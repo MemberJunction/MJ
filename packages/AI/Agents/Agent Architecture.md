@@ -1190,55 +1190,59 @@ ORDER BY
 
 ```typescript
 async function createBasicAgent() {
-  // Create the agent
-  const agentId = await agentManager.createAgent({
-    name: "Customer Support Agent",
-    description: "Assists with customer inquiries and support tickets",
-    executionMode: "Sequential"
-  });
+  // Note: Agent and prompt creation is typically done through the MemberJunction
+  // metadata system using database entities rather than programmatic creation.
+  // This example shows the conceptual flow.
   
-  // Create the initial prompt
-  const greetingPromptId = await promptManager.createPrompt({
-    name: "Customer Greeting",
-    description: "Initial greeting to the customer",
-    promptText: "You are a helpful customer support agent. Greet the customer professionally and ask how you can help them today.",
-    aiModelTypeId: AI_MODEL_TYPES.LLM,
-    selectionStrategy: "ByPower",
-    powerPreference: "Highest",
-    outputType: "string"
-  });
+  // Create the agent through metadata (AIAgent entity)
+  const agentEntity = await metadata.GetEntityObject('AI Agents');
+  agentEntity.NewRecord();
+  agentEntity.Name = "Customer Support Agent";
+  agentEntity.Description = "Assists with customer inquiries and support tickets";
+  agentEntity.ExecutionMode = "Sequential";
+  await agentEntity.Save();
   
-  // Create the support prompt
-  const supportPromptId = await promptManager.createPrompt({
-    name: "Support Response",
-    description: "Provides support based on customer inquiry",
-    promptText: "Based on the customer's inquiry: '{{inquiry}}', provide a helpful response that addresses their needs.",
-    aiModelTypeId: AI_MODEL_TYPES.LLM,
-    selectionStrategy: "ByPower",
-    powerPreference: "Highest",
-    outputType: "string",
-    enableCaching: true,
-    cacheTTLSeconds: 3600,
-    cacheMatchType: "Vector",
-    cacheSimilarityThreshold: 0.92,
-    cacheMustMatchModel: true,
-    cacheMustMatchVendor: false
-  });
+  // Create prompts through metadata (AIPrompt entities)
+  const greetingPrompt = await metadata.GetEntityObject('AI Prompts');
+  greetingPrompt.NewRecord();
+  greetingPrompt.Name = "Customer Greeting";
+  greetingPrompt.Description = "Initial greeting to the customer";
+  greetingPrompt.PromptText = "You are a helpful customer support agent. Greet the customer professionally and ask how you can help them today.";
+  greetingPrompt.OutputType = "string";
+  await greetingPrompt.Save();
   
-  // Associate prompts with the agent
-  await agentManager.associatePrompt(agentId, greetingPromptId, {
-    purpose: "Initial Greeting",
-    executionOrder: 1,
-    contextBehavior: "Smart"
-  });
+  const supportPrompt = await metadata.GetEntityObject('AI Prompts');
+  supportPrompt.NewRecord();
+  supportPrompt.Name = "Support Response";
+  supportPrompt.Description = "Provides support based on customer inquiry";
+  supportPrompt.PromptText = "Based on the customer's inquiry: '{{inquiry}}', provide a helpful response that addresses their needs.";
+  supportPrompt.OutputType = "string";
+  supportPrompt.EnableCaching = true;
+  supportPrompt.CacheTTLSeconds = 3600;
+  supportPrompt.CacheMatchType = "Vector";
+  supportPrompt.CacheSimilarityThreshold = 0.92;
+  await supportPrompt.Save();
   
-  await agentManager.associatePrompt(agentId, supportPromptId, {
-    purpose: "Support Response",
-    executionOrder: 2,
-    contextBehavior: "Complete"
-  });
+  // Associate prompts with the agent through AIAgentPrompt entities
+  const agentGreetingPrompt = await metadata.GetEntityObject('AI Agent Prompts');
+  agentGreetingPrompt.NewRecord();
+  agentGreetingPrompt.AgentID = agentEntity.ID;
+  agentGreetingPrompt.PromptID = greetingPrompt.ID;
+  agentGreetingPrompt.Purpose = "Initial Greeting";
+  agentGreetingPrompt.ExecutionOrder = 1;
+  agentGreetingPrompt.ContextBehavior = "Smart";
+  await agentGreetingPrompt.Save();
   
-  return agentId;
+  const agentSupportPrompt = await metadata.GetEntityObject('AI Agent Prompts');
+  agentSupportPrompt.NewRecord();
+  agentSupportPrompt.AgentID = agentEntity.ID;
+  agentSupportPrompt.PromptID = supportPrompt.ID;
+  agentSupportPrompt.Purpose = "Support Response";
+  agentSupportPrompt.ExecutionOrder = 2;
+  agentSupportPrompt.ContextBehavior = "Complete";
+  await agentSupportPrompt.Save();
+  
+  return agentEntity.ID;
 }
 ```
 
@@ -1246,22 +1250,40 @@ async function createBasicAgent() {
 
 ```typescript
 async function executeAgent(agentId, initialContext) {
-  // Initialize the execution context
-  const executionContext = {
-    conversation: initialContext.conversation || [],
-    parameters: initialContext.parameters || {},
-    configuration: initialContext.configuration || DEFAULT_CONFIGURATION
-  };
+  // Load agent entity from AI Engine
+  await AIEngine.Instance.Config(false, contextUser);
+  const agentEntity = AIEngine.Instance.Agents.find(a => a.ID === agentId);
   
-  // Execute the agent
-  const result = await agentManager.executeAgent(agentId, executionContext);
+  if (!agentEntity) {
+    throw new Error(`Agent with ID '${agentId}' not found`);
+  }
+  
+  // Get agent type to determine runner type
+  const agentType = AIEngine.Instance.AgentTypes.find(at => at.ID === agentEntity.TypeID);
+  if (!agentType) {
+    throw new Error(`Agent type not found for agent '${agentId}'`);
+  }
+  
+  // Get agent runner using the global function
+  const runner = await GetAgentRunner(agentType.Name, contextUser);
+  
+  // Execute the agent with context
+  const result = await runner.Execute({
+    agentEntity: agentEntity,
+    contextUser: contextUser,
+    data: initialContext.parameters || {},
+    conversationMessages: initialContext.conversation || [],
+    onProgress: (progress) => {
+      console.log(`${progress.step}: ${progress.percentage}% - ${progress.message}`);
+    }
+  });
   
   // Log the execution for analytics
   await analyticsManager.logAgentExecution(
     agentId,
-    result.promptRuns,
-    executionContext,
-    result.outcome
+    result.metadata?.runId,
+    initialContext,
+    result
   );
   
   return result;
