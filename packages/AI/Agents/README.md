@@ -42,13 +42,11 @@ The `AgentRunner` class is the central component of the AI Agents framework, pro
 - **Clean Architecture**: Delegates all prompt execution to AIPromptRunner for separation of concerns
 
 ```typescript
-import { AgentRunner } from '@memberjunction/ai-agents';
-import { AIAgentTypeEntityExtended } from '@memberjunction/ai-engine-base';
+import { GetAgentRunner } from '@memberjunction/ai-agents';
 import { UserInfo } from '@memberjunction/core';
 
-// Create an agent runner for a specific agent type
-const agentType = await manager.GetAgentTypeEntity("Customer Support");
-const runner = new AgentRunner(agentType, contextUser);
+// Get an agent runner for a specific agent type
+const runner = await GetAgentRunner("Customer Support", contextUser);
 
 // Execute an agent with decision-driven architecture
 const result = await runner.Execute({
@@ -85,19 +83,18 @@ Key architectural concepts covered include:
 ### Basic Agent Implementation
 
 ```typescript
-import { AgentRunner } from '@memberjunction/ai-agents';
+import { GetAgentRunner } from '@memberjunction/ai-agents';
 import { AIEngine } from '@memberjunction/aiengine';
 import { UserInfo } from '@memberjunction/core';
 
 // Initialize AI Engine to access agents and types
 await AIEngine.Instance.Config(false, contextUser);
 
-// Get agent type and specific agent
-const agentType = AIEngine.Instance.AgentTypes.find(t => t.Name === 'Customer Support');
+// Get specific agent entity
 const agentEntity = AIEngine.Instance.Agents.find(a => a.Name === 'Customer Support Agent');
 
-// Create agent runner
-const runner = new AgentRunner(agentType, contextUser);
+// Get agent runner for the agent type
+const runner = await GetAgentRunner('Customer Support', contextUser);
 
 // Execute with decision-driven architecture
 const result = await runner.Execute({
@@ -121,14 +118,13 @@ if (result.success) {
 ### Hierarchical Agent Composition
 
 ```typescript
-import { AgentRunner } from '@memberjunction/ai-agents';
+import { GetAgentRunner } from '@memberjunction/ai-agents';
 
 // The AgentRunner automatically handles sub-agent delegation through decision-making
 // Parent agents can delegate to child agents based on AI decisions
 
-// Create a parent agent runner
-const parentAgentType = AIEngine.Instance.AgentTypes.find(t => t.Name === 'Customer Service Manager');
-const parentRunner = new AgentRunner(parentAgentType, contextUser);
+// Get a parent agent runner
+const parentRunner = await GetAgentRunner('Customer Service Manager', contextUser);
 
 // Execute - the agent will make autonomous decisions about delegation
 const result = await parentRunner.Execute({
@@ -159,7 +155,7 @@ result.decisionHistory?.forEach((decision, i) => {
 ### Context Management and Compression
 
 ```typescript
-import { AgentRunner } from '@memberjunction/ai-agents';
+import { GetAgentRunner } from '@memberjunction/ai-agents';
 
 // Context compression is automatically handled by AgentRunner
 // Configure compression through the agent entity properties
@@ -170,7 +166,7 @@ const longConversationAgent = AIEngine.Instance.Agents.find(a => {
            a.ContextCompressionMessageRetentionCount === 10;
 });
 
-const runner = new AgentRunner(agentType, contextUser);
+const runner = await GetAgentRunner('Long Conversation Agent', contextUser);
 
 // Execute with long conversation - compression happens automatically
 const longConversation = Array(60).fill(null).map((_, i) => ({
@@ -520,9 +516,8 @@ try {
 The framework provides a decision-driven architecture with clean separation of concerns:
 
 ```typescript
-// Create agent runner for specific agent type
-const agentType = await manager.GetAgentTypeEntity("CustomerSupport");
-const runner = new AgentRunner(agentType, contextUser);
+// Get agent runner for specific agent type
+const runner = await GetAgentRunner("CustomerSupport", contextUser);
 
 // Execute with autonomous decision-making
 const result = await runner.Execute({

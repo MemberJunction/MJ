@@ -6,7 +6,7 @@ import { AIPromptRunner, AIPromptParams } from '@memberjunction/ai-prompts';
 import { ChatMessage } from '@memberjunction/ai';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionParam, ActionResult } from '@memberjunction/actions-base';
-import { RegisterClass } from '@memberjunction/global';
+import { MJGlobal, RegisterClass } from '@memberjunction/global';
 
 /**
  * Represents the different types of decisions an AI agent can make during execution.
@@ -2380,6 +2380,76 @@ Consider:
 
 
 
+}
+
+/**
+ * Gets an AgentRunner instance for the specified agent type.
+ * 
+ * This function:
+ * 1. Loads the AIAgentTypeEntity from the database by name
+ * 2. Uses the ClassFactory to instantiate the appropriate AgentRunner subclass
+ * 3. Falls back to base AgentRunner if no custom subclass is registered
+ * 4. Configures all dependent engines (AIEngine & ActionEngine)
+ * 
+ * @param agentTypeName The name of the agent type (e.g., "Base Agent", "Customer Support", "Data Analysis")
+ * @param contextUser User context for database access and permissions
+ * @param key Optional key for ClassFactory to use specific registered subclass
+ * @param additionalParams Optional additional parameters to pass to the runner constructor
+ * @returns Promise<AgentRunner | null> The instantiated runner, or null if the agent type is not found
+ * @throws Error if the agent type cannot be loaded or runner cannot be instantiated
+ */
+export async function GetAgentRunner(
+  agentTypeName: string,
+  contextUser?: UserInfo,
+  key?: string,
+  ...additionalParams: any[]
+): Promise<AgentRunner | null> {
+  try {
+    if (!agentTypeName || agentTypeName.trim().length === 0) {
+      throw new Error('Agent type name is required');
+    }
+
+    // Initialize metadata for user context if needed
+    const metadata = new Metadata();
+    if (!contextUser) {
+      contextUser = metadata.CurrentUser;
+    }
+
+    // Load AI Engine to get access to agent types
+    await AIEngine.Instance.Config(false, contextUser);
+
+    // Find the agent type by name
+    const agentType = AIEngine.Instance.AgentTypes?.find(at => 
+      at.Name.toLowerCase() === agentTypeName.trim().toLowerCase() && at.IsActive
+    );
+
+    if (!agentType) {
+      LogError(`Agent type with name '${agentTypeName}' not found`);
+      return null;
+    }
+
+    // Config all dependent engines to ensure they are loaded
+    await ActionEngineServer.Instance.Config(false, contextUser);
+
+    // Use ClassFactory to create the runner instance
+    // The key allows for agent-type-specific subclasses
+    const runnerInstance = MJGlobal.Instance.ClassFactory.CreateInstance<AgentRunner>(
+      AgentRunner,
+      key,            
+      agentType,      // Pass the agent type entity
+      contextUser,    // Pass the user context
+      ...additionalParams
+    );
+
+    if (!runnerInstance) {
+      throw new Error(`Failed to create agent runner instance for type '${agentTypeName}'`);
+    }
+
+    return runnerInstance;
+  } catch (error) {
+    LogError(`Error creating agent runner for type '${agentTypeName}': ${error.message}`);
+    throw error;
+  }
 }
 
 export function LoadAgentRunner() {
