@@ -129,10 +129,24 @@ export class AIPromptParams {
   agentRunId?: string;
 
   /**
-   * Optional system prompt ID for AI prompt embedding
-   * When provided, this prompt will be embedded into the specified system prompt template.
-   * The system prompt template must support AI prompt embedding using {% AIPrompt %} syntax.
-   * Only compatible with prompts that can be embedded into agent system prompts.
+   * Optional system prompt ID for AI prompt embedding.
+   * 
+   * When provided, the AIPromptRunner will:
+   * 1. Load the system prompt template from the database
+   * 2. Embed this AI prompt into the system template using {% PromptEmbed %} syntax
+   * 3. Render the complete system prompt with agent context and available actions
+   * 4. Use the rendered system prompt instead of the regular AI prompt template
+   * 
+   * This enables agent architectures where:
+   * - Agent-specific prompts contain domain logic (e.g., DATA_GATHER instructions)
+   * - System prompts enforce deterministic JSON response format for parsing
+   * - Available actions and sub-agents are injected for decision-making
+   * 
+   * The system prompt template must contain {% PromptEmbed %} tags to embed the AI prompt.
+   * Validation ensures the AI prompt is properly linked to agents using this system prompt.
+   * 
+   * @see {@link validatePromptEmbedding} for relationship validation
+   * @see {@link renderSystemPromptWithEmbeddedPrompt} for embedding implementation
    */
   systemPromptId?: string;
 }
@@ -297,17 +311,54 @@ export class AIPromptRunResult {
 }
 
 /**
- * Advanced AI Prompt execution engine that supports template-driven prompts,
- * sophisticated model selection, parallelization, output validation, and comprehensive tracking.
+ * Advanced AI Prompt execution engine with comprehensive template support, system prompt embedding,
+ * sophisticated model selection, parallelization, output validation, and execution tracking.
  *
- * This class implements the enhanced AI Prompt system with support for:
- * - Template-based prompt generation using MJ Templates system
- * - Advanced model selection strategies (Default, Specific, ByPower)
- * - Parallel execution with multiple models and execution groups
- * - Structured output validation and type conversion
- * - Comprehensive execution tracking and analytics
- * - Configuration-driven behavior
- * - Real-time progress updates and streaming responses
+ * ## Core Features
+ * - **Template-based prompt generation** using MJ Templates system
+ * - **System prompt embedding** for agent architectures via {% PromptEmbed %} syntax
+ * - **Advanced model selection** strategies (Default, Specific, ByPower)
+ * - **Parallel execution** with multiple models and execution groups
+ * - **Structured output validation** and type conversion with retry logic
+ * - **Comprehensive execution tracking** with agent run linking
+ * - **Configuration-driven behavior** with caching and performance optimization
+ * - **Real-time progress updates** and streaming response support
+ * 
+ * ## System Prompt Embedding
+ * When `systemPromptId` is provided in {@link AIPromptParams}:
+ * 1. Loads system prompt template from database
+ * 2. Embeds the AI prompt using {% PromptEmbed %} template syntax
+ * 3. Renders complete system prompt with agent context
+ * 4. Uses rendered system prompt instead of regular template
+ * 
+ * This enables agent architectures where system prompts wrap agent-specific prompts
+ * with execution control, deterministic response format, and available actions context.
+ * 
+ * ## Agent Integration
+ * - Links executions to agent runs via `agentRunId` parameter
+ * - Validates prompt-agent relationships for system prompt embedding
+ * - Provides agent context data for system prompt rendering
+ * - Supports agent decision-making workflows with structured JSON responses
+ * 
+ * @example Basic Usage
+ * ```typescript
+ * const runner = new AIPromptRunner();
+ * const params = new AIPromptParams();
+ * params.prompt = aiPrompt;
+ * params.data = { key: 'value' };
+ * const result = await runner.ExecutePrompt(params);
+ * ```
+ * 
+ * @example System Prompt Embedding for Agents
+ * ```typescript
+ * const params = new AIPromptParams();
+ * params.prompt = agentSpecificPrompt;
+ * params.systemPromptId = 'system-prompt-id';
+ * params.agentRunId = 'agent-run-id';
+ * params.data = { agentName: 'DataGather', availableActions: [...] };
+ * const result = await runner.ExecutePrompt(params);
+ * // System prompt embeds agent prompt and enforces JSON response format
+ * ```
  */
 export class AIPromptRunner {
   private _metadata: Metadata;
@@ -391,8 +442,20 @@ export class AIPromptRunner {
 
       let renderedPromptText: string = '';
 
-      // Always render the template (needed for system prompt or user message)
-      if (prompt.TemplateID && (!params.conversationMessages || params.templateMessageRole !== 'none')) {
+      // Handle system prompt embedding or regular template rendering
+      if (params.systemPromptId) {
+        // System prompt embedding mode - render system prompt with embedded AI prompt
+        const systemPromptResult = await this.renderSystemPromptWithEmbeddedPrompt(
+          params.systemPromptId,
+          prompt,
+          params
+        );
+        if (!systemPromptResult.Success) {
+          throw new Error(`Failed to render system prompt with embedded AI prompt: ${systemPromptResult.Message}`);
+        }
+        renderedPromptText = systemPromptResult.Output;
+      } else if (prompt.TemplateID && (!params.conversationMessages || params.templateMessageRole !== 'none')) {
+        // Regular template rendering mode
         // Initialize template engine
         await this._templateEngine.Config(false, params.contextUser);
 
@@ -700,6 +763,145 @@ export class AIPromptRunner {
     } catch (error) {
       LogError(`Error loading template ${templateId}: ${error.message}`);
       return null;
+    }
+  }
+
+  /**
+   * Renders a system prompt template with an embedded AI prompt.
+   * 
+   * This method loads the system prompt template and renders it with the AI prompt
+   * embedded via {% PromptEmbed %} syntax. The system prompt template should contain
+   * agent context information and enforce deterministic response format.
+   * 
+   * @param systemPromptId - ID of the system prompt template
+   * @param aiPrompt - The AI prompt to embed into the system template
+   * @param params - Original execution parameters for context
+   * @returns Promise<TemplateRenderResult> - The rendered system prompt with embedded AI prompt
+   */
+  private async renderSystemPromptWithEmbeddedPrompt(
+    systemPromptId: string,
+    aiPrompt: AIPromptEntity,
+    params: AIPromptParams
+  ): Promise<TemplateRenderResult> {
+    try {
+      // Initialize template engine
+      await this._templateEngine.Config(false, params.contextUser);
+
+      // Load the system prompt from AI Engine (it's stored as an AI prompt that references a template)
+      const systemPrompt = await this.loadSystemPromptById(systemPromptId, params.contextUser);
+      if (!systemPrompt) {
+        throw new Error(`System prompt with ID ${systemPromptId} not found`);
+      }
+
+      if (!systemPrompt.TemplateID) {
+        throw new Error(`System prompt ${systemPrompt.Name} has no associated template`);
+      }
+
+      // Load the system prompt template
+      const systemTemplate = await this.loadTemplate(systemPrompt.TemplateID, params.contextUser);
+      if (!systemTemplate) {
+        throw new Error(`Template with ID ${systemPrompt.TemplateID} not found for system prompt ${systemPrompt.Name}`);
+      }
+
+      // Prepare enhanced data context for system prompt rendering
+      const systemPromptData = await this.prepareSystemPromptData(aiPrompt, params);
+
+      // Render the system prompt template with the embedded AI prompt
+      // The template should contain {% PromptEmbed %} syntax to embed the AI prompt
+      const result = await this.renderPromptTemplate(systemTemplate, systemPromptData, params.templateData);
+
+      if (!result.Success) {
+        throw new Error(`Failed to render system prompt template: ${result.Message}`);
+      }
+
+      LogStatus(`✅ Successfully rendered system prompt with embedded AI prompt "${aiPrompt.Name}"`);
+      return result;
+
+    } catch (error) {
+      LogError(`Error rendering system prompt with embedded AI prompt: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Loads a system prompt by ID from AI Engine.
+   * System prompts are stored as AI prompts that reference templates.
+   */
+  private async loadSystemPromptById(systemPromptId: string, contextUser?: UserInfo): Promise<AIPromptEntity | null> {
+    try {
+      // Ensure AI Engine is configured
+      await AIEngine.Instance.Config(false, contextUser);
+
+      // Find the system prompt in cached prompts
+      const systemPrompt = AIEngine.Instance.Prompts.find(p => p.ID === systemPromptId);
+      return systemPrompt || null;
+
+    } catch (error) {
+      LogError(`Error loading system prompt ${systemPromptId}: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Prepares enhanced data context for system prompt rendering.
+   * 
+   * This includes agent information and AI prompt details needed for proper 
+   * template rendering and embedding. Actions and sub-agents are handled 
+   * separately by the agent-runner's createDecisionInput function.
+   */
+  private async prepareSystemPromptData(aiPrompt: AIPromptEntity, params: AIPromptParams): Promise<Record<string, unknown>> {
+    try {
+      // Start with user-provided data
+      const data: Record<string, unknown> = { ...params.data };
+
+      // Add AI prompt information for embedding
+      data.agentPrompt = aiPrompt.Name;
+      data.agentPromptDescription = aiPrompt.Description;
+
+      // Add agent context if available (extract from validation or AI Engine)
+      await AIEngine.Instance.Config(false, params.contextUser);
+
+      // Find agents linked to this prompt for context
+      const agentPromptLinks = AIEngine.Instance.AgentPrompts.filter(ap => ap.PromptID === aiPrompt.ID);
+      
+      if (agentPromptLinks.length > 0) {
+        const firstAgentLink = agentPromptLinks[0];
+        const agent = AIEngine.Instance.Agents.find(a => a.ID === firstAgentLink.AgentID);
+        
+        if (agent) {
+          data.agentName = agent.Name;
+          data.agentDescription = agent.Description;
+
+          // Get agent type information
+          const agentType = AIEngine.Instance.AgentTypes.find(at => at.ID === agent.TypeID);
+          if (agentType) {
+            data.agentTypeName = agentType.Name;
+            data.agentTypeDescription = agentType.Description;
+          }
+        }
+      }
+
+      // Provide fallback values if agent information is not available
+      if (!data.agentName) {
+        data.agentName = `Agent using ${aiPrompt.Name}`;
+      }
+      if (!data.agentDescription) {
+        data.agentDescription = `AI agent executing prompt: ${aiPrompt.Description || aiPrompt.Name}`;
+      }
+
+      LogStatus(`Prepared system prompt data for agent "${data.agentName}"`);
+      return data;
+
+    } catch (error) {
+      LogError(`Error preparing system prompt data: ${error.message}`);
+      // Return minimal data to allow template rendering to continue
+      return {
+        ...params.data,
+        agentPrompt: aiPrompt.Name,
+        agentPromptDescription: aiPrompt.Description,
+        agentName: `Agent using ${aiPrompt.Name}`,
+        agentDescription: `AI agent executing prompt: ${aiPrompt.Description || aiPrompt.Name}`
+      };
     }
   }
 
