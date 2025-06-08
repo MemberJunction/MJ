@@ -28,8 +28,10 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                                 const newInstruction = sqlProvider.GetSaveSQL(item.BaseEntity, bCreate, spName, item.BaseEntity.ContextCurrentUser);
                                 item.Instruction = newInstruction; // update the instruction with the new values    
                             }
-                            result = await transaction.query(item.Instruction, item.Vars);
-                            if (result && result.length > 0) {
+                            const rawResult = await transaction.query(item.Instruction, item.Vars);
+                            if (rawResult && rawResult.length > 0) {
+                                // Process the result to handle timezone conversions
+                                result = sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo);
                                 this.SetVariableValuesFromEntity(item.BaseEntity, result[0]); // set the variables that this item defines after the save is done
                             }
                             bSuccess = (result && result.length > 0); // success if we have a result and it has rows 
@@ -47,12 +49,14 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                     for (const item of items) {
                         promises.push(transaction.query(item.Instruction, item.Vars)); // no await, run in parallel
                     }
-                    const results = await Promise.all(promises);
+                    const rawResults = await Promise.all(promises);
                     for (let i = 0; i < items.length; i++) {
                         const item = items[i];
                         let result = null;
-                        if (results[0] && results[i].length > 0) {
-                            result = results[i][0]; // get the first row of the result
+                        if (rawResults[0] && rawResults[i].length > 0) {
+                            // Process the result to handle timezone conversions
+                            const processedResults = sqlProvider.ProcessEntityRows(rawResults[i], item.BaseEntity.EntityInfo);
+                            result = processedResults[0]; // get the first row of the processed result
                         }
                         returnResults.push(new TransactionResult(item, result, result !== null));
                     }
