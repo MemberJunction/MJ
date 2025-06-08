@@ -8,6 +8,7 @@ The MemberJunction AI Prompts package provides sophisticated prompt management, 
 ## Features
 
 - **📝 Advanced Prompt System**: Sophisticated prompt management with template rendering and validation
+- **🤖 System Prompt Embedding**: Agent architecture support with {% PromptEmbed %} syntax for deterministic response formats
 - **⚡ Parallel Processing**: Multi-model execution with result selection strategies
 - **💾 Intelligent Caching**: Vector similarity matching and TTL-based result caching
 - **🔄 Template Integration**: Dynamic prompt generation with MemberJunction template system
@@ -19,6 +20,7 @@ The MemberJunction AI Prompts package provides sophisticated prompt management, 
 - **🚫 Cancellation Support**: AbortSignal integration for graceful execution cancellation
 - **📈 Progress Updates**: Real-time progress callbacks and streaming response support
 - **🔄 Streaming Integration**: Compatible with BaseLLM streaming capabilities
+- **🔗 Agent Integration**: Full agent run linking for comprehensive execution tracking
 
 ## Installation
 
@@ -1625,3 +1627,132 @@ const defaultPrompt = {
 ```
 
 For additional configuration options and advanced use cases, refer to the source code and entity definitions in the MemberJunction core system.
+
+## System Prompt Embedding
+
+The AI Prompt Runner provides sophisticated system prompt embedding capabilities for agent architectures through the template engine integration.
+
+### Architecture Overview
+
+When `systemPromptId` is provided in AIPromptParams, the runner:
+1. Loads the system prompt template from the database
+2. Embeds the agent-specific AI prompt using `{% PromptEmbed %}` syntax
+3. Renders the complete system prompt with agent context
+4. Uses the rendered system prompt instead of the regular AI prompt template
+
+This enables sophisticated agent architectures where:
+- **System prompts** provide execution control and enforce deterministic JSON response format
+- **Agent prompts** contain domain-specific logic (e.g., DATA_GATHER instructions)
+- **Available actions and sub-agents** are injected for agent decision-making
+
+### Template Syntax
+
+System prompt templates use the `{% PromptEmbed %}` syntax to embed AI prompts:
+
+```nunjucks
+# System Prompt Template Example
+
+You are an AI agent with the following specialized instructions:
+
+{% PromptEmbed %}
+
+## Available Actions
+{{#each availableActions}}
+- **{{this.name}}**: {{this.description}}
+{{/each}}
+
+## Available Sub-Agents  
+{{#each availableSubAgents}}
+- **{{this.name}}**: {{this.description}}
+{{/each}}
+
+## Response Format
+You must respond with valid JSON following this structure:
+{
+  "decision": "execute_action|execute_subagent|complete_task|request_clarification",
+  "reasoning": "Explanation of your decision",
+  "executionPlan": [
+    {
+      "type": "action|subagent",
+      "targetId": "action-or-agent-id",
+      "parameters": {},
+      "executionOrder": 1,
+      "allowParallel": true
+    }
+  ],
+  "isTaskComplete": false,
+  "confidence": 0.95
+}
+```
+
+### Validation and Security
+
+The system includes comprehensive validation to ensure proper prompt embedding:
+
+```typescript
+// Validation process:
+// 1. Verify system prompt exists and has template
+// 2. Check agent-prompt relationships via AIAgentPrompt table
+// 3. Ensure agents using system prompt are linked to current prompt
+// 4. Validate template contains {% PromptEmbed %} syntax
+
+const params = new AIPromptParams();
+params.prompt = agentSpecificPrompt;
+params.systemPromptId = 'system-prompt-id'; // Triggers validation
+params.data = { agentName: 'DataGather', availableActions: [...] };
+```
+
+### Integration with AI Agents
+
+The AgentRunner seamlessly uses system prompt embedding:
+
+```typescript
+// AgentRunner delegates to AIPromptRunner with system prompt embedding
+const promptParams = new AIPromptParams();
+promptParams.prompt = primaryAgentPrompt.prompt;
+promptParams.systemPromptId = this.agentType.SystemPromptID;
+promptParams.data = promptData;
+promptParams.agentRunId = context.agentRun.ID;
+
+const promptResult = await this._promptRunner.ExecutePrompt(promptParams);
+```
+
+### Database Schema Integration
+
+The system prompt embedding feature integrates with several database entities:
+
+#### Entity Relationships
+
+```sql
+-- System prompts are stored as AIPrompt entities with templates
+AIPrompt (SystemPromptID) -> Template -> TemplateContent (contains {% PromptEmbed %})
+
+-- Agent types reference system prompts
+AIAgentType.SystemPromptID -> AIPrompt (system prompt)
+
+-- Agents belong to agent types
+AIAgent.TypeID -> AIAgentType
+
+-- Agent prompts link agents to their specific prompts
+AIAgentPrompt: AgentID + PromptID
+
+-- Validation ensures proper linkage:
+-- Agent -> AgentType -> SystemPrompt
+-- Agent -> AIAgentPrompt -> AIPrompt (to be embedded)
+```
+
+#### Storage Structure
+
+```sql
+-- Example system prompt template storage
+INSERT INTO Template (Name, Description) 
+VALUES ('AI Agent System Prompt', 'Control wrapper for agent decision-making');
+
+INSERT INTO TemplateContent (TemplateID, TemplateText, Priority) 
+VALUES (@TemplateID, 'You are {{agentName}}... {% PromptEmbed %}... Respond with JSON...', 100);
+
+INSERT INTO AIPrompt (Name, Description, TemplateID, Category) 
+VALUES ('System Prompt', 'Agent execution control wrapper', @TemplateID, 'System');
+
+UPDATE AIAgentType SET SystemPromptID = @SystemPromptID WHERE Name = 'DataGatherAgent';
+```
