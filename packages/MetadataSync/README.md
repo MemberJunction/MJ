@@ -74,18 +74,29 @@ The Metadata Sync tool bridges the gap between database-stored metadata and file
 
 ## Supported Entities
 
-### Phase 1: AI Prompts (Current)
-- Full support for all AI Prompt fields
-- Markdown files for prompt content
-- Category-based organization
-- AI Prompt Models as embedded collections
+The tool works with any MemberJunction entity - both core system entities and user-created entities. Each entity type can have its own directory structure, file naming conventions, and related entity configurations.
 
-### Future Phases
-- Templates
-- AI Models
-- AI Vendors
-- Query definitions
-- Any MJ entity with metadata
+### Important Limitation: Database-Reflected Metadata
+
+**This tool should NOT be used to modify metadata that is reflected from the underlying database catalog.** Examples include:
+- Entity field data types
+- Column lengths/precision
+- Primary key definitions
+- Foreign key relationships
+- Table/column existence
+
+These properties are designed to flow **from** the database catalog **up** into MJ metadata, not the other way around. Attempting to modify these via file sync could create inconsistencies between the metadata and actual database schema.
+
+The tool is intended for managing business-level metadata such as:
+- Descriptions and documentation
+- Display names and user-facing text
+- Categories and groupings
+- Custom properties and settings
+- AI prompts, templates, and other content
+- Permissions and security settings
+- Any other data that is not reflected **up** from the underlying system database catalogs
+
+For more information about how CodeGen reflects system-level data from the database into the MJ metadata layer, see the [CodeGen documentation](../CodeGen/README.md).
 
 ## File Structure
 
