@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/ng-notifications
 
+## 2.46.0
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@2.46.0
+- @memberjunction/core@2.46.0
+- @memberjunction/core-entities@2.46.0
+- @memberjunction/global@2.46.0
+
 ## 2.45.0
 
 ### Patch Changes

@@ -1,5 +1,15 @@
 # @memberjunction/ng-dashboards
 
+## 2.46.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.46.0
+- @memberjunction/ng-notifications@2.46.0
+- @memberjunction/core@2.46.0
+- @memberjunction/core-entities@2.46.0
+- @memberjunction/templates-base-types@2.46.0
+
 ## 2.45.0
 
 ### Patch Changes

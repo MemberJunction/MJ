@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/a2aserver
 
+## 2.46.0
+
+### Patch Changes
+
+- @memberjunction/core@2.46.0
+- @memberjunction/global@2.46.0
+- @memberjunction/sqlserver-dataprovider@2.46.0
+
 ## 2.45.0
 
 ### Patch Changes
