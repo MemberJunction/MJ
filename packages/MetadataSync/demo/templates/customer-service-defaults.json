@@ -1,0 +1,9 @@
+{
+  "CategoryID": "@lookup:AI Prompt Categories.Name=Customer Experience",
+  "Tags": ["customer-service", "support"],
+  "Temperature": 0.8,
+  "ResponseFormat": "Unstructured",
+  "EnableCaching": true,
+  "CacheTTLSeconds": 1800,
+  "ValidationBehavior": "None"
+}

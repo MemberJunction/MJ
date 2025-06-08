@@ -5,8 +5,14 @@ import * as path from 'path';
 import { cleanupProvider } from '../lib/provider-utils';
 
 const hook: Hook<'init'> = async function () {
-  // Load .env from the repository root
+  // Load .env from the repository root first
   dotenv.config({ path: path.join(__dirname, '../../../../.env') });
+  
+  // Then load local .env from package directory to override
+  dotenv.config({ 
+    path: path.join(__dirname, '../../.env'),
+    override: true  // This ensures local values override already loaded ones
+  });
   
   // Load core entities server subclasses
   LoadCoreEntitiesServerSubClasses();

@@ -1,0 +1,28 @@
+[
+  {
+    "fields": {
+      "PromptID": "@parent:ID",
+      "ModelID": "@lookup:AI Models.Name=GPT 4 Lite",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "Priority": 1,
+      "Status": "Active",
+      "MaxTokens": 1000,
+      "Temperature": 0.7,
+      "TopP": 0.9,
+      "Notes": "Primary model for standard operations"
+    }
+  },
+  {
+    "fields": {
+      "PromptID": "@parent:ID",
+      "ModelID": "@lookup:AI Models.Name=Claude 4.5 Haiku",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+      "Priority": 2,
+      "Status": "Active",
+      "MaxTokens": 1500,
+      "Temperature": 0.7,
+      "TopP": 0.9,
+      "Notes": "Fallback model with good performance"
+    }
+  }
+]
