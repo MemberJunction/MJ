@@ -31,6 +31,7 @@ import { MarkdownModule } from 'ngx-markdown';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { DataContextModule } from '@memberjunction/ng-data-context';
 import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
+import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 
 // LOCAL
 import { SkipChatComponent } from './skip-chat/skip-chat.component';
@@ -78,6 +79,7 @@ import { SkipArtifactsCounterComponent } from './artifacts/skip-artifacts-counte
     OverlayModule,
     ExcelExportModule,
     ResourcePermissionsModule,
+    CodeEditorModule,
     MarkdownModule.forRoot(),
   ],
   exports: [
