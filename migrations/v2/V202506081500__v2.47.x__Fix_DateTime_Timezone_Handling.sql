@@ -984,7 +984,7 @@ BEGIN
             @ContextCompressionMessageThreshold,
             @ContextCompressionPromptID,
             @ContextCompressionMessageRetentionCount,
-            CASE @TypeID WHEN '00000000-0000-0000-0000-000000000000' THEN A7B8C9D0-E1F2-3456-7890-123456789ABC ELSE @TypeID END
+            CASE @TypeID WHEN '00000000-0000-0000-0000-000000000000' THEN 'A7B8C9D0-E1F2-3456-7890-123456789ABC' ELSE @TypeID END
         )
     -- return the new record from the base view, which might have some calculated fields
     SELECT * FROM [${flyway:defaultSchema}].[vwAIAgents] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
