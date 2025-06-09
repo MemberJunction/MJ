@@ -325,21 +325,15 @@ export interface SkipComponentDataRequirements {
      */
     staticData?: {
         /**
-         * Array of data context item names that this component depends on.
-         * These names reference items in the conversation's data context.
+         * Reference to the data context that this component uses.
+         * Points to a DataContext object containing pre-loaded data.
          */
-        dataContextItems: string[];
+        dataContext: SimpleDataContext;
         
         /**
          * Optional description of how the static data is used by the component
          */
         description?: string;
-        
-        /**
-         * Optional SQL queries or data specifications used to populate the static data
-         * @since 2.1.0
-         */
-        queries?: string[];
     };
     
     /**
@@ -358,29 +352,9 @@ export interface SkipComponentDataRequirements {
         requiredEntities: string[];
         
         /**
-         * Optional array of view names that this component will execute
-         */
-        viewNames?: string[];
-        
-        /**
-         * Optional array of query names that this component will execute
-         */
-        queryNames?: string[];
-        
-        /**
          * Optional description of the dynamic data access patterns
          */
         description?: string;
-        
-        /**
-         * Optional specification of filters, sorting, and pagination strategies
-         * @since 2.1.0
-         */
-        accessPatterns?: {
-            filtering?: string;
-            sorting?: string;
-            pagination?: string;
-        };
     };
     
     /**
@@ -400,15 +374,6 @@ export interface SkipComponentDataRequirements {
          * Optional performance considerations for the hybrid approach
          */
         performanceNotes?: string;
-        
-        /**
-         * Optional breakdown of which parts use static vs dynamic data
-         * @since 2.1.0
-         */
-        breakdown?: {
-            staticParts: string[];
-            dynamicParts: string[];
-        };
     };
     
     /**
@@ -485,17 +450,8 @@ export type SkipComponentRootSpec = {
     componentType: "report" | "dashboard" | "form" | "other",
 
     /**
-     * The type of data access this component uses, static means that the data is provided to the component as static data during the initialization
-     * process described in the @interface SkipComponentObject interface, dynamic means that the component will use capabilities provided by 
-     * the SkipComponentObject interface to dynamically access data from the MemberJunction instance that it is running within. 'both' means
-     * that the component can use both static and dynamic data access methods, and 'none' means that the component does not use any data (rare, but possible for example if
-     * a component does something other than show data or if it uses 3rd party data sources via API that are not related to the MJ instance it is running within).
-     * @deprecated Use dataRequirements.mode instead for more detailed data access specification
-     */
-    dataAccessType: 'static' | 'dynamic' | 'both' | 'none';    
-
-    /**
-     * A description of what this component does
+     * A summary of what the component does that a user would understand.
+     * This should be a high-level, user-friendly description suitable for end users.
      */
     description: string;
     
@@ -554,7 +510,8 @@ export interface SkipComponentChildSpec {
     componentCode?: string;
 
     /**
-     * A detailed description of what this child component does
+     * A summary of what this child component does that a user would understand.
+     * This should be a high-level, user-friendly description suitable for end users.
      */
     description: string;
     
@@ -573,8 +530,8 @@ export interface SkipComponentChildSpec {
     
     /**
      * Data requirements for this child component.
-     * Defines how the component accesses and uses data, inheriting or extending parent component's data access.
-     * Child components typically inherit data access patterns from their parent but may have specific needs.
+     * Child components inherit static data from their parent component's data context.
+     * However, they can define their own dynamic data requirements for entities they need to access at runtime.
      * 
      * @since 2.1.0 - Enhanced documentation for clarity
      */
