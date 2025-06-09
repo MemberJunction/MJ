@@ -28,15 +28,15 @@
                 </skip-dynamic-grid>  
             }
             @else if (IsHTML) {
-                <skip-dynamic-html-report
-                    #theHtmlReport 
+                <skip-dynamic-ui-component
+                    #theUIComponent 
                     [SkipData]="SkipData"
                     [ShowCreateReportButton]="ShowCreateReportButton"
                     [matchingReportID]="matchingReportID"
                     (DrillDownEvent)="HandleDrillDownEvent($event)"
                     (CreateReportRequested)="handleCreateReportForOption($event)"
                     style="display:block; height: 100%;">
-                </skip-dynamic-html-report>  
+                </skip-dynamic-ui-component>  
             }
         </div>
 

@@ -5,7 +5,7 @@ import { MapEntityInfoToSkipEntityInfo, SimpleMetadata, SimpleRunQuery, SimpleRu
 import { DrillDownInfo } from '../drill-down-info';
 
 @Component({
-  selector: 'skip-dynamic-html-report',
+  selector: 'skip-dynamic-ui-component',
   template: `
     @if (reportOptions.length > 1) {
       <!-- Multiple options: show tabs -->
@@ -404,8 +404,8 @@ import { DrillDownInfo } from '../drill-down-info';
     }
   `] 
 })
-export class SkipDynamicHTMLReportComponent implements AfterViewInit, OnDestroy {
-    @Input() HTMLReport: string | null = null;
+export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy {
+    @Input() UIComponentCode: string | null = null;
     @Input() ComponentObjectName: string | null = null;
     @Input() ShowPrintReport: boolean = true;
     @Input() ShowReportOptionsToggle: boolean = true;
@@ -494,7 +494,7 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit, OnDestroy 
 
         try {
             // Update the component info - this can fail if placeholders are missing
-            this.HTMLReport = BuildSkipComponentCompleteCode(selectedOption.option);
+            this.UIComponentCode = BuildSkipComponentCompleteCode(selectedOption.option);
             this.ComponentObjectName = selectedOption.option.componentName;
             
             // Simply create or reuse the React host for this option
@@ -513,8 +513,8 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit, OnDestroy 
                 technicalDetails: error?.toString() || 'Unknown error during component assembly'
             };
             
-            // Clear the HTML report to prevent partial rendering
-            this.HTMLReport = null;
+            // Clear the UI component code to prevent partial rendering
+            this.UIComponentCode = null;
             this.ComponentObjectName = null;
         }
     }
@@ -605,7 +605,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         
         // Wait for ViewChildren to be available
         setTimeout(() => {
-            if (this.HTMLReport && this.ComponentObjectName && this.SkipData) {
+            if (this.UIComponentCode && this.ComponentObjectName && this.SkipData) {
                 // Create the initial React host for the first option
                 this.createReactHostForOption(this.selectedReportOptionIndex);
             }
@@ -660,11 +660,11 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             if (d.componentOptions && d.componentOptions.length > 0) {
                 // Use the first component option (or the highest ranked one)
                 const component = d.componentOptions[0];
-                this.HTMLReport = BuildSkipComponentCompleteCode(component.option);
+                this.UIComponentCode = BuildSkipComponentCompleteCode(component.option);
                 this.ComponentObjectName = component.option.componentName;
             } else {
                 // Fallback for old format
-                this.HTMLReport = (d as any).htmlReport;
+                this.UIComponentCode = (d as any).htmlReport;
                 this.ComponentObjectName = (d as any).htmlReportObjectName;
             }
         }
@@ -675,11 +675,11 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     }
 
     /**
-     * Sets up the report options from the SkipData, prioritizing the new htmlReportOptions array
+     * Sets up the component options from the SkipData, prioritizing the new componentOptions array
      * but falling back to the deprecated htmlReport/htmlReportObjectName for backward compatibility
      */
     private setupReportOptions(data: SkipAPIAnalysisCompleteResponse): void {
-        // Check if we have the new htmlReportOptions array
+        // Check if we have the new componentOptions array
         if (data.componentOptions && data.componentOptions.length > 0) {
             // Sort by AIRank (lower numbers = better ranking)
             this.reportOptions = [...data.componentOptions].sort((a, b) => {
@@ -691,7 +691,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             // Select the best option (first in sorted array)
             this.selectedReportOptionIndex = 0;
             const bestOption = this.reportOptions[0];
-            this.HTMLReport = BuildSkipComponentCompleteCode(bestOption.option);
+            this.UIComponentCode = BuildSkipComponentCompleteCode(bestOption.option);
             this.ComponentObjectName = bestOption.option.componentName;
         } 
     }

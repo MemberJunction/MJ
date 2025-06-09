@@ -40,7 +40,7 @@ import { SkipDynamicLinearReportComponent } from './dynamic-report/linear-report
 import { SkipDynamicChartComponent } from './dynamic-report/dynamic-chart';
 import { SkipDynamicGridComponent } from './dynamic-report/dynamic-grid';
 import { MJNotificationsModule } from '@memberjunction/ng-notifications';
-import { SkipDynamicHTMLReportComponent } from './dynamic-report/dynamic-html-report';
+import { SkipDynamicUIComponentComponent } from './dynamic-report/dynamic-ui-component';
 import { SkipSplitPanelComponent } from './split-panel/skip-split-panel.component';
 import { SkipArtifactViewerComponent } from './artifacts/skip-artifact-viewer.component';
 import { SkipArtifactsCounterComponent } from './artifacts/skip-artifacts-counter.component';
@@ -54,7 +54,7 @@ import { SkipArtifactsCounterComponent } from './artifacts/skip-artifacts-counte
     SkipDynamicReportWrapperComponent,
     SkipDynamicChartComponent,
     SkipDynamicGridComponent,
-    SkipDynamicHTMLReportComponent,
+    SkipDynamicUIComponentComponent,
     SkipSplitPanelComponent,
     SkipArtifactViewerComponent,
     SkipArtifactsCounterComponent
@@ -87,7 +87,7 @@ import { SkipArtifactsCounterComponent } from './artifacts/skip-artifacts-counte
     SkipDynamicReportWrapperComponent,
     SkipDynamicChartComponent,
     SkipDynamicGridComponent,
-    SkipDynamicHTMLReportComponent,
+    SkipDynamicUIComponentComponent,
     SkipSplitPanelComponent,
     SkipArtifactViewerComponent,
     SkipArtifactsCounterComponent

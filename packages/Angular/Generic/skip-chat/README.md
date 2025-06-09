@@ -5,7 +5,7 @@ An Angular component package for integrating the Skip AI assistant into MemberJu
 ## Features
 
 - **Conversational AI Interface**: Full chat interface for Skip AI assistant
-- **Dynamic Report Rendering**: Displays AI-generated reports, charts, and data visualizations
+- **Dynamic Component Rendering**: Displays AI-generated UI components, charts, and data visualizations
 - **Conversation Management**: Create, save, rename, and delete conversations
 - **Message Controls**: Edit, delete, and rate messages
 - **Inline Artifacts**: View and interact with AI-generated artifacts directly within messages
