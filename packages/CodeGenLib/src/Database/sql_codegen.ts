@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, Metadata, UserInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, Metadata, UserInfo, EntityFieldTSType } from '@memberjunction/core';
 import { logError, logMessage, logStatus, logWarning } from '../Misc/status_logging';
 import * as fs from 'fs';
 import path from 'path';
@@ -1180,7 +1180,14 @@ ${updatedAtTrigger}
                     // this is the VALUE side (prefix not null/blank), is NOT a primary key, and is a uniqueidentifier column, and has a default value specified
                     // in this situation we need to check if the value being passed in is the special value '00000000-0000-0000-0000-000000000000' (which is in __specialUUIDValue) if it is, we substitute it with the actual default value
                     // otherwise we use the value passed in
-                    sOutput += `CASE @${ef.CodeName} WHEN '${this.__specialUUIDValue}' THEN ${quotes}${ef.DefaultValue}${quotes} ELSE @${ef.CodeName} END`;
+                    // next check to make sure ef.DefaultValue does not contain quotes around the value if it is a string type, if it does, we need to remove them
+                    let defValue = ef.DefaultValue;
+                    if (ef.TSType === EntityFieldTSType.String) {
+                        if (defValue.startsWith("'") && defValue.endsWith("'")) {
+                            defValue = defValue.substring(1, defValue.length - 1).trim(); // remove the quotes
+                        }
+                    }
+                    sOutput += `CASE @${ef.CodeName} WHEN '${this.__specialUUIDValue}' THEN ${quotes}${defValue}${quotes} ELSE @${ef.CodeName} END`;
                 }
                 else {
                     let sVal: string = '';
