@@ -3607,7 +3607,7 @@ export const DashboardSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Type: z.union([z.literal('Config'), z.literal('Code')]).describe(`
+    Type: z.union([z.literal('Config'), z.literal('Code'), z.literal('Dynamic Code')]).describe(`
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(20)
@@ -3616,7 +3616,8 @@ export const DashboardSchema = z.object({
     * * Possible Values 
     *   * Config
     *   * Code
-    * * Description: Specifies if the dashboard is metadata-driven (Config) or code-based (Code)`),
+    *   * Dynamic Code
+    * * Description: Dashboard type supporting Config (metadata-driven), Code (compiled TypeScript), and Dynamic Code (Skip-generated runtime JavaScript/React) options`),
     Thumbnail: z.string().nullable().describe(`
         * * Field Name: Thumbnail
         * * Display Name: Thumbnail
@@ -21379,12 +21380,13 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     * * Possible Values 
     *   * Config
     *   * Code
-    * * Description: Specifies if the dashboard is metadata-driven (Config) or code-based (Code)
+    *   * Dynamic Code
+    * * Description: Dashboard type supporting Config (metadata-driven), Code (compiled TypeScript), and Dynamic Code (Skip-generated runtime JavaScript/React) options
     */
-    get Type(): 'Config' | 'Code' {
+    get Type(): 'Config' | 'Code' | 'Dynamic Code' {
         return this.Get('Type');
     }
-    set Type(value: 'Config' | 'Code') {
+    set Type(value: 'Config' | 'Code' | 'Dynamic Code') {
         this.Set('Type', value);
     }
 
