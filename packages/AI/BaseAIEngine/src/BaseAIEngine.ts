@@ -9,15 +9,11 @@ import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEnt
 export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _models: AIModelEntityExtended[] = [];
     private _vectorDatabases: VectorDatabaseEntity[] = [];
-    private _actions: AIActionEntity[] = [];
-    private _entityActions: EntityAIActionEntity[] = [];
-    private _modelActions: AIModelActionEntity[] = [];
     private _prompts: AIPromptEntity[] = [];
     private _promptModels: AIPromptModelEntity[] = [];
     private _promptTypes: AIPromptTypeEntity[] = [];
     private _promptCategories: AIPromptCategoryEntityExtended[] = [];
     private _agentActions: AIAgentActionEntity[] = [];
-    private _agentModels: AIAgentModelEntity[] = [];
     private _agentNoteTypes: AIAgentNoteTypeEntity[] = [];
     private _agentNotes: AIAgentNoteEntity[] = [];
     private _agents: AIAgentEntityExtended[] = [];
@@ -51,24 +47,8 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 EntityName: 'Vector Databases'
             },
             {
-                PropertyName: '_actions',
-                EntityName: 'AI Actions'
-            },
-            {
-                PropertyName: '_entityActions',
-                EntityName: 'Entity AI Actions'
-            },
-            {
-                PropertyName: '_modelActions',
-                EntityName: 'AI Model Actions'
-            },
-            {
                 PropertyName: '_agentActions',
                 EntityName: 'AI Agent Actions'
-            },
-            {
-                PropertyName: '_agentModels',
-                EntityName: 'AI Agent Models'
             },
             {
                 PropertyName: '_agentNoteTypes',
@@ -112,12 +92,6 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 return action.AgentID === agent.ID;
             }).forEach((action: AIAgentActionEntity) => {
                 agent.Actions.push(action);
-            });
-
-            this._agentModels.filter((model: AIAgentModelEntity) => {
-                return model.AgentID === agent.ID;
-            }).forEach((model: AIAgentModelEntity) => {
-                agent.Models.push(model);
             });
 
             this._agentNotes.filter((note: AIAgentNoteEntity) => {
@@ -173,8 +147,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this._agentActions;
     }
 
+    /**
+     * @deprecated Agent Models are deprecated. This method returns an empty array.
+     */
     public get AgentModels(): AIAgentModelEntity[] {
-        return this._agentModels;
+        return [];
     }
 
     public get AgentNoteTypes(): AIAgentNoteTypeEntity[] {
@@ -228,22 +205,25 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this._vectorDatabases;
     }
 
+    /**
+     * @deprecated AI Model Actions are deprecated. Returns an empty array.
+     */
     public get ModelActions(): AIModelActionEntity[] {
-        return this._modelActions;
+        return [];
     }
 
     /**
-     * @deprecated AI Actions are deprecated.  
+     * @deprecated AI Actions are deprecated. Returns an empty array.
      */
     public get Actions(): AIActionEntity[] {
-        return this._actions;
+        return [];
     }
 
     /**
-     * @deprecated Entity AI Actions are deprecated. 
+     * @deprecated Entity AI Actions are deprecated. Returns an empty array.
      */
     public get EntityAIActions(): EntityAIActionEntity[] {
-        return this._entityActions;
+        return [];
     }
 
     public static get Instance(): AIEngineBase {
