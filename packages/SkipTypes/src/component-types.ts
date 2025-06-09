@@ -300,17 +300,170 @@ export type SkipComponentOption = {
 }
 
 /**
+ * Defines the data requirements for a Skip component, supporting three different data access modes.
+ * This interface is critical for understanding how components interact with MemberJunction data
+ * and helps optimize performance by clearly defining data access patterns.
+ * 
+ * @since 2.1.0 - Enhanced with comprehensive support for static, dynamic, and hybrid data modes
+ */
+export interface SkipComponentDataRequirements {
+    /**
+     * The primary data access mode for this component.
+     * - 'static': Data is pre-loaded and passed to the component during initialization
+     * - 'dynamic': Component fetches data at runtime using MJ utilities
+     * - 'hybrid': Component uses both static and dynamic data access patterns
+     */
+    mode: 'static' | 'dynamic' | 'hybrid';
+    
+    /**
+     * For static mode: References to data context items that this component uses.
+     * These are pre-loaded data snapshots that are passed to the component during initialization.
+     * Static mode is preferred for:
+     * - Reports with fixed datasets
+     * - Components where users don't need entity-level permissions
+     * - Scenarios requiring reduced database load
+     */
+    staticData?: {
+        /**
+         * Array of data context item names that this component depends on.
+         * These names reference items in the conversation's data context.
+         */
+        dataContextItems: string[];
+        
+        /**
+         * Optional description of how the static data is used by the component
+         */
+        description?: string;
+        
+        /**
+         * Optional SQL queries or data specifications used to populate the static data
+         * @since 2.1.0
+         */
+        queries?: string[];
+    };
+    
+    /**
+     * For dynamic mode: Defines which MemberJunction entities this component needs access to.
+     * The component will use the RunView/RunQuery utilities to fetch data at runtime.
+     * Dynamic mode is preferred for:
+     * - Interactive dashboards with drill-down capabilities
+     * - Components requiring real-time data
+     * - Scenarios where users need entity-level permission validation
+     */
+    dynamicData?: {
+        /**
+         * Array of entity names that this component needs to access dynamically.
+         * These should be valid MemberJunction entity names.
+         */
+        requiredEntities: string[];
+        
+        /**
+         * Optional array of view names that this component will execute
+         */
+        viewNames?: string[];
+        
+        /**
+         * Optional array of query names that this component will execute
+         */
+        queryNames?: string[];
+        
+        /**
+         * Optional description of the dynamic data access patterns
+         */
+        description?: string;
+        
+        /**
+         * Optional specification of filters, sorting, and pagination strategies
+         * @since 2.1.0
+         */
+        accessPatterns?: {
+            filtering?: string;
+            sorting?: string;
+            pagination?: string;
+        };
+    };
+    
+    /**
+     * For hybrid mode: Components can use both static and dynamic data access.
+     * Both staticData and dynamicData sections should be populated.
+     * Hybrid mode is useful for:
+     * - Components with both summary (static) and detail (dynamic) views
+     * - Optimizing performance while maintaining interactivity
+     */
+    hybridStrategy?: {
+        /**
+         * Description of how the component decides when to use static vs dynamic data
+         */
+        description: string;
+        
+        /**
+         * Optional performance considerations for the hybrid approach
+         */
+        performanceNotes?: string;
+        
+        /**
+         * Optional breakdown of which parts use static vs dynamic data
+         * @since 2.1.0
+         */
+        breakdown?: {
+            staticParts: string[];
+            dynamicParts: string[];
+        };
+    };
+    
+    /**
+     * General description of the component's data requirements and access patterns.
+     * This should provide a high-level overview of the data strategy.
+     */
+    description?: string;
+    
+    /**
+     * Security considerations for data access
+     * @since 2.1.0
+     */
+    securityNotes?: string;
+}
+
+/**
  * Represents a complete specification for a generated Skip component, including its structure,
  * requirements, code, and nested component hierarchy
  */
 export type SkipComponentRootSpec = {
     /**
-     * A description of what the component should do from a functional perspective
+     * A description of what the component should do from a functional perspective.
+     * This should be in markdown format and include:
+     * - Core functionality and purpose
+     * - User interactions and behaviors
+     * - Business rules and logic
+     * - Expected outcomes and outputs
+     * - User experience considerations
+     * - Accessibility requirements
+     * 
+     * @since 2.1.0 - Made required and enhanced documentation
      */
     functionalRequirements: string;
     
     /**
-     * A technical description of how the component is designed and implemented
+     * Detailed data requirements specification for the component.
+     * Defines how the component accesses and uses data, supporting static, dynamic, and hybrid modes.
+     * This field is critical for determining how the component will interact with MemberJunction data.
+     * 
+     * @since 2.1.0 - Made required for better data architecture planning
+     */
+    dataRequirements: SkipComponentDataRequirements;
+    
+    /**
+     * A technical description of how the component is designed and implemented.
+     * This should be in markdown format and include:
+     * - Architecture and design patterns used
+     * - Key technical decisions and rationale
+     * - Component structure and organization
+     * - State management approach
+     * - Performance considerations
+     * - Integration points with parent/child components
+     * - Error handling strategies
+     * 
+     * @since 2.1.0 - Made required and enhanced documentation
      */
     technicalDesign: string;
     
@@ -337,6 +490,7 @@ export type SkipComponentRootSpec = {
      * the SkipComponentObject interface to dynamically access data from the MemberJunction instance that it is running within. 'both' means
      * that the component can use both static and dynamic data access methods, and 'none' means that the component does not use any data (rare, but possible for example if
      * a component does something other than show data or if it uses 3rd party data sources via API that are not related to the MJ instance it is running within).
+     * @deprecated Use dataRequirements.mode instead for more detailed data access specification
      */
     dataAccessType: 'static' | 'dynamic' | 'both' | 'none';    
 
@@ -403,6 +557,41 @@ export interface SkipComponentChildSpec {
      * A detailed description of what this child component does
      */
     description: string;
+    
+    /**
+     * Functional requirements for this child component.
+     * This should be in markdown format and describe what the component should do from a functional perspective.
+     * Includes:
+     * - Component-specific functionality
+     * - How it integrates with the parent component
+     * - User interactions within this component
+     * - Business rules specific to this component
+     * 
+     * @since 2.1.0 - Enhanced documentation for clarity
+     */
+    functionalRequirements?: string;
+    
+    /**
+     * Data requirements for this child component.
+     * Defines how the component accesses and uses data, inheriting or extending parent component's data access.
+     * Child components typically inherit data access patterns from their parent but may have specific needs.
+     * 
+     * @since 2.1.0 - Enhanced documentation for clarity
+     */
+    dataRequirements?: SkipComponentDataRequirements;
+    
+    /**
+     * Technical design details for this child component.
+     * This should be in markdown format and describe the implementation approach.
+     * Includes:
+     * - How the component is structured
+     * - State management within the component
+     * - Props interface and event handlers
+     * - Performance optimizations specific to this component
+     * 
+     * @since 2.1.0 - Enhanced documentation for clarity
+     */
+    technicalDesign?: string;
     
     /**
      * The path in the state tree where this component's state is stored
