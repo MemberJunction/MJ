@@ -981,15 +981,8 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             if (dataReq.staticData.description) {
                 markdown += `${dataReq.staticData.description}\n\n`;
             }
-            if (dataReq.staticData.dataContextItems.length > 0) {
-                markdown += `**Data Context Items:**\n`;
-                dataReq.staticData.dataContextItems.forEach(item => {
-                    markdown += `- ${item}\n`;
-                });
-                markdown += '\n';
-            }
-            if (dataReq.staticData.queries && dataReq.staticData.queries.length > 0) {
-                markdown += `**Queries:**\n\`\`\`sql\n${dataReq.staticData.queries.join('\n\n')}\n\`\`\`\n\n`;
+            if (dataReq.staticData.dataContext) {
+                markdown += `**Data Context:** Present (pre-loaded data available)\n\n`;
             }
         }
         
@@ -998,27 +991,11 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             if (dataReq.dynamicData.description) {
                 markdown += `${dataReq.dynamicData.description}\n\n`;
             }
-            if (dataReq.dynamicData.requiredEntities.length > 0) {
+            if (dataReq.dynamicData.requiredEntities && dataReq.dynamicData.requiredEntities.length > 0) {
                 markdown += `**Required Entities:**\n`;
                 dataReq.dynamicData.requiredEntities.forEach(entity => {
                     markdown += `- ${entity}\n`;
                 });
-                markdown += '\n';
-            }
-            if (dataReq.dynamicData.viewNames && dataReq.dynamicData.viewNames.length > 0) {
-                markdown += `**Views:** ${dataReq.dynamicData.viewNames.join(', ')}\n\n`;
-            }
-            if (dataReq.dynamicData.accessPatterns) {
-                markdown += `**Access Patterns:**\n`;
-                if (dataReq.dynamicData.accessPatterns.filtering) {
-                    markdown += `- Filtering: ${dataReq.dynamicData.accessPatterns.filtering}\n`;
-                }
-                if (dataReq.dynamicData.accessPatterns.sorting) {
-                    markdown += `- Sorting: ${dataReq.dynamicData.accessPatterns.sorting}\n`;
-                }
-                if (dataReq.dynamicData.accessPatterns.pagination) {
-                    markdown += `- Pagination: ${dataReq.dynamicData.accessPatterns.pagination}\n`;
-                }
                 markdown += '\n';
             }
         }
@@ -1027,22 +1004,6 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             markdown += `### Hybrid Strategy\n\n${dataReq.hybridStrategy.description}\n\n`;
             if (dataReq.hybridStrategy.performanceNotes) {
                 markdown += `**Performance Notes:** ${dataReq.hybridStrategy.performanceNotes}\n\n`;
-            }
-            if (dataReq.hybridStrategy.breakdown) {
-                if (dataReq.hybridStrategy.breakdown.staticParts.length > 0) {
-                    markdown += `**Static Parts:**\n`;
-                    dataReq.hybridStrategy.breakdown.staticParts.forEach(part => {
-                        markdown += `- ${part}\n`;
-                    });
-                    markdown += '\n';
-                }
-                if (dataReq.hybridStrategy.breakdown.dynamicParts.length > 0) {
-                    markdown += `**Dynamic Parts:**\n`;
-                    dataReq.hybridStrategy.breakdown.dynamicParts.forEach(part => {
-                        markdown += `- ${part}\n`;
-                    });
-                    markdown += '\n';
-                }
             }
         }
         
