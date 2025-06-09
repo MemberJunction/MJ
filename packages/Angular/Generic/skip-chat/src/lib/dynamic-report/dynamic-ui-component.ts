@@ -1,8 +1,10 @@
-import { AfterViewInit, Component, ElementRef, EventEmitter, Input, OnDestroy, Output, ViewChild, ViewChildren, QueryList, SimpleChanges } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, EventEmitter, Input, OnDestroy, Output, ViewChild, ViewChildren, QueryList, SimpleChanges, ChangeDetectorRef, NgZone, HostListener } from '@angular/core';
 import { CompositeKey, KeyValuePair, LogError, Metadata, RunQuery, RunQueryParams, RunView, RunViewParams } from '@memberjunction/core';
 import { SkipReactComponentHost } from './skip-react-component-host';
 import { MapEntityInfoToSkipEntityInfo, SimpleMetadata, SimpleRunQuery, SimpleRunView, SkipAPIAnalysisCompleteResponse, SkipComponentStyles, SkipComponentCallbacks, SkipComponentUtilities, SkipComponentOption, BuildSkipComponentCompleteCode } from '@memberjunction/skip-types';
 import { DrillDownInfo } from '../drill-down-info';
+import { DomSanitizer } from '@angular/platform-browser';
+import { marked } from 'marked';
 
 @Component({
   selector: 'skip-dynamic-ui-component',
@@ -26,7 +28,35 @@ import { DrillDownInfo } from '../drill-down-info';
                 <!-- Tab Action Bar -->
                 <div class="tab-action-bar">
                   <div class="tab-actions-left">
-                    <!-- Space for future left-aligned actions -->
+                    <!-- Toggle buttons for showing/hiding component details -->
+                    <button class="tab-action-button toggle-button" 
+                            (click)="toggleShowFunctionalRequirements()"
+                            [class.active]="showFunctionalRequirements"
+                            title="Toggle Functional Requirements">
+                      <i class="fa-solid fa-list-check"></i>
+                      <span>Functional</span>
+                    </button>
+                    <button class="tab-action-button toggle-button" 
+                            (click)="toggleShowDataRequirements()"
+                            [class.active]="showDataRequirements"
+                            title="Toggle Data Requirements">
+                      <i class="fa-solid fa-database"></i>
+                      <span>Data</span>
+                    </button>
+                    <button class="tab-action-button toggle-button" 
+                            (click)="toggleShowTechnicalDesign()"
+                            [class.active]="showTechnicalDesign"
+                            title="Toggle Technical Design">
+                      <i class="fa-solid fa-cogs"></i>
+                      <span>Technical</span>
+                    </button>
+                    <button class="tab-action-button toggle-button" 
+                            (click)="toggleShowCode()"
+                            [class.active]="showCode"
+                            title="Toggle Code View">
+                      <i class="fa-solid fa-code"></i>
+                      <span>Code</span>
+                    </button>
                   </div>
                   <div class="tab-actions-right">
                     <button class="tab-action-button create-button" 
@@ -34,7 +64,7 @@ import { DrillDownInfo } from '../drill-down-info';
                             (click)="createReportForOption(i)"
                             [disabled]="isCreatingReport">
                       <i class="fa-solid fa-plus"></i>
-                      <span>Create Report</span>
+                      <span>Create {{ getComponentTypeName(option) }}</span>
                     </button>
                     <button class="tab-action-button print-button" 
                             *ngIf="ShowPrintReport" 
@@ -46,12 +76,82 @@ import { DrillDownInfo } from '../drill-down-info';
                   </div>
                 </div>
                 
-                <!-- React component container -->
-                <div #htmlContainer [attr.data-tab-index]="i" 
-                     style="flex: 1; position: relative; min-height: 0;">
-                  <!-- Content will be rendered here by React host -->
+                <!-- Main content area with optional details panels -->
+                <div style="flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
+                  @if (showFunctionalRequirements || showDataRequirements || showTechnicalDesign || showCode) {
+                    <!-- Details panel -->
+                    <div class="details-panel" [style.height]="detailsPanelHeight">
+                      <kendo-tabstrip style="height: 100%;">
+                        @if (showFunctionalRequirements) {
+                          <kendo-tabstrip-tab [selected]="true">
+                            <ng-template kendoTabTitle>
+                              <i class="fa-solid fa-list-check"></i> Functional Requirements
+                            </ng-template>
+                            <ng-template kendoTabContent>
+                              <div class="details-content">
+                                <div [innerHTML]="getFormattedFunctionalRequirements(option)"></div>
+                              </div>
+                            </ng-template>
+                          </kendo-tabstrip-tab>
+                        }
+                        @if (showDataRequirements) {
+                          <kendo-tabstrip-tab [selected]="!showFunctionalRequirements">
+                            <ng-template kendoTabTitle>
+                              <i class="fa-solid fa-database"></i> Data Requirements
+                            </ng-template>
+                            <ng-template kendoTabContent>
+                              <div class="details-content">
+                                <div [innerHTML]="getFormattedDataRequirements(option)"></div>
+                              </div>
+                            </ng-template>
+                          </kendo-tabstrip-tab>
+                        }
+                        @if (showTechnicalDesign) {
+                          <kendo-tabstrip-tab [selected]="!showFunctionalRequirements && !showDataRequirements">
+                            <ng-template kendoTabTitle>
+                              <i class="fa-solid fa-cogs"></i> Technical Design
+                            </ng-template>
+                            <ng-template kendoTabContent>
+                              <div class="details-content">
+                                <div [innerHTML]="getFormattedTechnicalDesign(option)"></div>
+                              </div>
+                            </ng-template>
+                          </kendo-tabstrip-tab>
+                        }
+                        @if (showCode) {
+                          <kendo-tabstrip-tab [selected]="!showFunctionalRequirements && !showDataRequirements && !showTechnicalDesign">
+                            <ng-template kendoTabTitle>
+                              <i class="fa-solid fa-code"></i> Code
+                            </ng-template>
+                            <ng-template kendoTabContent>
+                              <div class="details-content code-content">
+                                <mj-code-editor
+                                  [value]="getComponentCode(option)"
+                                  [autoFocus]="false"
+                                  [indentWithTab]="true"
+                                  [readonly]="true"
+                                  style="height: 100%;">
+                                </mj-code-editor>
+                              </div>
+                            </ng-template>
+                          </kendo-tabstrip-tab>
+                        }
+                      </kendo-tabstrip>
+                    </div>
+                    <!-- Resizer -->
+                    <div class="panel-resizer" 
+                         (mousedown)="startResize($event)"
+                         (touchstart)="startResize($event)">
+                      <div class="resizer-handle"></div>
+                    </div>
+                  }
                   
-                  <!-- Error overlay for this tab (shown on top of content when needed) -->
+                  <!-- React component container -->
+                  <div #htmlContainer [attr.data-tab-index]="i" 
+                       style="flex: 1; position: relative; min-height: 0; overflow: auto;">
+                    <!-- Content will be rendered here by React host -->
+                    
+                    <!-- Error overlay for this tab (shown on top of content when needed) -->
                   @if (currentError && selectedReportOptionIndex === i) {
                     <div style="top: 0; 
                                 left: 0; 
@@ -114,6 +214,7 @@ import { DrillDownInfo } from '../drill-down-info';
                       </div>
                     </div>
                   }
+                  </div>
                 </div>
               </div>
             </ng-template>
@@ -126,7 +227,35 @@ import { DrillDownInfo } from '../drill-down-info';
         <!-- Tab Action Bar -->
         <div class="tab-action-bar">
           <div class="tab-actions-left">
-            <!-- Space for future left-aligned actions -->
+            <!-- Toggle buttons for showing/hiding component details -->
+            <button class="tab-action-button toggle-button" 
+                    (click)="toggleShowFunctionalRequirements()"
+                    [class.active]="showFunctionalRequirements"
+                    title="Toggle Functional Requirements">
+              <i class="fa-solid fa-list-check"></i>
+              <span>Functional</span>
+            </button>
+            <button class="tab-action-button toggle-button" 
+                    (click)="toggleShowDataRequirements()"
+                    [class.active]="showDataRequirements"
+                    title="Toggle Data Requirements">
+              <i class="fa-solid fa-database"></i>
+              <span>Data</span>
+            </button>
+            <button class="tab-action-button toggle-button" 
+                    (click)="toggleShowTechnicalDesign()"
+                    [class.active]="showTechnicalDesign"
+                    title="Toggle Technical Design">
+              <i class="fa-solid fa-cogs"></i>
+              <span>Technical</span>
+            </button>
+            <button class="tab-action-button toggle-button" 
+                    (click)="toggleShowCode()"
+                    [class.active]="showCode"
+                    title="Toggle Code View">
+              <i class="fa-solid fa-code"></i>
+              <span>Code</span>
+            </button>
           </div>
           <div class="tab-actions-right">
             <button class="tab-action-button create-button" 
@@ -134,7 +263,7 @@ import { DrillDownInfo } from '../drill-down-info';
                     (click)="createReportForOption(0)"
                     [disabled]="isCreatingReport">
               <i class="fa-solid fa-plus"></i>
-              <span>Create Report</span>
+              <span>Create {{ reportOptions[0] ? getComponentTypeName(reportOptions[0]) : 'Component' }}</span>
             </button>
             <button class="tab-action-button print-button" 
                     *ngIf="ShowPrintReport" 
@@ -146,11 +275,81 @@ import { DrillDownInfo } from '../drill-down-info';
           </div>
         </div>
         
-        <!-- React component container -->
-        <div #htmlContainer style="flex: 1; position: relative; min-height: 0;">
-          <!-- Content will be rendered here by React host -->
+        <!-- Main content area with optional details panels -->
+        <div style="flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
+          @if (showFunctionalRequirements || showDataRequirements || showTechnicalDesign || showCode) {
+            <!-- Details panel -->
+            <div class="details-panel" [style.height]="detailsPanelHeight">
+              <kendo-tabstrip style="height: 100%;">
+                @if (showFunctionalRequirements && reportOptions[0]) {
+                  <kendo-tabstrip-tab [selected]="true">
+                    <ng-template kendoTabTitle>
+                      <i class="fa-solid fa-list-check"></i> Functional Requirements
+                    </ng-template>
+                    <ng-template kendoTabContent>
+                      <div class="details-content">
+                        <div [innerHTML]="getFormattedFunctionalRequirements(reportOptions[0])"></div>
+                      </div>
+                    </ng-template>
+                  </kendo-tabstrip-tab>
+                }
+                @if (showDataRequirements && reportOptions[0]) {
+                  <kendo-tabstrip-tab [selected]="!showFunctionalRequirements">
+                    <ng-template kendoTabTitle>
+                      <i class="fa-solid fa-database"></i> Data Requirements
+                    </ng-template>
+                    <ng-template kendoTabContent>
+                      <div class="details-content">
+                        <div [innerHTML]="getFormattedDataRequirements(reportOptions[0])"></div>
+                      </div>
+                    </ng-template>
+                  </kendo-tabstrip-tab>
+                }
+                @if (showTechnicalDesign && reportOptions[0]) {
+                  <kendo-tabstrip-tab [selected]="!showFunctionalRequirements && !showDataRequirements">
+                    <ng-template kendoTabTitle>
+                      <i class="fa-solid fa-cogs"></i> Technical Design
+                    </ng-template>
+                    <ng-template kendoTabContent>
+                      <div class="details-content">
+                        <div [innerHTML]="getFormattedTechnicalDesign(reportOptions[0])"></div>
+                      </div>
+                    </ng-template>
+                  </kendo-tabstrip-tab>
+                }
+                @if (showCode && reportOptions[0]) {
+                  <kendo-tabstrip-tab [selected]="!showFunctionalRequirements && !showDataRequirements && !showTechnicalDesign">
+                    <ng-template kendoTabTitle>
+                      <i class="fa-solid fa-code"></i> Code
+                    </ng-template>
+                    <ng-template kendoTabContent>
+                      <div class="details-content code-content">
+                        <mj-code-editor
+                          [value]="getComponentCode(reportOptions[0])"
+                          [autoFocus]="false"
+                          [indentWithTab]="true"
+                          [readonly]="true"
+                          style="height: 100%;">
+                        </mj-code-editor>
+                      </div>
+                    </ng-template>
+                  </kendo-tabstrip-tab>
+                }
+              </kendo-tabstrip>
+            </div>
+            <!-- Resizer -->
+            <div class="panel-resizer" 
+                 (mousedown)="startResize($event)"
+                 (touchstart)="startResize($event)">
+              <div class="resizer-handle"></div>
+            </div>
+          }
           
-          <!-- Error overlay (shown on top of content when needed) -->
+          <!-- React component container -->
+          <div #htmlContainer style="flex: 1; position: relative; min-height: 0; overflow: auto;">
+            <!-- Content will be rendered here by React host -->
+            
+            <!-- Error overlay (shown on top of content when needed) -->
           @if (currentError) {
             <div style="position: absolute; 
                         top: 0; 
@@ -213,6 +412,7 @@ import { DrillDownInfo } from '../drill-down-info';
               </div>
             </div>
           }
+          </div>
         </div>
       </div>
     }
@@ -285,6 +485,99 @@ import { DrillDownInfo } from '../drill-down-info';
     .tab-action-button.print-button:hover:not(:disabled) {
       background-color: #f5f5f5;
       border-color: #d0d0d0;
+    }
+    
+    /* Toggle buttons styling */
+    .tab-action-button.toggle-button {
+      background-color: white;
+      color: #666;
+      border-color: #e0e0e0;
+    }
+    
+    .tab-action-button.toggle-button:hover:not(:disabled) {
+      background-color: #f5f5f5;
+      border-color: #d0d0d0;
+      color: #333;
+    }
+    
+    .tab-action-button.toggle-button.active {
+      background-color: #5B4FE9;
+      color: white;
+      border-color: #5B4FE9;
+    }
+    
+    .tab-action-button.toggle-button.active:hover:not(:disabled) {
+      background-color: #4940D4;
+      border-color: #4940D4;
+    }
+    
+    /* Details panel styling */
+    .details-panel {
+      border-bottom: 1px solid #e0e0e0;
+      background-color: #fafafa;
+      overflow: hidden;
+      transition: height 0.3s ease;
+    }
+    
+    .details-content {
+      padding: 16px;
+      overflow-y: auto;
+      height: 100%;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    
+    .details-content.code-content {
+      padding: 0;
+    }
+    
+    /* Panel resizer */
+    .panel-resizer {
+      height: 4px;
+      background-color: #e0e0e0;
+      cursor: ns-resize;
+      position: relative;
+      transition: background-color 0.2s ease;
+    }
+    
+    .panel-resizer:hover {
+      background-color: #d0d0d0;
+    }
+    
+    .resizer-handle {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 40px;
+      height: 2px;
+      background-color: #999;
+      border-radius: 1px;
+    }
+    
+    /* Markdown content styling */
+    .details-content :deep(h1) { font-size: 1.5em; margin-top: 0; margin-bottom: 0.5em; }
+    .details-content :deep(h2) { font-size: 1.3em; margin-top: 1em; margin-bottom: 0.5em; }
+    .details-content :deep(h3) { font-size: 1.1em; margin-top: 1em; margin-bottom: 0.5em; }
+    .details-content :deep(ul), .details-content :deep(ol) { margin-left: 1.5em; }
+    .details-content :deep(code) { 
+      background-color: #f4f4f4; 
+      padding: 2px 4px; 
+      border-radius: 3px; 
+      font-family: 'Courier New', monospace; 
+      font-size: 0.9em;
+    }
+    .details-content :deep(pre) { 
+      background-color: #f4f4f4; 
+      padding: 12px; 
+      border-radius: 4px; 
+      overflow-x: auto; 
+    }
+    .details-content :deep(blockquote) { 
+      border-left: 4px solid #e0e0e0; 
+      padding-left: 16px; 
+      margin-left: 0; 
+      color: #666; 
     }
     
     /* Tab styling */
@@ -422,6 +715,18 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
     public currentError: { type: string; message: string; technicalDetails?: string } | null = null;
     public isCreatingReport: boolean = false;
     
+    // Toggle states for showing/hiding component details
+    public showFunctionalRequirements: boolean = false;
+    public showDataRequirements: boolean = false;
+    public showTechnicalDesign: boolean = false;
+    public showCode: boolean = false;
+    
+    // Details panel height for resizing
+    public detailsPanelHeight: string = '300px';
+    private isResizing: boolean = false;
+    private startY: number = 0;
+    private startHeight: number = 0;
+    
     // Cache for React component hosts - lazy loaded per option
     private reactHostCache: Map<number, SkipReactComponentHost> = new Map();
     private currentHostIndex: number | null = null;
@@ -433,7 +738,11 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
         NotifyEvent: (eventName: string, eventData: any) => this.handleNotifyEvent(eventName, eventData)
     };
 
-    constructor() { }
+    constructor(
+        private sanitizer: DomSanitizer,
+        private cdr: ChangeDetectorRef,
+        private ngZone: NgZone
+    ) { }
 
     /**
      * Gets the currently selected report option
@@ -596,6 +905,229 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         this.isCreatingReport = true;
         // Emit the event with the option index so the parent can handle it
         this.CreateReportRequested.emit(optionIndex);
+    }
+    
+    /**
+     * Get the component type name for display
+     */
+    public getComponentTypeName(option: SkipComponentOption): string {
+        const type = option.option.componentType || 'report';
+        return type.charAt(0).toUpperCase() + type.slice(1);
+    }
+    
+    /**
+     * Toggle methods for showing/hiding component details
+     */
+    public toggleShowFunctionalRequirements(): void {
+        this.showFunctionalRequirements = !this.showFunctionalRequirements;
+        this.adjustDetailsPanelHeight();
+    }
+    
+    public toggleShowDataRequirements(): void {
+        this.showDataRequirements = !this.showDataRequirements;
+        this.adjustDetailsPanelHeight();
+    }
+    
+    public toggleShowTechnicalDesign(): void {
+        this.showTechnicalDesign = !this.showTechnicalDesign;
+        this.adjustDetailsPanelHeight();
+    }
+    
+    public toggleShowCode(): void {
+        this.showCode = !this.showCode;
+        this.adjustDetailsPanelHeight();
+    }
+    
+    /**
+     * Adjust the details panel height when toggling views
+     */
+    private adjustDetailsPanelHeight(): void {
+        const anyVisible = this.showFunctionalRequirements || this.showDataRequirements || 
+                          this.showTechnicalDesign || this.showCode;
+        
+        if (anyVisible && this.detailsPanelHeight === '0px') {
+            this.detailsPanelHeight = '300px';
+        } else if (!anyVisible) {
+            this.detailsPanelHeight = '0px';
+        }
+    }
+    
+    /**
+     * Format functional requirements as HTML
+     */
+    public getFormattedFunctionalRequirements(option: SkipComponentOption): any {
+        const requirements = option.option.functionalRequirements || 'No functional requirements specified.';
+        const html = marked.parse(requirements);
+        return this.sanitizer.sanitize(1, html); // 1 = SecurityContext.HTML
+    }
+    
+    /**
+     * Format data requirements as HTML
+     */
+    public getFormattedDataRequirements(option: SkipComponentOption): any {
+        const dataReq = option.option.dataRequirements;
+        if (!dataReq) {
+            return this.sanitizer.sanitize(1, '<p>No data requirements specified.</p>');
+        }
+        
+        let markdown = `## Data Access Mode: ${dataReq.mode}\n\n`;
+        
+        if (dataReq.description) {
+            markdown += `${dataReq.description}\n\n`;
+        }
+        
+        if (dataReq.staticData) {
+            markdown += `### Static Data\n\n`;
+            if (dataReq.staticData.description) {
+                markdown += `${dataReq.staticData.description}\n\n`;
+            }
+            if (dataReq.staticData.dataContextItems.length > 0) {
+                markdown += `**Data Context Items:**\n`;
+                dataReq.staticData.dataContextItems.forEach(item => {
+                    markdown += `- ${item}\n`;
+                });
+                markdown += '\n';
+            }
+            if (dataReq.staticData.queries && dataReq.staticData.queries.length > 0) {
+                markdown += `**Queries:**\n\`\`\`sql\n${dataReq.staticData.queries.join('\n\n')}\n\`\`\`\n\n`;
+            }
+        }
+        
+        if (dataReq.dynamicData) {
+            markdown += `### Dynamic Data\n\n`;
+            if (dataReq.dynamicData.description) {
+                markdown += `${dataReq.dynamicData.description}\n\n`;
+            }
+            if (dataReq.dynamicData.requiredEntities.length > 0) {
+                markdown += `**Required Entities:**\n`;
+                dataReq.dynamicData.requiredEntities.forEach(entity => {
+                    markdown += `- ${entity}\n`;
+                });
+                markdown += '\n';
+            }
+            if (dataReq.dynamicData.viewNames && dataReq.dynamicData.viewNames.length > 0) {
+                markdown += `**Views:** ${dataReq.dynamicData.viewNames.join(', ')}\n\n`;
+            }
+            if (dataReq.dynamicData.accessPatterns) {
+                markdown += `**Access Patterns:**\n`;
+                if (dataReq.dynamicData.accessPatterns.filtering) {
+                    markdown += `- Filtering: ${dataReq.dynamicData.accessPatterns.filtering}\n`;
+                }
+                if (dataReq.dynamicData.accessPatterns.sorting) {
+                    markdown += `- Sorting: ${dataReq.dynamicData.accessPatterns.sorting}\n`;
+                }
+                if (dataReq.dynamicData.accessPatterns.pagination) {
+                    markdown += `- Pagination: ${dataReq.dynamicData.accessPatterns.pagination}\n`;
+                }
+                markdown += '\n';
+            }
+        }
+        
+        if (dataReq.hybridStrategy) {
+            markdown += `### Hybrid Strategy\n\n${dataReq.hybridStrategy.description}\n\n`;
+            if (dataReq.hybridStrategy.performanceNotes) {
+                markdown += `**Performance Notes:** ${dataReq.hybridStrategy.performanceNotes}\n\n`;
+            }
+            if (dataReq.hybridStrategy.breakdown) {
+                if (dataReq.hybridStrategy.breakdown.staticParts.length > 0) {
+                    markdown += `**Static Parts:**\n`;
+                    dataReq.hybridStrategy.breakdown.staticParts.forEach(part => {
+                        markdown += `- ${part}\n`;
+                    });
+                    markdown += '\n';
+                }
+                if (dataReq.hybridStrategy.breakdown.dynamicParts.length > 0) {
+                    markdown += `**Dynamic Parts:**\n`;
+                    dataReq.hybridStrategy.breakdown.dynamicParts.forEach(part => {
+                        markdown += `- ${part}\n`;
+                    });
+                    markdown += '\n';
+                }
+            }
+        }
+        
+        if (dataReq.securityNotes) {
+            markdown += `### Security Considerations\n\n${dataReq.securityNotes}\n`;
+        }
+        
+        const html = marked.parse(markdown);
+        return this.sanitizer.sanitize(1, html);
+    }
+    
+    /**
+     * Format technical design as HTML
+     */
+    public getFormattedTechnicalDesign(option: SkipComponentOption): any {
+        const design = option.option.technicalDesign || 'No technical design specified.';
+        const html = marked.parse(design);
+        return this.sanitizer.sanitize(1, html);
+    }
+    
+    /**
+     * Get the component code
+     */
+    public getComponentCode(option: SkipComponentOption): string {
+        try {
+            return BuildSkipComponentCompleteCode(option.option);
+        } catch (e) {
+            return `// Error building complete component code:\n// ${e}`;
+        }
+    }
+    
+    /**
+     * Start resizing the details panel
+     */
+    public startResize(event: MouseEvent | TouchEvent): void {
+        event.preventDefault();
+        this.isResizing = true;
+        this.startY = event instanceof MouseEvent ? event.clientY : event.touches[0].clientY;
+        this.startHeight = parseInt(this.detailsPanelHeight, 10);
+        
+        // Use NgZone to run outside Angular to prevent change detection during drag
+        this.ngZone.runOutsideAngular(() => {
+            document.addEventListener('mousemove', this.onResize);
+            document.addEventListener('mouseup', this.stopResize);
+            document.addEventListener('touchmove', this.onResize);
+            document.addEventListener('touchend', this.stopResize);
+        });
+    }
+    
+    /**
+     * Handle resize movement
+     */
+    private onResize = (event: MouseEvent | TouchEvent): void => {
+        if (!this.isResizing) return;
+        
+        const currentY = event instanceof MouseEvent ? event.clientY : event.touches[0].clientY;
+        const deltaY = currentY - this.startY;
+        const newHeight = Math.max(100, Math.min(600, this.startHeight + deltaY));
+        
+        // Run inside Angular to update the binding
+        this.ngZone.run(() => {
+            this.detailsPanelHeight = `${newHeight}px`;
+            this.cdr.detectChanges();
+        });
+    }
+    
+    /**
+     * Stop resizing
+     */
+    private stopResize = (): void => {
+        this.isResizing = false;
+        document.removeEventListener('mousemove', this.onResize);
+        document.removeEventListener('mouseup', this.stopResize);
+        document.removeEventListener('touchmove', this.onResize);
+        document.removeEventListener('touchend', this.stopResize);
+    }
+    
+    @HostListener('window:resize')
+    onWindowResize(): void {
+        // Ensure the details panel height remains valid on window resize
+        const currentHeight = parseInt(this.detailsPanelHeight, 10);
+        const maxHeight = window.innerHeight * 0.6;
+        if (currentHeight > maxHeight) {
+            this.detailsPanelHeight = `${maxHeight}px`;
+        }
     }
 
     ngAfterViewInit() {
