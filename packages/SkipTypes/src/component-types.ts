@@ -450,7 +450,7 @@ export type SkipComponentRootSpec = {
      * 
      * @since 2.1.0 - Made required for better data architecture planning
      */
-    dataRequirements: SkipComponentDataRequirements;
+    dataRequirements?: SkipComponentDataRequirements;
     
     /**
      * A technical description of how the component is designed and implemented.
