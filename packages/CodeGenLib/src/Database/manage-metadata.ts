@@ -1793,9 +1793,15 @@ export class ManageMetadataBase {
    }
 
    protected async createNewApplication(ds: DataSource, appID: string, appName: string, schemaName: string): Promise<string | null>{
-      const sSQL: string = "INSERT INTO [" + mj_core_schema() + "].Application (ID, Name, Description, SchemaAutoAddNewEntities) VALUES ('" + appID + "', '" + appName + "', 'Generated for schema', '" + schemaName + "')";
-      const result = await this.LogSQLAndExecute(ds, sSQL, `SQL generated to create new application ${appName}`);
-      return result && result.length > 0 ? result[0].ID : null;
+      try {
+         const sSQL: string = "INSERT INTO [" + mj_core_schema() + "].Application (ID, Name, Description, SchemaAutoAddNewEntities) VALUES ('" + appID + "', '" + appName + "', 'Generated for schema', '" + schemaName + "')";
+         await this.LogSQLAndExecute(ds, sSQL, `SQL generated to create new application ${appName}`);
+         return appID; // if we get here, we successfully created the application, so return the ID
+      }
+      catch (e) {
+         LogError(`Failed to create new application ${appName} for schema ${schemaName}`, null, e);
+         return null; // if we get here, we failed to create the application
+      }
    }
 
    protected async applicationExists(ds: DataSource, applicationName: string): Promise<boolean>{
