@@ -1,5 +1,15 @@
 # @memberjunction/ai-mcp-server
 
+## 2.47.0
+
+### Patch Changes
+
+- Updated dependencies [3f31192]
+  - @memberjunction/sqlserver-dataprovider@2.47.0
+  - @memberjunction/core@2.47.0
+  - @memberjunction/core-entities@2.47.0
+  - @memberjunction/global@2.47.0
+
 ## 2.46.0
 
 ### Patch Changes

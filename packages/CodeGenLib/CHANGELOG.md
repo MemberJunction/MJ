@@ -1,5 +1,31 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.47.0
+
+### Minor Changes
+
+- 6e60efe: Clean up code gen bugs and AIEngineBase
+
+### Patch Changes
+
+- 31afe2a: Fix CodeGen view refresh failure when foreign key columns are dropped
+  Enhanced the `recompileAllBaseViews()` function to automatically detect and recover from view refresh
+  failures. When `sp_refreshview` fails due to dropped foreign key columns, the system now falls back
+  to regenerating the view definition using current schema, preventing cascading CodeGen failures and
+  metadata corruption.
+- Updated dependencies [3f31192]
+  - @memberjunction/sqlserver-dataprovider@2.47.0
+  - @memberjunction/aiengine@2.47.0
+  - @memberjunction/actions@2.47.0
+  - @memberjunction/ai@2.47.0
+  - @memberjunction/ai-anthropic@2.47.0
+  - @memberjunction/ai-groq@2.47.0
+  - @memberjunction/ai-mistral@2.47.0
+  - @memberjunction/ai-openai@2.47.0
+  - @memberjunction/core@2.47.0
+  - @memberjunction/core-entities@2.47.0
+  - @memberjunction/global@2.47.0
+
 ## 2.46.0
 
 ### Patch Changes

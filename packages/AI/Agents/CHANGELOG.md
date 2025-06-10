@@ -1,5 +1,19 @@
 # @memberjunction/ai-agents
 
+## 2.47.0
+
+### Patch Changes
+
+- Updated dependencies [3621e2f]
+- Updated dependencies [4c4751c]
+  - @memberjunction/ai-prompts@2.47.0
+  - @memberjunction/aiengine@2.47.0
+  - @memberjunction/templates@2.47.0
+  - @memberjunction/ai@2.47.0
+  - @memberjunction/core@2.47.0
+  - @memberjunction/core-entities@2.47.0
+  - @memberjunction/global@2.47.0
+
 ## 2.46.0
 
 ### Patch Changes

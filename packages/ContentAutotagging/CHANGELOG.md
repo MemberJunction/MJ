@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/content-autotagging
 
+## 2.47.0
+
+### Patch Changes
+
+- @memberjunction/aiengine@2.47.0
+- @memberjunction/ai@2.47.0
+- @memberjunction/core@2.47.0
+- @memberjunction/core-entities@2.47.0
+- @memberjunction/global@2.47.0
+
 ## 2.46.0
 
 ### Patch Changes

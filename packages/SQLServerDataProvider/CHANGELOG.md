@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 2.47.0
+
+### Patch Changes
+
+- 3f31192: bug fixes for date handling ISO strings for null dates
+  - @memberjunction/aiengine@2.47.0
+  - @memberjunction/ai-vector-dupe@2.47.0
+  - @memberjunction/actions@2.47.0
+  - @memberjunction/queue@2.47.0
+  - @memberjunction/ai@2.47.0
+  - @memberjunction/core@2.47.0
+  - @memberjunction/core-entities@2.47.0
+  - @memberjunction/global@2.47.0
+
 ## 2.46.0
 
 ### Patch Changes
