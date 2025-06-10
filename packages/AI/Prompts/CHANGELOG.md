@@ -1,5 +1,21 @@
 # @memberjunction/ai-prompts
 
+## 2.47.0
+
+### Minor Changes
+
+- 4c4751c: Changed datetime2 to datetimeoffset for RunAt/CompletedAt columns in the AIPromptRun table
+
+### Patch Changes
+
+- 3621e2f: Tweaks to prompt interface
+  - @memberjunction/aiengine@2.47.0
+  - @memberjunction/templates@2.47.0
+  - @memberjunction/ai@2.47.0
+  - @memberjunction/core@2.47.0
+  - @memberjunction/core-entities@2.47.0
+  - @memberjunction/global@2.47.0
+
 ## 2.46.0
 
 ### Patch Changes

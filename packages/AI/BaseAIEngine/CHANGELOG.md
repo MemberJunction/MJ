@@ -1,5 +1,18 @@
 # @memberjunction/ai-engine-base
 
+## 2.47.0
+
+### Minor Changes
+
+- 6e60efe: Clean up code gen bugs and AIEngineBase
+
+### Patch Changes
+
+- @memberjunction/ai@2.47.0
+- @memberjunction/core@2.47.0
+- @memberjunction/core-entities@2.47.0
+- @memberjunction/global@2.47.0
+
 ## 2.46.0
 
 ### Patch Changes
