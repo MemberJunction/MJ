@@ -1,5 +1,5 @@
 import { LogError, LogStatus, UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { AIAgentEntityExtended, AIAgentPromptEntity, AIPromptEntity, AIAgentRunEntity, AIAgentRunStepEntity, AIAgentTypeEntity } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended, AIPromptEntity, AIAgentRunEntity, AIAgentRunStepEntity, AIAgentTypeEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner, AIPromptParams } from '@memberjunction/ai-prompts';
 import { ChatMessage } from '@memberjunction/ai';
@@ -235,8 +235,6 @@ export interface ExecutionHistoryItem {
  * @see {@link AgentExecutionResult} for the corresponding output structure
  */
 export interface AgentExecutionParams {
-  /** The AI agent entity to execute (must match the runner's agent type) */
-  agentEntity: AIAgentEntityExtended;
   /** User context for authentication, permissions, and personalization */
   contextUser?: UserInfo;
   /** Data context passed to prompts and templates during execution */
@@ -342,8 +340,6 @@ export interface SerializedAgentState {
  * Context information maintained during agent execution
  */
 export interface AgentExecutionContext {
-  /** The agent entity being executed */
-  agentEntity: AIAgentEntityExtended;
   /** Current conversation messages */
   conversationMessages: ChatMessage[];
   /** Execution parameters */
@@ -360,6 +356,12 @@ export interface AgentExecutionContext {
   agentRun?: AIAgentRunEntity;
   /** Current step number for sequential tracking */
   currentStepNumber: number;
+}
+
+// Forward declaration to avoid circular dependency
+export interface IAgentFactory {
+  CreateAgentFromEntity(agentEntity: AIAgentEntityExtended, key?: string, ...additionalParams: any[]): BaseAgent;
+  CreateAgent(agentName: string, key?: string, contextUser?: UserInfo, ...additionalParams: any[]): Promise<BaseAgent>
 }
 
 /**
@@ -403,7 +405,6 @@ export interface AgentExecutionContext {
  * ```typescript
  * const runner = new AgentRunner(agentType, contextUser);
  * const params = new AgentExecutionParams();
- * params.agentEntity = dataGatherAgent;
  * params.goal = "Analyze sales data for Q4";
  * const result = await runner.Execute(params);
  * ```
@@ -422,9 +423,10 @@ export interface AgentExecutionContext {
  * }
  * ```
  */
-@RegisterClass(AgentRunner, null)
-export class AgentRunner {
-  private _agentType: AIAgentTypeEntity;
+@RegisterClass(BaseAgent, null)
+export class BaseAgent {
+  private _agent: AIAgentEntityExtended;
+  private _factory: IAgentFactory;
   private _promptRunner: AIPromptRunner;
   private _contextUser?: UserInfo;
   protected _metadata: Metadata;
@@ -447,31 +449,29 @@ export class AgentRunner {
    * const runner = new AgentRunner(agentType, contextUser);
    * ```
    */
-  constructor(agentType: AIAgentTypeEntity, contextUser: UserInfo) {
-    this._agentType = agentType;
-    this._promptRunner = new AIPromptRunner();
+  constructor(agent: AIAgentEntityExtended, factory: IAgentFactory, contextUser: UserInfo, promptRunner?: AIPromptRunner) {
+    this._agent = agent;
+    this._factory = factory;
+    this._promptRunner = promptRunner ? promptRunner : new AIPromptRunner();
     this._contextUser = contextUser;
     this._metadata = new Metadata();
   }
   
-  // Protected getters for subclasses to access private fields
-  protected get agentType(): AIAgentTypeEntity {
-    return this._agentType;
+  public get agent(): AIAgentEntityExtended {
+    return this._agent;
   }
   
+  // Protected getters for subclasses to access private fields
+  protected get factory(): IAgentFactory {
+    return this._factory;
+  }
+
   protected get promptRunner(): AIPromptRunner {
     return this._promptRunner;
   }
 
   protected get contextUser(): UserInfo {
     return this._contextUser;
-  }
-
-  /**
-   * Gets the agent type that defines this runner's configuration.
-   */
-  public get AgentType(): AIAgentTypeEntity {
-    return this.agentType;
   }
 
   /**
@@ -514,8 +514,6 @@ export class AgentRunner {
    * @see {@link AgentExecutionResult} for return value structure
    */
   public async Execute(params: AgentExecutionParams): Promise<AgentExecutionResult> {
-    // Validate that the agent entity matches our agent type
-    this.validateAgentEntityCompatibility(params.agentEntity);
     const startTime = new Date();
     
     try {
@@ -531,8 +529,8 @@ export class AgentRunner {
       this.sendProgress(params.onProgress, {
         step: 'initialization',
         percentage: 10,
-        message: `Initializing agent '${params.agentEntity.Name}'`,
-        metadata: { agentName: params.agentEntity.Name, agentId: params.agentEntity.ID }
+        message: `Initializing agent '${this.agent.Name}'`,
+        metadata: { agentName: this.agent.Name, agentId: this.agent.ID }
       });
 
       // Process context (compression, etc.)
@@ -561,7 +559,7 @@ export class AgentRunner {
       this.sendProgress(params.onProgress, {
         step: 'completion',
         percentage: 100,
-        message: `Agent '${params.agentEntity.Name}' execution completed`,
+        message: `Agent '${this.agent.Name}' execution completed`,
         metadata: { 
           success: result.success,
           executionTimeMS: result.executionTimeMS
@@ -571,7 +569,7 @@ export class AgentRunner {
       return result;
 
     } catch (error) {
-      LogError(`Error executing agent '${params.agentEntity?.Name || 'Unknown'}': ${error.message}`);
+      LogError(`Error executing agent '${this.agent?.Name || 'Unknown'}': ${error.message}`);
       
       const endTime = new Date();
       return {
@@ -603,7 +601,7 @@ export class AgentRunner {
         context,
         'decision',
         'Agent core execution loop',
-        context.agentEntity.ID,
+        this.agent.ID,
         { maxIterations: 10 }
       );
 
@@ -802,7 +800,7 @@ export class AgentRunner {
       return result;
       
     } catch (error) {
-      LogError(`Error in executeCore for agent '${context.agentEntity.Name}' of agent type '${this.AgentType.Name}': ${error.message}`);
+      LogError(`Error in executeCore for agent '${this.agent.Name}': ${error.message}`);
       
       if (executionStepEntity) {
         await this.completeExecutionStep(executionStepEntity, false, null, error.message);
@@ -813,7 +811,7 @@ export class AgentRunner {
         errorMessage: error.message,
         metadata: {
           errorStep: 'executeCore',
-          agentName: context.agentEntity.Name,
+          agentName: this.agent.Name,
           runId: context.agentRun?.ID
         }
       };
@@ -822,32 +820,15 @@ export class AgentRunner {
       return result;
     }
   }
-
-  /**
-   * Validates that the agent entity type matches this runner's agent type.
-   */
-  private validateAgentEntityCompatibility(agentEntity: AIAgentEntityExtended): void {
-    if (!agentEntity) {
-      throw new Error('Agent entity is required for execution');
-    }
-    
-    if (agentEntity.TypeID !== this.agentType.ID) {
-      throw new Error(
-        `Agent entity type mismatch: Agent '${agentEntity.Name}' has type ID '${agentEntity.TypeID}' ` +
-        `but this runner expects type '${this.agentType.Name}' (ID: '${this.agentType.ID}'). ` +
-        `Only agents of type '${this.agentType.Name}' can be executed by this runner.`
-      );
-    }
-  }
   
   /**
    * Initializes the execution context for the agent and creates the database run record.
    */
   private async initializeContext(params: AgentExecutionParams, startTime: Date): Promise<AgentExecutionContext> {
     // Create the AIAgentRun record
-    const agentRun = await this._metadata.GetEntityObject<AIAgentRunEntity>('AI Agent Runs', this.contextUser);
+    const agentRun = await this._metadata.GetEntityObject<AIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
     agentRun.NewRecord();
-    agentRun.AgentID = params.agentEntity.ID;
+    agentRun.AgentID = this.agent.ID;
     agentRun.Status = 'Running';
     agentRun.StartedAt = startTime;
     
@@ -894,7 +875,6 @@ export class AgentRunner {
     await agentRun.Save();
     
     return {
-      agentEntity: params.agentEntity,
       conversationMessages: params.conversationMessages || [],
       params,
       data: params.data || {},
@@ -910,9 +890,9 @@ export class AgentRunner {
    */
   private async processContext(context: AgentExecutionContext): Promise<void> {
     // Apply context compression if configured
-    if (context.agentEntity.EnableContextCompression && 
-        context.agentEntity.ContextCompressionMessageThreshold &&
-        context.conversationMessages.length > context.agentEntity.ContextCompressionMessageThreshold) {
+    if (this.agent.EnableContextCompression && 
+        this.agent.ContextCompressionMessageThreshold &&
+        context.conversationMessages.length > this.agent.ContextCompressionMessageThreshold) {
       
       await this.compressContext(context);
     }
@@ -923,12 +903,12 @@ export class AgentRunner {
    */
   private async compressContext(context: AgentExecutionContext): Promise<void> {
     try {
-      if (!context.agentEntity.ContextCompressionPromptID) {
-        LogStatus(`Context compression enabled but no compression prompt configured for agent '${context.agentEntity.Name}'`);
+      if (!this.agent.ContextCompressionPromptID) {
+        LogStatus(`Context compression enabled but no compression prompt configured for agent '${this.agent.Name}'`);
         return;
       }
 
-      const retentionCount = context.agentEntity.ContextCompressionMessageRetentionCount || 5;
+      const retentionCount = this.agent.ContextCompressionMessageRetentionCount || 5;
       const messagesToCompress = context.conversationMessages.slice(0, -retentionCount);
       const messagesToKeep = context.conversationMessages.slice(-retentionCount);
 
@@ -937,9 +917,9 @@ export class AgentRunner {
       }
 
       // Load compression prompt
-      const compressionPrompt = AIEngine.Instance.Prompts.find(p => p.ID === context.agentEntity.ContextCompressionPromptID);
+      const compressionPrompt = AIEngine.Instance.Prompts.find(p => p.ID === this.agent.ContextCompressionPromptID);
       if (!compressionPrompt) {
-        LogError(`Compression prompt not found: ${context.agentEntity.ContextCompressionPromptID}`);
+        LogError(`Compression prompt not found: ${this.agent.ContextCompressionPromptID}`);
         return;
       }
 
@@ -964,52 +944,88 @@ export class AgentRunner {
         };
 
         context.conversationMessages = [summaryMessage, ...messagesToKeep];
-        LogStatus(`Compressed ${messagesToCompress.length} messages into summary for agent '${context.agentEntity.Name}'`);
+        LogStatus(`Compressed ${messagesToCompress.length} messages into summary for agent '${this.agent.Name}'`);
       }
 
     } catch (error) {
-      LogError(`Error compressing context for agent '${context.agentEntity.Name}': ${error.message}`);
+      LogError(`Error compressing context for agent '${this.agent.Name}': ${error.message}`);
     }
   }
 
   /**
    * Loads the prompts associated with the given agent entity.
    */
-  private async loadAgentPrompts(agentEntity: AIAgentEntityExtended): Promise<{ agentPrompt: AIAgentPromptEntity, prompt: AIPromptEntity }[]> {
+  protected async loadAgentPrompts(): Promise<AIPromptEntity[]> {
     try {
       // Get agent prompts ordered by execution order
+      await AIEngine.Instance.Config(false, this.contextUser);
       const agentPrompts = AIEngine.Instance.AgentPrompts
-        .filter(ap => ap.AgentID === agentEntity.ID && ap.Status === 'Active')
+        .filter(ap => ap.AgentID === this.agent.ID && ap.Status === 'Active')
         .sort((a, b) => (a.ExecutionOrder || 0) - (b.ExecutionOrder || 0));
 
-      const results: { agentPrompt: AIAgentPromptEntity, prompt: AIPromptEntity }[] = [];
+      const results: AIPromptEntity[] = [];
 
       for (const agentPrompt of agentPrompts) {
         const prompt = AIEngine.Instance.Prompts.find(p => p.ID === agentPrompt.PromptID);
         if (prompt && prompt.Status === 'Active') {
-          results.push({ agentPrompt, prompt });
+          results.push(prompt);
+        }
+      }
+
+      if (results.length === 0) {
+        const agentType = await this.loadAgentType();
+        if (agentType && agentType.SystemPromptID) {
+          const systemPrompt = AIEngine.Instance.Prompts.find(p => p.ID === agentType.SystemPromptID);
+          if (systemPrompt && systemPrompt.Status === 'Active') {
+            results.push(systemPrompt);
+          } else {
+            LogStatus(`System prompt not found or inactive for agent type '${agentType.Name}'`);
+          }
+        } else {
+          LogStatus(`No active prompts found for agent '${this.agent.Name}' and no system prompt configured`);
         }
       }
 
       return results;
     } catch (error) {
-      LogError(`Error loading agent prompts for '${agentEntity.Name}': ${error.message}`);
+      LogError(`Error loading agent prompts for '${this.agent.Name}': ${error.message}`);
       return [];
+    }
+  }
+
+  private async loadAgentType(): Promise<AIAgentTypeEntity | null> {
+    try {
+      if (!this.agent.TypeID) {
+        LogStatus(`Agent '${this.agent.Name}' has no AgentTypeID defined`);
+        return null;
+      }
+
+      // Load the agent type entity from the database
+      await AIEngine.Instance.Config(false, this.contextUser);
+      const agentType = AIEngine.Instance.AgentTypes.find(at => at.ID === this.agent.TypeID);
+      if (!agentType) {
+        LogError(`Agent type not found for ID: ${this.agent.TypeID}`);
+        return null;
+      }
+      return agentType;
+    } catch (error) {
+      LogError(`Error loading agent type for '${this.agent.Name}': ${error.message}`);
+      return null;
     }
   }
 
   /**
    * Loads child agents if the given agent has hierarchical structure.
    */
-  private async loadChildAgents(agentEntity: AIAgentEntityExtended): Promise<AIAgentEntityExtended[]> {
+  private async loadChildAgents(): Promise<AIAgentEntityExtended[]> {
     try {
       const childAgents = AIEngine.Instance.Agents
-        .filter(a => a.ParentID === agentEntity.ID)
+        .filter(a => a.ParentID === this.agent.ID)
         .sort((a, b) => (a.ExecutionOrder || 0) - (b.ExecutionOrder || 0));
 
       return childAgents;
     } catch (error) {
-      LogError(`Error loading child agents for '${agentEntity.Name}': ${error.message}`);
+      LogError(`Error loading child agents for '${this.agent.Name}': ${error.message}`);
       return [];
     }
   }
@@ -1296,13 +1312,13 @@ export class AgentRunner {
     executionHistory: ExecutionHistoryItem[]
   ): Promise<AgentDecisionInput> {
     // Load available actions and subagents
-    const availableActions = await this.getAvailableActions(context.agentEntity, context.params.contextUser);
-    const availableSubAgents = await this.getAvailableSubAgents(context.agentEntity);
+    const availableActions = await this.getAvailableActions();
+    const availableSubAgents = await this.getAvailableSubAgentDescriptions();
     
     // Determine current goal from context or agent description
     const currentGoal = context.data.goal as string || 
                        context.data.task as string || 
-                       context.agentEntity.Description || 
+                       this.agent.Description || 
                        'Complete the requested task';
 
     return {
@@ -1355,22 +1371,23 @@ export class AgentRunner {
   ): Promise<AgentDecisionResponse> {
     try {
       // Get agent-specific prompts from AI Engine
-      const agentPrompts = await this.loadAgentPrompts(context.agentEntity);
+      const prompts = await this.loadAgentPrompts();
+      const agentType = await this.loadAgentType();
       
-      if (agentPrompts.length === 0) {
-        throw new Error(`No prompts found for agent ${context.agentEntity.Name}`);
+      if (prompts.length === 0) {
+        throw new Error(`No prompts found for agent ${this.agent.Name}`);
       }
 
       // Use the first (highest priority) agent prompt
-      const primaryAgentPrompt = agentPrompts[0];
+      const primaryprompt = prompts[0];
 
       // Prepare context-aware decision prompt
       const contextualPrompt = this.buildContextualDecisionPrompt(decisionInput, context);
 
       // Prepare data context for system prompt rendering
       const promptData = {
-        agentName: context.agentEntity.Name,
-        agentDescription: context.agentEntity.Description,
+        agentName: this.agent.Name,
+        agentDescription: this.agent.Description,
         availableActions: decisionInput.availableActions,
         availableSubAgents: decisionInput.availableSubAgents,
         currentGoal: decisionInput.currentGoal,
@@ -1389,8 +1406,8 @@ export class AgentRunner {
 
       // Configure AIPromptRunner parameters with system prompt embedding
       const promptParams = new AIPromptParams();
-      promptParams.prompt = primaryAgentPrompt.prompt;
-      promptParams.parentPromptID = this.agentType.SystemPromptID; // Use system prompt embedding
+      promptParams.prompt = primaryprompt;
+      promptParams.parentPromptID = agentType.SystemPromptID; // Use system prompt embedding
       promptParams.data = promptData;
       promptParams.conversationMessages = conversationMessages;
       promptParams.templateMessageRole = 'system';
@@ -1942,17 +1959,15 @@ Consider:
   /**
    * Gets available actions for the given agent entity.
    */
-  protected async getAvailableActions(agentEntity?: AIAgentEntityExtended, contextUser?: UserInfo): Promise<ActionDescription[]> {
+  protected async getAvailableActions(): Promise<ActionDescription[]> {
     try {
-      if (!agentEntity) {
-        return [];
-      }
-      
       // Get agent actions from metadata
       const agentActions = AIEngine.Instance.AgentActions
-        .filter(aa => aa.AgentID === agentEntity.ID && aa.Status === 'Active');
+        .filter(aa => aa.AgentID === this.agent.ID && aa.Status === 'Active');
       
       const actions: ActionDescription[] = [];
+
+      await ActionEngineServer.Instance.Config(false, this.contextUser);
       
       for (const agentAction of agentActions) {
         const action = ActionEngineServer.Instance.Actions.find(a => a.ID === agentAction.ActionID);
@@ -1983,13 +1998,9 @@ Consider:
   /**
    * Gets available sub-agents for the given agent entity.
    */
-  protected async getAvailableSubAgents(agentEntity?: AIAgentEntityExtended): Promise<SubAgentDescription[]> {
+  protected async getAvailableSubAgentDescriptions(): Promise<SubAgentDescription[]> {
     try {
-      if (!agentEntity) {
-        return [];
-      }
-      
-      const childAgents = await this.loadChildAgents(agentEntity);
+      const childAgents = await this.loadChildAgents();
       
       return childAgents.map(agent => ({
         id: agent.ID,
@@ -2052,15 +2063,10 @@ Consider:
         throw new Error(`Sub-agent with ID '${subAgentId}' not found`);
       }
 
-      // Get the agent type for the sub-agent
-      const subAgentType = AIEngine.Instance.AgentTypes?.find(at => at.ID === subAgentEntity.TypeID);
-      if (!subAgentType) {
-        throw new Error(`Agent type not found for sub-agent '${subAgentId}'`);
-      }
+      const subAgent = this.factory.CreateAgentFromEntity(subAgentEntity, null, this._contextUser);
       
       // Create execution parameters for sub-agent with hierarchical tracking
       const subAgentParams: AgentExecutionParams = {
-        agentEntity: subAgentEntity,
         contextUser: parentContext.params.contextUser,
         data: { 
           ...parentContext.data, 
@@ -2075,7 +2081,7 @@ Consider:
         onStreaming: parentContext.params.onStreaming
       };
 
-      return await this.Execute(subAgentParams);
+      return await subAgent.Execute(subAgentParams);
     } catch (error) {
       LogError(`Error executing sub-agent '${subAgentId}': ${error.message}`);
       return {
@@ -2280,10 +2286,8 @@ Consider:
       
       // Create execution context for resumption
       const resumedContext: AgentExecutionContext = {
-        agentEntity,
         conversationMessages: serializedState.conversationMessages || [],
         params: {
-          agentEntity,
           contextUser,
           data: serializedState.contextData || {},
           conversationMessages: serializedState.conversationMessages || []
@@ -2381,76 +2385,6 @@ Consider:
 
 }
 
-/**
- * Gets an AgentRunner instance for the specified agent type.
- * 
- * This function:
- * 1. Loads the AIAgentTypeEntity from the database by name
- * 2. Uses the ClassFactory to instantiate the appropriate AgentRunner subclass
- * 3. Falls back to base AgentRunner if no custom subclass is registered
- * 4. Configures all dependent engines (AIEngine & ActionEngine)
- * 
- * @param agentTypeName The name of the agent type (e.g., "Base Agent", "Customer Support", "Data Analysis")
- * @param contextUser User context for database access and permissions
- * @param key Optional key for ClassFactory to use specific registered subclass
- * @param additionalParams Optional additional parameters to pass to the runner constructor
- * @returns Promise<AgentRunner | null> The instantiated runner, or null if the agent type is not found
- * @throws Error if the agent type cannot be loaded or runner cannot be instantiated
- */
-export async function GetAgentRunner(
-  agentTypeName: string,
-  contextUser?: UserInfo,
-  key?: string,
-  ...additionalParams: any[]
-): Promise<AgentRunner | null> {
-  try {
-    if (!agentTypeName || agentTypeName.trim().length === 0) {
-      throw new Error('Agent type name is required');
-    }
-
-    // Initialize metadata for user context if needed
-    const metadata = new Metadata();
-    if (!contextUser) {
-      contextUser = metadata.CurrentUser;
-    }
-
-    // Load AI Engine to get access to agent types
-    await AIEngine.Instance.Config(false, contextUser);
-
-    // Find the agent type by name
-    const agentType = AIEngine.Instance.AgentTypes?.find(at => 
-      at.Name.toLowerCase() === agentTypeName.trim().toLowerCase() && at.IsActive
-    );
-
-    if (!agentType) {
-      LogError(`Agent type with name '${agentTypeName}' not found`);
-      return null;
-    }
-
-    // Config all dependent engines to ensure they are loaded
-    await ActionEngineServer.Instance.Config(false, contextUser);
-
-    // Use ClassFactory to create the runner instance
-    // The key allows for agent-type-specific subclasses
-    const runnerInstance = MJGlobal.Instance.ClassFactory.CreateInstance<AgentRunner>(
-      AgentRunner,
-      key,            
-      agentType,      // Pass the agent type entity
-      contextUser,    // Pass the user context
-      ...additionalParams
-    );
-
-    if (!runnerInstance) {
-      throw new Error(`Failed to create agent runner instance for type '${agentTypeName}'`);
-    }
-
-    return runnerInstance;
-  } catch (error) {
-    LogError(`Error creating agent runner for type '${agentTypeName}': ${error.message}`);
-    throw error;
-  }
-}
-
-export function LoadAgentRunner() {
+export function LoadBaseAgent() {
   // This function ensures the class isn't tree-shaken
 }

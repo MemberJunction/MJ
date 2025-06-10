@@ -129,26 +129,24 @@ export class AIPromptParams {
   agentRunId?: string;
 
   /**
-   * Optional system prompt ID for AI prompt embedding.
+   * Optional parent prompt ID for AI prompt embedding.
    * 
    * When provided, the AIPromptRunner will:
-   * 1. Load the system prompt template from the database
-   * 2. Embed this AI prompt into the system template using {% PromptEmbed %} syntax
-   * 3. Render the complete system prompt with agent context and available actions
-   * 4. Use the rendered system prompt instead of the regular AI prompt template
+   * 1. First render the current AI prompt as normal
+   * 2. Load the parent prompt template from the database
+   * 3. Render the parent prompt with the child prompt's rendered text as "childPrompt" parameter
+   * 4. Use the rendered parent prompt result as the final prompt for the LLM
    * 
-   * This enables agent architectures where:
-   * - Agent-specific prompts contain domain logic (e.g., DATA_GATHER instructions)
-   * - System prompts enforce deterministic JSON response format for parsing
-   * - Available actions and sub-agents are injected for decision-making
+   * This enables nested prompt architectures where:
+   * - Child prompts contain specific domain logic
+   * - Parent prompts provide structure, format, and context wrapping
+   * - Parent prompts can use {{ childPrompt }} to insert the rendered child content
    * 
-   * The system prompt template must contain {% PromptEmbed %} tags to embed the AI prompt.
-   * Validation ensures the AI prompt is properly linked to agents using this system prompt.
+   * The parent prompt template should contain {{ childPrompt }} parameter for embedding.
    * 
-   * @see {@link validatePromptEmbedding} for relationship validation
-   * @see {@link renderSystemPromptWithEmbeddedPrompt} for embedding implementation
+   * @see {@link renderWithParentPrompt} for embedding implementation
    */
-  systemPromptId?: string;
+  parentPromptID?: string;
 }
 
 /**
@@ -330,20 +328,19 @@ export class AIPromptRunResult<T = unknown> {
  * - **Configuration-driven behavior** with caching and performance optimization
  * - **Real-time progress updates** and streaming response support
  * 
- * ## System Prompt Embedding
- * When `systemPromptId` is provided in {@link AIPromptParams}:
- * 1. Loads system prompt template from database
- * 2. Embeds the AI prompt using {% PromptEmbed %} template syntax
- * 3. Renders complete system prompt with agent context
- * 4. Uses rendered system prompt instead of regular template
+ * ## Parent Prompt Embedding
+ * When `parentPromptID` is provided in {@link AIPromptParams}:
+ * 1. First renders the child AI prompt with provided data
+ * 2. Loads parent prompt template from database
+ * 3. Renders parent prompt with child's rendered text as "childPrompt" parameter
+ * 4. Uses rendered parent prompt result as final prompt for LLM
  * 
- * This enables agent architectures where system prompts wrap agent-specific prompts
- * with execution control, deterministic response format, and available actions context.
+ * This enables nested prompt architectures where parent prompts wrap child prompts
+ * with additional structure, formatting, and context using {{ childPrompt }} parameter.
  * 
  * ## Agent Integration
  * - Links executions to agent runs via `agentRunId` parameter
- * - Validates prompt-agent relationships for system prompt embedding
- * - Provides agent context data for system prompt rendering
+ * - Validates prompt-parent prompt relationships for embedding
  * - Supports agent decision-making workflows with structured JSON responses
  * 
  * @example Basic Usage
@@ -355,15 +352,14 @@ export class AIPromptRunResult<T = unknown> {
  * const result = await runner.ExecutePrompt(params);
  * ```
  * 
- * @example System Prompt Embedding for Agents
+ * @example Parent Prompt Embedding
  * ```typescript
  * const params = new AIPromptParams();
- * params.prompt = agentSpecificPrompt;
- * params.systemPromptId = 'system-prompt-id';
- * params.agentRunId = 'agent-run-id';
- * params.data = { agentName: 'DataGather', availableActions: [...] };
+ * params.prompt = childPrompt;
+ * params.parentPromptID = 'parent-prompt-id';
+ * params.data = { userInput: 'analyze this data' };
  * const result = await runner.ExecutePrompt(params);
- * // System prompt embeds agent prompt and enforces JSON response format
+ * // Child prompt renders first, then parent prompt wraps it using {{ childPrompt }}
  * ```
  */
 export class AIPromptRunner {
@@ -462,25 +458,20 @@ export class AIPromptRunner {
         throw new Error(`Prompt ${prompt.Name} is not active (Status: ${prompt.Status})`);
       }
 
-      // Validate AI prompt embedding if systemPromptId is provided
-      if (params.systemPromptId) {
-        await this.validatePromptEmbedding(prompt, params.systemPromptId, params.contextUser);
-      }
-
       let renderedPromptText: string = '';
 
-      // Handle system prompt embedding or regular template rendering
-      if (params.systemPromptId) {
-        // System prompt embedding mode - render system prompt with embedded AI prompt
-        const systemPromptResult = await this.renderSystemPromptWithEmbeddedPrompt(
-          params.systemPromptId,
+      // Handle parent prompt embedding or regular template rendering
+      if (params.parentPromptID) {
+        // Parent prompt embedding mode - first render child prompt, then embed in parent
+        const childPromptResult = await this.renderWithParentPrompt(
+          params.parentPromptID,
           prompt,
           params
         );
-        if (!systemPromptResult.Success) {
-          throw new Error(`Failed to render system prompt with embedded AI prompt: ${systemPromptResult.Message}`);
+        if (!childPromptResult.Success) {
+          throw new Error(`Failed to render prompt with parent prompt: ${childPromptResult.Message}`);
         }
-        renderedPromptText = systemPromptResult.Output;
+        renderedPromptText = childPromptResult.Output;
       } else if (prompt.TemplateID && (!params.conversationMessages || params.templateMessageRole !== 'none')) {
         // Regular template rendering mode
         // Initialize template engine
@@ -798,143 +789,99 @@ export class AIPromptRunner {
   }
 
   /**
-   * Renders a system prompt template with an embedded AI prompt.
+   * Renders a child prompt and then embeds it in a parent prompt template.
    * 
-   * This method loads the system prompt template and renders it with the AI prompt
-   * embedded via {% PromptEmbed %} syntax. The system prompt template should contain
-   * agent context information and enforce deterministic response format.
+   * This method:
+   * 1. First renders the child prompt with the provided data
+   * 2. Loads the parent prompt template
+   * 3. Renders the parent prompt with the child's rendered text as "childPrompt" parameter
    * 
-   * @param systemPromptId - ID of the system prompt template
-   * @param aiPrompt - The AI prompt to embed into the system template
+   * @param parentPromptID - ID of the parent prompt
+   * @param childPrompt - The child AI prompt to render first
    * @param params - Original execution parameters for context
-   * @returns Promise<TemplateRenderResult> - The rendered system prompt with embedded AI prompt
+   * @returns Promise<TemplateRenderResult> - The rendered parent prompt with embedded child prompt
    */
-  private async renderSystemPromptWithEmbeddedPrompt(
-    systemPromptId: string,
-    aiPrompt: AIPromptEntity,
+  private async renderWithParentPrompt(
+    parentPromptID: string,
+    childPrompt: AIPromptEntity,
     params: AIPromptParams
   ): Promise<TemplateRenderResult> {
     try {
       // Initialize template engine
       await this._templateEngine.Config(false, params.contextUser);
 
-      // Load the system prompt from AI Engine (it's stored as an AI prompt that references a template)
-      const systemPrompt = await this.loadSystemPromptById(systemPromptId, params.contextUser);
-      if (!systemPrompt) {
-        throw new Error(`System prompt with ID ${systemPromptId} not found`);
+      // Step 1: Render the child prompt first
+      let childRenderedText = '';
+      if (childPrompt.TemplateID) {
+        const childTemplate = await this.loadTemplate(childPrompt.TemplateID, params.contextUser);
+        if (!childTemplate) {
+          throw new Error(`Template with ID ${childPrompt.TemplateID} not found for child prompt ${childPrompt.Name}`);
+        }
+
+        const childRenderResult = await this.renderPromptTemplate(childTemplate, params.data, params.templateData);
+        if (!childRenderResult.Success) {
+          throw new Error(`Failed to render child prompt template: ${childRenderResult.Message}`);
+        }
+        childRenderedText = childRenderResult.Output;
       }
 
-      if (!systemPrompt.TemplateID) {
-        throw new Error(`System prompt ${systemPrompt.Name} has no associated template`);
+      // Step 2: Load the parent prompt
+      const parentPrompt = await this.loadParentPromptById(parentPromptID, params.contextUser);
+      if (!parentPrompt) {
+        throw new Error(`Parent prompt with ID ${parentPromptID} not found`);
       }
 
-      // Load the system prompt template
-      const systemTemplate = await this.loadTemplate(systemPrompt.TemplateID, params.contextUser);
-      if (!systemTemplate) {
-        throw new Error(`Template with ID ${systemPrompt.TemplateID} not found for system prompt ${systemPrompt.Name}`);
+      if (!parentPrompt.TemplateID) {
+        throw new Error(`Parent prompt ${parentPrompt.Name} has no associated template`);
       }
 
-      // Prepare enhanced data context for system prompt rendering
-      const systemPromptData = await this.prepareSystemPromptData(aiPrompt, params);
+      // Step 3: Load the parent prompt template
+      const parentTemplate = await this.loadTemplate(parentPrompt.TemplateID, params.contextUser);
+      if (!parentTemplate) {
+        throw new Error(`Template with ID ${parentPrompt.TemplateID} not found for parent prompt ${parentPrompt.Name}`);
+      }
 
-      // Render the system prompt template with the embedded AI prompt
-      // The template should contain {% PromptEmbed %} syntax to embed the AI prompt
-      const result = await this.renderPromptTemplate(systemTemplate, systemPromptData, params.templateData);
+      // Step 4: Prepare data context with the child prompt as "childPrompt" parameter
+      const parentData = {
+        ...params.data,
+        childPrompt: childRenderedText
+      };
+
+      // Step 5: Render the parent prompt template with the child prompt embedded
+      const result = await this.renderPromptTemplate(parentTemplate, parentData, params.templateData);
 
       if (!result.Success) {
-        throw new Error(`Failed to render system prompt template: ${result.Message}`);
+        throw new Error(`Failed to render parent prompt template: ${result.Message}`);
       }
 
-      LogStatus(`✅ Successfully rendered system prompt with embedded AI prompt "${aiPrompt.Name}"`);
+      LogStatus(`✅ Successfully rendered parent prompt "${parentPrompt.Name}" with embedded child prompt "${childPrompt.Name}"`);
       return result;
 
     } catch (error) {
-      LogError(`Error rendering system prompt with embedded AI prompt: ${error.message}`);
+      LogError(`Error rendering prompt with parent prompt: ${error.message}`);
       throw error;
     }
   }
 
   /**
-   * Loads a system prompt by ID from AI Engine.
-   * System prompts are stored as AI prompts that reference templates.
+   * Loads a parent prompt by ID from AI Engine.
+   * Parent prompts are stored as AI prompts that reference templates.
    */
-  private async loadSystemPromptById(systemPromptId: string, contextUser?: UserInfo): Promise<AIPromptEntity | null> {
+  private async loadParentPromptById(parentPromptID: string, contextUser?: UserInfo): Promise<AIPromptEntity | null> {
     try {
       // Ensure AI Engine is configured
       await AIEngine.Instance.Config(false, contextUser);
 
-      // Find the system prompt in cached prompts
-      const systemPrompt = AIEngine.Instance.Prompts.find(p => p.ID === systemPromptId);
-      return systemPrompt || null;
+      // Find the parent prompt in cached prompts
+      const parentPrompt = AIEngine.Instance.Prompts.find(p => p.ID === parentPromptID);
+      return parentPrompt || null;
 
     } catch (error) {
-      LogError(`Error loading system prompt ${systemPromptId}: ${error.message}`);
+      LogError(`Error loading parent prompt ${parentPromptID}: ${error.message}`);
       return null;
     }
   }
 
-  /**
-   * Prepares enhanced data context for system prompt rendering.
-   * 
-   * This includes agent information and AI prompt details needed for proper 
-   * template rendering and embedding. Actions and sub-agents are handled 
-   * separately by the agent-runner's createDecisionInput function.
-   */
-  private async prepareSystemPromptData(aiPrompt: AIPromptEntity, params: AIPromptParams): Promise<Record<string, unknown>> {
-    try {
-      // Start with user-provided data
-      const data: Record<string, unknown> = { ...params.data };
-
-      // Add AI prompt information for embedding
-      data.agentPrompt = aiPrompt.Name;
-      data.agentPromptDescription = aiPrompt.Description;
-
-      // Add agent context if available (extract from validation or AI Engine)
-      await AIEngine.Instance.Config(false, params.contextUser);
-
-      // Find agents linked to this prompt for context
-      const agentPromptLinks = AIEngine.Instance.AgentPrompts.filter(ap => ap.PromptID === aiPrompt.ID);
-      
-      if (agentPromptLinks.length > 0) {
-        const firstAgentLink = agentPromptLinks[0];
-        const agent = AIEngine.Instance.Agents.find(a => a.ID === firstAgentLink.AgentID);
-        
-        if (agent) {
-          data.agentName = agent.Name;
-          data.agentDescription = agent.Description;
-
-          // Get agent type information
-          const agentType = AIEngine.Instance.AgentTypes.find(at => at.ID === agent.TypeID);
-          if (agentType) {
-            data.agentTypeName = agentType.Name;
-            data.agentTypeDescription = agentType.Description;
-          }
-        }
-      }
-
-      // Provide fallback values if agent information is not available
-      if (!data.agentName) {
-        data.agentName = `Agent using ${aiPrompt.Name}`;
-      }
-      if (!data.agentDescription) {
-        data.agentDescription = `AI agent executing prompt: ${aiPrompt.Description || aiPrompt.Name}`;
-      }
-
-      LogStatus(`Prepared system prompt data for agent "${data.agentName}"`);
-      return data;
-
-    } catch (error) {
-      LogError(`Error preparing system prompt data: ${error.message}`);
-      // Return minimal data to allow template rendering to continue
-      return {
-        ...params.data,
-        agentPrompt: aiPrompt.Name,
-        agentPromptDescription: aiPrompt.Description,
-        agentName: `Agent using ${aiPrompt.Name}`,
-        agentDescription: `AI agent executing prompt: ${aiPrompt.Description || aiPrompt.Name}`
-      };
-    }
-  }
 
   /**
    * Selects the appropriate AI model based on prompt configuration and parameters.
@@ -1861,70 +1808,6 @@ export class AIPromptRunner {
       }
     } catch (error) {
       LogError(`Error updating prompt run: ${error.message}`);
-    }
-  }
-
-  /**
-   * Validates that an AI prompt can be embedded into a system prompt.
-   * 
-   * This validation ensures that the current AI prompt is properly linked to an agent
-   * that uses the specified system prompt. The linkage is verified through:
-   * 1. Finding agents that use the system prompt (via AIAgentType.SystemPromptID)
-   * 2. Checking if any of those agents are linked to the current prompt (via AIAgentPrompt table)
-   * 
-   * @param prompt - The AI prompt that wants to be embedded
-   * @param systemPromptId - The ID of the system prompt template
-   * @param contextUser - User context for permissions
-   * @throws Error if the prompt cannot be embedded into the system prompt
-   */
-  private async validatePromptEmbedding(prompt: AIPromptEntity, systemPromptId: string, contextUser?: UserInfo): Promise<void> {
-    try {
-      // Ensure AI Engine is configured to access cached collections
-      await AIEngine.Instance.Config(false, contextUser);
-      
-      // First, find all AIAgentType entities that use this system prompt using cached data
-      const agentTypesUsingSystemPrompt = AIEngine.Instance.AgentTypes.filter(at => 
-        at.SystemPromptID === systemPromptId
-      );
-
-      if (agentTypesUsingSystemPrompt.length === 0) {
-        throw new Error(`No agent types found using system prompt ID ${systemPromptId}`);
-      }
-
-      // Get all agent type IDs that use this system prompt
-      const agentTypeIds = agentTypesUsingSystemPrompt.map(at => at.ID);
-
-      // Now find all agents that belong to these agent types using cached data
-      const agentsUsingSystemPrompt = AIEngine.Instance.Agents.filter(agent => 
-        agentTypeIds.includes(agent.TypeID)
-      );
-
-      if (agentsUsingSystemPrompt.length === 0) {
-        throw new Error(`No agents found for agent types that use system prompt ID ${systemPromptId}`);
-      }
-
-      // Get all agent IDs
-      const agentIds = agentsUsingSystemPrompt.map(a => a.ID);
-
-      // Finally, check if any of these agents are linked to the current prompt via cached AIAgentPrompt data
-      const agentPromptLinks = AIEngine.Instance.AgentPrompts.filter(ap => 
-        agentIds.includes(ap.AgentID) && ap.PromptID === prompt.ID
-      );
-
-      if (agentPromptLinks.length === 0) {
-        throw new Error(
-          `AI prompt "${prompt.Name}" (ID: ${prompt.ID}) cannot be embedded into system prompt ID ${systemPromptId}. ` +
-          `The prompt must be linked to an agent that uses this system prompt through the AI Agent Prompts table.`
-        );
-      }
-
-      // Validation passed - the prompt is properly linked to an agent that uses this system prompt
-      LogStatus(`Validation passed: AI prompt "${prompt.Name}" can be embedded into system prompt ID ${systemPromptId}`);
-      LogStatus(`Found ${agentPromptLinks.length} valid agent-prompt link(s) for embedding validation`);
-
-    } catch (error) {
-      LogError(`AI prompt embedding validation failed: ${error.message}`);
-      throw error;
     }
   }
 }
