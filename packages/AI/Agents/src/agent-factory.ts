@@ -3,6 +3,8 @@ import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { AIAgentEntityExtended } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { BaseAgent, IAgentFactory } from './base-agent';
+import { ConductorAgent, CONDUCTOR_AGENT_NAME } from './conductor-agent';
+import { AgentRunner } from './agent-runner';
 
 /**
  * Factory class for creating and managing AI Agent instances.
@@ -182,7 +184,7 @@ export class AgentFactory implements IAgentFactory {
    */
   public async GetAgentEntity(
     agentName: string, 
-    contextUser?: UserInfo
+    contextUser: UserInfo
   ): Promise<AIAgentEntityExtended | null> {
     try {
       if (!agentName || agentName.trim().length === 0) {
@@ -194,6 +196,80 @@ export class AgentFactory implements IAgentFactory {
     } catch (error) {
       LogError(`Error getting agent entity '${agentName}': ${error.message}`);
       return null;
+    }
+  }
+
+  /**
+   * Creates a ConductorAgent instance using the global class factory.
+   * 
+   * @param conductorEntity The conductor agent entity
+   * @param contextUser User context for authentication and permissions
+   * @returns ConductorAgent instance
+   */
+  public async GetConductorAgent(
+    contextUser: UserInfo
+  ): Promise<ConductorAgent> {
+    try {
+
+      // Load AI Engine to get access to agents metadata
+      await AIEngine.Instance.Config(false, contextUser);
+
+      // Find the agent by name
+      const conductorEntity = AIEngine.Instance.GetAgentByName(CONDUCTOR_AGENT_NAME);
+      if (!conductorEntity) {
+        LogError(`Agent with name '${CONDUCTOR_AGENT_NAME}' not found`);
+        return null;
+      }
+
+      const conductor = MJGlobal.Instance.ClassFactory.CreateInstance<ConductorAgent>(
+        BaseAgent,
+        CONDUCTOR_AGENT_NAME, // Use the conductor agent name as key
+        conductorEntity,
+        this,
+        contextUser
+      );
+
+      if (!conductor) {
+        throw new Error(`Failed to create ConductorAgent instance for '${conductorEntity.Name}'`);
+      }
+
+      return conductor;
+    } catch (error) {
+      LogError(`Error creating Conductor Agent: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Creates an AgentRunner instance using the global class factory.
+   * Uses GetConductor internally to create the conductor.
+   * 
+   * @param conductorEntity The conductor agent entity  
+   * @param contextUser User context for authentication and permissions
+   * @returns AgentRunner instance
+   */
+  public async GetAgentRunner(
+    contextUser: UserInfo,
+    key?: string
+  ): Promise<AgentRunner> {
+    try {
+      const conductor = await this.GetConductorAgent(contextUser);
+      
+      const runner = MJGlobal.Instance.ClassFactory.CreateInstance<AgentRunner>(
+        AgentRunner,
+        key || null,
+        conductor,
+        contextUser
+      );
+
+      if (!runner) {
+        throw new Error(`Failed to create AgentRunner instance`);
+      }
+
+      return runner;
+    } catch (error) {
+      LogError(`Error creating AgentRunner: ${error.message}`);
+      throw error;
     }
   }
 }
