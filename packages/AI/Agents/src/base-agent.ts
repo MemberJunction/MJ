@@ -337,6 +337,52 @@ export interface SerializedAgentState {
 }
 
 /**
+ * Result from executing decided actions containing execution outcomes and history
+ */
+export interface ActionExecutionResult {
+  /** Historical record of executed actions/subagents */
+  historyItems: ExecutionHistoryItem[];
+  /** Results from executed actions */
+  actionResults: ActionResult[];
+  /** New conversation messages generated during execution */
+  newMessages: ChatMessage[];
+}
+
+/**
+ * Result from executing a single execution step
+ */
+export interface SingleStepExecutionResult {
+  /** History item representing the completed step */
+  historyItem: ExecutionHistoryItem;
+  /** Action result if step was an action execution */
+  actionResult?: ActionResult;
+  /** New message generated from the step execution */
+  newMessage?: ChatMessage;
+}
+
+/**
+ * Agent run history containing the run record and all execution steps
+ */
+export interface AgentRunHistory {
+  /** The agent run database record */
+  agentRun: AIAgentRunEntity;
+  /** All execution steps for this run, ordered by step number */
+  steps: AIAgentRunStepEntity[];
+}
+
+/**
+ * Result from deserializing agent state containing restored execution data
+ */
+export interface DeserializedAgentState {
+  /** Restored execution history */
+  executionHistory: ExecutionHistoryItem[];
+  /** Restored decision history */
+  decisionHistory: AgentDecisionResponse[];
+  /** Restored action results */
+  actionResults: ActionResult[];
+}
+
+/**
  * Context information maintained during agent execution
  */
 export interface AgentExecutionContext {
@@ -1177,11 +1223,7 @@ export class BaseAgent {
   protected deserializeAgentState(
     serializedState: SerializedAgentState,
     context: AgentExecutionContext
-  ): {
-    executionHistory: ExecutionHistoryItem[];
-    decisionHistory: AgentDecisionResponse[];
-    actionResults: ActionResult[];
-  } {
+  ): DeserializedAgentState {
     // Update context with restored state
     context.conversationMessages = serializedState.conversationMessages;
     context.currentStep = serializedState.currentStep;
@@ -1640,11 +1682,7 @@ Consider:
     context: AgentExecutionContext,
     decision: AgentDecisionResponse,
     executionHistory: ExecutionHistoryItem[]
-  ): Promise<{
-    historyItems: ExecutionHistoryItem[];
-    actionResults: ActionResult[];
-    newMessages: ChatMessage[];
-  }> {
+  ): Promise<ActionExecutionResult> {
     const historyItems: ExecutionHistoryItem[] = [];
     const actionResults: ActionResult[] = [];
     const newMessages: ChatMessage[] = [];
@@ -1738,11 +1776,7 @@ Consider:
     context: AgentExecutionContext,
     steps: ExecutionStep[],
     executionHistory: ExecutionHistoryItem[]
-  ): Promise<{
-    historyItems: ExecutionHistoryItem[];
-    actionResults: ActionResult[];
-    newMessages: ChatMessage[];
-  }> {
+  ): Promise<ActionExecutionResult> {
     const promises = steps.map(step => 
       this.executeSingleStep(context, step, executionHistory)
     );
@@ -1789,11 +1823,7 @@ Consider:
     context: AgentExecutionContext,
     steps: ExecutionStep[],
     executionHistory: ExecutionHistoryItem[]
-  ): Promise<{
-    historyItems: ExecutionHistoryItem[];
-    actionResults: ActionResult[];
-    newMessages: ChatMessage[];
-  }> {
+  ): Promise<ActionExecutionResult> {
     const historyItems: ExecutionHistoryItem[] = [];
     const actionResults: ActionResult[] = [];
     const newMessages: ChatMessage[] = [];
@@ -1832,11 +1862,7 @@ Consider:
     context: AgentExecutionContext,
     step: ExecutionStep,
     executionHistory: ExecutionHistoryItem[]
-  ): Promise<{
-    historyItem: ExecutionHistoryItem;
-    actionResult?: ActionResult;
-    newMessage?: ChatMessage;
-  }> {
+  ): Promise<SingleStepExecutionResult> {
     const timestamp = new Date();
     
     // Create database step record
@@ -2121,11 +2147,7 @@ Consider:
    */
   protected createExecutionSummary(
     decision: AgentDecisionResponse,
-    executionResults: {
-      historyItems: ExecutionHistoryItem[];
-      actionResults: ActionResult[];
-      newMessages: ChatMessage[];
-    }
+    executionResults: ActionExecutionResult
   ): string {
     const { historyItems } = executionResults;
     const successful = historyItems.filter(h => h.success);
@@ -2168,10 +2190,7 @@ Consider:
    * 
    * @public
    */
-  public async getRunHistory(agentRunId: string): Promise<{
-    agentRun: AIAgentRunEntity;
-    steps: AIAgentRunStepEntity[];
-  } | null> {
+  public async getRunHistory(agentRunId: string): Promise<AgentRunHistory | null> {
     try {
       // Load the agent run
       const agentRun = await this._metadata.GetEntityObject<AIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
