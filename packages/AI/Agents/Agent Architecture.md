@@ -1186,107 +1186,139 @@ ORDER BY
 
 ## Appendix D: Integration Examples
 
-### D.1 Creating an Agent with Prompts
+### D.1 Creating and Using Agents with the AgentFactory
 
 ```typescript
-async function createBasicAgent() {
-  // Note: Agent and prompt creation is typically done through the MemberJunction
-  // metadata system using database entities rather than programmatic creation.
-  // This example shows the conceptual flow.
+// Get the global agent factory instance
+const factory = GetAgentFactory();
+
+// Create a new agent from an existing agent entity in the database
+async function createAgentFromEntity(agentId: string, user: UserInfo): Promise<BaseAgent> {
+  const agent = await factory.CreateAgentFromEntity(agentId, user);
+  return agent;
+}
+
+// Create a custom agent by extending BaseAgent
+class CustomerSupportAgent extends BaseAgent {
+  constructor(entity: AIAgentEntity, contextUser: UserInfo) {
+    super(entity, contextUser);
+  }
+
+  protected async processDecision(decision: any, context: AgentContext): Promise<AgentResult> {
+    // Custom logic for customer support specific processing
+    if (decision.decision === 'escalate_to_human') {
+      return await this.escalateToHuman(context);
+    }
+    
+    // Delegate to parent for standard processing
+    return await super.processDecision(decision, context);
+  }
+
+  private async escalateToHuman(context: AgentContext): Promise<AgentResult> {
+    // Custom escalation logic
+    return {
+      success: true,
+      result: 'Escalated to human support',
+      metadata: {
+        escalated: true,
+        timestamp: new Date()
+      }
+    };
+  }
+}
+
+// Register the custom agent type with the factory
+factory.RegisterAgentClass('CustomerSupport', CustomerSupportAgent);
+
+// Use the factory to create agents
+async function useAgentFactory(user: UserInfo) {
+  // Method 1: Create agent by type name
+  const agent1 = await factory.CreateAgent('Base Agent', user);
   
-  // Create the agent through metadata (AIAgent entity)
-  const agentEntity = await metadata.GetEntityObject('AI Agents');
-  agentEntity.NewRecord();
-  agentEntity.Name = "Customer Support Agent";
-  agentEntity.Description = "Assists with customer inquiries and support tickets";
-  agentEntity.ExecutionMode = "Sequential";
-  await agentEntity.Save();
+  // Method 2: Create agent from database entity
+  const agent2 = await factory.CreateAgentFromEntity('agent-uuid-here', user);
   
-  // Create prompts through metadata (AIPrompt entities)
-  const greetingPrompt = await metadata.GetEntityObject('AI Prompts');
-  greetingPrompt.NewRecord();
-  greetingPrompt.Name = "Customer Greeting";
-  greetingPrompt.Description = "Initial greeting to the customer";
-  greetingPrompt.PromptText = "You are a helpful customer support agent. Greet the customer professionally and ask how you can help them today.";
-  greetingPrompt.OutputType = "string";
-  await greetingPrompt.Save();
+  // Method 3: Create custom agent type
+  const agent3 = await factory.CreateAgent('CustomerSupport', user);
   
-  const supportPrompt = await metadata.GetEntityObject('AI Prompts');
-  supportPrompt.NewRecord();
-  supportPrompt.Name = "Support Response";
-  supportPrompt.Description = "Provides support based on customer inquiry";
-  supportPrompt.PromptText = "Based on the customer's inquiry: '{{inquiry}}', provide a helpful response that addresses their needs.";
-  supportPrompt.OutputType = "string";
-  supportPrompt.EnableCaching = true;
-  supportPrompt.CacheTTLSeconds = 3600;
-  supportPrompt.CacheMatchType = "Vector";
-  supportPrompt.CacheSimilarityThreshold = 0.92;
-  await supportPrompt.Save();
+  // Execute the agent
+  const result = await agent1.Execute({
+    conversationMessages: [
+      { role: 'user', content: 'Help me with my order status' }
+    ],
+    data: { orderId: '12345' }
+  });
   
-  // Associate prompts with the agent through AIAgentPrompt entities
-  const agentGreetingPrompt = await metadata.GetEntityObject('AI Agent Prompts');
-  agentGreetingPrompt.NewRecord();
-  agentGreetingPrompt.AgentID = agentEntity.ID;
-  agentGreetingPrompt.PromptID = greetingPrompt.ID;
-  agentGreetingPrompt.Purpose = "Initial Greeting";
-  agentGreetingPrompt.ExecutionOrder = 1;
-  agentGreetingPrompt.ContextBehavior = "Smart";
-  await agentGreetingPrompt.Save();
-  
-  const agentSupportPrompt = await metadata.GetEntityObject('AI Agent Prompts');
-  agentSupportPrompt.NewRecord();
-  agentSupportPrompt.AgentID = agentEntity.ID;
-  agentSupportPrompt.PromptID = supportPrompt.ID;
-  agentSupportPrompt.Purpose = "Support Response";
-  agentSupportPrompt.ExecutionOrder = 2;
-  agentSupportPrompt.ContextBehavior = "Complete";
-  await agentSupportPrompt.Save();
-  
-  return agentEntity.ID;
+  return result;
 }
 ```
 
-### D.2 Executing an Agent with Context
+### D.2 Executing an Agent with BaseAgent Framework
 
 ```typescript
-async function executeAgent(agentId, initialContext) {
-  // Load agent entity from AI Engine
-  await AIEngine.Instance.Config(false, contextUser);
-  const agentEntity = AIEngine.Instance.Agents.find(a => a.ID === agentId);
-  
-  if (!agentEntity) {
-    throw new Error(`Agent with ID '${agentId}' not found`);
+async function executeAgent(agentId: string, initialContext: any, user: UserInfo): Promise<AgentResult> {
+  try {
+    // Get the global agent factory
+    const factory = GetAgentFactory();
+    
+    // Create agent from entity ID
+    const agent = await factory.CreateAgentFromEntity(agentId, user);
+    
+    // Execute the agent with context and progress tracking
+    const result = await agent.Execute({
+      conversationMessages: initialContext.conversation || [],
+      data: initialContext.parameters || {},
+      onProgress: (progress) => {
+        console.log(`Step ${progress.currentStep}/${progress.totalSteps}: ${progress.message}`);
+        console.log(`Progress: ${progress.percentage}%`);
+      },
+      onStreamingUpdate: (update) => {
+        // Handle real-time updates during execution
+        console.log('Streaming update:', update);
+      }
+    });
+    
+    // The agent automatically handles state tracking, metrics, and logging
+    console.log(`Execution completed in ${result.metadata?.executionTimeMs}ms`);
+    console.log(`Tokens used: ${result.metadata?.tokensUsed}`);
+    console.log(`Cost: $${result.metadata?.cost}`);
+    
+    return result;
+    
+  } catch (error) {
+    console.error('Agent execution failed:', error);
+    throw error;
   }
+}
+
+// Example with cancellation support
+async function executeAgentWithCancellation(agentId: string, context: any, user: UserInfo) {
+  const factory = GetAgentFactory();
+  const agent = await factory.CreateAgentFromEntity(agentId, user);
   
-  // Get agent type to determine runner type
-  const agentType = AIEngine.Instance.AgentTypes.find(at => at.ID === agentEntity.TypeID);
-  if (!agentType) {
-    throw new Error(`Agent type not found for agent '${agentId}'`);
-  }
+  // Create cancellation token
+  const controller = new AbortController();
   
-  // Get agent runner using the global function
-  const runner = await GetAgentRunner(agentType.Name, contextUser);
+  // Set up timeout
+  setTimeout(() => {
+    controller.abort();
+  }, 30000); // 30 second timeout
   
-  // Execute the agent with context
-  const result = await runner.Execute({
-    agentEntity: agentEntity,
-    contextUser: contextUser,
-    data: initialContext.parameters || {},
-    conversationMessages: initialContext.conversation || [],
-    onProgress: (progress) => {
-      console.log(`${progress.step}: ${progress.percentage}% - ${progress.message}`);
+  try {
+    const result = await agent.Execute({
+      conversationMessages: context.conversation || [],
+      data: context.parameters || {},
+      signal: controller.signal // Pass cancellation signal
+    });
+    
+    return result;
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      console.log('Agent execution was cancelled');
+      // Agent state is automatically saved for potential resume
     }
-  });
-  
-  // Log the execution for analytics
-  await analyticsManager.logAgentExecution(
-    agentId,
-    result.metadata?.runId,
-    initialContext,
-    result
-  );
-  
-  return result;
+    throw error;
+  }
 }
 ```
 
