@@ -9,6 +9,7 @@ import { SyncEngine, RecordData } from '../../lib/sync-engine';
 import { initializeProvider, findEntityDirectories, getSystemUser } from '../../lib/provider-utils';
 import { BaseEntity } from '@memberjunction/core';
 import { cleanupProvider } from '../../lib/provider-utils';
+import { configManager } from '../../lib/config-manager';
 
 export default class Push extends Command {
   static description = 'Push local file changes to the database';
@@ -39,7 +40,7 @@ export default class Push extends Command {
         this.error('No mj.config.cjs found in current directory or parent directories');
       }
       
-      const syncConfig = await loadSyncConfig(process.cwd());
+      const syncConfig = await loadSyncConfig(configManager.getOriginalCwd());
       
       // Initialize data provider
       await initializeProvider(mjConfig);
@@ -50,7 +51,7 @@ export default class Push extends Command {
       spinner.succeed('Configuration loaded');
       
       // Find entity directories to process
-      const entityDirs = findEntityDirectories(process.cwd(), flags.dir);
+      const entityDirs = findEntityDirectories(configManager.getOriginalCwd(), flags.dir);
       
       if (entityDirs.length === 0) {
         this.error('No entity directories found');
@@ -113,12 +114,13 @@ export default class Push extends Command {
   ): Promise<{ created: number; updated: number; errors: number }> {
     const result = { created: 0, updated: 0, errors: 0 };
     
-    // Find JSON files in the current directory only (not subdirectories)
+    // Find files matching the configured pattern
     const pattern = entityConfig.filePattern || '*.json';
     const jsonFiles = await fastGlob(pattern, {
       cwd: entityDir,
       ignore: ['.mj-sync.json', '.mj-folder.json'],
-      dot: true  // Include dotfiles (files starting with .)
+      dot: true,  // Include dotfiles (files starting with .)
+      onlyFiles: true
     });
     
     this.log(`Processing ${jsonFiles.length} records in ${path.relative(process.cwd(), entityDir) || '.'}`);

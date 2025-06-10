@@ -13,6 +13,7 @@
 import { cosmiconfigSync } from 'cosmiconfig';
 import path from 'path';
 import fs from 'fs-extra';
+import { configManager } from './lib/config-manager';
 
 /**
  * MemberJunction database configuration
@@ -81,6 +82,22 @@ export interface RelatedEntityConfig {
   foreignKey: string;
   /** Optional SQL filter to apply when pulling related records */
   filter?: string;
+  /** Fields to externalize to separate files for this related entity */
+  externalizeFields?: string[] | {
+    [fieldName: string]: {
+      /** File extension to use (e.g., ".md", ".txt", ".html") */
+      extension?: string;
+    }
+  };
+  /** Fields to exclude from the pulled data for this related entity */
+  excludeFields?: string[];
+  /** Foreign key fields to convert to @lookup references for this related entity */
+  lookupFields?: {
+    [fieldName: string]: {
+      entity: string;
+      field: string;
+    };
+  };
   /** Nested related entities for deep object graphs */
   relatedEntities?: Record<string, RelatedEntityConfig>;
 }
@@ -105,6 +122,25 @@ export interface EntityConfig {
     filter?: string;
     /** Configuration for pulling related entities */
     relatedEntities?: Record<string, RelatedEntityConfig>;
+    /** Fields to externalize to separate files with optional configuration */
+    externalizeFields?: string[] | {
+      [fieldName: string]: {
+        /** File extension to use (e.g., ".md", ".txt", ".html") */
+        extension?: string;
+      }
+    };
+    /** Fields to exclude from the pulled data (e.g., ["TemplateID"]) */
+    excludeFields?: string[];
+    /** Foreign key fields to convert to @lookup references */
+    lookupFields?: {
+      /** Field name in this entity (e.g., "CategoryID") */
+      [fieldName: string]: {
+        /** Target entity name (e.g., "AI Prompt Categories") */
+        entity: string;
+        /** Field in target entity to use for lookup (e.g., "Name") */
+        field: string;
+      };
+    };
   };
 }
 
@@ -136,19 +172,7 @@ export interface FolderConfig {
  * ```
  */
 export function loadMJConfig(): MJConfig | null {
-  try {
-    const explorer = cosmiconfigSync('mj');
-    const result = explorer.search(process.cwd());
-    
-    if (!result || !result.config) {
-      throw new Error('No mj.config.cjs found');
-    }
-    
-    return result.config;
-  } catch (error) {
-    console.error('Error loading MJ config:', error);
-    return null;
-  }
+  return configManager.loadMJConfig();
 }
 
 /**

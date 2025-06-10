@@ -13,6 +13,7 @@ import type { MJConfig } from '../config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { UserInfo } from '@memberjunction/core';
+import { configManager } from './config-manager';
 
 /** Global DataSource instance for connection lifecycle management */
 let globalDataSource: DataSource | null = null;

@@ -102,7 +102,7 @@ export default class Status extends Command {
   ): Promise<{ new: number; modified: number; deleted: number; unchanged: number }> {
     const result = { new: 0, modified: 0, deleted: 0, unchanged: 0 };
     
-    // Find JSON files in the current directory only (not subdirectories)
+    // Find files matching the configured pattern
     const pattern = entityConfig.filePattern || '*.json';
     const jsonFiles = await fastGlob(pattern, {
       cwd: entityDir,

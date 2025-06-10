@@ -104,9 +104,23 @@ The tool uses a hierarchical directory structure with cascading defaults:
 - Each top-level directory represents an entity type
 - `.mj-sync.json` files define entities and base defaults
 - `.mj-folder.json` files define folder-specific defaults (optional)
-- All JSON files within are treated as records of that entity type
+- Only dot-prefixed JSON files (e.g., `.prompt-template.json`, `.category.json`) are treated as metadata records
+- Regular JSON files without the dot prefix are ignored, allowing package.json and other config files to coexist
 - External files (`.md`, `.html`, etc.) are referenced from the JSON files
 - Defaults cascade down through the folder hierarchy
+
+### File Naming Convention
+
+**Metadata files must be prefixed with a dot (.)** to be recognized by the sync tool. This convention:
+- Clearly distinguishes metadata files from regular configuration files
+- Allows `package.json`, `tsconfig.json` and other standard files to coexist without being processed
+- Follows established patterns like `.gitignore` and `.eslintrc.json`
+
+Examples:
+- ✅ `.greeting.json` - Will be processed as metadata
+- ✅ `.customer-prompt.json` - Will be processed as metadata  
+- ❌ `greeting.json` - Will be ignored
+- ❌ `package.json` - Will be ignored
 
 ### File Format Options
 
@@ -147,12 +161,12 @@ metadata/
 │   ├── .mj-sync.json               # Defines entity: "AI Prompts"
 │   ├── customer-service/
 │   │   ├── .mj-folder.json         # Folder metadata (CategoryID, etc.)
-│   │   ├── greeting.json           # AI Prompt record with embedded models
+│   │   ├── .greeting.json          # AI Prompt record with embedded models
 │   │   ├── greeting.prompt.md      # Prompt content (referenced)
 │   │   └── greeting.notes.md       # Notes field (referenced)
 │   └── analytics/
 │       ├── .mj-folder.json         # Folder metadata (CategoryID, etc.)
-│       ├── daily-report.json       # AI Prompt record
+│       ├── .daily-report.json      # AI Prompt record
 │       └── daily-report.prompt.md  # Prompt content (referenced)
 ├── templates/                       # Reusable JSON templates
 │   ├── standard-prompt-settings.json # Common prompt configurations
@@ -163,17 +177,17 @@ metadata/
     ├── .mj-sync.json               # Defines entity: "Templates"
     ├── email/
     │   ├── .mj-folder.json         # Folder metadata
-    │   ├── welcome.json            # Template record
+    │   ├── .welcome.json           # Template record (dot-prefixed)
     │   └── welcome.template.html   # Template content (referenced)
     └── reports/
         ├── .mj-folder.json         # Folder metadata
-        ├── invoice.json            # Template record
+        ├── .invoice.json           # Template record (dot-prefixed)
         └── invoice.template.html   # Template content (referenced)
 ```
 
 ## JSON Metadata Format
 
-### Individual Record (e.g., ai-prompts/customer-service/greeting.json)
+### Individual Record (e.g., ai-prompts/customer-service/.greeting.json)
 ```json
 {
   "fields": {

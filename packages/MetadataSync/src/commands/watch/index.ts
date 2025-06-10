@@ -68,6 +68,7 @@ export default class Watch extends Command {
         this.log(`Watching ${entityConfig.entity} in ${entityDir}`);
         
         // Watch for JSON files and external files
+        // All JSON files will be watched, but only dot-prefixed ones will be processed
         const patterns = [
           path.join(entityDir, entityConfig.filePattern || '**/*.json'),
           path.join(entityDir, '**/*.md'),

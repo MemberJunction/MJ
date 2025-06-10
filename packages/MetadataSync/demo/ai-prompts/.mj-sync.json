@@ -1,11 +1,12 @@
 {
   "entity": "AI Prompts",
-  "filePattern": "*.json",
+  "filePattern": ".*.json",
   "defaults": {
     "CategoryID": "@lookup:AI Prompt Categories.Name=Examples?create&Description=Example category for AI prompts"
   },
   "pull": {
     "filter": "CategoryID IN (SELECT ID FROM [AI Prompt Categories] WHERE Name = 'Examples')",
+    "externalizeFields": ["Prompt"],
     "relatedEntities": {
       "MJ: AI Prompt Models": {
         "entity": "MJ: AI Prompt Models",
