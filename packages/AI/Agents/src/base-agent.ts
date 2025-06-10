@@ -953,7 +953,7 @@ export class BaseAgent {
   }
 
   /**
-   * Loads the prompts associated with the given agent entity.
+   * Loads the prompts associated this agent.
    */
   protected async loadAgentPrompts(): Promise<AIPromptEntity[]> {
     try {
@@ -1312,7 +1312,7 @@ export class BaseAgent {
     executionHistory: ExecutionHistoryItem[]
   ): Promise<AgentDecisionInput> {
     // Load available actions and subagents
-    const availableActions = await this.getAvailableActions();
+    const availableActions = await this.getAvailableActionDescriptions();
     const availableSubAgents = await this.getAvailableSubAgentDescriptions();
     
     // Determine current goal from context or agent description
@@ -1382,7 +1382,7 @@ export class BaseAgent {
       const primaryprompt = prompts[0];
 
       // Prepare context-aware decision prompt
-      const contextualPrompt = this.buildContextualDecisionPrompt(decisionInput, context);
+      const contextualPrompt = this.buildContextualDecisionPrompt(decisionInput);
 
       // Prepare data context for system prompt rendering
       const promptData = {
@@ -1407,7 +1407,7 @@ export class BaseAgent {
       // Configure AIPromptRunner parameters with system prompt embedding
       const promptParams = new AIPromptParams();
       promptParams.prompt = primaryprompt;
-      promptParams.parentPromptID = agentType.SystemPromptID; // Use system prompt embedding
+      promptParams.parentPromptID = agentType && agentType.SystemPromptID !== primaryprompt.ID ? agentType.SystemPromptID : null; // Use system prompt embedding if the system prompt is not the primary prompt
       promptParams.data = promptData;
       promptParams.conversationMessages = conversationMessages;
       promptParams.templateMessageRole = 'system';
@@ -1422,7 +1422,7 @@ export class BaseAgent {
       }
 
       // Parse and validate the LLM response
-      const decision = await this.parseAndValidateDecision(promptResult.rawResult || '', decisionInput);
+      const decision = await this.parseAndValidateDecision(promptResult.rawResult || '');
       
       return decision;
     } catch (error) {
@@ -1442,10 +1442,7 @@ export class BaseAgent {
   /**
    * Builds a contextual decision prompt based on the current state and goals.
    */
-  private buildContextualDecisionPrompt(
-    decisionInput: AgentDecisionInput,
-    context: AgentExecutionContext
-  ): string {
+  private buildContextualDecisionPrompt(decisionInput: AgentDecisionInput): string {
     const executionSummary = decisionInput.executionHistory.length > 0 
       ? this.summarizeExecutionHistory(decisionInput.executionHistory)
       : 'No previous actions taken.';
@@ -1561,10 +1558,7 @@ Consider:
   /**
    * Parses and validates the LLM decision response with enhanced error handling.
    */
-  private async parseAndValidateDecision(
-    llmResponse: string,
-    decisionInput: AgentDecisionInput
-  ): Promise<AgentDecisionResponse> {
+  private async parseAndValidateDecision(llmResponse: string): Promise<AgentDecisionResponse> {
     try {
       // Try to extract JSON from the response (handle cases where LLM adds extra text)
       const jsonMatch = llmResponse.match(/```json\s*([\s\S]*?)\s*```/) || 
@@ -1580,24 +1574,21 @@ Consider:
         LogError(`Failed to parse LLM decision response: ${parseError.message}`);
         
         // Attempt to infer intent from the response text
-        return this.createFallbackDecision(llmResponse, decisionInput);
+        return this.createFallbackDecision(llmResponse);
       }
 
       // Validate and normalize the decision
       return this.validateAndNormalizeDecision(decision);
     } catch (error) {
       LogError(`Error parsing decision: ${error.message}`);
-      return this.createFallbackDecision(llmResponse, decisionInput);
+      return this.createFallbackDecision(llmResponse);
     }
   }
 
   /**
    * Creates a fallback decision when JSON parsing fails.
    */
-  private createFallbackDecision(
-    llmResponse: string,
-    decisionInput: AgentDecisionInput
-  ): AgentDecisionResponse {
+  private createFallbackDecision(llmResponse: string): AgentDecisionResponse {
     // Try to infer intent from the response
     const response = llmResponse.toLowerCase();
     
@@ -1959,7 +1950,7 @@ Consider:
   /**
    * Gets available actions for the given agent entity.
    */
-  protected async getAvailableActions(): Promise<ActionDescription[]> {
+  protected async getAvailableActionDescriptions(): Promise<ActionDescription[]> {
     try {
       // Get agent actions from metadata
       const agentActions = AIEngine.Instance.AgentActions
