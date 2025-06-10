@@ -74,18 +74,29 @@ The Metadata Sync tool bridges the gap between database-stored metadata and file
 
 ## Supported Entities
 
-### Phase 1: AI Prompts (Current)
-- Full support for all AI Prompt fields
-- Markdown files for prompt content
-- Category-based organization
-- AI Prompt Models as embedded collections
+The tool works with any MemberJunction entity - both core system entities and user-created entities. Each entity type can have its own directory structure, file naming conventions, and related entity configurations.
 
-### Future Phases
-- Templates
-- AI Models
-- AI Vendors
-- Query definitions
-- Any MJ entity with metadata
+### Important Limitation: Database-Reflected Metadata
+
+**This tool should NOT be used to modify metadata that is reflected from the underlying database catalog.** Examples include:
+- Entity field data types
+- Column lengths/precision
+- Primary key definitions
+- Foreign key relationships
+- Table/column existence
+
+These properties are designed to flow **from** the database catalog **up** into MJ metadata, not the other way around. Attempting to modify these via file sync could create inconsistencies between the metadata and actual database schema.
+
+The tool is intended for managing business-level metadata such as:
+- Descriptions and documentation
+- Display names and user-facing text
+- Categories and groupings
+- Custom properties and settings
+- AI prompts, templates, and other content
+- Permissions and security settings
+- Any other data that is not reflected **up** from the underlying system database catalogs
+
+For more information about how CodeGen reflects system-level data from the database into the MJ metadata layer, see the [CodeGen documentation](../CodeGen/README.md).
 
 ## File Structure
 
@@ -96,6 +107,37 @@ The tool uses a hierarchical directory structure with cascading defaults:
 - All JSON files within are treated as records of that entity type
 - External files (`.md`, `.html`, etc.) are referenced from the JSON files
 - Defaults cascade down through the folder hierarchy
+
+### File Format Options
+
+#### Single Record per File (Default)
+Each JSON file contains one record:
+```json
+{
+  "fields": { ... },
+  "relatedEntities": { ... }
+}
+```
+
+#### Multiple Records per File (NEW)
+JSON files can contain arrays of records:
+```json
+[
+  {
+    "fields": { ... },
+    "relatedEntities": { ... }
+  },
+  {
+    "fields": { ... },
+    "relatedEntities": { ... }
+  }
+]
+```
+
+This is useful for:
+- Grouping related records in a single file
+- Reducing file clutter for entities with many small records
+- Maintaining logical groupings while using `@file:` references for large content
 
 ### Example Structure
 ```
@@ -112,7 +154,12 @@ metadata/
 │       ├── .mj-folder.json         # Folder metadata (CategoryID, etc.)
 │       ├── daily-report.json       # AI Prompt record
 │       └── daily-report.prompt.md  # Prompt content (referenced)
-└── templates/
+├── templates/                       # Reusable JSON templates
+│   ├── standard-prompt-settings.json # Common prompt configurations
+│   ├── standard-ai-models.json     # Standard model configurations
+│   ├── high-performance-models.json # High-power model configurations
+│   └── customer-service-defaults.json # CS-specific defaults
+└── template-entities/
     ├── .mj-sync.json               # Defines entity: "Templates"
     ├── email/
     │   ├── .mj-folder.json         # Folder metadata
@@ -302,6 +349,66 @@ Support environment-specific values:
 - `@env:VARIABLE_NAME`
 - Useful for different environments (dev/staging/prod)
 
+### @template: References (NEW)
+Enable JSON template composition for reusable configurations:
+
+#### String Template Reference
+Use `@template:` to replace any value with template content:
+```json
+{
+  "relatedEntities": {
+    "MJ: AI Prompt Models": "@template:templates/standard-ai-models.json"
+  }
+}
+```
+
+#### Object Template Merging
+Use `@template` field within objects to merge template content:
+```json
+{
+  "fields": {
+    "Name": "My Prompt",
+    "@template": "templates/standard-prompt-settings.json",
+    "Temperature": 0.9  // Overrides template value
+  }
+}
+```
+
+#### Multiple Template Merging
+Merge multiple templates in order (later templates override earlier ones):
+```json
+{
+  "fields": {
+    "@template": [
+      "templates/base-settings.json",
+      "templates/customer-service-defaults.json"
+    ],
+    "Name": "Customer Bot"  // Local fields override all templates
+  }
+}
+```
+
+#### Nested Templates
+Templates can reference other templates:
+```json
+// templates/high-performance-models.json
+[
+  {
+    "fields": {
+      "@template": "../templates/model-defaults.json",
+      "ModelID": "@lookup:AI Models.Name=GPT 4o"
+    }
+  }
+]
+```
+
+#### Template Benefits
+- **DRY Principle**: Define configurations once, use everywhere
+- **Maintainability**: Update template to affect all uses
+- **Flexibility**: Use at any JSON level
+- **Composability**: Build complex configurations from simple parts
+- **Override Support**: Local values always override template values
+
 ## CLI Commands
 
 ```bash
@@ -313,6 +420,10 @@ mj-sync pull --entity="AI Prompts"
 
 # Pull specific records by filter
 mj-sync pull --entity="AI Prompts" --filter="CategoryID='customer-service-id'"
+
+# Pull multiple records into a single file (NEW)
+mj-sync pull --entity="AI Prompts" --multi-file="all-prompts"
+mj-sync pull --entity="AI Prompts" --filter="Status='Active'" --multi-file="active-prompts.json"
 
 # Push all changes from current directory and subdirectories
 mj-sync push

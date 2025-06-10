@@ -177,9 +177,9 @@ export interface ValidationAttempt {
 }
 
 /**
- * Result of an AI prompt execution
+ * Result of an AI prompt execution with generic type for the result
  */
-export class AIPromptRunResult {
+export class AIPromptRunResult<T = unknown> {
   /**
    * Whether the execution was successful
    */
@@ -208,7 +208,13 @@ export class AIPromptRunResult {
   /**
    * The parsed/validated result based on OutputType
    */
-  result?: unknown;
+  result?: T;
+
+  /**
+   * The ChatResult object containing the full response from the AI model, many
+   * of the properties of this object are included in the result object
+   */
+  chatResult: ChatResult;
 
   /**
    * Error message if execution failed
@@ -245,7 +251,7 @@ export class AIPromptRunResult {
    * Index 0 = second best, Index 1 = third best, etc.
    * (The best result is the main result object itself)
    */
-  additionalResults?: AIPromptRunResult[];
+  additionalResults?: AIPromptRunResult<T>[];
 
   /**
    * Ranking assigned by judge (1 = best, 2 = second best, etc.)
@@ -341,9 +347,29 @@ export class AIPromptRunner {
    * Executes an AI prompt with full support for templates, model selection, and validation.
    *
    * @param params Parameters for prompt execution
-   * @returns Promise<AIPromptRunResult> The execution result with tracking information
+   * @returns Promise<AIPromptRunResult<T>> The execution result with tracking information
+   * 
+   * @example
+   * ```typescript
+   * // Execute with specific result type
+   * interface AnalysisResult {
+   *   sentiment: string;
+   *   score: number;
+   *   keywords: string[];
+   * }
+   * 
+   * const result = await promptRunner.ExecutePrompt<AnalysisResult>({
+   *   prompt: sentimentPrompt,
+   *   data: { text: "Customer feedback text" }
+   * });
+   * 
+   * if (result.success && result.result) {
+   *   // result.result is typed as AnalysisResult
+   *   console.log(`Sentiment: ${result.result.sentiment}, Score: ${result.result.score}`);
+   * }
+   * ```
    */
-  public async ExecutePrompt(params: AIPromptParams): Promise<AIPromptRunResult> {
+  public async ExecutePrompt<T = unknown>(params: AIPromptParams): Promise<AIPromptRunResult<T>> {
     const startTime = new Date();
     const promptRun: AIPromptRunEntity | null = null;
 
@@ -356,6 +382,7 @@ export class AIPromptRunner {
         cancellationReason: 'user_requested',
         errorMessage: 'Prompt execution was cancelled before starting',
         executionTimeMS: 0,
+        chatResult: { success: false, errorMessage: 'Prompt execution was cancelled before starting' } as ChatResult,
       };
     }
 
@@ -402,10 +429,10 @@ export class AIPromptRunner {
 
       if (shouldUseParallelExecution) {
         // Use parallel execution path
-        return await this.executePromptInParallel(prompt, renderedPromptText, params, startTime);
+        return await this.executePromptInParallel<T>(prompt, renderedPromptText, params, startTime);
       } else {
         // Use traditional single execution path
-        return await this.executeSinglePrompt(prompt, renderedPromptText, params, startTime);
+        return await this.executeSinglePrompt<T>(prompt, renderedPromptText, params, startTime);
       }
     } catch (error) {
       LogError(error);
@@ -429,6 +456,7 @@ export class AIPromptRunner {
         errorMessage: error.message,
         promptRun,
         executionTimeMS,
+        chatResult: { success: false, errorMessage: error.message } as ChatResult,
       };
     }
   }
@@ -440,9 +468,9 @@ export class AIPromptRunner {
    * @param renderedPromptText - The rendered prompt text
    * @param params - Original execution parameters
    * @param startTime - Execution start time
-   * @returns Promise<AIPromptRunResult> - The execution result
+   * @returns Promise<AIPromptRunResult<T>> - The execution result
    */
-  private async executeSinglePrompt(prompt: AIPromptEntity, renderedPromptText: string, params: AIPromptParams, startTime: Date): Promise<AIPromptRunResult> {
+  private async executeSinglePrompt<T = unknown>(prompt: AIPromptEntity, renderedPromptText: string, params: AIPromptParams, startTime: Date): Promise<AIPromptRunResult<T>> {
     // Check for cancellation before model selection
     if (params.cancellationToken?.aborted) {
       throw new Error('Prompt execution was cancelled before model selection');
@@ -487,7 +515,8 @@ export class AIPromptRunner {
     return {
       success: true,
       rawResult: chatResult.data?.choices?.[0]?.message?.content,
-      result: parsedResult.result,
+      result: parsedResult.result as T,
+      chatResult,
       promptRun,
       executionTimeMS,
       tokensUsed: chatResult.data?.usage?.totalTokens,
@@ -503,14 +532,14 @@ export class AIPromptRunner {
    * @param renderedPromptText - The rendered prompt text
    * @param params - Original execution parameters
    * @param startTime - Execution start time
-   * @returns Promise<AIPromptRunResult> - The aggregated execution result
+   * @returns Promise<AIPromptRunResult<T>> - The aggregated execution result
    */
-  private async executePromptInParallel(
+  private async executePromptInParallel<T = unknown>(
     prompt: AIPromptEntity,
     renderedPromptText: string,
     params: AIPromptParams,
     startTime: Date,
-  ): Promise<AIPromptRunResult> {
+  ): Promise<AIPromptRunResult<T>> {
     // Check for cancellation before starting parallel execution
     if (params.cancellationToken?.aborted) {
       throw new Error('Parallel execution was cancelled before starting');
@@ -610,7 +639,7 @@ export class AIPromptRunner {
     }
 
     // Create additional results from all other successful results (excluding the best one)
-    const additionalResults: AIPromptRunResult[] = [];
+    const additionalResults: AIPromptRunResult<T>[] = [];
 
     // Sort successful results by ranking (if available) or keep original order
     const sortedResults = successfulResults.sort((a, b) => {
@@ -629,7 +658,8 @@ export class AIPromptRunner {
         additionalResults.push({
           success: result.success,
           rawResult: result.rawResult,
-          result: parsedResult.result,
+          result: parsedResult.result as T,
+          chatResult: result.modelResult!,
           executionTimeMS: result.executionTimeMS,
           tokensUsed: result.tokensUsed,
           validationResult: parsedResult.validationResult,
@@ -652,7 +682,8 @@ export class AIPromptRunner {
     return {
       success: true,
       rawResult: selectedResult.rawResult,
-      result: selectedParsedResult.result,
+      result: selectedParsedResult.result as T,
+      chatResult: selectedResult.modelResult!,
       promptRun: consolidatedPromptRun,
       executionTimeMS: parallelResult.totalExecutionTimeMS,
       tokensUsed: parallelResult.totalTokensUsed,

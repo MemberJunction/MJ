@@ -1,3 +1,12 @@
+/**
+ * @fileoverview Database provider utilities for MetadataSync
+ * @module provider-utils
+ * 
+ * This module provides utilities for initializing and managing the database
+ * connection, accessing system users, and finding entity directories. It handles
+ * the TypeORM DataSource lifecycle and MemberJunction provider initialization.
+ */
+
 import { DataSource } from 'typeorm';
 import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
 import type { MJConfig } from '../config';
@@ -5,13 +14,27 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { UserInfo } from '@memberjunction/core';
 
-/**
- * Initialize a SQLServerDataProvider with the given configuration
- * @param config MemberJunction configuration with database connection details
- * @returns Initialized SQLServerDataProvider instance
- */
+/** Global DataSource instance for connection lifecycle management */
 let globalDataSource: DataSource | null = null;
 
+/**
+ * Initialize a SQLServerDataProvider with the given configuration
+ * 
+ * Creates and initializes a TypeORM DataSource for SQL Server, then sets up
+ * the MemberJunction SQLServerDataProvider. The connection is stored globally
+ * for proper cleanup. Auto-detects Azure SQL databases for encryption settings.
+ * 
+ * @param config - MemberJunction configuration with database connection details
+ * @returns Promise resolving to initialized SQLServerDataProvider instance
+ * @throws Error if database connection fails
+ * 
+ * @example
+ * ```typescript
+ * const config = loadMJConfig();
+ * const provider = await initializeProvider(config);
+ * // Provider is ready for use
+ * ```
+ */
 export async function initializeProvider(config: MJConfig): Promise<SQLServerDataProvider> {
   // Create TypeORM DataSource
   const dataSource = new DataSource({
@@ -24,7 +47,8 @@ export async function initializeProvider(config: MJConfig): Promise<SQLServerDat
     synchronize: false,
     logging: false,
     options: {
-      encrypt: config.dbTrustServerCertificate !== 'Y' ? false : true,
+      encrypt: config.dbEncrypt === 'Y' || config.dbEncrypt === 'true' || 
+               config.dbHost.includes('.database.windows.net'), // Auto-detect Azure SQL
       trustServerCertificate: config.dbTrustServerCertificate === 'Y',
       instanceName: config.dbInstanceName
     }
@@ -48,6 +72,23 @@ export async function initializeProvider(config: MJConfig): Promise<SQLServerDat
   return await setupSQLServerClient(providerConfig);
 }
 
+/**
+ * Clean up the global database connection
+ * 
+ * Destroys the TypeORM DataSource if it exists and is initialized.
+ * Should be called when the CLI command completes to ensure proper cleanup.
+ * 
+ * @returns Promise that resolves when cleanup is complete
+ * 
+ * @example
+ * ```typescript
+ * try {
+ *   // Do work with database
+ * } finally {
+ *   await cleanupProvider();
+ * }
+ * ```
+ */
 export async function cleanupProvider(): Promise<void> {
   if (globalDataSource && globalDataSource.isInitialized) {
     await globalDataSource.destroy();
@@ -55,6 +96,21 @@ export async function cleanupProvider(): Promise<void> {
   }
 }
 
+/**
+ * Get the system user from the UserCache
+ * 
+ * Retrieves the "System" user from MemberJunction's UserCache. This user is
+ * typically used for CLI operations where no specific user context exists.
+ * 
+ * @returns The System UserInfo object
+ * @throws Error if System user is not found in the cache
+ * 
+ * @example
+ * ```typescript
+ * const systemUser = getSystemUser();
+ * const syncEngine = new SyncEngine(systemUser);
+ * ```
+ */
 export function getSystemUser(): UserInfo {
   const sysUser = UserCache.Instance.UserByName("System", false);
   if (!sysUser) {
@@ -64,42 +120,52 @@ export function getSystemUser(): UserInfo {
 }
 
 /**
- * Recursively find all entity directories with .mj-sync.json files
- * @param dir Directory to search
- * @param specificDir Optional specific directory to limit search to
- * @returns Array of directory paths containing .mj-sync.json files
+ * Find entity directories at the immediate level only
+ * 
+ * Searches for directories containing .mj-sync.json files, which indicate
+ * entity data directories. Only searches immediate subdirectories, not recursive.
+ * If a specific directory is provided, only checks that directory.
+ * 
+ * @param dir - Base directory to search from
+ * @param specificDir - Optional specific subdirectory name to check
+ * @returns Array of absolute directory paths containing .mj-sync.json files
+ * 
+ * @example
+ * ```typescript
+ * // Find all entity directories
+ * const dirs = findEntityDirectories(process.cwd());
+ * 
+ * // Check specific directory
+ * const dirs = findEntityDirectories(process.cwd(), 'ai-prompts');
+ * ```
  */
 export function findEntityDirectories(dir: string, specificDir?: string): string[] {
   const results: string[] = [];
   
-  function search(currentDir: string) {
-    const entries = fs.readdirSync(currentDir, { withFileTypes: true });
-    
-    // Check if this directory has .mj-sync.json (and it's not the root)
-    const hasSyncConfig = entries.some(e => e.name === '.mj-sync.json');
-    const isRoot = currentDir === dir;
-    
-    if (hasSyncConfig && !isRoot) {
-      results.push(currentDir);
-    }
-    
-    // Recursively search subdirectories
-    for (const entry of entries) {
-      if (entry.isDirectory() && !entry.name.startsWith('.')) {
-        search(path.join(currentDir, entry.name));
-      }
-    }
-  }
-  
-  // If specific directory is provided, only search within it
+  // If specific directory is provided, check if it's an entity directory
   if (specificDir) {
-    // Handle both absolute and relative paths
     const targetDir = path.isAbsolute(specificDir) ? specificDir : path.join(dir, specificDir);
     if (fs.existsSync(targetDir)) {
-      search(targetDir);
+      const hasSyncConfig = fs.existsSync(path.join(targetDir, '.mj-sync.json'));
+      if (hasSyncConfig) {
+        results.push(targetDir);
+      }
     }
-  } else {
-    search(dir);
+    return results;
+  }
+  
+  // Otherwise, find all immediate subdirectories with .mj-sync.json
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  
+  for (const entry of entries) {
+    if (entry.isDirectory() && !entry.name.startsWith('.')) {
+      const subDir = path.join(dir, entry.name);
+      const hasSyncConfig = fs.existsSync(path.join(subDir, '.mj-sync.json'));
+      
+      if (hasSyncConfig) {
+        results.push(subDir);
+      }
+    }
   }
   
   return results;

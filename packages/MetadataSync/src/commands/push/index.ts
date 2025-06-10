@@ -113,64 +113,130 @@ export default class Push extends Command {
   ): Promise<{ created: number; updated: number; errors: number }> {
     const result = { created: 0, updated: 0, errors: 0 };
     
-    // Find all JSON files
+    // Find JSON files in the current directory only (not subdirectories)
     const pattern = entityConfig.filePattern || '*.json';
     const jsonFiles = await fastGlob(pattern, {
       cwd: entityDir,
-      ignore: ['.mj-sync.json', '.mj-folder.json']
+      ignore: ['.mj-sync.json', '.mj-folder.json'],
+      dot: true  // Include dotfiles (files starting with .)
     });
     
-    this.log(`Found ${jsonFiles.length} records to process`);
+    this.log(`Processing ${jsonFiles.length} records in ${path.relative(process.cwd(), entityDir) || '.'}`);
     
-    if (jsonFiles.length === 0) {
-      return result;
-    }
+    // First, process all JSON files in this directory
+    await this.processJsonFiles(jsonFiles, entityDir, entityConfig, syncEngine, flags, result);
     
-    // Confirm if needed
-    if (!flags['dry-run'] && !flags.ci && syncConfig?.push?.requireConfirmation) {
-      const proceed = await confirm({
-        message: `Push ${jsonFiles.length} ${entityConfig.entity} records to database?`
-      });
-      
-      if (!proceed) {
-        this.log('Push cancelled');
-        return result;
+    // Then, recursively process subdirectories
+    const entries = await fs.readdir(entityDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory() && !entry.name.startsWith('.')) {
+        const subDir = path.join(entityDir, entry.name);
+        
+        // Load subdirectory config and merge with parent config
+        let subEntityConfig = { ...entityConfig };
+        const subDirConfig = await loadEntityConfig(subDir);
+        
+        if (subDirConfig) {
+          // Check if this is a new entity type (has different entity name)
+          if (subDirConfig.entity && subDirConfig.entity !== entityConfig.entity) {
+            // This is a different entity type, skip it (will be processed separately)
+            continue;
+          }
+          
+          // Merge defaults: parent defaults + subdirectory overrides
+          subEntityConfig = {
+            ...entityConfig,
+            ...subDirConfig,
+            defaults: {
+              ...entityConfig.defaults,
+              ...(subDirConfig.defaults || {})
+            }
+          };
+        }
+        
+        // Process subdirectory with merged config
+        const subResult = await this.processEntityDirectory(
+          subDir,
+          subEntityConfig,
+          syncEngine,
+          flags,
+          syncConfig
+        );
+        
+        result.created += subResult.created;
+        result.updated += subResult.updated;
+        result.errors += subResult.errors;
       }
     }
     
-    // Process each file
+    return result;
+  }
+  
+  private async processJsonFiles(
+    jsonFiles: string[],
+    entityDir: string,
+    entityConfig: any,
+    syncEngine: SyncEngine,
+    flags: any,
+    result: { created: number; updated: number; errors: number }
+  ): Promise<void> {
+    if (jsonFiles.length === 0) {
+      return;
+    }
+    
     const spinner = ora();
     spinner.start('Processing records');
+    
+    let totalRecords = 0;
     
     for (const file of jsonFiles) {
       try {
         const filePath = path.join(entityDir, file);
-        const recordData: RecordData = await fs.readJson(filePath);
+        const fileContent = await fs.readJson(filePath);
+        
+        // Process templates in the loaded content
+        const processedContent = await syncEngine.processTemplates(fileContent, entityDir);
+        
+        // Check if the file contains a single record or an array of records
+        const isArray = Array.isArray(processedContent);
+        const records: RecordData[] = isArray ? processedContent : [processedContent];
+        totalRecords += records.length;
         
         // Build and process defaults (including lookups)
         const defaults = await syncEngine.buildDefaults(filePath, entityConfig);
         
-        // Process the record
-        const isNew = await this.pushRecord(
-          recordData,
-          entityConfig.entity,
-          path.dirname(filePath),
-          file,
-          defaults,
-          syncEngine,
-          flags['dry-run'],
-          flags.verbose
-        );
-        
-        if (!flags['dry-run']) {
-          if (isNew) {
-            result.created++;
-          } else {
-            result.updated++;
+        // Process each record in the file
+        for (let i = 0; i < records.length; i++) {
+          const recordData = records[i];
+          
+          // Process the record
+          const isNew = await this.pushRecord(
+            recordData,
+            entityConfig.entity,
+            path.dirname(filePath),
+            file,
+            defaults,
+            syncEngine,
+            flags['dry-run'],
+            flags.verbose,
+            isArray ? i : undefined
+          );
+          
+          if (!flags['dry-run']) {
+            if (isNew) {
+              result.created++;
+            } else {
+              result.updated++;
+            }
           }
+          
+          spinner.text = `Processing records (${result.created + result.updated + result.errors}/${totalRecords})`;
         }
         
-        spinner.text = `Processing records (${result.created + result.updated + result.errors}/${jsonFiles.length})`;
+        // Write back the entire file if it's an array
+        if (isArray && !flags['dry-run']) {
+          await fs.writeJson(filePath, records, { spaces: 2 });
+        }
         
       } catch (error) {
         result.errors++;
@@ -179,8 +245,7 @@ export default class Push extends Command {
       }
     }
     
-    spinner.succeed(`Processed ${jsonFiles.length} records`);
-    return result;
+    spinner.succeed(`Processed ${totalRecords} records from ${jsonFiles.length} files`);
   }
   
   private async pushRecord(
@@ -191,7 +256,8 @@ export default class Push extends Command {
     defaults: Record<string, any>,
     syncEngine: SyncEngine,
     dryRun: boolean,
-    verbose: boolean = false
+    verbose: boolean = false,
+    arrayIndex?: number
   ): Promise<boolean> {
     // Load or create entity
     let entity: BaseEntity | null = null;
@@ -268,16 +334,19 @@ export default class Push extends Command {
       }
     }
     
-    // Always update sync metadata and write back to file
+    // Always update sync metadata
     // This ensures related entities are persisted with their metadata
     recordData.sync = {
       lastModified: new Date().toISOString(),
       checksum: syncEngine.calculateChecksum(recordData.fields)
     };
     
-    // Write back to file
-    const filePath = path.join(baseDir, fileName);
-    await fs.writeJson(filePath, recordData, { spaces: 2 });
+    // Write back to file only if it's a single record (not part of an array)
+    // Array records are written back in bulk after all records are processed
+    if (arrayIndex === undefined) {
+      const filePath = path.join(baseDir, fileName);
+      await fs.writeJson(filePath, recordData, { spaces: 2 });
+    }
     
     return isNew;
   }

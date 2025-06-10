@@ -72,9 +72,9 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "MetadataSync CLI - Push Demo",
+      "name": "MetadataSync CLI - Push",
       "program": "${workspaceFolder}/packages/MetadataSync/bin/run.js",
-      "args": ["push", "--dir", "packages/MetadataSync/demo/ai-prompts"],
+      "args": ["push", "--dir", "${input:metadataSyncDirectory}"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "sourceMaps": true,
@@ -153,6 +153,12 @@
       "type": "promptString",
       "description": "Arg 4 (optional)",
       "default": ""
+    },
+    {
+      "id": "metadataSyncDirectory",
+      "type": "promptString",
+      "description": "Directory to push (leave empty for default demo)",
+      "default": "packages/MetadataSync/demo/ai-prompts"
     }
   ]
 }

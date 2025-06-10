@@ -126,6 +126,8 @@ export class SQLServerDataProvider
   private _localStorageProvider: ILocalStorageProvider;
   private _bAllowRefresh: boolean = true;
   private _recordDupeDetector: DuplicateRecordDetector;
+  private _needsDatetimeOffsetAdjustment: boolean = false;
+  private _datetimeOffsetTestComplete: boolean = false;
 
   public get ConfigData(): SQLServerProviderConfigData {
     return <SQLServerProviderConfigData>super.ConfigData;
@@ -1482,7 +1484,8 @@ export class SQLServerDataProvider
               result = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
             }
             else {
-              result = await this.ExecuteSQL(sSQL);
+              const rawResult = await this.ExecuteSQL(sSQL);
+              result = await this.ProcessEntityRows(rawResult, entity.EntityInfo);
             }
 
             this._bAllowRefresh = true; // allow refreshes now
@@ -1565,7 +1568,8 @@ export class SQLServerDataProvider
           // DO NOT INCLUDE any fields where we skip validation, these are fields that are not editable by the user/object
           // model/api because they're special fields like ID, CreatedAt, etc. or they're virtual or auto-increment, etc.
           let value = entity.Get(f.Name);
-          if (f.Type.trim().toLowerCase() === 'datetimeoffset') {
+          if (value && f.Type.trim().toLowerCase() === 'datetimeoffset') {
+            // for non-null datetimeoffset fields, we need to convert the value to ISO format
             value = new Date(value).toISOString();
           } else if (!isUpdate && f.Type.trim().toLowerCase() === 'uniqueidentifier') {
             // in the case of unique identifiers, for CREATE procs only,
@@ -1808,7 +1812,8 @@ export class SQLServerDataProvider
     }).join(' AND ');
 
     const sql = `SELECT * FROM [${entity.EntityInfo.SchemaName}].${entity.EntityInfo.BaseView} WHERE ${where}`;
-    const d = await this.ExecuteSQL(sql);
+    const rawData = await this.ExecuteSQL(sql);
+    const d = await this.ProcessEntityRows(rawData, entity.EntityInfo);
     if (d && d.length > 0) {
       // got the record, now process the relationships if there are any
       const ret = d[0];
@@ -1842,9 +1847,18 @@ export class SQLServerDataProvider
                                         WHERE
                                             _jv.${relInfo.JoinEntityJoinField} = ${quotes}${ret[entity.FirstPrimaryKey.Name]}${quotes}`; // don't yet support composite foreign keys
 
-            const relData = await this.ExecuteSQL(relSql);
-            if (relData && relData.length > 0) {
-              ret[rel] = relData;
+            const rawRelData = await this.ExecuteSQL(relSql);
+            if (rawRelData && rawRelData.length > 0) {
+              // Find the related entity info to process datetime fields correctly
+              const relEntityInfo = this.Entities.find(
+                e => e.Name.trim().toLowerCase() === relInfo.RelatedEntity.trim().toLowerCase()
+              );
+              if (relEntityInfo) {
+                ret[rel] = await this.ProcessEntityRows(rawRelData, relEntityInfo);
+              } else {
+                // Fallback if we can't find entity info
+                ret[rel] = rawRelData;
+              }
             }
           }
         }
@@ -2417,6 +2431,96 @@ export class SQLServerDataProvider
   }
 
   /**
+   * Processes entity rows returned from SQL Server to handle timezone conversions for datetime fields.
+   * This method specifically handles the conversion of datetime2 fields (which SQL Server returns without timezone info)
+   * to proper UTC dates, preventing JavaScript from incorrectly interpreting them as local time.
+   * 
+   * @param rows The raw result rows from SQL Server
+   * @param entityInfo The entity metadata to determine field types
+   * @returns The processed rows with corrected datetime values
+   */
+  public async ProcessEntityRows(rows: any[], entityInfo: EntityInfo): Promise<any[]> {
+    if (!rows || rows.length === 0) {
+      return rows;
+    }
+
+    // Find all datetime fields in the entity
+    const datetimeFields = entityInfo.Fields.filter(
+      field => field.TSType === EntityFieldTSType.Date
+    );
+
+    // If there are no datetime fields, return the rows as-is
+    if (datetimeFields.length === 0) {
+      return rows;
+    }
+
+    // Check if we need datetimeoffset adjustment (lazy loaded on first use)
+    const needsAdjustment = await this.NeedsDatetimeOffsetAdjustment();
+
+    // Process each row
+    return rows.map(row => {
+      const processedRow = { ...row };
+      
+      for (const field of datetimeFields) {
+        const fieldValue = processedRow[field.Name];
+        
+        // Skip null/undefined values
+        if (fieldValue === null || fieldValue === undefined) {
+          continue;
+        }
+
+        // Handle different datetime field types
+        if (field.Type.toLowerCase() === 'datetime2') {
+          if (typeof fieldValue === 'string') {
+            // If it's still a string (rare case), convert to UTC
+            if (!fieldValue.includes('Z') && !fieldValue.includes('+') && !fieldValue.includes('-')) {
+              const utcValue = fieldValue.replace(' ', 'T') + 'Z';
+              processedRow[field.Name] = new Date(utcValue);
+            } else {
+              processedRow[field.Name] = new Date(fieldValue);
+            }
+          } else if (fieldValue instanceof Date) {
+            // TypeORM has already converted to a Date object using local timezone
+            // We need to adjust it back to UTC
+            // SQL Server stores datetime2 as UTC, but TypeORM interprets it as local
+            const localDate = fieldValue;
+            const timezoneOffsetMs = localDate.getTimezoneOffset() * 60 * 1000;
+            const utcDate = new Date(localDate.getTime() + timezoneOffsetMs);
+            processedRow[field.Name] = utcDate;
+          }
+        } else if (field.Type.toLowerCase() === 'datetimeoffset') {
+          // Handle datetimeoffset based on empirical test results
+          if (typeof fieldValue === 'string') {
+            // String format should include timezone offset, parse it correctly
+            processedRow[field.Name] = new Date(fieldValue);
+          } else if (fieldValue instanceof Date && needsAdjustment) {
+            // The database driver has incorrectly converted to a Date object using local timezone
+            // For datetimeoffset, SQL Server provides the value with timezone info, but the driver 
+            // creates the Date as if it were in local time, ignoring the offset
+            // We need to adjust it back to the correct UTC time
+            const localDate = fieldValue;
+            const timezoneOffsetMs = localDate.getTimezoneOffset() * 60 * 1000;
+            const utcDate = new Date(localDate.getTime() + timezoneOffsetMs);
+            processedRow[field.Name] = utcDate;
+          }
+          // If it's already a Date object and no adjustment needed, leave as-is
+        } else if (field.Type.toLowerCase() === 'datetime') {
+          // Legacy datetime type - similar handling to datetime2
+          if (fieldValue instanceof Date) {
+            const localDate = fieldValue;
+            const timezoneOffsetMs = localDate.getTimezoneOffset() * 60 * 1000;
+            const utcDate = new Date(localDate.getTime() + timezoneOffsetMs);
+            processedRow[field.Name] = utcDate;
+          }
+        }
+        // For other types (date, time), leave as-is
+      }
+      
+      return processedRow;
+    });
+  }
+
+  /**
    * This method can be used to execute raw SQL statements outside of the MJ infrastructure.
    * *CAUTION* - use this method with great care.
    * @param query
@@ -2435,6 +2539,93 @@ export class SQLServerDataProvider
     } catch (e) {
       LogError(e);
       throw e; // force caller to handle
+    }
+  }
+
+  /**
+   * Determines whether the database driver requires adjustment for datetimeoffset fields.
+   * This method performs an empirical test on first use to detect if the driver (e.g., TypeORM)
+   * incorrectly handles timezone information in datetimeoffset columns.
+   * 
+   * @returns {Promise<boolean>} True if datetimeoffset values need timezone adjustment, false otherwise
+   * 
+   * @example
+   * ```typescript
+   * const provider = new SQLServerDataProvider();
+   * if (await provider.NeedsDatetimeOffsetAdjustment()) {
+   *   console.log('Driver requires datetimeoffset adjustment');
+   * }
+   * ```
+   * 
+   * @remarks
+   * Some database drivers (notably TypeORM) incorrectly interpret SQL Server's datetimeoffset
+   * values as local time instead of respecting the timezone offset. This method detects
+   * this behavior by inserting a known UTC time and checking if it's retrieved correctly.
+   * The test is performed only once and the result is cached for performance.
+   */
+  public async NeedsDatetimeOffsetAdjustment(): Promise<boolean> {
+    // If we've already run the test, return the cached result
+    if (this._datetimeOffsetTestComplete) {
+      return this._needsDatetimeOffsetAdjustment;
+    }
+
+    // Run the test
+    await this.testDatetimeOffsetHandling();
+    return this._needsDatetimeOffsetAdjustment;
+  }
+
+  /**
+   * Tests how the database driver handles datetimeoffset fields.
+   * This empirical test determines if we need to adjust for incorrect timezone handling.
+   */
+  private async testDatetimeOffsetHandling(): Promise<void> {
+    try {
+      const testQuery = `
+        DECLARE @TestTable TABLE (
+            TestDateTime datetimeoffset NOT NULL
+        );
+
+        -- Insert 1/1/1900 at 11:00 AM UTC
+        INSERT INTO @TestTable (TestDateTime)
+        VALUES ('1900-01-01 11:00:00.0000000 +00:00');
+
+        -- Select and return the row
+        SELECT TestDateTime FROM @TestTable;
+      `;
+
+      const result = await this.ExecuteSQL(testQuery);
+      if (result && result.length > 0) {
+        const testDate = result[0].TestDateTime;
+        
+        // Expected: January 1, 1900 at 11:00 AM UTC
+        const expectedUTCHours = 11;
+        
+        if (testDate instanceof Date) {
+          // Get the UTC hours from the returned date
+          const actualUTCHours = testDate.getUTCHours();
+          
+          // If the UTC hours don't match, the driver is incorrectly handling timezone
+          if (actualUTCHours !== expectedUTCHours) {
+            this._needsDatetimeOffsetAdjustment = true;
+            console.log(`SQLServerDataProvider: Detected incorrect datetimeoffset handling. Expected UTC hour: ${expectedUTCHours}, got: ${actualUTCHours}. Enabling automatic adjustment.`);
+          } else {
+            this._needsDatetimeOffsetAdjustment = false;
+            console.log('SQLServerDataProvider: Database driver correctly handles datetimeoffset fields.');
+          }
+        } else {
+          // If it's not a Date object, log for debugging
+          console.log('SQLServerDataProvider: Unexpected datetimeoffset test result type:', typeof testDate, testDate);
+        }
+      }
+      
+      // Mark the test as complete
+      this._datetimeOffsetTestComplete = true;
+    } catch (e) {
+      // If the test fails, log the error but don't prevent initialization
+      console.error('SQLServerDataProvider: Failed to test datetimeoffset handling:', e);
+      // Default to assuming adjustment is needed for safety
+      this._needsDatetimeOffsetAdjustment = true;
+      this._datetimeOffsetTestComplete = true;
     }
   }
 
