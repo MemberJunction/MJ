@@ -6,6 +6,8 @@ import ora from 'ora-classic';
 import { loadMJConfig, loadEntityConfig } from '../../config';
 import { SyncEngine, RecordData } from '../../lib/sync-engine';
 import { initializeProvider, findEntityDirectories, getSystemUser } from '../../lib/provider-utils';
+import { getSyncEngine, resetSyncEngine } from '../../lib/singleton-manager';
+import { cleanupProvider } from '../../lib/provider-utils';
 
 export default class Status extends Command {
   static description = 'Show status of local files vs database';
@@ -31,13 +33,17 @@ export default class Status extends Command {
         this.error('No mj.config.cjs found in current directory or parent directories');
       }
       
+      // Stop spinner before provider initialization (which logs to console)
+      spinner.stop();
+      
       // Initialize data provider
       const provider = await initializeProvider(mjConfig);
       
-      // Initialize sync engine
-      const syncEngine = new SyncEngine(getSystemUser());
-      await syncEngine.initialize();
-      spinner.succeed('Configuration loaded');
+      // Initialize sync engine using singleton pattern
+      const syncEngine = await getSyncEngine(getSystemUser());
+      
+      // Show success after all initialization is complete
+      spinner.succeed('Configuration and metadata loaded');
       
       // Find entity directories to process
       const entityDirs = findEntityDirectories(process.cwd(), flags.dir);
@@ -92,6 +98,11 @@ export default class Status extends Command {
     } catch (error) {
       spinner.fail('Status check failed');
       this.error(error as Error);
+    } finally {
+      // Reset sync engine singleton
+      resetSyncEngine();
+      // Clean up database connection
+      await cleanupProvider();
     }
   }
   
@@ -106,7 +117,7 @@ export default class Status extends Command {
     const pattern = entityConfig.filePattern || '*.json';
     const jsonFiles = await fastGlob(pattern, {
       cwd: entityDir,
-      ignore: ['.mj-sync.json', '.mj-folder.json'],
+      ignore: ['.mj-sync.json', '.mj-folder.json', '**/*.backup'],
       dot: true  // Include dotfiles (files starting with .)
     });
     

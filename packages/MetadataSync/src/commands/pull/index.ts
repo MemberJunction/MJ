@@ -18,9 +18,10 @@ import { select } from '@inquirer/prompts';
 import ora from 'ora-classic';
 import { loadMJConfig, loadEntityConfig, RelatedEntityConfig } from '../../config';
 import { SyncEngine, RecordData } from '../../lib/sync-engine';
-import { RunView, Metadata } from '@memberjunction/core';
+import { RunView, Metadata, EntityInfo } from '@memberjunction/core';
 import { getSystemUser, initializeProvider, cleanupProvider } from '../../lib/provider-utils';
 import { configManager } from '../../lib/config-manager';
+import { getSyncEngine, resetSyncEngine } from '../../lib/singleton-manager';
 
 /**
  * Pull metadata records from database to local files
@@ -68,13 +69,17 @@ export default class Pull extends Command {
         this.error('No mj.config.cjs found in current directory or parent directories');
       }
       
+      // Stop spinner before provider initialization (which logs to console)
+      spinner.stop();
+      
       // Initialize data provider
       const provider = await initializeProvider(mjConfig);
       
-      // Initialize sync engine
-      const syncEngine = new SyncEngine(getSystemUser());
-      await syncEngine.initialize();
-      spinner.succeed('Configuration loaded');
+      // Get singleton sync engine
+      const syncEngine = await getSyncEngine(getSystemUser());
+      
+      // Show success after all initialization is complete
+      spinner.succeed('Configuration and metadata loaded');
       
       let targetDir: string;
       let entityConfig: any;
@@ -120,6 +125,19 @@ export default class Pull extends Command {
         }
       }
       
+      // Show configuration notice only if relevant
+      if (entityConfig.pull?.appendRecordsToExistingFile && entityConfig.pull?.newFileName) {
+        const targetFile = path.join(targetDir, entityConfig.pull.newFileName.endsWith('.json') 
+          ? entityConfig.pull.newFileName 
+          : `${entityConfig.pull.newFileName}.json`);
+        
+        if (await fs.pathExists(targetFile)) {
+          // File exists - inform about append behavior
+          this.log(`\n📝 Configuration: New records will be appended to existing file '${path.basename(targetFile)}'`);
+        }
+        // If file doesn't exist, no need to mention anything special - we're just creating it
+      }
+      
       // Pull records
       spinner.start(`Pulling ${flags.entity} records`);
       const rv = new RunView();
@@ -154,9 +172,21 @@ export default class Pull extends Command {
         const entityInfo = metadata.EntityByName(flags.entity);
         if (entityInfo) {
           const externalizeConfig = entityConfig.pull.externalizeFields;
-          const fieldsToExternalize = Array.isArray(externalizeConfig) 
-            ? externalizeConfig 
-            : Object.keys(externalizeConfig);
+          let fieldsToExternalize: string[] = [];
+          
+          if (Array.isArray(externalizeConfig)) {
+            if (externalizeConfig.length > 0 && typeof externalizeConfig[0] === 'string') {
+              // Simple string array
+              fieldsToExternalize = externalizeConfig as string[];
+            } else {
+              // New pattern format
+              fieldsToExternalize = (externalizeConfig as Array<{field: string; pattern: string}>)
+                .map(item => item.field);
+            }
+          } else {
+            // Object format
+            fieldsToExternalize = Object.keys(externalizeConfig);
+          }
           
           // Get all field names from entity metadata
           const metadataFieldNames = entityInfo.Fields.map(f => f.Name);
@@ -180,6 +210,9 @@ export default class Pull extends Command {
       
       spinner.start('Processing records');
       let processed = 0;
+      let updated = 0;
+      let created = 0;
+      let skipped = 0;
       
       // If multi-file flag is set, collect all records
       if (flags['multi-file']) {
@@ -194,7 +227,7 @@ export default class Pull extends Command {
             }
             
             // Process record for multi-file
-            const recordData = await this.processRecordData(record, primaryKey, targetDir, entityConfig, syncEngine, flags);
+            const recordData = await this.processRecordData(record, primaryKey, targetDir, entityConfig, syncEngine, flags, true);
             allRecords.push(recordData);
             processed++;
             
@@ -214,36 +247,192 @@ export default class Pull extends Command {
           spinner.succeed(`Pulled ${processed} records to ${filePath}`);
         }
       } else {
-        // Original single-file-per-record logic
+        // Smart update logic for single-file-per-record
+        spinner.text = 'Scanning for existing files...';
+        
+        // Find existing files
+        const filePattern = entityConfig.pull?.filePattern || entityConfig.filePattern || '*.json';
+        const existingFiles = await this.findExistingFiles(targetDir, filePattern);
+        
+        if (flags.verbose) {
+          this.log(`Found ${existingFiles.length} existing files matching pattern '${filePattern}'`);
+          existingFiles.forEach(f => this.log(`  - ${path.basename(f)}`));
+        }
+        
+        // Load existing records and build lookup map
+        const existingRecordsMap = await this.loadExistingRecords(existingFiles, entityInfo);
+        
+        if (flags.verbose) {
+          this.log(`Loaded ${existingRecordsMap.size} existing records from files`);
+        }
+        
+        // Separate records into new and existing
+        const newRecords: Array<{ record: any; primaryKey: Record<string, any> }> = [];
+        const existingRecordsToUpdate: Array<{ record: any; primaryKey: Record<string, any>; filePath: string }> = [];
+        
         for (const record of result.Results) {
-          try {
-            // Build primary key
-            const primaryKey: Record<string, any> = {};
-            for (const pk of entityInfo.PrimaryKeys) {
-              primaryKey[pk.Name] = record[pk.Name];
+          // Build primary key
+          const primaryKey: Record<string, any> = {};
+          for (const pk of entityInfo.PrimaryKeys) {
+            primaryKey[pk.Name] = record[pk.Name];
+          }
+          
+          // Create lookup key
+          const lookupKey = this.createPrimaryKeyLookup(primaryKey);
+          const existingFileInfo = existingRecordsMap.get(lookupKey);
+          
+          if (existingFileInfo) {
+            // Record exists locally
+            if (entityConfig.pull?.updateExistingRecords !== false) {
+              existingRecordsToUpdate.push({ record, primaryKey, filePath: existingFileInfo.filePath });
+            } else {
+              skipped++;
+              if (flags.verbose) {
+                this.log(`Skipping existing record: ${lookupKey}`);
+              }
             }
-            
-            // Process record
-            await this.processRecord(record, primaryKey, targetDir, entityConfig, syncEngine, flags);
-            processed++;
-            
-            if (flags.verbose) {
-              spinner.text = `Processing records (${processed}/${result.Results.length})`;
+          } else {
+            // Record doesn't exist locally
+            if (entityConfig.pull?.createNewFileIfNotFound !== false) {
+              newRecords.push({ record, primaryKey });
+            } else {
+              skipped++;
+              if (flags.verbose) {
+                this.log(`Skipping new record (createNewFileIfNotFound=false): ${lookupKey}`);
+              }
             }
-          } catch (error) {
-            this.warn(`Failed to process record: ${(error as any).message || error}`);
           }
         }
         
-        spinner.succeed(`Pulled ${processed} records to ${targetDir}`);
+        // Track which files have been backed up to avoid duplicates
+        const backedUpFiles = new Set<string>();
+        
+        // Process existing records updates
+        for (const { record, primaryKey, filePath } of existingRecordsToUpdate) {
+          try {
+            spinner.text = `Updating existing records (${updated + 1}/${existingRecordsToUpdate.length})`;
+            
+            // Create backup if configured (only once per file)
+            if (entityConfig.pull?.backupBeforeUpdate && !backedUpFiles.has(filePath)) {
+              await this.createBackup(filePath, entityConfig.pull?.backupDirectory);
+              backedUpFiles.add(filePath);
+            }
+            
+            // Load existing file data
+            const existingData = await fs.readJson(filePath);
+            const existingRecordData = Array.isArray(existingData) ? existingData[0] : existingData;
+            
+            // Process the new record data (isNewRecord = false for updates)
+            const newRecordData = await this.processRecordData(record, primaryKey, targetDir, entityConfig, syncEngine, flags, false, existingRecordData);
+            
+            // Apply merge strategy
+            const mergedData = await this.mergeRecords(
+              existingRecordData,
+              newRecordData,
+              entityConfig.pull?.mergeStrategy || 'merge',
+              entityConfig.pull?.preserveFields || []
+            );
+            
+            // Write updated data
+            if (Array.isArray(existingData)) {
+              // Update the record in the array
+              const index = existingData.findIndex(r => 
+                this.createPrimaryKeyLookup(r.primaryKey || {}) === this.createPrimaryKeyLookup(primaryKey)
+              );
+              if (index >= 0) {
+                existingData[index] = mergedData;
+                await fs.writeJson(filePath, existingData, { spaces: 2 });
+              }
+            } else {
+              await fs.writeJson(filePath, mergedData, { spaces: 2 });
+            }
+            
+            updated++;
+            processed++;
+            
+            if (flags.verbose) {
+              this.log(`Updated: ${filePath}`);
+            }
+          } catch (error) {
+            this.warn(`Failed to update record: ${(error as any).message || error}`);
+          }
+        }
+        
+        // Process new records
+        if (newRecords.length > 0) {
+          spinner.text = `Creating new records (0/${newRecords.length})`;
+          
+          if (entityConfig.pull?.appendRecordsToExistingFile && entityConfig.pull?.newFileName) {
+            // Append all new records to a single file
+            const fileName = entityConfig.pull.newFileName.endsWith('.json') 
+              ? entityConfig.pull.newFileName 
+              : `${entityConfig.pull.newFileName}.json`;
+            const filePath = path.join(targetDir, fileName);
+            
+            // Load existing file if it exists
+            let existingData: RecordData[] = [];
+            if (await fs.pathExists(filePath)) {
+              const fileData = await fs.readJson(filePath);
+              existingData = Array.isArray(fileData) ? fileData : [fileData];
+            }
+            
+            // Process and append all new records
+            for (const { record, primaryKey } of newRecords) {
+              try {
+                // For new records, pass isNewRecord = true (default)
+                const recordData = await this.processRecordData(record, primaryKey, targetDir, entityConfig, syncEngine, flags, true);
+                existingData.push(recordData);
+                created++;
+                processed++;
+                
+                if (flags.verbose) {
+                  spinner.text = `Creating new records (${created}/${newRecords.length})`;
+                }
+              } catch (error) {
+                this.warn(`Failed to process new record: ${(error as any).message || error}`);
+              }
+            }
+            
+            // Write the combined data
+            await fs.writeJson(filePath, existingData, { spaces: 2 });
+            
+            if (flags.verbose) {
+              this.log(`Appended ${created} new records to: ${filePath}`);
+            }
+          } else {
+            // Create individual files for each new record
+            for (const { record, primaryKey } of newRecords) {
+              try {
+                await this.processRecord(record, primaryKey, targetDir, entityConfig, syncEngine, flags);
+                created++;
+                processed++;
+                
+                if (flags.verbose) {
+                  spinner.text = `Creating new records (${created}/${newRecords.length})`;
+                }
+              } catch (error) {
+                this.warn(`Failed to process new record: ${(error as any).message || error}`);
+              }
+            }
+          }
+        }
+        
+        // Final status
+        const statusParts = [`Processed ${processed} records`];
+        if (updated > 0) statusParts.push(`updated ${updated}`);
+        if (created > 0) statusParts.push(`created ${created}`);
+        if (skipped > 0) statusParts.push(`skipped ${skipped}`);
+        
+        spinner.succeed(statusParts.join(', '));
       }
       
     } catch (error) {
       spinner.fail('Pull failed');
       this.error(error as Error);
     } finally {
-      // Clean up database connection
+      // Clean up database connection and reset singletons
       await cleanupProvider();
+      resetSyncEngine();
     }
   }
   
@@ -306,7 +495,7 @@ export default class Pull extends Command {
     syncEngine: SyncEngine,
     flags: any
   ): Promise<void> {
-    const recordData = await this.processRecordData(record, primaryKey, targetDir, entityConfig, syncEngine, flags);
+    const recordData = await this.processRecordData(record, primaryKey, targetDir, entityConfig, syncEngine, flags, true);
     
     // Determine file path
     const fileName = this.buildFileName(primaryKey, entityConfig);
@@ -327,6 +516,9 @@ export default class Pull extends Command {
    * @param targetDir - Directory where files will be saved
    * @param entityConfig - Entity configuration with defaults and settings
    * @param syncEngine - Sync engine for checksum calculation
+   * @param flags - Command flags
+   * @param isNewRecord - Whether this is a new record
+   * @param existingRecordData - Existing record data to preserve field selection
    * @returns Promise resolving to formatted RecordData
    * @private
    */
@@ -336,7 +528,9 @@ export default class Pull extends Command {
     targetDir: string, 
     entityConfig: any,
     syncEngine: SyncEngine,
-    flags?: any
+    flags?: any,
+    isNewRecord: boolean = true,
+    existingRecordData?: RecordData
   ): Promise<RecordData> {
     // Build record data - we'll restructure at the end for proper ordering
     const fields: Record<string, any> = {};
@@ -359,6 +553,27 @@ export default class Pull extends Command {
     if (typeof record.GetAll === 'function') {
       // It's an entity object, get the underlying data
       dataToProcess = record.GetAll();
+    }
+    
+    // Get externalize configuration for pattern lookup
+    const externalizeConfig = entityConfig.pull?.externalizeFields;
+    let externalizeMap = new Map<string, string | undefined>();
+    
+    if (externalizeConfig) {
+      if (Array.isArray(externalizeConfig)) {
+        if (externalizeConfig.length > 0 && typeof externalizeConfig[0] === 'string') {
+          // Simple string array
+          (externalizeConfig as string[]).forEach(f => externalizeMap.set(f, undefined));
+        } else {
+          // New pattern format
+          (externalizeConfig as Array<{field: string; pattern: string}>).forEach(item => 
+            externalizeMap.set(item.field, item.pattern)
+          );
+        }
+      } else {
+        // Object format
+        Object.keys(externalizeConfig).forEach(f => externalizeMap.set(f, undefined));
+      }
     }
     
     // Process regular fields from the underlying data
@@ -430,15 +645,17 @@ export default class Pull extends Command {
       
       // Check if this is an external file field
       if (await this.shouldExternalizeField(fieldName, fieldValue, entityConfig)) {
+        const pattern = externalizeMap.get(fieldName);
         const fileName = await this.createExternalFile(
           targetDir,
           record,
           primaryKey,
           fieldName,
           String(fieldValue),
-          entityConfig
+          entityConfig,
+          pattern
         );
-        fields[fieldName] = `@file:${fileName}`;
+        fields[fieldName] = fileName; // fileName already includes @file: prefix if pattern-based
       } else {
         fields[fieldName] = fieldValue;
       }
@@ -448,14 +665,31 @@ export default class Pull extends Command {
     // We process ALL externalized fields, including those not in the data
     if (entityConfig.pull?.externalizeFields && typeof record.GetAll === 'function') {
       const externalizeConfig = entityConfig.pull.externalizeFields;
-      const fieldsToExternalize = Array.isArray(externalizeConfig) 
-        ? externalizeConfig 
-        : Object.keys(externalizeConfig);
+      
+      // Normalize configuration to array format
+      let externalizeItems: Array<{field: string; pattern?: string}> = [];
+      if (Array.isArray(externalizeConfig)) {
+        if (externalizeConfig.length > 0 && typeof externalizeConfig[0] === 'string') {
+          // Simple string array
+          externalizeItems = (externalizeConfig as string[]).map(f => ({field: f}));
+        } else {
+          // Already in the new format
+          externalizeItems = externalizeConfig as Array<{field: string; pattern: string}>;
+        }
+      } else {
+        // Object format
+        externalizeItems = Object.entries(externalizeConfig).map(([field, config]) => ({
+          field,
+          pattern: undefined // Will use default pattern
+        }));
+      }
       
       // Get the keys from the underlying data to identify computed properties
       const dataKeys = Object.keys(dataToProcess);
       
-      for (const externalField of fieldsToExternalize) {
+      for (const externalItem of externalizeItems) {
+        const externalField = externalItem.field;
+        
         // Only process fields that are NOT in the underlying data
         // (these are likely computed properties)
         if (dataKeys.includes(externalField)) {
@@ -473,9 +707,10 @@ export default class Pull extends Command {
                 primaryKey,
                 externalField,
                 String(fieldValue),
-                entityConfig
+                entityConfig,
+                externalItem.pattern
               );
-              fields[externalField] = `@file:${fileName}`;
+              fields[externalField] = fileName; // fileName already includes @file: prefix if pattern-based
             } else {
               // Include the field value if not externalized
               fields[externalField] = fieldValue;
@@ -508,51 +743,75 @@ export default class Pull extends Command {
     
     // Filter out null values and fields matching their defaults
     const cleanedFields: Record<string, any> = {};
+    
+    // Get the set of fields that existed in the original record (if updating)
+    const existingFieldNames = existingRecordData?.fields ? new Set(Object.keys(existingRecordData.fields)) : new Set<string>();
+    
     for (const [fieldName, fieldValue] of Object.entries(fields)) {
-      // Skip null/undefined/empty string values
-      if (fieldValue === null || fieldValue === undefined || fieldValue === '') {
-        continue;
-      }
+      let includeField = false;
       
-      // Check if value matches the field's default
-      if (entityInfo) {
-        const fieldInfo = entityInfo.Fields.find(f => f.Name === fieldName);
-        if (fieldInfo && fieldInfo.DefaultValue !== null && fieldInfo.DefaultValue !== undefined) {
-          // Compare with default value
-          if (fieldValue === fieldInfo.DefaultValue) {
-            continue;
+      if (!isNewRecord && existingFieldNames.has(fieldName)) {
+        // For updates: Always preserve fields that existed in the original record
+        includeField = true;
+      } else {
+        // For new records or new fields in existing records:
+        // Skip null/undefined/empty string values
+        if (fieldValue === null || fieldValue === undefined || fieldValue === '') {
+          includeField = false;
+        } else if (entityInfo) {
+          // Check if value matches the field's default
+          const fieldInfo = entityInfo.Fields.find(f => f.Name === fieldName);
+          if (fieldInfo && fieldInfo.DefaultValue !== null && fieldInfo.DefaultValue !== undefined) {
+            // Compare with default value
+            if (fieldValue === fieldInfo.DefaultValue) {
+              includeField = false;
+            }
+            // Special handling for boolean defaults (might be stored as strings)
+            else if (typeof fieldValue === 'boolean' && 
+                (fieldInfo.DefaultValue === (fieldValue ? '1' : '0') || 
+                 fieldInfo.DefaultValue === (fieldValue ? 'true' : 'false'))) {
+              includeField = false;
+            }
+            // Special handling for numeric defaults that might be strings
+            else if (typeof fieldValue === 'number' && String(fieldValue) === String(fieldInfo.DefaultValue)) {
+              includeField = false;
+            } else {
+              includeField = true;
+            }
+          } else {
+            // No default value defined, include if not null/empty
+            includeField = true;
           }
-          // Special handling for boolean defaults (might be stored as strings)
-          if (typeof fieldValue === 'boolean' && 
-              (fieldInfo.DefaultValue === (fieldValue ? '1' : '0') || 
-               fieldInfo.DefaultValue === (fieldValue ? 'true' : 'false'))) {
-            continue;
-          }
-          // Special handling for numeric defaults that might be strings
-          if (typeof fieldValue === 'number' && String(fieldValue) === String(fieldInfo.DefaultValue)) {
-            continue;
-          }
+        } else {
+          // No entity info, include if not null/empty
+          includeField = true;
         }
       }
       
-      cleanedFields[fieldName] = fieldValue;
+      if (includeField) {
+        cleanedFields[fieldName] = fieldValue;
+      }
     }
     
     // Calculate checksum on cleaned fields
     const checksum = syncEngine.calculateChecksum(cleanedFields);
     
     // Build the final record data with proper ordering
-    const recordData: RecordData = {
-      fields: cleanedFields
-    };
+    // Use a new object to ensure property order
+    const recordData: RecordData = {} as RecordData;
     
-    // Only add relatedEntities if we have some
+    // 1. User fields first
+    recordData.fields = cleanedFields;
+    
+    // 2. Related entities (if any)
     if (Object.keys(relatedEntities).length > 0) {
       recordData.relatedEntities = relatedEntities;
     }
     
-    // Add system fields at the end
+    // 3. Primary key (system field)
     recordData.primaryKey = primaryKey;
+    
+    // 4. Sync metadata (system field)
     recordData.sync = {
       lastModified: new Date().toISOString(),
       checksum: checksum
@@ -649,8 +908,16 @@ export default class Pull extends Command {
     }
     
     if (Array.isArray(externalizeConfig)) {
-      return externalizeConfig.includes(fieldName);
+      if (externalizeConfig.length > 0 && typeof externalizeConfig[0] === 'string') {
+        // Simple string array
+        return (externalizeConfig as string[]).includes(fieldName);
+      } else {
+        // New pattern format
+        return (externalizeConfig as Array<{field: string; pattern: string}>)
+          .some(item => item.field === fieldName);
+      }
     } else {
+      // Object format
       return fieldName in externalizeConfig;
     }
   }
@@ -678,9 +945,66 @@ export default class Pull extends Command {
     primaryKey: Record<string, any>,
     fieldName: string,
     content: string,
-    entityConfig: any
+    entityConfig: any,
+    pattern?: string
   ): Promise<string> {
-    // Get configured extension for this field
+    // If pattern is provided, use it to generate the full path
+    if (pattern) {
+      // Replace placeholders in the pattern
+      let resolvedPattern = pattern;
+      
+      // Get entity metadata for field lookups
+      const metadata = new Metadata();
+      const entityInfo = metadata.EntityByName(entityConfig.entity);
+      
+      // Replace {Name} with the entity's name field value
+      if (entityInfo) {
+        const nameField = entityInfo.Fields.find(f => f.IsNameField);
+        if (nameField && record[nameField.Name]) {
+          const nameValue = String(record[nameField.Name])
+            .replace(/[^a-zA-Z0-9\-_ ]/g, '') // Remove disallowed characters
+            .replace(/\s+/g, '-') // Replace spaces with -
+            .toLowerCase(); // Make lowercase
+          resolvedPattern = resolvedPattern.replace(/{Name}/g, nameValue);
+        }
+      }
+      
+      // Replace {ID} with the primary key
+      const idValue = primaryKey.ID || Object.values(primaryKey)[0];
+      if (idValue) {
+        resolvedPattern = resolvedPattern.replace(/{ID}/g, String(idValue).toLowerCase());
+      }
+      
+      // Replace {FieldName} with the current field name
+      resolvedPattern = resolvedPattern.replace(/{FieldName}/g, fieldName.toLowerCase());
+      
+      // Replace any other {field} placeholders with field values from the record
+      const placeholderRegex = /{(\w+)}/g;
+      resolvedPattern = resolvedPattern.replace(placeholderRegex, (match, fieldName) => {
+        const value = record[fieldName];
+        if (value !== undefined && value !== null) {
+          return String(value)
+            .replace(/[^a-zA-Z0-9\-_ ]/g, '')
+            .replace(/\s+/g, '-')
+            .toLowerCase();
+        }
+        return match; // Keep placeholder if field not found
+      });
+      
+      // Extract the file path from the pattern
+      const filePath = path.join(targetDir, resolvedPattern.replace('@file:', ''));
+      
+      // Ensure directory exists
+      await fs.ensureDir(path.dirname(filePath));
+      
+      // Write the file
+      await fs.writeFile(filePath, content, 'utf-8');
+      
+      // Return the pattern as-is (it includes @file: prefix)
+      return resolvedPattern;
+    }
+    
+    // Original logic for non-pattern based externalization
     let extension = '.md'; // default to markdown
     
     const externalizeConfig = entityConfig.pull?.externalizeFields;
@@ -833,9 +1157,21 @@ export default class Pull extends Command {
         
         // Check if we need to wait for async property loading for related entities
         if (config.externalizeFields && result.Results.length > 0) {
-          const fieldsToExternalize = Array.isArray(config.externalizeFields) 
-            ? config.externalizeFields 
-            : Object.keys(config.externalizeFields);
+          let fieldsToExternalize: string[] = [];
+          
+          if (Array.isArray(config.externalizeFields)) {
+            if (config.externalizeFields.length > 0 && typeof config.externalizeFields[0] === 'string') {
+              // Simple string array
+              fieldsToExternalize = config.externalizeFields as string[];
+            } else {
+              // New pattern format
+              fieldsToExternalize = (config.externalizeFields as Array<{field: string; pattern: string}>)
+                .map(item => item.field);
+            }
+          } else {
+            // Object format
+            fieldsToExternalize = Object.keys(config.externalizeFields);
+          }
           
           // Get all field names from entity metadata
           const metadataFieldNames = childEntity.Fields.map(f => f.Name);
@@ -873,7 +1209,8 @@ export default class Pull extends Command {
               }
             },
             syncEngine,
-            flags
+            flags,
+            true
           );
           
           // Convert foreign key reference to @parent
@@ -919,5 +1256,220 @@ export default class Pull extends Command {
       }
     }
     return null;
+  }
+  
+  /**
+   * Find existing files in a directory matching a pattern
+   * 
+   * Searches for files that match the configured file pattern, used to identify
+   * which records already exist locally for smart update functionality.
+   * 
+   * @param dir - Directory to search in
+   * @param pattern - Glob pattern to match files (e.g., "*.json")
+   * @returns Promise resolving to array of file paths
+   * @private
+   */
+  private async findExistingFiles(dir: string, pattern: string): Promise<string[]> {
+    const files: string[] = [];
+    
+    try {
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+      
+      for (const entry of entries) {
+        if (entry.isFile()) {
+          const fileName = entry.name;
+          
+          // Simple pattern matching - could be enhanced with proper glob support
+          if (pattern === '*.json' && fileName.endsWith('.json')) {
+            files.push(path.join(dir, fileName));
+          } else if (pattern === '.*.json' && fileName.startsWith('.') && fileName.endsWith('.json')) {
+            // Handle dot-prefixed JSON files
+            files.push(path.join(dir, fileName));
+          } else if (pattern === fileName) {
+            files.push(path.join(dir, fileName));
+          }
+          // TODO: Add more sophisticated glob pattern matching if needed
+        }
+      }
+    } catch (error) {
+      // Directory might not exist yet
+      if ((error as any).code !== 'ENOENT') {
+        throw error;
+      }
+    }
+    
+    return files;
+  }
+  
+  /**
+   * Load existing records from files and build a lookup map
+   * 
+   * Reads all existing files and creates a map from primary key to file location,
+   * enabling efficient lookup during the update process.
+   * 
+   * @param files - Array of file paths to load
+   * @param entityInfo - Entity metadata for primary key information
+   * @returns Map from primary key string to file info
+   * @private
+   */
+  private async loadExistingRecords(
+    files: string[], 
+    entityInfo: EntityInfo
+  ): Promise<Map<string, { filePath: string; recordData: RecordData }>> {
+    const recordsMap = new Map<string, { filePath: string; recordData: RecordData }>();
+    
+    for (const filePath of files) {
+      try {
+        const fileData = await fs.readJson(filePath);
+        const records = Array.isArray(fileData) ? fileData : [fileData];
+        
+        for (const record of records) {
+          if (record.primaryKey) {
+            const lookupKey = this.createPrimaryKeyLookup(record.primaryKey);
+            recordsMap.set(lookupKey, { filePath, recordData: record });
+          }
+        }
+      } catch (error) {
+        // Skip files that can't be parsed
+        this.warn(`Could not load file ${filePath}: ${error}`);
+      }
+    }
+    
+    return recordsMap;
+  }
+  
+  /**
+   * Create a string lookup key from primary key values
+   * 
+   * Generates a consistent string representation of primary key values
+   * for use in maps and comparisons.
+   * 
+   * @param primaryKey - Primary key field names and values
+   * @returns String representation of the primary key
+   * @private
+   */
+  private createPrimaryKeyLookup(primaryKey: Record<string, any>): string {
+    const keys = Object.keys(primaryKey).sort();
+    return keys.map(k => `${k}:${primaryKey[k]}`).join('|');
+  }
+  
+  /**
+   * Merge two record data objects based on configured strategy
+   * 
+   * Combines existing and new record data according to the merge strategy:
+   * - 'overwrite': Replace all fields with new values
+   * - 'merge': Combine fields, with new values taking precedence
+   * - 'skip': Keep existing record unchanged
+   * 
+   * @param existing - Existing record data
+   * @param newData - New record data from database
+   * @param strategy - Merge strategy to apply
+   * @param preserveFields - Field names that should never be overwritten
+   * @returns Merged record data
+   * @private
+   */
+  private async mergeRecords(
+    existing: RecordData,
+    newData: RecordData,
+    strategy: 'overwrite' | 'merge' | 'skip',
+    preserveFields: string[]
+  ): Promise<RecordData> {
+    if (strategy === 'skip') {
+      return existing;
+    }
+    
+    if (strategy === 'overwrite') {
+      // Build with proper ordering
+      const result: RecordData = {} as RecordData;
+      
+      // 1. Fields first
+      result.fields = { ...newData.fields };
+      
+      // Restore preserved fields from existing
+      if (preserveFields.length > 0 && existing.fields) {
+        for (const field of preserveFields) {
+          if (field in existing.fields) {
+            result.fields[field] = existing.fields[field];
+          }
+        }
+      }
+      
+      // 2. Related entities (if any)
+      if (newData.relatedEntities) {
+        result.relatedEntities = newData.relatedEntities;
+      }
+      
+      // 3. Primary key
+      result.primaryKey = newData.primaryKey;
+      
+      // 4. Sync metadata
+      result.sync = newData.sync;
+      
+      return result;
+    }
+    
+    // Default 'merge' strategy
+    // Build with proper ordering
+    const result: RecordData = {} as RecordData;
+    
+    // 1. Fields first
+    result.fields = { ...existing.fields, ...newData.fields };
+    
+    // Restore preserved fields
+    if (preserveFields.length > 0 && existing.fields) {
+      for (const field of preserveFields) {
+        if (field in existing.fields) {
+          result.fields[field] = existing.fields[field];
+        }
+      }
+    }
+    
+    // 2. Related entities (if any)
+    if (existing.relatedEntities || newData.relatedEntities) {
+      result.relatedEntities = {
+        ...existing.relatedEntities,
+        ...newData.relatedEntities
+      };
+    }
+    
+    // 3. Primary key
+    result.primaryKey = newData.primaryKey || existing.primaryKey;
+    
+    // 4. Sync metadata
+    result.sync = newData.sync;
+    
+    return result;
+  }
+  
+  /**
+   * Create a backup of a file before updating
+   * 
+   * Creates a timestamped backup copy of the file in a backup directory
+   * with the original filename, timestamp suffix, and .backup extension.
+   * The backup directory defaults to .backups but can be configured.
+   * 
+   * @param filePath - Path to the file to backup
+   * @param backupDirName - Name of the backup directory (optional)
+   * @returns Promise that resolves when backup is created
+   * @private
+   */
+  private async createBackup(filePath: string, backupDirName?: string): Promise<void> {
+    const dir = path.dirname(filePath);
+    const fileName = path.basename(filePath);
+    const backupDir = path.join(dir, backupDirName || '.backups');
+    
+    // Ensure backup directory exists
+    await fs.ensureDir(backupDir);
+    
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    // Remove .json extension, add timestamp, then add .backup extension
+    const backupFileName = fileName.replace(/\.json$/, `.${timestamp}.backup`);
+    const backupPath = path.join(backupDir, backupFileName);
+    
+    try {
+      await fs.copy(filePath, backupPath);
+    } catch (error) {
+      this.warn(`Could not create backup of ${filePath}: ${error}`);
+    }
   }
 }

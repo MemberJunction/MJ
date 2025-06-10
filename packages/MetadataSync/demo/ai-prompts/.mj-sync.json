@@ -5,13 +5,44 @@
     "CategoryID": "@lookup:AI Prompt Categories.Name=Examples?create&Description=Example category for AI prompts"
   },
   "pull": {
-    "filter": "CategoryID IN (SELECT ID FROM [AI Prompt Categories] WHERE Name = 'Examples')",
-    "externalizeFields": ["Prompt"],
+    "filePattern": ".*.json",
+    "createNewFileIfNotFound": true,
+    "newFileName": ".all-new.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "CategoryID IN (SELECT ID FROM [__mj].vwAIPromptCategories WHERE Name = 'Examples')",
+    "externalizeFields": [
+      {
+        "field": "Prompt",
+        "pattern": "@file:{Name}.prompt.md"
+      }
+    ],
+    "excludeFields": ["TemplateID"],
+    "lookupFields": {
+      "CategoryID": {
+        "entity": "AI Prompt Categories",
+        "field": "Name"
+      },
+      "TypeID": {
+        "entity": "AI Prompt Types",
+        "field": "Name"
+      }
+    },
     "relatedEntities": {
       "MJ: AI Prompt Models": {
         "entity": "MJ: AI Prompt Models",
-        "foreignKey": "ID",
-        "filter": "Status = 'Active'"
+        "foreignKey": "PromptID",
+        "filter": "Status = 'Active'",
+        "lookupFields": {
+          "ModelID": {
+            "entity": "AI Models",
+            "field": "Name"
+          }
+        }
       }
     }
   }

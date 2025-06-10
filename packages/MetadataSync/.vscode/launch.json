@@ -9,7 +9,7 @@
       "args": [
         "pull",
         "--entity", "AI Prompts",
-        "--multi-file", ".all-pull.json"
+        "--verbose"
       ],
       "cwd": "${workspaceFolder}/${input:pullDirectory}",
       "console": "integratedTerminal",

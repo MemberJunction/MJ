@@ -18,6 +18,12 @@ import { configManager } from './config-manager';
 /** Global DataSource instance for connection lifecycle management */
 let globalDataSource: DataSource | null = null;
 
+/** Global provider instance to ensure single initialization */
+let globalProvider: SQLServerDataProvider | null = null;
+
+/** Promise to track ongoing initialization */
+let initializationPromise: Promise<SQLServerDataProvider> | null = null;
+
 /**
  * Initialize a SQLServerDataProvider with the given configuration
  * 
@@ -37,40 +43,56 @@ let globalDataSource: DataSource | null = null;
  * ```
  */
 export async function initializeProvider(config: MJConfig): Promise<SQLServerDataProvider> {
-  // Create TypeORM DataSource
-  const dataSource = new DataSource({
-    type: 'mssql',
-    host: config.dbHost,
-    port: config.dbPort ? Number(config.dbPort) : 1433,
-    database: config.dbDatabase,
-    username: config.dbUsername,
-    password: config.dbPassword,
-    synchronize: false,
-    logging: false,
-    options: {
-      encrypt: config.dbEncrypt === 'Y' || config.dbEncrypt === 'true' || 
-               config.dbHost.includes('.database.windows.net'), // Auto-detect Azure SQL
-      trustServerCertificate: config.dbTrustServerCertificate === 'Y',
-      instanceName: config.dbInstanceName
-    }
-  });
+  // Return existing provider if already initialized
+  if (globalProvider) {
+    return globalProvider;
+  }
   
-  // Initialize the data source
-  await dataSource.initialize();
+  // Return ongoing initialization if in progress
+  if (initializationPromise) {
+    return initializationPromise;
+  }
   
-  // Store for cleanup
-  globalDataSource = dataSource;
+  // Start new initialization
+  initializationPromise = (async () => {
+    // Create TypeORM DataSource
+    const dataSource = new DataSource({
+      type: 'mssql',
+      host: config.dbHost,
+      port: config.dbPort ? Number(config.dbPort) : 1433,
+      database: config.dbDatabase,
+      username: config.dbUsername,
+      password: config.dbPassword,
+      synchronize: false,
+      logging: false,
+      options: {
+        encrypt: config.dbEncrypt === 'Y' || config.dbEncrypt === 'true' || 
+                 config.dbHost.includes('.database.windows.net'), // Auto-detect Azure SQL
+        trustServerCertificate: config.dbTrustServerCertificate === 'Y',
+        instanceName: config.dbInstanceName
+      }
+    });
+    
+    // Initialize the data source
+    await dataSource.initialize();
+    
+    // Store for cleanup
+    globalDataSource = dataSource;
+    
+    // Create provider config
+    const providerConfig = new SQLServerProviderConfigData(
+      dataSource,
+      'system@sync.cli', // Default user for CLI
+      config.mjCoreSchema || '__mj',
+      0
+    );
+    
+    // Use setupSQLServerClient to properly initialize
+    globalProvider = await setupSQLServerClient(providerConfig);
+    return globalProvider;
+  })();
   
-  // Create provider config
-  const providerConfig = new SQLServerProviderConfigData(
-    dataSource,
-    'system@sync.cli', // Default user for CLI
-    config.mjCoreSchema || '__mj',
-    0
-  );
-  
-  // Use setupSQLServerClient to properly initialize
-  return await setupSQLServerClient(providerConfig);
+  return initializationPromise;
 }
 
 /**
@@ -95,6 +117,8 @@ export async function cleanupProvider(): Promise<void> {
     await globalDataSource.destroy();
     globalDataSource = null;
   }
+  globalProvider = null;
+  initializationPromise = null;
 }
 
 /**

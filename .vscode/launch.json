@@ -103,8 +103,7 @@
       "program": "${workspaceFolder}/packages/MetadataSync/bin/run.js",
       "args": [
         "pull",
-        "--entity", "AI Prompts",
-        "--multi-file", ".all-pull.json"
+        "--entity", "AI Prompts"
       ],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",

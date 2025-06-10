@@ -88,7 +88,12 @@ export interface RelatedEntityConfig {
       /** File extension to use (e.g., ".md", ".txt", ".html") */
       extension?: string;
     }
-  };
+  } | Array<{
+    /** Field name to externalize */
+    field: string;
+    /** Pattern for the output file. Supports placeholders from the entity */
+    pattern: string;
+  }>;
   /** Fields to exclude from the pulled data for this related entity */
   excludeFields?: string[];
   /** Foreign key fields to convert to @lookup references for this related entity */
@@ -118,6 +123,24 @@ export interface EntityConfig {
   defaults?: Record<string, any>;
   /** Pull command specific configuration */
   pull?: {
+    /** Glob pattern for finding existing files to update (defaults to filePattern) */
+    filePattern?: string;
+    /** Whether to create new files for records not found locally */
+    createNewFileIfNotFound?: boolean;
+    /** Filename for new records when createNewFileIfNotFound is true */
+    newFileName?: string;
+    /** Whether to append multiple new records to a single file */
+    appendRecordsToExistingFile?: boolean;
+    /** Whether to update existing records found in local files */
+    updateExistingRecords?: boolean;
+    /** Fields to preserve during updates (never overwrite these) */
+    preserveFields?: string[];
+    /** Strategy for merging updates: "overwrite" | "merge" | "skip" */
+    mergeStrategy?: 'overwrite' | 'merge' | 'skip';
+    /** Create backup files before updating existing files */
+    backupBeforeUpdate?: boolean;
+    /** Directory name for backup files (defaults to ".backups") */
+    backupDirectory?: string;
     /** SQL filter to apply when pulling records from database */
     filter?: string;
     /** Configuration for pulling related entities */
@@ -128,7 +151,18 @@ export interface EntityConfig {
         /** File extension to use (e.g., ".md", ".txt", ".html") */
         extension?: string;
       }
-    };
+    } | Array<{
+      /** Field name to externalize */
+      field: string;
+      /** Pattern for the output file. Supports placeholders:
+       * - {Name}: Entity's name field value
+       * - {ID}: Entity's ID
+       * - {FieldName}: The field being externalized
+       * - Any other {FieldName} from the entity
+       * Example: "@file:templates/{Name}.template.md"
+       */
+      pattern: string;
+    }>;
     /** Fields to exclude from the pulled data (e.g., ["TemplateID"]) */
     excludeFields?: string[];
     /** Foreign key fields to convert to @lookup references */

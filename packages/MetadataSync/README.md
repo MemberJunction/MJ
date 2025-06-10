@@ -490,7 +490,7 @@ Configuration follows a hierarchical structure:
 ```json
 {
   "entity": "AI Prompts",
-  "filePattern": "*.json",
+  "filePattern": ".*.json",
   "defaults": {
     "TypeID": "@lookup:AI Prompt Types.Name=Chat",
     "Temperature": 0.7,
@@ -498,11 +498,21 @@ Configuration follows a hierarchical structure:
     "Status": "Active"
   },
   "pull": {
+    "filePattern": ".*.json",
+    "updateExistingRecords": true,
+    "createNewFileIfNotFound": true,
+    "mergeStrategy": "merge",
     "filter": "Status = 'Active'",
+    "externalizeFields": [
+      {
+        "field": "Prompt",
+        "pattern": "@file:{Name}.prompt.md"
+      }
+    ],
     "relatedEntities": {
       "MJ: AI Prompt Models": {
         "entity": "MJ: AI Prompt Models",
-        "foreignKey": "ID",
+        "foreignKey": "PromptID",
         "filter": "Status = 'Active'"
       }
     }
@@ -543,25 +553,144 @@ The tool now supports managing related entities as embedded collections within p
 - **Relationship Clarity**: Visual representation of data relationships
 
 ### Configuration for Pull
-Configure which related entities to pull in `.mj-sync.json`:
+
+The pull command now supports smart update capabilities with extensive configuration options:
+
 ```json
 {
   "entity": "AI Prompts",
+  "filePattern": ".*.json",
   "pull": {
+    "filePattern": ".*.json",
+    "createNewFileIfNotFound": true,
+    "newFileName": ".all-new.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": ["customField", "localNotes"],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "filter": "Status = 'Active'",
+    "externalizeFields": [
+      {
+        "field": "TemplateText",
+        "pattern": "@file:{Name}.template.md"
+      },
+      {
+        "field": "PromptText",
+        "pattern": "@file:prompts/{Name}.prompt.md"
+      }
+    ],
+    "excludeFields": ["InternalID", "TempField"],
+    "lookupFields": {
+      "CategoryID": {
+        "entity": "AI Prompt Categories",
+        "field": "Name"
+      },
+      "TypeID": {
+        "entity": "AI Prompt Types",
+        "field": "Name"
+      }
+    },
     "relatedEntities": {
       "MJ: AI Prompt Models": {
         "entity": "MJ: AI Prompt Models",
-        "foreignKey": "ID",
-        "filter": "Status = 'Active'"
-      },
-      "AI Prompt Parameters": {
-        "entity": "AI Prompt Parameters",
-        "foreignKey": "ID"
+        "foreignKey": "PromptID",
+        "filter": "Status = 'Active'",
+        "lookupFields": {
+          "ModelID": {
+            "entity": "AI Models",
+            "field": "Name"
+          }
+        }
       }
     }
   }
 }
 ```
+
+#### Pull Configuration Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `filePattern` | string | Entity filePattern | Pattern for finding existing files to update |
+| `createNewFileIfNotFound` | boolean | true | Create files for records not found locally |
+| `newFileName` | string | - | Filename for new records when appending (see warning below) |
+| `appendRecordsToExistingFile` | boolean | false | Append new records to a single file |
+| `updateExistingRecords` | boolean | true | Update existing records found in local files |
+| `preserveFields` | string[] | [] | Fields that should never be overwritten during updates |
+| `mergeStrategy` | string | "merge" | How to merge updates: "merge", "overwrite", or "skip" |
+| `backupBeforeUpdate` | boolean | false | Create timestamped backups before updating files |
+| `backupDirectory` | string | ".backups" | Directory name for backup files (relative to entity directory) |
+| `filter` | string | - | SQL WHERE clause for filtering records |
+| `externalizeFields` | array/object | - | Fields to save as external files with optional patterns |
+| `excludeFields` | string[] | [] | Fields to exclude from pulled data |
+| `lookupFields` | object | - | Foreign keys to convert to @lookup references |
+| `relatedEntities` | object | - | Related entities to pull as embedded collections |
+
+> **⚠️ Important Configuration Warning**
+> 
+> When both `appendRecordsToExistingFile: true` and `newFileName` are set, ALL new records will be appended to the single file specified by `newFileName`, effectively ignoring the standard per-record file pattern. This can lead to unexpected file organization:
+> 
+> ```json
+> // This configuration will put ALL new records in .all-new.json
+> "pull": {
+>   "appendRecordsToExistingFile": true,
+>   "newFileName": ".all-new.json"  // ⚠️ Overrides individual file creation
+> }
+> ```
+> 
+> **Recommended configurations:**
+> - For individual files per record: Set `appendRecordsToExistingFile: false` (or omit it)
+> - For grouped new records: Set both `appendRecordsToExistingFile: true` and `newFileName`
+> - For mixed approach: Omit `newFileName` to let new records follow the standard pattern
+
+#### Merge Strategies
+
+- **`merge`** (default): Combines fields from database and local file, with database values taking precedence for existing fields
+- **`overwrite`**: Completely replaces local record with database version (except preserved fields)
+- **`skip`**: Leaves existing records unchanged, only adds new records
+
+#### Backup Configuration
+
+When `backupBeforeUpdate` is enabled, the tool creates timestamped backups before updating existing files:
+
+- **Backup Location**: Files are backed up to the `backupDirectory` (default: `.backups`) within the entity directory
+- **Backup Naming**: Original filename + timestamp + `.backup` extension (e.g., `.greeting.json` → `.greeting.2024-03-15T10-30-45-123Z.backup`)
+- **Extension**: All backup files use the `.backup` extension, preventing them from being processed by push/pull/status commands
+- **Deduplication**: Only one backup is created per file per pull operation, even if the file contains multiple records
+
+Example configuration:
+```json
+"pull": {
+  "backupBeforeUpdate": true,
+  "backupDirectory": ".backups"  // Custom backup directory name
+}
+```
+
+#### Externalize Fields Patterns
+
+The `externalizeFields` configuration supports dynamic file naming with placeholders:
+
+```json
+"externalizeFields": [
+  {
+    "field": "TemplateText",
+    "pattern": "@file:{Name}.template.md"
+  },
+  {
+    "field": "SQLQuery", 
+    "pattern": "@file:queries/{CategoryName}/{Name}.sql"
+  }
+]
+```
+
+Supported placeholders:
+- `{Name}` - The entity's name field value
+- `{ID}` - The entity's primary key
+- `{FieldName}` - The field being externalized
+- `{AnyFieldName}` - Any field from the entity record
+
+All values are sanitized for filesystem compatibility (lowercase, spaces to hyphens, special characters removed).
 
 ### Nested Related Entities
 Support for multiple levels of nesting:
