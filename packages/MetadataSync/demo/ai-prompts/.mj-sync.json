@@ -10,7 +10,7 @@
     "newFileName": ".all-new.json",
     "appendRecordsToExistingFile": true,
     "updateExistingRecords": true,
-    "preserveFields": [],
+    "preserveFields": ["Prompt", "Notes"],
     "mergeStrategy": "merge",
     "backupBeforeUpdate": true,
     "backupDirectory": ".backups",
@@ -21,7 +21,7 @@
         "pattern": "@file:{Name}.prompt.md"
       }
     ],
-    "excludeFields": ["TemplateID"],
+    "excludeFields": ["TemplateID", "InternalMetrics"],
     "lookupFields": {
       "CategoryID": {
         "entity": "AI Prompt Categories",

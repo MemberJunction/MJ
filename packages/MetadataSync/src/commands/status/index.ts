@@ -103,6 +103,9 @@ export default class Status extends Command {
       resetSyncEngine();
       // Clean up database connection
       await cleanupProvider();
+      
+      // Exit process to prevent background MJ tasks from throwing errors
+      process.exit(0);
     }
   }
   

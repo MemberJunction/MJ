@@ -617,13 +617,13 @@ The pull command now supports smart update capabilities with extensive configura
 | `newFileName` | string | - | Filename for new records when appending (see warning below) |
 | `appendRecordsToExistingFile` | boolean | false | Append new records to a single file |
 | `updateExistingRecords` | boolean | true | Update existing records found in local files |
-| `preserveFields` | string[] | [] | Fields that should never be overwritten during updates |
+| `preserveFields` | string[] | [] | Fields that retain local values during updates (see detailed explanation below) |
 | `mergeStrategy` | string | "merge" | How to merge updates: "merge", "overwrite", or "skip" |
 | `backupBeforeUpdate` | boolean | false | Create timestamped backups before updating files |
 | `backupDirectory` | string | ".backups" | Directory name for backup files (relative to entity directory) |
 | `filter` | string | - | SQL WHERE clause for filtering records |
 | `externalizeFields` | array/object | - | Fields to save as external files with optional patterns |
-| `excludeFields` | string[] | [] | Fields to exclude from pulled data |
+| `excludeFields` | string[] | [] | Fields to completely omit from pulled data (see detailed explanation below) |
 | `lookupFields` | object | - | Foreign keys to convert to @lookup references |
 | `relatedEntities` | object | - | Related entities to pull as embedded collections |
 
@@ -649,6 +649,65 @@ The pull command now supports smart update capabilities with extensive configura
 - **`merge`** (default): Combines fields from database and local file, with database values taking precedence for existing fields
 - **`overwrite`**: Completely replaces local record with database version (except preserved fields)
 - **`skip`**: Leaves existing records unchanged, only adds new records
+
+#### Understanding excludeFields vs preserveFields
+
+These two configuration options serve different purposes for managing fields during pull operations:
+
+##### excludeFields
+- **Purpose**: Completely omit specified fields from your local files
+- **Use Case**: Remove internal/system fields you don't want in version control
+- **Effect**: Fields never appear in the JSON files
+- **Example**: Excluding internal IDs, timestamps, or sensitive data
+
+##### preserveFields  
+- **Purpose**: Protect local customizations from being overwritten during updates
+- **Use Case**: Keep locally modified values while updating other fields
+- **Effect**: Fields exist in files but retain their local values during pull
+- **Example**: Preserving custom file paths, local notes, or environment-specific values
+- **Special Behavior for @file: references**: When a preserved field contains a `@file:` reference, the tool will update the content at the existing file path rather than creating a new file with a generated name
+
+##### Example Configuration
+```json
+{
+  "pull": {
+    "excludeFields": ["TemplateID", "InternalNotes", "CreatedAt"],
+    "preserveFields": ["TemplateText", "OutputExample", "LocalConfig"]
+  }
+}
+```
+
+With this configuration:
+- **TemplateID, InternalNotes, CreatedAt** → Never appear in local files
+- **TemplateText, OutputExample, LocalConfig** → Keep their local values during updates
+
+##### Common Scenario: Customized File References
+When you customize file paths (e.g., changing `@file:templates/skip-conductor.md` to `@file:templates/conductor.md`), use `preserveFields` to protect these customizations:
+
+```json
+{
+  "pull": {
+    "preserveFields": ["TemplateText", "OutputExample"],
+    "externalizeFields": [
+      {
+        "field": "TemplateText",
+        "pattern": "@file:templates/{Name}.template.md"
+      }
+    ]
+  }
+}
+```
+
+This ensures your custom paths aren't overwritten when pulling updates from the database.
+
+**How it works:**
+1. **Without preserveFields**: Pull would create a new file using the pattern (e.g., `templates/skip-conductor.template.md`) and update the JSON to point to it
+2. **With preserveFields**: Pull keeps your custom path (e.g., `@file:templates/conductor.md`) in the JSON and updates the content at that existing location
+
+This is particularly useful when:
+- You've reorganized your file structure after initial pull
+- You've renamed files to follow your own naming conventions
+- You want to maintain consistent paths across team members
 
 #### Backup Configuration
 

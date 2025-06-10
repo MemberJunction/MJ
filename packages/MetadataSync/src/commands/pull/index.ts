@@ -320,7 +320,18 @@ export default class Pull extends Command {
             
             // Load existing file data
             const existingData = await fs.readJson(filePath);
-            const existingRecordData = Array.isArray(existingData) ? existingData[0] : existingData;
+            
+            // Find the specific existing record that matches this primary key
+            let existingRecordData: RecordData;
+            if (Array.isArray(existingData)) {
+              // Find the matching record in the array
+              const matchingRecord = existingData.find(r => 
+                this.createPrimaryKeyLookup(r.primaryKey || {}) === this.createPrimaryKeyLookup(primaryKey)
+              );
+              existingRecordData = matchingRecord || existingData[0]; // Fallback to first if not found
+            } else {
+              existingRecordData = existingData;
+            }
             
             // Process the new record data (isNewRecord = false for updates)
             const newRecordData = await this.processRecordData(record, primaryKey, targetDir, entityConfig, syncEngine, flags, false, existingRecordData);
@@ -433,6 +444,9 @@ export default class Pull extends Command {
       // Clean up database connection and reset singletons
       await cleanupProvider();
       resetSyncEngine();
+      
+      // Exit process to prevent background MJ tasks from throwing errors
+      process.exit(0);
     }
   }
   
@@ -645,17 +659,37 @@ export default class Pull extends Command {
       
       // Check if this is an external file field
       if (await this.shouldExternalizeField(fieldName, fieldValue, entityConfig)) {
-        const pattern = externalizeMap.get(fieldName);
-        const fileName = await this.createExternalFile(
-          targetDir,
-          record,
-          primaryKey,
-          fieldName,
-          String(fieldValue),
-          entityConfig,
-          pattern
-        );
-        fields[fieldName] = fileName; // fileName already includes @file: prefix if pattern-based
+        // Check if this field is preserved and already has a @file: reference
+        const isPreservedField = entityConfig.pull?.preserveFields?.includes(fieldName);
+        const existingFieldValue = existingRecordData?.fields?.[fieldName];
+        
+        if (isPreservedField && existingFieldValue && typeof existingFieldValue === 'string' && existingFieldValue.startsWith('@file:')) {
+          // Field is preserved and has existing @file: reference - update the existing file
+          const existingFilePath = existingFieldValue.replace('@file:', '');
+          const fullPath = path.join(targetDir, existingFilePath);
+          
+          // Ensure directory exists
+          await fs.ensureDir(path.dirname(fullPath));
+          
+          // Write the content to the existing file path
+          await fs.writeFile(fullPath, String(fieldValue), 'utf-8');
+          
+          // Keep the existing @file: reference
+          fields[fieldName] = existingFieldValue;
+        } else {
+          // Normal externalization - create new file
+          const pattern = externalizeMap.get(fieldName);
+          const fileName = await this.createExternalFile(
+            targetDir,
+            record,
+            primaryKey,
+            fieldName,
+            String(fieldValue),
+            entityConfig,
+            pattern
+          );
+          fields[fieldName] = fileName; // fileName already includes @file: prefix if pattern-based
+        }
       } else {
         fields[fieldName] = fieldValue;
       }
@@ -701,16 +735,36 @@ export default class Pull extends Command {
           const fieldValue = record[externalField];
           if (fieldValue !== undefined && fieldValue !== null && fieldValue !== '') {
             if (await this.shouldExternalizeField(externalField, fieldValue, entityConfig)) {
-              const fileName = await this.createExternalFile(
-                targetDir,
-                record,
-                primaryKey,
-                externalField,
-                String(fieldValue),
-                entityConfig,
-                externalItem.pattern
-              );
-              fields[externalField] = fileName; // fileName already includes @file: prefix if pattern-based
+              // Check if this field is preserved and already has a @file: reference
+              const isPreservedField = entityConfig.pull?.preserveFields?.includes(externalField);
+              const existingFieldValue = existingRecordData?.fields?.[externalField];
+              
+              if (isPreservedField && existingFieldValue && typeof existingFieldValue === 'string' && existingFieldValue.startsWith('@file:')) {
+                // Field is preserved and has existing @file: reference - update the existing file
+                const existingFilePath = existingFieldValue.replace('@file:', '');
+                const fullPath = path.join(targetDir, existingFilePath);
+                
+                // Ensure directory exists
+                await fs.ensureDir(path.dirname(fullPath));
+                
+                // Write the content to the existing file path
+                await fs.writeFile(fullPath, String(fieldValue), 'utf-8');
+                
+                // Keep the existing @file: reference
+                fields[externalField] = existingFieldValue;
+              } else {
+                // Normal externalization - create new file
+                const fileName = await this.createExternalFile(
+                  targetDir,
+                  record,
+                  primaryKey,
+                  externalField,
+                  String(fieldValue),
+                  entityConfig,
+                  externalItem.pattern
+                );
+                fields[externalField] = fileName; // fileName already includes @file: prefix if pattern-based
+              }
             } else {
               // Include the field value if not externalized
               fields[externalField] = fieldValue;
