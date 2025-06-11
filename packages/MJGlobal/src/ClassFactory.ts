@@ -34,6 +34,11 @@ export class ClassFactory {
      */
     public Register(baseClass: any, subClass: any, key: string = null, priority: number = 0) {
         if (baseClass && subClass) {
+            if (key === undefined || key === null) {
+                console.warn(`ClassFactory.GetAllRegistrations: Registration for base class ${baseClass.name} has no key set. This is not recommended and may lead to unintended behavior when trying to match registrations. Please set a key for this registration.`)
+            }
+
+
             // get all of hte existing registrations for this baseClass and key
             const registrations = this.GetAllRegistrations(baseClass, key);
 
@@ -102,7 +107,7 @@ export class ClassFactory {
         if (baseClass) {
             return this._registrations.filter(r => {
                 return  r.BaseClass.name === baseClass.name && // we use the name of the class instead of the class itself because JS is finicky about this since a given module can be loaded in various places (like from multiple other modules) and the class itself will be different in each case
-                        ( key === undefined || key === null ? true : r.Key.trim().toLowerCase() === key.trim().toLowerCase())
+                        ( key === undefined || key === null ? true : r.Key?.trim().toLowerCase() === key.trim().toLowerCase())
             } );
         }
         else

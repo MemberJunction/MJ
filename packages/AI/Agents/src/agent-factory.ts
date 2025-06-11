@@ -30,7 +30,6 @@ import { AgentRunner } from './agent-runner';
  * const agent = await factory.CreateAgent("Code", contextUser);
  * ```
  */
-@RegisterClass(AgentFactory, null)
 export class AgentFactory implements IAgentFactory {
   private _metadata: Metadata;
 
