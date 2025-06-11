@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/core
 
+## 2.48.0
+
+### Minor Changes
+
+- bb01fcf: bug fixes but bumping minor version here since we have a migration in this PR
+
+### Patch Changes
+
+- @memberjunction/global@2.48.0
+
 ## 2.47.0
 
 ### Patch Changes

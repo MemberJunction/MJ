@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/ng-find-record
 
+## 2.48.0
+
+### Patch Changes
+
+- Updated dependencies [bb01fcf]
+- Updated dependencies [031e724]
+  - @memberjunction/core@2.48.0
+  - @memberjunction/core-entities@2.48.0
+  - @memberjunction/ng-shared@2.48.0
+  - @memberjunction/ng-container-directives@2.48.0
+  - @memberjunction/global@2.48.0
+
 ## 2.47.0
 
 ### Patch Changes
