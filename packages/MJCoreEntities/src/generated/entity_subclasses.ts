@@ -1072,12 +1072,11 @@ export const AIAgentSchema = z.object({
         * * Display Name: Context Compression Message Retention Count
         * * SQL Data Type: int
     * * Description: Number of recent messages to keep uncompressed when context compression is applied.`),
-    TypeID: z.string().describe(`
+    TypeID: z.string().nullable().describe(`
         * * Field Name: TypeID
         * * Display Name: Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
-        * * Default Value: A7B8C9D0-E1F2-3456-7890-123456789ABC
     * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
@@ -1087,7 +1086,7 @@ export const AIAgentSchema = z.object({
         * * Field Name: ContextCompressionPrompt
         * * Display Name: Context Compression Prompt
         * * SQL Data Type: nvarchar(255)`),
-    Type: z.string().describe(`
+    Type: z.string().nullable().describe(`
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(100)`),
@@ -14544,13 +14543,12 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     * * Display Name: Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
-    * * Default Value: A7B8C9D0-E1F2-3456-7890-123456789ABC
     * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.
     */
-    get TypeID(): string {
+    get TypeID(): string | null {
         return this.Get('TypeID');
     }
-    set TypeID(value: string) {
+    set TypeID(value: string | null) {
         this.Set('TypeID', value);
     }
 
@@ -14577,7 +14575,7 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     * * Display Name: Type
     * * SQL Data Type: nvarchar(100)
     */
-    get Type(): string {
+    get Type(): string | null {
         return this.Get('Type');
     }
 }
@@ -15311,11 +15309,11 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * Validate() method override for AI Prompts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
     * * CacheSimilarityThreshold: This rule ensures that if a cache similarity threshold is provided, it must be a value between 0 and 1, inclusive. If no value is provided, that's also allowed.
     * * CacheTTLSeconds: This rule ensures that if the cache expiration time in seconds is provided, it must be greater than zero.
+    * * Table-Level: This rule ensures that if the OutputType is set to 'object', an OutputExample must be provided. If the OutputType is anything other than 'object', providing an OutputExample is not required.
     * * Table-Level: This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.
     * * Table-Level: This rule ensures that if the cache match type is set to 'Vector', the cache similarity threshold must be specified. If the match type is anything other than 'Vector', the similarity threshold can be left empty.
     * * Table-Level: This rule ensures that if the parallelization mode is set to 'StaticCount', then the number of parallel tasks (ParallelCount) must be provided.
-    * * Table-Level: This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then the Parallel Config Param field must be filled in. For any other mode, the Parallel Config Param can be left empty.
-    * * Table-Level: This rule ensures that if the OutputType is set to 'object', an OutputExample must be provided. If the OutputType is anything other than 'object', providing an OutputExample is not required.  
+    * * Table-Level: This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then the Parallel Config Param field must be filled in. For any other mode, the Parallel Config Param can be left empty.  
     * @public
     * @method
     * @override
@@ -15324,11 +15322,11 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
         const result = super.Validate();
         this.ValidateCacheSimilarityThresholdIsBetweenZeroAndOne(result);
         this.ValidateCacheTTLSecondsGreaterThanZero(result);
+        this.ValidateOutputExampleWhenOutputTypeObject(result);
         this.ValidateResultSelectorPromptIDNotEqualID(result);
         this.ValidateCacheSimilarityThresholdRequiredForVectorCache(result);
         this.ValidateParallelCountWhenParallelizationModeIsStaticCount(result);
         this.ValidateParallelConfigParamRequiredForConfigParamMode(result);
-        this.ValidateOutputExampleWhenOutputTypeObject(result);
 
         return result;
     }
@@ -15354,6 +15352,18 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     public ValidateCacheTTLSecondsGreaterThanZero(result: ValidationResult) {
     	if (this.CacheTTLSeconds !== null && this.CacheTTLSeconds <= 0) {
     		result.Errors.push(new ValidationErrorInfo("CacheTTLSeconds", "If cache expiration time (CacheTTLSeconds) is specified, it must be greater than zero.", this.CacheTTLSeconds, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the OutputType is set to 'object', an OutputExample must be provided. If the OutputType is anything other than 'object', providing an OutputExample is not required.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateOutputExampleWhenOutputTypeObject(result: ValidationResult) {
+    	if (this.OutputType === "object" && (this.OutputExample === null || this.OutputExample === undefined)) {
+    		result.Errors.push(new ValidationErrorInfo("OutputExample", "When OutputType is 'object', OutputExample must be provided.", this.OutputExample, ValidationErrorType.Failure));
     	}
     }
 
@@ -15402,18 +15412,6 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     public ValidateParallelConfigParamRequiredForConfigParamMode(result: ValidationResult) {
     	if (this.ParallelizationMode === "ConfigParam" && this.ParallelConfigParam === null) {
     		result.Errors.push(new ValidationErrorInfo("ParallelConfigParam", "Parallel Config Param must be entered when Parallelization Mode is set to 'ConfigParam'.", this.ParallelConfigParam, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if the OutputType is set to 'object', an OutputExample must be provided. If the OutputType is anything other than 'object', providing an OutputExample is not required.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateOutputExampleWhenOutputTypeObject(result: ValidationResult) {
-    	if (this.OutputType === "object" && (this.OutputExample === null || this.OutputExample === undefined)) {
-    		result.Errors.push(new ValidationErrorInfo("OutputExample", "When OutputType is 'object', OutputExample must be provided.", this.OutputExample, ValidationErrorType.Failure));
     	}
     }
 
@@ -31649,9 +31647,9 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
 
     /**
     * Validate() method override for MJ: AI Prompt Models entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * ParallelCount: This rule ensures that the number of parallel tasks (ParallelCount) must be at least 1. It cannot be zero or negative.
     * * Priority: This rule ensures that the Priority value must be greater than or equal to zero. Negative priorities are not allowed.
     * * ExecutionGroup: This rule ensures that the ExecutionGroup value must be zero or a positive number. Negative numbers are not allowed.
-    * * ParallelCount: This rule ensures that the number of parallel tasks (ParallelCount) must be at least 1. It cannot be zero or negative.
     * * Table-Level: This rule ensures that if the parallelization mode is 'None' or 'StaticCount', then the parallel config parameter must be empty. If the parallelization mode is 'ConfigParam', then the parallel config parameter must be provided.  
     * @public
     * @method
@@ -31659,12 +31657,24 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
+        this.ValidateParallelCountAtLeastOne(result);
         this.ValidatePriorityIsNonNegative(result);
         this.ValidateExecutionGroupIsNonNegative(result);
-        this.ValidateParallelCountAtLeastOne(result);
         this.ValidateParallelConfigParamBasedOnParallelizationMode(result);
 
         return result;
+    }
+
+    /**
+    * This rule ensures that the number of parallel tasks (ParallelCount) must be at least 1. It cannot be zero or negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParallelCountAtLeastOne(result: ValidationResult) {
+    	if (this.ParallelCount < 1) {
+    		result.Errors.push(new ValidationErrorInfo("ParallelCount", "ParallelCount must be at least 1.", this.ParallelCount, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -31688,18 +31698,6 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     public ValidateExecutionGroupIsNonNegative(result: ValidationResult) {
     	if (this.ExecutionGroup < 0) {
     		result.Errors.push(new ValidationErrorInfo("ExecutionGroup", "ExecutionGroup must be zero or a positive number.", this.ExecutionGroup, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the number of parallel tasks (ParallelCount) must be at least 1. It cannot be zero or negative.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateParallelCountAtLeastOne(result: ValidationResult) {
-    	if (this.ParallelCount < 1) {
-    		result.Errors.push(new ValidationErrorInfo("ParallelCount", "ParallelCount must be at least 1.", this.ParallelCount, ValidationErrorType.Failure));
     	}
     }
 

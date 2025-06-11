@@ -233,10 +233,9 @@ export class EntityField {
                             this.Value = temp;
                     }
                     catch (e) {
-                        // if we get here, that means the default value is not a valid date, so we need to check to see if the date is a getdate() or getutcdate() type default
-                        // use includes() below because it is possible that the value is wrapped in parenthesis, like (getdate()) and that is still valid.
-                        if (fieldInfo.DefaultValue.trim().toLowerCase().includes("getdate()") || fieldInfo.DefaultValue.trim().toLowerCase().includes("getutcdate()")) {
-                            // we have a getdate() or getutcdate() type default, leave the field alone if its a special date field as the server (i.e. database) will handle
+                        // if we get here, that means the default value is not a valid date, so we need to check to see if it's a SQL current date function
+                        if (EntityFieldInfo.IsDefaultValueSQLCurrentDateFunction(fieldInfo.DefaultValue)) {
+                            // we have a SQL current date function default, leave the field alone if its a special date field as the server (i.e. database) will handle
                             //setting the value, otherwise set the value to the current date
                             if(fieldInfo.IsSpecialDateField){
                                 this.Value = null;
