@@ -469,7 +469,6 @@ export interface IAgentFactory {
  * }
  * ```
  */
-@RegisterClass(BaseAgent, null)
 export class BaseAgent {
   private _agent: AIAgentEntityExtended;
   private _factory: IAgentFactory;

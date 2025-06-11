@@ -31,13 +31,13 @@ export class ClassFactory {
      * @param subClass A reference to the sub-class you are registering
      * @param key A key can be used to differentiate registrations for the same base class/sub-class combination. For example, in the case of BaseEntity and Entity object subclasses we'll have a LOT of entries and we want to get the highest priority registered sub-class for a specific key. In that case, the key is the entity name, but the key can be any value you want to use to differentiate registrations.
      * @param priority Higher priority registrations will be used over lower priority registrations. If there are multiple registrations for a given base class/sub-class/key combination, the one with the highest priority will be used. If there are multiple registrations with the same priority, the last one registered will be used. Finally, if you do NOT provide this setting, the order of registrations will increment the priority automatically so dependency injection will typically care care of this. That is, in order for Class B, a subclass of Class A, to be registered properly, Class A code has to already have been loaded and therefore Class A's RegisterClass decorator was run. In that scenario, if neither Class A or B has a priority setting, Class A would be 1 and Class B would be 2 automatically. For this reason, you only need to explicitly set priority if you want to do something atypical as this mechanism normally will solve for setting the priority correctly based on the furthest descendant class that is registered.
+     * @param skipNullKeyWarning If true, will not print a warning if the key is null or undefined. This is useful for cases where you know that the key is not needed and you don't want to see the warning in the console.
      */
-    public Register(baseClass: any, subClass: any, key: string = null, priority: number = 0) {
+    public Register(baseClass: any, subClass: any, key: string = null, priority: number = 0, skipNullKeyWarning: boolean = false): void {
         if (baseClass && subClass) {
-            if (key === undefined || key === null) {
+            if (key === undefined || key === null && !skipNullKeyWarning) {
                 console.warn(`ClassFactory.GetAllRegistrations: Registration for base class ${baseClass.name} has no key set. This is not recommended and may lead to unintended behavior when trying to match registrations. Please set a key for this registration.`)
             }
-
 
             // get all of hte existing registrations for this baseClass and key
             const registrations = this.GetAllRegistrations(baseClass, key);
@@ -88,8 +88,7 @@ export class ClassFactory {
                 return instance;
             }
             else {
-                // don't emit this to the console anymore, this is a normal condition to use the base class if we can't find a registration
-                //console.log(`ClassFactory.CreateInstance: Could not find registration for base class ${baseClass && baseClass.name ? baseClass.name : baseClass} and key ${key}, using the base class instead.`);  
+                // this is a normal condition to use the base class if we can't find a registration
                 return new baseClass(...params); // if we can't find a registration, just return a new instance of the base class
             }
         }

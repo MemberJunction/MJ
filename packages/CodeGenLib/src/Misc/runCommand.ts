@@ -15,7 +15,6 @@ export type CommandExecutionResult = {
 /**
  * Base class that handles the process of running commands which can be done executed from any other area of the system, typically done by the main runMemberJunctionCodeGen process
  */
-@RegisterClass(RunCommandsBase)
 export class RunCommandsBase {
   public async runCommands(commands: CommandInfo[]): Promise<CommandExecutionResult[]>{
     try {

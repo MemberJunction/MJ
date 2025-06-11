@@ -9,7 +9,6 @@ import { RegisterClass } from '@memberjunction/global';
 /**
  * Base class for generating a database schema JSON output, you can sub-class this class to create your own schema generator logic
  */
-@RegisterClass(DBSchemaGeneratorBase)
 export class DBSchemaGeneratorBase { 
     public generateDBSchemaJSONOutput(entities: EntityInfo[], outputDir: string): boolean {
         if (!fs.existsSync(outputDir))

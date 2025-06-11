@@ -24,7 +24,6 @@ const { mjCoreSchema } = configInfo;
  * This class is the main entry point for running the code generation process. It will handle all the steps required to generate the code for the MemberJunction system. You can sub-class this class
  * and override specific methods as desired to customize the code generation process.
  */
-@RegisterClass(RunCodeGenBase)
 export class RunCodeGenBase {
   /**
    * This method is called to setup the data source for the code generation process. You can override this method to customize the data source setup process.

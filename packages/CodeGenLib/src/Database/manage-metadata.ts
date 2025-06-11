@@ -36,7 +36,6 @@ export class ValidatorResult {
  * Base class for managing metadata within the CodeGen system. This class can be sub-classed to extend/override base class functionality. Make sure to use the RegisterClass decorator from the @memberjunction/global package
  * to properly register your subclass with a priority of 1+ to ensure it gets instantiated.
  */
-@RegisterClass(ManageMetadataBase)
 export class ManageMetadataBase {
 
    protected _sqlUtilityObject: SQLUtilityBase = MJGlobal.Instance.ClassFactory.CreateInstance<SQLUtilityBase>(SQLUtilityBase)!;

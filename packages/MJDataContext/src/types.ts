@@ -14,7 +14,6 @@ export class DataContextFieldInfo {
 /**
  * Base class and the default implementation for the DataContextItem object, other implementations (sub-classes) can be registered as well with higher priorities to take over for this particular class.
  */
-@RegisterClass(DataContextItem) 
 export class DataContextItem {
     /**
      * The type of the item, either "view", "query", "full_entity", or "sql", or "single_record"
@@ -532,7 +531,9 @@ export class DataContextItem {
     }
 }
 
-@RegisterClass(DataContext) // this is the base class and the default implementation for the DataContext object, other implementations can be registered as well with higher priorities
+/**
+ *  Base class and the default implementation for the DataContext object, other implementations can be registered as well with higher priorities
+ **/ 
 export class DataContext {
     /**
      * The ID of the data context in the system
