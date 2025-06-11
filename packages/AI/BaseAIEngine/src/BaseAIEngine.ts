@@ -3,7 +3,9 @@ import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEnt
          AIModelActionEntity, AIModelEntity, AIModelEntityExtended, AIPromptCategoryEntity, AIPromptEntity, 
          AIPromptModelEntity, AIPromptTypeEntity, AIResultCacheEntity, AIVendorTypeDefinitionEntity, 
          ArtifactTypeEntity, EntityAIActionEntity, VectorDatabaseEntity,
-         AIPromptCategoryEntityExtended, AIAgentEntityExtended } from "@memberjunction/core-entities";
+         AIPromptCategoryEntityExtended, AIAgentEntityExtended, 
+         AIAgentPromptEntity,
+         AIAgentTypeEntity} from "@memberjunction/core-entities";
  
 // this class handles execution of AI Actions
 export class AIEngineBase extends BaseEngine<AIEngineBase> {
@@ -14,9 +16,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _promptTypes: AIPromptTypeEntity[] = [];
     private _promptCategories: AIPromptCategoryEntityExtended[] = [];
     private _agentActions: AIAgentActionEntity[] = [];
+    private _agentPrompts: AIAgentPromptEntity[] = [];
     private _agentNoteTypes: AIAgentNoteTypeEntity[] = [];
     private _agentNotes: AIAgentNoteEntity[] = [];
     private _agents: AIAgentEntityExtended[] = [];
+    private _agentTypes: AIAgentTypeEntity[] = [];
     private _artifactTypes: ArtifactTypeEntity[] = [];
     private _vendorTypeDefinitions: AIVendorTypeDefinitionEntity[] = [];
 
@@ -63,12 +67,20 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 EntityName: 'AI Agents'
             },
             {
+                PropertyName: '_agentTypes',
+                EntityName: 'AI Agent Types'
+            },
+            {
                 PropertyName: '_artifactTypes',
                 EntityName: 'MJ: Artifact Types'
             },
             {
                 PropertyName: '_vendorTypeDefinitions',
                 EntityName: 'MJ: AI Vendor Type Definitions'
+            }, 
+            {
+                PropertyName: '_agentPrompts',
+                EntityName: 'MJ: AI Agent Prompts'
             }
         ];
         return await this.Load(params, provider, forceRefresh, contextUser);
@@ -139,6 +151,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this._agents;
     }
 
+    public get AgentTypes(): AIAgentTypeEntity[] {
+        return this._agentTypes;
+    }
+
     public GetAgentByName(agentName: string): AIAgentEntityExtended {
         return this._agents.find(a => a.Name.trim().toLowerCase() === agentName.trim().toLowerCase());
     }
@@ -147,12 +163,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this._agentActions;
     }
 
-    /**
-     * @deprecated Agent Models are deprecated. This method returns an empty array.
-     */
-    public get AgentModels(): AIAgentModelEntity[] {
-        return [];
+    public get AgentPrompts(): AIAgentPromptEntity[] {
+        AIEngineBase.checkMetadataLoaded();
+        return AIEngineBase.Instance._agentPrompts;
     }
+
 
     public get AgentNoteTypes(): AIAgentNoteTypeEntity[] {
         return this._agentNoteTypes;

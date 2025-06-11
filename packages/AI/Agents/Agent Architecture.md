@@ -129,7 +129,10 @@ Represents a specific AI model (e.g., GPT-4, Claude 3.5 Sonnet).
 | Description | nvarchar(max) | Detailed description of the model |
 | AIModelTypeID | uniqueidentifier | References the model type |
 | PowerRank | int | Relative capability ranking |
+| SpeedRank | int | Relative speed ranking |
+| CostRank | int | Relative cost ranking |
 | IsActive | bit | Whether the model is available for use |
+| ModelSelectionInsights | nvarchar(max) | Guidance for model selection |
 
 #### 3.1.3 AIVendorTypeDefinition
 
@@ -138,7 +141,7 @@ Defines the types of vendors in the system.
 | Field | Type | Description |
 |-------|------|-------------|
 | ID | uniqueidentifier | Primary key |
-| Name | nvarchar(50) | Type name (e.g., "Model Developer", "Inference Provider") |
+| Name | nvarchar(50) | Type name (e.g., "Model Developer", "Inference Provider") - unique |
 | Description | nvarchar(max) | Detailed description of the vendor type |
 
 #### 3.1.4 AIVendor
@@ -148,7 +151,7 @@ Represents an AI provider (e.g., OpenAI, Anthropic).
 | Field | Type | Description |
 |-------|------|-------------|
 | ID | uniqueidentifier | Primary key |
-| Name | nvarchar(50) | Vendor name (e.g., "OpenAI") |
+| Name | nvarchar(50) | Vendor name (e.g., "OpenAI") - unique |
 | Description | nvarchar(max) | Detailed description of the vendor |
 
 #### 3.1.5 AIVendorType
@@ -162,6 +165,8 @@ Associates vendors with their types and establishes priorities.
 | TypeID | uniqueidentifier | References the vendor type |
 | Rank | int | Priority ranking within this type |
 | Status | nvarchar(20) | Status of this vendor-type association |
+
+**Unique Constraints:** VendorID + TypeID
 
 #### 3.1.6 AIModelVendor
 
@@ -182,9 +187,9 @@ Links models with vendors and includes implementation details.
 | SupportedResponseFormats | nvarchar(100) | Formats the model can output |
 | SupportsEffortLevel | bit | Whether effort level can be specified |
 | SupportsStreaming | bit | Whether streaming responses are supported |
-| ParallelizationMode | nvarchar(20) | How this model handles parallelization |
-| ParallelCount | int | Number of parallel executions |
-| ParallelConfigParam | nvarchar(100) | Config parameter for parallel count |
+| TypeID | uniqueidentifier | References vendor type definition |
+
+**Unique Constraints:** ModelID + VendorID + TypeID
 
 ### 3.2 Configuration Management
 
@@ -195,7 +200,7 @@ Stores configurations for AI operations.
 | Field | Type | Description |
 |-------|------|-------------|
 | ID | uniqueidentifier | Primary key |
-| Name | nvarchar(100) | Configuration name |
+| Name | nvarchar(100) | Configuration name - unique |
 | Description | nvarchar(max) | Detailed description |
 | IsDefault | bit | Whether this is the default configuration |
 | Status | nvarchar(20) | Status of this configuration |
@@ -215,19 +220,46 @@ Stores parameter values for configurations.
 | Value | nvarchar(max) | Parameter value |
 | Description | nvarchar(max) | Detailed description |
 
+**Unique Constraints:** ConfigurationID + Name
+
 ### 3.3 Prompt Management
 
-#### 3.3.1 AIPrompt
+#### 3.3.1 AIPromptType
 
-Defines prompts used by agents.
+Defines types/categories of AI prompts.
 
 | Field | Type | Description |
 |-------|------|-------------|
 | ID | uniqueidentifier | Primary key |
-| Name | nvarchar(100) | Prompt name |
+| Name | nvarchar(255) | Type name |
 | Description | nvarchar(max) | Detailed description |
-| PromptText | nvarchar(max) | The actual prompt template |
-| TemplateType | nvarchar(50) | Format of the template |
+
+#### 3.3.2 AIPromptCategory
+
+Hierarchical categorization of AI prompts.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | uniqueidentifier | Primary key |
+| Name | nvarchar(255) | Category name |
+| ParentID | uniqueidentifier | References parent category (self-referencing) |
+| Description | nvarchar(max) | Detailed description |
+
+#### 3.3.3 AIPrompt
+
+Defines prompts used by agents with advanced configuration options.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | uniqueidentifier | Primary key |
+| Name | nvarchar(255) | Prompt name |
+| Description | nvarchar(max) | Detailed description |
+| TemplateID | uniqueidentifier | References the template containing prompt text |
+| CategoryID | uniqueidentifier | References the prompt category |
+| TypeID | uniqueidentifier | References the prompt type |
+| Status | nvarchar(50) | Status of the prompt |
+| ResponseFormat | nvarchar(20) | Expected response format |
+| ModelSpecificResponseFormat | nvarchar(max) | Model-specific format details |
 | AIModelTypeID | uniqueidentifier | References the model type |
 | MinPowerRank | int | Minimum power rank required |
 | SelectionStrategy | nvarchar(20) | How models are selected |
@@ -235,13 +267,13 @@ Defines prompts used by agents.
 | ParallelizationMode | nvarchar(20) | How parallelization is handled |
 | ParallelCount | int | Number of parallel executions |
 | ParallelConfigParam | nvarchar(100) | Config parameter for parallel count |
-| ResultSelectorPromptID | uniqueidentifier | References a prompt that selects the best result |
 | OutputType | nvarchar(50) | Expected output type |
 | OutputExample | nvarchar(max) | Example of expected output |
 | ValidationBehavior | nvarchar(50) | How validation failures are handled |
 | MaxRetries | int | Maximum retry attempts |
 | RetryDelayMS | int | Delay between retries |
 | RetryStrategy | nvarchar(20) | Strategy for retry delays |
+| ResultSelectorPromptID | uniqueidentifier | References a prompt that selects the best result |
 | EnableCaching | bit | Whether to cache results |
 | CacheTTLSeconds | int | Time-to-live for cached results |
 | CacheMatchType | nvarchar(20) | How cache matches are determined |
@@ -250,8 +282,10 @@ Defines prompts used by agents.
 | CacheMustMatchVendor | bit | Whether vendor must match for cache hit |
 | CacheMustMatchAgent | bit | Whether agent must match for cache hit |
 | CacheMustMatchConfig | bit | Whether config must match for cache hit |
+| PromptRole | nvarchar(20) | Role of the prompt (System, User, Assistant, SystemOrUser) |
+| PromptPosition | nvarchar(20) | Position of the prompt in conversation |
 
-#### 3.3.2 AIPromptModel
+#### 3.3.4 AIPromptModel
 
 Associates prompts with specific models and configurations.
 
@@ -266,19 +300,38 @@ Associates prompts with specific models and configurations.
 | ExecutionGroup | int | Group for parallel execution |
 | ModelParameters | nvarchar(max) | JSON-formatted model-specific parameters |
 | Status | nvarchar(20) | Status of this prompt-model association |
+| ParallelizationMode | nvarchar(20) | How this specific model handles parallelization |
+| ParallelCount | int | Number of parallel executions for this model |
+| ParallelConfigParam | nvarchar(100) | Config parameter for parallel count |
+
+**Unique Constraints:** PromptID + ModelID + VendorID + ConfigurationID
 
 ### 3.4 Agent Framework
 
-#### 3.4.1 AIAgent
+#### 3.4.1 AIAgentType
 
-Defines AI agents in the system.
+Defines types of AI agents with their system prompts and behavioral characteristics.
 
 | Field | Type | Description |
 |-------|------|-------------|
 | ID | uniqueidentifier | Primary key |
-| Name | nvarchar(100) | Agent name |
+| Name | nvarchar(100) | Type name (e.g., "Base Agent", "CustomerSupport", "DataAnalysis") |
+| Description | nvarchar(max) | Detailed description of the agent type |
+| SystemPromptID | uniqueidentifier | References the AI Prompt that contains system-level instructions |
+| IsActive | bit | Whether this agent type is available for use |
+
+#### 3.4.2 AIAgent
+
+Defines AI agents in the system with hierarchical structure and type classification.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | uniqueidentifier | Primary key |
+| Name | nvarchar(255) | Agent name |
 | Description | nvarchar(max) | Detailed description |
-| ParentID | uniqueidentifier | References parent agent |
+| LogoURL | nvarchar(255) | URL to agent logo/avatar |
+| TypeID | uniqueidentifier | References AIAgentType that defines category and system-level behavior |
+| ParentID | uniqueidentifier | References parent agent (self-referencing) |
 | ExposeAsAction | bit | Whether to expose as an action |
 | ExecutionOrder | int | Order among siblings |
 | ExecutionMode | nvarchar(20) | How child agents are executed |
@@ -287,7 +340,48 @@ Defines AI agents in the system.
 | ContextCompressionPromptID | uniqueidentifier | Prompt used for compression |
 | ContextCompressionMessageRetentionCount | int | Messages to keep uncompressed |
 
-#### 3.4.2 AIAgentPrompt
+#### 3.4.3 AIAgentRun
+
+Tracks individual execution runs of AI agents with comprehensive state management.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | uniqueidentifier | Primary key |
+| AgentID | uniqueidentifier | References the AIAgent being executed |
+| ParentRunID | uniqueidentifier | References parent agent run (self-referencing for hierarchical execution) |
+| Status | nvarchar(50) | Current status: Running, Completed, Paused, Failed, Cancelled |
+| StartedAt | datetimeoffset(7) | When the agent run began execution |
+| CompletedAt | datetimeoffset(7) | When the agent run completed (NULL while running) |
+| Success | bit | Whether the execution was successful (NULL while running) |
+| ErrorMessage | nvarchar(max) | Error message if the run failed |
+| ConversationID | uniqueidentifier | Links to conversation or user session |
+| UserID | uniqueidentifier | User context for authentication and permissions |
+| Result | nvarchar(max) | Final result or output from the agent execution |
+| AgentState | nvarchar(max) | JSON serialization of complete agent state for pause/resume |
+| TotalTokensUsed | int | Total tokens consumed by all LLM calls |
+| TotalCost | decimal(18,6) | Total estimated cost for all AI model usage |
+
+#### 3.4.4 AIAgentRunStep
+
+Provides step-by-step tracking of agent execution for debugging and monitoring.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | uniqueidentifier | Primary key |
+| AgentRunID | uniqueidentifier | References the parent AIAgentRun |
+| StepNumber | int | Sequential step number within the run (starting from 1) |
+| StepType | nvarchar(50) | Type of step: prompt, action, subagent, decision |
+| StepName | nvarchar(255) | Human-readable name of what this step accomplishes |
+| TargetID | uniqueidentifier | ID of the target being executed (prompt, action, agent, etc.) |
+| Status | nvarchar(50) | Current execution status: Running, Completed, Failed, Cancelled |
+| StartedAt | datetimeoffset(7) | When this step began execution |
+| CompletedAt | datetimeoffset(7) | When this step completed (NULL while running) |
+| Success | bit | Whether this step completed successfully (NULL while running) |
+| ErrorMessage | nvarchar(max) | Error message if this step failed |
+| InputData | nvarchar(max) | JSON serialization of input data for this step |
+| OutputData | nvarchar(max) | JSON serialization of output data from this step |
+
+#### 3.4.5 AIAgentPrompt
 
 Associates prompts with agents.
 
@@ -303,11 +397,89 @@ Associates prompts with agents.
 | ContextBehavior | nvarchar(50) | How conversation context is filtered |
 | ContextMessageCount | int | Number of messages to include |
 
+**Unique Constraints:** AgentID + PromptID + ConfigurationID
+
+#### 3.4.6 AIAgentModel
+
+Associates agents with specific AI models.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | uniqueidentifier | Primary key |
+| AgentID | uniqueidentifier | References the agent |
+| ModelID | uniqueidentifier | References the model |
+| Active | bit | Whether this model association is active |
+| Priority | int | Priority ranking for model selection |
+
+#### 3.4.7 AIAgentAction
+
+Links AI agents to actions they can perform.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | uniqueidentifier | Primary key |
+| AgentID | uniqueidentifier | References the agent |
+| ActionID | uniqueidentifier | References the action |
+| Status | nvarchar(15) | Status of this agent-action association |
+
+#### 3.4.8 AIAgentRequest
+
+Tracks requests made to AI agents.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | uniqueidentifier | Primary key |
+| AgentID | uniqueidentifier | References the agent |
+| RequestedAt | datetime | When the request was made |
+| RequestForUserID | uniqueidentifier | User who made the request |
+| Status | nvarchar(20) | Status of the request |
+| Request | nvarchar(max) | The actual request text |
+| Response | nvarchar(max) | The agent's response |
+| ResponseByUserID | uniqueidentifier | User who provided the response |
+| RespondedAt | datetime | When the response was provided |
+| Comments | nvarchar(max) | Additional comments |
+
+#### 3.4.9 AIAgentLearningCycle
+
+Tracks learning cycles for AI agents.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | uniqueidentifier | Primary key |
+| AgentID | uniqueidentifier | References the agent |
+| StartedAt | datetimeoffset(7) | When the learning cycle started |
+| EndedAt | datetimeoffset(7) | When the learning cycle ended |
+| Status | nvarchar(20) | Status of the learning cycle |
+| AgentSummary | nvarchar(max) | Summary of what the agent learned |
+
+#### 3.4.10 AIAgentNote
+
+Notes and annotations for AI agents.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | uniqueidentifier | Primary key |
+| AgentID | uniqueidentifier | References the agent |
+| AgentNoteTypeID | uniqueidentifier | References the note type |
+| Note | nvarchar(max) | The note content |
+| Type | nvarchar(20) | Type of note |
+| UserID | uniqueidentifier | User who created the note |
+
+#### 3.4.11 AIAgentNoteType
+
+Categorizes different types of agent notes.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | uniqueidentifier | Primary key |
+| Name | nvarchar(255) | Note type name |
+| Description | nvarchar(max) | Detailed description |
+
 ### 3.5 Execution and Caching
 
 #### 3.5.1 AIPromptRun
 
-Tracks the execution of prompts.
+Tracks the execution of prompts with comprehensive metrics and agent integration.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -316,6 +488,7 @@ Tracks the execution of prompts.
 | ModelID | uniqueidentifier | References the model |
 | VendorID | uniqueidentifier | References the vendor |
 | AgentID | uniqueidentifier | References the agent (if any) |
+| AgentRunID | uniqueidentifier | References the AIAgentRun that initiated this prompt execution |
 | ConfigurationID | uniqueidentifier | References the configuration |
 | RunAt | datetime2(7) | Execution start time |
 | CompletedAt | datetime2(7) | Execution end time |
@@ -328,10 +501,13 @@ Tracks the execution of prompts.
 | TotalCost | decimal(18,6) | Estimated cost |
 | Success | bit | Whether execution succeeded |
 | ErrorMessage | nvarchar(max) | Error message if failed |
+| ParentID | uniqueidentifier | References parent run (self-referencing) |
+| RunType | nvarchar(20) | Type of run (single, parallel, etc.) |
+| ExecutionOrder | int | Order within a batch execution |
 
 #### 3.5.2 AIResultCache
 
-Caches results for reuse.
+Caches results for reuse with vector similarity matching.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -349,33 +525,111 @@ Caches results for reuse.
 | PromptEmbedding | varbinary(max) | Vector representation of prompt |
 | PromptRunID | uniqueidentifier | References the execution that created this cache |
 
+### 3.6 Data Context Enhancements
+
+#### 3.6.1 DataContextItem (Enhanced)
+
+The DataContextItem table has been enhanced with programmatic naming for improved code generation.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ... | ... | (Existing fields remain unchanged) |
+| CodeName | nvarchar(255) | Optional programmatic identifier following JavaScript naming conventions |
+
+**Unique Constraints:** DataContextID + CodeName
+
+### 3.7 Model Actions and Capabilities
+
+#### 3.7.1 AIModelAction
+
+Links AI models to actions they support.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | uniqueidentifier | Primary key |
+| AIModelID | uniqueidentifier | References the AI model |
+| AIActionID | uniqueidentifier | References the AI action |
+| IsActive | bit | Whether this model-action link is active |
+
 ---
 
 ## 4. Key Workflows
 
-### 4.1 Prompt Execution Workflow
+### 4.1 Agent Execution Workflow (Separation of Concerns)
+
+The agent execution workflow follows the separation of concerns pattern with distinct responsibilities:
+
+1. **AgentRunner Initialization**:
+   - Create AIAgentRun entry with Running status
+   - Initialize execution context with conversation history and parameters
+   - Set up progress tracking and cancellation support
+   - Prepare both BaseAgent and ConductorAgent for execution
+
+2. **Execution Loop (Agent + Conductor Pattern)**:
+   - **BaseAgent Execution**: Execute domain-specific prompts and tasks
+   - **Conductor Decision**: Feed BaseAgent results to ConductorAgent for orchestration decisions
+   - **Action Execution**: Execute conductor's decided actions/sub-agents
+   - **Iteration**: Repeat until task completion or max iterations reached
+
+3. **BaseAgent Responsibilities**:
+   - Load and execute agent-specific prompts in sequence
+   - Handle conversation context and compression when needed
+   - Process hierarchical prompt execution with child prompts
+   - Return standardized execution results
+
+4. **ConductorAgent Responsibilities**:
+   - Analyze current context and BaseAgent results
+   - Evaluate available actions and sub-agents
+   - Make autonomous decisions about next steps
+   - Plan execution sequences with proper ordering
+
+5. **Step Tracking and State Management**:
+   - Create AIAgentRunStep entries for each discrete action
+   - Track execution order, timing, and success/failure status
+   - Store input/output data for debugging and analytics
+   - Support hierarchical execution with parent-child run relationships
+   - Resource tracking (tokens, cost, timing)
+
+6. **Completion and Cleanup**:
+   - Update AIAgentRun with final status and results
+   - Aggregate metrics from all execution steps
+   - Return comprehensive execution results
+
+### 4.2 Hierarchical Prompt Execution Workflow
 
 1. **Initialization**:
    - Client requests prompt execution with parameters
    - System resolves the prompt by ID or name
    - Execution context is created with parameters, configuration, and agent context (if any)
 
-2. **Model Selection**:
+2. **Child Prompt Detection**:
+   - Check if prompt has `childPrompts` array defined
+   - If children exist, initiate hierarchical execution
+   - Otherwise, proceed with standard execution
+
+3. **Hierarchical Execution** (if children exist):
+   - **Depth-First Traversal**: Execute child prompts recursively before parent
+   - **Parallel Sibling Execution**: Execute prompts at same level in parallel
+   - **Result Collection**: Gather all child results with placeholder names
+   - **Parent Rendering**: Render parent template with child results embedded
+   - **Parent Execution**: Execute parent prompt with merged data context
+
+4. **Model Selection**:
    - Based on the prompt's SelectionStrategy:
      - Default: Use system default model
      - Specific: Use models specified in AIPromptModel
      - ByPower: Select based on PowerRank and PowerPreference
 
-3. **Parallelization Decision**:
+5. **Parallelization Decision**:
    - Based on the prompt's ParallelizationMode:
      - None: Execute once
      - StaticCount: Execute ParallelCount times
      - ConfigParam: Get count from configuration parameter
      - ModelSpecific: Use settings from AIPromptModel entries
 
-4. **Cache Check** (if EnableCaching=true):
+6. **Cache Check** (if EnableCaching=true):
    - Generate cache key based on:
-     - Prompt text and parameters
+     - Prompt text and parameters (including child results)
      - Model, vendor, agent, configuration (based on CacheMustMatch* settings)
    - If CacheMatchType=Exact:
      - Search for exact match in AIResultCache
@@ -384,14 +638,14 @@ Caches results for reuse.
      - Find cached entries with similarity > CacheSimilarityThreshold
    - If valid cache entry found, return cached result
 
-5. **Execution**:
+7. **Execution**:
    - Create AIPromptRun entry for logging
-   - Format template with parameters
+   - Format template with parameters (and child results if applicable)
    - Send to model via appropriate vendor implementation
    - Record metrics (tokens, cost, timing)
    - Update AIPromptRun with results
 
-6. **Validation** (if OutputType is specified):
+8. **Validation** (if OutputType is specified):
    - Validate result against expected format
    - If ValidationBehavior=Strict and validation fails:
      - Retry if MaxRetries > 0
@@ -399,58 +653,54 @@ Caches results for reuse.
    - If ValidationBehavior=Warn and validation fails:
      - Log warning but continue
 
-7. **Result Selection** (if multiple executions):
+9. **Result Selection** (if multiple executions):
    - If ResultSelectorPromptID is specified:
      - Execute selector prompt with all results as input
      - Return selected result
    - Otherwise, return all results to client
 
-8. **Caching** (if EnableCaching=true):
-   - Create or update AIResultCache entry with result
-   - Set expiration based on CacheTTLSeconds
-   - Store embedding if CacheMatchType=Vector
+10. **Caching** (if EnableCaching=true):
+    - Create or update AIResultCache entry with result
+    - Set expiration based on CacheTTLSeconds
+    - Store embedding if CacheMatchType=Vector
 
-### 4.2 Agent Execution Workflow
+### 4.3 Hierarchical Agent Orchestration
 
-1. **Agent Invocation**:
-   - Client invokes agent with initial context
-   - System loads agent configuration and prompt associations
+1. **Agent Type Resolution**:
+   - Load AIAgentType to determine system-level behavior
+   - Apply type-specific system prompts and configurations
+   - Initialize agent with type-appropriate capabilities
 
-2. **Hierarchical Resolution**:
-   - If ParentID is null, execute as root agent
-   - Otherwise, resolve parent-child relationships
-   - Prepare for execution based on ExecutionMode
-
-3. **Prompt Sequencing**:
-   - Execute prompts in the order specified by ExecutionOrder
-   - For each prompt:
-     - Apply ContextBehavior to filter conversation history
-     - Execute prompt using Prompt Execution Workflow
-     - Add result to conversation context
-
-4. **Child Agent Orchestration**:
+2. **Child Agent Coordination**:
    - Based on ExecutionMode:
      - Sequential: Execute child agents in ExecutionOrder sequence
      - Parallel: Execute child agents concurrently
    - For each child agent:
+     - Create child AIAgentRun with ParentRunID reference
      - Pass appropriate context subset
-     - Execute using Agent Execution Workflow (recursive)
-     - Integrate results into parent context
+     - Execute using recursive agent workflow
+     - Track execution in AIAgentRunStep entries
 
-5. **Context Management**:
+3. **Context Management**:
    - If EnableContextCompression=true and message count exceeds threshold:
      - Retain ContextCompressionMessageRetentionCount recent messages
      - Use ContextCompressionPromptID to compress older messages
      - Replace compressed messages with summary
 
-6. **Result Aggregation**:
+4. **Result Aggregation**:
    - Combine results from all executed prompts and child agents
-   - Format according to agent's defined output structure
-   - Return to client or parent agent
+   - Update parent AIAgentRun with aggregated metrics
+   - Return comprehensive results to client or parent agent
 
-### 4.3 Configuration and Deployment
+### 4.4 Configuration and Deployment
 
-1. **Agent Configuration**:
+1. **Agent Type Configuration**:
+   - Create AIAgentType entries for different categories of agents
+   - Define system prompts that provide base behavior for each type
+   - Set up type-specific capabilities and constraints
+
+2. **Agent Configuration**:
+   - Create AIAgent entries with TypeID references
    - Define agent structure (parent-child relationships)
    - Associate prompts with agents (AIAgentPrompt entries)
    - Configure execution parameters (order, mode, etc.)
@@ -477,7 +727,78 @@ Caches results for reuse.
 
 ## 5. Advanced Features
 
-### 5.1 Context Compression
+### 5.1 Separation of Concerns Architecture
+
+The framework implements a separation of concerns pattern that cleanly separates different responsibilities:
+
+1. **BaseAgent - Domain Execution**:
+   - Focuses solely on executing agent-specific prompts and tasks
+   - Handles template rendering with data context
+   - Manages conversation context and compression
+   - Returns standardized execution results
+
+2. **ConductorAgent - Decision Making**:
+   - Specialized agent for making orchestration decisions
+   - Analyzes current state and available resources
+   - Makes autonomous decisions about next steps
+   - Plans execution sequences with proper ordering
+
+3. **AgentRunner - Coordination**:
+   - Orchestrates interaction between BaseAgent and ConductorAgent
+   - Implements the core execution loop
+   - Manages progress tracking and cancellation
+   - Provides user interface abstraction
+
+4. **Hierarchical Prompt Execution**:
+   - Parent prompts specify their children via `childPrompts` array
+   - Depth-first traversal with parallel execution at each level
+   - Unlimited nesting depth with recursive processing
+   - Flexible placeholder replacement for child results
+
+### 5.2 Enhanced Factory Pattern
+
+The framework includes an improved factory pattern for agent instantiation:
+
+1. **Global Agent Factory**:
+   - `GetAgentFactory()` function provides consistent access
+   - Support for factory subclassing and customization
+   - Integration with MemberJunction ClassFactory system
+
+2. **Extensible Agent Types**:
+   - Agent types can be subclassed and registered
+   - Custom agents inherit full framework capabilities
+   - Seamless integration with existing metadata system
+
+### 5.3 Comprehensive Execution Tracking
+
+The new tracking system provides detailed insights into agent execution:
+
+1. **Run-Level Tracking**:
+   - AIAgentRun entries track complete agent executions
+   - Support for pause/resume through state serialization
+   - Hierarchical tracking for parent-child relationships
+
+2. **Step-Level Granularity**:
+   - AIAgentRunStep entries track individual actions
+   - Input/output data capture for debugging
+   - Timing and success metrics for performance analysis
+
+### 5.4 Action vs Tool Terminology
+
+The framework has been updated to use consistent "actions" terminology:
+
+1. **Unified Terminology**:
+   - "Actions" replace "tools" throughout the system
+   - Consistent naming in interfaces and documentation
+   - Improved clarity for developers and users
+
+2. **Backward Compatibility**:
+   - Existing functionality remains unchanged
+   - Only terminology has been updated for consistency
+
+### 5.5 Context Compression
+
+### 5.6 Vectorized Cache Matching
 
 Long conversations with agents can accumulate many messages, leading to increased token usage and potential context window limitations. The framework addresses this with automatic context compression:
 
@@ -495,7 +816,7 @@ Long conversations with agents can accumulate many messages, leading to increase
    - System preserves key information needed for continuity
    - Special messages (e.g., system instructions) are exempt from compression
 
-### 5.2 Vectorized Cache Matching
+### 5.7 Parallel Model Execution
 
 Traditional exact-match caching fails when prompts vary slightly but semantically represent the same query. The framework's vector-based cache matching addresses this:
 
@@ -513,7 +834,7 @@ Traditional exact-match caching fails when prompts vary slightly but semanticall
    - CacheSimilarityThreshold controls strictness of matching
    - CacheMustMatch* fields control which attributes must match
 
-### 5.3 Parallel Model Execution
+### 5.8 Structured Output Validation
 
 The framework supports executing prompts across multiple models in parallel to leverage the strengths of different AI models:
 
@@ -531,7 +852,6 @@ The framework supports executing prompts across multiple models in parallel to l
    - ResultSelectorPromptID specifies a prompt that selects the best result
    - Selection can be based on quality, correctness, or custom criteria
 
-### 5.4 Structured Output Validation
 
 To ensure AI outputs meet application requirements, the framework includes robust validation:
 
@@ -893,85 +1213,139 @@ ORDER BY
 
 ## Appendix D: Integration Examples
 
-### D.1 Creating an Agent with Prompts
+### D.1 Creating and Using Agents with the AgentFactory
 
 ```typescript
-async function createBasicAgent() {
-  // Create the agent
-  const agentId = await agentManager.createAgent({
-    name: "Customer Support Agent",
-    description: "Assists with customer inquiries and support tickets",
-    executionMode: "Sequential"
+// Get the global agent factory instance
+const factory = GetAgentFactory();
+
+// Create a new agent from an existing agent entity in the database
+async function createAgentFromEntity(agentId: string, user: UserInfo): Promise<BaseAgent> {
+  const agent = await factory.CreateAgentFromEntity(agentId, user);
+  return agent;
+}
+
+// Create a custom agent by extending BaseAgent
+class CustomerSupportAgent extends BaseAgent {
+  constructor(entity: AIAgentEntity, contextUser: UserInfo) {
+    super(entity, contextUser);
+  }
+
+  protected async processDecision(decision: any, context: AgentContext): Promise<AgentResult> {
+    // Custom logic for customer support specific processing
+    if (decision.decision === 'escalate_to_human') {
+      return await this.escalateToHuman(context);
+    }
+    
+    // Delegate to parent for standard processing
+    return await super.processDecision(decision, context);
+  }
+
+  private async escalateToHuman(context: AgentContext): Promise<AgentResult> {
+    // Custom escalation logic
+    return {
+      success: true,
+      result: 'Escalated to human support',
+      metadata: {
+        escalated: true,
+        timestamp: new Date()
+      }
+    };
+  }
+}
+
+// Register the custom agent type with the factory
+factory.RegisterAgentClass('CustomerSupport', CustomerSupportAgent);
+
+// Use the factory to create agents
+async function useAgentFactory(user: UserInfo) {
+  // Method 1: Create agent by type name
+  const agent1 = await factory.CreateAgent('Base Agent', user);
+  
+  // Method 2: Create agent from database entity
+  const agent2 = await factory.CreateAgentFromEntity('agent-uuid-here', user);
+  
+  // Method 3: Create custom agent type
+  const agent3 = await factory.CreateAgent('CustomerSupport', user);
+  
+  // Execute the agent
+  const result = await agent1.Execute({
+    conversationMessages: [
+      { role: 'user', content: 'Help me with my order status' }
+    ],
+    data: { orderId: '12345' }
   });
   
-  // Create the initial prompt
-  const greetingPromptId = await promptManager.createPrompt({
-    name: "Customer Greeting",
-    description: "Initial greeting to the customer",
-    promptText: "You are a helpful customer support agent. Greet the customer professionally and ask how you can help them today.",
-    aiModelTypeId: AI_MODEL_TYPES.LLM,
-    selectionStrategy: "ByPower",
-    powerPreference: "Highest",
-    outputType: "string"
-  });
-  
-  // Create the support prompt
-  const supportPromptId = await promptManager.createPrompt({
-    name: "Support Response",
-    description: "Provides support based on customer inquiry",
-    promptText: "Based on the customer's inquiry: '{{inquiry}}', provide a helpful response that addresses their needs.",
-    aiModelTypeId: AI_MODEL_TYPES.LLM,
-    selectionStrategy: "ByPower",
-    powerPreference: "Highest",
-    outputType: "string",
-    enableCaching: true,
-    cacheTTLSeconds: 3600,
-    cacheMatchType: "Vector",
-    cacheSimilarityThreshold: 0.92,
-    cacheMustMatchModel: true,
-    cacheMustMatchVendor: false
-  });
-  
-  // Associate prompts with the agent
-  await agentManager.associatePrompt(agentId, greetingPromptId, {
-    purpose: "Initial Greeting",
-    executionOrder: 1,
-    contextBehavior: "Smart"
-  });
-  
-  await agentManager.associatePrompt(agentId, supportPromptId, {
-    purpose: "Support Response",
-    executionOrder: 2,
-    contextBehavior: "Complete"
-  });
-  
-  return agentId;
+  return result;
 }
 ```
 
-### D.2 Executing an Agent with Context
+### D.2 Executing an Agent with BaseAgent Framework
 
 ```typescript
-async function executeAgent(agentId, initialContext) {
-  // Initialize the execution context
-  const executionContext = {
-    conversation: initialContext.conversation || [],
-    parameters: initialContext.parameters || {},
-    configuration: initialContext.configuration || DEFAULT_CONFIGURATION
-  };
+async function executeAgent(agentId: string, initialContext: any, user: UserInfo): Promise<AgentResult> {
+  try {
+    // Get the global agent factory
+    const factory = GetAgentFactory();
+    
+    // Create agent from entity ID
+    const agent = await factory.CreateAgentFromEntity(agentId, user);
+    
+    // Execute the agent with context and progress tracking
+    const result = await agent.Execute({
+      conversationMessages: initialContext.conversation || [],
+      data: initialContext.parameters || {},
+      onProgress: (progress) => {
+        console.log(`Step ${progress.currentStep}/${progress.totalSteps}: ${progress.message}`);
+        console.log(`Progress: ${progress.percentage}%`);
+      },
+      onStreamingUpdate: (update) => {
+        // Handle real-time updates during execution
+        console.log('Streaming update:', update);
+      }
+    });
+    
+    // The agent automatically handles state tracking, metrics, and logging
+    console.log(`Execution completed in ${result.metadata?.executionTimeMs}ms`);
+    console.log(`Tokens used: ${result.metadata?.tokensUsed}`);
+    console.log(`Cost: $${result.metadata?.cost}`);
+    
+    return result;
+    
+  } catch (error) {
+    console.error('Agent execution failed:', error);
+    throw error;
+  }
+}
+
+// Example with cancellation support
+async function executeAgentWithCancellation(agentId: string, context: any, user: UserInfo) {
+  const factory = GetAgentFactory();
+  const agent = await factory.CreateAgentFromEntity(agentId, user);
   
-  // Execute the agent
-  const result = await agentManager.executeAgent(agentId, executionContext);
+  // Create cancellation token
+  const controller = new AbortController();
   
-  // Log the execution for analytics
-  await analyticsManager.logAgentExecution(
-    agentId,
-    result.promptRuns,
-    executionContext,
-    result.outcome
-  );
+  // Set up timeout
+  setTimeout(() => {
+    controller.abort();
+  }, 30000); // 30 second timeout
   
-  return result;
+  try {
+    const result = await agent.Execute({
+      conversationMessages: context.conversation || [],
+      data: context.parameters || {},
+      signal: controller.signal // Pass cancellation signal
+    });
+    
+    return result;
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      console.log('Agent execution was cancelled');
+      // Agent state is automatically saved for potential resume
+    }
+    throw error;
+  }
 }
 ```
 
