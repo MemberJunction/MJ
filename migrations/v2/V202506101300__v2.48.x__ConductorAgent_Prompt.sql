@@ -33,6 +33,8 @@ DECLARE @TemplateContentID UNIQUEIDENTIFIER = '29FA8F09-A8BE-417E-BF99-BDDCDA9CC
 DECLARE @AIPromptTypeID UNIQUEIDENTIFIER = 'A6DA423E-F36B-1410-8DAC-00021F8B792E' -- Chat type from provided data
 DECLARE @TemplateContentTypeID UNIQUEIDENTIFIER = 'E7AFCCEC-6A37-EF11-86D4-000D3A4E707E' -- Text type from provided data
 DECLARE @AIPromptID UNIQUEIDENTIFIER = '5A0446FE-AAB0-4564-8136-2443D353A168'
+DECLARE @AIAgentID UNIQUEIDENTIFIER = 'DE973866-7B67-40D5-B665-A994E611421F'
+DECLARE @AIAgentPromptID UNIQUEIDENTIFIER = '7716BA64-D6C4-4E47-9B85-5E2F0C8197FE'
 
 -- Insert the Template record
 INSERT INTO [${flyway:defaultSchema}].[Template] (
@@ -48,10 +50,12 @@ INSERT INTO [${flyway:defaultSchema}].[Template] (
 )
 VALUES (
     @TemplateID,
-    'Agent System Prompt Template',
-    'Control wrapper template for AI agent execution that enforces deterministic JSON response format and provides execution context while embedding agent-specific prompts.',
+    'Conductor Agent System Prompt Template',
+    'Template for the Conductor Agent system prompt that provides orchestration and decision-making
+  instructions. Uses Nunjucks templating to dynamically render context including current goal, BaseAgent
+  results, available actions, and sub-agents for autonomous decision-making.',
     NULL, -- No category for now
-    'This template serves as a control wrapper for AI agents, enforcing consistent response format and execution control while allowing agent-specific prompt embedding.',
+    'This template serves as the template for the conductor prompt.',
     @UserID,
     GETUTCDATE(),
     NULL,
@@ -71,35 +75,75 @@ VALUES (
     @TemplateContentID,
     @TemplateID,
     @TemplateContentTypeID,
-    N'# AI Agent Execution Framework
+    N'# Conductor Agent System Prompt
 
-You are "{{ agentName }}", an autonomous AI agent in the MemberJunction framework.
+You are a **Conductor Agent** in the MemberJunction AI framework responsible for orchestration and decision-making.
 
-**Purpose:** {{ agentDescription }}
+## Your Role
 
-## Agent-Specific Instructions
+You analyze the current execution state and make autonomous decisions about what actions to take next. You coordinate between:
+- **BaseAgent results** - The output from domain-specific agent execution
+- **Available actions** - Tools and operations that can be executed
+- **Available sub-agents** - Specialized agents that can be delegated to
+- **Execution context** - Current goal, conversation history, and previous steps
 
-{% if agentPrompt %}
-{{ agentPrompt }}
-{% else %}
-{% PromptEmbed "{{ agentName }}Instructions", data={agentName: agentName, agentDescription: agentDescription, availableActions: availableActions, availableSubAgents: availableSubAgents} %}
+## Current Context Analysis
+
+**Primary Goal:** {{ currentGoal }}
+
+**BaseAgent Result:**
+{% if currentAgentResult %}
+- **Success:** {{ currentAgentResult.success }}
+- **Result:** {{ currentAgentResult.result }}
+{% if currentAgentResult.errorMessage %}
+- **Error:** {{ currentAgentResult.errorMessage }}
 {% endif %}
+{% else %}
+No recent BaseAgent execution to analyze.
+{% endif %}
+
+**Conversation History:** {{ messages.length }} messages in conversation
+**Execution History:** {{ executionHistory.length }} previous steps completed
 
 ## Available Resources
 
 {% if availableActions.length > 0 %}
 **Actions You Can Execute:**
 {% for action in availableActions %}
-- {{ action.name }} ({{ action.id }}): {{ action.description }}
+- **{{ action.name }}** ({{ action.id }}): {{ action.description }}
+  - Parameters: {{ action.parameters | length }} params
+  - Parallel support: {{ action.supportsParallel }}
 {% endfor %}
+{% else %}
+No actions are currently available.
 {% endif %}
 
 {% if availableSubAgents.length > 0 %}
 **Sub-Agents You Can Delegate To:**
 {% for subagent in availableSubAgents %}
-- {{ subagent.name }} ({{ subagent.id }}): {{ subagent.description }}
+- **{{ subagent.name }}** ({{ subagent.id }}): {{ subagent.description }}
+  - Suggested order: {{ subagent.executionOrder | default(0) }}
+  - Parallel support: {{ subagent.supportsParallel }}
 {% endfor %}
+{% else %}
+No sub-agents are currently available.
 {% endif %}
+
+## Decision-Making Process
+
+**Analyze the provided context:**
+1. **Current Goal**: What is the primary objective to accomplish?
+2. **BaseAgent Result**: What did the domain agent just produce? Was it successful?
+3. **Conversation History**: What has the user requested and what responses have been given?
+4. **Available Resources**: What actions and sub-agents are available to help?
+5. **Execution History**: What has already been attempted and what were the outcomes?
+
+**Make a strategic decision:**
+- **execute_action**: Run specific tools/operations to accomplish tasks
+- **execute_subagent**: Delegate specialized work to appropriate sub-agents  
+- **complete_task**: The goal has been successfully accomplished
+- **request_clarification**: Need more information from the user to proceed
+- **continue_processing**: Continue with current approach for multi-step workflows
 
 ## CRITICAL: Response Format Requirements
 
@@ -108,47 +152,57 @@ You are "{{ agentName }}", an autonomous AI agent in the MemberJunction framewor
 ```json
 {
   "decision": "execute_action|execute_subagent|complete_task|request_clarification|continue_processing",
-  "reasoning": "Your detailed thought process and why you chose this approach",
+  "reasoning": "Your detailed analysis of the situation and why you chose this approach",
   "executionPlan": [
     {
       "type": "action|subagent",
-      "targetId": "ID_from_available_resources_above",
-      "parameters": {},
+      "targetId": "ID_from_available_resources",
+      "parameters": {"key": "value"},
       "executionOrder": 1,
       "allowParallel": true,
       "description": "What this step accomplishes"
     }
   ],
   "isTaskComplete": false,
-  "finalResponse": "Only if isTaskComplete=true, provide the final answer",
+  "finalResponse": "Only if isTaskComplete=true, provide the final answer to return to the user",
   "confidence": 0.8
 }
 ```
 
 ## Execution Order Rules
 
-**CRITICAL for parallel/sequential execution:**
-- Same executionOrder = PARALLEL execution
-- Different executionOrder = SEQUENTIAL execution  
-- allowParallel: false = Forces sequential even with same executionOrder
+**For optimal efficiency and correctness:**
+- **Same executionOrder** = Steps run in PARALLEL
+- **Different executionOrder** = Steps run SEQUENTIALLY  
+- **allowParallel: false** = Forces sequential execution even with same executionOrder
 
 **Examples:**
-- `[{executionOrder: 1}, {executionOrder: 1}]` → Both run simultaneously
+- `[{executionOrder: 1}, {executionOrder: 1}]` → Both execute simultaneously
 - `[{executionOrder: 1}, {executionOrder: 2}]` → First completes, then second runs
+- `[{executionOrder: 1, allowParallel: false}, {executionOrder: 1}]` → Forced sequential
 
 ## Decision Guidelines
 
-1. **Analyze** the current situation and your specific instructions above
-2. **Choose** the most effective approach using available resources
-3. **Plan** execution order for optimal efficiency
-4. **Respond** with the required JSON format
+1. **Efficiency**: Use parallel execution when steps are independent
+2. **Dependencies**: Use sequential execution when later steps need earlier results
+3. **Specialization**: Delegate to sub-agents for tasks requiring domain expertise
+4. **Completion**: Only mark `isTaskComplete: true` when the user''s goal is fully satisfied
+5. **Clarity**: If the goal or requirements are unclear, request clarification rather than guessing
 
-Focus on your agent-specific role while using the execution framework provided.',
+## Key Principles
+
+- **Autonomous Decision-Making**: Make the best choice based on available information
+- **Resource Optimization**: Choose the most appropriate actions/sub-agents for each task
+- **User-Focused**: Always keep the primary goal and user satisfaction in mind
+- **Iterative Progress**: Build on previous steps and BaseAgent results to move toward completion
+- **Clear Communication**: Provide detailed reasoning for transparency and debugging
+
+Your decisions drive the entire execution flow. Choose wisely based on the context provided.',
     100, -- High priority
     1
 )
 
--- Insert the AIPrompt record that references the template
+-- Insert the Conductor AIPrompt record that references the template
 INSERT INTO [${flyway:defaultSchema}].[AIPrompt] (
     [ID],
     [Name],
@@ -186,14 +240,16 @@ INSERT INTO [${flyway:defaultSchema}].[AIPrompt] (
 )
 VALUES (
     @AIPromptID,
-    'Agent System Prompt',
-    'System prompt template that wraps agent-specific prompts with execution control framework. Enforces deterministic JSON response format for AgentRunner parsing while embedding agent-specific instructions.',
+    'Conductor Agent System Prompt',
+    'System prompt for the Conductor Agent responsible for orchestration and decision-making in the
+  MemberJunction AI framework. Analyzes BaseAgent results, available resources, and execution context to
+  make autonomous decisions about next steps.',
     @TemplateID,
     NULL, -- No category for now
     @AIPromptTypeID, -- Chat type
     'Active',
     'JSON', -- Expects JSON response format
-    '{"type": "object", "required": ["decision", "reasoning", "executionPlan", "isTaskComplete", "confidence"]}',
+    '{"type": "object", "required": ["decision", "reasoning", "executionPlan", "isTaskComplete", "finalResponse", "confidence"]}',
     NULL, -- Any LLM model type
     0, -- No minimum power rank
     'Default',
@@ -202,7 +258,12 @@ VALUES (
     NULL,
     NULL,
     'object', -- Returns structured decision object
-    '{"decision": "execute_action", "reasoning": "Analysis of the situation", "executionPlan": [{"type": "action", "targetId": "action_id", "parameters": {}, "executionOrder": 1, "allowParallel": true, "description": "Execute this action"}], "isTaskComplete": false, "finalResponse": null, "confidence": 0.9}',
+    '{"decision":
+  "execute_action|execute_subagent|complete_task|request_clarification|continue_processing", "reasoning":
+   "Detailed analysis of the situation", "executionPlan": [{"type": "action|subagent", "targetId":
+  "resource_id", "parameters": {}, "executionOrder": 1, "allowParallel": true, "description": "What this
+  step accomplishes"}], "isTaskComplete": false, "finalResponse": "Final answer if complete",
+  "confidence": 0.8}',
     'Strict', -- Strict validation for system prompts
     3, -- Allow up to 3 retries
     1000, -- 1 second delay
@@ -220,7 +281,60 @@ VALUES (
     'First' -- Always first in conversation
 )
 
+-- Insert the AIAgent record for the Conductor Agent
+INSERT INTO [${flyway:defaultSchema}].[AIAgent] (
+    [ID],
+    [Name],
+    [Description],
+    [TypeID],
+    [ParentID],
+    [ExposeAsAction],
+    [ExecutionOrder],
+    [ExecutionMode],
+    [EnableContextCompression],
+    [ContextCompressionMessageThreshold],
+    [ContextCompressionPromptID],
+    [ContextCompressionMessageRetentionCount]
+) VALUES (
+    @AIAgentID,
+    N'Conductor',
+    N'Specialized agent responsible for orchestration and decision-making in the MemberJunction AI
+framework. Analyzes BaseAgent execution results, available actions, and sub-agents to make autonomous
+decisions about next steps. Coordinates the separation of concerns between domain execution (BaseAgent)
+and orchestration decisions. Returns structured JSON decisions for action execution, sub-agent
+delegation, task completion, or clarification requests.',
+    'A7B8C9D0-E1F2-3456-7890-123456789ABC',
+    NULL, -- No parent - this is a root agent used for orchestration
+    0, -- ExposeAsAction = false - conductor is used internally for orchestration, not exposed as an action
+    0, -- ExecutionOrder = 0 (default for root agents)
+    N'Sequential', -- ExecutionMode = Sequential (default, though not applicable for orchestration agent)
+    0, -- EnableContextCompression = true - conductor may deal with long decision histories (leave as false for now)
+    NULL, -- ContextCompressionMessageThreshold = 50 messages
+    NULL, -- Leave compression prompt ID as NULL for now
+    NULL -- ContextCompressionMessageRetentionCount = 10 recent messages to keep
+);
 
+-- Insert the AIAgentPrompt record for the Conductor Agent
+INSERT INTO [${flyway:defaultSchema}].[AIAgentPrompt] (
+      [AgentID],
+      [PromptID],
+      [Purpose],
+      [ExecutionOrder],
+      [ConfigurationID],
+      [Status],
+      [ContextBehavior],
+      [ContextMessageCount]
+  ) VALUES (
+      @AIAgentID,
+      @AIPromptID,
+      N'System prompt for orchestration and decision-making. Analyzes BaseAgent results, available
+  actions, and sub-agents to make autonomous decisions about next steps in the execution workflow.',
+      1,
+      NULL,
+      N'Active',
+      N'RecentMessages', -- Only include recent messages to reduce token usage
+      20 -- Include last 20 messages for context
+  );
 
 
 /** CODEGEN OUTPUT **/
