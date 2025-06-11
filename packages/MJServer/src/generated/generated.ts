@@ -15613,7 +15613,7 @@ export class Dashboard_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field({description: `Specifies if the dashboard is metadata-driven (Config) or code-based (Code)`}) 
+    @Field({description: `Dashboard type supporting Config (metadata-driven), Code (compiled TypeScript), and Dynamic Code (Skip-generated runtime JavaScript/React) options`}) 
     @MaxLength(40)
     Type: string;
         

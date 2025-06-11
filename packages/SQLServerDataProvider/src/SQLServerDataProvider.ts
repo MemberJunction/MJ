@@ -2607,10 +2607,9 @@ export class SQLServerDataProvider
           // If the UTC hours don't match, the driver is incorrectly handling timezone
           if (actualUTCHours !== expectedUTCHours) {
             this._needsDatetimeOffsetAdjustment = true;
-            console.log(`SQLServerDataProvider: Detected incorrect datetimeoffset handling. Expected UTC hour: ${expectedUTCHours}, got: ${actualUTCHours}. Enabling automatic adjustment.`);
+            console.warn(`SQLServerDataProvider: Detected incorrect datetimeoffset handling. Expected UTC hour: ${expectedUTCHours}, got: ${actualUTCHours}. Enabling automatic adjustment.`);
           } else {
             this._needsDatetimeOffsetAdjustment = false;
-            console.log('SQLServerDataProvider: Database driver correctly handles datetimeoffset fields.');
           }
         } else {
           // If it's not a Date object, log for debugging

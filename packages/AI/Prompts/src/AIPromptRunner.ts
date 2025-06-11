@@ -1,6 +1,6 @@
 import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey } from '@memberjunction/ai';
 import { LogError, LogStatus, Metadata, UserInfo, ValidationResult, ValidationErrorInfo, ValidationErrorType, RunView } from '@memberjunction/core';
-import { MJGlobal } from '@memberjunction/global';
+import { CleanJSON, MJGlobal } from '@memberjunction/global';
 import { AIModelEntityExtended, AIPromptEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateEntityExtended, TemplateRenderResult } from '@memberjunction/templates-base-types';
@@ -1333,7 +1333,6 @@ export class AIPromptRunner {
 
         if (validationResult?.Success !== false) {
           // Validation succeeded, return the result
-          LogStatus(`✅ Validation succeeded on attempt ${attempt + 1}/${maxRetries + 1}`);
           return {
             modelResult,
             parsedResult: { result, validationResult },
@@ -1606,7 +1605,7 @@ export class AIPromptRunner {
 
           case 'object':
             try {
-              parsedResult = JSON.parse(rawOutput);
+              parsedResult = JSON.parse(CleanJSON(rawOutput));
             } catch (jsonError) {
               const error = new ValidationErrorInfo('output', `Expected JSON object but got invalid JSON: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
               validationErrors.push(error);

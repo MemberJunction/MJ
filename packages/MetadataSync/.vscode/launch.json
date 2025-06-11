@@ -1,0 +1,123 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Pull AI Prompts to Directory",
+      "program": "${workspaceFolder}/bin/run.js",
+      "args": [
+        "pull",
+        "--entity", "AI Prompts",
+        "--verbose"
+      ],
+      "cwd": "${workspaceFolder}/${input:pullDirectory}",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/dist/**/*.js"
+      ],
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "NODE_ENV": "development"
+      },
+      "preLaunchTask": "Build MetadataSync",
+      "runtimeArgs": ["--enable-source-maps"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Push to Directory",
+      "program": "${workspaceFolder}/bin/run.js",
+      "args": ["push", "--dir", "${input:pushDirectory}"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/dist/**/*.js"
+      ],
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "NODE_ENV": "development"
+      },
+      "preLaunchTask": "Build MetadataSync",
+      "runtimeArgs": ["--enable-source-maps"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "MetadataSync CLI (Custom)",
+      "program": "${workspaceFolder}/bin/run.js",
+      "args": ["${input:command}", "${input:arg1}", "${input:arg2}", "${input:arg3}", "${input:arg4}"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/dist/**/*.js"
+      ],
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "NODE_ENV": "development"
+      },
+      "preLaunchTask": "Build MetadataSync",
+      "runtimeArgs": ["--enable-source-maps"]
+    }
+  ],
+  "inputs": [
+    {
+      "id": "pullDirectory",
+      "type": "promptString",
+      "description": "Directory name (relative to MetadataSync folder)",
+      "default": "demo/ai-prompts"
+    },
+    {
+      "id": "pushDirectory",
+      "type": "promptString",
+      "description": "Directory to push (relative to MetadataSync folder)",
+      "default": "demo/ai-prompts"
+    },
+    {
+      "id": "command",
+      "type": "pickString",
+      "description": "Select command",
+      "options": ["push", "pull", "status", "watch", "init"],
+      "default": "push"
+    },
+    {
+      "id": "arg1",
+      "type": "promptString",
+      "description": "Argument 1",
+      "default": ""
+    },
+    {
+      "id": "arg2",
+      "type": "promptString",
+      "description": "Argument 2",
+      "default": ""
+    },
+    {
+      "id": "arg3",
+      "type": "promptString",
+      "description": "Argument 3",
+      "default": ""
+    },
+    {
+      "id": "arg4",
+      "type": "promptString",
+      "description": "Argument 4",
+      "default": ""
+    }
+  ]
+}
