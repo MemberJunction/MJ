@@ -104,7 +104,7 @@ export class SkipDynamicTabbedReportComponent extends SkipDynamicReportBase impl
     this.confirmCreateReportDialogOpen = false;
   }
   
-  public async handleHTMLReportDrillDown(info: DrillDownInfo) {
+  public async handleUIComponentDrillDown(info: DrillDownInfo) {
     this.handleDrillDown(info);
   }
 

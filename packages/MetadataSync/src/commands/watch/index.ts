@@ -7,6 +7,8 @@ import { loadMJConfig, loadSyncConfig, loadEntityConfig } from '../../config';
 import { SyncEngine, RecordData } from '../../lib/sync-engine';
 import { initializeProvider, findEntityDirectories, getSystemUser } from '../../lib/provider-utils';
 import { BaseEntity } from '@memberjunction/core';
+import { getSyncEngine, resetSyncEngine } from '../../lib/singleton-manager';
+import { cleanupProvider } from '../../lib/provider-utils';
 
 export default class Watch extends Command {
   static description = 'Watch for file changes and automatically push to database';
@@ -38,13 +40,17 @@ export default class Watch extends Command {
       
       this.syncConfig = await loadSyncConfig(process.cwd());
       
+      // Stop spinner before provider initialization (which logs to console)
+      spinner.stop();
+      
       // Initialize data provider
       const provider = await initializeProvider(mjConfig);
       
-      // Initialize sync engine
-      this.syncEngine = new SyncEngine(getSystemUser());
-      await this.syncEngine.initialize();
-      spinner.succeed('Configuration loaded');
+      // Initialize sync engine using singleton pattern
+      this.syncEngine = await getSyncEngine(getSystemUser());
+      
+      // Show success after all initialization is complete
+      spinner.succeed('Configuration and metadata loaded');
       
       // Find entity directories to watch
       const entityDirs = findEntityDirectories(process.cwd(), flags.dir);
@@ -68,6 +74,7 @@ export default class Watch extends Command {
         this.log(`Watching ${entityConfig.entity} in ${entityDir}`);
         
         // Watch for JSON files and external files
+        // All JSON files will be watched, but only dot-prefixed ones will be processed
         const patterns = [
           path.join(entityDir, entityConfig.filePattern || '**/*.json'),
           path.join(entityDir, '**/*.md'),
@@ -82,6 +89,7 @@ export default class Watch extends Command {
           '**/.git/**',
           '**/.mj-sync.json',
           '**/.mj-folder.json',
+          '**/*.backup',
           ...(this.syncConfig?.watch?.ignorePatterns || [])
         ];
         
@@ -105,14 +113,22 @@ export default class Watch extends Command {
       process.stdin.resume();
       
       // Cleanup on exit
-      process.on('SIGINT', () => {
+      process.on('SIGINT', async () => {
         this.log('\nStopping watchers...');
         watchers.forEach(w => w.close());
+        // Reset sync engine singleton
+        resetSyncEngine();
+        // Clean up database connection
+        await cleanupProvider();
         process.exit(0);
       });
       
     } catch (error) {
       spinner.fail('Watch failed');
+      // Reset sync engine singleton
+      resetSyncEngine();
+      // Clean up database connection
+      await cleanupProvider();
       this.error(error as Error);
     }
   }

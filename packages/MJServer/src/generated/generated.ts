@@ -1982,9 +1982,9 @@ export class AIAgent_ {
     @Field(() => Int, {nullable: true, description: `Number of recent messages to keep uncompressed when context compression is applied.`}) 
     ContextCompressionMessageRetentionCount?: number;
         
-    @Field({description: `Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.`}) 
+    @Field({nullable: true, description: `Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.`}) 
     @MaxLength(16)
-    TypeID: string;
+    TypeID?: string;
         
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -1994,9 +1994,9 @@ export class AIAgent_ {
     @MaxLength(510)
     ContextCompressionPrompt?: string;
         
-    @Field() 
+    @Field({nullable: true}) 
     @MaxLength(200)
-    Type: string;
+    Type?: string;
         
     @Field(() => [AIAgentRequest_])
     AIAgentRequests_AgentIDArray: AIAgentRequest_[]; // Link to AIAgentRequests
@@ -2069,7 +2069,7 @@ export class CreateAIAgentInput {
     ContextCompressionMessageRetentionCount: number | null;
 
     @Field({ nullable: true })
-    TypeID?: string;
+    TypeID: string | null;
 }
     
 
@@ -2115,7 +2115,7 @@ export class UpdateAIAgentInput {
     ContextCompressionMessageRetentionCount?: number | null;
 
     @Field({ nullable: true })
-    TypeID?: string;
+    TypeID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -8019,14 +8019,14 @@ export class User_ {
     @Field(() => [UserFavorite_])
     UserFavorites_UserIDArray: UserFavorite_[]; // Link to UserFavorites
     
-    @Field(() => [ResourceLink_])
-    ResourceLinks_UserIDArray: ResourceLink_[]; // Link to ResourceLinks
-    
     @Field(() => [ListCategory_])
     ListCategories_UserIDArray: ListCategory_[]; // Link to ListCategories
     
     @Field(() => [ScheduledAction_])
     ScheduledActions_CreatedByUserIDArray: ScheduledAction_[]; // Link to ScheduledActions
+    
+    @Field(() => [ResourceLink_])
+    ResourceLinks_UserIDArray: ResourceLink_[]; // Link to ResourceLinks
     
     @Field(() => [AIAgentRequest_])
     AIAgentRequests_ResponseByUserIDArray: AIAgentRequest_[]; // Link to AIAgentRequests
@@ -8477,15 +8477,6 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [ResourceLink_])
-    async ResourceLinks_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Resource Links', userPayload);
-        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceLinks] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Links', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Resource Links', await dataSource.query(sSQL));
-        return result;
-    }
-        
     @FieldResolver(() => [ListCategory_])
     async ListCategories_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('List Categories', userPayload);
@@ -8501,6 +8492,15 @@ export class UserResolverBase extends ResolverBase {
         const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActions] WHERE [CreatedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Scheduled Actions', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [ResourceLink_])
+    async ResourceLinks_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Resource Links', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceLinks] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Links', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Resource Links', await dataSource.query(sSQL));
         return result;
     }
         
@@ -15613,7 +15613,7 @@ export class Dashboard_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field({description: `Specifies if the dashboard is metadata-driven (Config) or code-based (Code)`}) 
+    @Field({description: `Dashboard type supporting Config (metadata-driven), Code (compiled TypeScript), and Dynamic Code (Skip-generated runtime JavaScript/React) options`}) 
     @MaxLength(40)
     Type: string;
         

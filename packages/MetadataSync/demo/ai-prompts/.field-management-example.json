@@ -1,0 +1,20 @@
+{
+  "fields": {
+    "Name": "Field Management Example",
+    "Description": "Demonstrates excludeFields vs preserveFields",
+    "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+    "CategoryID": "@lookup:AI Prompt Categories.Name=Examples",
+    "Prompt": "This is my locally customized prompt that won't be overwritten",
+    "Notes": "These are my local development notes - also preserved",
+    "Temperature": 0.7,
+    "MaxTokens": 1000,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "example-123"
+  },
+  "sync": {
+    "lastModified": "2024-03-15T10:30:00.000Z",
+    "checksum": "example"
+  }
+}

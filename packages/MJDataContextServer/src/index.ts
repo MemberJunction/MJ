@@ -3,7 +3,7 @@ import { LogError, UserInfo } from "@memberjunction/core";
 import { DataContextItem } from "@memberjunction/data-context";
 import { DataSource } from "typeorm";
 
-@RegisterClass(DataContextItem, undefined, 2) // higher priority for this class
+@RegisterClass(DataContextItem, undefined, undefined, true) 
 export class DataContextItemServer extends DataContextItem {
     /**
      * Server-Side only method to load the data context item from a SQL statement

@@ -95,6 +95,37 @@
       "sourceMapPathOverrides": {
         "${workspaceFolder}/packages/*": "${workspaceFolder}/packages/*"
       }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "MetadataSync CLI - Pull",
+      "program": "${workspaceFolder}/packages/MetadataSync/bin/run.js",
+      "args": [
+        "pull",
+        "--entity", "AI Prompts"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/packages/**",
+        "!**/node_modules/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/**/dist/**/*.js",
+        "${workspaceFolder}/packages/**/lib/**/*.js"
+      ],
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "NODE_ENV": "development",
+        "METADATA_SYNC_TARGET_DIR": "${input:metadataSyncPullDirectory}"
+      },
+      "preLaunchTask": "Build MetadataSync",
+      "runtimeArgs": ["--enable-source-maps"],
+      "sourceMapPathOverrides": {
+        "${workspaceFolder}/packages/*": "${workspaceFolder}/packages/*"
+      }
     }
   ],
   "inputs": [
@@ -159,6 +190,12 @@
       "type": "promptString",
       "description": "Directory to push (leave empty for default demo)",
       "default": "packages/MetadataSync/demo/ai-prompts"
+    },
+    {
+      "id": "metadataSyncPullDirectory",
+      "type": "promptString",
+      "description": "Directory path to pull to (absolute or relative)",
+      "default": "${workspaceFolder}/packages/MetadataSync/demo/ai-prompts"
     }
   ]
 }

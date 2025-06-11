@@ -3,8 +3,12 @@ import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { cleanupProvider } from '../lib/provider-utils';
+import { configManager } from '../lib/config-manager';
 
 const hook: Hook<'init'> = async function () {
+  // Capture the original working directory FIRST before any changes
+  configManager.getOriginalCwd();
+  
   // Load .env from the repository root first
   dotenv.config({ path: path.join(__dirname, '../../../../.env') });
   

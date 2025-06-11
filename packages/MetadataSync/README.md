@@ -104,9 +104,23 @@ The tool uses a hierarchical directory structure with cascading defaults:
 - Each top-level directory represents an entity type
 - `.mj-sync.json` files define entities and base defaults
 - `.mj-folder.json` files define folder-specific defaults (optional)
-- All JSON files within are treated as records of that entity type
+- Only dot-prefixed JSON files (e.g., `.prompt-template.json`, `.category.json`) are treated as metadata records
+- Regular JSON files without the dot prefix are ignored, allowing package.json and other config files to coexist
 - External files (`.md`, `.html`, etc.) are referenced from the JSON files
 - Defaults cascade down through the folder hierarchy
+
+### File Naming Convention
+
+**Metadata files must be prefixed with a dot (.)** to be recognized by the sync tool. This convention:
+- Clearly distinguishes metadata files from regular configuration files
+- Allows `package.json`, `tsconfig.json` and other standard files to coexist without being processed
+- Follows established patterns like `.gitignore` and `.eslintrc.json`
+
+Examples:
+- ✅ `.greeting.json` - Will be processed as metadata
+- ✅ `.customer-prompt.json` - Will be processed as metadata  
+- ❌ `greeting.json` - Will be ignored
+- ❌ `package.json` - Will be ignored
 
 ### File Format Options
 
@@ -147,12 +161,12 @@ metadata/
 │   ├── .mj-sync.json               # Defines entity: "AI Prompts"
 │   ├── customer-service/
 │   │   ├── .mj-folder.json         # Folder metadata (CategoryID, etc.)
-│   │   ├── greeting.json           # AI Prompt record with embedded models
+│   │   ├── .greeting.json          # AI Prompt record with embedded models
 │   │   ├── greeting.prompt.md      # Prompt content (referenced)
 │   │   └── greeting.notes.md       # Notes field (referenced)
 │   └── analytics/
 │       ├── .mj-folder.json         # Folder metadata (CategoryID, etc.)
-│       ├── daily-report.json       # AI Prompt record
+│       ├── .daily-report.json      # AI Prompt record
 │       └── daily-report.prompt.md  # Prompt content (referenced)
 ├── templates/                       # Reusable JSON templates
 │   ├── standard-prompt-settings.json # Common prompt configurations
@@ -163,17 +177,17 @@ metadata/
     ├── .mj-sync.json               # Defines entity: "Templates"
     ├── email/
     │   ├── .mj-folder.json         # Folder metadata
-    │   ├── welcome.json            # Template record
+    │   ├── .welcome.json           # Template record (dot-prefixed)
     │   └── welcome.template.html   # Template content (referenced)
     └── reports/
         ├── .mj-folder.json         # Folder metadata
-        ├── invoice.json            # Template record
+        ├── .invoice.json           # Template record (dot-prefixed)
         └── invoice.template.html   # Template content (referenced)
 ```
 
 ## JSON Metadata Format
 
-### Individual Record (e.g., ai-prompts/customer-service/greeting.json)
+### Individual Record (e.g., ai-prompts/customer-service/.greeting.json)
 ```json
 {
   "fields": {
@@ -476,7 +490,7 @@ Configuration follows a hierarchical structure:
 ```json
 {
   "entity": "AI Prompts",
-  "filePattern": "*.json",
+  "filePattern": ".*.json",
   "defaults": {
     "TypeID": "@lookup:AI Prompt Types.Name=Chat",
     "Temperature": 0.7,
@@ -484,11 +498,21 @@ Configuration follows a hierarchical structure:
     "Status": "Active"
   },
   "pull": {
+    "filePattern": ".*.json",
+    "updateExistingRecords": true,
+    "createNewFileIfNotFound": true,
+    "mergeStrategy": "merge",
     "filter": "Status = 'Active'",
+    "externalizeFields": [
+      {
+        "field": "Prompt",
+        "pattern": "@file:{Name}.prompt.md"
+      }
+    ],
     "relatedEntities": {
       "MJ: AI Prompt Models": {
         "entity": "MJ: AI Prompt Models",
-        "foreignKey": "ID",
+        "foreignKey": "PromptID",
         "filter": "Status = 'Active'"
       }
     }
@@ -529,25 +553,203 @@ The tool now supports managing related entities as embedded collections within p
 - **Relationship Clarity**: Visual representation of data relationships
 
 ### Configuration for Pull
-Configure which related entities to pull in `.mj-sync.json`:
+
+The pull command now supports smart update capabilities with extensive configuration options:
+
 ```json
 {
   "entity": "AI Prompts",
+  "filePattern": ".*.json",
   "pull": {
+    "filePattern": ".*.json",
+    "createNewFileIfNotFound": true,
+    "newFileName": ".all-new.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": ["customField", "localNotes"],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "filter": "Status = 'Active'",
+    "externalizeFields": [
+      {
+        "field": "TemplateText",
+        "pattern": "@file:{Name}.template.md"
+      },
+      {
+        "field": "PromptText",
+        "pattern": "@file:prompts/{Name}.prompt.md"
+      }
+    ],
+    "excludeFields": ["InternalID", "TempField"],
+    "lookupFields": {
+      "CategoryID": {
+        "entity": "AI Prompt Categories",
+        "field": "Name"
+      },
+      "TypeID": {
+        "entity": "AI Prompt Types",
+        "field": "Name"
+      }
+    },
     "relatedEntities": {
       "MJ: AI Prompt Models": {
         "entity": "MJ: AI Prompt Models",
-        "foreignKey": "ID",
-        "filter": "Status = 'Active'"
-      },
-      "AI Prompt Parameters": {
-        "entity": "AI Prompt Parameters",
-        "foreignKey": "ID"
+        "foreignKey": "PromptID",
+        "filter": "Status = 'Active'",
+        "lookupFields": {
+          "ModelID": {
+            "entity": "AI Models",
+            "field": "Name"
+          }
+        }
       }
     }
   }
 }
 ```
+
+#### Pull Configuration Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `filePattern` | string | Entity filePattern | Pattern for finding existing files to update |
+| `createNewFileIfNotFound` | boolean | true | Create files for records not found locally |
+| `newFileName` | string | - | Filename for new records when appending (see warning below) |
+| `appendRecordsToExistingFile` | boolean | false | Append new records to a single file |
+| `updateExistingRecords` | boolean | true | Update existing records found in local files |
+| `preserveFields` | string[] | [] | Fields that retain local values during updates (see detailed explanation below) |
+| `mergeStrategy` | string | "merge" | How to merge updates: "merge", "overwrite", or "skip" |
+| `backupBeforeUpdate` | boolean | false | Create timestamped backups before updating files |
+| `backupDirectory` | string | ".backups" | Directory name for backup files (relative to entity directory) |
+| `filter` | string | - | SQL WHERE clause for filtering records |
+| `externalizeFields` | array/object | - | Fields to save as external files with optional patterns |
+| `excludeFields` | string[] | [] | Fields to completely omit from pulled data (see detailed explanation below) |
+| `lookupFields` | object | - | Foreign keys to convert to @lookup references |
+| `relatedEntities` | object | - | Related entities to pull as embedded collections |
+
+> **⚠️ Important Configuration Warning**
+> 
+> When both `appendRecordsToExistingFile: true` and `newFileName` are set, ALL new records will be appended to the single file specified by `newFileName`, effectively ignoring the standard per-record file pattern. This can lead to unexpected file organization:
+> 
+> ```json
+> // This configuration will put ALL new records in .all-new.json
+> "pull": {
+>   "appendRecordsToExistingFile": true,
+>   "newFileName": ".all-new.json"  // ⚠️ Overrides individual file creation
+> }
+> ```
+> 
+> **Recommended configurations:**
+> - For individual files per record: Set `appendRecordsToExistingFile: false` (or omit it)
+> - For grouped new records: Set both `appendRecordsToExistingFile: true` and `newFileName`
+> - For mixed approach: Omit `newFileName` to let new records follow the standard pattern
+
+#### Merge Strategies
+
+- **`merge`** (default): Combines fields from database and local file, with database values taking precedence for existing fields
+- **`overwrite`**: Completely replaces local record with database version (except preserved fields)
+- **`skip`**: Leaves existing records unchanged, only adds new records
+
+#### Understanding excludeFields vs preserveFields
+
+These two configuration options serve different purposes for managing fields during pull operations:
+
+##### excludeFields
+- **Purpose**: Completely omit specified fields from your local files
+- **Use Case**: Remove internal/system fields you don't want in version control
+- **Effect**: Fields never appear in the JSON files
+- **Example**: Excluding internal IDs, timestamps, or sensitive data
+
+##### preserveFields  
+- **Purpose**: Protect local customizations from being overwritten during updates
+- **Use Case**: Keep locally modified values while updating other fields
+- **Effect**: Fields exist in files but retain their local values during pull
+- **Example**: Preserving custom file paths, local notes, or environment-specific values
+- **Special Behavior for @file: references**: When a preserved field contains a `@file:` reference, the tool will update the content at the existing file path rather than creating a new file with a generated name
+
+##### Example Configuration
+```json
+{
+  "pull": {
+    "excludeFields": ["TemplateID", "InternalNotes", "CreatedAt"],
+    "preserveFields": ["TemplateText", "OutputExample", "LocalConfig"]
+  }
+}
+```
+
+With this configuration:
+- **TemplateID, InternalNotes, CreatedAt** → Never appear in local files
+- **TemplateText, OutputExample, LocalConfig** → Keep their local values during updates
+
+##### Common Scenario: Customized File References
+When you customize file paths (e.g., changing `@file:templates/skip-conductor.md` to `@file:templates/conductor.md`), use `preserveFields` to protect these customizations:
+
+```json
+{
+  "pull": {
+    "preserveFields": ["TemplateText", "OutputExample"],
+    "externalizeFields": [
+      {
+        "field": "TemplateText",
+        "pattern": "@file:templates/{Name}.template.md"
+      }
+    ]
+  }
+}
+```
+
+This ensures your custom paths aren't overwritten when pulling updates from the database.
+
+**How it works:**
+1. **Without preserveFields**: Pull would create a new file using the pattern (e.g., `templates/skip-conductor.template.md`) and update the JSON to point to it
+2. **With preserveFields**: Pull keeps your custom path (e.g., `@file:templates/conductor.md`) in the JSON and updates the content at that existing location
+
+This is particularly useful when:
+- You've reorganized your file structure after initial pull
+- You've renamed files to follow your own naming conventions
+- You want to maintain consistent paths across team members
+
+#### Backup Configuration
+
+When `backupBeforeUpdate` is enabled, the tool creates timestamped backups before updating existing files:
+
+- **Backup Location**: Files are backed up to the `backupDirectory` (default: `.backups`) within the entity directory
+- **Backup Naming**: Original filename + timestamp + `.backup` extension (e.g., `.greeting.json` → `.greeting.2024-03-15T10-30-45-123Z.backup`)
+- **Extension**: All backup files use the `.backup` extension, preventing them from being processed by push/pull/status commands
+- **Deduplication**: Only one backup is created per file per pull operation, even if the file contains multiple records
+
+Example configuration:
+```json
+"pull": {
+  "backupBeforeUpdate": true,
+  "backupDirectory": ".backups"  // Custom backup directory name
+}
+```
+
+#### Externalize Fields Patterns
+
+The `externalizeFields` configuration supports dynamic file naming with placeholders:
+
+```json
+"externalizeFields": [
+  {
+    "field": "TemplateText",
+    "pattern": "@file:{Name}.template.md"
+  },
+  {
+    "field": "SQLQuery", 
+    "pattern": "@file:queries/{CategoryName}/{Name}.sql"
+  }
+]
+```
+
+Supported placeholders:
+- `{Name}` - The entity's name field value
+- `{ID}` - The entity's primary key
+- `{FieldName}` - The field being externalized
+- `{AnyFieldName}` - Any field from the entity record
+
+All values are sanitized for filesystem compatibility (lowercase, spaces to hyphens, special characters removed).
 
 ### Nested Related Entities
 Support for multiple levels of nesting:

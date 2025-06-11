@@ -7,7 +7,6 @@ import path from 'path';
  * Base class for logging, you can sub-class this class to create your own logger and override the logError and logStatus methods if desired.
  * The default behavior in the base class is to use the LogError/LogStatus functions from the @memberjunction/core package to log to the console and to a log file if configured in the config.json file.
  */
-@RegisterClass(LoggerBase)
 export class LoggerBase {
    /**
     * Logs an error message to the console and to the log file if configured

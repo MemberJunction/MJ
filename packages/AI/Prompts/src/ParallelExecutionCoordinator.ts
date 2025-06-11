@@ -160,6 +160,7 @@ export class ParallelExecutionCoordinator {
    * @param parentPromptRunId - Optional parent prompt run ID for hierarchical logging
    * @param cancellationToken - Optional cancellation token to abort execution
    * @param progressCallbacks - Optional callbacks for progress tracking
+   * @param agentRunId - Optional agent run ID to link prompt executions to parent agent run
    * @returns Promise<ParallelExecutionResult> - Aggregated results from all executions
    */
   public async executeTasksInParallel(
@@ -168,6 +169,7 @@ export class ParallelExecutionCoordinator {
     parentPromptRunId?: string,
     cancellationToken?: AbortSignal,
     progressCallbacks?: ProgressCallbacksInterface, // Using interface to avoid circular dependency
+    agentRunId?: string,
   ): Promise<ParallelExecutionResult> {
     const startTime = new Date();
     const executionConfig = { ...this._defaultConfig, ...config };
@@ -207,7 +209,7 @@ export class ParallelExecutionCoordinator {
       const progressTracker = new ParallelProgressTracker(tasks.length, executionGroups.length, progressCallbacks);
 
       // Execute groups sequentially, tasks within groups in parallel
-      const allResults = await this.executeGroupsSequentially(executionGroups, executionConfig, parentPromptRunId, cancellationToken, progressTracker);
+      const allResults = await this.executeGroupsSequentially(executionGroups, executionConfig, parentPromptRunId, cancellationToken, progressTracker, agentRunId);
 
       // Aggregate results and calculate metrics
       const result = this.aggregateResults(allResults, startTime, new Date());
@@ -327,6 +329,7 @@ export class ParallelExecutionCoordinator {
    * @param parentPromptRunId - Optional parent prompt run ID for tracking
    * @param cancellationToken - Optional cancellation token to abort execution
    * @param progressTracker - Progress tracker for monitoring execution
+   * @param agentRunId - Optional agent run ID to link prompt executions to parent agent run
    * @returns Promise<ExecutionTaskResult[]> - All task results from all groups
    */
   private async executeGroupsSequentially(
@@ -335,6 +338,7 @@ export class ParallelExecutionCoordinator {
     parentPromptRunId?: string,
     cancellationToken?: AbortSignal,
     progressTracker?: ParallelProgressTracker,
+    agentRunId?: string,
   ): Promise<ExecutionTaskResult[]> {
     const allResults: ExecutionTaskResult[] = [];
 
@@ -361,7 +365,7 @@ export class ParallelExecutionCoordinator {
       // Update progress tracker for current group
       progressTracker?.updateProgress(group.groupNumber);
 
-      const groupResults = await this.executeGroupInParallel(group, config, parentPromptRunId, cancellationToken, progressTracker);
+      const groupResults = await this.executeGroupInParallel(group, config, parentPromptRunId, cancellationToken, progressTracker, agentRunId);
       allResults.push(...groupResults);
 
       // Check if we should fail fast
@@ -383,6 +387,7 @@ export class ParallelExecutionCoordinator {
    * @param parentPromptRunId - Optional parent prompt run ID for tracking
    * @param cancellationToken - Optional cancellation token to abort execution
    * @param progressTracker - Progress tracker for monitoring execution
+   * @param agentRunId - Optional agent run ID to link prompt executions to parent agent run
    * @returns Promise<ExecutionTaskResult[]> - Results from all tasks in the group
    */
   private async executeGroupInParallel(
@@ -391,6 +396,7 @@ export class ParallelExecutionCoordinator {
     parentPromptRunId?: string,
     cancellationToken?: AbortSignal,
     progressTracker?: ParallelProgressTracker,
+    agentRunId?: string,
   ): Promise<ExecutionTaskResult[]> {
     const maxConcurrent = Math.min(config.maxConcurrentExecutions, group.tasks.length);
     const results: ExecutionTaskResult[] = [];
@@ -424,7 +430,7 @@ export class ParallelExecutionCoordinator {
       while (executing.length < maxConcurrent && taskIndex < group.tasks.length) {
         const task = group.tasks[taskIndex++];
         progressTracker?.addActiveTask(task.taskId);
-        const execution = this.executeTask(task, config, parentPromptRunId, executionOrder++);
+        const execution = this.executeTask(task, config, parentPromptRunId, executionOrder++, agentRunId);
         executing.push(execution);
       }
 
@@ -457,6 +463,7 @@ export class ParallelExecutionCoordinator {
    * @param config - Execution configuration
    * @param parentPromptRunId - Optional parent prompt run ID for hierarchical logging
    * @param executionOrder - Execution order for this task
+   * @param agentRunId - Optional agent run ID to link prompt executions to parent agent run
    * @returns Promise<ExecutionTaskResult> - Result of the task execution
    */
   private async executeTask(
@@ -464,6 +471,7 @@ export class ParallelExecutionCoordinator {
     config: ParallelExecutionConfig,
     parentPromptRunId?: string,
     executionOrder?: number,
+    agentRunId?: string,
   ): Promise<ExecutionTaskResult> {
     const startTime = new Date();
     let lastError: Error | null = null;
@@ -492,7 +500,7 @@ export class ParallelExecutionCoordinator {
           LogStatus(`Retrying task ${task.taskId}, attempt ${attempt + 1}/${config.maxRetries + 1}`);
         }
 
-        const result = await this.executeSingleTask(task, config.taskTimeoutMS, parentPromptRunId, executionOrder);
+        const result = await this.executeSingleTask(task, config.taskTimeoutMS, parentPromptRunId, executionOrder, agentRunId);
         result.startTime = startTime;
         result.endTime = new Date();
 
@@ -525,9 +533,12 @@ export class ParallelExecutionCoordinator {
    *
    * @param task - The execution task to process
    * @param timeoutMS - Timeout for the execution in milliseconds
+   * @param parentPromptRunId - Optional parent prompt run ID for hierarchical logging
+   * @param executionOrder - Execution order for this task
+   * @param agentRunId - Optional agent run ID to link prompt executions to parent agent run
    * @returns Promise<ExecutionTaskResult> - Result of the task execution
    */
-  private async executeSingleTask(task: ExecutionTask, timeoutMS: number, parentPromptRunId?: string, executionOrder?: number): Promise<ExecutionTaskResult> {
+  private async executeSingleTask(task: ExecutionTask, timeoutMS: number, parentPromptRunId?: string, executionOrder?: number, agentRunId?: string): Promise<ExecutionTaskResult> {
     // TODO: This will need to integrate with AIPromptRunner's execution logic
     // For now, implementing a simplified version
 
@@ -537,7 +548,7 @@ export class ParallelExecutionCoordinator {
     try {
       // Create child prompt run log if parent ID is provided
       if (parentPromptRunId) {
-        childPromptRun = await this.createChildPromptRun(task, startTime, parentPromptRunId, executionOrder);
+        childPromptRun = await this.createChildPromptRun(task, startTime, parentPromptRunId, executionOrder, agentRunId);
       }
       // Create LLM instance
       const apiKey = GetAIAPIKey(task.model.DriverClass);
@@ -982,9 +993,10 @@ export class ParallelExecutionCoordinator {
    * @param startTime - When the execution started
    * @param parentPromptRunId - ID of the parent prompt run
    * @param executionOrder - Execution order within the parallel group
+   * @param agentRunId - Optional agent run ID to link prompt executions to parent agent run
    * @returns Promise<AIPromptRunEntity> - The created child prompt run
    */
-  private async createChildPromptRun(task: ExecutionTask, startTime: Date, parentPromptRunId: string, executionOrder?: number): Promise<AIPromptRunEntity> {
+  private async createChildPromptRun(task: ExecutionTask, startTime: Date, parentPromptRunId: string, executionOrder?: number, agentRunId?: string): Promise<AIPromptRunEntity> {
     try {
       const promptRun = await this._metadata.GetEntityObject<AIPromptRunEntity>('MJ: AI Prompt Runs', task.contextUser);
       promptRun.NewRecord();
@@ -997,6 +1009,11 @@ export class ParallelExecutionCoordinator {
 
       if (executionOrder !== undefined) {
         promptRun.ExecutionOrder = executionOrder;
+      }
+
+      // Set AgentRunID if provided for agent-prompt execution tracking
+      if (agentRunId) {
+        promptRun.AgentRunID = agentRunId;
       }
 
       // Set vendor ID from task if available

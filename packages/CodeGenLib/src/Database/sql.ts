@@ -20,7 +20,6 @@ const execAsync = promisify(exec);
 /**
  * Base class for SQL Utility functions, you can sub-class this class to create your own SQL Utility functions/override existing functionality.
  */
-@RegisterClass(SQLUtilityBase)
 export class SQLUtilityBase {
 /**
  * Returns a file name for a given DB Object given a type, schema and object name.
