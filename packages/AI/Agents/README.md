@@ -1,18 +1,18 @@
 # @memberjunction/ai-agents
 
-The MemberJunction AI Agents package provides a comprehensive framework for creating, managing, and executing AI agents within the MemberJunction ecosystem. This package serves as the foundation for building sophisticated agentic AI applications with hierarchical composition, context management, and intelligent execution strategies.
+The MemberJunction AI Agents package provides a comprehensive framework for creating, managing, and executing AI agents within the MemberJunction ecosystem. This package implements a clean separation of concerns architecture that separates domain execution from orchestration decision-making.
 
 ## Features
 
-- **🤖 Decision-Driven Architecture**: AI-powered autonomous decision making with structured execution plans
-- **🧠 System Prompt Integration**: Agent prompts embedded in system prompt wrappers for deterministic response format
+- **🎯 Separation of Concerns**: Clean architecture separating BaseAgent (execution), ConductorAgent (decisions), and AgentRunner (coordination)
+- **🤖 Hierarchical Prompt Execution**: Advanced prompt system with depth-first traversal and parallel execution at each level
 - **🏗️ Agent Composition**: Hierarchical agent architecture with parent-child relationships
-- **🔄 Mixed Execution**: Tool actions and sub-agent delegation with parallel/sequential coordination
+- **🔄 Mixed Execution**: Action execution and sub-agent delegation with parallel/sequential coordination
 - **📝 Comprehensive Tracking**: Agent run and prompt run linking for complete execution visibility
 - **🎯 Action Framework**: Extensible action system integrated with ActionEngine
 - **🧠 Context Management**: Intelligent conversation context handling and compression
-- **🔧 AgentRunner Framework**: Clean delegation pattern to AIPromptRunner for all prompt execution
-- **🔐 Metadata-Driven**: Database-driven configuration for agents, types, and system prompts
+- **🔧 Factory Pattern**: Enhanced AgentFactory for dynamic agent instantiation and extensibility
+- **🔐 Metadata-Driven**: Database-driven configuration for agents, types, and prompts
 - **📊 Analytics**: Hierarchical execution logging with performance tracking across agent workflows
 
 ## Installation
@@ -30,36 +30,48 @@ npm install @memberjunction/ai-agents
 
 ## Core Architecture
 
-### AgentRunner Class
+The AI Agents framework implements a clean separation of concerns architecture:
 
-The `AgentRunner` class is the central component of the AI Agents framework, providing:
+### BaseAgent - Domain Execution
+- Focuses solely on executing agent-specific prompts and tasks
+- Handles template rendering with data context
+- Manages conversation context and compression
+- Returns standardized execution results
 
-- **Decision-Driven Execution**: LLM makes autonomous decisions about what actions to take
-- **System Prompt Embedding**: Uses AIPromptRunner with system prompt wrappers for deterministic JSON responses
-- **Mixed Execution Support**: Coordinates both tool actions and sub-agent delegation
-- **Comprehensive Tracking**: Links all executions through AIAgentRun and AIPromptRun entities
-- **Context Management**: Automatic conversation compression and state management
-- **Clean Architecture**: Delegates all prompt execution to AIPromptRunner for separation of concerns
+### ConductorAgent - Decision Making
+- Specialized agent for making orchestration decisions
+- Analyzes current state and available resources
+- Makes autonomous decisions about next steps
+- Plans execution sequences with proper ordering
+
+### AgentRunner - Coordination
+- Orchestrates interaction between BaseAgent and ConductorAgent
+- Implements the core execution loop
+- Manages progress tracking and cancellation
+- Provides user interface abstraction
 
 ```typescript
-import { GetAgentRunner } from '@memberjunction/ai-agents';
+import { GetAgentFactory } from '@memberjunction/ai-agents';
 import { UserInfo } from '@memberjunction/core';
 
-// Get an agent runner for a specific agent type
-const runner = await GetAgentRunner("Customer Support", contextUser);
+// Get agent factory and create agents
+const factory = GetAgentFactory();
+const baseAgent = await factory.CreateAgent("Customer Support", null, contextUser);
+const conductorAgent = await factory.CreateAgent("Conductor", null, contextUser);
 
-// Execute an agent with decision-driven architecture
-const result = await runner.Execute({
-  agentEntity: customerSupportAgent,
-  contextUser: user,
-  data: { customerQuery: "Help with my order" },
+// Create runner and execute with separation of concerns
+const runner = new AgentRunner(conductorAgent, contextUser);
+const result = await runner.Run({
+  agent: baseAgent,
+  goal: "Help customer with their order",
+  data: { customerQuery: "Where is my order?" },
   conversationMessages: [...],
   onProgress: (progress) => console.log(progress.message),
   cancellationToken: controller.signal
 });
 
 if (result.success) {
-  console.log("Agent completed:", result.finalDecision?.finalResponse);
+  console.log("Task completed:", result.finalDecision?.finalResponse);
   console.log("Decisions made:", result.decisionHistory?.length);
   console.log("Actions executed:", result.actionResults?.length);
 }
@@ -83,23 +95,24 @@ Key architectural concepts covered include:
 ### Basic Agent Implementation
 
 ```typescript
-import { GetAgentRunner } from '@memberjunction/ai-agents';
+import { GetAgentFactory } from '@memberjunction/ai-agents';
 import { AIEngine } from '@memberjunction/aiengine';
+import { AgentRunner } from '@memberjunction/ai-agents';
 import { UserInfo } from '@memberjunction/core';
 
 // Initialize AI Engine to access agents and types
 await AIEngine.Instance.Config(false, contextUser);
 
-// Get specific agent entity
-const agentEntity = AIEngine.Instance.Agents.find(a => a.Name === 'Customer Support Agent');
+// Get agent factory and create agents
+const factory = GetAgentFactory();
+const baseAgent = await factory.CreateAgent('Customer Support', null, contextUser);
+const conductorAgent = await factory.CreateAgent('Conductor', null, contextUser);
 
-// Get agent runner for the agent type
-const runner = await GetAgentRunner('Customer Support', contextUser);
-
-// Execute with decision-driven architecture
-const result = await runner.Execute({
-    agentEntity: agentEntity,
-    contextUser: contextUser,
+// Create and run with separation of concerns architecture
+const runner = new AgentRunner(conductorAgent, contextUser);
+const result = await runner.Run({
+    agent: baseAgent,
+    goal: 'Help customer with their order',
     data: {
         customerQuery: 'I need help with my order',
         customerId: 'cust-123'
@@ -110,7 +123,7 @@ const result = await runner.Execute({
 });
 
 if (result.success) {
-    console.log('Agent response:', result.finalDecision?.finalResponse);
+    console.log('Task completed:', result.finalDecision?.finalResponse);
     console.log('Execution summary:', result.metadata);
 }
 ```
@@ -118,31 +131,34 @@ if (result.success) {
 ### Hierarchical Agent Composition
 
 ```typescript
-import { GetAgentRunner } from '@memberjunction/ai-agents';
+import { GetAgentFactory, AgentRunner } from '@memberjunction/ai-agents';
 
-// The AgentRunner automatically handles sub-agent delegation through decision-making
-// Parent agents can delegate to child agents based on AI decisions
+// Hierarchical agents are handled through conductor decision-making
+// Parent agents delegate to child agents based on AI decisions
 
-// Get a parent agent runner
-const parentRunner = await GetAgentRunner('Customer Service Manager', contextUser);
+// Get factory and create hierarchical agents
+const factory = GetAgentFactory();
+const managerAgent = await factory.CreateAgent('Customer Service Manager', null, contextUser);
+const conductorAgent = await factory.CreateAgent('Conductor', null, contextUser);
 
-// Execute - the agent will make autonomous decisions about delegation
-const result = await parentRunner.Execute({
-    agentEntity: managerAgent,
-    contextUser: contextUser,
+// Create runner and execute - conductor will make autonomous delegation decisions
+const runner = new AgentRunner(conductorAgent, contextUser);
+const result = await runner.Run({
+    agent: managerAgent,
+    goal: 'Resolve complex customer issue',
     data: {
         customerQuery: 'Complex billing and technical issue',
         priority: 'high'
     },
     conversationMessages: [...],
     onProgress: (progress) => {
-        if (progress.step === 'subagent_coordination') {
-            console.log('Agent coordinating sub-agents:', progress.metadata);
+        if (progress.step === 'prompt_execution') {
+            console.log('Agent coordinating execution:', progress.metadata);
         }
     }
 });
 
-// The agent's decision history shows which sub-agents were chosen
+// The conductor's decision history shows which sub-agents were chosen
 result.decisionHistory?.forEach((decision, i) => {
     console.log(`Decision ${i + 1}: ${decision.decision}`);
     console.log(`Reasoning: ${decision.reasoning}`);
@@ -155,37 +171,40 @@ result.decisionHistory?.forEach((decision, i) => {
 ### Context Management and Compression
 
 ```typescript
-import { GetAgentRunner } from '@memberjunction/ai-agents';
+import { GetAgentFactory, AgentRunner } from '@memberjunction/ai-agents';
 
-// Context compression is automatically handled by AgentRunner
+// Context compression is automatically handled by BaseAgent
 // Configure compression through the agent entity properties
 
+const factory = GetAgentFactory();
 const longConversationAgent = AIEngine.Instance.Agents.find(a => {
     return a.EnableContextCompression && 
            a.ContextCompressionMessageThreshold === 50 &&
            a.ContextCompressionMessageRetentionCount === 10;
 });
 
-const runner = await GetAgentRunner('Long Conversation Agent', contextUser);
+const baseAgent = factory.CreateAgentFromEntity(longConversationAgent, null, contextUser);
+const conductorAgent = await factory.CreateAgent('Conductor', null, contextUser);
+const runner = new AgentRunner(conductorAgent, contextUser);
 
-// Execute with long conversation - compression happens automatically
+// Execute with long conversation - compression happens automatically in BaseAgent
 const longConversation = Array(60).fill(null).map((_, i) => ({
     role: i % 2 === 0 ? 'user' : 'assistant',
     content: `Message ${i + 1} in a very long conversation`
 }));
 
-const result = await runner.Execute({
-    agentEntity: longConversationAgent,
-    contextUser: contextUser,
+const result = await runner.Run({
+    agent: baseAgent,
+    goal: 'Handle long conversation with compression',
     conversationMessages: longConversation,
     onProgress: (progress) => {
-        if (progress.step === 'context_processing') {
+        if (progress.step === 'prompt_execution') {
             console.log('Processing context (may include compression):', progress.message);
         }
     }
 });
 
-// Compression is applied automatically based on agent configuration
+// Compression is applied automatically by BaseAgent based on agent configuration
 // The agent run record tracks the compression activity
 ```
 
@@ -193,109 +212,117 @@ const result = await runner.Execute({
 
 ### AgentRunner Class
 
-The core execution engine for AI agents with decision-driven architecture.
+The core coordination engine for orchestrating BaseAgent and ConductorAgent interactions.
 
 #### Constructor
 ```typescript
-constructor(agentType: AIAgentTypeEntityExtended, contextUser: UserInfo)
+constructor(conductor: ConductorAgent, contextUser: UserInfo)
 ```
 
 **Parameters:**
-- `agentType: AIAgentTypeEntityExtended` - The agent type that defines system prompt and configuration
+- `conductor: ConductorAgent` - The conductor agent that makes orchestration decisions
 - `contextUser: UserInfo` - User context for authentication and permissions
 
-#### Properties
+#### Methods
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `AgentType` | `AIAgentTypeEntityExtended` | The agent type that defines this runner's configuration |
+##### `Run(params: AgentRunnerParams): Promise<AgentRunnerResult>`
+Runs the agent using the BaseAgent + ConductorAgent separation of concerns pattern.
+
+**Parameters:**
+- `params: AgentRunnerParams` - Execution parameters including base agent, goal, and configuration
+
+**Returns:** `Promise<AgentRunnerResult>` - Enhanced execution result with decision history and outcomes
+
+**Key Features:**
+- Clean separation between execution and decision-making
+- Iterative BaseAgent → ConductorAgent → Action execution pattern
+- Mixed action and sub-agent execution with proper ordering
+- Progress tracking and cancellation support
+- Comprehensive execution step tracking
+
+### BaseAgent Class
+
+The domain execution engine that focuses solely on executing agent-specific prompts.
+
+#### Constructor
+```typescript
+constructor(agent: AIAgentEntityExtended, factory: IAgentFactory, contextUser: UserInfo, promptRunner?: AIPromptRunner)
+```
+
+**Parameters:**
+- `agent: AIAgentEntityExtended` - The agent entity definition
+- `factory: IAgentFactory` - Factory for creating additional agent instances
+- `contextUser: UserInfo` - User context for authentication and permissions
+- `promptRunner: AIPromptRunner` - Optional prompt runner instance
 
 #### Methods
 
 ##### `Execute(params: AgentExecutionParams): Promise<AgentExecutionResult>`
-Executes an AI agent using autonomous decision-making and action orchestration.
+Executes the agent's specific prompts and returns the result.
 
 **Parameters:**
-- `params: AgentExecutionParams` - Execution parameters including agent entity, context, and callbacks
-
-**Returns:** `Promise<AgentExecutionResult>` - The execution result with decision history and outcomes
-
-**Key Features:**
-- AI-driven decision making (no predetermined execution paths)
-- Mixed action and sub-agent execution with proper ordering
-- Context compression for long conversations
-- Progress tracking and cancellation support
-- Comprehensive error handling and fallback strategies
-
-##### `pauseExecution(context: AgentExecutionContext, reason?: string): Promise<string | null>`
-Pauses the current execution by serializing state and updating the run status.
-
-**Parameters:**
-- `context: AgentExecutionContext` - Current execution context
-- `reason: string` - Optional reason for pausing
-
-**Returns:** `Promise<string | null>` - The agent run ID if successful
-
-##### `resumeExecution(agentRunId: string, contextUser?: UserInfo): Promise<AgentExecutionResult>`
-Resumes execution from a paused agent run by restoring state and continuing.
-
-**Parameters:**
-- `agentRunId: string` - ID of the paused agent run to resume
-- `contextUser: UserInfo` - User context for the resumed execution
+- `params: AgentExecutionParams` - Execution parameters including context, data, and callbacks
 
 **Returns:** `Promise<AgentExecutionResult>` - The execution result
 
-##### `getRunHistory(agentRunId: string): Promise<{agentRun: AIAgentRunEntity; steps: AIAgentRunStepEntity[];} | null>`
-Retrieves the complete run history for a specific agent run, including all execution steps.
+**Key Features:**
+- Single responsibility: execute agent-specific prompts only
+- Conversation context management and compression
+- Progress monitoring and streaming response support
+- Cancellation support with graceful cleanup
+
+### ConductorAgent Class
+
+The decision-making engine that analyzes context and makes orchestration decisions.
+
+#### Constructor
+```typescript
+constructor(agent: AIAgentEntityExtended, factory: IAgentFactory, contextUser: UserInfo)
+```
+
+#### Methods
+
+##### `MakeDecision(decisionInput: ConductorDecisionInput): Promise<ConductorDecisionResponse>`
+Makes an autonomous decision about what to do next based on current context.
 
 **Parameters:**
-- `agentRunId: string` - ID of the agent run to retrieve
+- `decisionInput: ConductorDecisionInput` - Complete context for decision-making
 
-**Returns:** Promise resolving to the run details with steps, or null if not found
+**Returns:** `Promise<ConductorDecisionResponse>` - Structured decision response
 
-##### `cleanupFailedRuns(maxAgeHours?: number): Promise<number>`
-Cleans up failed or stale agent runs by marking them as failed.
+##### `executeAction(actionId: string, parameters: Record<string, unknown>): Promise<ActionResult>`
+Executes an action using the ActionEngine.
 
-**Parameters:**
-- `maxAgeHours: number` - Maximum age in hours for running agents before marking as failed (default: 24)
-
-**Returns:** Promise resolving to the number of runs cleaned up
+##### `executeSubAgent(subAgentId: string, parameters: Record<string, unknown>, parentContext?: Record<string, unknown>): Promise<AgentExecutionResult>`
+Executes a sub-agent with the provided parameters.
 
 ### Types and Interfaces
 
-#### AgentExecutionParams
+#### AgentRunnerParams
 ```typescript
-interface AgentExecutionParams {
-    agentEntity: AIAgentEntityExtended;
-    contextUser?: UserInfo;
-    data?: Record<string, unknown>;
-    conversationMessages?: ChatMessage[];
-    cancellationToken?: AbortSignal;
-    onProgress?: (progress: AgentProgressUpdate) => void;
-    onStreaming?: (chunk: AgentStreamingUpdate) => void;
+interface AgentRunnerParams extends AgentExecutionParams {
+    agent: BaseAgent;
+    maxIterations?: number;
+    goal?: string;
+    enableDetailedLogging?: boolean;
 }
 ```
 
-#### AgentExecutionResult
+#### AgentRunnerResult
 ```typescript
-interface AgentExecutionResult {
-    success: boolean;
-    result?: unknown;
-    errorMessage?: string;
-    executionTimeMS?: number;
-    metadata?: Record<string, unknown>;
-    cancelled?: boolean;
-    conversationMessages?: ChatMessage[];
-    decisionHistory?: AgentDecisionResponse[];
+interface AgentRunnerResult extends AgentExecutionResult {
+    decisionHistory?: ConductorDecisionResponse[];
     actionResults?: ActionResult[];
-    finalDecision?: AgentDecisionResponse;
+    finalDecision?: ConductorDecisionResponse;
+    iterationCount?: number;
+    executionSteps?: ExecutionHistoryItem[];
 }
 ```
 
-#### AgentDecisionResponse
+#### ConductorDecisionResponse
 ```typescript
-interface AgentDecisionResponse {
-    decision: AgentDecisionType;
+interface ConductorDecisionResponse {
+    decision: ConductorDecisionType;
     reasoning: string;
     executionPlan: ExecutionStep[];
     isTaskComplete: boolean;
@@ -324,7 +351,7 @@ interface ExecutionStep {
 #### AgentProgressUpdate
 ```typescript
 interface AgentProgressUpdate {
-    step: 'initialization' | 'context_processing' | 'prompt_execution' | 'subagent_coordination' | 'result_aggregation' | 'completion';
+    step: 'initialization' | 'prompt_execution' | 'completion';
     percentage: number;
     message: string;
     metadata?: Record<string, unknown>;
@@ -513,38 +540,43 @@ try {
 
 ### Current Architecture (Implemented)
 
-The framework provides a decision-driven architecture with clean separation of concerns:
+The framework provides a separation of concerns architecture with specialized responsibilities:
 
 ```typescript
-// Get agent runner for specific agent type
-const runner = await GetAgentRunner("CustomerSupport", contextUser);
+// Get factory and create specialized agents
+const factory = GetAgentFactory();
+const baseAgent = await factory.CreateAgent("CustomerSupport", null, contextUser);
+const conductorAgent = await factory.CreateAgent("Conductor", null, contextUser);
 
-// Execute with autonomous decision-making
-const result = await runner.Execute({
-  agentEntity: customerSupportAgent,
+// Execute with clean separation of concerns
+const runner = new AgentRunner(conductorAgent, contextUser);
+const result = await runner.Run({
+  agent: baseAgent,
+  goal: "Help customer with their issue",
   data: { customerName: "John" },
   conversationMessages: [...],
   onProgress: (progress) => console.log(progress),
   cancellationToken: controller.signal
 });
 
-// AgentRunner delegates all prompt execution to AIPromptRunner
-// with system prompt embedding for deterministic JSON responses
+// BaseAgent handles domain execution, ConductorAgent makes decisions
+// AgentRunner coordinates the interaction between them
 ```
 
-### System Prompt Integration
+### Hierarchical Prompt Integration
 
-The framework integrates with the AI Prompts system through system prompt embedding:
+The framework integrates with the AI Prompts system through hierarchical prompt execution:
 
 ```typescript
-// Agent types define system prompts for deterministic response format
+// Agent types define system prompts for behavioral characteristics
 AIAgentType.SystemPromptID -> AIPrompt (system template)
 
 // Agent-specific prompts provide domain logic
 AIAgent -> AIAgentPrompt -> AIPrompt (agent-specific instructions)
 
-// Runtime: System prompt embeds agent prompt via {% PromptEmbed %}
-System Prompt: "You are {{agentName}}... {% PromptEmbed %}... Respond with JSON..."
+// Runtime: Hierarchical execution with parent-child relationships
+// Parent prompts specify children via childPrompts array
+// Depth-first traversal with parallel execution at each level
 ```
 
 ## License

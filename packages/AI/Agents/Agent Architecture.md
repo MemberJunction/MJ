@@ -555,63 +555,81 @@ Links AI models to actions they support.
 
 ## 4. Key Workflows
 
-### 4.1 Agent Execution Workflow (Enhanced)
+### 4.1 Agent Execution Workflow (Separation of Concerns)
 
-The agent execution workflow has been significantly enhanced with decision-driven architecture and comprehensive tracking:
+The agent execution workflow follows the separation of concerns pattern with distinct responsibilities:
 
-1. **Agent Initialization**:
+1. **AgentRunner Initialization**:
    - Create AIAgentRun entry with Running status
-   - Load agent configuration, type, and associated prompts
    - Initialize execution context with conversation history and parameters
    - Set up progress tracking and cancellation support
+   - Prepare both BaseAgent and ConductorAgent for execution
 
-2. **Decision-Driven Execution Loop**:
-   - **Context Analysis**: Agent analyzes current conversation and available resources
-   - **Decision Making**: LLM-powered decision making determines next actions
-   - **Action Execution**: Execute decided actions (prompts, subagents, or tools) with proper ordering
-   - **Result Integration**: Incorporate results into conversation context
-   - **Completion Check**: Determine if task is complete or continue iteration
+2. **Execution Loop (Agent + Conductor Pattern)**:
+   - **BaseAgent Execution**: Execute domain-specific prompts and tasks
+   - **Conductor Decision**: Feed BaseAgent results to ConductorAgent for orchestration decisions
+   - **Action Execution**: Execute conductor's decided actions/sub-agents
+   - **Iteration**: Repeat until task completion or max iterations reached
 
-3. **Step Tracking**:
+3. **BaseAgent Responsibilities**:
+   - Load and execute agent-specific prompts in sequence
+   - Handle conversation context and compression when needed
+   - Process hierarchical prompt execution with child prompts
+   - Return standardized execution results
+
+4. **ConductorAgent Responsibilities**:
+   - Analyze current context and BaseAgent results
+   - Evaluate available actions and sub-agents
+   - Make autonomous decisions about next steps
+   - Plan execution sequences with proper ordering
+
+5. **Step Tracking and State Management**:
    - Create AIAgentRunStep entries for each discrete action
    - Track execution order, timing, and success/failure status
    - Store input/output data for debugging and analytics
-   - Handle parallel and sequential execution strategies
-
-4. **State Management**:
-   - Support for pause/resume through AgentState serialization
-   - Context compression for long conversations
-   - Hierarchical execution with parent-child run relationships
+   - Support hierarchical execution with parent-child run relationships
    - Resource tracking (tokens, cost, timing)
 
-5. **Completion and Cleanup**:
+6. **Completion and Cleanup**:
    - Update AIAgentRun with final status and results
    - Aggregate metrics from all execution steps
    - Return comprehensive execution results
 
-### 4.2 Prompt Execution Workflow
+### 4.2 Hierarchical Prompt Execution Workflow
 
 1. **Initialization**:
    - Client requests prompt execution with parameters
    - System resolves the prompt by ID or name
    - Execution context is created with parameters, configuration, and agent context (if any)
 
-2. **Model Selection**:
+2. **Child Prompt Detection**:
+   - Check if prompt has `childPrompts` array defined
+   - If children exist, initiate hierarchical execution
+   - Otherwise, proceed with standard execution
+
+3. **Hierarchical Execution** (if children exist):
+   - **Depth-First Traversal**: Execute child prompts recursively before parent
+   - **Parallel Sibling Execution**: Execute prompts at same level in parallel
+   - **Result Collection**: Gather all child results with placeholder names
+   - **Parent Rendering**: Render parent template with child results embedded
+   - **Parent Execution**: Execute parent prompt with merged data context
+
+4. **Model Selection**:
    - Based on the prompt's SelectionStrategy:
      - Default: Use system default model
      - Specific: Use models specified in AIPromptModel
      - ByPower: Select based on PowerRank and PowerPreference
 
-3. **Parallelization Decision**:
+5. **Parallelization Decision**:
    - Based on the prompt's ParallelizationMode:
      - None: Execute once
      - StaticCount: Execute ParallelCount times
      - ConfigParam: Get count from configuration parameter
      - ModelSpecific: Use settings from AIPromptModel entries
 
-4. **Cache Check** (if EnableCaching=true):
+6. **Cache Check** (if EnableCaching=true):
    - Generate cache key based on:
-     - Prompt text and parameters
+     - Prompt text and parameters (including child results)
      - Model, vendor, agent, configuration (based on CacheMustMatch* settings)
    - If CacheMatchType=Exact:
      - Search for exact match in AIResultCache
@@ -620,14 +638,14 @@ The agent execution workflow has been significantly enhanced with decision-drive
      - Find cached entries with similarity > CacheSimilarityThreshold
    - If valid cache entry found, return cached result
 
-5. **Execution**:
+7. **Execution**:
    - Create AIPromptRun entry for logging
-   - Format template with parameters
+   - Format template with parameters (and child results if applicable)
    - Send to model via appropriate vendor implementation
    - Record metrics (tokens, cost, timing)
    - Update AIPromptRun with results
 
-6. **Validation** (if OutputType is specified):
+8. **Validation** (if OutputType is specified):
    - Validate result against expected format
    - If ValidationBehavior=Strict and validation fails:
      - Retry if MaxRetries > 0
@@ -635,16 +653,16 @@ The agent execution workflow has been significantly enhanced with decision-drive
    - If ValidationBehavior=Warn and validation fails:
      - Log warning but continue
 
-7. **Result Selection** (if multiple executions):
+9. **Result Selection** (if multiple executions):
    - If ResultSelectorPromptID is specified:
      - Execute selector prompt with all results as input
      - Return selected result
    - Otherwise, return all results to client
 
-8. **Caching** (if EnableCaching=true):
-   - Create or update AIResultCache entry with result
-   - Set expiration based on CacheTTLSeconds
-   - Store embedding if CacheMatchType=Vector
+10. **Caching** (if EnableCaching=true):
+    - Create or update AIResultCache entry with result
+    - Set expiration based on CacheTTLSeconds
+    - Store embedding if CacheMatchType=Vector
 
 ### 4.3 Hierarchical Agent Orchestration
 
@@ -709,24 +727,33 @@ The agent execution workflow has been significantly enhanced with decision-drive
 
 ## 5. Advanced Features
 
-### 5.1 Decision-Driven Agent Architecture
+### 5.1 Separation of Concerns Architecture
 
-The framework now implements an advanced decision-driven architecture where agents use LLM-powered reasoning to determine their next actions:
+The framework implements a separation of concerns pattern that cleanly separates different responsibilities:
 
-1. **Dynamic Action Selection**:
-   - Agents analyze current context and available resources
-   - LLM makes strategic decisions about which actions to take
-   - Support for mixed execution of prompts, tools, and subagents
+1. **BaseAgent - Domain Execution**:
+   - Focuses solely on executing agent-specific prompts and tasks
+   - Handles template rendering with data context
+   - Manages conversation context and compression
+   - Returns standardized execution results
 
-2. **Execution Planning**:
-   - Agents create execution plans with proper ordering
-   - Support for parallel and sequential execution strategies
-   - Dynamic adaptation based on results and context
+2. **ConductorAgent - Decision Making**:
+   - Specialized agent for making orchestration decisions
+   - Analyzes current state and available resources
+   - Makes autonomous decisions about next steps
+   - Plans execution sequences with proper ordering
 
-3. **Comprehensive Resource Awareness**:
-   - Agents have full visibility into available actions and subagents
-   - Metadata-driven capability discovery
-   - Intelligent resource selection based on context
+3. **AgentRunner - Coordination**:
+   - Orchestrates interaction between BaseAgent and ConductorAgent
+   - Implements the core execution loop
+   - Manages progress tracking and cancellation
+   - Provides user interface abstraction
+
+4. **Hierarchical Prompt Execution**:
+   - Parent prompts specify their children via `childPrompts` array
+   - Depth-first traversal with parallel execution at each level
+   - Unlimited nesting depth with recursive processing
+   - Flexible placeholder replacement for child results
 
 ### 5.2 Enhanced Factory Pattern
 
