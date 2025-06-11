@@ -1,5 +1,27 @@
 # Change Log - @memberjunction/ng-ask-skip
 
+## 2.48.0
+
+### Patch Changes
+
+- e49a91a: rename types and clean up skip for more generalized use as a "component" generator
+- Updated dependencies [e49a91a]
+- Updated dependencies [bb01fcf]
+- Updated dependencies [031e724]
+- Updated dependencies [5c72641]
+  - @memberjunction/ng-skip-chat@2.48.0
+  - @memberjunction/skip-types@2.48.0
+  - @memberjunction/core@2.48.0
+  - @memberjunction/core-entities@2.48.0
+  - @memberjunction/ng-shared@2.48.0
+  - @memberjunction/ng-user-view-grid@2.48.0
+  - @memberjunction/ng-chat@2.48.0
+  - @memberjunction/ng-container-directives@2.48.0
+  - @memberjunction/ng-data-context@2.48.0
+  - @memberjunction/graphql-dataprovider@2.48.0
+  - @memberjunction/ng-tabstrip@2.48.0
+  - @memberjunction/global@2.48.0
+
 ## 2.47.0
 
 ### Patch Changes
