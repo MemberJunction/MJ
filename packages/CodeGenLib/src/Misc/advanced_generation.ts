@@ -24,7 +24,6 @@ LoadGroqLLM();
 /**
  * This class is responsible for managing the advanced generation capabilities of the system. You can override the class to provide your own implementation.
  */
-@RegisterClass(AdvancedGeneration)
 export class AdvancedGeneration {
     private static _prompts: PromptDefinition[] = [
         {

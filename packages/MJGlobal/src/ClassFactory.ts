@@ -38,7 +38,6 @@ export class ClassFactory {
                 console.warn(`ClassFactory.GetAllRegistrations: Registration for base class ${baseClass.name} has no key set. This is not recommended and may lead to unintended behavior when trying to match registrations. Please set a key for this registration.`)
             }
 
-
             // get all of hte existing registrations for this baseClass and key
             const registrations = this.GetAllRegistrations(baseClass, key);
 
@@ -88,8 +87,7 @@ export class ClassFactory {
                 return instance;
             }
             else {
-                // don't emit this to the console anymore, this is a normal condition to use the base class if we can't find a registration
-                //console.log(`ClassFactory.CreateInstance: Could not find registration for base class ${baseClass && baseClass.name ? baseClass.name : baseClass} and key ${key}, using the base class instead.`);  
+                // this is a normal condition to use the base class if we can't find a registration
                 return new baseClass(...params); // if we can't find a registration, just return a new instance of the base class
             }
         }

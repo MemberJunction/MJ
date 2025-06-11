@@ -24,7 +24,6 @@ export class AngularFormSectionInfo {
 /**
  * Base class for generating Angular client code, you can sub-class this class to create your own Angular client code generator logic
  */
-@RegisterClass(AngularClientGeneratorBase)
 export class AngularClientGeneratorBase {
     public async generateAngularCode(entities: EntityInfo[], directory: string, modulePrefix: string, contextUser: UserInfo): Promise<boolean> {
         try {

@@ -10,7 +10,6 @@ import { RegisterClass } from '@memberjunction/global';
  * This class is responsible for generating the GraphQL Server resolvers and types for the entities, you can sub-class this class to extend/modify the logic, make sure to use @memberjunction/global RegisterClass decorator
  * so that your class is used.
  */
-@RegisterClass(GraphQLServerGeneratorBase)
 export class GraphQLServerGeneratorBase {
   public generateGraphQLServerCode(
     entities: EntityInfo[],

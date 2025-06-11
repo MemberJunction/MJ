@@ -8,7 +8,6 @@ import { RegisterClass } from "@memberjunction/global";
 /**
  * Base class for creating a new user in the system, you can sub-class this class to create your own user creation logic
  */
-@RegisterClass(CreateNewUserBase)
 export class CreateNewUserBase {
     public async createNewUser(newUserSetup: NewUserSetup): Promise<{Success: boolean, Message: string, Severity: 'warning' | 'error' | undefined}> {
         try {   

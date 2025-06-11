@@ -29,7 +29,6 @@ export type SPType = typeof SPType[keyof typeof SPType];
  * databases. The base class implements support for SQL Server. In future versions of MJ, we will break out an abstract base class that has the skeleton of the logic and then the SQL Server version will be a sub-class
  * of that abstract base class and other databases will be sub-classes of the abstract base class as well.
  */
-@RegisterClass(SQLCodeGenBase)
 export class SQLCodeGenBase {
     protected _sqlUtilityObject: SQLUtilityBase = MJGlobal.Instance.ClassFactory.CreateInstance<SQLUtilityBase>(SQLUtilityBase)!;
     public get SQLUtilityObject(): SQLUtilityBase {
