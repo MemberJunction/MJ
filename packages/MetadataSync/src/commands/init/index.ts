@@ -100,6 +100,34 @@ export default class Init extends Command {
       
     } catch (error) {
       spinner.fail('Initialization failed');
+      
+      // Enhanced error logging for debugging
+      this.log('\n=== Initialization Error Details ===');
+      this.log(`Error type: ${error?.constructor?.name || 'Unknown'}`);
+      this.log(`Error message: ${error instanceof Error ? error.message : String(error)}`);
+      
+      if (error instanceof Error && error.stack) {
+        this.log(`\nStack trace:`);
+        this.log(error.stack);
+      }
+      
+      // Log context information
+      this.log(`\nContext:`);
+      this.log(`- Working directory: ${process.cwd()}`);
+      
+      // Check if error is related to common issues
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('permission') || errorMessage.includes('EACCES')) {
+        this.log(`\nHint: This appears to be a file permission issue.`);
+        this.log(`Make sure you have write permissions in the current directory.`);
+      } else if (errorMessage.includes('ENOENT') || errorMessage.includes('no such file')) {
+        this.log(`\nHint: This appears to be a file or directory access issue.`);
+        this.log(`Make sure the current directory exists and is accessible.`);
+      } else if (errorMessage.includes('already exists') || errorMessage.includes('EEXIST')) {
+        this.log(`\nHint: Files or directories already exist.`);
+        this.log(`Try using the overwrite option or manually remove existing files.`);
+      }
+      
       this.error(error as Error);
     }
   }

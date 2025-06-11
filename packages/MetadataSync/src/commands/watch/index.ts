@@ -125,6 +125,42 @@ export default class Watch extends Command {
       
     } catch (error) {
       spinner.fail('Watch failed');
+      
+      // Enhanced error logging for debugging
+      this.log('\n=== Watch Error Details ===');
+      this.log(`Error type: ${error?.constructor?.name || 'Unknown'}`);
+      this.log(`Error message: ${error instanceof Error ? error.message : String(error)}`);
+      
+      if (error instanceof Error && error.stack) {
+        this.log(`\nStack trace:`);
+        this.log(error.stack);
+      }
+      
+      // Log context information
+      this.log(`\nContext:`);
+      this.log(`- Working directory: ${process.cwd()}`);
+      this.log(`- Specific directory: ${flags.dir || 'none (watching all directories)'}`);
+      this.log(`- Flags: ${JSON.stringify(flags, null, 2)}`);
+      
+      // Check if error is related to common issues
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('No entity directories found')) {
+        this.log(`\nHint: This appears to be an entity directory configuration issue.`);
+        this.log(`Make sure directories have .mj-sync.json files or run "mj-sync init".`);
+      } else if (errorMessage.includes('database') || errorMessage.includes('connection')) {
+        this.log(`\nHint: This appears to be a database connectivity issue.`);
+        this.log(`Check your mj.config.cjs configuration and database connectivity.`);
+      } else if (errorMessage.includes('config') || errorMessage.includes('mj.config.cjs')) {
+        this.log(`\nHint: This appears to be a configuration file issue.`);
+        this.log(`Make sure mj.config.cjs exists and is properly configured.`);
+      } else if (errorMessage.includes('ENOENT') || errorMessage.includes('no such file')) {
+        this.log(`\nHint: File or directory access issue.`);
+        this.log(`Check that the directories exist and are accessible.`);
+      } else if (errorMessage.includes('chokidar') || errorMessage.includes('watch')) {
+        this.log(`\nHint: File watching system issue.`);
+        this.log(`Check file system permissions and available file descriptors.`);
+      }
+      
       // Reset sync engine singleton
       resetSyncEngine();
       // Clean up database connection

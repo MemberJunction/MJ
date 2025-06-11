@@ -439,6 +439,40 @@ export default class Pull extends Command {
       
     } catch (error) {
       spinner.fail('Pull failed');
+      
+      // Enhanced error logging for debugging
+      this.log('\n=== Pull Error Details ===');
+      this.log(`Error type: ${error?.constructor?.name || 'Unknown'}`);
+      this.log(`Error message: ${error instanceof Error ? error.message : String(error)}`);
+      
+      if (error instanceof Error && error.stack) {
+        this.log(`\nStack trace:`);
+        this.log(error.stack);
+      }
+      
+      // Log context information
+      this.log(`\nContext:`);
+      this.log(`- Working directory: ${configManager.getOriginalCwd()}`);
+      this.log(`- Entity: ${flags.entity || 'not specified'}`);
+      this.log(`- Filter: ${flags.filter || 'none'}`);
+      this.log(`- Flags: ${JSON.stringify(flags, null, 2)}`);
+      
+      // Check if error is related to common issues
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('No directory found for entity')) {
+        this.log(`\nHint: This appears to be an entity directory configuration issue.`);
+        this.log(`Run "mj-sync init" to create directories or ensure .mj-sync.json files exist.`);
+      } else if (errorMessage.includes('database') || errorMessage.includes('connection')) {
+        this.log(`\nHint: This appears to be a database connectivity issue.`);
+        this.log(`Check your mj.config.cjs configuration and database connectivity.`);
+      } else if (errorMessage.includes('Failed to pull records')) {
+        this.log(`\nHint: This appears to be a database query issue.`);
+        this.log(`Check if the entity name "${flags.entity}" is correct and exists in the database.`);
+      } else if (errorMessage.includes('Entity information not found')) {
+        this.log(`\nHint: The entity "${flags.entity}" was not found in metadata.`);
+        this.log(`Check the entity name spelling and ensure it exists in the database.`);
+      }
+      
       this.error(error as Error);
     } finally {
       // Clean up database connection and reset singletons
