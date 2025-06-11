@@ -347,7 +347,14 @@ export default class Push extends Command {
     // Save the record
     const saved = await entity.Save();
     if (!saved) {
-      const errors = entity.LatestResult?.Errors?.join(', ') || 'Unknown error';
+      const message = entity.LatestResult?.Message;
+      if (message) {
+        throw new Error(`Failed to save record: ${message}`);
+      }
+      
+      const errors = entity.LatestResult?.Errors?.map(err => 
+        typeof err === 'string' ? err : (err?.message || JSON.stringify(err))
+      )?.join(', ') || 'Unknown error';
       throw new Error(`Failed to save record: ${errors}`);
     }
     
@@ -447,7 +454,14 @@ export default class Push extends Command {
           // Save the related entity
           const saved = await entity.Save();
           if (!saved) {
-            const errors = entity.LatestResult?.Errors?.join(', ') || 'Unknown error';
+            const message = entity.LatestResult?.Message;
+            if (message) {
+              throw new Error(`Failed to save related ${entityName}: ${message}`);
+            }
+            
+            const errors = entity.LatestResult?.Errors?.map(err => 
+              typeof err === 'string' ? err : (err?.message || JSON.stringify(err))
+            )?.join(', ') || 'Unknown error';
             throw new Error(`Failed to save related ${entityName}: ${errors}`);
           }
           
