@@ -1,7 +1,7 @@
 import { LogError, LogStatus, UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { AIAgentEntityExtended, AIPromptEntity, AIAgentRunEntity, AIAgentRunStepEntity, AIAgentTypeEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIPromptRunner, AIPromptParams } from '@memberjunction/ai-prompts';
+import { AIPromptRunner, AIPromptParams, ChildPromptParam } from '@memberjunction/ai-prompts';
 import { ChatMessage } from '@memberjunction/ai';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionParam, ActionResult } from '@memberjunction/actions-base';
@@ -424,10 +424,10 @@ export interface IAgentFactory {
  * - **Execution Tracking**: Comprehensive tracking via AIAgentRun and AIPromptRun entities
  * 
  * ## System Prompt Integration
- * AgentRunner delegates all prompt execution to {@link AIPromptRunner} with system prompt embedding:
+ * AgentRunner delegates all prompt execution to {@link AIPromptRunner} with hierarchical prompt execution:
  * 1. Loads agent-specific prompts from AI Engine
- * 2. Uses agent type's SystemPromptID for system prompt embedding
- * 3. AIPromptRunner embeds agent prompt into system template using {% PromptEmbed %}
+ * 2. Uses agent type's SystemPromptID for hierarchical prompt structure
+ * 3. AIPromptRunner executes agent prompt as child and embeds result in system prompt template
  * 4. System prompt provides execution context, available actions, and enforces JSON format
  * 5. LLM returns structured decisions that AgentRunner can deterministically parse
  * 
@@ -1390,7 +1390,7 @@ export class BaseAgent {
    * 5. **Parse Response**: Validates and parses structured JSON decision response
    * 
    * ## System Prompt Integration
-   * - Uses `this.agentType.SystemPromptID` for system prompt embedding
+   * - Uses `this.agentType.SystemPromptID` for hierarchical prompt execution
    * - System prompt enforces deterministic JSON response format
    * - Agent prompt provides domain-specific logic (e.g., DATA_GATHER instructions)
    * - Available actions and sub-agents are injected for decision-making context
@@ -1446,17 +1446,42 @@ export class BaseAgent {
         }
       ];
 
-      // Configure AIPromptRunner parameters with system prompt embedding
+      // Configure AIPromptRunner parameters with system prompt embedding using new childPrompts approach
       const promptParams = new AIPromptParams();
-      promptParams.prompt = primaryprompt;
-      promptParams.parentPromptID = agentType && agentType.SystemPromptID !== primaryprompt.ID ? agentType.SystemPromptID : null; // Use system prompt embedding if the system prompt is not the primary prompt
-      promptParams.data = promptData;
+      
+      if (agentType && agentType.SystemPromptID && agentType.SystemPromptID !== primaryprompt.ID) {
+        // Use hierarchical prompt execution: system prompt as parent, agent prompt as child
+        const systemPrompt = prompts.find(p => p.ID === agentType.SystemPromptID);
+        if (systemPrompt) {
+          // Create child prompt parameter for the primary agent prompt
+          const childPromptParams = new AIPromptParams();
+          childPromptParams.prompt = primaryprompt;
+          childPromptParams.data = promptData;
+          childPromptParams.contextUser = context.params.contextUser;
+          
+          const childPrompt = new ChildPromptParam(childPromptParams, 'agentPrompt');
+          
+          // Configure parent (system) prompt with child embedded
+          promptParams.prompt = systemPrompt;
+          promptParams.childPrompts = [childPrompt];
+          promptParams.data = promptData; // System prompt can also access this data
+        } else {
+          // Fallback to primary prompt if system prompt not found
+          promptParams.prompt = primaryprompt;
+          promptParams.data = promptData;
+        }
+      } else {
+        // No system prompt embedding needed, use primary prompt directly
+        promptParams.prompt = primaryprompt;
+        promptParams.data = promptData;
+      }
+      
       promptParams.conversationMessages = conversationMessages;
       promptParams.templateMessageRole = 'system';
       promptParams.contextUser = context.params.contextUser;
       promptParams.agentRunId = context.agentRun.ID; // Link to agent run for tracking
 
-      // Execute prompt with system prompt embedding
+      // Execute prompt with hierarchical execution (if child prompts are configured)
       const promptResult = await this._promptRunner.ExecutePrompt(promptParams);
 
       if (!promptResult.success) {

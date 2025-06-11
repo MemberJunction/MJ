@@ -44,6 +44,26 @@ export type ExecutionStreamingCallback = (chunk: {
 export type TemplateMessageRole = 'system' | 'user' | 'none';
 
 /**
+ * Represents a child prompt to be executed and embedded in a parent prompt
+ */
+export class ChildPromptParam {
+  /**
+   * The child prompt to execute - a full AIPromptParams that can contain its own child prompts
+   */
+  childPrompt: AIPromptParams;
+
+  /**
+   * The placeholder name in the parent template where this child's result will be inserted
+   */
+  parentPlaceholder: string;
+
+  constructor(childPrompt: AIPromptParams, parentPlaceholder: string) {
+    this.childPrompt = childPrompt;
+    this.parentPlaceholder = parentPlaceholder;
+  }
+}
+
+/**
  * Parameters for executing an AI prompt
  */
 export class AIPromptParams {
@@ -128,25 +148,37 @@ export class AIPromptParams {
    */
   agentRunId?: string;
 
+
   /**
-   * Optional parent prompt ID for AI prompt embedding.
+   * Optional array of child prompts to execute before this prompt.
    * 
    * When provided, the AIPromptRunner will:
-   * 1. First render the current AI prompt as normal
-   * 2. Load the parent prompt template from the database
-   * 3. Render the parent prompt with the child prompt's rendered text as "childPrompt" parameter
-   * 4. Use the rendered parent prompt result as the final prompt for the LLM
+   * 1. Execute all child prompts in a depth-first manner
+   * 2. At each level, execute sibling prompts in parallel for performance
+   * 3. Collect all child prompt results
+   * 4. Replace the corresponding placeholders in the parent template with child results
+   * 5. Execute the parent prompt with all child results embedded
    * 
-   * This enables nested prompt architectures where:
-   * - Child prompts contain specific domain logic
-   * - Parent prompts provide structure, format, and context wrapping
-   * - Parent prompts can use {{ childPrompt }} to insert the rendered child content
+   * This enables hierarchical prompt architectures where:
+   * - Child prompts can contain their own nested child prompts (unlimited depth)
+   * - Each child result is embedded at a specific placeholder in the parent template
+   * - Parallel execution optimizes performance at each level
+   * - Complex multi-step reasoning can be decomposed into manageable units
    * 
-   * The parent prompt template should contain {{ childPrompt }} parameter for embedding.
+   * Each child prompt can specify its own execution parameters including models, validation, etc.
    * 
-   * @see {@link renderWithParentPrompt} for embedding implementation
+   * @example
+   * ```typescript
+   * const params = new AIPromptParams();
+   * params.prompt = parentPrompt;
+   * params.childPrompts = [
+   *   new ChildPromptParam(childPrompt1, 'analysis'),
+   *   new ChildPromptParam(childPrompt2, 'summary')
+   * ];
+   * // Parent template can use {{ analysis }} and {{ summary }} placeholders
+   * ```
    */
-  parentPromptID?: string;
+  childPrompts?: ChildPromptParam[];
 }
 
 /**
@@ -315,12 +347,12 @@ export class AIPromptRunResult<T = unknown> {
 }
 
 /**
- * Advanced AI Prompt execution engine with comprehensive template support, system prompt embedding,
+ * Advanced AI Prompt execution engine with comprehensive template support, hierarchical prompt execution,
  * sophisticated model selection, parallelization, output validation, and execution tracking.
  *
  * ## Core Features
  * - **Template-based prompt generation** using MJ Templates system
- * - **System prompt embedding** for agent architectures via {% PromptEmbed %} syntax
+ * - **Hierarchical prompt execution** with depth-first traversal and parallel execution at each level
  * - **Advanced model selection** strategies (Default, Specific, ByPower)
  * - **Parallel execution** with multiple models and execution groups
  * - **Structured output validation** and type conversion with retry logic
@@ -328,20 +360,21 @@ export class AIPromptRunResult<T = unknown> {
  * - **Configuration-driven behavior** with caching and performance optimization
  * - **Real-time progress updates** and streaming response support
  * 
- * ## Parent Prompt Embedding
- * When `parentPromptID` is provided in {@link AIPromptParams}:
- * 1. First renders the child AI prompt with provided data
- * 2. Loads parent prompt template from database
- * 3. Renders parent prompt with child's rendered text as "childPrompt" parameter
- * 4. Uses rendered parent prompt result as final prompt for LLM
+ * ## Hierarchical Prompt Execution
+ * When `childPrompts` array is provided in {@link AIPromptParams}:
+ * 1. Executes child prompts in depth-first manner (children before parents)
+ * 2. At each level, executes sibling prompts in parallel for optimal performance
+ * 3. Recursively handles grandchild prompts (unlimited nesting depth)
+ * 4. Collects all child results and replaces corresponding placeholders in parent template
+ * 5. Executes parent prompt with all child results embedded in data context
  * 
- * This enables nested prompt architectures where parent prompts wrap child prompts
- * with additional structure, formatting, and context using {{ childPrompt }} parameter.
+ * This enables complex multi-step reasoning decomposed into manageable hierarchical units
+ * where each child can specify its own models, validation rules, and execution parameters.
  * 
  * ## Agent Integration
  * - Links executions to agent runs via `agentRunId` parameter
- * - Validates prompt-parent prompt relationships for embedding
  * - Supports agent decision-making workflows with structured JSON responses
+ * - Enables hierarchical reasoning patterns in AI agents
  * 
  * @example Basic Usage
  * ```typescript
@@ -352,14 +385,18 @@ export class AIPromptRunResult<T = unknown> {
  * const result = await runner.ExecutePrompt(params);
  * ```
  * 
- * @example Parent Prompt Embedding
+ * @example Hierarchical Prompt Execution
  * ```typescript
  * const params = new AIPromptParams();
- * params.prompt = childPrompt;
- * params.parentPromptID = 'parent-prompt-id';
- * params.data = { userInput: 'analyze this data' };
+ * params.prompt = parentPrompt;
+ * params.childPrompts = [
+ *   new ChildPromptParam(analysisPrompt, 'analysis'),
+ *   new ChildPromptParam(summaryPrompt, 'summary'),
+ *   new ChildPromptParam(complexChild, 'complex') // This can have its own children
+ * ];
+ * params.data = { userInput: 'complex data to process' };
  * const result = await runner.ExecutePrompt(params);
- * // Child prompt renders first, then parent prompt wraps it using {{ childPrompt }}
+ * // All children execute first in parallel, then parent uses {{ analysis }}, {{ summary }}, {{ complex }}
  * ```
  */
 export class AIPromptRunner {
@@ -460,18 +497,19 @@ export class AIPromptRunner {
 
       let renderedPromptText: string = '';
 
-      // Handle parent prompt embedding or regular template rendering
-      if (params.parentPromptID) {
-        // Parent prompt embedding mode - first render child prompt, then embed in parent
-        const childPromptResult = await this.renderWithParentPrompt(
-          params.parentPromptID,
-          prompt,
-          params
-        );
-        if (!childPromptResult.Success) {
-          throw new Error(`Failed to render prompt with parent prompt: ${childPromptResult.Message}`);
-        }
-        renderedPromptText = childPromptResult.Output;
+      // Handle different prompt execution modes
+      if (params.childPrompts && params.childPrompts.length > 0) {
+        // New child prompt execution mode - execute children first, then render parent with results
+        LogStatus(`🌳 Executing prompt with ${params.childPrompts.length} child prompts in hierarchical mode`);
+        
+        // Execute all child prompts recursively
+        const childResults = await this.executeChildPrompts(params.childPrompts, params.cancellationToken);
+        
+        // Render the parent prompt with child results embedded
+        renderedPromptText = await this.renderPromptWithChildResults(prompt, params, childResults);
+        
+        LogStatus(`✅ Hierarchical prompt execution completed with ${Object.keys(childResults).length} child results embedded`);
+        
       } else if (prompt.TemplateID && (!params.conversationMessages || params.templateMessageRole !== 'none')) {
         // Regular template rendering mode
         // Initialize template engine
@@ -788,100 +826,158 @@ export class AIPromptRunner {
     }
   }
 
+
   /**
-   * Renders a child prompt and then embeds it in a parent prompt template.
+   * Executes child prompts in a depth-first manner with parallel execution at each level.
    * 
-   * This method:
-   * 1. First renders the child prompt with the provided data
-   * 2. Loads the parent prompt template
-   * 3. Renders the parent prompt with the child's rendered text as "childPrompt" parameter
-   * 
-   * @param parentPromptID - ID of the parent prompt
-   * @param childPrompt - The child AI prompt to render first
-   * @param params - Original execution parameters for context
-   * @returns Promise<TemplateRenderResult> - The rendered parent prompt with embedded child prompt
+   * @param childPrompts - Array of child prompts to execute
+   * @param cancellationToken - Cancellation token for aborting execution
+   * @returns Promise<Record<string, string>> - Map of placeholder names to execution results
    */
-  private async renderWithParentPrompt(
-    parentPromptID: string,
-    childPrompt: AIPromptEntity,
-    params: AIPromptParams
-  ): Promise<TemplateRenderResult> {
+  private async executeChildPrompts(
+    childPrompts: ChildPromptParam[],
+    cancellationToken?: AbortSignal
+  ): Promise<Record<string, string>> {
+    if (!childPrompts || childPrompts.length === 0) {
+      return {};
+    }
+
+    // Check for cancellation
+    if (cancellationToken?.aborted) {
+      throw new Error('Child prompt execution was cancelled');
+    }
+
+    LogStatus(`🔄 Executing ${childPrompts.length} child prompts in parallel`);
+
+    // Execute all child prompts in parallel at this level
+    const childExecutionPromises = childPrompts.map(async (childParam) => {
+      try {
+        // Check for cancellation before each child execution
+        if (cancellationToken?.aborted) {
+          throw new Error('Child prompt execution was cancelled');
+        }
+
+        // First, recursively execute any grandchild prompts
+        let childData = { ...childParam.childPrompt.data };
+        if (childParam.childPrompt.childPrompts && childParam.childPrompt.childPrompts.length > 0) {
+          const grandchildResults = await this.executeChildPrompts(
+            childParam.childPrompt.childPrompts,
+            cancellationToken
+          );
+          
+          // Merge grandchild results into the child's data context
+          childData = { ...childData, ...grandchildResults };
+        }
+
+        // Create a new AIPromptParams for the child execution with merged data
+        const childExecutionParams = new AIPromptParams();
+        Object.assign(childExecutionParams, childParam.childPrompt);
+        childExecutionParams.data = childData;
+        childExecutionParams.cancellationToken = cancellationToken;
+
+        // Execute the child prompt
+        LogStatus(`  🔹 Executing child prompt: ${childParam.childPrompt.prompt.Name} -> ${childParam.parentPlaceholder}`);
+        const childResult = await this.ExecutePrompt(childExecutionParams);
+
+        if (!childResult.success) {
+          throw new Error(`Child prompt execution failed: ${childResult.errorMessage}`);
+        }
+
+        // Return the placeholder name and result
+        return {
+          placeholder: childParam.parentPlaceholder,
+          result: childResult.rawResult || JSON.stringify(childResult.result),
+          success: true
+        };
+
+      } catch (error) {
+        LogError(`Error executing child prompt for placeholder ${childParam.parentPlaceholder}: ${error.message}`);
+        
+        // Return error result but allow other children to continue
+        return {
+          placeholder: childParam.parentPlaceholder,
+          result: `ERROR: ${error.message}`,
+          success: false
+        };
+      }
+    });
+
+    // Wait for all child prompts to complete
+    const childResults = await Promise.all(childExecutionPromises);
+
+    // Check if any critical errors occurred
+    const failedChildren = childResults.filter(r => !r.success);
+    if (failedChildren.length > 0) {
+      LogError(`${failedChildren.length} out of ${childResults.length} child prompts failed`);
+      // Continue with available results rather than failing completely
+    }
+
+    // Build result map
+    const resultMap: Record<string, string> = {};
+    for (const childResult of childResults) {
+      resultMap[childResult.placeholder] = childResult.result;
+    }
+
+    LogStatus(`✅ Completed execution of ${childResults.length} child prompts`);
+    return resultMap;
+  }
+
+  /**
+   * Renders a prompt template with child prompt results merged into the data context.
+   * 
+   * @param prompt - The AI prompt to render
+   * @param params - Original execution parameters
+   * @param childResults - Map of placeholder names to child prompt results
+   * @returns Promise<string> - The rendered prompt text with child results embedded
+   */
+  private async renderPromptWithChildResults(
+    prompt: AIPromptEntity,
+    params: AIPromptParams,
+    childResults: Record<string, string>
+  ): Promise<string> {
+    if (!prompt.TemplateID) {
+      // If no template, return empty string (will be handled by conversation messages)
+      return '';
+    }
+
     try {
       // Initialize template engine
       await this._templateEngine.Config(false, params.contextUser);
 
-      // Step 1: Render the child prompt first
-      let childRenderedText = '';
-      if (childPrompt.TemplateID) {
-        const childTemplate = await this.loadTemplate(childPrompt.TemplateID, params.contextUser);
-        if (!childTemplate) {
-          throw new Error(`Template with ID ${childPrompt.TemplateID} not found for child prompt ${childPrompt.Name}`);
-        }
-
-        const childRenderResult = await this.renderPromptTemplate(childTemplate, params.data, params.templateData);
-        if (!childRenderResult.Success) {
-          throw new Error(`Failed to render child prompt template: ${childRenderResult.Message}`);
-        }
-        childRenderedText = childRenderResult.Output;
+      // Load the template for the prompt
+      const template = await this.loadTemplate(prompt.TemplateID, params.contextUser);
+      if (!template) {
+        throw new Error(`Template with ID ${prompt.TemplateID} not found for prompt ${prompt.Name}`);
       }
 
-      // Step 2: Load the parent prompt
-      const parentPrompt = await this.loadParentPromptById(parentPromptID, params.contextUser);
-      if (!parentPrompt) {
-        throw new Error(`Parent prompt with ID ${parentPromptID} not found`);
-      }
-
-      if (!parentPrompt.TemplateID) {
-        throw new Error(`Parent prompt ${parentPrompt.Name} has no associated template`);
-      }
-
-      // Step 3: Load the parent prompt template
-      const parentTemplate = await this.loadTemplate(parentPrompt.TemplateID, params.contextUser);
-      if (!parentTemplate) {
-        throw new Error(`Template with ID ${parentPrompt.TemplateID} not found for parent prompt ${parentPrompt.Name}`);
-      }
-
-      // Step 4: Prepare data context with the child prompt as "childPrompt" parameter
-      const parentData = {
-        ...params.data,
-        childPrompt: childRenderedText
+      // Merge original data with child results and template data
+      const mergedData = {
+        ...params.data,           // Original data context
+        ...childResults,          // Child prompt results with placeholder names as keys
+        ...params.templateData    // Additional template data (highest priority)
       };
 
-      // Step 5: Render the parent prompt template with the child prompt embedded
-      const result = await this.renderPromptTemplate(parentTemplate, parentData, params.templateData);
-
-      if (!result.Success) {
-        throw new Error(`Failed to render parent prompt template: ${result.Message}`);
+      LogStatus(`🔧 Rendering prompt template with ${Object.keys(childResults).length} child results embedded`);
+      
+      // Log placeholder replacement for debugging
+      for (const [placeholder, result] of Object.entries(childResults)) {
+        const truncatedResult = result.length > 100 ? result.substring(0, 100) + '...' : result;
+        LogStatus(`  📝 ${placeholder} -> ${truncatedResult}`);
       }
 
-      LogStatus(`✅ Successfully rendered parent prompt "${parentPrompt.Name}" with embedded child prompt "${childPrompt.Name}"`);
-      return result;
+      // Render the template with merged data
+      const renderedPrompt = await this.renderPromptTemplate(template, mergedData);
+      if (!renderedPrompt.Success) {
+        throw new Error(`Failed to render template for prompt ${prompt.Name}: ${renderedPrompt.Message}`);
+      }
+
+      return renderedPrompt.Output;
 
     } catch (error) {
-      LogError(`Error rendering prompt with parent prompt: ${error.message}`);
+      LogError(`Error rendering prompt with child results: ${error.message}`);
       throw error;
     }
   }
-
-  /**
-   * Loads a parent prompt by ID from AI Engine.
-   * Parent prompts are stored as AI prompts that reference templates.
-   */
-  private async loadParentPromptById(parentPromptID: string, contextUser?: UserInfo): Promise<AIPromptEntity | null> {
-    try {
-      // Ensure AI Engine is configured
-      await AIEngine.Instance.Config(false, contextUser);
-
-      // Find the parent prompt in cached prompts
-      const parentPrompt = AIEngine.Instance.Prompts.find(p => p.ID === parentPromptID);
-      return parentPrompt || null;
-
-    } catch (error) {
-      LogError(`Error loading parent prompt ${parentPromptID}: ${error.message}`);
-      return null;
-    }
-  }
-
 
   /**
    * Selects the appropriate AI model based on prompt configuration and parameters.
