@@ -68,7 +68,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             },
             {
                 PropertyName: '_agentTypes',
-                EntityName: 'AI Agent Types'
+                EntityName: 'MJ: AI Agent Types'
             },
             {
                 PropertyName: '_artifactTypes',

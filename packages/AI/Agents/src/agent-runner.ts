@@ -127,7 +127,6 @@ interface ActionExecutionResult {
  * const runner = new AgentRunner(conductor, contextUser);
  * ```
  */
-@RegisterClass(AgentRunner, null)
 export class AgentRunner {
   private _conductor: ConductorAgent;
   private _contextUser: UserInfo;
