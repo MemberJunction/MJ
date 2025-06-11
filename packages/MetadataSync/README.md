@@ -98,6 +98,310 @@ The tool is intended for managing business-level metadata such as:
 
 For more information about how CodeGen reflects system-level data from the database into the MJ metadata layer, see the [CodeGen documentation](../CodeGen/README.md).
 
+## Creating Error-Free Entity Files
+
+### Quick Start Checklist
+
+Before creating entity JSON files, follow this checklist to avoid common mistakes:
+
+✅ **1. Find the Entity Definition**
+- Open `packages/MJCoreEntities/src/generated/entity_subclasses.ts` or `packages/GeneratedEntities/src/generated/entity_subclasses.ts`
+- Search for `[EntityName]EntityZodObject` (e.g., `TemplateEntityZodObject`)
+- Identify required vs optional fields
+
+✅ **2. Check Required Fields**
+- Fields without `.optional()` are required
+- Always include `Name` (almost always required)
+- Always include `UserID` (use System User ID: `ECAFCCEC-6A37-EF11-86D4-000D3A4E707E`)
+
+✅ **3. Validate Field Names**
+- Use exact field names from the Zod schema
+- Field names are case-sensitive
+- Don't assume fields exist (e.g., not all entities have `Status`)
+
+✅ **4. Use Correct File Naming**
+- Configuration files (.mj-sync.json, .mj-folder.json) must start with dot
+- Metadata files follow the `filePattern` in your .mj-sync.json
+- Most common: `"filePattern": "*.json"` (matches any .json file)
+- Alternative: `"filePattern": ".*.json"` (matches dot-prefixed .json files)
+
+✅ **5. Set Up Directory Structure**
+- Create `.mj-sync.json` in the entity directory
+- Use glob patterns: `"filePattern": "*.json"` (not regex: `".*.json"`)
+
+### Discovering Entity Structure
+
+**CRITICAL**: Before creating entity files, you must understand the entity's field structure. Most errors occur because users are unfamiliar with the required fields, data types, and constraints.
+
+#### Finding Entity Definitions
+
+Entity classes are auto-generated and located in:
+
+- **Core MJ Entities**: `packages/MJCoreEntities/src/generated/entity_subclasses.ts`
+  - System entities like Users, Roles, EntityFields, etc.
+  - AI-related entities like AI Prompts, AI Models, etc.
+  
+- **Custom Entities**: `packages/GeneratedEntities/src/generated/entity_subclasses.ts`  
+  - Your application-specific entities
+  - Business domain entities
+
+#### How to Find Required Fields
+
+1. **Open the entity class file** in your IDE
+2. **Search for your entity** (e.g., `class TemplateEntity`)
+3. **Examine the Zod schema** (e.g., `TemplateEntityZodObject`)
+4. **Look for required fields** - fields without `.optional()` are required
+5. **Check field types** - string, number, boolean, datetime, etc.
+6. **Review validation rules** - min/max lengths, enum values, etc.
+
+#### Example: Templates Entity Structure
+```typescript
+// From MJCoreEntities/src/generated/entity_subclasses.ts
+export const TemplateEntityZodObject = z.object({
+  ID: z.string(),
+  Name: z.string(),                    // Required
+  Description: z.string().optional(),  // Optional
+  UserID: z.string(),                 // Required - MUST be valid User ID
+  CategoryID: z.string().optional(),  // Optional foreign key
+  Status: z.literal('Active').optional(), // This field may not exist!
+  // ... other fields
+});
+```
+
+#### Common Required Fields Pattern
+
+Most MJ entities follow these patterns:
+
+**Always Required:**
+- `ID` - Primary key (GUID) - auto-generated if not provided
+- `Name` - Human-readable name
+- `UserID` - Creator/owner (use System User: `ECAFCCEC-6A37-EF11-86D4-000D3A4E707E`)
+
+**Often Required:**
+- `Description` - Usually optional but recommended
+- Foreign key fields ending in `ID` - Check if they have `.optional()`
+
+**Be Careful With:**
+- `Status` fields - Some entities have them, others don't
+- Enum fields - Must match exact values from database
+- DateTime fields - Use ISO format: `2024-01-15T10:30:00Z`
+
+### Common Mistakes and Solutions
+
+#### ❌ Mistake 1: Using Non-Existent Fields
+```json
+{
+  "fields": {
+    "Name": "My Template",
+    "Status": "Active"  // ❌ Templates entity may not have Status field
+  }
+}
+```
+
+**✅ Solution**: Check the Zod schema first
+```typescript
+// In entity_subclasses.ts - if you don't see Status here, don't use it
+export const TemplateEntityZodObject = z.object({
+  Name: z.string(),
+  Description: z.string().optional(),
+  // No Status field defined
+});
+```
+
+#### ❌ Mistake 2: Missing Required Fields
+```json
+{
+  "fields": {
+    "Name": "My Template"
+    // ❌ Missing required UserID
+  }
+}
+```
+
+**✅ Solution**: Include all required fields
+```json
+{
+  "fields": {
+    "Name": "My Template",
+    "UserID": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
+  }
+}
+```
+
+#### ❌ Mistake 3: Wrong File Pattern in .mj-sync.json
+```json
+{
+  "entity": "Templates",
+  "filePattern": ".*.json"  // ❌ This is regex, not glob
+}
+```
+
+**✅ Solution**: Use glob patterns
+```json
+{
+  "entity": "Templates", 
+  "filePattern": "*.json"  // ✅ Correct glob pattern
+}
+```
+
+#### ❌ Mistake 4: Incorrect Data Types
+```json
+{
+  "fields": {
+    "Name": "My Template",
+    "CreatedAt": "2024-01-15",  // ❌ Wrong datetime format
+    "Priority": "1"  // ❌ Should be number, not string
+  }
+}
+```
+
+**✅ Solution**: Use correct data types
+```json
+{
+  "fields": {
+    "Name": "My Template",
+    "CreatedAt": "2024-01-15T10:30:00Z",  // ✅ ISO format
+    "Priority": 1  // ✅ Number type
+  }
+}
+```
+
+#### ❌ Mistake 5: Files Not Being Detected
+```
+mydir/
+├── .mj-sync.json (with "filePattern": "*.json")
+├── template1.txt  // ❌ Wrong extension
+└── .template2.json  // ❌ Dot prefix when pattern is "*.json"
+```
+
+**✅ Solution**: Match your filePattern
+```
+mydir/
+├── .mj-sync.json (with "filePattern": "*.json")
+├── template1.json  // ✅ Matches *.json pattern
+└── template2.json  // ✅ Matches *.json pattern
+```
+
+### Step-by-Step Entity File Creation
+
+#### Step 1: Research the Entity
+```bash
+# Open in your IDE:
+packages/MJCoreEntities/src/generated/entity_subclasses.ts
+
+# Search for your entity (Ctrl+F):
+TemplateEntityZodObject
+
+# Note the required fields (no .optional()):
+Name: z.string(),           // Required
+UserID: z.string(),         // Required  
+Description: z.string().optional(),  // Optional
+```
+
+#### Step 2: Create Directory Structure
+```bash
+mkdir templates
+cd templates
+
+# Create entity config (dot-prefixed configuration file)
+echo '{
+  "entity": "Templates",
+  "filePattern": "*.json"
+}' > .mj-sync.json
+```
+
+#### Step 3: Create Your First Entity File
+```bash
+# Create metadata file (follows filePattern from .mj-sync.json)
+echo '{
+  "fields": {
+    "Name": "My First Template",
+    "Description": "A test template",
+    "UserID": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
+  }
+}' > my-first-template.json
+```
+
+#### Step 4: Test and Validate
+```bash
+# Dry run to check for errors
+mj-sync push --dir="templates" --dry-run
+
+# If successful, do actual push
+mj-sync push --dir="templates"
+```
+
+### AI/LLM Guidelines
+
+When using AI tools (like Claude, ChatGPT, etc.) to generate entity files:
+
+**🤖 For AI Assistants:**
+
+1. **Always check entity definitions first** - Never assume field names or requirements
+2. **Look up the exact Zod schema** in the generated entity files
+3. **Use the System User ID** (`ECAFCCEC-6A37-EF11-86D4-000D3A4E707E`) for UserID fields
+4. **Include only fields that exist** in the entity definition
+5. **Use proper data types** as defined in the Zod schema
+6. **Remember file naming rules**:
+   - Configuration files (.mj-sync.json) must have dot prefix
+   - Metadata files follow the filePattern in .mj-sync.json
+7. **Use glob patterns** in .mj-sync.json, not regex patterns
+
+**📝 Prompt Template for AI:**
+```
+I need to create entity files for the [EntityName] entity in MemberJunction.
+
+Please:
+1. First, check the entity definition in packages/MJCoreEntities/src/generated/entity_subclasses.ts
+2. Find the [EntityName]EntityZodObject schema
+3. Identify required vs optional fields
+4. Create a .mj-sync.json file with correct glob pattern
+5. Create sample metadata JSON files following the filePattern
+6. Use UserID: "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E" for required UserID fields
+7. Follow the exact field names and data types from the Zod schema
+
+CRITICAL: Configuration files (.mj-sync.json) must start with dot, but metadata files follow the filePattern specified in the configuration.
+```
+
+### Understanding File Naming Rules
+
+**Configuration Files (Always Dot-Prefixed):**
+- ✅ `.mj-sync.json` - Entity configuration
+- ✅ `.mj-folder.json` - Folder defaults
+- ❌ `mj-sync.json` - Won't be recognized
+
+**Metadata Files (Follow filePattern):**
+With `"filePattern": "*.json"`:
+- ✅ `my-template.json` - Will be processed
+- ✅ `greeting.json` - Will be processed  
+- ❌ `.my-template.json` - Won't match pattern
+- ❌ `package.json` - Will be ignored (add to ignore list if needed)
+
+With `"filePattern": ".*.json"`:
+- ✅ `.my-template.json` - Will be processed
+- ✅ `.greeting.json` - Will be processed
+- ❌ `my-template.json` - Won't match pattern
+- ❌ `package.json` - Won't match pattern
+
+### Troubleshooting Quick Reference
+
+| Error Message | Cause | Solution |
+|---------------|-------|----------|
+| `No entity directories found` | Missing .mj-sync.json or wrong filePattern | Check .mj-sync.json exists and uses `"*.json"` |
+| `Field 'X' does not exist on entity 'Y'` | Using non-existent field | Check Zod schema in entity_subclasses.ts |
+| `User ID cannot be null` | Missing required UserID | Add `"UserID": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"` |
+| `Processing 0 records` | Files don't match filePattern | Check files match pattern in .mj-sync.json |
+| Failed validation | Wrong data type or format | Check Zod schema for field types |
+
+### System User ID Reference
+
+**Always use this GUID for UserID fields:**
+```
+ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
+```
+
+This is the System User ID that should be used when creating entity records through the MetadataSync tool. Using any other ID or leaving it null will cause validation errors.
+
 ## File Structure
 
 The tool uses a hierarchical directory structure with cascading defaults:
