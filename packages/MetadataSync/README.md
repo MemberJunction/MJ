@@ -932,6 +932,108 @@ The tool now supports managing related entities as embedded collections within p
 - **Cleaner Organization**: Fewer files to manage
 - **Relationship Clarity**: Visual representation of data relationships
 
+## Recursive Patterns (NEW)
+
+The tool now supports automatic recursive patterns for self-referencing entities, eliminating the need to manually define each nesting level for hierarchical data structures.
+
+### Benefits
+- **Simplified Configuration**: No need to manually define each hierarchy level
+- **Automatic Depth Handling**: Adapts to actual data depth dynamically
+- **Reduced Maintenance**: Configuration stays simple regardless of data changes
+- **Safeguards**: Built-in protection against infinite loops and excessive memory usage
+
+### Recursive Configuration
+
+Enable recursive patterns for self-referencing entities:
+
+```json
+{
+  "pull": {
+    "entities": {
+      "AI Agents": {
+        "relatedEntities": {
+          "AI Agents": {
+            "entity": "AI Agents",
+            "foreignKey": "ParentID",
+            "recursive": true,        // Enable recursive fetching
+            "maxDepth": 10,          // Optional depth limit (omit for default of 10)
+            "filter": "Status = 'Active'"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### How It Works
+
+When `recursive: true` is set:
+
+1. **Automatic Child Fetching**: The tool automatically fetches child records at each level
+2. **Dynamic Depth**: Continues until no more children are found or max depth is reached
+3. **Circular Reference Protection**: Prevents infinite loops by tracking processed record IDs
+4. **Consistent Configuration**: All recursive levels use the same `lookupFields`, `externalizeFields`, etc.
+
+### Before vs After
+
+**Before (Manual Configuration):**
+```json
+{
+  "pull": {
+    "relatedEntities": {
+      "AI Agents": {
+        "entity": "AI Agents", 
+        "foreignKey": "ParentID",
+        "relatedEntities": {
+          "AI Agents": {
+            "entity": "AI Agents",
+            "foreignKey": "ParentID",
+            "relatedEntities": {
+              "AI Agents": {
+                "entity": "AI Agents",
+                "foreignKey": "ParentID"
+                // Must manually add more levels...
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+**After (Recursive Configuration):**
+```json
+{
+  "pull": {
+    "relatedEntities": {
+      "AI Agents": {
+        "entity": "AI Agents",
+        "foreignKey": "ParentID", 
+        "recursive": true,
+        "maxDepth": 10
+      }
+    }
+  }
+}
+```
+
+### Configuration Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `recursive` | boolean | false | Enable automatic recursive fetching |
+| `maxDepth` | number | 10 | Maximum recursion depth to prevent infinite loops |
+
+### Safeguards
+
+- **Circular Reference Detection**: Tracks processed record IDs to prevent infinite loops
+- **Maximum Depth Limit**: Configurable depth limit (default: 10) prevents excessive memory usage
+- **Performance Monitoring**: Verbose mode shows recursion depth and skipped circular references
+- **Backward Compatibility**: Existing configurations continue to work unchanged
+
 ### Configuration for Pull
 
 The pull command now supports smart update capabilities with extensive configuration options:

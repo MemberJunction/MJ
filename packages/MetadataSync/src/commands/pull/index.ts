@@ -567,6 +567,8 @@ export default class Pull extends Command {
    * @param flags - Command flags
    * @param isNewRecord - Whether this is a new record
    * @param existingRecordData - Existing record data to preserve field selection
+   * @param currentDepth - Current recursion depth for recursive entities
+   * @param processedIds - Set of IDs already processed to prevent circular references
    * @returns Promise resolving to formatted RecordData
    * @private
    */
@@ -578,7 +580,9 @@ export default class Pull extends Command {
     syncEngine: SyncEngine,
     flags?: any,
     isNewRecord: boolean = true,
-    existingRecordData?: RecordData
+    existingRecordData?: RecordData,
+    currentDepth: number = 0,
+    processedIds: Set<string> = new Set()
   ): Promise<RecordData> {
     // Build record data - we'll restructure at the end for proper ordering
     const fields: Record<string, any> = {};
@@ -820,7 +824,9 @@ export default class Pull extends Command {
         entityConfig.pull.relatedEntities,
         syncEngine,
         entityConfig,
-        flags
+        flags,
+        currentDepth,
+        processedIds
       );
       Object.assign(relatedEntities, related);
     }
@@ -1181,10 +1187,15 @@ export default class Pull extends Command {
    * Retrieves child records that have foreign key relationships to the parent.
    * Converts foreign key values to @parent references and supports nested
    * related entities for deep object graphs.
+   * NEW: Supports automatic recursive patterns for self-referencing entities.
    * 
    * @param parentRecord - Parent entity record
    * @param relatedConfig - Configuration for related entities to pull
    * @param syncEngine - Sync engine instance
+   * @param entityConfig - Entity configuration
+   * @param flags - Command flags
+   * @param currentDepth - Current recursion depth for recursive entities
+   * @param processedIds - Set of IDs already processed to prevent circular references
    * @returns Promise resolving to map of entity names to related records
    * @private
    */
@@ -1193,7 +1204,9 @@ export default class Pull extends Command {
     relatedConfig: Record<string, RelatedEntityConfig>,
     syncEngine: SyncEngine,
     entityConfig: any,
-    flags?: any
+    flags?: any,
+    currentDepth: number = 0,
+    processedIds: Set<string> = new Set()
   ): Promise<Record<string, RecordData[]>> {
     const relatedEntities: Record<string, RecordData[]> = {};
     
@@ -1282,6 +1295,45 @@ export default class Pull extends Command {
             relatedPrimaryKey[pk.Name] = relatedRecord[pk.Name];
           }
           
+          // Check for circular references if this is a recursive config
+          const recordId = String(relatedPrimaryKey[childEntity.PrimaryKeys[0]?.Name || 'ID']);
+          if (config.recursive && processedIds.has(recordId)) {
+            if (flags?.verbose) {
+              this.log(`Skipping circular reference for ${config.entity} with ID: ${recordId}`);
+            }
+            continue;
+          }
+          
+          // Add current record ID to processed set for recursion tracking
+          const newProcessedIds = new Set(processedIds);
+          if (config.recursive) {
+            newProcessedIds.add(recordId);
+          }
+          
+          // Determine related entities configuration for recursion
+          let childRelatedConfig = config.relatedEntities;
+          
+          // If recursive is enabled and this is a self-referencing entity
+          if (config.recursive && config.entity === entityConfig.entity) {
+            const maxDepth = config.maxDepth || 10;
+            
+            if (currentDepth < maxDepth) {
+              // Create recursive configuration that references the same entity
+              childRelatedConfig = {
+                [key]: {
+                  ...config,
+                  // Keep same configuration but increment depth internally
+                }
+              };
+            } else {
+              // At max depth, don't recurse further
+              childRelatedConfig = undefined;
+              if (flags?.verbose) {
+                this.log(`Max depth ${maxDepth} reached for recursive entity ${config.entity} at record ${recordId}`);
+              }
+            }
+          }
+          
           // Process the related record using the same logic as parent records
           const relatedData = await this.processRecordData(
             relatedRecord,
@@ -1293,12 +1345,15 @@ export default class Pull extends Command {
                 excludeFields: config.excludeFields || entityConfig.pull?.excludeFields,
                 lookupFields: config.lookupFields || entityConfig.pull?.lookupFields,
                 externalizeFields: config.externalizeFields,
-                relatedEntities: config.relatedEntities
+                relatedEntities: childRelatedConfig
               }
             },
             syncEngine,
             flags,
-            true
+            true, // isNewRecord
+            undefined, // existingRecordData
+            currentDepth + 1,
+            newProcessedIds
           );
           
           // Convert foreign key reference to @parent
