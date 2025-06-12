@@ -279,7 +279,14 @@ export class SyncEngine {
       // Save the new record
       const saved = await newEntity.Save();
       if (!saved) {
-        const errors = newEntity.LatestResult?.Errors?.join(', ') || 'Unknown error';
+        const message = newEntity.LatestResult?.Message;
+        if (message) {
+          throw new Error(`Failed to auto-create ${entityName}: ${message}`);
+        }
+        
+        const errors = newEntity.LatestResult?.Errors?.map(err => 
+          typeof err === 'string' ? err : (err?.message || JSON.stringify(err))
+        )?.join(', ') || 'Unknown error';
         throw new Error(`Failed to auto-create ${entityName}: ${errors}`);
       }
       

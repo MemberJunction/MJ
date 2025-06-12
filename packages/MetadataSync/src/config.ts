@@ -74,6 +74,7 @@ export interface SyncConfig {
  * 
  * Defines how to pull and push related entities that have foreign key relationships
  * with a parent entity. Supports nested relationships for deep object graphs.
+ * NEW: Supports automatic recursive patterns for self-referencing entities.
  */
 export interface RelatedEntityConfig {
   /** Name of the related entity to sync */
@@ -82,6 +83,17 @@ export interface RelatedEntityConfig {
   foreignKey: string;
   /** Optional SQL filter to apply when pulling related records */
   filter?: string;
+  /** 
+   * Enable recursive fetching for self-referencing entities
+   * When true, automatically fetches all levels of the hierarchy until no more children found
+   */
+  recursive?: boolean;
+  /** 
+   * Maximum depth for recursive fetching (optional, defaults to 10)
+   * Prevents infinite loops and controls memory usage
+   * Only applies when recursive is true
+   */
+  maxDepth?: number;
   /** Fields to externalize to separate files for this related entity */
   externalizeFields?: string[] | {
     [fieldName: string]: {
