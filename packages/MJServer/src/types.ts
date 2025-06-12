@@ -2,7 +2,7 @@ import { UserInfo } from '@memberjunction/core';
 import { UserViewEntity } from '@memberjunction/core-entities';
 import { GraphQLSchema } from 'graphql';
 import { PubSubEngine } from 'type-graphql';
-import { DataSource, QueryRunner } from 'typeorm';
+import sql from 'mssql';
 import { getSystemUser } from './auth/index.js';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 
@@ -19,19 +19,19 @@ export type UserPayload = {
  */
 export type AppContext = {
   /**
-   * The default and backwards compatible data source.
+   * The default and backwards compatible connection pool.
    */
-  dataSource: DataSource;
+  dataSource: sql.ConnectionPool;
   userPayload: UserPayload;
-  queryRunner?: QueryRunner;
+  queryRunner?: sql.Request;
   /**
-   * Array of data sources that have additional information about their intended use e.g. Admin, Read-Write, Read-Only.
+   * Array of connection pools that have additional information about their intended use e.g. Admin, Read-Write, Read-Only.
    */
   dataSources: DataSourceInfo[];
 };
 
 export class DataSourceInfo  {
-  dataSource: DataSource;
+  dataSource: sql.ConnectionPool;
   host: string;
   port: number;
   instance?: string;
@@ -39,7 +39,7 @@ export class DataSourceInfo  {
   userName: string;
   type: "Admin" | "Read-Write" | "Read-Only" | "Other";
 
-  constructor(init: {dataSource: DataSource, type: "Admin" | "Read-Write" | "Read-Only" | "Other", host: string, port: number, database: string, userName: string} ) {
+  constructor(init: {dataSource: sql.ConnectionPool, type: "Admin" | "Read-Write" | "Read-Only" | "Other", host: string, port: number, database: string, userName: string} ) {
     this.dataSource = init.dataSource;
     this.host = init.host;
     this.port = init.port;
@@ -56,7 +56,7 @@ export type DirectiveBuilder = {
 
 export type RunViewGenericParams = {
   viewInfo: UserViewEntity;
-  dataSource: DataSource;
+  dataSource: sql.ConnectionPool;
   extraFilter: string;
   orderBy: string;
   userSearchString: string;

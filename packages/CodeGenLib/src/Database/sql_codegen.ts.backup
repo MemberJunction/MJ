@@ -752,8 +752,7 @@ export class SQLCodeGenBase {
         o.schema_id = SCHEMA_ID('${entity.SchemaName}') AND
         kc.type = 'PK';
         `
-        const resultResult = await pool.request().query(sSQL);
-            const result = resultResult.recordset;
+        const result = await pool.request().query(sSQL);
         if (result && result.length > 0)
             return result[0].IndexName;
         else

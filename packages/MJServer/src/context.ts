@@ -4,7 +4,7 @@ import { default as jwt } from 'jsonwebtoken';
 import 'reflect-metadata';
 import { Subject, firstValueFrom } from 'rxjs';
 import { AuthenticationError, AuthorizationError } from 'type-graphql';
-import { DataSource } from 'typeorm';
+import sql from 'mssql';
 import { getSigningKeys, getSystemUser, validationOptions, verifyUserRecord } from './auth/index.js';
 import { authCache } from './cache.js';
 import { userEmailMap, apiKey } from './config.js';
@@ -105,7 +105,7 @@ export const getUserPayload = async (
 };
 
 export const contextFunction =
-  ({ setupComplete$, dataSource, dataSources }: { setupComplete$: Subject<unknown>; dataSource: DataSource, dataSources: DataSourceInfo[] }) =>
+  ({ setupComplete$, dataSource, dataSources }: { setupComplete$: Subject<unknown>; dataSource: sql.ConnectionPool, dataSources: DataSourceInfo[] }) =>
   async ({ req }: { req: IncomingMessage }) => {
     await firstValueFrom(setupComplete$); // wait for setup to complete before processing the request
 

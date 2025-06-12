@@ -2,7 +2,7 @@ import { logError, logMessage } from "../Misc/status_logging";
 import fs from 'fs';
 import path from 'path';
 import { EntityInfo, Metadata } from "@memberjunction/core";
-import { DataSource } from "typeorm";
+import * as sql from 'mssql';
 import { configInfo, outputDir } from "../Config/config";
 import { ManageMetadataBase } from "../Database/manage-metadata";
 import { RegisterClass } from "@memberjunction/global";
@@ -121,7 +121,7 @@ public buildEntityLevelsTree(entities: EntityInfo[]): EntityInfo[][] {
    return entityLevelTree;
  }
 
-public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], applyPermissions: boolean, excludeEntities?: string[]): Promise<boolean> {
+public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: string[], applyPermissions: boolean, excludeEntities?: string[]): Promise<boolean> {
    let bSuccess: boolean = true; // start off true
    const md: Metadata = new Metadata();
 
@@ -216,7 +216,7 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
     return combinedSQL;
  }
  
- public async recompileSingleBaseView(ds: DataSource, entity: EntityInfo, applyPermissions: boolean): Promise<boolean> {
+ public async recompileSingleBaseView(ds: sql.ConnectionPool, entity: EntityInfo, applyPermissions: boolean): Promise<boolean> {
   // just call EXEC sp_refreshview 'your_schema_name.your_view_name';
   try {
     await this.executeSQLScript(ds, `EXEC sp_refreshview '${entity.SchemaName}.${entity.BaseView}';`, false);
@@ -234,14 +234,14 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
   * @param entities List of entities to check
   * @returns Array of entities whose views failed to refresh
   */
- private async identifyFailedViewRefreshes(ds: DataSource, entities: EntityInfo[]): Promise<EntityInfo[]> {
+ private async identifyFailedViewRefreshes(ds: sql.ConnectionPool, entities: EntityInfo[]): Promise<EntityInfo[]> {
    const failedEntities: EntityInfo[] = [];
    
    for (const entity of entities) {
      try {
        // Try to query the view to see if it's valid
        const testQuery = `SELECT TOP 1 * FROM [${entity.SchemaName}].[${entity.BaseView}]`;
-       await ds.query(testQuery);
+       await ds.request().query(testQuery);
      } catch (e) {
        // If the query fails, the view is invalid and needs to be regenerated
        logMessage(`View ${entity.SchemaName}.${entity.BaseView} is invalid and will be regenerated`, 'Warning');
@@ -258,7 +258,7 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
   * @param entities List of entities whose views need to be regenerated
   * @returns True if all regenerations succeeded, false otherwise
   */
- private async regenerateFailedBaseViews(ds: DataSource, entities: EntityInfo[]): Promise<boolean> {
+ private async regenerateFailedBaseViews(ds: sql.ConnectionPool, entities: EntityInfo[]): Promise<boolean> {
    let bSuccess = true;
    
    const sqlCodeGen = new SQLCodeGenBase();
@@ -374,7 +374,7 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
 
 
 
- public async executeSQLScript(ds: DataSource, scriptText: string, inChunks : boolean): Promise<boolean> {
+ public async executeSQLScript(ds: sql.ConnectionPool, scriptText: string, inChunks : boolean): Promise<boolean> {
     try {
       if (!scriptText || scriptText.length == 0)
          return true; // nothing to do

@@ -93,8 +93,7 @@ export class SystemIntegrityBase {
     protected static async CheckEntityFieldSequencesInternal(pool: sql.ConnectionPool, filter: string): Promise<IntegrityCheckResult> {
         try {
             const sSQL = `SELECT ID, Entity, SchemaName, BaseView, EntityID, Name, Sequence FROM [${mj_core_schema()}].[vwEntityFields] ${filter} ORDER BY Entity, Sequence`;
-            const resultResult = await pool.request().query(sSQL);
-      const result = resultResult.recordset;
+            const result = await pool.request().query(sSQL);
             if (!result || result.length === 0) {
                 throw new Error("No entity fields found");
             }
@@ -135,12 +134,11 @@ export class SystemIntegrityBase {
                                 // we will do this by SELECT TOP 1 * from the base view
                                 const entity = row.Entity;
                                 const sampleSQL = `SELECT TOP 1 * FROM [${row.SchemaName}].[${row.BaseView}]`;
-                                const sampleResultResult = await pool.request().query(sampleSQL);
-      const sampleResult = sampleResultResult.recordset;
+                                const sampleResult = await pool.request().query(sampleSQL);
                                 // now check the order of the columns in the result set relative to the
                                 // fields array
-                                if (sampleResult && sampleResult.length > 0) {
-                                    const columns = Object.keys(sampleResult[0]);
+                                if (sampleResult && sampleResult.columns) {
+                                    const columns = Object.keys(sampleResult.columns);
                                     let i = 0;
                                     for (const field of fields) {
                                         if (columns[i] !== field.Name) {

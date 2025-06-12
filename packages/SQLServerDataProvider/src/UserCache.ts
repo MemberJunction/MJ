@@ -1,6 +1,6 @@
 import { LogError, Metadata, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
-import { DataSource } from "typeorm";
+import * as sql from 'mssql';
 
 /**
  * Server side cache of users and their roles
@@ -34,14 +34,18 @@ export class UserCache {
     
     /**
      * This method will refresh the cache with the latest data from the database
-     * @param dataSource - the data source to use to refresh the cache
+     * @param pool - the connection pool to use to refresh the cache
      * @param autoRefreshIntervalMS - optional, if provided, the cache will be refreshed every interval as specified - denominated in milliseconds
      */
-    public async Refresh(dataSource: DataSource, autoRefreshIntervalMS?: number): Promise<void> {
+    public async Refresh(pool: sql.ConnectionPool, autoRefreshIntervalMS?: number): Promise<void> {
       try {
         const coreSchema = Metadata.Provider.ConfigData.MJCoreSchemaName;
-        const u = await dataSource.query(`SELECT * FROM [${coreSchema}].vwUsers`);
-        const r = await dataSource.query(`SELECT * FROM [${coreSchema}].vwUserRoles`);
+        const request = new sql.Request(pool);
+        const uResult = await request.query(`SELECT * FROM [${coreSchema}].vwUsers`);
+        const rRequest = new sql.Request(pool);
+        const rResult = await rRequest.query(`SELECT * FROM [${coreSchema}].vwUserRoles`);
+        const u = uResult.recordset;
+        const r = rResult.recordset;
         if (u) {
           this._users = u.map((user: any) => {
             user.UserRoles = r.filter((role: any) => role.UserID === user.ID);
@@ -52,7 +56,7 @@ export class UserCache {
           // refresh this every interval noted above to ensure we have the latest data
           if (autoRefreshIntervalMS && autoRefreshIntervalMS > 0)
             setTimeout(() => {
-              this.Refresh(dataSource, autoRefreshIntervalMS);
+              this.Refresh(pool, autoRefreshIntervalMS);
             }, autoRefreshIntervalMS);
         }
       }

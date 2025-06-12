@@ -74,7 +74,7 @@ import {
 import { AIEngine, EntityAIActionParams } from '@memberjunction/aiengine';
 import { QueueManager } from '@memberjunction/queue';
 
-import { DataSource, QueryRunner } from 'typeorm';
+import * as sql from 'mssql';
 import { SQLServerTransactionGroup } from './SQLServerTransactionGroup';
 
 import { UserCache } from './UserCache';
@@ -120,8 +120,10 @@ export class SQLServerDataProvider
   extends ProviderBase
   implements IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider
 {
-  private _dataSource: DataSource;
-  private _queryRunner: QueryRunner;
+  private _pool: sql.ConnectionPool;
+  private _poolConfig: any; // Store the connection config for later use
+  private _transaction: sql.Transaction;
+  private _transactionRequest: sql.Request;
   private _currentUserEmail: string;
   private _localStorageProvider: ILocalStorageProvider;
   private _bAllowRefresh: boolean = true;
@@ -135,7 +137,7 @@ export class SQLServerDataProvider
 
   public async Config(configData: SQLServerProviderConfigData): Promise<boolean> {
     try {
-      this._dataSource = configData.DataSource;
+      this._pool = configData.DataSource; // Now expects a ConnectionPool instead of DataSource
       this._currentUserEmail = configData.CurrentUserEmail;
 
       return super.Config(configData); // now parent class can do it's config
@@ -146,25 +148,27 @@ export class SQLServerDataProvider
   }
 
   /**
-   * SQL Server Data Provider implementation of this getter returns a TypeORM DataSource object
+   * SQL Server Data Provider implementation of this getter returns an mssql ConnectionPool object
    */
   public get DatabaseConnection(): any {
-    return this._dataSource;
+    return this._pool;
   }
 
   /**
    * For the SQLServerDataProvider the unique instance connection string which is used to identify, uniquely, a given connection is the following format:
-   * type://host:port/instanceName?/database
+   * mssql://host:port/instanceName?/database
    * instanceName is only inserted if it is provided in the options
    */
   public get InstanceConnectionString(): string {
-    const dbOptions: any = this._dataSource.options;
+    // For mssql, we need to access the pool's internal connection options
+    // Since mssql v11 doesn't expose config directly, we'll construct from what we know
+    const pool = this._pool as any;
     const options = {
-      type: dbOptions.type || '',
-      host: dbOptions.host || '',
-      port: dbOptions.port || '',
-      instanceName: dbOptions.instanceName ? '/' + dbOptions.instanceName : '',
-      database: dbOptions.database || '',
+      type: 'mssql',
+      host: pool._config?.server || 'localhost',
+      port: pool._config?.port || 1433,
+      instanceName: pool._config?.options?.instanceName ? '/' + pool._config.options.instanceName : '',
+      database: pool._config?.database || '',
     };
     return options.type + '://' + options.host + ':' + options.port + options.instanceName + '/' + options.database;
   }
@@ -502,14 +506,14 @@ export class SQLServerDataProvider
         }
 
         // now we can run the viewSQL, but only do this if the ResultType !== 'count_only', otherwise we don't need to run the viewSQL
-        const retData = params.ResultType === 'count_only' ? [] : await this._dataSource.query(viewSQL);
+        const retData = params.ResultType === 'count_only' ? [] : await this.ExecuteSQL(viewSQL);
 
         // finally, if we have a countSQL, we need to run that to get the row count
         // but only do that if the # of rows returned is equal to the max rows, otherwise we know we have all the rows
         // OR do that if we are doing a count_only
         let rowCount = null;
         if (countSQL && (params.ResultType === 'count_only' || retData.length === entityInfo.UserViewMaxRows)) {
-          const countResult = await this._dataSource.query(countSQL);
+          const countResult = await this.ExecuteSQL(countSQL);
           if (countResult && countResult.length > 0) {
             rowCount = countResult[0].TotalRowCount;
           }
@@ -688,7 +692,7 @@ export class SQLServerDataProvider
             INSERT INTO @ViewIDList (ID) (SELECT ${entityInfo.FirstPrimaryKey.Name} FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE (${whereSQL}))
             EXEC [${this.MJCoreSchemaName}].spCreateUserViewRunWithDetail(${viewId},${user.Email}, @ViewIDLIst)
             `;
-    const runIDResult = await this._dataSource.query(sSQL);
+    const runIDResult = await this.ExecuteSQL(sSQL);
     const runID: string = runIDResult[0].UserViewRunID;
     const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE ${entityInfo.FirstPrimaryKey.Name} IN
                                     (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE UserViewRunID=${runID})
@@ -1443,7 +1447,7 @@ export class SQLServerDataProvider
             // and when the transaction is committed, we will send all the queries at once
             this._bAllowRefresh = false; // stop refreshes of metadata while we're doing work
             entity.TransactionGroup.AddTransaction(
-              new TransactionItem(entity, entityResult.Type === 'create' ? 'Create' : 'Update', sSQL, null, { dataSource: this._dataSource }, (transactionResult: Record<string, any>, success: boolean) => {
+              new TransactionItem(entity, entityResult.Type === 'create' ? 'Create' : 'Update', sSQL, null, { dataSource: this._pool }, (transactionResult: Record<string, any>, success: boolean) => {
                 // we get here whenever the transaction group does gets around to committing
                 // our query.
                 this._bAllowRefresh = true; // allow refreshes again
@@ -1969,7 +1973,7 @@ export class SQLServerDataProvider
         // we are part of a transaction group, so just add our query to the list
         // and when the transaction is committed, we will send all the queries at once
         entity.TransactionGroup.AddTransaction(
-          new TransactionItem(entity, 'Delete', sSQL, null, { dataSource: this._dataSource }, (transactionResult: Record<string, any>, success: boolean) => {
+          new TransactionItem(entity, 'Delete', sSQL, null, { dataSource: this._pool }, (transactionResult: Record<string, any>, success: boolean) => {
             // we get here whenever the transaction group does gets around to committing
             // our query.
             result.EndedAt = new Date();
@@ -2068,7 +2072,7 @@ export class SQLServerDataProvider
                     ON
                         di.EntityID = e.ID
                     WHERE
-                        d.Name = @0`;
+                        d.Name = @p0`;
 
     const items = await this.ExecuteSQL(sSQL, [datasetName]);
     // now we have the dataset and the items, we need to get the update date from the items underlying entities
@@ -2239,7 +2243,7 @@ export class SQLServerDataProvider
             ON
                 di.EntityID = e.ID
             WHERE
-                d.Name = @0`;
+                d.Name = @p0`;
 
     const items = await this.ExecuteSQL(sSQL, [datasetName]);
 
@@ -2529,16 +2533,89 @@ export class SQLServerDataProvider
    */
   public async ExecuteSQL(query: string, parameters: any = null): Promise<any> {
     try {
-      if (this._queryRunner) {
-        const data = await this._queryRunner.query(query, parameters);
-        return data;
+      let request: sql.Request;
+      
+      if (this._transaction && this._transactionRequest) {
+        // Use transaction request if in a transaction
+        request = this._transactionRequest;
+      } else if (this._transaction) {
+        // Create a new request for this transaction if we don't have one
+        request = new sql.Request(this._transaction);
       } else {
-        const data = await this._dataSource.query(query, parameters);
-        return data;
+        // Use pool request for non-transactional queries
+        request = new sql.Request(this._pool);
       }
+      
+      // Add parameters if provided
+      if (parameters) {
+        if (Array.isArray(parameters)) {
+          // Handle positional parameters (legacy TypeORM style)
+          // Convert to named parameters for mssql
+          parameters.forEach((value, index) => {
+            request.input(`p${index}`, value);
+          });
+          // Replace ? with @p0, @p1, etc. in the query
+          let paramIndex = 0;
+          query = query.replace(/\?/g, () => `@p${paramIndex++}`);
+        } else if (typeof parameters === 'object') {
+          // Handle named parameters
+          for (const [key, value] of Object.entries(parameters)) {
+            request.input(key, value);
+          }
+        }
+      }
+      
+      const result = await request.query(query);
+      // Return recordset for consistency with TypeORM behavior
+      // If multiple recordsets, return recordsets array
+      return result.recordsets && Array.isArray(result.recordsets) && result.recordsets.length > 1 
+        ? result.recordsets 
+        : result.recordset;
     } catch (e) {
       LogError(e);
       throw e; // force caller to handle
+    }
+  }
+
+  /**
+   * Static helper method for executing SQL queries on an external connection pool.
+   * This method is designed to be used by generated code where a connection pool
+   * is passed in from the context. It returns results as arrays for consistency
+   * with the expected behavior in generated resolvers.
+   * 
+   * @param pool - The mssql ConnectionPool to execute the query on
+   * @param query - The SQL query to execute
+   * @param parameters - Optional parameters for the query
+   * @returns Promise<any[]> - Array of results (empty array if no results)
+   */
+  public static async ExecuteSQLWithPool(pool: sql.ConnectionPool, query: string, parameters?: any): Promise<any[]> {
+    try {
+      const request = new sql.Request(pool);
+      
+      // Add parameters if provided
+      if (parameters) {
+        if (Array.isArray(parameters)) {
+          // Handle positional parameters
+          parameters.forEach((value, index) => {
+            request.input(`p${index}`, value);
+          });
+          // Replace ? with @p0, @p1, etc. in the query
+          let paramIndex = 0;
+          query = query.replace(/\?/g, () => `@p${paramIndex++}`);
+        } else if (typeof parameters === 'object') {
+          // Handle named parameters
+          for (const [key, value] of Object.entries(parameters)) {
+            request.input(key, value);
+          }
+        }
+      }
+      
+      const result = await request.query(query);
+      // Always return array for consistency
+      return result.recordset || [];
+    } catch (e) {
+      LogError(e);
+      throw e;
     }
   }
 
@@ -2630,9 +2707,12 @@ export class SQLServerDataProvider
 
   protected async BeginTransaction() {
     try {
-      if (!this._queryRunner) this._queryRunner = this._dataSource.createQueryRunner();
-
-      await this._queryRunner.startTransaction();
+      // Create a new transaction from the pool
+      this._transaction = new sql.Transaction(this._pool);
+      await this._transaction.begin();
+      
+      // Create a request for this transaction that can be reused
+      this._transactionRequest = new sql.Request(this._transaction);
     } catch (e) {
       LogError(e);
       throw e; // force caller to handle
@@ -2641,7 +2721,11 @@ export class SQLServerDataProvider
 
   protected async CommitTransaction() {
     try {
-      await this._queryRunner.commitTransaction();
+      if (this._transaction) {
+        await this._transaction.commit();
+        this._transaction = null;
+        this._transactionRequest = null;
+      }
     } catch (e) {
       LogError(e);
       throw e; // force caller to handle
@@ -2650,7 +2734,11 @@ export class SQLServerDataProvider
 
   protected async RollbackTransaction() {
     try {
-      await this._queryRunner.rollbackTransaction();
+      if (this._transaction) {
+        await this._transaction.rollback();
+        this._transaction = null;
+        this._transactionRequest = null;
+      }
     } catch (e) {
       LogError(e);
       throw e; // force caller to handle

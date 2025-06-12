@@ -53,8 +53,8 @@ import {
   UserNotificationEntity,
   AIAgentEntityExtended
 } from '@memberjunction/core-entities';
-import { DataSource } from 'typeorm';
 import { apiKey, baseUrl, configInfo, graphqlPort, mj_core_schema } from '../config.js';
+import mssql from 'mssql';
 
 import { registerEnumType } from 'type-graphql';
 import { MJGlobal, CopyScalarsAndArrays } from '@memberjunction/global';
@@ -882,7 +882,7 @@ cycle.`);
    */
   protected async buildBaseSkipRequest(
     contextUser: UserInfo,
-    dataSource: DataSource,
+    dataSource: mssql.ConnectionPool,
     includeEntities: boolean,
     includeQueries: boolean,
     includeNotes: boolean,
@@ -955,7 +955,7 @@ cycle.`);
     includeQueries: boolean,
     includeNotes: boolean,
     includeRequests: boolean,
-    dataSource: DataSource,
+    dataSource: mssql.ConnectionPool,
     contextUser: UserInfo,
     forceEntitiesRefresh: boolean = false,
     includeCallBackKeyAndAccessToken: boolean = false
@@ -1005,7 +1005,7 @@ cycle.`);
    */
   protected async BuildSkipLearningCycleNewConversations(
     lastLearningCycleDate: Date,
-    dataSource: DataSource,
+    dataSource: mssql.ConnectionPool,
     contextUser: UserInfo
   ): Promise<SkipConversation[]> {
     try {
@@ -1143,7 +1143,7 @@ cycle.`);
     includeNotes: boolean,
     includeRequests: boolean,
     contextUser: UserInfo,
-    dataSource: DataSource,
+    dataSource: mssql.ConnectionPool,
     forceEntitiesRefresh: boolean = false,
     includeCallBackKeyAndAccessToken: boolean = false
   ): Promise<SkipAPIRequest> {
@@ -1191,7 +1191,7 @@ cycle.`);
    * @param conversationId ID of the conversation
    * @returns Array of artifacts associated with the conversation
    */
-  protected async buildSkipAPIArtifacts(contextUser: UserInfo, dataSource: DataSource, conversationId: string): Promise<SkipAPIArtifact[]> {
+  protected async buildSkipAPIArtifacts(contextUser: UserInfo, dataSource: mssql.ConnectionPool, conversationId: string): Promise<SkipAPIArtifact[]> {
     const md = new Metadata();
     const ei = md.EntityByName('MJ: Conversation Artifacts');
     const rv = new RunView();
@@ -1507,7 +1507,7 @@ cycle.`);
    * @param dataSource Database connection
    * @returns Array of entity rows based on packing configuration
    */
-  protected async PackEntityRows(e: EntityInfo, dataSource: DataSource): Promise<any[]> {
+  protected async PackEntityRows(e: EntityInfo, dataSource: mssql.ConnectionPool): Promise<any[]> {
     try {
       if (e.RowsToPackWithSchema === 'None')
         return [];
@@ -1545,12 +1545,13 @@ cycle.`);
               break;
           }
       }
-      const result = await dataSource.query(sql);
-      if (!result) {
+      const request = new mssql.Request(dataSource);
+      const result = await request.query(sql);
+      if (!result || !result.recordset) {
         return [];
       }
       else {
-        return result;
+        return result.recordset;
       }
     }
     catch (e) {
@@ -1567,7 +1568,7 @@ cycle.`);
    * @param dataSource Database connection
    * @returns Array of possible values for the field
    */
-  protected async PackFieldPossibleValues(f: EntityFieldInfo, dataSource: DataSource): Promise<SkipEntityFieldValueInfo[]> {
+  protected async PackFieldPossibleValues(f: EntityFieldInfo, dataSource: mssql.ConnectionPool): Promise<SkipEntityFieldValueInfo[]> {
     try {
       if (f.ValuesToPackWithSchema === 'None') {
         return []; // don't pack anything
@@ -1617,15 +1618,16 @@ cycle.`);
    * @param dataSource Database connection
    * @returns Array of distinct values for the field
    */
-  protected async GetFieldDistinctValues(f: EntityFieldInfo, dataSource: DataSource): Promise<SkipEntityFieldValueInfo[]> {
+  protected async GetFieldDistinctValues(f: EntityFieldInfo, dataSource: mssql.ConnectionPool): Promise<SkipEntityFieldValueInfo[]> {
     try {
       const sql = `SELECT DISTINCT ${f.Name} FROM ${f.SchemaName}.${f.BaseView}`;
-      const result = await dataSource.query(sql);
-      if (!result) {
+      const request = new mssql.Request(dataSource);
+      const result = await request.query(sql);
+      if (!result || !result.recordset) {
         return [];
       }
       else {
-        return result.map((r) => {
+        return result.recordset.map((r) => {
           return {
             value: r[f.Name], 
             displayValue: r[f.Name]
@@ -1652,7 +1654,7 @@ cycle.`);
    * @param dataSource Database connection
    * @returns Updated array of entity information
    */
-  private async refreshSkipEntities(dataSource: DataSource): Promise<SkipEntityInfo[]> {
+  private async refreshSkipEntities(dataSource: mssql.ConnectionPool): Promise<SkipEntityInfo[]> {
     try {
       const md = new Metadata();
       const skipSpecialIncludeEntities = (configInfo.askSkip?.entitiesToSend?.includeEntitiesFromExcludedSchemas ?? [])
@@ -1695,7 +1697,7 @@ cycle.`);
    * @param refreshIntervalMinutes Minutes before cache expires
    * @returns Array of entity information
    */
-  public async BuildSkipEntities(dataSource: DataSource, forceRefresh: boolean = false, refreshIntervalMinutes: number = 15): Promise<SkipEntityInfo[]> {
+  public async BuildSkipEntities(dataSource: mssql.ConnectionPool, forceRefresh: boolean = false, refreshIntervalMinutes: number = 15): Promise<SkipEntityInfo[]> {
     try {
       const now = Date.now();
       const cacheExpired = (now - AskSkipResolver.__lastRefreshTime) > (refreshIntervalMinutes * 60 * 1000);
@@ -1723,7 +1725,7 @@ cycle.`);
    * @param dataSource Database connection
    * @returns Packaged entity information
    */
-  protected async PackSingleSkipEntityInfo(e: EntityInfo, dataSource: DataSource): Promise<SkipEntityInfo> {
+  protected async PackSingleSkipEntityInfo(e: EntityInfo, dataSource: mssql.ConnectionPool): Promise<SkipEntityInfo> {
     try {
       const ret: SkipEntityInfo = {
         id: e.ID,
@@ -1794,7 +1796,7 @@ cycle.`);
    * @param dataSource Database connection
    * @returns Packaged field information
    */
-  protected async PackSingleSkipEntityField(f: EntityFieldInfo, dataSource: DataSource): Promise<SkipEntityFieldInfo> {
+  protected async PackSingleSkipEntityField(f: EntityFieldInfo, dataSource: mssql.ConnectionPool): Promise<SkipEntityFieldInfo> {
     try {
       return {
         //id: f.ID,
@@ -1848,7 +1850,7 @@ cycle.`);
    * @returns Object containing loaded entities and contexts
    */
   protected async HandleSkipChatInitialObjectLoading(
-    dataSource: DataSource,
+    dataSource: mssql.ConnectionPool,
     ConversationId: string,
     UserQuestion: string,
     user: UserInfo,
@@ -1985,7 +1987,7 @@ cycle.`);
    * @returns Array of messages in Skip format
    */
   protected async LoadConversationDetailsIntoSkipMessages(
-    dataSource: DataSource,
+    dataSource: mssql.ConnectionPool,
     ConversationId: string,
     maxHistoricalMessages?: number,
     roleFilter?: string
@@ -2010,14 +2012,15 @@ cycle.`);
                       ConversationID = '${ConversationId}'${roleFilterClause}
                    ORDER
                       BY __mj_CreatedAt DESC`;
-      const result = await dataSource.query(sql);
-      if (!result) 
+      const request = new mssql.Request(dataSource);
+      const result = await request.query(sql);
+      if (!result || !result.recordset) 
         throw new Error(`Error running SQL: ${sql}`);
       else {
         // first, let's sort the result array into a local variable called returnData and in that we will sort by __mj_CreatedAt in ASCENDING order so we have the right chronological order
         // the reason we're doing a LOCAL sort here is because in the SQL query above, we're sorting in DESCENDING order so we can use the TOP clause to limit the number of records and get the
         // N most recent records. We want to sort in ASCENDING order because we want to send the messages to the Skip API in the order they were created.
-        const returnData = result.sort((a: any, b: any) => {
+        const returnData = result.recordset.sort((a: any, b: any) => {
           const aDate = new Date(a.__mj_CreatedAt);
           const bDate = new Date(b.__mj_CreatedAt);
           return aDate.getTime() - bDate.getTime();
@@ -2123,7 +2126,7 @@ cycle.`);
     input: SkipAPIRequest,
     UserQuestion: string,
     user: UserInfo,
-    dataSource: DataSource,
+    dataSource: mssql.ConnectionPool,
     ConversationId: string,
     userPayload: UserPayload,
     pubSub: PubSubEngine,
@@ -2371,7 +2374,7 @@ cycle.`);
     apiResponse: SkipAPIAnalysisCompleteResponse,
     UserQuestion: string,
     user: UserInfo,
-    dataSource: DataSource,
+    dataSource: mssql.ConnectionPool,
     ConversationId: string,
     userPayload: UserPayload,
     pubSub: PubSubEngine,
@@ -2435,7 +2438,7 @@ cycle.`);
     apiResponse: SkipAPIClarifyingQuestionResponse,
     UserQuestion: string,
     user: UserInfo,
-    dataSource: DataSource,
+    dataSource: mssql.ConnectionPool,
     ConversationId: string,
     userPayload: UserPayload,
     pubSub: PubSubEngine,
@@ -2509,7 +2512,7 @@ cycle.`);
     apiResponse: SkipAPIDataRequestResponse,
     UserQuestion: string,
     user: UserInfo,
-    dataSource: DataSource,
+    dataSource: mssql.ConnectionPool,
     ConversationId: string,
     userPayload: UserPayload,
     pubSub: PubSubEngine,
@@ -2681,7 +2684,7 @@ cycle.`);
     convoEntity: ConversationEntity,
     pubSub: PubSubEngine,
     userPayload: UserPayload,
-    dataSource: DataSource,
+    dataSource: mssql.ConnectionPool,
     startTime: Date
   ): Promise<{ AIMessageConversationDetailID: string }> {
     const sTitle = apiResponse.title || apiResponse.reportTitle;
@@ -2722,9 +2725,10 @@ cycle.`);
         const ei = md.EntityByName("MJ: Conversation Artifact Versions");        
         const sSQL = `SELECT ISNULL(MAX(Version),0) AS MaxVersion FROM [${ei.SchemaName}].[${ei.BaseView}] WHERE ConversationArtifactID = '${artifactId}'`;
         try {
-          const result = await dataSource.query(sSQL);
-          if (result && result.length > 0) {
-            newVersion = result[0].MaxVersion + 1;
+          const request = new mssql.Request(dataSource);
+          const result = await request.query(sSQL);
+          if (result && result.recordset && result.recordset.length > 0) {
+            newVersion = result.recordset[0].MaxVersion + 1;
           } 
           else {
             LogError(`Error getting max version for artifact ID: ${artifactId}`, undefined, result);
