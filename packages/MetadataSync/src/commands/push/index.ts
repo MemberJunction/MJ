@@ -103,6 +103,35 @@ export default class Push extends Command {
       
     } catch (error) {
       spinner.fail('Push failed');
+      
+      // Enhanced error logging for debugging
+      this.log('\n=== Push Error Details ===');
+      this.log(`Error type: ${error?.constructor?.name || 'Unknown'}`);
+      this.log(`Error message: ${error instanceof Error ? error.message : String(error)}`);
+      
+      if (error instanceof Error && error.stack) {
+        this.log(`\nStack trace:`);
+        this.log(error.stack);
+      }
+      
+      // Log context information
+      this.log(`\nContext:`);
+      this.log(`- Working directory: ${configManager.getOriginalCwd()}`);
+      this.log(`- Flags: ${JSON.stringify(flags, null, 2)}`);
+      
+      // Check if error is related to common issues
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('entity directories')) {
+        this.log(`\nHint: This appears to be an entity directory configuration issue.`);
+        this.log(`Make sure each entity directory has a .mj-sync.json file.`);
+      } else if (errorMessage.includes('database') || errorMessage.includes('connection')) {
+        this.log(`\nHint: This appears to be a database connectivity issue.`);
+        this.log(`Check your mj.config.cjs configuration and database connectivity.`);
+      } else if (errorMessage.includes('config') || errorMessage.includes('mj.config.cjs')) {
+        this.log(`\nHint: This appears to be a configuration file issue.`);
+        this.log(`Make sure mj.config.cjs exists and is properly configured.`);
+      }
+      
       this.error(error as Error);
     } finally {
       // Reset sync engine singleton
@@ -318,7 +347,14 @@ export default class Push extends Command {
     // Save the record
     const saved = await entity.Save();
     if (!saved) {
-      const errors = entity.LatestResult?.Errors?.join(', ') || 'Unknown error';
+      const message = entity.LatestResult?.Message;
+      if (message) {
+        throw new Error(`Failed to save record: ${message}`);
+      }
+      
+      const errors = entity.LatestResult?.Errors?.map(err => 
+        typeof err === 'string' ? err : (err?.message || JSON.stringify(err))
+      )?.join(', ') || 'Unknown error';
       throw new Error(`Failed to save record: ${errors}`);
     }
     
@@ -418,7 +454,14 @@ export default class Push extends Command {
           // Save the related entity
           const saved = await entity.Save();
           if (!saved) {
-            const errors = entity.LatestResult?.Errors?.join(', ') || 'Unknown error';
+            const message = entity.LatestResult?.Message;
+            if (message) {
+              throw new Error(`Failed to save related ${entityName}: ${message}`);
+            }
+            
+            const errors = entity.LatestResult?.Errors?.map(err => 
+              typeof err === 'string' ? err : (err?.message || JSON.stringify(err))
+            )?.join(', ') || 'Unknown error';
             throw new Error(`Failed to save related ${entityName}: ${errors}`);
           }
           
