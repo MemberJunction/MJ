@@ -106,16 +106,17 @@ Before creating entity JSON files, follow this checklist to avoid common mistake
 
 ✅ **1. Find the Entity Definition**
 - Open `packages/MJCoreEntities/src/generated/entity_subclasses.ts` or `packages/GeneratedEntities/src/generated/entity_subclasses.ts`
-- Search for `[EntityName]EntityZodObject` (e.g., `TemplateEntityZodObject`)
-- Identify required vs optional fields
+- Search for `class [EntityName]Entity` (e.g., `class TemplateEntity`)
+- Review JSDoc comments and property definitions to identify required vs optional fields
 
 ✅ **2. Check Required Fields**
-- Fields without `.optional()` are required
+- Look for JSDoc comments with `@required` annotations
+- Fields without `?` in TypeScript definitions are typically required
 - Always include `Name` (almost always required)
 - Always include `UserID` (use System User ID: `ECAFCCEC-6A37-EF11-86D4-000D3A4E707E`)
 
 ✅ **3. Validate Field Names**
-- Use exact field names from the Zod schema
+- Use exact field names from the BaseEntity class definition
 - Field names are case-sensitive
 - Don't assume fields exist (e.g., not all entities have `Status`)
 
@@ -135,7 +136,11 @@ Before creating entity JSON files, follow this checklist to avoid common mistake
 
 #### Finding Entity Definitions
 
-Entity classes are auto-generated and located in:
+The approach depends on whether you're working inside or outside the MemberJunction monorepo:
+
+##### Working Inside MJ Monorepo
+
+Entity classes are located in:
 
 - **Core MJ Entities**: `packages/MJCoreEntities/src/generated/entity_subclasses.ts`
   - System entities like Users, Roles, EntityFields, etc.
@@ -145,27 +150,98 @@ Entity classes are auto-generated and located in:
   - Your application-specific entities
   - Business domain entities
 
+##### Working Outside MJ Monorepo (In Your Own Project)
+
+Entity classes are located in:
+
+- **Core MJ Entities**: `node_modules/@memberjunction/core-entities/dist/generated/entity_subclasses.js`
+  - Note: This is compiled JavaScript, but your IDE should provide IntelliSense
+  - For TypeScript definitions: `node_modules/@memberjunction/core-entities/dist/generated/entity_subclasses.d.ts`
+  
+- **Custom Entities**: Your project's generated entities location (varies by project structure)
+  - Common locations: `src/generated/`, `packages/entities/`, or similar
+  - Look for files containing your custom entity classes
+
+##### Best Practice: Use Your IDE's IntelliSense
+
+**Recommended approach for all scenarios:**
+
+1. **Import the entity class** in your IDE:
+   ```typescript
+   import { TemplateEntity } from '@memberjunction/core-entities';
+   ```
+
+2. **Create an instance and explore with IntelliSense**:
+   ```typescript
+   const template = new TemplateEntity();
+   // Type "template." and let your IDE show available properties
+   ```
+
+3. **Check the class definition** (F12 or "Go to Definition") to see:
+   - JSDoc comments with field descriptions
+   - Required vs optional fields
+   - Field types and validation rules
+   - Relationships and constraints
+
 #### How to Find Required Fields
 
-1. **Open the entity class file** in your IDE
-2. **Search for your entity** (e.g., `class TemplateEntity`)
-3. **Examine the Zod schema** (e.g., `TemplateEntityZodObject`)
-4. **Look for required fields** - fields without `.optional()` are required
-5. **Check field types** - string, number, boolean, datetime, etc.
-6. **Review validation rules** - min/max lengths, enum values, etc.
+1. **Use IDE IntelliSense** (Recommended):
+   - Import the entity class
+   - Create an instance: `const entity = new TemplateEntity();`
+   - Use "Go to Definition" (F12) to see the BaseEntity class
+   - Look for JSDoc comments and field definitions
+
+2. **Examine the BaseEntity Class**:
+   - Find the entity class (e.g., `class TemplateEntity`)
+   - Look at property declarations with JSDoc comments
+   - Check for required vs optional field annotations
+   - Review any validation methods or constraints
+
+3. **Runtime Metadata Discovery**:
+   ```typescript
+   import { Metadata } from '@memberjunction/core';
+   
+   const md = new Metadata();
+   const entityInfo = md.EntityByName('Templates');
+   console.log('Required fields:', entityInfo.Fields.filter(f => !f.AllowsNull));
+   ```
 
 #### Example: Templates Entity Structure
 ```typescript
-// From MJCoreEntities/src/generated/entity_subclasses.ts
-export const TemplateEntityZodObject = z.object({
-  ID: z.string(),
-  Name: z.string(),                    // Required
-  Description: z.string().optional(),  // Optional
-  UserID: z.string(),                 // Required - MUST be valid User ID
-  CategoryID: z.string().optional(),  // Optional foreign key
-  Status: z.literal('Active').optional(), // This field may not exist!
-  // ... other fields
-});
+// BaseEntity class (accessible via IDE IntelliSense)
+export class TemplateEntity extends BaseEntity {
+  /**
+   * Primary key - auto-generated GUID
+   */
+  ID: string;
+  
+  /**
+   * Template name - REQUIRED
+   * @required
+   */
+  Name: string;
+  
+  /**
+   * Template description - optional
+   */
+  Description?: string;
+  
+  /**
+   * User who created this template - REQUIRED
+   * Must be a valid User ID
+   * @required
+   * @foreignKey Users.ID
+   */
+  UserID: string;
+  
+  /**
+   * Category for organizing templates - optional
+   * @foreignKey TemplateCategories.ID
+   */
+  CategoryID?: string;
+  
+  // Note: Status field may not exist on all entities!
+}
 ```
 
 #### Common Required Fields Pattern
@@ -198,14 +274,14 @@ Most MJ entities follow these patterns:
 }
 ```
 
-**✅ Solution**: Check the Zod schema first
+**✅ Solution**: Check the BaseEntity class first
 ```typescript
 // In entity_subclasses.ts - if you don't see Status here, don't use it
-export const TemplateEntityZodObject = z.object({
-  Name: z.string(),
-  Description: z.string().optional(),
+export class TemplateEntity extends BaseEntity {
+  Name: string;  // Required
+  Description?: string;  // Optional (note the ?)
   // No Status field defined
-});
+}
 ```
 
 #### ❌ Mistake 2: Missing Required Fields
@@ -289,13 +365,13 @@ mydir/
 # Open in your IDE:
 packages/MJCoreEntities/src/generated/entity_subclasses.ts
 
-# Search for your entity (Ctrl+F):
-TemplateEntityZodObject
+# Search for your entity class (Ctrl+F):
+class TemplateEntity
 
-# Note the required fields (no .optional()):
-Name: z.string(),           // Required
-UserID: z.string(),         // Required  
-Description: z.string().optional(),  // Optional
+# Note the required vs optional fields:
+Name: string;           // Required (no ?)
+UserID: string;         // Required (no ?)  
+Description?: string;   // Optional (note the ?)
 ```
 
 #### Step 2: Create Directory Structure
@@ -338,10 +414,10 @@ When using AI tools (like Claude, ChatGPT, etc.) to generate entity files:
 **🤖 For AI Assistants:**
 
 1. **Always check entity definitions first** - Never assume field names or requirements
-2. **Look up the exact Zod schema** in the generated entity files
+2. **Look up the exact BaseEntity class** in the generated entity files
 3. **Use the System User ID** (`ECAFCCEC-6A37-EF11-86D4-000D3A4E707E`) for UserID fields
 4. **Include only fields that exist** in the entity definition
-5. **Use proper data types** as defined in the Zod schema
+5. **Use proper data types** as defined in the BaseEntity class
 6. **Remember file naming rules**:
    - Configuration files (.mj-sync.json) must have dot prefix
    - Metadata files follow the filePattern in .mj-sync.json
@@ -353,12 +429,12 @@ I need to create entity files for the [EntityName] entity in MemberJunction.
 
 Please:
 1. First, check the entity definition in packages/MJCoreEntities/src/generated/entity_subclasses.ts
-2. Find the [EntityName]EntityZodObject schema
-3. Identify required vs optional fields
+2. Find the class [EntityName]Entity (e.g., class TemplateEntity)
+3. Review JSDoc comments and property definitions to identify required vs optional fields
 4. Create a .mj-sync.json file with correct glob pattern
 5. Create sample metadata JSON files following the filePattern
 6. Use UserID: "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E" for required UserID fields
-7. Follow the exact field names and data types from the Zod schema
+7. Follow the exact field names and data types from the BaseEntity class definition
 
 CRITICAL: Configuration files (.mj-sync.json) must start with dot, but metadata files follow the filePattern specified in the configuration.
 ```
@@ -388,10 +464,10 @@ With `"filePattern": ".*.json"`:
 | Error Message | Cause | Solution |
 |---------------|-------|----------|
 | `No entity directories found` | Missing .mj-sync.json or wrong filePattern | Check .mj-sync.json exists and uses `"*.json"` |
-| `Field 'X' does not exist on entity 'Y'` | Using non-existent field | Check Zod schema in entity_subclasses.ts |
+| `Field 'X' does not exist on entity 'Y'` | Using non-existent field | Check BaseEntity class in entity_subclasses.ts |
 | `User ID cannot be null` | Missing required UserID | Add `"UserID": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"` |
 | `Processing 0 records` | Files don't match filePattern | Check files match pattern in .mj-sync.json |
-| Failed validation | Wrong data type or format | Check Zod schema for field types |
+| Failed validation | Wrong data type or format | Check BaseEntity class for field types |
 
 ### System User ID Reference
 
