@@ -10,7 +10,7 @@ import { RegisterClass } from "@memberjunction/global";
  * Possible params:
  *  EntityList - a comma separated list of entity names to detect changes for. If not provided, all eligible entities will be processed.
  */
-@RegisterClass(BaseAction, "Run External Change Detection")
+@RegisterClass(BaseAction, "__RunExternalChangeDetection")
 export class ExternalChangeDetectionAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         const entityListParam = params.Params.find(p => p.Name === 'EntityList');

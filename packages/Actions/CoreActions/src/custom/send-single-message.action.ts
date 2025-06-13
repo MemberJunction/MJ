@@ -16,7 +16,7 @@ import { Message } from "@memberjunction/communication-types";
  *  * Provider: The name of the Communication Provider to use to send the message.
  *  * MessageType: The name of the Message Type (within the provider) to use to send the message.
  */
-@RegisterClass(BaseAction, "Send Single Message")
+@RegisterClass(BaseAction, "__SendSingleMessage")
 export class SendSingleMessageAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         const subject = params.Params.find(p => p.Name === 'Subject');
