@@ -12,6 +12,7 @@ import { cleanupProvider } from '../../lib/provider-utils';
 import { configManager } from '../../lib/config-manager';
 import { getSyncEngine, resetSyncEngine } from '../../lib/singleton-manager';
 import type { SqlLoggingSession } from '@memberjunction/sqlserver-dataprovider';
+import { uuidv4 } from '@memberjunction/global';
 
 export default class Push extends Command {
   static description = 'Push local file changes to the database';
@@ -387,7 +388,7 @@ export default class Push extends Command {
               }
             } else if (pk.Type.toLowerCase() === 'uniqueidentifier' && !recordData.fields[pk.Name]) {
               // Generate UUID for this primary key and set it on entity directly
-              const uuid = syncEngine.generateUUID();
+              const uuid = uuidv4();
               // Don't add to fields as it will be in primaryKey section after save
               if (verbose) {
                 this.log(`  Generated UUID for primary key ${pk.Name}: ${uuid}`);
@@ -528,7 +529,7 @@ export default class Push extends Command {
                     }
                   } else if (pk.Type.toLowerCase() === 'uniqueidentifier' && !relatedRecord.fields[pk.Name]) {
                     // Generate UUID for this primary key and set it on entity directly
-                    const uuid = syncEngine.generateUUID();
+                    const uuid = uuidv4();
                     // Don't add to fields as it will be in primaryKey section after save
                     (entity as any)[pk.Name] = uuid;
                     if (verbose) {
