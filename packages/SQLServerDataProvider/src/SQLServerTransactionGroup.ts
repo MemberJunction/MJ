@@ -51,7 +51,7 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                             
                             if (rawResult && rawResult.length > 0) {
                                 // Process the result to handle timezone conversions
-                                result = sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo);
+                                result = await sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo);
                                 this.SetVariableValuesFromEntity(item.BaseEntity, result[0]); // set the variables that this item defines after the save is done
                             }
                             bSuccess = (result && result.length > 0); // success if we have a result and it has rows 
@@ -85,7 +85,7 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                                 
                                 if (rawResult && rawResult.length > 0) {
                                     // Process the result to handle timezone conversions
-                                    result = sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo);
+                                    result = await sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo);
                                 }
                             } else {
                                 const queryResult = await request.query(item.Instruction);
@@ -93,7 +93,7 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                                 
                                 if (rawResult && rawResult.length > 0) {
                                     // Process the result to handle timezone conversions
-                                    result = sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo);
+                                    result = await sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo);
                                 }
                             }
                             bSuccess = (result && result.length > 0); // success if we have a result and it has rows 
