@@ -1,0 +1,82 @@
+[
+  {
+    "fields": {
+      "Name": "Demo Loop Agent",
+      "Description": "Simple Agent Demo",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExecutionOrder": 0,
+      "ExposeAsAction": true
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Demo Loop Agent - Main Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "67FF1331-BB59-401C-AA91-3B22D6EDF4BD"
+          },
+          "sync": {
+            "lastModified": "2025-06-13T22:06:14.754Z",
+            "checksum": "2f61e887fc4305ff9a139125e5a419009e858a3b0de5b1756a6ffc8955dab0a6"
+          }
+        }
+      ],
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Get Weather",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C8CEC297-98A5-43BE-84E5-35E6F41281EA"
+          },
+          "sync": {
+            "lastModified": "2025-06-13T22:06:14.834Z",
+            "checksum": "bfd0856ee8119698eed7b76b888f9736680ca59d333a427685e8b16591a4df73"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Census Data Lookup",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "63A4FF2D-2628-49BD-A5F9-8A1B4FE9A08B"
+          },
+          "sync": {
+            "lastModified": "2025-06-13T22:06:14.862Z",
+            "checksum": "10a488464ba741046c73438156a73b41c8a661e00b3db662f6d222f292213664"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Get Stock Price",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3DCC3D66-4DD4-4BFB-90EF-5345F341AFFB"
+          },
+          "sync": {
+            "lastModified": "2025-06-13T22:06:14.884Z",
+            "checksum": "99f0140095255853b769a5a31317c17afd16fda1ccc7c9f45eb15fe39c2545ed"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "336CAB6C-B859-449C-A4C2-6DA1EF96475B"
+    },
+    "sync": {
+      "lastModified": "2025-06-13T22:06:14.884Z",
+      "checksum": "1a2ce700b40af2cd1adc758e7bbf5941644ce288e02852030fa531d40ffa4066"
+    }
+  }
+]
