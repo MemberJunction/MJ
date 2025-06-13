@@ -972,7 +972,7 @@ ${whereClause}GO${permissions}
         const firstKey = entity.FirstPrimaryKey;
 
         //double exclamations used on the firstKey.DefaultValue property otherwise the type of this variable is 'number | ""';
-        const primaryKeyAutomatic: boolean = firstKey.AutoIncrement || (firstKey.Type.toLowerCase().trim() === 'uniqueidentifier') && (!!firstKey.DefaultValue && firstKey.DefaultValue.trim().length > 0);
+        const primaryKeyAutomatic: boolean = firstKey.AutoIncrement; // Only exclude auto-increment fields, allow manual override for all other PKs including UUIDs with defaults
         const efString: string = this.createEntityFieldsParamString(entity.Fields, !primaryKeyAutomatic);
         const permissions: string = this.generateSPPermissions(entity, spName, SPType.Create);
 
@@ -984,32 +984,41 @@ ${whereClause}GO${permissions}
         if (entity.FirstPrimaryKey.AutoIncrement) {
             selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.FirstPrimaryKey.Name}] = SCOPE_IDENTITY()`;
         } else if (entity.FirstPrimaryKey.Type.toLowerCase().trim() === 'uniqueidentifier') {
-            // our primary key is a uniqueidentifier. Two scenarios exist for this:
-            // 1) The default value is specified in the database (usually either NEWID() or NEWSEQUENTIALID()).
-            // 2) No default value is specified, so we need to generate a new GUID in the stored procedure using NEWID() --- NewSequentialID() is not allowed in a stored procedure, only usable as a default value.
+            // our primary key is a uniqueidentifier. Now we support optional override:
+            // - If PKEY is provided (not NULL), use it
+            // - If PKEY is NULL and there's a default value, let the database use it
+            // - If PKEY is NULL and no default value, generate NEWID()
 
-            // so, first check to see if there is a default value for the field or not
             const hasDefaultValue = entity.FirstPrimaryKey.DefaultValue && entity.FirstPrimaryKey.DefaultValue.trim().length > 0;
-            // if we have a default value, then we do NOT want to insert a new value, let the database use the default
+            
+            preInsertCode = `DECLARE @InsertedRow TABLE ([${entity.FirstPrimaryKey.Name}] UNIQUEIDENTIFIER)`;
+            outputCode = `OUTPUT INSERTED.[${entity.FirstPrimaryKey.Name}] INTO @InsertedRow
+    `;
+            
             if (hasDefaultValue) {
-                // in this situation, we DO have a default value, so we do NOT insert a new value, we let the database use the default
-                // however, we need to do some extra preprocessing to use the OUTPUT from the INSERT statement and return the record that was
-                // just created, that is how we get the newly created GUID that was the default value
-                preInsertCode = `DECLARE @InsertedRow TABLE ([${entity.FirstPrimaryKey.Name}] UNIQUEIDENTIFIER)`;
-                outputCode = `OUTPUT INSERTED.[${entity.FirstPrimaryKey.Name}] INTO @InsertedRow
-    `
-                selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.FirstPrimaryKey.Name}] = (SELECT [${entity.FirstPrimaryKey.Name}] FROM @InsertedRow)`;
+                // Has default value - check if ID was provided
+                preInsertCode += `
+    DECLARE @UseProvidedID BIT = CASE WHEN @${entity.FirstPrimaryKey.Name} IS NOT NULL THEN 1 ELSE 0 END`;
+                
+                // Always include the PK field in the insert
+                additionalFieldList = ',\n            [' + entity.FirstPrimaryKey.Name + ']';
+                // Use the provided value if not null, otherwise extract and use the default
+                let defValue = entity.FirstPrimaryKey.DefaultValue.trim();
+                if (defValue.startsWith("'") && defValue.endsWith("'")) {
+                    defValue = defValue.substring(1, defValue.length - 1).trim();
+                }
+                additionalValueList = `,\n            ISNULL(@${entity.FirstPrimaryKey.Name}, ${defValue})`;
             }
             else {
-                // we have no default value, so we use NEWID() to generate a new GUID and we manually insert it into the table
-                // as part of the sproc
-                preInsertCode = `DECLARE @newId UNIQUEIDENTIFIER = NEWID();\n    SET @${entity.FirstPrimaryKey.Name} = @newId;\n`;
-
+                // No default value - use provided ID or generate new one
+                preInsertCode += `
+    DECLARE @ActualID UNIQUEIDENTIFIER = ISNULL(@${entity.FirstPrimaryKey.Name}, NEWID())`;
+                
                 additionalFieldList = ',\n            [' + entity.FirstPrimaryKey.Name + ']';
-                additionalValueList = ',\n            @newId';
-
-                selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.FirstPrimaryKey.Name}] = @newId`;
+                additionalValueList = ',\n            @ActualID';
             }
+            
+            selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.FirstPrimaryKey.Name}] = (SELECT [${entity.FirstPrimaryKey.Name}] FROM @InsertedRow)`;
         } else {
             selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE `;
             let isFirst = true;
@@ -1131,7 +1140,7 @@ ${updatedAtTrigger}
         let sOutput: string = '', isFirst: boolean = true;
         for (let i: number = 0; i < entityFields.length; ++i) {
             const ef: EntityFieldInfo = entityFields[i];
-            const autoGeneratedPrimaryKey: boolean = ef.AutoIncrement || ef.Type.toLowerCase().trim() === 'uniqueidentifier';
+            const autoGeneratedPrimaryKey: boolean = ef.AutoIncrement; // Only exclude auto-increment fields from params
             if (
                 (ef.AllowUpdateAPI || (ef.IsPrimaryKey && isUpdate)) &&
                     !ef.IsVirtual &&
@@ -1143,12 +1152,11 @@ ${updatedAtTrigger}
                 else
                     isFirst = false;
 
-                // for unique identifiers, only for spCreate procs, IF there is a default value specified then we append a default parameter value
-                // to the sproc param with '00000000-0000-0000-0000-000000000000' so that the sproc can be called without passing in a value
-                // within the sproc body for spCreate, we will look for this special value and substitute it with the actual default value for the column (typically newid() or newsequentialid())
+                // For primary keys (non-auto-increment), make them optional with NULL default
+                // This allows callers to omit the PK and let the DB/sproc handle it
                 let defaultParamValue = '';
-                if (!isUpdate && ef.IsUniqueIdentifier && ef.HasDefaultValue) {
-                    defaultParamValue = ` = '${this.__specialUUIDValue}'`;
+                if (!isUpdate && ef.IsPrimaryKey && !ef.AutoIncrement) {
+                    defaultParamValue = ` = NULL`;
                 }
                 sOutput += `@${ef.CodeName} ${ef.SQLFullType}${defaultParamValue}`;
             }
@@ -1157,7 +1165,7 @@ ${updatedAtTrigger}
     }
 
     protected createEntityFieldsInsertString(entity: EntityInfo, entityFields: EntityFieldInfo[], prefix: string): string {
-        const autoGeneratedPrimaryKey = entity.FirstPrimaryKey.AutoIncrement || entity.FirstPrimaryKey.Type.toLowerCase().trim() === 'uniqueidentifier';
+        const autoGeneratedPrimaryKey = entity.FirstPrimaryKey.AutoIncrement; // Only exclude auto-increment PKs from insert
         let sOutput: string = '', isFirst: boolean = true;
         const filteredFields = entityFields.filter(f => f.AllowUpdateAPI);
         for (let i: number = 0; i < entityFields.length; ++i) {

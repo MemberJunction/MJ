@@ -81,13 +81,6 @@ const includePrimaryKey = classPrefix === 'Update' || !f.AutoIncrement;
 - Include primary key fields for create operations unless auto-increment
 - Check for null/undefined values before including in mutation
 
-### 5. MJCore BaseEntity Updates
-**File**: `packages/MJCore/src/generic/baseEntity.ts`
-
-#### Update `NewRecord` method:
-- Don't automatically generate values for non-identity primary keys if a value is already set
-- Preserve any primary key values set before calling `NewRecord()`
-
 ## Implementation Steps
 
 1. **Update SQL CodeGen** (Priority: High)
@@ -106,7 +99,7 @@ const includePrimaryKey = classPrefix === 'Update' || !f.AutoIncrement;
    - Test both providers
 
 4. **Update BaseEntity** (Priority: Low)
-   - Ensure NewRecord preserves existing PK values
+   - Ensure NewRecord resets all values including pkey values (it should)
    - Test entity creation flows
 
 5. **Testing** (Priority: Critical)

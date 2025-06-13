@@ -371,6 +371,30 @@ export default class Push extends Command {
       entity = await syncEngine.createEntityObject(entityName);
       entity.NewRecord();
       isNew = true;
+      
+      // Handle primary keys for new records
+      const entityInfo = syncEngine.getEntityInfo(entityName);
+      if (entityInfo) {
+        for (const pk of entityInfo.PrimaryKeys) {
+          if (!pk.AutoIncrement) {
+            // Check if we have a value in primaryKey object
+            if (recordData.primaryKey?.[pk.Name]) {
+              // User specified a primary key for new record, add it to fields
+              recordData.fields[pk.Name] = recordData.primaryKey[pk.Name];
+              if (verbose) {
+                this.log(`  Using specified primary key ${pk.Name}: ${recordData.primaryKey[pk.Name]}`);
+              }
+            } else if (pk.Type.toLowerCase() === 'uniqueidentifier' && !recordData.fields[pk.Name]) {
+              // Generate UUID for this primary key
+              const uuid = syncEngine.generateUUID();
+              recordData.fields[pk.Name] = uuid;
+              if (verbose) {
+                this.log(`  Generated UUID for primary key ${pk.Name}: ${uuid}`);
+              }
+            }
+          }
+        }
+      }
     }
     
     // Apply defaults first

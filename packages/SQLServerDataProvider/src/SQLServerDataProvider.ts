@@ -1921,21 +1921,26 @@ export class SQLServerDataProvider
       bFirst: boolean = true;
     for (let i = 0; i < entity.EntityInfo.Fields.length; i++) {
       const f = entity.EntityInfo.Fields[i];
-      if (f.AllowUpdateAPI) {
-        if (!f.SkipValidation) {
+      // For CREATE operations, include primary keys that are not auto-increment and have actual values
+      const includePrimaryKeyForCreate = !isUpdate && f.IsPrimaryKey && !f.AutoIncrement && entity.Get(f.Name) !== null && entity.Get(f.Name) !== undefined;
+      
+      if (f.AllowUpdateAPI || includePrimaryKeyForCreate) {
+        if (!f.SkipValidation || includePrimaryKeyForCreate) {
           // DO NOT INCLUDE any fields where we skip validation, these are fields that are not editable by the user/object
           // model/api because they're special fields like ID, CreatedAt, etc. or they're virtual or auto-increment, etc.
+          // EXCEPTION: Include primary keys for CREATE when they have values and are not auto-increment
           let value = entity.Get(f.Name);
           if (value && f.Type.trim().toLowerCase() === 'datetimeoffset') {
             // for non-null datetimeoffset fields, we need to convert the value to ISO format
             value = new Date(value).toISOString();
-          } else if (!isUpdate && f.Type.trim().toLowerCase() === 'uniqueidentifier') {
+          } else if (!isUpdate && f.Type.trim().toLowerCase() === 'uniqueidentifier' && !includePrimaryKeyForCreate) {
             // in the case of unique identifiers, for CREATE procs only,
             // we need to check to see if the value we have in the entity object is a function like newid() or newsquentialid()
             // in those cases we should just skip the parameter entirely because that means there is a default value that should be used
             // and that will be handled by the database not by us
             // instead of just checking for specific functions like newid(), we can instead check for any string that includes ()
             // this way we can handle any function that the database might support in the future
+            // EXCEPTION: Don't skip if we're including a primary key for create
             if (typeof value === 'string' && value.includes('()')) {
               continue; // skip this field entirely by going to the next iteration of the loop
             }
