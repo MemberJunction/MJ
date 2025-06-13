@@ -15,7 +15,6 @@ import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { Metadata, EntityPermissionType, CompositeKey } from '@memberjunction/core'
 
 import { MaxLength } from 'class-validator';
-// TypeORM import removed - no longer needed
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
 
