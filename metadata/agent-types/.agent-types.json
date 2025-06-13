@@ -3,6 +3,7 @@
     "fields": {
       "Name": "Loop",
       "Description": "Basic Agentic Loop",
+      "AgentPromptPlaceholder": "agentSpecificPrompt",
       "SystemPromptID": "@lookup:AI Prompts.Name=Loop Agent Type: System Prompt",
       "IsActive": true
     },
@@ -11,8 +12,8 @@
       "ID": "2A243235-D2C5-4EA9-8DE9-24E924616A13"
     },
     "sync": {
-      "lastModified": "2025-06-13T22:06:14.747Z",
-      "checksum": "9e45e43df6fce1b6629755cc2b0d762d1b88d8179606c5048a2e38f9d897398a"
+      "lastModified": "2025-06-13T22:44:01.549Z",
+      "checksum": "35f95d6d15ab1ef98e1871f34aa2fc2332dfec44e181a9c9292a654f817842aa"
     }
   }
 ]
