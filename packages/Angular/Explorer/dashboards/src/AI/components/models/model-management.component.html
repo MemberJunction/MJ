@@ -1,4 +1,4 @@
-<div class="model-management-container" mjFillContainer [rightMargin]="8" [bottomMargin]="8">
+<div class="model-management-container">
   <div class="dashboard-header">
     <div class="header-info">
       <span class="model-count">{{ filteredModels.length }} AI models</span>
@@ -53,7 +53,7 @@
       <kendo-splitter 
         class="main-splitter"
         orientation="horizontal"
-        mjFillContainer>
+        >
         
         <!-- Filter Panel (Left) -->
         <kendo-splitter-pane 
@@ -124,7 +124,7 @@
         <kendo-splitter-pane 
           [resizable]="true"
           [scrollable]="false">
-          <div class="models-pane-container" mjFillContainer>
+          <div class="models-pane-container" >
             @if (filteredModels.length === 0) {
               <div class="empty-state">
                 <span class="fa-solid fa-microchip empty-icon"></span>

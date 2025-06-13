@@ -4,25 +4,25 @@
     <kendo-drawer
       #drawer
       [items]="drawerItems"
-      [mode]="mode"
-      [mini]="mini"
+      mode="push"
+      [mini]="true"
       [animation]="false"
       (select)="onDrawerSelect($event)"
-      [autoCollapse]="false"
+      [autoCollapse]="true"
     >
       <ng-template kendoDrawerItemTemplate let-item>
         <div class="drawer-item-icon">
           <span [class]="item.icon"></span>
         </div>
-        <div class="item-descr-wrap" *ngIf="!mini">
+        <div class="item-descr-wrap">
           <div>{{ item.text }}</div>
           <span class="item-descr">{{ item.description }}</span>
         </div>
       </ng-template>    
     </kendo-drawer>
-    <kendo-drawer-content mjFillContainer>
+    <kendo-drawer-content>
 
-      <mj-tabstrip #mjTabstrip mjFillContainer (TabClosed)="handleTabClosed($event)" (TabSelected)="handleTabSelected($event)" (TabContextMenu)="handleTabContextMenu($event)" (ResizeContainer)="sharedService.InvokeManualResize()">
+      <mj-tabstrip #mjTabstrip (TabClosed)="handleTabClosed($event)" (TabSelected)="handleTabSelected($event)" (TabContextMenu)="handleTabContextMenu($event)" (ResizeContainer)="sharedService.InvokeManualResize()">
         <mj-tab [TabCloseable]="false">
           Home
         </mj-tab>
@@ -47,7 +47,6 @@
               (ResourceRecordSaved)="HandleResourceRecordSaved(tab, $event)"
               (ContentLoadingStarted)="setTabContentLoadingStatus(tab, true)"
               (ContentLoadingComplete)="setTabContentLoadingStatus(tab, false)"
-              mjFillContainer
               class="tab-resource"
             ></mj-resource>
           </mj-tab-body>  

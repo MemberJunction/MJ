@@ -1,4 +1,4 @@
-<div class="prompt-management-container" mjFillContainer [rightMargin]="8" [bottomMargin]="8">
+<div class="prompt-management-container">
   <!-- List View -->
   @if (currentView === 'list') {
     <div class="list-view">
@@ -70,7 +70,7 @@
             class="main-splitter"
             orientation="horizontal"
             (layoutChange)="onMainSplitterChange($event)"
-            mjFillContainer>
+            >
           
           <!-- Filter Panel (Left) -->
           <kendo-splitter-pane 
@@ -231,7 +231,7 @@
           <app-model-prompt-priority-matrix
             [selectedPrompts]="promptsForMatrix"
             (promptSelected)="onPromptSelectedFromMatrix($event)"
-            mjFillContainer>
+            >
           </app-model-prompt-priority-matrix>
         }
 
@@ -240,7 +240,7 @@
           <app-prompt-version-control
             [prompt]="selectedPrompt?.prompt || null"
             (versionSelected)="onVersionSelected($event)"
-            mjFillContainer>
+            >
           </app-prompt-version-control>
         }
       </div>
@@ -323,7 +323,7 @@
           class="editor-splitter"
           orientation="horizontal"
           (layoutChange)="onEditorSplitterChange($event)"
-          mjFillContainer>
+          >
           
           <!-- Prompt Details Panel -->
           <kendo-splitter-pane 

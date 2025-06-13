@@ -3,7 +3,7 @@ import { Component, Output, EventEmitter } from '@angular/core';
 @Component({
   selector: 'mj-categories-list-view',
   template: `
-    <div class="categories-list-placeholder" mjFillContainer>
+    <div class="categories-list-placeholder" >
       <div class="placeholder-content">
         <i class="fa-solid fa-sitemap"></i>
         <h3>Categories List View</h3>

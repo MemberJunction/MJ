@@ -1,4 +1,4 @@
-<div class="ai-dashboard-container" mjFillContainer [rightMargin]="8" [bottomMargin]="8">
+<div class="ai-dashboard-container">
   @if (isLoading) {
     <div class="loading-container">
       <div class="loading-content">
@@ -18,7 +18,7 @@
         @if (activeTab === 'models') {
           <app-model-management
             (openEntityRecord)="onOpenEntityRecord($event)"
-            mjFillContainer>
+            >
           </app-model-management>
         }
         
@@ -26,7 +26,7 @@
           <app-prompt-management
             (openEntityRecord)="onOpenEntityRecord($event)"
             (stateChange)="onPromptManagementStateChange($event)"
-            mjFillContainer>
+            >
           </app-prompt-management>
         }
         
@@ -34,14 +34,14 @@
           <app-agent-configuration
             (openEntityRecord)="onOpenEntityRecord($event)"
             (stateChange)="onAgentConfigurationStateChange($event)"
-            mjFillContainer>
+            >
           </app-agent-configuration>
         }
         
         @if (activeTab === 'monitoring') {
           <app-execution-monitoring
             (openEntityRecord)="onOpenEntityRecord($event)"
-            mjFillContainer>
+            >
           </app-execution-monitoring>
         }
         
@@ -49,7 +49,7 @@
           <app-system-configuration
             (openEntityRecord)="onOpenEntityRecord($event)"
             (stateChange)="onSystemConfigurationStateChange($event)"
-            mjFillContainer>
+            >
           </app-system-configuration>
         }
       </div>

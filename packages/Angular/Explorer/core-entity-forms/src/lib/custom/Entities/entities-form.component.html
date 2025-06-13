@@ -1,14 +1,14 @@
-<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
-    <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
+<div class="record-form-container">
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
-        <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()" mjFillContainer>
+        <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()" >
             <kendo-splitter-pane [collapsible]="true" [size]="TopAreaHeight">
                 <div #topArea class="record-form-group">
                     <mj-form-section Entity="Entities" Section="top-area" [record]="record" [EditMode]="this.EditMode" (LoadComplete)="CalcTopAreaHeight()"></mj-form-section>
                 </div>
             </kendo-splitter-pane>
             <kendo-splitter-pane>
-                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer (ResizeContainer)="InvokeManualResize()">
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
                     <mj-tab Name="Fields">
                         Fields
                     </mj-tab>
@@ -16,7 +16,7 @@
                         <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Entity Fields')"  
                             [AllowLoad]="this.IsCurrentTab('Fields')"  
                             [EditMode]="this.GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                        >
                         </mj-user-view-grid>
                     </mj-tab-body>
 
@@ -27,7 +27,7 @@
                         <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Entity Permissions')"  
                             [AllowLoad]="this.IsCurrentTab('Permissions')"  
                             [EditMode]="this.GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                        >
                         </mj-user-view-grid>
                     </mj-tab-body>
 
@@ -74,7 +74,7 @@
                         <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Entity Relationships')"  
                             [AllowLoad]="this.IsCurrentTab('Relationships')"  
                             [EditMode]="this.GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                        >
                         </mj-user-view-grid>
                     </mj-tab-body>
 
@@ -86,7 +86,7 @@
                         <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Entity AI Actions')"  
                             [AllowLoad]="this.IsCurrentTab('AI Actions')"  
                             [EditMode]="this.GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                        >
                         </mj-user-view-grid>
                     </mj-tab-body>
 
@@ -98,7 +98,7 @@
                         <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Application Entities')"  
                             [AllowLoad]="this.IsCurrentTab('Application Entities')"  
                             [EditMode]="this.GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                        >
                         </mj-user-view-grid>
                     </mj-tab-body>
 
@@ -109,7 +109,7 @@
                         <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('User Views')"  
                             [AllowLoad]="this.IsCurrentTab('User Views')"  
                             [EditMode]="this.GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                        >
                         </mj-user-view-grid>
                     </mj-tab-body> 
                 
@@ -120,7 +120,7 @@
                         <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Dataset Items')"  
                             [AllowLoad]="this.IsCurrentTab('Dataset Items')"  
                             [EditMode]="this.GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                        >
                         </mj-user-view-grid>
                     </mj-tab-body> 
                 
@@ -131,7 +131,7 @@
                         <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Entity Documents')"  
                             [AllowLoad]="this.IsCurrentTab('Entity Documents')"  
                             [EditMode]="this.GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                        >
                         </mj-user-view-grid>
                     </mj-tab-body> 
                 
@@ -142,7 +142,7 @@
                         <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Entity Record Documents')"  
                             [AllowLoad]="this.IsCurrentTab('Entity Record Documents')"  
                             [EditMode]="this.GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                        >
                         </mj-user-view-grid>
                     </mj-tab-body> 
                 
@@ -153,7 +153,7 @@
                         <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('File Entity Record Links')"  
                             [AllowLoad]="this.IsCurrentTab('File Entity Record Links')"  
                             [EditMode]="this.GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                        >
                         </mj-user-view-grid>
                     </mj-tab-body> 
                 </mj-tabstrip>
