@@ -1,4 +1,4 @@
-<div class="agent-configuration-container" mjFillContainer [rightMargin]="8" [bottomMargin]="8">
+<div class="agent-configuration-container">
   
   <!-- Agent Editor Modal -->
   @if (showEditor && selectedAgentId) {
@@ -6,7 +6,7 @@
       [agentId]="selectedAgentId"
       (close)="closeAgentEditor()"
       (openAgent)="onOpenAgentFromEditor($event)"
-      mjFillContainer>
+      >
     </mj-agent-editor>
   } @else {
   <!-- Header -->
@@ -39,12 +39,12 @@
   </div>
 
   <!-- Main Content with Splitter -->
-  <div class="main-content" mjFillContainer>
+  <div class="main-content" >
     <kendo-splitter 
       class="main-splitter"
       orientation="horizontal"
       (layoutChange)="onMainSplitterChange($event)"
-      mjFillContainer>
+      >
       
       <!-- Filter Panel (Left) -->
       <kendo-splitter-pane 

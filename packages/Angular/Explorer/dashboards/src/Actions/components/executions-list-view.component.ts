@@ -3,7 +3,7 @@ import { Component, Output, EventEmitter } from '@angular/core';
 @Component({
   selector: 'mj-executions-list-view',
   template: `
-    <div class="executions-list-placeholder" mjFillContainer>
+    <div class="executions-list-placeholder" >
       <div class="placeholder-content">
         <i class="fa-solid fa-list"></i>
         <h3>Executions List View</h3>

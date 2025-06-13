@@ -1,10 +1,10 @@
-<div class="erd-composite" mjFillContainer>
+<div class="erd-composite" >
   <!-- Main Layout with Kendo Splitter (2-pane) -->
   <kendo-splitter 
     class="main-splitter"
     orientation="horizontal"
     (layoutChange)="onSplitterLayoutChange($event)"
-    mjFillContainer>
+    >
     
     <!-- Filter Panel (Left) -->
     <kendo-splitter-pane 
@@ -28,7 +28,7 @@
     <kendo-splitter-pane 
       [resizable]="true"
       [scrollable]="false">
-      <div class="erd-pane-container" mjFillContainer>
+      <div class="erd-pane-container" >
         <mj-erd-diagram
           [filteredEntities]="filteredEntities"
           [allEntityFields]="allEntityFields"
@@ -37,7 +37,7 @@
           (entitySelected)="onEntitySelected($event)"
           (entityDeselected)="onEntityDeselected()"
           (refreshERD)="refreshERD()"
-          mjFillContainer>
+          >
         </mj-erd-diagram>
       </div>
     </kendo-splitter-pane>

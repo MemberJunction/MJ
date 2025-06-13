@@ -81,7 +81,6 @@ Use the component in your template:
 ```html
 <mj-list-detail-grid
   [Params]="viewParams"
-  [BottomMargin]="15"
   [AutoNavigate]="true"
   (rowClicked)="onRowClicked($event)"
   (rowEdited)="onRowEdited($event)">

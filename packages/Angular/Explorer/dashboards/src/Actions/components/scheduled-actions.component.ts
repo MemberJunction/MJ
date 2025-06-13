@@ -3,7 +3,7 @@ import { Component, Output, EventEmitter } from '@angular/core';
 @Component({
   selector: 'mj-scheduled-actions',
   template: `
-    <div class="scheduled-actions-placeholder" mjFillContainer>
+    <div class="scheduled-actions-placeholder" >
       <div class="placeholder-content">
         <i class="fa-solid fa-clock"></i>
         <h3>Scheduled Actions</h3>

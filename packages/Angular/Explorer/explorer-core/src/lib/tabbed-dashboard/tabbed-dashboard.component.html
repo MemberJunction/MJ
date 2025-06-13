@@ -1,4 +1,4 @@
-<div class="tabbed-dashboard-container" mjFillContainer [rightMargin]="10" [bottomMargin]="10">
+<div class="tabbed-dashboard-container">
   <!-- Dashboard Preferences Button -->
   <button type="button" 
           class="preferences-button"
@@ -21,14 +21,14 @@
   }
   
   @if (!loading && !error) {
-    <div #tabstripContainer mjFillContainer>
+    <div #tabstripContainer >
       @if (dashboards.length === 0) {
         <!-- Show default content without any tabs, if no dashboards are set for this user, cleaner this way -->
         <div #noTabsContainer></div>
       }
       @else {
         <!-- Show tab strip with dashboards -->
-        <mj-tabstrip #tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+        <mj-tabstrip #tabstrip (TabSelected)="onTabSelect($event.index)" >
           <!-- Show default tab if no dashboards are available -->
           @if (DefaultDashboardPosition === 'first') {
             <mj-tab [Name]="DefaultTabName">
@@ -59,8 +59,8 @@
           <!-- Default tab body when it is shown first -->
           @if (DefaultDashboardPosition === 'first') {
             <mj-tab-body>
-              <div class="dashboard-container" mjFillContainer>
-                <div #tabContainer mjFillContainer></div>
+              <div class="dashboard-container" >
+                <div #tabContainer ></div>
               </div>
             </mj-tab-body>
           }
@@ -68,8 +68,8 @@
           <!-- Dashboard tab bodies -->
           @for (dashboard of dashboards; track dashboard.ID; let i = $index) {
             <mj-tab-body>
-              <div class="dashboard-container" mjFillContainer>
-                <div id="dashboard-{{ dashboard.ID }}" class="dashboard-instance" mjFillContainer>
+              <div class="dashboard-container" >
+                <div id="dashboard-{{ dashboard.ID }}" class="dashboard-instance" >
                 </div>
               </div>
             </mj-tab-body>
@@ -78,8 +78,8 @@
           <!-- Default tab body, when it is shown last -->
           @if (DefaultDashboardPosition === 'last') {
             <mj-tab-body>
-              <div class="dashboard-container" mjFillContainer>
-                <div #tabContainer mjFillContainer></div>
+              <div class="dashboard-container" >
+                <div #tabContainer ></div>
               </div>
             </mj-tab-body>
           }
