@@ -1,39 +1,90 @@
-import { ChatMessage } from '@memberjunction/ai';
+/**
+ * @fileoverview Base implementation of the MemberJunction AI Agent framework.
+ * 
+ * This module provides the core BaseAgent class that handles agent execution
+ * using a hierarchical prompt system. Agents use their type's system prompt
+ * as a parent prompt and their own configured prompts as child prompts,
+ * enabling sophisticated agent behaviors through prompt composition.
+ * 
+ * @module @memberjunction/ai-agents
+ * @author MemberJunction.com
+ * @since 2.49.0
+ */
+
 import { AIAgentEntity, AIAgentTypeEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { AIPromptRunner, AIPromptParams, ChildPromptParam } from '@memberjunction/ai-prompts';
-import { BaseAgentType, BaseAgentNextStep } from './base-agent-type';
+import { BaseAgentType } from './base-agent-type';
 import { MJGlobal } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
+import { 
+    ExecuteAgentParams, 
+    ExecuteAgentResult, 
+    AgentContextData, 
+    ActionInfo,
+    BaseAgentNextStep 
+} from './types';
 
-export type ExecuteAgentParams = {
-    agent: AIAgentEntity;
-    conversationMessages: ChatMessage[];
-    contextUser?: UserInfo;
-}
-
-export type ExecuteAgentResult = {
-    nextStep: 'success' | 'failed' | 'subagent' | 'action';
-    returnValue?: any;
-    rawResult?: string;
-    errorMessage?: string;
-}
-
-/** 
- * Simple test base class that works as follows:
- * * We get the SystemPromptID from the AgentTypeID from the agent
- * * That system prompt becomes the "parent" prompt for the agent
- * * We get the first prompt within the MJ: AI Agent Prompts entity that is linked to this agent and that becomes the child prompt
- * * The parent prompt has special data context where we pass in the following:
- *  - subAgentCount: number of sub-agents that this agent has
- *  - subAgentDetails: JSON stringified of the sub-agent metadata
- *  - actionCount: number of actions that this agent has access to
- *  - actionDetails: JSON stringified of the action metadata
- * * The system prompt from the agent type controls what the agent does 
+/**
+ * Base implementation for AI Agents in the MemberJunction framework.
+ * 
+ * The BaseAgent class provides the core execution logic for AI agents using
+ * a hierarchical prompt system. It implements the following workflow:
+ * 
+ * 1. Loads the agent's type to get the system prompt configuration
+ * 2. Validates that the agent type has a properly configured placeholder
+ * 3. Loads the agent's first active prompt (ordered by ExecutionOrder)
+ * 4. Gathers context data including sub-agents and available actions
+ * 5. Executes the prompts hierarchically (system prompt as parent, agent prompt as child)
+ * 6. Uses the agent type to determine the next step based on execution results
+ * 
+ * @class BaseAgent
+ * @example
+ * ```typescript
+ * const agent = new BaseAgent();
+ * const result = await agent.Execute({
+ *   agent: myAgentEntity,
+ *   conversationMessages: messages,
+ *   contextUser: currentUser
+ * });
+ * 
+ * if (result.nextStep === 'success') {
+ *   console.log('Agent completed successfully:', result.returnValue);
+ * }
+ * ```
  */
 export class BaseAgent {
+    /**
+     * Instance of AIPromptRunner used for executing hierarchical prompts.
+     * @private
+     */
     private _promptRunner: AIPromptRunner = new AIPromptRunner();
 
+    /**
+     * Executes an AI agent using hierarchical prompt composition.
+     * 
+     * This method orchestrates the entire agent execution process, from loading
+     * configuration to executing prompts and determining next steps. It ensures
+     * all required metadata is present and handles errors gracefully.
+     * 
+     * @param {ExecuteAgentParams} params - Parameters for agent execution
+     * @param {AIAgentEntity} params.agent - The agent entity to execute
+     * @param {ChatMessage[]} params.conversationMessages - Conversation history
+     * @param {UserInfo} [params.contextUser] - Optional user context
+     * 
+     * @returns {Promise<ExecuteAgentResult>} Result containing next step and any output
+     * 
+     * @throws {Error} Throws if there are issues loading required entities
+     * 
+     * @example
+     * ```typescript
+     * const result = await agent.Execute({
+     *   agent: salesAgent,
+     *   conversationMessages: [{role: 'user', content: 'Help me find products'}],
+     *   contextUser: currentUser
+     * });
+     * ```
+     */
     public async Execute(params: ExecuteAgentParams): Promise<ExecuteAgentResult> {
         try {
             // Ensure AIEngine is configured
@@ -90,7 +141,18 @@ export class BaseAgent {
             promptParams.conversationMessages = params.conversationMessages;
             promptParams.templateMessageRole = 'system';
 
-            // Add the agent prompt as a child prompt
+            // Check for required placeholder configuration
+            if (!agentType.AgentPromptPlaceholder) {
+                const errorMsg = `Agent type '${agentType.Name}' does not have AgentPromptPlaceholder configured. This field is required to properly inject agent prompt results into the system prompt template.`;
+                console.error(errorMsg);
+                return {
+                    nextStep: 'failed',
+                    errorMessage: errorMsg
+                };
+            }
+            
+            const placeholderName = agentType.AgentPromptPlaceholder;
+            
             promptParams.childPrompts = [
                 new ChildPromptParam(
                     {
@@ -100,7 +162,7 @@ export class BaseAgent {
                         conversationMessages: params.conversationMessages,
                         templateMessageRole: 'user'
                     } as AIPromptParams,
-                    'agentResponse'
+                    placeholderName
                 )
             ];
 
@@ -142,7 +204,24 @@ export class BaseAgent {
     }
 
 
-    private async gatherContextData(agent: AIAgentEntity, contextUser?: UserInfo): Promise<Record<string, any>> {
+    /**
+     * Gathers context data about the agent for use in prompt templates.
+     * 
+     * This method collects information about the agent's sub-agents and available
+     * actions, formatting them for injection into prompt templates. The data is
+     * structured to provide the LLM with comprehensive context about the agent's
+     * capabilities and hierarchical relationships.
+     * 
+     * @param {AIAgentEntity} agent - The agent to gather context for
+     * @param {UserInfo} [contextUser] - Optional user context (reserved for future use)
+     * 
+     * @returns {Promise<AgentContextData>} Structured context data for prompts
+     * 
+     * @throws {Error} If there's an error accessing agent data
+     * 
+     * @private
+     */
+    private async gatherContextData(agent: AIAgentEntity, contextUser?: UserInfo): Promise<AgentContextData> {
         try {
             const engine = AIEngine.Instance;
             
@@ -151,27 +230,42 @@ export class BaseAgent {
                 .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder);
             
             // Load available actions (placeholder for now - would integrate with Actions framework)
-            const actions: any[] = []; // TODO: Implement action loading from Actions framework
+            const actions: ActionInfo[] = []; // TODO: Implement action loading from Actions framework
 
-            return {
+            const contextData: AgentContextData = {
                 agentName: agent.Name,
                 agentDescription: agent.Description,
                 subAgentCount: subAgents.length,
-                subAgentDetails: JSON.stringify(subAgents.map(sa => ({
-                    id: sa.ID,
-                    name: sa.Name,
-                    description: sa.Description,
-                    type: sa.Type
-                }))),
+                subAgentDetails: JSON.stringify(subAgents),
                 actionCount: actions.length,
                 actionDetails: JSON.stringify(actions)
             };
+
+            return contextData;
         } catch (error) {
             throw new Error(`Error gathering context data: ${error.message}`);
         }
     }
 
 
+    /**
+     * Instantiates the appropriate agent type class based on the agent type entity.
+     * 
+     * This method uses the MemberJunction class factory to dynamically instantiate
+     * agent type classes. It follows the naming convention of appending "AgentType"
+     * to the agent type name. If a specific class doesn't exist, it returns a
+     * default implementation.
+     * 
+     * @param {AIAgentTypeEntity} agentType - The agent type entity to instantiate
+     * 
+     * @returns {Promise<BaseAgentType | null>} Instance of the agent type class
+     * 
+     * @example
+     * // For an agent type named "Loop", this will try to instantiate "LoopAgentType"
+     * const agentTypeInstance = await this.getAgentTypeInstance(loopAgentType);
+     * 
+     * @private
+     */
     private async getAgentTypeInstance(agentType: AIAgentTypeEntity): Promise<BaseAgentType | null> {
         try {
             // Use the class factory to instantiate the agent type based on its name
@@ -185,9 +279,28 @@ export class BaseAgent {
 }
 
 /**
- * Default agent type implementation for when no specific agent type class is found
+ * Default implementation of BaseAgentType used as a fallback.
+ * 
+ * This class is used when a specific agent type implementation cannot be found
+ * in the class factory. It provides a simple success response, allowing agents
+ * to function even without custom type implementations.
+ * 
+ * @class DefaultAgentType
+ * @extends {BaseAgentType}
+ * 
+ * @internal
  */
 class DefaultAgentType extends BaseAgentType {
+    /**
+     * Determines the next step for the agent execution.
+     * 
+     * This default implementation always returns 'success', providing a simple
+     * pass-through behavior for agents without custom type logic.
+     * 
+     * @returns {Promise<BaseAgentNextStep>} Always returns success step
+     * 
+     * @override
+     */
     public async DetermineNextStep(): Promise<BaseAgentNextStep> {
         // Default behavior - just return success
         return {

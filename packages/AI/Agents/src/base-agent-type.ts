@@ -1,33 +1,79 @@
-export type BaseAgentNextStep = {
-    /**
-     * This is sthe standardized step that will drive the behavior of the agent:
-     * - 'success' indicates that the agent has completed its task successfully
-     * - 'failed' indicates that the agent has failed to complete its task
-     * - 'subagent' indicates that the agent should spawn a sub-agent to handle a specific task
-     * - 'action' indicates that the agent should perform a specific action using the Actions framework
-     */
-    step: 'success' | 'failed' | 'subagent' | 'action';
-    returnValue?: any;
-}
+/**
+ * @fileoverview Base agent type abstraction for the MemberJunction AI Agent framework.
+ * 
+ * This module defines the abstract BaseAgentType class that serves as the foundation
+ * for different agent execution patterns. Agent types encapsulate reusable behavior
+ * patterns (like loops, decision trees, or linear flows) that can be applied to
+ * multiple agents through configuration rather than code duplication.
+ * 
+ * @module @memberjunction/ai-agents
+ * @author MemberJunction.com
+ * @since 2.49.0
+ */
+
+import { BaseAgentNextStep } from './types';
 
 /**
- * Agent Type is an abstraction that defines the basic operations of an agent. The concept is 
- * that we can have a wide array of different agents but the basic operation of the kind of agentic
- * process (e.g. a continual loop, a simple decision tree, etc) can be reused across any number
- * of agents easily simply by linking to the agent type desired. Each agent can of course
- * override the basic operations of the agent type if needed, but the agent type provides a
- * common set of functionality used by all agents of that type, by default.
+ * Abstract base class for agent type implementations.
  * 
- * Each agent type has a SystemPromptID that is designed to return a specific type of result
- * for example a "Loop" style of agent is designed to continually loop until the agent determines
- * that the objective requested has been completed
- *  
+ * Agent types define reusable execution patterns that control how agents behave.
+ * Each agent type is associated with a system prompt that guides the LLM's output
+ * format and decision-making process. Common agent type patterns include:
+ * 
+ * - **Loop**: Continues executing until a goal is achieved
+ * - **SinglePass**: Executes once and returns a result
+ * - **DecisionTree**: Makes branching decisions based on conditions
+ * - **Pipeline**: Executes a series of steps in sequence
+ * 
+ * The agent type's system prompt should be designed to produce output that can
+ * be parsed by the DetermineNextStep method to decide what happens next in the
+ * agent's execution flow.
+ * 
+ * @abstract
+ * @class BaseAgentType
+ * 
+ * @example
+ * ```typescript
+ * export class LoopAgentType extends BaseAgentType {
+ *   public async DetermineNextStep(): Promise<BaseAgentNextStep> {
+ *     // Parse LLM output to determine if goal is achieved
+ *     const goalAchieved = // ... parsing logic
+ *     
+ *     return {
+ *       step: goalAchieved ? 'success' : 'action',
+ *       returnValue: result
+ *     };
+ *   }
+ * }
+ * ```
  */
 export abstract class BaseAgentType {
     /**
-     * Each sub-class of BaseAgentType implements this method to handle the logic for 
-     * the output of a prompt execution. An individual agent can override handling of the
-     * output by directly determining the next step in its own implementation.
+     * Analyzes the output from prompt execution to determine the next step.
+     * 
+     * This method is called after the hierarchical prompts have been executed
+     * and should parse the LLM's response to determine what the agent should
+     * do next. The implementation depends on the specific agent type's logic
+     * and the format of output expected from its system prompt.
+     * 
+     * @abstract
+     * @returns {Promise<BaseAgentNextStep>} The determined next step and optional return value
+     * 
+     * @example
+     * ```typescript
+     * public async DetermineNextStep(): Promise<BaseAgentNextStep> {
+     *   // Implementation might parse JSON output from LLM
+     *   const response = JSON.parse(this.lastExecutionResult);
+     *   
+     *   if (response.taskComplete) {
+     *     return { step: 'success', returnValue: response.result };
+     *   } else if (response.needsSubAgent) {
+     *     return { step: 'subagent', returnValue: response.subAgentConfig };
+     *   } else {
+     *     return { step: 'action', returnValue: response.nextAction };
+     *   }
+     * }
+     * ```
      */
     public abstract DetermineNextStep(): Promise<BaseAgentNextStep>  
 }
