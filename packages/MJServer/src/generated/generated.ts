@@ -685,7 +685,7 @@ export class ExplorerNavigationItemResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Generated Code Categories
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Categorization for generated code, including optional parent-child relationships.` })
 export class GeneratedCodeCategory_ {
     @Field() 
     @MaxLength(16)
@@ -2610,6 +2610,10 @@ export class AIAgentType_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `The placeholder name used in the system prompt template where the agent prompt result should be injected. For example, if the system prompt contains "{{ agentPrompt }}", this field should contain "agentPrompt". This enables proper hierarchical prompt execution where the agent type's system prompt acts as the parent and the agent's specific prompt acts as the child.`}) 
+    @MaxLength(510)
+    AgentPromptPlaceholder?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     SystemPrompt?: string;
@@ -2635,6 +2639,9 @@ export class CreateAIAgentTypeInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field({ nullable: true })
+    AgentPromptPlaceholder: string | null;
 }
     
 
@@ -2657,6 +2664,9 @@ export class UpdateAIAgentTypeInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field({ nullable: true })
+    AgentPromptPlaceholder?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

@@ -7350,6 +7350,11 @@ export const AIAgentTypeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    AgentPromptPlaceholder: z.string().nullable().describe(`
+        * * Field Name: AgentPromptPlaceholder
+        * * Display Name: Agent Prompt Placeholder
+        * * SQL Data Type: nvarchar(255)
+    * * Description: The placeholder name used in the system prompt template where the agent prompt result should be injected. For example, if the system prompt contains "{{ agentPrompt }}", this field should contain "agentPrompt". This enables proper hierarchical prompt execution where the agent type's system prompt acts as the parent and the agent's specific prompt acts as the child.`),
     SystemPrompt: z.string().nullable().describe(`
         * * Field Name: SystemPrompt
         * * Display Name: System Prompt
@@ -28765,6 +28770,7 @@ export class FileEntity extends BaseEntity<FileEntityType> {
  * * Schema: __mj
  * * Base Table: GeneratedCodeCategory
  * * Base View: vwGeneratedCodeCategories
+ * * @description Categorization for generated code, including optional parent-child relationships.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -30970,6 +30976,19 @@ export class AIAgentTypeEntity extends BaseEntity<AIAgentTypeEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: AgentPromptPlaceholder
+    * * Display Name: Agent Prompt Placeholder
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The placeholder name used in the system prompt template where the agent prompt result should be injected. For example, if the system prompt contains "{{ agentPrompt }}", this field should contain "agentPrompt". This enables proper hierarchical prompt execution where the agent type's system prompt acts as the parent and the agent's specific prompt acts as the child.
+    */
+    get AgentPromptPlaceholder(): string | null {
+        return this.Get('AgentPromptPlaceholder');
+    }
+    set AgentPromptPlaceholder(value: string | null) {
+        this.Set('AgentPromptPlaceholder', value);
     }
 
     /**

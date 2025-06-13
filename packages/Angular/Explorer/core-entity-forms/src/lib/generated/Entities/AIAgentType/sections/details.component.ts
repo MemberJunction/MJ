@@ -56,6 +56,13 @@ import { AIAgentTypeEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="AgentPromptPlaceholder"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="SystemPrompt"
             Type="textbox"
             [EditMode]="EditMode"
