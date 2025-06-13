@@ -11928,6 +11928,9 @@ export class ActionAuthorizationEntity extends BaseEntity<ActionAuthorizationEnt
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: ActionID
@@ -12045,6 +12048,9 @@ export class ActionCategoryEntity extends BaseEntity<ActionCategoryEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -12175,6 +12181,9 @@ export class ActionContextTypeEntity extends BaseEntity<ActionContextTypeEntityT
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -12262,6 +12271,9 @@ export class ActionContextEntity extends BaseEntity<ActionContextEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -12387,6 +12399,9 @@ export class ActionExecutionLogEntity extends BaseEntity<ActionExecutionLogEntit
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -12558,6 +12573,9 @@ export class ActionFilterEntity extends BaseEntity<ActionFilterEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: UserDescription
@@ -12667,6 +12685,9 @@ export class ActionLibraryEntity extends BaseEntity<ActionLibraryEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -12786,6 +12807,9 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -12969,6 +12993,9 @@ export class ActionResultCodeEntity extends BaseEntity<ActionResultCodeEntityTyp
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: ActionID
@@ -13091,6 +13118,9 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -13396,6 +13426,9 @@ export class AIActionEntity extends BaseEntity<AIActionEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -13530,6 +13563,9 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: AgentID
@@ -13656,6 +13692,9 @@ export class AIAgentLearningCycleEntity extends BaseEntity<AIAgentLearningCycleE
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -13802,6 +13841,9 @@ export class AIAgentModelEntity extends BaseEntity<AIAgentModelEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: AgentID
@@ -13934,6 +13976,9 @@ export class AIAgentNoteTypeEntity extends BaseEntity<AIAgentNoteTypeEntityType>
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -14018,6 +14063,9 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -14176,6 +14224,9 @@ export class AIAgentRequestEntity extends BaseEntity<AIAgentRequestEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -14440,6 +14491,9 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -14722,6 +14776,9 @@ export class AIModelActionEntity extends BaseEntity<AIModelActionEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: AIModelID
@@ -14840,6 +14897,9 @@ export class AIModelTypeEntity extends BaseEntity<AIModelTypeEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -14980,6 +15040,9 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -15220,6 +15283,9 @@ export class AIPromptCategoryEntity extends BaseEntity<AIPromptCategoryEntityTyp
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -15328,6 +15394,9 @@ export class AIPromptTypeEntity extends BaseEntity<AIPromptTypeEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -15524,6 +15593,9 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -16128,6 +16200,9 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: AIPromptID
@@ -16400,6 +16475,9 @@ export class ApplicationEntityEntity extends BaseEntity<ApplicationEntityEntityT
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: ApplicationID
@@ -16564,6 +16642,9 @@ export class ApplicationSettingEntity extends BaseEntity<ApplicationSettingEntit
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: ApplicationID
@@ -16682,6 +16763,9 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -16830,6 +16914,9 @@ export class AuditLogTypeEntity extends BaseEntity<AuditLogTypeEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -16970,6 +17057,9 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -17197,6 +17287,9 @@ export class AuthorizationRoleEntity extends BaseEntity<AuthorizationRoleEntityT
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: AuthorizationID
@@ -17343,6 +17436,9 @@ export class AuthorizationEntity extends BaseEntity<AuthorizationEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: ParentID
@@ -17477,6 +17573,9 @@ export class CommunicationBaseMessageTypeEntity extends BaseEntity<Communication
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -17618,6 +17717,9 @@ export class CommunicationLogEntity extends BaseEntity<CommunicationLogEntityTyp
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -17814,6 +17916,9 @@ export class CommunicationProviderMessageTypeEntity extends BaseEntity<Communica
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: CommunicationProviderID
@@ -17988,6 +18093,9 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -18175,6 +18283,9 @@ export class CommunicationRunEntity extends BaseEntity<CommunicationRunEntityTyp
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: UserID
@@ -18343,6 +18454,9 @@ export class CompanyEntity extends BaseEntity<CompanyEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -18472,6 +18586,9 @@ export class CompanyIntegrationRecordMapEntity extends BaseEntity<CompanyIntegra
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -18603,6 +18720,9 @@ export class CompanyIntegrationRunAPILogEntity extends BaseEntity<CompanyIntegra
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -18757,6 +18877,9 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity<CompanyIntegra
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -18930,6 +19053,9 @@ export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRu
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -19137,6 +19263,9 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -19406,6 +19535,9 @@ export class ContentFileTypeEntity extends BaseEntity<ContentFileTypeEntityType>
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -19490,6 +19622,9 @@ export class ContentItemAttributeEntity extends BaseEntity<ContentItemAttributeE
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -19598,6 +19733,9 @@ export class ContentItemTagEntity extends BaseEntity<ContentItemTagEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: ItemID
@@ -19692,6 +19830,9 @@ export class ContentItemEntity extends BaseEntity<ContentItemEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -19902,6 +20043,9 @@ export class ContentProcessRunEntity extends BaseEntity<ContentProcessRunEntityT
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: SourceID
@@ -20033,6 +20177,9 @@ export class ContentSourceParamEntity extends BaseEntity<ContentSourceParamEntit
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: ContentSourceID
@@ -20139,6 +20286,9 @@ export class ContentSourceTypeParamEntity extends BaseEntity<ContentSourceTypePa
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -20261,6 +20411,9 @@ export class ContentSourceTypeEntity extends BaseEntity<ContentSourceTypeEntityT
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -20345,6 +20498,9 @@ export class ContentSourceEntity extends BaseEntity<ContentSourceEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -20497,6 +20653,9 @@ export class ContentTypeAttributeEntity extends BaseEntity<ContentTypeAttributeE
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: ContentTypeID
@@ -20605,6 +20764,9 @@ export class ContentTypeEntity extends BaseEntity<ContentTypeEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -20762,6 +20924,9 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -21038,6 +21203,9 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: UserID
@@ -21257,6 +21425,9 @@ export class DashboardCategoryEntity extends BaseEntity<DashboardCategoryEntityT
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -21386,6 +21557,9 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -21627,6 +21801,9 @@ export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType>
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -21875,6 +22052,9 @@ export class DataContextEntity extends BaseEntity<DataContextEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -22006,6 +22186,9 @@ export class DatasetItemEntity extends BaseEntity<DatasetItemEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -22199,6 +22382,9 @@ export class DatasetEntity extends BaseEntity<DatasetEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -22295,6 +22481,9 @@ export class DuplicateRunDetailMatchEntity extends BaseEntity<DuplicateRunDetail
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -22514,6 +22703,9 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: DuplicateRunID
@@ -22687,6 +22879,9 @@ export class DuplicateRunEntity extends BaseEntity<DuplicateRunEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -22934,6 +23129,9 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: EmployeeID
@@ -23046,6 +23244,9 @@ export class EmployeeRoleEntity extends BaseEntity<EmployeeRoleEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: EmployeeID
@@ -23142,6 +23343,9 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: EmployeeID
@@ -23237,6 +23441,9 @@ export class EmployeeEntity extends BaseEntity<EmployeeEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -23474,6 +23681,9 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -24302,6 +24512,9 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: EntityActionID
@@ -24422,6 +24635,9 @@ export class EntityActionInvocationTypeEntity extends BaseEntity<EntityActionInv
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -24522,6 +24738,9 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -24638,6 +24857,9 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -24846,6 +25068,9 @@ export class EntityActionEntity extends BaseEntity<EntityActionEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Entity
@@ -24906,6 +25131,9 @@ export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -25164,6 +25392,9 @@ export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicati
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: EntityCommunicationMessageTypeID
@@ -25264,6 +25495,9 @@ export class EntityCommunicationMessageTypeEntity extends BaseEntity<EntityCommu
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -25396,6 +25630,9 @@ export class EntityDocumentRunEntity extends BaseEntity<EntityDocumentRunEntityT
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: EntityDocumentID
@@ -25522,6 +25759,9 @@ export class EntityDocumentSettingEntity extends BaseEntity<EntityDocumentSettin
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: EntityDocumentID
@@ -25640,6 +25880,9 @@ export class EntityDocumentTypeEntity extends BaseEntity<EntityDocumentTypeEntit
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -25769,6 +26012,9 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -26010,6 +26256,9 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: EntityFieldID
@@ -26158,6 +26407,9 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -26892,6 +27144,9 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: EntityID
@@ -27158,6 +27413,9 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: EntityID
@@ -27358,6 +27616,9 @@ export class EntityRelationshipDisplayComponentEntity extends BaseEntity<EntityR
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -27460,6 +27721,9 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -27879,6 +28143,9 @@ export class EntitySettingEntity extends BaseEntity<EntitySettingEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: EntityID
@@ -28008,6 +28275,9 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -28192,6 +28462,9 @@ export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationI
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Sequence
@@ -28373,6 +28646,9 @@ export class FileCategoryEntity extends BaseEntity<FileCategoryEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -28479,6 +28755,9 @@ export class FileEntityRecordLinkEntity extends BaseEntity<FileEntityRecordLinkE
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -28596,6 +28875,9 @@ export class FileStorageProviderEntity extends BaseEntity<FileStorageProviderEnt
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -28731,6 +29013,9 @@ export class FileEntity extends BaseEntity<FileEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -28900,6 +29185,9 @@ export class GeneratedCodeCategoryEntity extends BaseEntity<GeneratedCodeCategor
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -29007,6 +29295,9 @@ export class GeneratedCodeEntity extends BaseEntity<GeneratedCodeEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -29257,6 +29548,9 @@ export class IntegrationURLFormatEntity extends BaseEntity<IntegrationURLFormatE
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: IntegrationID
@@ -29499,6 +29793,9 @@ export class IntegrationEntity extends BaseEntity<IntegrationEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 }
 
 
@@ -29540,6 +29837,9 @@ export class LibraryEntity extends BaseEntity<LibraryEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -29672,6 +29972,9 @@ export class LibraryItemEntity extends BaseEntity<LibraryItemEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -29787,6 +30090,9 @@ export class ListCategoryEntity extends BaseEntity<ListCategoryEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -29916,6 +30222,9 @@ export class ListDetailEntity extends BaseEntity<ListDetailEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -30059,6 +30368,9 @@ export class ListEntity extends BaseEntity<ListEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -30259,6 +30571,9 @@ export class AIAgentPromptEntity extends BaseEntity<AIAgentPromptEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -30499,6 +30814,9 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: AgentRunID
@@ -30725,6 +31043,9 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -31077,6 +31398,9 @@ export class AIAgentTypeEntity extends BaseEntity<AIAgentTypeEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -31227,6 +31551,9 @@ export class AIConfigurationParamEntity extends BaseEntity<AIConfigurationParamE
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: ConfigurationID
@@ -31369,6 +31696,9 @@ export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType>
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -31590,6 +31920,9 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -31946,6 +32279,9 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: PromptID
@@ -32250,6 +32586,9 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -32697,6 +33036,9 @@ export class AIVendorTypeDefinitionEntity extends BaseEntity<AIVendorTypeDefinit
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -32809,6 +33151,9 @@ export class AIVendorTypeEntity extends BaseEntity<AIVendorTypeEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -32949,6 +33294,9 @@ export class AIVendorEntity extends BaseEntity<AIVendorEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -33034,6 +33382,9 @@ export class ArtifactTypeEntity extends BaseEntity<ArtifactTypeEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -33148,6 +33499,9 @@ export class ConversationArtifactPermissionEntity extends BaseEntity<Conversatio
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -33290,6 +33644,9 @@ export class ConversationArtifactVersionEntity extends BaseEntity<ConversationAr
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: ConversationArtifactID
@@ -33425,6 +33782,9 @@ export class ConversationArtifactEntity extends BaseEntity<ConversationArtifactE
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -33620,6 +33980,9 @@ export class DashboardUserPreferenceEntity extends BaseEntity<DashboardUserPrefe
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: UserID
@@ -33780,6 +34143,9 @@ export class DashboardUserStateEntity extends BaseEntity<DashboardUserStateEntit
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: DashboardID
@@ -33899,6 +34265,9 @@ export class ReportUserStateEntity extends BaseEntity<ReportUserStateEntityType>
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -34043,6 +34412,9 @@ export class ReportVersionEntity extends BaseEntity<ReportVersionEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -34217,6 +34589,9 @@ export class OutputDeliveryTypeEntity extends BaseEntity<OutputDeliveryTypeEntit
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -34325,6 +34700,9 @@ export class OutputFormatTypeEntity extends BaseEntity<OutputFormatTypeEntityTyp
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -34447,6 +34825,9 @@ export class OutputTriggerTypeEntity extends BaseEntity<OutputTriggerTypeEntityT
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -34532,6 +34913,9 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -34746,6 +35130,9 @@ export class QueryCategoryEntity extends BaseEntity<QueryCategoryEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -34877,6 +35264,9 @@ export class QueryEntityEntity extends BaseEntity<QueryEntityEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: QueryID
@@ -34983,6 +35373,9 @@ export class QueryFieldEntity extends BaseEntity<QueryFieldEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -35213,6 +35606,9 @@ export class QueryPermissionEntity extends BaseEntity<QueryPermissionEntityType>
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: QueryID
@@ -35329,6 +35725,9 @@ export class QueueTaskEntity extends BaseEntity<QueueTaskEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -35527,6 +35926,9 @@ export class QueueTypeEntity extends BaseEntity<QueueTypeEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -35661,6 +36063,9 @@ export class QueueEntity extends BaseEntity<QueueEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -35966,6 +36371,9 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: RecommendationID
@@ -36089,6 +36497,9 @@ export class RecommendationProviderEntity extends BaseEntity<RecommendationProvi
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -36186,6 +36597,9 @@ export class RecommendationRunEntity extends BaseEntity<RecommendationRunEntityT
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -36363,6 +36777,9 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: RecommendationRunID
@@ -36484,6 +36901,9 @@ export class RecordChangeReplayRunEntity extends BaseEntity<RecordChangeReplayRu
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -36624,6 +37044,9 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -36920,6 +37343,9 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: RecordMergeLogID
@@ -37047,6 +37473,9 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -37272,6 +37701,9 @@ export class ReportCategoryEntity extends BaseEntity<ReportCategoryEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -37401,6 +37833,9 @@ export class ReportSnapshotEntity extends BaseEntity<ReportSnapshotEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: ReportID
@@ -37517,6 +37952,9 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -37861,6 +38299,9 @@ export class ResourceLinkEntity extends BaseEntity<ResourceLinkEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: UserID
@@ -38022,6 +38463,9 @@ export class ResourcePermissionEntity extends BaseEntity<ResourcePermissionEntit
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -38269,6 +38713,9 @@ export class ResourceTypeEntity extends BaseEntity<ResourceTypeEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -38423,6 +38870,9 @@ export class RoleEntity extends BaseEntity<RoleEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -38544,6 +38994,9 @@ export class RowLevelSecurityFilterEntity extends BaseEntity<RowLevelSecurityFil
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -38640,6 +39093,9 @@ export class ScheduledActionParamEntity extends BaseEntity<ScheduledActionParamE
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -38786,6 +39242,9 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -39102,6 +39561,9 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: SchemaName
@@ -39223,6 +39685,9 @@ export class SkillEntity extends BaseEntity<SkillEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -39329,6 +39794,9 @@ export class TaggedItemEntity extends BaseEntity<TaggedItemEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -39460,6 +39928,9 @@ export class TagEntity extends BaseEntity<TagEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -39579,6 +40050,9 @@ export class TemplateCategoryEntity extends BaseEntity<TemplateCategoryEntityTyp
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -39712,6 +40186,9 @@ export class TemplateContentTypeEntity extends BaseEntity<TemplateContentTypeEnt
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -39823,6 +40300,9 @@ export class TemplateContentEntity extends BaseEntity<TemplateContentEntityType>
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -39969,6 +40449,9 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -40214,6 +40697,9 @@ export class TemplateEntity extends BaseEntity<TemplateEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -40397,6 +40883,9 @@ export class UserApplicationEntityEntity extends BaseEntity<UserApplicationEntit
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: UserApplicationID
@@ -40521,6 +41010,9 @@ export class UserApplicationEntity extends BaseEntity<UserApplicationEntityType>
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -40652,6 +41144,9 @@ export class UserFavoriteEntity extends BaseEntity<UserFavoriteEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: UserID
@@ -40776,6 +41271,9 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -40965,6 +41463,9 @@ export class UserRecordLogEntity extends BaseEntity<UserRecordLogEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -41158,6 +41659,9 @@ export class UserRoleEntity extends BaseEntity<UserRoleEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: UserID
@@ -41262,6 +41766,9 @@ export class UserViewCategoryEntity extends BaseEntity<UserViewCategoryEntityTyp
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -41426,6 +41933,9 @@ export class UserViewRunDetailEntity extends BaseEntity<UserViewRunDetailEntityT
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: UserViewRunID
@@ -41541,6 +42051,9 @@ export class UserViewRunEntity extends BaseEntity<UserViewRunEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -41658,6 +42171,9 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -41997,6 +42513,9 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -42249,6 +42768,9 @@ export class VectorDatabaseEntity extends BaseEntity<VectorDatabaseEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -42357,6 +42879,9 @@ export class VectorIndexEntity extends BaseEntity<VectorIndexEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -42498,6 +43023,9 @@ export class VersionInstallationEntity extends BaseEntity<VersionInstallationEnt
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -42680,6 +43208,9 @@ export class WorkflowEngineEntity extends BaseEntity<WorkflowEngineEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -42797,6 +43328,9 @@ export class WorkflowRunEntity extends BaseEntity<WorkflowRunEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -42965,6 +43499,9 @@ export class WorkflowEntity extends BaseEntity<WorkflowEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -43145,6 +43682,9 @@ export class WorkspaceItemEntity extends BaseEntity<WorkspaceItemEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -43310,6 +43850,9 @@ export class WorkspaceEntity extends BaseEntity<WorkspaceEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**

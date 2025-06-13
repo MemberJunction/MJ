@@ -345,11 +345,35 @@ export class SQLCodeGenBase {
     }
 
     protected logSQLForNewOrModifiedEntity(entity: EntityInfo, sql: string, description: string, logSql: boolean = false) {
-        if (logSql && 
-            (ManageMetadataBase.newEntityList.find(e => e === entity.Name) || ManageMetadataBase.modifiedEntityList.find(e => e === entity.Name))  ) {
-            // per above only do this if (a) logSql is true and (b) the entity is in the newEntityList OR modifiedEntityList
+        // Check if we should log this SQL
+        let shouldLog = false;
+        
+        if (logSql) {
+            // Check if entity is in new or modified lists
+            const isNewOrModified = !!ManageMetadataBase.newEntityList.find(e => e === entity.Name) || 
+                                   !!ManageMetadataBase.modifiedEntityList.find(e => e === entity.Name);
+            
+            // Check if force regeneration is enabled for relevant SQL types
+            const isForceRegeneration = configInfo.forceRegeneration?.enabled && (
+                (description.toLowerCase().includes('base view') && configInfo.forceRegeneration.baseViews) ||
+                (description.toLowerCase().includes('spcreate') && configInfo.forceRegeneration.spCreate) ||
+                (description.toLowerCase().includes('spupdate') && configInfo.forceRegeneration.spUpdate) ||
+                (description.toLowerCase().includes('spdelete') && configInfo.forceRegeneration.spDelete) ||
+                (description.toLowerCase().includes('index') && configInfo.forceRegeneration.indexes) ||
+                (description.toLowerCase().includes('full text search') && configInfo.forceRegeneration.fullTextSearch) ||
+                (configInfo.forceRegeneration.allStoredProcedures && 
+                 (description.toLowerCase().includes('spcreate') || 
+                  description.toLowerCase().includes('spupdate') || 
+                  description.toLowerCase().includes('spdelete')))
+            );
+            
+            shouldLog = isNewOrModified || isForceRegeneration;
+        }
+        
+        if (shouldLog) {
             SQLLogging.appendToSQLLogFile(sql, description);
         }
+        
         logIf(configInfo.verboseOutput, `SQL Generated for ${entity.Name}: ${description}`);
     }
 
@@ -377,7 +401,8 @@ export class SQLCodeGenBase {
             let permissionsSQL: string = ''
             // Indexes for Fkeys for the table
             if (!options.onlyPermissions){
-                const indexSQL = autoIndexForeignKeys() ? this.generateIndexesForForeignKeys(options.pool, options.entity) : ''; // if autoIndexForeignKeys is true, generate the indexes, otherwise, just add a blank string to the header
+                const shouldGenerateIndexes = autoIndexForeignKeys() || (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.indexes);
+                const indexSQL = shouldGenerateIndexes ? this.generateIndexesForForeignKeys(options.pool, options.entity) : ''; // generate indexes if auto-indexing is on OR force regeneration is enabled
                 const s = this.generateSingleEntitySQLFileHeader(options.entity, 'Index for Foreign Keys') + indexSQL; 
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('index', options.entity.SchemaName, options.entity.BaseTable, false, true));
@@ -389,7 +414,9 @@ export class SQLCodeGenBase {
             }
 
             // BASE VIEW
-            if (!options.onlyPermissions && options.entity.BaseViewGenerated && !options.entity.VirtualEntity) {
+            if (!options.onlyPermissions && 
+                (options.entity.BaseViewGenerated || (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.baseViews)) && 
+                !options.entity.VirtualEntity) {
                 // generate the base view
                 const s = this.generateSingleEntitySQLFileHeader(options.entity,options.entity.BaseView) + await this.generateBaseView(options.pool, options.entity)
                 const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('view', options.entity.SchemaName, options.entity.BaseView, false, true));
@@ -420,7 +447,9 @@ export class SQLCodeGenBase {
             // CREATE SP
             if (options.entity.AllowCreateAPI && !options.entity.VirtualEntity) {
                 const spName: string = this.getSPName(options.entity, SPType.Create);
-                if (!options.onlyPermissions && options.entity.spCreateGenerated) {
+                if (!options.onlyPermissions && 
+                    (options.entity.spCreateGenerated || 
+                     (configInfo.forceRegeneration?.enabled && (configInfo.forceRegeneration?.spCreate || configInfo.forceRegeneration?.allStoredProcedures)))) {
                     // generate the create SP
                     const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + this.generateSPCreate(options.entity)
                     if (options.writeFiles) {
@@ -454,7 +483,9 @@ export class SQLCodeGenBase {
             // UPDATE SP
             if (options.entity.AllowUpdateAPI && !options.entity.VirtualEntity) {
                 const spName: string = this.getSPName(options.entity, SPType.Update);
-                if (!options.onlyPermissions && options.entity.spUpdateGenerated) {
+                if (!options.onlyPermissions && 
+                    (options.entity.spUpdateGenerated || 
+                     (configInfo.forceRegeneration?.enabled && (configInfo.forceRegeneration?.spUpdate || configInfo.forceRegeneration?.allStoredProcedures)))) {
                     // generate the update SP
                     const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + this.generateSPUpdate(options.entity)
                     if (options.writeFiles) {
@@ -488,7 +519,9 @@ export class SQLCodeGenBase {
             // DELETE SP
             if (options.entity.AllowDeleteAPI && !options.entity.VirtualEntity) {
                 const spName: string = this.getSPName(options.entity, SPType.Delete);
-                if (!options.onlyPermissions && options.entity.spDeleteGenerated) {
+                if (!options.onlyPermissions && 
+                    (options.entity.spDeleteGenerated || 
+                     (configInfo.forceRegeneration?.enabled && (configInfo.forceRegeneration?.spDelete || configInfo.forceRegeneration?.allStoredProcedures)))) {
                     // generate the delete SP
                     const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + this.generateSPDelete(options.entity)
                     if (options.writeFiles) {
@@ -520,7 +553,7 @@ export class SQLCodeGenBase {
             }
 
             // check to see if the options.entity supports full text search or not
-            if (options.entity.FullTextSearchEnabled) {
+            if (options.entity.FullTextSearchEnabled || (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.fullTextSearch)) {
                 // always generate the code so we can get the function name from the below function call
                 const ft = await this.generateEntityFullTextSearchSQL(options.pool, options.entity);
                 if (!options.onlyPermissions) {
@@ -973,7 +1006,7 @@ ${whereClause}GO${permissions}
 
         //double exclamations used on the firstKey.DefaultValue property otherwise the type of this variable is 'number | ""';
         const primaryKeyAutomatic: boolean = firstKey.AutoIncrement; // Only exclude auto-increment fields, allow manual override for all other PKs including UUIDs with defaults
-        const efString: string = this.createEntityFieldsParamString(entity.Fields, !primaryKeyAutomatic);
+        const efString: string = this.createEntityFieldsParamString(entity.Fields, false); // Always pass false for isUpdate since this is generateSPCreate
         const permissions: string = this.generateSPPermissions(entity, spName, SPType.Create);
 
         let preInsertCode = '';
@@ -983,7 +1016,7 @@ ${whereClause}GO${permissions}
         let additionalValueList = '';
         if (entity.FirstPrimaryKey.AutoIncrement) {
             selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.FirstPrimaryKey.Name}] = SCOPE_IDENTITY()`;
-        } else if (entity.FirstPrimaryKey.Type.toLowerCase().trim() === 'uniqueidentifier') {
+        } else if (entity.FirstPrimaryKey.Type.toLowerCase().trim() === 'uniqueidentifier' && entity.PrimaryKeys.length === 1) {
             // our primary key is a uniqueidentifier. Now we support optional override:
             // - If PKEY is provided (not NULL), use it
             // - If PKEY is NULL and there's a default value, let the database use it
@@ -991,34 +1024,57 @@ ${whereClause}GO${permissions}
 
             const hasDefaultValue = entity.FirstPrimaryKey.DefaultValue && entity.FirstPrimaryKey.DefaultValue.trim().length > 0;
             
-            preInsertCode = `DECLARE @InsertedRow TABLE ([${entity.FirstPrimaryKey.Name}] UNIQUEIDENTIFIER)`;
-            outputCode = `OUTPUT INSERTED.[${entity.FirstPrimaryKey.Name}] INTO @InsertedRow
-    `;
-            
             if (hasDefaultValue) {
-                // Has default value - check if ID was provided
-                preInsertCode += `
-    DECLARE @UseProvidedID BIT = CASE WHEN @${entity.FirstPrimaryKey.Name} IS NOT NULL THEN 1 ELSE 0 END`;
+                // Has default value - use conditional logic to either include the field or let DB use default
+                preInsertCode = `DECLARE @InsertedRow TABLE ([${entity.FirstPrimaryKey.Name}] UNIQUEIDENTIFIER)
+    
+    IF @${entity.FirstPrimaryKey.Name} IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${entity.SchemaName}].[${entity.BaseTable}]
+            (
+                [${entity.FirstPrimaryKey.Name}],
+                ${this.createEntityFieldsInsertString(entity, entity.Fields, '', true)}
+            )
+        OUTPUT INSERTED.[${entity.FirstPrimaryKey.Name}] INTO @InsertedRow
+        VALUES
+            (
+                @${entity.FirstPrimaryKey.Name},
+                ${this.createEntityFieldsInsertString(entity, entity.Fields, '@', true)}
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${entity.SchemaName}].[${entity.BaseTable}]
+            (
+                ${this.createEntityFieldsInsertString(entity, entity.Fields, '')}
+            )
+        OUTPUT INSERTED.[${entity.FirstPrimaryKey.Name}] INTO @InsertedRow
+        VALUES
+            (
+                ${this.createEntityFieldsInsertString(entity, entity.Fields, '@')}
+            )
+    END`;
                 
-                // Always include the PK field in the insert
-                additionalFieldList = ',\n            [' + entity.FirstPrimaryKey.Name + ']';
-                // Use the provided value if not null, otherwise extract and use the default
-                let defValue = entity.FirstPrimaryKey.DefaultValue.trim();
-                if (defValue.startsWith("'") && defValue.endsWith("'")) {
-                    defValue = defValue.substring(1, defValue.length - 1).trim();
-                }
-                additionalValueList = `,\n            ISNULL(@${entity.FirstPrimaryKey.Name}, ${defValue})`;
+                // Clear these as we're handling the INSERT in preInsertCode
+                additionalFieldList = '';
+                additionalValueList = '';
+                outputCode = '';
+                
+                selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.FirstPrimaryKey.Name}] = (SELECT [${entity.FirstPrimaryKey.Name}] FROM @InsertedRow)`;
             }
             else {
-                // No default value - use provided ID or generate new one
-                preInsertCode += `
-    DECLARE @ActualID UNIQUEIDENTIFIER = ISNULL(@${entity.FirstPrimaryKey.Name}, NEWID())`;
+                // No default value - we calculate the ID upfront, so no need for OUTPUT clause
+                preInsertCode = `DECLARE @ActualID UNIQUEIDENTIFIER = ISNULL(@${entity.FirstPrimaryKey.Name}, NEWID())`;
                 
-                additionalFieldList = ',\n            [' + entity.FirstPrimaryKey.Name + ']';
-                additionalValueList = ',\n            @ActualID';
+                additionalFieldList = ',\n                [' + entity.FirstPrimaryKey.Name + ']';
+                additionalValueList = ',\n                @ActualID';
+                outputCode = ''; // No OUTPUT clause needed
+                
+                // We already know the ID, so just select using it directly
+                selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.FirstPrimaryKey.Name}] = @ActualID`;
             }
-            
-            selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.FirstPrimaryKey.Name}] = (SELECT [${entity.FirstPrimaryKey.Name}] FROM @InsertedRow)`;
         } else {
             selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE `;
             let isFirst = true;
@@ -1042,7 +1098,7 @@ CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
 AS
 BEGIN
     SET NOCOUNT ON;
-    ${preInsertCode}
+    ${preInsertCode}${preInsertCode.includes('INSERT INTO') ? '' : `
     INSERT INTO
     [${entity.SchemaName}].[${entity.BaseTable}]
         (
@@ -1051,7 +1107,7 @@ BEGIN
     ${outputCode}VALUES
         (
             ${this.createEntityFieldsInsertString(entity, entity.Fields, '@')}${additionalValueList}
-        )
+        )`}
     -- return the new record from the base view, which might have some calculated fields
     ${selectInsertedRecord}
 END
@@ -1142,7 +1198,7 @@ ${updatedAtTrigger}
             const ef: EntityFieldInfo = entityFields[i];
             const autoGeneratedPrimaryKey: boolean = ef.AutoIncrement; // Only exclude auto-increment fields from params
             if (
-                (ef.AllowUpdateAPI || (ef.IsPrimaryKey && isUpdate)) &&
+                (ef.AllowUpdateAPI || (ef.IsPrimaryKey && isUpdate) || (ef.IsPrimaryKey && !autoGeneratedPrimaryKey && !isUpdate)) &&
                     !ef.IsVirtual &&
                 (!ef.IsPrimaryKey || !autoGeneratedPrimaryKey || isUpdate) &&
                     !ef.IsSpecialDateField
@@ -1152,11 +1208,12 @@ ${updatedAtTrigger}
                 else
                     isFirst = false;
 
-                // For primary keys (non-auto-increment), make them optional with NULL default
-                // This allows callers to omit the PK and let the DB/sproc handle it
+                // Check if we need a default value
                 let defaultParamValue = '';
                 if (!isUpdate && ef.IsPrimaryKey && !ef.AutoIncrement) {
-                    defaultParamValue = ` = NULL`;
+                    // For primary keys (non-auto-increment), make them optional with NULL default
+                    // This allows callers to omit the PK and let the DB/sproc handle it
+                    defaultParamValue = ' = NULL';
                 }
                 sOutput += `@${ef.CodeName} ${ef.SQLFullType}${defaultParamValue}`;
             }
@@ -1164,7 +1221,7 @@ ${updatedAtTrigger}
         return sOutput;
     }
 
-    protected createEntityFieldsInsertString(entity: EntityInfo, entityFields: EntityFieldInfo[], prefix: string): string {
+    protected createEntityFieldsInsertString(entity: EntityInfo, entityFields: EntityFieldInfo[], prefix: string, excludePrimaryKey: boolean = false): string {
         const autoGeneratedPrimaryKey = entity.FirstPrimaryKey.AutoIncrement; // Only exclude auto-increment PKs from insert
         let sOutput: string = '', isFirst: boolean = true;
         const filteredFields = entityFields.filter(f => f.AllowUpdateAPI);
@@ -1172,19 +1229,23 @@ ${updatedAtTrigger}
             const ef: EntityFieldInfo = entityFields[i];
             const quotes: string = ef.NeedsQuotes ? "'" : "";
             // we only want fields that are (a) not primary keys, or if a pkey, not an auto-increment pkey and (b) not virtual fields and (c) updateable fields and (d) not auto-increment fields if they're not pkeys)
-            if ( (!ef.IsPrimaryKey || !autoGeneratedPrimaryKey) && !ef.IsVirtual && ef.AllowUpdateAPI && !ef.AutoIncrement) { 
-                if (!isFirst)
-                    sOutput += ',\n            '
-                else
-                    isFirst = false;
+            // ALSO: if excludePrimaryKey is true, skip all primary key fields
+            if ( (excludePrimaryKey && ef.IsPrimaryKey) || (ef.IsPrimaryKey && autoGeneratedPrimaryKey) || ef.IsVirtual || !ef.AllowUpdateAPI || ef.AutoIncrement) {
+                continue; // skip this field
+            }
+            
+            if (!isFirst)
+                sOutput += ',\n                '
+            else
+                isFirst = false;
 
-                if (prefix !== '' && ef.IsSpecialDateField) {
-                    if (ef.IsCreatedAtField || ef.IsUpdatedAtField)
-                        sOutput += `GETUTCDATE()`; // we set the inserted row value to the current date for created and updated at fields
-                    else
-                        sOutput += `NULL`; // we don't set the deleted at field on an insert, only on a delete
-                }
-                else if ((prefix && prefix !== '') && !ef.IsPrimaryKey && ef.IsUniqueIdentifier && ef.HasDefaultValue) {
+            if (prefix !== '' && ef.IsSpecialDateField) {
+                if (ef.IsCreatedAtField || ef.IsUpdatedAtField)
+                    sOutput += `GETUTCDATE()`; // we set the inserted row value to the current date for created and updated at fields
+                else
+                    sOutput += `NULL`; // we don't set the deleted at field on an insert, only on a delete
+            }
+            else if ((prefix && prefix !== '') && !ef.IsPrimaryKey && ef.IsUniqueIdentifier && ef.HasDefaultValue) {
                     // this is the VALUE side (prefix not null/blank), is NOT a primary key, and is a uniqueidentifier column, and has a default value specified
                     // in this situation we need to check if the value being passed in is the special value '00000000-0000-0000-0000-000000000000' (which is in __specialUUIDValue) if it is, we substitute it with the actual default value
                     // otherwise we use the value passed in
@@ -1195,17 +1256,16 @@ ${updatedAtTrigger}
                             defValue = defValue.substring(1, defValue.length - 1).trim(); // remove the quotes
                         }
                     }
-                    sOutput += `CASE @${ef.CodeName} WHEN '${this.__specialUUIDValue}' THEN ${quotes}${defValue}${quotes} ELSE @${ef.CodeName} END`;
-                }
-                else {
-                    let sVal: string = '';
-                    if (!prefix || prefix.length === 0)
-                        sVal = '[' + ef.Name + ']'; // always put field names in brackets so that if reserved words are being used for field names in a table like "USER" and so on, they still work
-                    else
-                        sVal = prefix + ef.CodeName;
+                sOutput += `CASE @${ef.CodeName} WHEN '${this.__specialUUIDValue}' THEN ${quotes}${defValue}${quotes} ELSE @${ef.CodeName} END`;
+            }
+            else {
+                let sVal: string = '';
+                if (!prefix || prefix.length === 0)
+                    sVal = '[' + ef.Name + ']'; // always put field names in brackets so that if reserved words are being used for field names in a table like "USER" and so on, they still work
+                else
+                    sVal = prefix + ef.CodeName;
 
-                    sOutput += sVal;
-                }
+                sOutput += sVal;
             }
         }
         return sOutput;

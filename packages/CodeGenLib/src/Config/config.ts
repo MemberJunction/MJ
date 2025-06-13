@@ -146,6 +146,43 @@ const integrityCheckConfigSchema = z.object({
   entityFieldsSequenceCheck: z.boolean(),
 });
 
+export type ForceRegenerationConfig = z.infer<typeof forceRegenerationConfigSchema>;
+
+const forceRegenerationConfigSchema = z.object({
+  /**
+   * Force regeneration of all SQL objects even if no schema changes are detected
+   */
+  enabled: z.boolean().default(false),
+  /**
+   * Force regeneration of base views
+   */
+  baseViews: z.boolean().default(false),
+  /**
+   * Force regeneration of spCreate procedures
+   */
+  spCreate: z.boolean().default(false),
+  /**
+   * Force regeneration of spUpdate procedures
+   */
+  spUpdate: z.boolean().default(false),
+  /**
+   * Force regeneration of spDelete procedures
+   */
+  spDelete: z.boolean().default(false),
+  /**
+   * Force regeneration of all stored procedures
+   */
+  allStoredProcedures: z.boolean().default(false),
+  /**
+   * Force regeneration of indexes for foreign keys
+   */
+  indexes: z.boolean().default(false),
+  /**
+   * Force regeneration of full text search components
+   */
+  fullTextSearch: z.boolean().default(false),
+});
+
 export type SQLOutputConfig = z.infer<typeof sqlOutputConfigSchema>;
 
 const sqlOutputConfigSchema = z.object({
@@ -290,6 +327,7 @@ const configInfoSchema = z.object({
   dbSchemaJSONOutput: dbSchemaJSONOutputSchema,
   newEntityRelationshipDefaults: newEntityRelationshipDefaultsSchema,
   SQLOutput: sqlOutputConfigSchema,
+  forceRegeneration: forceRegenerationConfigSchema,
 
   dbHost: z.string(),
   dbPort: z.coerce.number().int().positive().default(1433),
