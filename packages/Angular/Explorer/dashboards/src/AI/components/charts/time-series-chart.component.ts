@@ -63,7 +63,7 @@ export interface DataPointClickEvent {
       background: white;
       border-radius: 8px;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      padding: 16px;
+      padding: 12px;
       height: 100%;
       display: flex;
       flex-direction: column;
@@ -74,7 +74,7 @@ export interface DataPointClickEvent {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
       flex-wrap: wrap;
       gap: 12px;
       flex-shrink: 0; /* Prevent header from being squeezed */
@@ -144,7 +144,7 @@ export interface DataPointClickEvent {
     .chart-controls {
       display: flex;
       gap: 8px;
-      margin-top: 12px;
+      margin-top: 8px;
       justify-content: center;
       flex-shrink: 0; /* Prevent controls from being squeezed */
     }
@@ -184,11 +184,13 @@ export interface DataPointClickEvent {
       fill: white;
       stroke-width: 2;
       r: 3;
+      z-index: 10;
     }
 
     :host ::ng-deep .chart-dot:hover {
       r: 5;
       filter: drop-shadow(0 0 4px rgba(0,0,0,0.3));
+      z-index: 20;
     }
 
     :host ::ng-deep .grid-line {
@@ -254,7 +256,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   private svg!: d3.Selection<SVGElement, unknown, null, undefined>;
   private width = 0;
   private height = 0;
-  private margin = { top: 15, right: 70, bottom: 35, left: 70 }; // Margins for dual axis
+  private margin = { top: 10, right: 70, bottom: 30, left: 70 }; // Margins for dual axis
 
   // Chart configuration
   private defaultColors = ['#2196f3', '#4caf50', '#ff9800', '#f44336', '#9c27b0'];
@@ -326,7 +328,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
     const containerHeight = container.clientHeight;
     
     // Reserve space for controls if they're shown
-    const controlsHeight = this.showControls ? 50 : 0;
+    const controlsHeight = this.showControls ? 60 : 0;
     const adjustedHeight = containerHeight - controlsHeight;
     
     // Use config dimensions or fallback to container dimensions
@@ -542,6 +544,11 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   }
 
   private drawMetrics(g: any, xScale: any, scales: any) {
+    // Create a group for lines and areas
+    const linesGroup = g.append('g').attr('class', 'lines-group');
+    // Create a group for dots (drawn on top)
+    const dotsGroup = g.append('g').attr('class', 'dots-group');
+    
     this.visibleMetrics.forEach((metric, index) => {
       if (this.hiddenMetrics.has(metric) || !scales[metric]) return;
 
@@ -575,7 +582,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
 
       // Draw area (optional)
       if (metric === 'executions' || metric === 'cost') {
-        g.append('path')
+        linesGroup.append('path')
           .datum(this.data)
           .attr('class', `chart-area chart-area--${metric}`)
           .attr('d', area)
@@ -583,15 +590,18 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
       }
 
       // Draw line
-      g.append('path')
+      linesGroup.append('path')
         .datum(this.data)
         .attr('class', `chart-line chart-line--${metric}`)
         .attr('d', line)
         .attr('stroke', color);
 
-      // Draw dots with click events
-      g.selectAll(`.chart-dot--${metric}`)
-        .data(this.data)
+      // Draw dots with click events - only for non-zero values
+      dotsGroup.selectAll(`.chart-dot--${metric}`)
+        .data(this.data.filter(d => {
+          const value = this.getMetricValue(d, metric);
+          return value != null && value > 0;
+        }))
         .enter().append('circle')
         .attr('class', `chart-dot chart-dot--${metric}`)
         .attr('cx', (d: TrendData) => xScale(d.timestamp))
@@ -604,9 +614,14 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
         })
         .attr('stroke', color)
         .style('cursor', 'pointer')
+        .style('pointer-events', 'all') // Ensure clicks are captured
         .on('click', (event: MouseEvent, d: TrendData) => {
           event.stopPropagation();
-          this.dataPointClick.emit({ data: d, metric, event });
+          // Only emit if there's actual data
+          const value = this.getMetricValue(d, metric);
+          if (value != null && value > 0) {
+            this.dataPointClick.emit({ data: d, metric, event });
+          }
         });
     });
   }
