@@ -63,19 +63,21 @@ export interface DataPointClickEvent {
       background: white;
       border-radius: 8px;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      padding: 20px;
+      padding: 16px;
       height: 100%;
       display: flex;
       flex-direction: column;
+      overflow: hidden; /* Ensure content doesn't overflow */
     }
 
     .chart-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
       flex-wrap: wrap;
       gap: 12px;
+      flex-shrink: 0; /* Prevent header from being squeezed */
     }
 
     .chart-title {
@@ -142,8 +144,9 @@ export interface DataPointClickEvent {
     .chart-controls {
       display: flex;
       gap: 8px;
-      margin-top: 16px;
+      margin-top: 12px;
       justify-content: center;
+      flex-shrink: 0; /* Prevent controls from being squeezed */
     }
 
     .control-btn {
@@ -251,7 +254,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   private svg!: d3.Selection<SVGElement, unknown, null, undefined>;
   private width = 0;
   private height = 0;
-  private margin = { top: 20, right: 80, bottom: 40, left: 80 }; // Increased margins for dual axis
+  private margin = { top: 15, right: 70, bottom: 35, left: 70 }; // Margins for dual axis
 
   // Chart configuration
   private defaultColors = ['#2196f3', '#4caf50', '#ff9800', '#f44336', '#9c27b0'];
@@ -322,13 +325,17 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
     const containerWidth = container.clientWidth;
     const containerHeight = container.clientHeight;
     
+    // Reserve space for controls if they're shown
+    const controlsHeight = this.showControls ? 50 : 0;
+    const adjustedHeight = containerHeight - controlsHeight;
+    
     // Use config dimensions or fallback to container dimensions
     this.width = (this.config.width || containerWidth) - this.margin.left - this.margin.right;
-    this.height = (this.config.height || Math.max(containerHeight, 250)) - this.margin.top - this.margin.bottom;
+    this.height = (this.config.height || Math.max(adjustedHeight, 200)) - this.margin.top - this.margin.bottom;
     
     // Ensure minimum dimensions for usability
     this.width = Math.max(this.width, 200);
-    this.height = Math.max(this.height, 200);
+    this.height = Math.max(this.height, 150);
     
     this.svg
       .attr('width', this.width + this.margin.left + this.margin.right)

@@ -1223,6 +1223,14 @@ export interface ExecutionRecord {
     .trends-chart app-time-series-chart {
       height: 100%;
       display: block;
+      overflow: hidden;
+    }
+
+    /* Ensure chart fits within tab pane */
+    .tab-pane.trends-chart {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
 
     /* Drill-down specific styles */
