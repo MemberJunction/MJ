@@ -1254,6 +1254,24 @@ export class AIAgentRun_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field(() => Int, {nullable: true, description: `Total number of prompt/input tokens used across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.`}) 
+    TotalPromptTokensUsed?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Total number of completion/output tokens generated across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.`}) 
+    TotalCompletionTokensUsed?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Total tokens used including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalTokensUsed. For parent agents, this includes the sum of all descendant agent tokens. Calculated as TotalPromptTokensUsedRollup + TotalCompletionTokensUsedRollup.`}) 
+    TotalTokensUsedRollup?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Total prompt/input tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalPromptTokensUsed. For parent agents, this includes the sum of all descendant agent prompt tokens.`}) 
+    TotalPromptTokensUsedRollup?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Total completion/output tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCompletionTokensUsed. For parent agents, this includes the sum of all descendant agent completion tokens.`}) 
+    TotalCompletionTokensUsedRollup?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Total cost including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCost. For parent agents, this includes the sum of all descendant agent costs. Note: This assumes all costs are in the same currency for accurate rollup.`}) 
+    TotalCostRollup?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -1320,6 +1338,24 @@ export class CreateAIAgentRunInput {
 
     @Field(() => Float, { nullable: true })
     TotalCost?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalPromptTokensUsed: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalCompletionTokensUsed: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalTokensUsedRollup: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalPromptTokensUsedRollup: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalCompletionTokensUsedRollup: number | null;
+
+    @Field(() => Float, { nullable: true })
+    TotalCostRollup: number | null;
 }
     
 
@@ -1369,6 +1405,24 @@ export class UpdateAIAgentRunInput {
 
     @Field(() => Float, { nullable: true })
     TotalCost?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalPromptTokensUsed?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalCompletionTokensUsed?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalTokensUsedRollup?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalPromptTokensUsedRollup?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalCompletionTokensUsedRollup?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    TotalCostRollup?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -2012,6 +2066,14 @@ export class AIAgent_ {
     @MaxLength(16)
     TypeID?: string;
         
+    @Field({nullable: true, description: `Current status of the AI agent. Active agents can be executed, Disabled agents are inactive, and Pending agents are awaiting configuration or approval. Allowed values: Active, Disabled, Pending.`}) 
+    @MaxLength(40)
+    Status?: string;
+        
+    @Field({nullable: true, description: `Optional override for the class name used by the MemberJunction class factory to instantiate this specific agent. If specified, this overrides the agent type's DriverClass. Useful for specialized agent implementations.`}) 
+    @MaxLength(510)
+    DriverClass?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -2096,6 +2158,12 @@ export class CreateAIAgentInput {
 
     @Field({ nullable: true })
     TypeID: string | null;
+
+    @Field({ nullable: true })
+    Status: string | null;
+
+    @Field({ nullable: true })
+    DriverClass: string | null;
 }
     
 
@@ -2142,6 +2210,12 @@ export class UpdateAIAgentInput {
 
     @Field({ nullable: true })
     TypeID?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -2614,6 +2688,10 @@ export class AIAgentType_ {
     @MaxLength(510)
     AgentPromptPlaceholder?: string;
         
+    @Field({nullable: true, description: `The class name used by the MemberJunction class factory to instantiate the specific agent type implementation. For example, "LoopAgentType" for a looping agent pattern. If not specified, defaults to using the agent type Name for the DriverClass lookup key.`}) 
+    @MaxLength(510)
+    DriverClass?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     SystemPrompt?: string;
@@ -2642,6 +2720,9 @@ export class CreateAIAgentTypeInput {
 
     @Field({ nullable: true })
     AgentPromptPlaceholder: string | null;
+
+    @Field({ nullable: true })
+    DriverClass: string | null;
 }
     
 
@@ -2667,6 +2748,9 @@ export class UpdateAIAgentTypeInput {
 
     @Field({ nullable: true })
     AgentPromptPlaceholder?: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -36397,7 +36481,7 @@ export class AIPromptRun_ {
     @Field(() => Int, {nullable: true, description: `Number of tokens in the completion/result.`}) 
     TokensCompletion?: number;
         
-    @Field(() => Float, {nullable: true, description: `Estimated cost of this execution in USD.`}) 
+    @Field(() => Float, {nullable: true, description: `Total cost including this execution and all child/grandchild executions. For leaf nodes (no children), this equals Cost. For parent nodes, this includes the sum of all descendant costs. Note: This assumes all costs are in the same currency for accurate rollup. Currency conversions should be handled at the application layer if needed.`}) 
     TotalCost?: number;
         
     @Field(() => Boolean, {description: `Whether the execution was successful.`}) 
@@ -36428,6 +36512,22 @@ export class AIPromptRun_ {
     @Field({nullable: true, description: `Optional reference to the AIAgentRun that initiated this prompt execution. Links prompt runs to their parent agent runs for comprehensive execution tracking.`}) 
     @MaxLength(16)
     AgentRunID?: string;
+        
+    @Field(() => Float, {nullable: true, description: `The cost of this specific prompt execution as reported by the AI provider. This does not include costs from child executions. The currency is specified in CostCurrency field.`}) 
+    Cost?: number;
+        
+    @Field({nullable: true, description: `ISO 4217 currency code for the Cost field (e.g., USD, EUR, GBP). Different AI providers may use different currencies.`}) 
+    @MaxLength(20)
+    CostCurrency?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Total tokens used including this execution and all child/grandchild executions. This provides a complete view of token usage for hierarchical prompt trees. Calculated as TokensPromptRollup + TokensCompletionRollup.`}) 
+    TokensUsedRollup?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Total prompt/input tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensPrompt. For parent nodes, this includes the sum of all descendant prompt tokens.`}) 
+    TokensPromptRollup?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Total completion/output tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensCompletion. For parent nodes, this includes the sum of all descendant completion tokens.`}) 
+    TokensCompletionRollup?: number;
         
     @Field() 
     @MaxLength(510)
@@ -36521,6 +36621,21 @@ export class CreateAIPromptRunInput {
 
     @Field({ nullable: true })
     AgentRunID: string | null;
+
+    @Field(() => Float, { nullable: true })
+    Cost: number | null;
+
+    @Field({ nullable: true })
+    CostCurrency: string | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensUsedRollup: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensPromptRollup: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensCompletionRollup: number | null;
 }
     
 
@@ -36591,6 +36706,21 @@ export class UpdateAIPromptRunInput {
 
     @Field({ nullable: true })
     AgentRunID?: string | null;
+
+    @Field(() => Float, { nullable: true })
+    Cost?: number | null;
+
+    @Field({ nullable: true })
+    CostCurrency?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensUsedRollup?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensPromptRollup?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensCompletionRollup?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

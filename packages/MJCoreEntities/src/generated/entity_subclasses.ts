@@ -1078,6 +1078,16 @@ export const AIAgentSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
     * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.`),
+    Status: z.string().nullable().describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+    * * Description: Current status of the AI agent. Active agents can be executed, Disabled agents are inactive, and Pending agents are awaiting configuration or approval. Allowed values: Active, Disabled, Pending.`),
+    DriverClass: z.string().nullable().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+    * * Description: Optional override for the class name used by the MemberJunction class factory to instantiate this specific agent. If specified, this overrides the agent type's DriverClass. Useful for specialized agent implementations.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -7292,6 +7302,36 @@ export const AIAgentRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    TotalPromptTokensUsed: z.number().nullable().describe(`
+        * * Field Name: TotalPromptTokensUsed
+        * * Display Name: Total Prompt Tokens Used
+        * * SQL Data Type: int
+    * * Description: Total number of prompt/input tokens used across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.`),
+    TotalCompletionTokensUsed: z.number().nullable().describe(`
+        * * Field Name: TotalCompletionTokensUsed
+        * * Display Name: Total Completion Tokens Used
+        * * SQL Data Type: int
+    * * Description: Total number of completion/output tokens generated across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.`),
+    TotalTokensUsedRollup: z.number().nullable().describe(`
+        * * Field Name: TotalTokensUsedRollup
+        * * Display Name: Total Tokens Used Rollup
+        * * SQL Data Type: int
+    * * Description: Total tokens used including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalTokensUsed. For parent agents, this includes the sum of all descendant agent tokens. Calculated as TotalPromptTokensUsedRollup + TotalCompletionTokensUsedRollup.`),
+    TotalPromptTokensUsedRollup: z.number().nullable().describe(`
+        * * Field Name: TotalPromptTokensUsedRollup
+        * * Display Name: Total Prompt Tokens Used Rollup
+        * * SQL Data Type: int
+    * * Description: Total prompt/input tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalPromptTokensUsed. For parent agents, this includes the sum of all descendant agent prompt tokens.`),
+    TotalCompletionTokensUsedRollup: z.number().nullable().describe(`
+        * * Field Name: TotalCompletionTokensUsedRollup
+        * * Display Name: Total Completion Tokens Used Rollup
+        * * SQL Data Type: int
+    * * Description: Total completion/output tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCompletionTokensUsed. For parent agents, this includes the sum of all descendant agent completion tokens.`),
+    TotalCostRollup: z.number().nullable().describe(`
+        * * Field Name: TotalCostRollup
+        * * Display Name: Total Cost Rollup
+        * * SQL Data Type: decimal(19, 8)
+    * * Description: Total cost including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCost. For parent agents, this includes the sum of all descendant agent costs. Note: This assumes all costs are in the same currency for accurate rollup.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -7355,6 +7395,11 @@ export const AIAgentTypeSchema = z.object({
         * * Display Name: Agent Prompt Placeholder
         * * SQL Data Type: nvarchar(255)
     * * Description: The placeholder name used in the system prompt template where the agent prompt result should be injected. For example, if the system prompt contains "{{ agentPrompt }}", this field should contain "agentPrompt". This enables proper hierarchical prompt execution where the agent type's system prompt acts as the parent and the agent's specific prompt acts as the child.`),
+    DriverClass: z.string().nullable().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+    * * Description: The class name used by the MemberJunction class factory to instantiate the specific agent type implementation. For example, "LoopAgentType" for a looping agent pattern. If not specified, defaults to using the agent type Name for the DriverClass lookup key.`),
     SystemPrompt: z.string().nullable().describe(`
         * * Field Name: SystemPrompt
         * * Display Name: System Prompt
@@ -7804,7 +7849,7 @@ export const AIPromptRunSchema = z.object({
         * * Field Name: TotalCost
         * * Display Name: Total Cost
         * * SQL Data Type: decimal(18, 6)
-    * * Description: Estimated cost of this execution in USD.`),
+    * * Description: Total cost including this execution and all child/grandchild executions. For leaf nodes (no children), this equals Cost. For parent nodes, this includes the sum of all descendant costs. Note: This assumes all costs are in the same currency for accurate rollup. Currency conversions should be handled at the application layer if needed.`),
     Success: z.boolean().describe(`
         * * Field Name: Success
         * * Display Name: Success
@@ -7855,6 +7900,31 @@ export const AIPromptRunSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
     * * Description: Optional reference to the AIAgentRun that initiated this prompt execution. Links prompt runs to their parent agent runs for comprehensive execution tracking.`),
+    Cost: z.number().nullable().describe(`
+        * * Field Name: Cost
+        * * Display Name: Cost
+        * * SQL Data Type: decimal(19, 8)
+    * * Description: The cost of this specific prompt execution as reported by the AI provider. This does not include costs from child executions. The currency is specified in CostCurrency field.`),
+    CostCurrency: z.string().nullable().describe(`
+        * * Field Name: CostCurrency
+        * * Display Name: Cost Currency
+        * * SQL Data Type: nvarchar(10)
+    * * Description: ISO 4217 currency code for the Cost field (e.g., USD, EUR, GBP). Different AI providers may use different currencies.`),
+    TokensUsedRollup: z.number().nullable().describe(`
+        * * Field Name: TokensUsedRollup
+        * * Display Name: Tokens Used Rollup
+        * * SQL Data Type: int
+    * * Description: Total tokens used including this execution and all child/grandchild executions. This provides a complete view of token usage for hierarchical prompt trees. Calculated as TokensPromptRollup + TokensCompletionRollup.`),
+    TokensPromptRollup: z.number().nullable().describe(`
+        * * Field Name: TokensPromptRollup
+        * * Display Name: Tokens Prompt Rollup
+        * * SQL Data Type: int
+    * * Description: Total prompt/input tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensPrompt. For parent nodes, this includes the sum of all descendant prompt tokens.`),
+    TokensCompletionRollup: z.number().nullable().describe(`
+        * * Field Name: TokensCompletionRollup
+        * * Display Name: Tokens Completion Rollup
+        * * SQL Data Type: int
+    * * Description: Total completion/output tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensCompletion. For parent nodes, this includes the sum of all descendant completion tokens.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -14555,6 +14625,32 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     }
     set TypeID(value: string | null) {
         this.Set('TypeID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Description: Current status of the AI agent. Active agents can be executed, Disabled agents are inactive, and Pending agents are awaiting configuration or approval. Allowed values: Active, Disabled, Pending.
+    */
+    get Status(): string | null {
+        return this.Get('Status');
+    }
+    set Status(value: string | null) {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional override for the class name used by the MemberJunction class factory to instantiate this specific agent. If specified, this overrides the agent type's DriverClass. Useful for specialized agent implementations.
+    */
+    get DriverClass(): string | null {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string | null) {
+        this.Set('DriverClass', value);
     }
 
     /**
@@ -30836,6 +30932,84 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     }
 
     /**
+    * * Field Name: TotalPromptTokensUsed
+    * * Display Name: Total Prompt Tokens Used
+    * * SQL Data Type: int
+    * * Description: Total number of prompt/input tokens used across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.
+    */
+    get TotalPromptTokensUsed(): number | null {
+        return this.Get('TotalPromptTokensUsed');
+    }
+    set TotalPromptTokensUsed(value: number | null) {
+        this.Set('TotalPromptTokensUsed', value);
+    }
+
+    /**
+    * * Field Name: TotalCompletionTokensUsed
+    * * Display Name: Total Completion Tokens Used
+    * * SQL Data Type: int
+    * * Description: Total number of completion/output tokens generated across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.
+    */
+    get TotalCompletionTokensUsed(): number | null {
+        return this.Get('TotalCompletionTokensUsed');
+    }
+    set TotalCompletionTokensUsed(value: number | null) {
+        this.Set('TotalCompletionTokensUsed', value);
+    }
+
+    /**
+    * * Field Name: TotalTokensUsedRollup
+    * * Display Name: Total Tokens Used Rollup
+    * * SQL Data Type: int
+    * * Description: Total tokens used including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalTokensUsed. For parent agents, this includes the sum of all descendant agent tokens. Calculated as TotalPromptTokensUsedRollup + TotalCompletionTokensUsedRollup.
+    */
+    get TotalTokensUsedRollup(): number | null {
+        return this.Get('TotalTokensUsedRollup');
+    }
+    set TotalTokensUsedRollup(value: number | null) {
+        this.Set('TotalTokensUsedRollup', value);
+    }
+
+    /**
+    * * Field Name: TotalPromptTokensUsedRollup
+    * * Display Name: Total Prompt Tokens Used Rollup
+    * * SQL Data Type: int
+    * * Description: Total prompt/input tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalPromptTokensUsed. For parent agents, this includes the sum of all descendant agent prompt tokens.
+    */
+    get TotalPromptTokensUsedRollup(): number | null {
+        return this.Get('TotalPromptTokensUsedRollup');
+    }
+    set TotalPromptTokensUsedRollup(value: number | null) {
+        this.Set('TotalPromptTokensUsedRollup', value);
+    }
+
+    /**
+    * * Field Name: TotalCompletionTokensUsedRollup
+    * * Display Name: Total Completion Tokens Used Rollup
+    * * SQL Data Type: int
+    * * Description: Total completion/output tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCompletionTokensUsed. For parent agents, this includes the sum of all descendant agent completion tokens.
+    */
+    get TotalCompletionTokensUsedRollup(): number | null {
+        return this.Get('TotalCompletionTokensUsedRollup');
+    }
+    set TotalCompletionTokensUsedRollup(value: number | null) {
+        this.Set('TotalCompletionTokensUsedRollup', value);
+    }
+
+    /**
+    * * Field Name: TotalCostRollup
+    * * Display Name: Total Cost Rollup
+    * * SQL Data Type: decimal(19, 8)
+    * * Description: Total cost including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCost. For parent agents, this includes the sum of all descendant agent costs. Note: This assumes all costs are in the same currency for accurate rollup.
+    */
+    get TotalCostRollup(): number | null {
+        return this.Get('TotalCostRollup');
+    }
+    set TotalCostRollup(value: number | null) {
+        this.Set('TotalCostRollup', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -30989,6 +31163,19 @@ export class AIAgentTypeEntity extends BaseEntity<AIAgentTypeEntityType> {
     }
     set AgentPromptPlaceholder(value: string | null) {
         this.Set('AgentPromptPlaceholder', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The class name used by the MemberJunction class factory to instantiate the specific agent type implementation. For example, "LoopAgentType" for a looping agent pattern. If not specified, defaults to using the agent type Name for the DriverClass lookup key.
+    */
+    get DriverClass(): string | null {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string | null) {
+        this.Set('DriverClass', value);
     }
 
     /**
@@ -32244,7 +32431,7 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     * * Field Name: TotalCost
     * * Display Name: Total Cost
     * * SQL Data Type: decimal(18, 6)
-    * * Description: Estimated cost of this execution in USD.
+    * * Description: Total cost including this execution and all child/grandchild executions. For leaf nodes (no children), this equals Cost. For parent nodes, this includes the sum of all descendant costs. Note: This assumes all costs are in the same currency for accurate rollup. Currency conversions should be handled at the application layer if needed.
     */
     get TotalCost(): number | null {
         return this.Get('TotalCost');
@@ -32359,6 +32546,71 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     }
     set AgentRunID(value: string | null) {
         this.Set('AgentRunID', value);
+    }
+
+    /**
+    * * Field Name: Cost
+    * * Display Name: Cost
+    * * SQL Data Type: decimal(19, 8)
+    * * Description: The cost of this specific prompt execution as reported by the AI provider. This does not include costs from child executions. The currency is specified in CostCurrency field.
+    */
+    get Cost(): number | null {
+        return this.Get('Cost');
+    }
+    set Cost(value: number | null) {
+        this.Set('Cost', value);
+    }
+
+    /**
+    * * Field Name: CostCurrency
+    * * Display Name: Cost Currency
+    * * SQL Data Type: nvarchar(10)
+    * * Description: ISO 4217 currency code for the Cost field (e.g., USD, EUR, GBP). Different AI providers may use different currencies.
+    */
+    get CostCurrency(): string | null {
+        return this.Get('CostCurrency');
+    }
+    set CostCurrency(value: string | null) {
+        this.Set('CostCurrency', value);
+    }
+
+    /**
+    * * Field Name: TokensUsedRollup
+    * * Display Name: Tokens Used Rollup
+    * * SQL Data Type: int
+    * * Description: Total tokens used including this execution and all child/grandchild executions. This provides a complete view of token usage for hierarchical prompt trees. Calculated as TokensPromptRollup + TokensCompletionRollup.
+    */
+    get TokensUsedRollup(): number | null {
+        return this.Get('TokensUsedRollup');
+    }
+    set TokensUsedRollup(value: number | null) {
+        this.Set('TokensUsedRollup', value);
+    }
+
+    /**
+    * * Field Name: TokensPromptRollup
+    * * Display Name: Tokens Prompt Rollup
+    * * SQL Data Type: int
+    * * Description: Total prompt/input tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensPrompt. For parent nodes, this includes the sum of all descendant prompt tokens.
+    */
+    get TokensPromptRollup(): number | null {
+        return this.Get('TokensPromptRollup');
+    }
+    set TokensPromptRollup(value: number | null) {
+        this.Set('TokensPromptRollup', value);
+    }
+
+    /**
+    * * Field Name: TokensCompletionRollup
+    * * Display Name: Tokens Completion Rollup
+    * * SQL Data Type: int
+    * * Description: Total completion/output tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensCompletion. For parent nodes, this includes the sum of all descendant completion tokens.
+    */
+    get TokensCompletionRollup(): number | null {
+        return this.Get('TokensCompletionRollup');
+    }
+    set TokensCompletionRollup(value: number | null) {
+        this.Set('TokensCompletionRollup', value);
     }
 
     /**
