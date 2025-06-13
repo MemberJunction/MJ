@@ -272,7 +272,6 @@ class SqlLoggingSessionImpl implements SqlLoggingSession {
     let header = `-- SQL Logging Session\n`;
     header += `-- Session ID: ${this.id}\n`;
     header += `-- Started: ${this.startTime.toISOString()}\n`;
-    header += `-- File: ${this.filePath}\n`;
     
     if (this.options.description) {
       header += `-- Description: ${this.options.description}\n`;

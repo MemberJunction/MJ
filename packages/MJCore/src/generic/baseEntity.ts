@@ -410,6 +410,7 @@ export abstract class BaseEntity<T = unknown> {
     private _eventSubject: Subject<BaseEntityEvent>;
     private _resultHistory: BaseEntityResult[] = [];
     private _provider: IEntityDataProvider | null = null;
+    private _everSaved: boolean = false;
 
     constructor(Entity: EntityInfo, Provider: IEntityDataProvider | null = null) {
         this._eventSubject = new Subject<BaseEntityEvent>();
@@ -507,7 +508,7 @@ export abstract class BaseEntity<T = unknown> {
      * Returns true if the record has been saved to the database, false otherwise. This is a useful property to check to determine if the record is a "New Record" or an existing one.
      */
     get IsSaved(): boolean {
-        return this.PrimaryKey.HasValue;
+        return this._everSaved;
     }
 
     /**
@@ -861,6 +862,7 @@ export abstract class BaseEntity<T = unknown> {
      */
     public NewRecord(newValues?: FieldValueCollection) : boolean {
         this.init();
+        this._everSaved = false; // Reset save state for new record
         if (newValues) {
             newValues.KeyValuePairs.filter(kv => kv.Value !== null && kv.Value !== undefined).forEach(kv => {
                 this.Set(kv.FieldName, kv.Value);
@@ -1011,6 +1013,7 @@ export abstract class BaseEntity<T = unknown> {
         if (data) {
             this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
             this.SetMany(data, false, true); // set the new values from the data returned from the save, this will also reset the old values
+            this._everSaved = true; // Mark as saved after successful save
             const result = this.LatestResult;
             if (result)
                 result.NewValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} }); // set the latest values here
@@ -1160,6 +1163,7 @@ export abstract class BaseEntity<T = unknown> {
                 }
             }
             this._recordLoaded = true;
+            this._everSaved = true; // Mark as saved since we loaded from database
             this._compositeKey = CompositeKey; // set the composite key to the one we just loaded
 
             return true;

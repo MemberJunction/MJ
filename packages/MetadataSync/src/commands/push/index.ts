@@ -379,18 +379,21 @@ export default class Push extends Command {
           if (!pk.AutoIncrement) {
             // Check if we have a value in primaryKey object
             if (recordData.primaryKey?.[pk.Name]) {
-              // User specified a primary key for new record, add it to fields
-              recordData.fields[pk.Name] = recordData.primaryKey[pk.Name];
+              // User specified a primary key for new record, set it on entity directly
+              // Don't add to fields as it will be in primaryKey section
+              (entity as any)[pk.Name] = recordData.primaryKey[pk.Name];
               if (verbose) {
                 this.log(`  Using specified primary key ${pk.Name}: ${recordData.primaryKey[pk.Name]}`);
               }
             } else if (pk.Type.toLowerCase() === 'uniqueidentifier' && !recordData.fields[pk.Name]) {
-              // Generate UUID for this primary key
+              // Generate UUID for this primary key and set it on entity directly
               const uuid = syncEngine.generateUUID();
-              recordData.fields[pk.Name] = uuid;
+              // Don't add to fields as it will be in primaryKey section after save
               if (verbose) {
                 this.log(`  Generated UUID for primary key ${pk.Name}: ${uuid}`);
               }
+              // Set the generated UUID on the entity
+              (entity as any)[pk.Name] = uuid;
             }
           }
         }
@@ -509,6 +512,32 @@ export default class Push extends Command {
             entity = await syncEngine.createEntityObject(entityName);
             entity.NewRecord();
             isNew = true;
+            
+            // Handle primary keys for new related entity records
+            const entityInfo = syncEngine.getEntityInfo(entityName);
+            if (entityInfo) {
+              for (const pk of entityInfo.PrimaryKeys) {
+                if (!pk.AutoIncrement) {
+                  // Check if we have a value in primaryKey object
+                  if (relatedRecord.primaryKey?.[pk.Name]) {
+                    // User specified a primary key for new record, set it on entity directly
+                    // Don't add to fields as it will be in primaryKey section
+                    (entity as any)[pk.Name] = relatedRecord.primaryKey[pk.Name];
+                    if (verbose) {
+                      this.log(`${indent}  Using specified primary key ${pk.Name}: ${relatedRecord.primaryKey[pk.Name]}`);
+                    }
+                  } else if (pk.Type.toLowerCase() === 'uniqueidentifier' && !relatedRecord.fields[pk.Name]) {
+                    // Generate UUID for this primary key and set it on entity directly
+                    const uuid = syncEngine.generateUUID();
+                    // Don't add to fields as it will be in primaryKey section after save
+                    (entity as any)[pk.Name] = uuid;
+                    if (verbose) {
+                      this.log(`${indent}  Generated UUID for primary key ${pk.Name}: ${uuid}`);
+                    }
+                  }
+                }
+              }
+            }
           }
           
           // Apply fields with parent/root context
