@@ -23,38 +23,32 @@ export interface DataPointClickEvent {
   selector: 'app-time-series-chart',
   template: `
     <div class="time-series-chart">
-      <div class="chart-header" *ngIf="title">
-        <h4 class="chart-title">{{ title }}</h4>
-        <div class="chart-legend" *ngIf="showLegend">
-          <div 
-            class="legend-item"
-            *ngFor="let metric of visibleMetrics; trackBy: trackByMetric"
-            (click)="toggleMetric(metric)"
-            [class.legend-item--disabled]="!isMetricVisible(metric)"
-          >
-            <div 
-              class="legend-color"
-              [style.background-color]="getMetricColor(metric)"
-            ></div>
-            <span class="legend-label">{{ getMetricLabel(metric) }}</span>
-          </div>
+      @if (title) {
+        <div class="chart-header">
+          <h4 class="chart-title">{{ title }}</h4>
+          @if (showLegend) {
+            <div class="chart-legend">
+              @for (metric of visibleMetrics; track metric) {
+                <div 
+                  class="legend-item"
+                  (click)="toggleMetric(metric)"
+                  [class.legend-item--disabled]="!isMetricVisible(metric)"
+                >
+                  <div 
+                    class="legend-color"
+                    [style.background-color]="getMetricColor(metric)"
+                  ></div>
+                  <span class="legend-label">{{ getMetricLabel(metric) }}</span>
+                </div>
+              }
+            </div>
+          }
         </div>
-      </div>
+      }
       
       <div class="chart-container">
         <svg #chartSvg></svg>
         <div class="chart-tooltip" #tooltip style="display: none;"></div>
-      </div>
-      
-      <div class="chart-controls" *ngIf="showControls">
-        <button 
-          class="control-btn"
-          *ngFor="let range of timeRanges"
-          [class.active]="selectedTimeRange === range.value"
-          (click)="selectTimeRange(range.value)"
-        >
-          {{ range.label }}
-        </button>
       </div>
     </div>
   `,
@@ -141,34 +135,6 @@ export interface DataPointClickEvent {
       max-width: 200px;
     }
 
-    .chart-controls {
-      display: flex;
-      gap: 8px;
-      margin-top: 8px;
-      justify-content: center;
-      flex-shrink: 0; /* Prevent controls from being squeezed */
-    }
-
-    .control-btn {
-      background: #f5f5f5;
-      border: none;
-      padding: 6px 12px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      color: #666;
-    }
-
-    .control-btn:hover {
-      background: #e0e0e0;
-    }
-
-    .control-btn.active {
-      background: #2196f3;
-      color: white;
-    }
 
     /* Chart styles */
     :host ::ng-deep .chart-line {
@@ -251,7 +217,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   private svg!: d3.Selection<SVGElement, unknown, null, undefined>;
   private width = 0;
   private height = 0;
-  private margin = { top: 10, right: 70, bottom: 30, left: 70 }; // Margins for dual axis
+  private margin = { top: 10, right: 70, bottom: 50, left: 70 }; // Increased bottom margin for x-axis labels
 
   // Chart configuration
   private defaultColors = ['#2196f3', '#4caf50', '#ff9800', '#f44336', '#9c27b0'];
@@ -260,18 +226,8 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   visibleMetrics = ['executions', 'cost', 'tokens', 'avgTime', 'errors'];
   private hiddenMetrics = new Set<string>();
 
-  // Time range controls
-  selectedTimeRange = '24h';
-  timeRanges = [
-    { label: '1H', value: '1h' },
-    { label: '6H', value: '6h' },
-    { label: '24H', value: '24h' },
-    { label: '7D', value: '7d' },
-    { label: '30D', value: '30d' }
-  ];
 
   ngOnInit() {
-    console.log('TimeSeriesChart initialized, dataPointClick emitter:', this.dataPointClick);
     this.applyConfig();
   }
 
@@ -323,13 +279,9 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
     const containerWidth = container.clientWidth;
     const containerHeight = container.clientHeight;
     
-    // Reserve space for controls if they're shown
-    const controlsHeight = this.showControls ? 70 : 0;
-    const adjustedHeight = containerHeight - controlsHeight;
-    
     // Use config dimensions or fallback to container dimensions
     this.width = (this.config.width || containerWidth) - this.margin.left - this.margin.right;
-    this.height = (this.config.height || Math.max(adjustedHeight, 200)) - this.margin.top - this.margin.bottom;
+    this.height = (this.config.height || Math.max(containerHeight, 200)) - this.margin.top - this.margin.bottom;
     
     // Ensure minimum dimensions for usability
     this.width = Math.max(this.width, 200);
@@ -608,8 +560,6 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
         return value != null && value > 0;
       });
       
-      console.log(`Creating dots for ${metric}:`, dotsData.length, 'dots');
-      
       const dots = dotsGroup.selectAll(`.chart-dot--${metric}`)
         .data(dotsData)
         .enter().append('circle')
@@ -631,7 +581,6 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
         .style('z-index', 1000) // Ensure dots are on top
         .attr('data-metric', metric) // Add data attribute for debugging
         .on('mouseenter', (event: MouseEvent, d: TrendData) => {
-          console.log(`Mouse enter on ${metric} dot`);
           // Bring to front on hover
           const dot = d3.select(event.currentTarget as SVGCircleElement);
           dot.raise();
@@ -650,26 +599,14 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
           }
         })
         .on('click', (event: MouseEvent, d: TrendData) => {
-          console.log('Dot clicked!', { metric, data: d, event });
           event.stopPropagation();
           event.preventDefault();
           // Only emit if there's actual data
           const value = this.getMetricValue(d, metric);
-          console.log('Value for metric:', { metric, value });
           if (value != null && value > 0) {
-            console.log('Emitting dataPointClick event');
             this.dataPointClick.emit({ data: d, metric, event });
-          } else {
-            console.log('Not emitting - value is null or <= 0');
           }
         });
-      
-      console.log(`Added click handlers to ${metric} dots:`, dots.size(), 'dots');
-      console.log(`${metric} dots positions:`, dots.nodes().map((node: any) => ({
-        cx: node.getAttribute('cx'),
-        cy: node.getAttribute('cy'),
-        r: node.getAttribute('r')
-      })));
     });
   }
 
@@ -758,12 +695,4 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
     this.updateChart();
   }
 
-  selectTimeRange(range: string): void {
-    this.selectedTimeRange = range;
-    this.timeRangeChange.emit(range);
-  }
-
-  trackByMetric(index: number, metric: string): string {
-    return metric;
-  }
 }

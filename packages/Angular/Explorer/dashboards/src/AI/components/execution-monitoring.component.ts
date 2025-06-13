@@ -1,6 +1,6 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, Output, EventEmitter, Input } from '@angular/core';
 import { Observable, Subject, combineLatest } from 'rxjs';
-import { map, takeUntil, startWith } from 'rxjs/operators';
+import { map, takeUntil, startWith, debounceTime } from 'rxjs/operators';
 import { 
   AIInstrumentationService, 
   DashboardKPIs, 
@@ -37,6 +37,25 @@ export interface ExecutionRecord {
   cost: number;
   tokens: number;
   errorMessage?: string;
+}
+
+export interface ExecutionMonitoringState {
+  selectedTimeRange: string;
+  refreshInterval: number;
+  panelStates: {
+    cost: boolean;
+    efficiency: boolean;
+    executions: boolean;
+  };
+  drillDownTabs: Array<{
+    id: string;
+    title: string;
+    type: string;
+    timestamp?: string;
+    metric?: string;
+  }>;
+  activeTabId: string;
+  splitterSizes?: number[];
 }
 
 @Component({
@@ -94,10 +113,10 @@ export interface ExecutionRecord {
       </div>
 
       <!-- Main Dashboard with Kendo Splitter -->
-      <kendo-splitter class="dashboard-splitter" orientation="vertical">
+      <kendo-splitter class="dashboard-splitter" orientation="vertical" (layoutChange)="onSplitterLayoutChange($event)">
         <!-- Top Row: System Health and Trends Chart -->
         <kendo-splitter-pane size="45%" [resizable]="true" [collapsible]="false">
-          <kendo-splitter orientation="horizontal">
+          <kendo-splitter orientation="horizontal" (layoutChange)="onSplitterLayoutChange($event)">
             <!-- System Health -->
             <kendo-splitter-pane size="30%" [resizable]="true" [collapsible]="true" [collapsed]="false">
               <div class="dashboard-section system-status">
@@ -328,7 +347,7 @@ export interface ExecutionRecord {
 
         <!-- Bottom Row: Analysis Panels with Expansion Layout -->
         <kendo-splitter-pane [resizable]="true" [collapsible]="false">
-          <kendo-splitter orientation="horizontal">
+          <kendo-splitter orientation="horizontal" (layoutChange)="onSplitterLayoutChange($event)">
             <!-- Left: Performance Heatmap -->
             <kendo-splitter-pane size="50%" [resizable]="true" [collapsible]="false">
               <div class="dashboard-section performance-matrix">
@@ -458,9 +477,15 @@ export interface ExecutionRecord {
         <div class="execution-modal-content" (click)="$event.stopPropagation()">
           <div class="execution-modal-header">
             <h3>Execution Details</h3>
-            <button class="close-btn" (click)="closeExecutionModal()">
-              <i class="fa-solid fa-times"></i>
-            </button>
+            <div class="modal-header-actions">
+              <button class="open-record-btn" (click)="openFullRecord()">
+                <i class="fa-solid fa-external-link-alt"></i>
+                Open
+              </button>
+              <button class="close-btn" (click)="closeExecutionModal()">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            </div>
           </div>
           <div class="execution-modal-body">
             @if (executionDetails) {
@@ -668,7 +693,7 @@ export interface ExecutionRecord {
     }
 
     .dashboard-splitter {
-      height: calc(100vh - 220px); /* Added 20px margin */
+      height: calc(100vh - 550px); /* Increased to account for headers and margins */
       min-height: 600px;
       margin-bottom: 20px;
     }
@@ -964,6 +989,37 @@ export interface ExecutionRecord {
       font-size: 18px;
       font-weight: 600;
       color: #333;
+    }
+
+    .modal-header-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .open-record-btn {
+      background: #2196f3;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .open-record-btn:hover {
+      background: #1976d2;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
+    }
+
+    .open-record-btn i {
+      font-size: 12px;
     }
 
     .close-btn {
@@ -1550,7 +1606,7 @@ export interface ExecutionRecord {
     /* Responsive Design */
     @media (max-width: 1200px) {
       .dashboard-splitter {
-        height: calc(100vh - 200px); /* Added 20px margin */
+        height: calc(100vh - 270px); /* Consistent with main height */
         margin-bottom: 20px;
       }
       
@@ -1589,7 +1645,7 @@ export interface ExecutionRecord {
       }
       
       .dashboard-splitter {
-        height: calc(100vh - 180px); /* Added 20px margin */
+        height: calc(100vh - 270px); /* Consistent with main height */
         min-height: 400px;
         margin-bottom: 20px;
       }
@@ -1665,7 +1721,12 @@ export interface ExecutionRecord {
   `]
 })
 export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
+  @Input() initialState?: Partial<ExecutionMonitoringState>;
+  @Output() openEntityRecord = new EventEmitter<{entityName: string, recordId: string}>();
+  @Output() stateChange = new EventEmitter<ExecutionMonitoringState>();
+  
   private destroy$ = new Subject<void>();
+  private stateChangeSubject$ = new Subject<ExecutionMonitoringState>();
 
   // Configuration
   refreshInterval = 30000; // 30 seconds
@@ -1711,7 +1772,7 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   // Panel state for collapsible sections
   panelStates = {
     cost: true,
-    efficiency: false,
+    efficiency: true,  // Expanded by default
     executions: false
   };
 
@@ -1752,23 +1813,101 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
-    this.instrumentationService.setRefreshInterval(this.refreshInterval);
-    this.setTimeRange(this.selectedTimeRange);
     
-    // Initialize with main chart tab
-    this.drillDownTabs = [
-      {
-        id: 'main-chart',
-        title: 'Execution Trends',
-        type: 'chart',
-        closeable: false
-      }
-    ];
+    // Load initial state if provided
+    if (this.initialState) {
+      this.loadUserState(this.initialState);
+    } else {
+      // Default initialization
+      this.instrumentationService.setRefreshInterval(this.refreshInterval);
+      this.setTimeRange(this.selectedTimeRange);
+      
+      // Initialize with main chart tab
+      this.drillDownTabs = [
+        {
+          id: 'main-chart',
+          title: 'Execution Trends',
+          type: 'chart',
+          closeable: false
+        }
+      ];
+    }
+    
+    // Set up debounced state change emission
+    this.stateChangeSubject$.pipe(
+      debounceTime(2000), // 2 second debounce
+      takeUntil(this.destroy$)
+    ).subscribe(state => {
+      this.stateChange.emit(state);
+    });
   }
 
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
+    this.stateChangeSubject$.complete();
+  }
+
+  private getCurrentState(): ExecutionMonitoringState {
+    return {
+      selectedTimeRange: this.selectedTimeRange,
+      refreshInterval: this.refreshInterval,
+      panelStates: { ...this.panelStates },
+      drillDownTabs: this.drillDownTabs.map(tab => ({
+        id: tab.id,
+        title: tab.title,
+        type: tab.type,
+        timestamp: tab.timestamp?.toISOString(),
+        metric: tab.metric
+      })),
+      activeTabId: this.activeTabId
+    };
+  }
+
+  private emitStateChange(): void {
+    const currentState = this.getCurrentState();
+    this.stateChangeSubject$.next(currentState);
+  }
+
+  public loadUserState(state: Partial<ExecutionMonitoringState>): void {
+    
+    if (state.selectedTimeRange) {
+      this.selectedTimeRange = state.selectedTimeRange;
+      this.setTimeRange(state.selectedTimeRange);
+    }
+    
+    if (state.refreshInterval !== undefined) {
+      this.refreshInterval = state.refreshInterval;
+      this.instrumentationService.setRefreshInterval(this.refreshInterval);
+    }
+    
+    if (state.panelStates) {
+      // Only override if state has explicit panel states, otherwise keep defaults
+      this.panelStates = { ...this.panelStates, ...state.panelStates };
+    }
+    
+    if (state.drillDownTabs && state.drillDownTabs.length > 0) {
+      this.drillDownTabs = state.drillDownTabs.map(tab => ({
+        ...tab,
+        type: tab.type as 'chart' | 'executions' | 'model-detail',
+        timestamp: tab.timestamp ? new Date(tab.timestamp) : undefined,
+        closeable: tab.id !== 'main-chart'
+      }));
+    } else {
+      // Initialize with default tab if not provided
+      this.drillDownTabs = [
+        {
+          id: 'main-chart',
+          title: 'Execution Trends',
+          type: 'chart',
+          closeable: false
+        }
+      ];
+    }
+    
+    if (state.activeTabId) {
+      this.activeTabId = state.activeTabId;
+    }
   }
 
   private createKPICards(kpis: DashboardKPIs): KPICardData[] {
@@ -1820,10 +1959,12 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
 
   onRefreshIntervalChange(): void {
     this.instrumentationService.setRefreshInterval(this.refreshInterval);
+    this.emitStateChange();
   }
 
   onTimeRangeChange(): void {
     this.setTimeRange(this.selectedTimeRange);
+    this.emitStateChange();
   }
 
   private setTimeRange(range: string): void {
@@ -1870,15 +2011,12 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   }
 
   onDataPointClick(event: DataPointClickEvent): void {
-    console.log('onDataPointClick received:', event);
     const timestamp = event.data.timestamp;
     const metric = event.metric;
     
     // Create new drill-down tab
     const tabId = `drill-down-${timestamp.getTime()}-${metric}`;
     const tabTitle = `${this.getMetricDisplayLabel(metric)} - ${this.formatTimestamp(timestamp)}`;
-    
-    console.log('Creating drill-down tab:', { tabId, tabTitle, timestamp, metric });
     
     const newTab: DrillDownTab = {
       id: tabId,
@@ -1891,10 +2029,8 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
     
     // Add tab if it doesn't exist
     if (!this.drillDownTabs.find(tab => tab.id === tabId)) {
-      console.log('Adding new tab to drillDownTabs');
       this.drillDownTabs.push(newTab);
-    } else {
-      console.log('Tab already exists, switching to it');
+      this.emitStateChange(); // Emit state when new tab is added
     }
     
     // Switch to the new tab
@@ -1952,6 +2088,24 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
     this.selectedExecution = null;
     this.executionDetails = null;
     this.loadingExecutionDetails = false;
+  }
+
+  openFullRecord(): void {
+    if (this.selectedExecution) {
+      // Determine the entity name based on the execution type
+      const entityName = this.selectedExecution.type === 'prompt' 
+        ? 'MJ: AI Prompt Runs' 
+        : 'MJ: AI Agent Runs';
+      
+      // Emit the event to open the full record
+      this.openEntityRecord.emit({
+        entityName: entityName,
+        recordId: this.selectedExecution.id
+      });
+      
+      // Close the modal
+      this.closeExecutionModal();
+    }
   }
 
   // Utility methods for templates
@@ -2012,6 +2166,11 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   // Tab management methods
   selectTab(tabId: string): void {
     this.activeTabId = tabId;
+    // Trigger chart resize after tab switch to fix chart rendering
+    setTimeout(() => {
+      window.dispatchEvent(new Event('resize'));
+    }, 100);
+    this.emitStateChange();
   }
 
   closeTab(event: MouseEvent, tabId: string): void {
@@ -2029,11 +2188,17 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
         // Switch to the previous tab or first tab
         const newActiveIndex = Math.max(0, tabIndex - 1);
         this.activeTabId = this.drillDownTabs[newActiveIndex].id;
+        // Trigger resize after tab switch
+        setTimeout(() => {
+          window.dispatchEvent(new Event('resize'));
+        }, 100);
       } else {
         // No tabs left, this shouldn't happen as main chart is not closeable
         this.activeTabId = 'main-chart';
       }
     }
+    
+    this.emitStateChange();
   }
 
   // KPI click handling
@@ -2265,6 +2430,7 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   // Panel management methods
   togglePanel(panelName: 'cost' | 'efficiency' | 'executions'): void {
     this.panelStates[panelName] = !this.panelStates[panelName];
+    this.emitStateChange();
   }
 
   viewExecutionDetail(execution: ExecutionRecord): void {
@@ -2301,5 +2467,15 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
     const start = details.startTime.getTime();
     const end = details.endTime ? details.endTime.getTime() : Date.now();
     return end - start;
+  }
+
+  onSplitterLayoutChange(event: any): void {
+    // Trigger window resize event to force charts to recalculate dimensions
+    setTimeout(() => {
+      window.dispatchEvent(new Event('resize'));
+    }, 100);
+    
+    // Emit state change when splitter changes
+    this.emitStateChange();
   }
 }

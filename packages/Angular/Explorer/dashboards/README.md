@@ -191,7 +191,46 @@ interface DashboardConfig {
 
 ### State Management
 
-Each dashboard maintains its own state structure that can be persisted:
+Each dashboard maintains its own state structure that can be persisted and restored. The state management pattern follows these principles:
+
+1. **State Initialization**: When a dashboard loads, the `loadData()` method checks for user state in the `Config` property and applies it
+2. **State Changes**: Components emit state changes via `UserStateChanged` events with debouncing to prevent excessive updates
+3. **State Persistence**: Parent components should listen to `UserStateChanged` events and persist the state as needed
+4. **State Restoration**: Pass previously saved state through the `Config.userState` property when initializing the dashboard
+
+#### How State Loading Works
+
+When a dashboard component initializes:
+
+```typescript
+// In the dashboard's loadData() method
+loadData(): void {
+  // Check if we have user state in the Config and apply it
+  if (this.Config?.userState) {
+    this.loadUserState(this.Config.userState);
+  }
+  
+  // Continue with other initialization...
+  this.LoadingComplete.emit();
+}
+```
+
+The `loadUserState()` method then applies the saved state to the component and its sub-components:
+
+```typescript
+// Example from AIDashboardComponent
+public loadUserState(state: Partial<AIDashboardState>): void {
+  if (state.activeTab) {
+    this.activeTab = state.activeTab;
+  }
+  
+  // Store sub-component states for when they're rendered
+  if (state.executionMonitoringState) {
+    this.executionMonitoringState = state.executionMonitoringState;
+  }
+  // ... other state properties
+}
+```
 
 #### AI Dashboard State
 ```typescript
@@ -200,8 +239,28 @@ interface AIDashboardState {
   modelManagementState: any;
   promptManagementState: any;
   agentConfigurationState: any;
-  executionMonitoringState: any;
+  executionMonitoringState: ExecutionMonitoringState;
   systemConfigurationState: any;
+}
+
+// ExecutionMonitoringState includes detailed UI state
+interface ExecutionMonitoringState {
+  selectedTimeRange: string;
+  refreshInterval: number;
+  panelStates: {
+    cost: boolean;
+    efficiency: boolean;
+    executions: boolean;
+  };
+  drillDownTabs: Array<{
+    id: string;
+    title: string;
+    type: string;
+    timestamp?: string;
+    metric?: string;
+  }>;
+  activeTabId: string;
+  splitterSizes?: number[];
 }
 ```
 
@@ -216,6 +275,50 @@ interface DashboardState {
   panPosition: { x: number; y: number };
   fieldsSectionExpanded: boolean;
   relationshipsSectionExpanded: boolean;
+}
+```
+
+#### Example: Complete State Management Implementation
+
+```typescript
+// Parent component that uses the AI Dashboard
+@Component({
+  template: `
+    <mj-ai-dashboard 
+      [Config]="dashboardConfig"
+      (UserStateChanged)="onStateChanged($event)">
+    </mj-ai-dashboard>
+  `
+})
+export class AIManagementComponent implements OnInit {
+  dashboardConfig: DashboardConfig;
+  
+  ngOnInit() {
+    // Load saved state from your persistence layer
+    const savedState = this.loadSavedState();
+    
+    // Configure dashboard with saved state
+    this.dashboardConfig = {
+      dashboard: this.dashboardEntity,
+      userState: savedState  // This will be applied in loadData()
+    };
+  }
+  
+  onStateChanged(state: AIDashboardState) {
+    // Save state changes with debouncing handled by the dashboard
+    this.saveState(state);
+  }
+  
+  private loadSavedState(): AIDashboardState | null {
+    // Load from localStorage, database, or other persistence
+    const saved = localStorage.getItem('ai-dashboard-state');
+    return saved ? JSON.parse(saved) : null;
+  }
+  
+  private saveState(state: AIDashboardState): void {
+    // Save to your persistence layer
+    localStorage.setItem('ai-dashboard-state', JSON.stringify(state));
+  }
 }
 ```
 
