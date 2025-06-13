@@ -11,6 +11,12 @@
 - Start API server: `npm run start:api`
 - Start Explorer UI: `npm run start:explorer`
 
+## Database Migrations
+- **CRITICAL**: Migration files must use the format `VYYYYMMDDHHMM__v[VERSION].x_[DESCRIPTION].sql`
+- Always use `date +"%Y%m%d%H%M"` to get the current timestamp in 24-hour format
+- Example: `V202506130552__v2.49.x_Add_AIAgent_Status_And_DriverClass_Columns.sql`
+- This ensures Flyway executes migrations in the correct order
+
 ## Development Workflow
 - **CRITICAL**: After making code changes, always compile the affected package by running `npm run build` in that package's directory to check for TypeScript errors
 - Fix all compilation errors before proceeding with additional changes
