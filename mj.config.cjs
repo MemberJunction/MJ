@@ -214,6 +214,16 @@ const codegenConfig = {
     convertCoreSchemaToFlywayMigrationFile: true,
     omitRecurringScriptsFromLog: true,
   },
+  forceRegeneration: {
+    enabled: false,  // Set to true to force regeneration even without schema changes
+    baseViews: false,
+    spCreate: false,  // Set this to true to regenerate all spCreate procedures
+    spUpdate: false,
+    spDelete: false,
+    allStoredProcedures: false,  // Overrides individual SP flags when true
+    indexes: false,
+    fullTextSearch: false,
+  },
 };
 
 /** @type {MJServerConfig} */

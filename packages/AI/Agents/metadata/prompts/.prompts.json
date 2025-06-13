@@ -1,0 +1,50 @@
+[
+  {
+    "fields": {
+      "Name": "Loop Agent Type: System Prompt",
+      "Description": "Basic control structure for the Loop Agent Type",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/loop-agent-type-system-prompt.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "@file:output/loop-agent-type-system-prompt-output.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Agent Type System Prompts?create&Description=System Prompts for Agent Types"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 4.1",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "0D13C545-5398-4623-A8AF-651971E270F3"
+          },
+          "sync": {
+            "lastModified": "2025-06-13T17:44:10.708Z",
+            "checksum": "6b6154f0c49d785c4e5b90e56012aa3cd00ff1a13d77a526dd3f5945ac7e29fd"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "29D65D89-9FA3-4674-82E9-EBFC939CF5EB"
+    },
+    "sync": {
+      "lastModified": "2025-06-13T17:44:10.709Z",
+      "checksum": "46f13994daa5f884a7d648926c5cc25207417898b1630cf820a349428ce00417"
+    }
+  }
+]

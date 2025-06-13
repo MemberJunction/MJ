@@ -99,7 +99,9 @@ export const loadModule = () => {
     get ${e.CodeName}(): ${typeString} {
         return this.Get('${e.Name}');
     }`;
-        if (!e.ReadOnly) {
+        if (!e.ReadOnly || (e.IsPrimaryKey && !e.AutoIncrement)) {
+          // Generate setter for non-readonly fields OR for primary keys that are not auto-increment
+          // This allows manual override of non-auto-increment primary keys (like UUIDs)
           sRet += `
     set ${e.CodeName}(value: ${typeString}) {
         this.Set('${e.Name}', value);

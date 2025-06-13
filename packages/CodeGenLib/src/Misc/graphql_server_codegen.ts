@@ -412,8 +412,8 @@ export class ${entity.BaseTableCodeName}Resolver${entity.CustomResolverAPI ? 'Ba
 export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
     // first, filter the fields
     const fieldsToInclude = entity.Fields.filter((f) => {
-      // include primary key for updates and also for creates if it is not an autoincrement field or a uniqueidentifier
-      const includePrimaryKey = classPrefix === 'Update' || (!f.AutoIncrement && f.Type !== 'uniqueidentifier');
+      // include primary key for updates and also for creates if it is not an autoincrement field
+      const includePrimaryKey = classPrefix === 'Update' || !f.AutoIncrement;
       return (includePrimaryKey && f.IsPrimaryKey) || !f.ReadOnly
     });
 
@@ -425,7 +425,10 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
 
       // next - decide if we allow this field to be undefined or not - for UPDATES, we only allow undefined if the field is not a primary key and the param to this function is on,
       // for CREATES, we allow undefined if the field is not a primary key and either the field allows null or has a default value
-      const fieldUndefined = classPrefix === 'Update' ? nonPKEYFieldsOptional && !f.IsPrimaryKey : nonPKEYFieldsOptional && !f.IsPrimaryKey && (!f.AllowsNull || f.HasDefaultValue);
+      // ALSO, for CREATES, primary keys that are not auto-increment should be nullable to allow optional override
+      const fieldUndefined = classPrefix === 'Update' ? 
+        nonPKEYFieldsOptional && !f.IsPrimaryKey : 
+        (f.IsPrimaryKey && !f.AutoIncrement) || (nonPKEYFieldsOptional && !f.IsPrimaryKey && (!f.AllowsNull || f.HasDefaultValue));
       const sNull: string = f.AllowsNull || fieldUndefined ? '{ nullable: true }' : '';
       const sFullTypeGraphQLString: string = sTypeGraphQLString + (sNull === '' || sTypeGraphQLString === '' ? '' : ', ') + sNull;
         sRet += `

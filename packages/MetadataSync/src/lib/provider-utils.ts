@@ -144,6 +144,26 @@ export function getSystemUser(): UserInfo {
 }
 
 /**
+ * Get the current data provider instance
+ * 
+ * Returns the global SQLServerDataProvider instance that was initialized by
+ * initializeProvider. This allows access to data provider features like SQL logging.
+ * 
+ * @returns The global SQLServerDataProvider instance or null if not initialized
+ * 
+ * @example
+ * ```typescript
+ * const provider = getDataProvider();
+ * if (provider?.createSqlLogger) {
+ *   const logger = await provider.createSqlLogger('/path/to/log.sql');
+ * }
+ * ```
+ */
+export function getDataProvider(): SQLServerDataProvider | null {
+  return globalProvider;
+}
+
+/**
  * Find entity directories at the immediate level only
  * 
  * Searches for directories containing .mj-sync.json files, which indicate
@@ -152,7 +172,8 @@ export function getSystemUser(): UserInfo {
  * 
  * @param dir - Base directory to search from
  * @param specificDir - Optional specific subdirectory name to check
- * @returns Array of absolute directory paths containing .mj-sync.json files
+ * @param directoryOrder - Optional array specifying the order directories should be processed
+ * @returns Array of absolute directory paths containing .mj-sync.json files, ordered according to directoryOrder
  * 
  * @example
  * ```typescript
@@ -161,25 +182,50 @@ export function getSystemUser(): UserInfo {
  * 
  * // Check specific directory
  * const dirs = findEntityDirectories(process.cwd(), 'ai-prompts');
+ * 
+ * // Find directories with custom ordering
+ * const dirs = findEntityDirectories(process.cwd(), undefined, ['prompts', 'agent-types']);
  * ```
  */
-export function findEntityDirectories(dir: string, specificDir?: string): string[] {
+export function findEntityDirectories(dir: string, specificDir?: string, directoryOrder?: string[]): string[] {
   const results: string[] = [];
   
-  // If specific directory is provided, check if it's an entity directory
+  // If specific directory is provided, check if it's an entity directory or root config directory
   if (specificDir) {
     const targetDir = path.isAbsolute(specificDir) ? specificDir : path.join(dir, specificDir);
     if (fs.existsSync(targetDir)) {
-      const hasSyncConfig = fs.existsSync(path.join(targetDir, '.mj-sync.json'));
+      const syncConfigPath = path.join(targetDir, '.mj-sync.json');
+      const hasSyncConfig = fs.existsSync(syncConfigPath);
+      
       if (hasSyncConfig) {
-        results.push(targetDir);
+        try {
+          const config = JSON.parse(fs.readFileSync(syncConfigPath, 'utf8'));
+          
+          // If this config has an entity field, it's an entity directory
+          if (config.entity) {
+            results.push(targetDir);
+            return results;
+          }
+          
+          // If this config has directoryOrder but no entity, treat it as a root config
+          // and look for entity directories in its subdirectories
+          if (config.directoryOrder) {
+            return findEntityDirectories(targetDir, undefined, config.directoryOrder);
+          }
+        } catch (error) {
+          // If we can't parse the config, treat it as a regular directory
+        }
       }
+      
+      // Fallback: look for entity subdirectories in the target directory
+      return findEntityDirectories(targetDir, undefined, directoryOrder);
     }
     return results;
   }
   
   // Otherwise, find all immediate subdirectories with .mj-sync.json
   const entries = fs.readdirSync(dir, { withFileTypes: true });
+  const foundDirectories: string[] = [];
   
   for (const entry of entries) {
     if (entry.isDirectory() && !entry.name.startsWith('.')) {
@@ -187,10 +233,40 @@ export function findEntityDirectories(dir: string, specificDir?: string): string
       const hasSyncConfig = fs.existsSync(path.join(subDir, '.mj-sync.json'));
       
       if (hasSyncConfig) {
-        results.push(subDir);
+        foundDirectories.push(subDir);
       }
     }
   }
   
-  return results;
+  // If directoryOrder is specified, sort directories according to it
+  if (directoryOrder && directoryOrder.length > 0) {
+    const orderedDirs: string[] = [];
+    const unorderedDirs: string[] = [];
+    
+    // First, add directories in the specified order
+    for (const dirName of directoryOrder) {
+      const matchingDir = foundDirectories.find(fullPath => 
+        path.basename(fullPath) === dirName
+      );
+      if (matchingDir) {
+        orderedDirs.push(matchingDir);
+      }
+    }
+    
+    // Then, add any remaining directories in alphabetical order
+    for (const foundDir of foundDirectories) {
+      const dirName = path.basename(foundDir);
+      if (!directoryOrder.includes(dirName)) {
+        unorderedDirs.push(foundDir);
+      }
+    }
+    
+    // Sort unordered directories alphabetically
+    unorderedDirs.sort((a, b) => path.basename(a).localeCompare(path.basename(b)));
+    
+    return [...orderedDirs, ...unorderedDirs];
+  }
+  
+  // No ordering specified, return in alphabetical order (existing behavior)
+  return foundDirectories.sort((a, b) => path.basename(a).localeCompare(path.basename(b)));
 }

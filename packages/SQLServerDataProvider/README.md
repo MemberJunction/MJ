@@ -458,6 +458,64 @@ Helper function to initialize and configure the SQL Server data provider.
 setupSQLServerClient(config: SQLServerProviderConfigData): Promise<SQLServerDataProvider>
 ```
 
+## SQL Output Logging
+
+The SQL Server Data Provider includes built-in SQL output logging capabilities that allow you to capture all SQL statements executed during operations. This is particularly useful for:
+
+- **Creating migration files** from application operations
+- **Debugging database operations** by reviewing exact SQL statements
+- **Performance analysis** by examining query patterns
+- **Compliance and auditing** requirements
+
+### Key Features
+
+- **Session-based logging** with unique identifiers for each logging session
+- **Parallel execution support** - logging runs alongside SQL execution without impacting performance
+- **Multiple output formats** - standard SQL logs or migration-ready files with Flyway naming
+- **Disposable pattern** - automatic resource cleanup when logging session ends
+- **Parameter capture** - logs both SQL statements and their parameters
+
+### Basic Usage
+
+```typescript
+import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
+
+const dataProvider = new SQLServerDataProvider(/* config */);
+await dataProvider.initialize();
+
+// Create a SQL logging session
+const logger = await dataProvider.createSqlLogger('./output/operations.sql', {
+  formatAsMigration: false,
+  description: 'User registration operations'
+});
+
+// Perform your database operations - they will be automatically logged
+await dataProvider.ExecuteSQL('INSERT INTO Users (Name, Email) VALUES (@name, @email)', {
+  name: 'John Doe',
+  email: 'john@example.com'
+});
+
+// Clean up the logging session
+await logger.dispose();
+```
+
+### Migration-Ready Format
+
+```typescript
+// Create logger with migration formatting
+const migrationLogger = await dataProvider.createSqlLogger('./migrations/V20241215120000__User_Operations.sql', {
+  formatAsMigration: true,
+  description: 'User management operations for deployment'
+});
+
+// Your operations are logged in Flyway-compatible format
+// with proper headers and schema placeholders
+```
+
+For comprehensive examples and advanced usage patterns, see [EXAMPLE_SQL_LOGGING.md](./EXAMPLE_SQL_LOGGING.md).
+
+> **Note**: This SQL output logging is different from the query execution logging available through subclassing the SQLServerDataProvider. SQL output logging captures statements for external use (like creating migrations), while execution logging is for debugging and monitoring the provider itself.
+
 ## Troubleshooting
 
 ### Common Issues

@@ -53,12 +53,27 @@ export interface MJConfig {
 export interface SyncConfig {
   /** Version of the sync configuration format */
   version: string;
+  /** 
+   * Directory processing order (only applies to root-level config, not inherited by subdirectories)
+   * Specifies the order in which subdirectories should be processed to handle dependencies.
+   * Directories not listed in this array will be processed after the ordered ones in alphabetical order.
+   */
+  directoryOrder?: string[];
   /** Push command configuration */
   push?: {
     /** Whether to validate records before pushing to database */
     validateBeforePush?: boolean;
     /** Whether to require user confirmation before push */
     requireConfirmation?: boolean;
+  };
+  /** SQL logging configuration (only applies to root-level config, not inherited by subdirectories) */
+  sqlLogging?: {
+    /** Whether to enable SQL logging during push operations */
+    enabled?: boolean;
+    /** Directory to output SQL log files (relative to command execution directory, defaults to './sql_logging') */
+    outputDirectory?: string;
+    /** Whether to format SQL as migration-ready files with Flyway schema placeholders */
+    formatAsMigration?: boolean;
   };
   /** Watch command configuration */
   watch?: {

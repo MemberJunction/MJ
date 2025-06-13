@@ -1,0 +1,41 @@
+{
+  "entity": "MJ: AI Agent Types",
+  "filePattern": ".*.json",
+  "defaults": {
+  },
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".prompts.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,   
+    "mergeStrategy": "merge",   
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",   
+    "filter": "",
+    "externalizeFields": [
+    ],
+    "lookupFields": {
+      "TypeID": {
+        "entity": "MJ: AI Agent Types",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": {
+        "entity": "MJ: AI Prompt Models",
+        "foreignKey": "PromptID",
+        "filter": "Status = 'Active'",
+        "lookupFields": {
+          "ModelID": {
+            "entity": "AI Models",
+            "field": "Name"
+          },
+          "VendorID": {
+            "entity": "MJ: AI Vendors",
+            "field": "Name"
+          }
+        }
+      }
+    }
+  }
+}

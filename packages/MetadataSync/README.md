@@ -851,13 +851,128 @@ Configuration follows a hierarchical structure:
 - **Entity configs**: Each entity directory has its own config defining the entity type
 - **Inheritance**: All files within an entity directory are treated as records of that entity type
 
+### Directory Processing Order (NEW)
+
+The MetadataSync tool now supports custom directory processing order to handle dependencies between entity types. This feature ensures that dependent entities are processed in the correct order.
+
+#### Directory Order Configuration
+
+Directory order is configured in the root-level `.mj-sync.json` file only (not inherited by subdirectories):
+
+```json
+{
+  "version": "1.0.0",
+  "directoryOrder": [
+    "prompts",
+    "agent-types"
+  ]
+}
+```
+
+#### How It Works
+
+- **Ordered Processing**: Directories listed in `directoryOrder` are processed first, in the specified order
+- **Remaining Directories**: Any directories not listed are processed after the ordered ones, in alphabetical order
+- **Dependency Management**: Ensures prompts are created before agent types that reference them
+- **Flexible**: Only specify the directories that have order requirements
+
+#### Example Use Cases
+
+1. **AI Prompts → Agent Types**: Create prompts before agent types that reference them
+2. **Categories → Items**: Create category records before items that reference them
+3. **Parent → Child**: Process parent entities before child entities with foreign key dependencies
+
+### SQL Logging (NEW)
+
+The MetadataSync tool now supports SQL logging for capturing all database operations during push commands. This feature is useful for:
+- Creating migration files from MetadataSync operations
+- Debugging database changes
+- Understanding what SQL operations occur during push
+- Creating migration scripts for deployment to other environments
+
+#### SQL Logging Configuration
+
+SQL logging is configured in the root-level `.mj-sync.json` file only (not inherited by subdirectories):
+
+```json
+{
+  "version": "1.0.0",
+  "sqlLogging": {
+    "enabled": true,
+    "outputDirectory": "./sql_logging",
+    "formatAsMigration": true
+  }
+}
+```
+
+#### SQL Logging Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | boolean | false | Whether to enable SQL logging during push operations |
+| `outputDirectory` | string | "./sql_logging" | Directory to output SQL log files (relative to command execution directory) |
+| `formatAsMigration` | boolean | false | Whether to format SQL as migration-ready files with Flyway schema placeholders |
+
+#### SQL Log File Format
+
+When `formatAsMigration` is `false`, log files are named:
+```
+metadatasync-push-YYYY-MM-DDTHH-MM-SS.sql
+```
+
+When `formatAsMigration` is `true`, log files are named as Flyway migrations:
+```
+VYYYYMMDDHHMMSS__MetadataSync_Push.sql
+```
+
+Migration files include:
+- Header comments with timestamp and description
+- Schema placeholders that can be replaced during deployment
+- Properly formatted SQL statements with parameters
+
+#### Example Usage
+
+1. **Enable SQL logging** in your root `.mj-sync.json`:
+   ```json
+   {
+     "version": "1.0.0",
+     "sqlLogging": {
+       "enabled": true,
+       "outputDirectory": "./migrations",
+       "formatAsMigration": true
+     }
+   }
+   ```
+
+2. **Run push command** as normal:
+   ```bash
+   mj-sync push
+   ```
+
+3. **Review generated SQL** in the output directory:
+   ```
+   migrations/
+   └── V20241215103045__MetadataSync_Push.sql
+   ```
+
+The SQL logging runs in parallel with the actual database operations, ensuring minimal performance impact while capturing all SQL statements for review and potential migration use.
+
 ### Root Configuration (metadata/.mj-sync.json)
 ```json
 {
   "version": "1.0.0",
+  "directoryOrder": [
+    "prompts",
+    "agent-types"
+  ],
   "push": {
     "validateBeforePush": true,
     "requireConfirmation": true
+  },
+  "sqlLogging": {
+    "enabled": true,
+    "outputDirectory": "./sql_logging",
+    "formatAsMigration": false
   },
   "watch": {
     "debounceMs": 1000,

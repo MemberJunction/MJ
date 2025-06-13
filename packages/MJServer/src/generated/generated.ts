@@ -107,6 +107,9 @@ export class ScheduledAction_ {
 @InputType()
 export class CreateScheduledActionInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     Name?: string;
 
     @Field({ nullable: true })
@@ -345,6 +348,9 @@ export class ScheduledActionParam_ {
 @InputType()
 export class CreateScheduledActionParamInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     ScheduledActionID?: string;
 
     @Field({ nullable: true })
@@ -528,6 +534,9 @@ export class ExplorerNavigationItem_ {
 //****************************************************************************
 @InputType()
 export class CreateExplorerNavigationItemInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field(() => Int, { nullable: true })
     Sequence?: number;
 
@@ -685,7 +694,7 @@ export class ExplorerNavigationItemResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Generated Code Categories
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Categorization for generated code, including optional parent-child relationships.` })
 export class GeneratedCodeCategory_ {
     @Field() 
     @MaxLength(16)
@@ -727,6 +736,9 @@ export class GeneratedCodeCategory_ {
 //****************************************************************************
 @InputType()
 export class CreateGeneratedCodeCategoryInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -912,6 +924,9 @@ export class AIAgentModel_ {
 @InputType()
 export class CreateAIAgentModelInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     AgentID: string | null;
 
     @Field({ nullable: true })
@@ -1069,6 +1084,9 @@ export class AIAgentNoteType_ {
 //****************************************************************************
 @InputType()
 export class CreateAIAgentNoteTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name: string | null;
 
@@ -1254,6 +1272,24 @@ export class AIAgentRun_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field(() => Int, {nullable: true, description: `Total number of prompt/input tokens used across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.`}) 
+    TotalPromptTokensUsed?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Total number of completion/output tokens generated across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.`}) 
+    TotalCompletionTokensUsed?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Total tokens used including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalTokensUsed. For parent agents, this includes the sum of all descendant agent tokens. Calculated as TotalPromptTokensUsedRollup + TotalCompletionTokensUsedRollup.`}) 
+    TotalTokensUsedRollup?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Total prompt/input tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalPromptTokensUsed. For parent agents, this includes the sum of all descendant agent prompt tokens.`}) 
+    TotalPromptTokensUsedRollup?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Total completion/output tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCompletionTokensUsed. For parent agents, this includes the sum of all descendant agent completion tokens.`}) 
+    TotalCompletionTokensUsedRollup?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Total cost including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCost. For parent agents, this includes the sum of all descendant agent costs. Note: This assumes all costs are in the same currency for accurate rollup.`}) 
+    TotalCostRollup?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -1282,6 +1318,9 @@ export class AIAgentRun_ {
 //****************************************************************************
 @InputType()
 export class CreateAIAgentRunInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     AgentID?: string;
 
@@ -1320,6 +1359,24 @@ export class CreateAIAgentRunInput {
 
     @Field(() => Float, { nullable: true })
     TotalCost?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalPromptTokensUsed: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalCompletionTokensUsed: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalTokensUsedRollup: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalPromptTokensUsedRollup: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalCompletionTokensUsedRollup: number | null;
+
+    @Field(() => Float, { nullable: true })
+    TotalCostRollup: number | null;
 }
     
 
@@ -1369,6 +1426,24 @@ export class UpdateAIAgentRunInput {
 
     @Field(() => Float, { nullable: true })
     TotalCost?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalPromptTokensUsed?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalCompletionTokensUsed?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalTokensUsedRollup?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalPromptTokensUsedRollup?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalCompletionTokensUsedRollup?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    TotalCostRollup?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -1536,6 +1611,9 @@ export class AIVendor_ {
 //****************************************************************************
 @InputType()
 export class CreateAIVendorInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -1767,6 +1845,9 @@ export class AIConfiguration_ {
 //****************************************************************************
 @InputType()
 export class CreateAIConfigurationInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -2012,6 +2093,14 @@ export class AIAgent_ {
     @MaxLength(16)
     TypeID?: string;
         
+    @Field({nullable: true, description: `Current status of the AI agent. Active agents can be executed, Disabled agents are inactive, and Pending agents are awaiting configuration or approval. Allowed values: Active, Disabled, Pending.`}) 
+    @MaxLength(40)
+    Status?: string;
+        
+    @Field({nullable: true, description: `Optional override for the class name used by the MemberJunction class factory to instantiate this specific agent. If specified, this overrides the agent type's DriverClass. Useful for specialized agent implementations.`}) 
+    @MaxLength(510)
+    DriverClass?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -2062,6 +2151,9 @@ export class AIAgent_ {
 @InputType()
 export class CreateAIAgentInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     Name: string | null;
 
     @Field({ nullable: true })
@@ -2096,6 +2188,12 @@ export class CreateAIAgentInput {
 
     @Field({ nullable: true })
     TypeID: string | null;
+
+    @Field({ nullable: true })
+    Status: string | null;
+
+    @Field({ nullable: true })
+    DriverClass: string | null;
 }
     
 
@@ -2142,6 +2240,12 @@ export class UpdateAIAgentInput {
 
     @Field({ nullable: true })
     TypeID?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -2414,6 +2518,9 @@ export class AIPromptModel_ {
 @InputType()
 export class CreateAIPromptModelInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     PromptID?: string;
 
     @Field({ nullable: true })
@@ -2610,6 +2717,14 @@ export class AIAgentType_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `The placeholder name used in the system prompt template where the agent prompt result should be injected. For example, if the system prompt contains "{{ agentPrompt }}", this field should contain "agentPrompt". This enables proper hierarchical prompt execution where the agent type's system prompt acts as the parent and the agent's specific prompt acts as the child.`}) 
+    @MaxLength(510)
+    AgentPromptPlaceholder?: string;
+        
+    @Field({nullable: true, description: `The class name used by the MemberJunction class factory to instantiate the specific agent type implementation. For example, "LoopAgentType" for a looping agent pattern. If not specified, defaults to using the agent type Name for the DriverClass lookup key.`}) 
+    @MaxLength(510)
+    DriverClass?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     SystemPrompt?: string;
@@ -2625,6 +2740,9 @@ export class AIAgentType_ {
 @InputType()
 export class CreateAIAgentTypeInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     Name?: string;
 
     @Field({ nullable: true })
@@ -2635,6 +2753,12 @@ export class CreateAIAgentTypeInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field({ nullable: true })
+    AgentPromptPlaceholder: string | null;
+
+    @Field({ nullable: true })
+    DriverClass: string | null;
 }
     
 
@@ -2657,6 +2781,12 @@ export class UpdateAIAgentTypeInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field({ nullable: true })
+    AgentPromptPlaceholder?: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -2813,6 +2943,9 @@ export class AIAgentNote_ {
 //****************************************************************************
 @InputType()
 export class CreateAIAgentNoteInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     AgentID: string | null;
 
@@ -2987,6 +3120,9 @@ export class AIAgentAction_ {
 //****************************************************************************
 @InputType()
 export class CreateAIAgentActionInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     AgentID: string | null;
 
@@ -3290,6 +3426,9 @@ export class AIPrompt_ {
 //****************************************************************************
 @InputType()
 export class CreateAIPromptInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -3762,6 +3901,9 @@ export class AIResultCache_ {
 @InputType()
 export class CreateAIResultCacheInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     AIPromptID?: string;
 
     @Field({ nullable: true })
@@ -3979,6 +4121,9 @@ export class AIPromptCategory_ {
 @InputType()
 export class CreateAIPromptCategoryInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     Name?: string;
 
     @Field({ nullable: true })
@@ -4150,6 +4295,9 @@ export class AIPromptType_ {
 //****************************************************************************
 @InputType()
 export class CreateAIPromptTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -4325,6 +4473,9 @@ export class Company_ {
 //****************************************************************************
 @InputType()
 export class CreateCompanyInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -4590,6 +4741,9 @@ export class Employee_ {
 @InputType()
 export class CreateEmployeeInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     FirstName?: string;
 
     @Field({ nullable: true })
@@ -4845,6 +4999,9 @@ export class UserFavorite_ {
 //****************************************************************************
 @InputType()
 export class CreateUserFavoriteInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     UserID?: string;
 
@@ -5397,6 +5554,9 @@ export class Role_ {
 //****************************************************************************
 @InputType()
 export class CreateRoleInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -6561,6 +6721,9 @@ export class EntityField_ {
 @InputType()
 export class CreateEntityFieldInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     DisplayName: string | null;
 
     @Field({ nullable: true })
@@ -7199,6 +7362,9 @@ export class Entity_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     ParentID: string | null;
 
@@ -8203,6 +8369,9 @@ export class User_ {
 @InputType()
 export class CreateUserInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     Name?: string;
 
     @Field({ nullable: true })
@@ -8934,6 +9103,9 @@ export class EntityRelationship_ {
 @InputType()
 export class CreateEntityRelationshipInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     EntityID?: string;
 
     @Field(() => Int, { nullable: true })
@@ -9438,6 +9610,9 @@ export class UserView_ {
 @InputType()
 export class CreateUserViewInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     UserID?: string;
 
     @Field({ nullable: true })
@@ -9763,6 +9938,9 @@ export class CompanyIntegrationRun_ {
 @InputType()
 export class CreateCompanyIntegrationRunInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     CompanyIntegrationID?: string;
 
     @Field({ nullable: true })
@@ -10002,6 +10180,9 @@ export class CompanyIntegrationRunDetail_ {
 @InputType()
 export class CreateCompanyIntegrationRunDetailInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     CompanyIntegrationRunID?: string;
 
     @Field({ nullable: true })
@@ -10194,6 +10375,9 @@ export class ErrorLog_ {
 //****************************************************************************
 @InputType()
 export class CreateErrorLogInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     CompanyIntegrationRunID: string | null;
 
@@ -10391,6 +10575,9 @@ export class Application_ {
 //****************************************************************************
 @InputType()
 export class CreateApplicationInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -10641,6 +10828,9 @@ export class ApplicationEntity_ {
 @InputType()
 export class CreateApplicationEntityInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     ApplicationID?: string;
 
     @Field({ nullable: true })
@@ -10852,6 +11042,9 @@ export class EntityPermission_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityPermissionInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     EntityID?: string;
 
@@ -11070,6 +11263,9 @@ export class UserApplicationEntity_ {
 @InputType()
 export class CreateUserApplicationEntityInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     UserApplicationID?: string;
 
     @Field({ nullable: true })
@@ -11236,6 +11432,9 @@ export class UserApplication_ {
 //****************************************************************************
 @InputType()
 export class CreateUserApplicationInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     UserID?: string;
 
@@ -11415,6 +11614,9 @@ export class CompanyIntegrationRunAPILog_ {
 //****************************************************************************
 @InputType()
 export class CreateCompanyIntegrationRunAPILogInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     CompanyIntegrationRunID?: string;
 
@@ -11613,6 +11815,9 @@ export class List_ {
 //****************************************************************************
 @InputType()
 export class CreateListInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -11822,6 +12027,9 @@ export class ListDetail_ {
 @InputType()
 export class CreateListDetailInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     ListID?: string;
 
     @Field({ nullable: true })
@@ -11999,6 +12207,9 @@ export class UserViewRun_ {
 @InputType()
 export class CreateUserViewRunInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     UserViewID?: string;
 
     @Field({ nullable: true })
@@ -12159,6 +12370,9 @@ export class UserViewRunDetail_ {
 //****************************************************************************
 @InputType()
 export class CreateUserViewRunDetailInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     UserViewRunID?: string;
 
@@ -12830,6 +13044,9 @@ export class RecordChange_ {
 @InputType()
 export class CreateRecordChangeInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     EntityID?: string;
 
     @Field({ nullable: true })
@@ -13046,6 +13263,9 @@ export class UserRole_ {
 //****************************************************************************
 @InputType()
 export class CreateUserRoleInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     UserID?: string;
 
@@ -13319,6 +13539,9 @@ export class AuditLog_ {
 //****************************************************************************
 @InputType()
 export class CreateAuditLogInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     UserID?: string;
 
@@ -14148,6 +14371,9 @@ export class AIModel_ {
 @InputType()
 export class CreateAIModelInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     Name?: string;
 
     @Field({ nullable: true })
@@ -14477,6 +14703,9 @@ export class AIAction_ {
 @InputType()
 export class CreateAIActionInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     Name?: string;
 
     @Field({ nullable: true })
@@ -14679,6 +14908,9 @@ export class AIModelAction_ {
 //****************************************************************************
 @InputType()
 export class CreateAIModelActionInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     AIModelID?: string;
 
@@ -14891,6 +15123,9 @@ export class EntityAIAction_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityAIActionInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     EntityID?: string;
 
@@ -15110,6 +15345,9 @@ export class AIModelType_ {
 //****************************************************************************
 @InputType()
 export class CreateAIModelTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -15453,6 +15691,9 @@ export class Queue_ {
 @InputType()
 export class CreateQueueInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     Name?: string;
 
     @Field({ nullable: true })
@@ -15711,6 +15952,9 @@ export class QueueTask_ {
 @InputType()
 export class CreateQueueTaskInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     QueueID?: string;
 
     @Field({ nullable: true })
@@ -15940,6 +16184,9 @@ export class Dashboard_ {
 //****************************************************************************
 @InputType()
 export class CreateDashboardInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -16547,6 +16794,9 @@ export class Report_ {
 @InputType()
 export class CreateReportInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     Name?: string;
 
     @Field({ nullable: true })
@@ -16815,6 +17065,9 @@ export class ReportSnapshot_ {
 //****************************************************************************
 @InputType()
 export class CreateReportSnapshotInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     ReportID?: string;
 
@@ -17355,6 +17608,9 @@ export class Workspace_ {
 @InputType()
 export class CreateWorkspaceInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     Name?: string;
 
     @Field({ nullable: true })
@@ -17539,6 +17795,9 @@ export class WorkspaceItem_ {
 //****************************************************************************
 @InputType()
 export class CreateWorkspaceItemInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -17979,6 +18238,9 @@ export class ConversationDetail_ {
 @InputType()
 export class CreateConversationDetailInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     ConversationID?: string;
 
     @Field({ nullable: true })
@@ -18259,6 +18521,9 @@ export class Conversation_ {
 @InputType()
 export class CreateConversationInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     UserID?: string;
 
     @Field({ nullable: true })
@@ -18520,6 +18785,9 @@ export class UserNotification_ {
 @InputType()
 export class CreateUserNotificationInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     UserID?: string;
 
     @Field({ nullable: true })
@@ -18705,6 +18973,9 @@ export class SchemaInfo_ {
 @InputType()
 export class CreateSchemaInfoInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     SchemaName?: string;
 
     @Field(() => Int, { nullable: true })
@@ -18865,6 +19136,9 @@ export class CompanyIntegrationRecordMap_ {
 //****************************************************************************
 @InputType()
 export class CreateCompanyIntegrationRecordMapInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     CompanyIntegrationID?: string;
 
@@ -19062,6 +19336,9 @@ export class RecordMergeLog_ {
 //****************************************************************************
 @InputType()
 export class CreateRecordMergeLogInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     EntityID?: string;
 
@@ -19275,6 +19552,9 @@ export class RecordMergeDeletionLog_ {
 @InputType()
 export class CreateRecordMergeDeletionLogInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     RecordMergeLogID?: string;
 
     @Field({ nullable: true })
@@ -19465,6 +19745,9 @@ export class QueryField_ {
 //****************************************************************************
 @InputType()
 export class CreateQueryFieldInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     QueryID?: string;
 
@@ -19691,6 +19974,9 @@ export class QueryCategory_ {
 @InputType()
 export class CreateQueryCategoryInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     Name?: string;
 
     @Field({ nullable: true })
@@ -19910,6 +20196,9 @@ export class Query_ {
 //****************************************************************************
 @InputType()
 export class CreateQueryInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -20157,6 +20446,9 @@ export class QueryPermission_ {
 @InputType()
 export class CreateQueryPermissionInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     QueryID?: string;
 
     @Field({ nullable: true })
@@ -20318,6 +20610,9 @@ export class VectorIndex_ {
 //****************************************************************************
 @InputType()
 export class CreateVectorIndexInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -20487,6 +20782,9 @@ export class EntityDocumentType_ {
 @InputType()
 export class CreateEntityDocumentTypeInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     Name?: string;
 
     @Field({ nullable: true })
@@ -20653,6 +20951,9 @@ export class EntityDocumentRun_ {
 @InputType()
 export class CreateEntityDocumentRunInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     EntityDocumentID?: string;
 
     @Field({ nullable: true })
@@ -20814,6 +21115,9 @@ export class VectorDatabase_ {
 //****************************************************************************
 @InputType()
 export class CreateVectorDatabaseInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -21024,6 +21328,9 @@ export class EntityRecordDocument_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityRecordDocumentInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     EntityID?: string;
 
@@ -21252,6 +21559,9 @@ export class EntityDocument_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityDocumentInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -21511,6 +21821,9 @@ export class DataContextItem_ {
 @InputType()
 export class CreateDataContextItemInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     DataContextID?: string;
 
     @Field({ nullable: true })
@@ -21729,6 +22042,9 @@ export class DataContext_ {
 @InputType()
 export class CreateDataContextInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     Name?: string;
 
     @Field({ nullable: true })
@@ -21944,6 +22260,9 @@ export class UserViewCategory_ {
 @InputType()
 export class CreateUserViewCategoryInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     Name?: string;
 
     @Field({ nullable: true })
@@ -22147,6 +22466,9 @@ export class DashboardCategory_ {
 @InputType()
 export class CreateDashboardCategoryInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     Name?: string;
 
     @Field({ nullable: true })
@@ -22344,6 +22666,9 @@ export class ReportCategory_ {
 @InputType()
 export class CreateReportCategoryInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     Name?: string;
 
     @Field({ nullable: true })
@@ -22535,6 +22860,9 @@ export class FileStorageProvider_ {
 //****************************************************************************
 @InputType()
 export class CreateFileStorageProviderInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -22744,6 +23072,9 @@ export class File_ {
 @InputType()
 export class CreateFileInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     Name?: string;
 
     @Field({ nullable: true })
@@ -22941,6 +23272,9 @@ export class FileCategory_ {
 @InputType()
 export class CreateFileCategoryInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     Name?: string;
 
     @Field({ nullable: true })
@@ -23123,6 +23457,9 @@ export class FileEntityRecordLink_ {
 @InputType()
 export class CreateFileEntityRecordLinkInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     FileID?: string;
 
     @Field({ nullable: true })
@@ -23295,6 +23632,9 @@ export class VersionInstallation_ {
 //****************************************************************************
 @InputType()
 export class CreateVersionInstallationInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field(() => Int, { nullable: true })
     MajorVersion?: number;
 
@@ -23500,6 +23840,9 @@ export class DuplicateRunDetailMatch_ {
 @InputType()
 export class CreateDuplicateRunDetailMatchInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     DuplicateRunDetailID?: string;
 
     @Field({ nullable: true })
@@ -23695,6 +24038,9 @@ export class EntityDocumentSetting_ {
 @InputType()
 export class CreateEntityDocumentSettingInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     EntityDocumentID?: string;
 
     @Field({ nullable: true })
@@ -23860,6 +24206,9 @@ export class EntitySetting_ {
 //****************************************************************************
 @InputType()
 export class CreateEntitySettingInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     EntityID?: string;
 
@@ -24065,6 +24414,9 @@ export class DuplicateRun_ {
 //****************************************************************************
 @InputType()
 export class CreateDuplicateRunInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     EntityID?: string;
 
@@ -24281,6 +24633,9 @@ export class DuplicateRunDetail_ {
 @InputType()
 export class CreateDuplicateRunDetailInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     DuplicateRunID?: string;
 
     @Field({ nullable: true })
@@ -24468,6 +24823,9 @@ export class ApplicationSetting_ {
 @InputType()
 export class CreateApplicationSettingInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     ApplicationID?: string;
 
     @Field({ nullable: true })
@@ -24640,6 +24998,9 @@ export class ActionCategory_ {
 //****************************************************************************
 @InputType()
 export class CreateActionCategoryInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -24845,6 +25206,9 @@ export class CreateEntityActionInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    ID?: string;
 }
     
 
@@ -25026,6 +25390,9 @@ export class EntityActionInvocation_ {
 @InputType()
 export class CreateEntityActionInvocationInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     EntityActionID?: string;
 
     @Field({ nullable: true })
@@ -25187,6 +25554,9 @@ export class ActionAuthorization_ {
 @InputType()
 export class CreateActionAuthorizationInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     ActionID?: string;
 
     @Field({ nullable: true })
@@ -25341,6 +25711,9 @@ export class EntityActionInvocationType_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityActionInvocationTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -25583,6 +25956,9 @@ export class Action_ {
 //****************************************************************************
 @InputType()
 export class CreateActionInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     CategoryID: string | null;
 
@@ -25909,6 +26285,9 @@ export class EntityActionFilter_ {
 @InputType()
 export class CreateEntityActionFilterInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     EntityActionID?: string;
 
     @Field({ nullable: true })
@@ -26071,6 +26450,9 @@ export class ActionFilter_ {
 //****************************************************************************
 @InputType()
 export class CreateActionFilterInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     UserDescription?: string;
 
@@ -26240,6 +26622,9 @@ export class ActionContextType_ {
 @InputType()
 export class CreateActionContextTypeInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     Name?: string;
 
     @Field({ nullable: true })
@@ -26403,6 +26788,9 @@ export class ActionResultCode_ {
 //****************************************************************************
 @InputType()
 export class CreateActionResultCodeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     ActionID?: string;
 
@@ -26571,6 +26959,9 @@ export class ActionContext_ {
 //****************************************************************************
 @InputType()
 export class CreateActionContextInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     ActionID?: string;
 
@@ -26747,6 +27138,9 @@ export class ActionExecutionLog_ {
 //****************************************************************************
 @InputType()
 export class CreateActionExecutionLogInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     ActionID?: string;
 
@@ -26951,6 +27345,9 @@ export class ActionParam_ {
 //****************************************************************************
 @InputType()
 export class CreateActionParamInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     ActionID?: string;
 
@@ -27163,6 +27560,9 @@ export class ActionLibrary_ {
 @InputType()
 export class CreateActionLibraryInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     ActionID?: string;
 
     @Field({ nullable: true })
@@ -27327,6 +27727,9 @@ export class Library_ {
 //****************************************************************************
 @InputType()
 export class CreateLibraryInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -27531,6 +27934,9 @@ export class ListCategory_ {
 @InputType()
 export class CreateListCategoryInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     Name?: string;
 
     @Field({ nullable: true })
@@ -27730,6 +28136,9 @@ export class CommunicationProvider_ {
 //****************************************************************************
 @InputType()
 export class CreateCommunicationProviderInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -27956,6 +28365,9 @@ export class CommunicationRun_ {
 @InputType()
 export class CreateCommunicationRunInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     UserID?: string;
 
     @Field({ nullable: true })
@@ -28154,6 +28566,9 @@ export class CommunicationProviderMessageType_ {
 //****************************************************************************
 @InputType()
 export class CreateCommunicationProviderMessageTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     CommunicationProviderID?: string;
 
@@ -28357,6 +28772,9 @@ export class CommunicationLog_ {
 @InputType()
 export class CreateCommunicationLogInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     CommunicationProviderID?: string;
 
     @Field({ nullable: true })
@@ -28543,6 +28961,9 @@ export class CommunicationBaseMessageType_ {
 //****************************************************************************
 @InputType()
 export class CreateCommunicationBaseMessageTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Type?: string;
 
@@ -28766,6 +29187,9 @@ export class Template_ {
 //****************************************************************************
 @InputType()
 export class CreateTemplateInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -29008,6 +29432,9 @@ export class TemplateCategory_ {
 @InputType()
 export class CreateTemplateCategoryInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     Name?: string;
 
     @Field({ nullable: true })
@@ -29200,6 +29627,9 @@ export class TemplateContent_ {
 //****************************************************************************
 @InputType()
 export class CreateTemplateContentInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     TemplateID?: string;
 
@@ -29405,6 +29835,9 @@ export class TemplateParam_ {
 //****************************************************************************
 @InputType()
 export class CreateTemplateParamInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     TemplateID?: string;
 
@@ -29616,6 +30049,9 @@ export class TemplateContentType_ {
 @InputType()
 export class CreateTemplateContentTypeInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     Name?: string;
 
     @Field({ nullable: true })
@@ -29786,6 +30222,9 @@ export class Recommendation_ {
 @InputType()
 export class CreateRecommendationInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     RecommendationRunID?: string;
 
     @Field({ nullable: true })
@@ -29940,6 +30379,9 @@ export class RecommendationProvider_ {
 //****************************************************************************
 @InputType()
 export class CreateRecommendationProviderInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -30120,6 +30562,9 @@ export class RecommendationRun_ {
 //****************************************************************************
 @InputType()
 export class CreateRecommendationRunInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     RecommendationProviderID?: string;
 
@@ -30303,6 +30748,9 @@ export class RecommendationItem_ {
 @InputType()
 export class CreateRecommendationItemInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     RecommendationID?: string;
 
     @Field({ nullable: true })
@@ -30466,6 +30914,9 @@ export class EntityCommunicationMessageType_ {
 @InputType()
 export class CreateEntityCommunicationMessageTypeInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     EntityID?: string;
 
     @Field({ nullable: true })
@@ -30628,6 +31079,9 @@ export class EntityCommunicationField_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityCommunicationFieldInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     EntityCommunicationMessageTypeID?: string;
 
@@ -30793,6 +31247,9 @@ export class RecordChangeReplayRun_ {
 //****************************************************************************
 @InputType()
 export class CreateRecordChangeReplayRunInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     StartedAt?: Date;
 
@@ -30961,6 +31418,9 @@ export class LibraryItem_ {
 @InputType()
 export class CreateLibraryItemInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     Name?: string;
 
     @Field({ nullable: true })
@@ -31116,6 +31576,9 @@ export class EntityRelationshipDisplayComponent_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityRelationshipDisplayComponentInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -31283,6 +31746,9 @@ export class EntityActionParam_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityActionParamInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     EntityActionID?: string;
 
@@ -31486,6 +31952,9 @@ export class ResourcePermission_ {
 @InputType()
 export class CreateResourcePermissionInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     ResourceTypeID?: string;
 
     @Field({ nullable: true })
@@ -31688,6 +32157,9 @@ export class ResourceLink_ {
 @InputType()
 export class CreateResourceLinkInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     UserID?: string;
 
     @Field({ nullable: true })
@@ -31858,6 +32330,9 @@ export class ConversationArtifactVersion_ {
 //****************************************************************************
 @InputType()
 export class CreateConversationArtifactVersionInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     ConversationArtifactID?: string;
 
@@ -32067,6 +32542,9 @@ export class AIAgentRequest_ {
 //****************************************************************************
 @InputType()
 export class CreateAIAgentRequestInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     AgentID?: string;
 
@@ -32305,6 +32783,9 @@ export class AIModelVendor_ {
 @InputType()
 export class CreateAIModelVendorInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     ModelID?: string;
 
     @Field({ nullable: true })
@@ -32520,6 +33001,9 @@ export class AIVendorTypeDefinition_ {
 @InputType()
 export class CreateAIVendorTypeDefinitionInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     Name?: string;
 
     @Field({ nullable: true })
@@ -32695,6 +33179,9 @@ export class ReportUserState_ {
 @InputType()
 export class CreateReportUserStateInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     ReportID?: string;
 
     @Field({ nullable: true })
@@ -32853,6 +33340,9 @@ export class QueryEntity_ {
 @InputType()
 export class CreateQueryEntityInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     QueryID?: string;
 
     @Field({ nullable: true })
@@ -33007,6 +33497,9 @@ export class DashboardUserState_ {
 //****************************************************************************
 @InputType()
 export class CreateDashboardUserStateInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     DashboardID?: string;
 
@@ -33166,6 +33659,9 @@ export class ArtifactType_ {
 //****************************************************************************
 @InputType()
 export class CreateArtifactTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -33347,6 +33843,9 @@ export class AIVendorType_ {
 //****************************************************************************
 @InputType()
 export class CreateAIVendorTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     VendorID?: string;
 
@@ -33534,6 +34033,9 @@ export class ConversationArtifact_ {
 //****************************************************************************
 @InputType()
 export class CreateConversationArtifactInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -33766,6 +34268,9 @@ export class AIAgentPrompt_ {
 @InputType()
 export class CreateAIAgentPromptInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     AgentID?: string;
 
     @Field({ nullable: true })
@@ -33969,6 +34474,9 @@ export class DashboardUserPreference_ {
 @InputType()
 export class CreateDashboardUserPreferenceInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     UserID: string | null;
 
     @Field({ nullable: true })
@@ -34145,6 +34653,9 @@ export class ContentProcessRun_ {
 //****************************************************************************
 @InputType()
 export class CreateContentProcessRunInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     SourceID?: string;
 
@@ -34340,6 +34851,9 @@ export class ContentSource_ {
 //****************************************************************************
 @InputType()
 export class CreateContentSourceInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name: string | null;
 
@@ -34540,6 +35054,9 @@ export class ContentSourceParam_ {
 @InputType()
 export class CreateContentSourceParamInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     ContentSourceID?: string;
 
     @Field({ nullable: true })
@@ -34695,6 +35212,9 @@ export class ContentSourceType_ {
 //****************************************************************************
 @InputType()
 export class CreateContentSourceTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -34868,6 +35388,9 @@ export class ContentSourceTypeParam_ {
 //****************************************************************************
 @InputType()
 export class CreateContentSourceTypeParamInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -35049,6 +35572,9 @@ export class ContentType_ {
 //****************************************************************************
 @InputType()
 export class CreateContentTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -35238,6 +35764,9 @@ export class ContentTypeAttribute_ {
 @InputType()
 export class CreateContentTypeAttributeInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     ContentTypeID?: string;
 
     @Field({ nullable: true })
@@ -35399,6 +35928,9 @@ export class ContentFileType_ {
 //****************************************************************************
 @InputType()
 export class CreateContentFileTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     Name?: string;
 
@@ -35611,6 +36143,9 @@ export class ContentItem_ {
 //****************************************************************************
 @InputType()
 export class CreateContentItemInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     ContentSourceID?: string;
 
@@ -35825,6 +36360,9 @@ export class ContentItemAttribute_ {
 @InputType()
 export class CreateContentItemAttributeInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     ContentItemID?: string;
 
     @Field({ nullable: true })
@@ -35978,6 +36516,9 @@ export class ContentItemTag_ {
 //****************************************************************************
 @InputType()
 export class CreateContentItemTagInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     ItemID?: string;
 
@@ -36166,6 +36707,9 @@ export class GeneratedCode_ {
 //****************************************************************************
 @InputType()
 export class CreateGeneratedCodeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     GeneratedAt?: Date;
 
@@ -36387,7 +36931,7 @@ export class AIPromptRun_ {
     @Field(() => Int, {nullable: true, description: `Number of tokens in the completion/result.`}) 
     TokensCompletion?: number;
         
-    @Field(() => Float, {nullable: true, description: `Estimated cost of this execution in USD.`}) 
+    @Field(() => Float, {nullable: true, description: `Total cost including this execution and all child/grandchild executions. For leaf nodes (no children), this equals Cost. For parent nodes, this includes the sum of all descendant costs. Note: This assumes all costs are in the same currency for accurate rollup. Currency conversions should be handled at the application layer if needed.`}) 
     TotalCost?: number;
         
     @Field(() => Boolean, {description: `Whether the execution was successful.`}) 
@@ -36418,6 +36962,22 @@ export class AIPromptRun_ {
     @Field({nullable: true, description: `Optional reference to the AIAgentRun that initiated this prompt execution. Links prompt runs to their parent agent runs for comprehensive execution tracking.`}) 
     @MaxLength(16)
     AgentRunID?: string;
+        
+    @Field(() => Float, {nullable: true, description: `The cost of this specific prompt execution as reported by the AI provider. This does not include costs from child executions. The currency is specified in CostCurrency field.`}) 
+    Cost?: number;
+        
+    @Field({nullable: true, description: `ISO 4217 currency code for the Cost field (e.g., USD, EUR, GBP). Different AI providers may use different currencies.`}) 
+    @MaxLength(20)
+    CostCurrency?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Total tokens used including this execution and all child/grandchild executions. This provides a complete view of token usage for hierarchical prompt trees. Calculated as TokensPromptRollup + TokensCompletionRollup.`}) 
+    TokensUsedRollup?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Total prompt/input tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensPrompt. For parent nodes, this includes the sum of all descendant prompt tokens.`}) 
+    TokensPromptRollup?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Total completion/output tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensCompletion. For parent nodes, this includes the sum of all descendant completion tokens.`}) 
+    TokensCompletionRollup?: number;
         
     @Field() 
     @MaxLength(510)
@@ -36452,6 +37012,9 @@ export class AIPromptRun_ {
 //****************************************************************************
 @InputType()
 export class CreateAIPromptRunInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     PromptID?: string;
 
@@ -36511,6 +37074,21 @@ export class CreateAIPromptRunInput {
 
     @Field({ nullable: true })
     AgentRunID: string | null;
+
+    @Field(() => Float, { nullable: true })
+    Cost: number | null;
+
+    @Field({ nullable: true })
+    CostCurrency: string | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensUsedRollup: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensPromptRollup: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensCompletionRollup: number | null;
 }
     
 
@@ -36581,6 +37159,21 @@ export class UpdateAIPromptRunInput {
 
     @Field({ nullable: true })
     AgentRunID?: string | null;
+
+    @Field(() => Float, { nullable: true })
+    Cost?: number | null;
+
+    @Field({ nullable: true })
+    CostCurrency?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensUsedRollup?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensPromptRollup?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensCompletionRollup?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -36759,6 +37352,9 @@ export class AIAgentRunStep_ {
 //****************************************************************************
 @InputType()
 export class CreateAIAgentRunStepInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     AgentRunID?: string;
 
@@ -36972,6 +37568,9 @@ export class ConversationArtifactPermission_ {
 @InputType()
 export class CreateConversationArtifactPermissionInput {
     @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
     ConversationArtifactID?: string;
 
     @Field({ nullable: true })
@@ -37136,6 +37735,9 @@ export class AIAgentLearningCycle_ {
 //****************************************************************************
 @InputType()
 export class CreateAIAgentLearningCycleInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     AgentID?: string;
 
@@ -37314,6 +37916,9 @@ export class ReportVersion_ {
 //****************************************************************************
 @InputType()
 export class CreateReportVersionInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     ReportID?: string;
 
@@ -37496,6 +38101,9 @@ export class AIConfigurationParam_ {
 //****************************************************************************
 @InputType()
 export class CreateAIConfigurationParamInput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field({ nullable: true })
     ConfigurationID?: string;
 

@@ -2,12 +2,127 @@ import { configInfo, currentWorkingDirectory } from "../Config/config";
 import { LogError, LogStatus, SeverityType, FormatFileMessage, FormatConsoleMessage } from '@memberjunction/core'
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
 import path from 'path';
+import ora from 'ora-classic';
 
 /**
  * Base class for logging, you can sub-class this class to create your own logger and override the logError and logStatus methods if desired.
  * The default behavior in the base class is to use the LogError/LogStatus functions from the @memberjunction/core package to log to the console and to a log file if configured in the config.json file.
+ * 
+ * Supports two modes:
+ * - Verbose mode: Full console output with detailed messages  
+ * - Normal mode: Clean spinner-based status updates
  */
 export class LoggerBase {
+   private _spinner: any = null;
+
+   private get isVerbose(): boolean {
+      // Lazy check - configInfo might not be available during module initialization
+      return configInfo?.verboseOutput ?? false;
+   }
+
+   private ensureSpinner(): void {
+      if (!this.isVerbose && !this._spinner) {
+         this._spinner = ora();
+      }
+   }
+
+   /**
+    * Start a spinner with a message (non-verbose mode only)
+    */
+   public startSpinner(message: string): void {
+      if (!this.isVerbose) {
+         this.ensureSpinner();
+         if (this._spinner) {
+            this._spinner.start(message);
+         } else {
+            // Fallback if spinner creation failed
+            console.log(`🔄 ${message}`);
+         }
+      } else {
+         this.logStatus(message, SeverityType.Info);
+      }
+   }
+
+   /**
+    * Update spinner text (non-verbose mode only)
+    */
+   public updateSpinner(message: string): void {
+      if (!this.isVerbose) {
+         this.ensureSpinner();
+         if (this._spinner) {
+            this._spinner.text = message;
+         } else {
+            // Fallback if spinner creation failed
+            console.log(`🔄 ${message}`);
+         }
+      } else {
+         this.logStatus(message, SeverityType.Info);
+      }
+   }
+
+   /**
+    * Stop spinner with success message
+    */
+   public succeedSpinner(message?: string): void {
+      if (!this.isVerbose) {
+         this.ensureSpinner();
+         if (this._spinner) {
+            this._spinner.succeed(message);
+         } else if (message) {
+            // Fallback if spinner creation failed
+            console.log(`✅ ${message}`);
+         }
+      } else if (message) {
+         this.logStatus(`✓ ${message}`, SeverityType.Info);
+      }
+   }
+
+   /**
+    * Stop spinner with failure message
+    */
+   public failSpinner(message?: string): void {
+      if (!this.isVerbose) {
+         this.ensureSpinner();
+         if (this._spinner) {
+            this._spinner.fail(message);
+         } else if (message) {
+            // Fallback if spinner creation failed
+            console.log(`❌ ${message}`);
+         }
+      } else if (message) {
+         this.logError(`✗ ${message}`, SeverityType.Critical);
+      }
+   }
+
+   /**
+    * Stop spinner with warning message
+    */
+   public warnSpinner(message?: string): void {
+      if (!this.isVerbose) {
+         this.ensureSpinner();
+         if (this._spinner) {
+            this._spinner.warn(message);
+         } else if (message) {
+            // Fallback if spinner creation failed
+            console.log(`⚠️ ${message}`);
+         }
+      } else if (message) {
+         this.logError(`⚠ ${message}`, SeverityType.Warning);
+      }
+   }
+
+   /**
+    * Stop spinner without status
+    */
+   public stopSpinner(): void {
+      if (!this.isVerbose) {
+         this.ensureSpinner();
+         if (this._spinner) {
+            this._spinner.stop();
+         }
+      }
+   }
+
    /**
     * Logs an error message to the console and to the log file if configured
     * @param message
@@ -47,7 +162,8 @@ export class LoggerBase {
    }
 
    protected logToConsole(message: string, isError: boolean, ...args: any[]) {
-      if (configInfo.logging.console) {
+      // Only log to console in verbose mode or for errors
+      if (configInfo?.logging?.console && (this.isVerbose || isError)) {
          if (isError){
             LogError(message, null!, ...args);
          }
@@ -57,7 +173,7 @@ export class LoggerBase {
       }
    }
    protected logToFile(message: string, isError: boolean, ...args: any[]) {
-      if (configInfo.logging.log) {
+      if (configInfo?.logging?.log) {
          if (configInfo.logging.logFile === null || configInfo.logging.logFile === undefined || configInfo.logging.logFile === '') {
             LogError('ERROR: No log file specified in config', null!, ...args);
          }
@@ -100,4 +216,29 @@ export function logStatus(message: string, ...args: any[]) {
  */
 export function logMessage(message: string, severity: SeverityType, isError = false, ...args: any[]): void {
    return _logger.logMessage(message, severity, isError, ...args);
+}
+
+// Spinner management functions
+export function startSpinner(message: string): void {
+   return _logger.startSpinner(message);
+}
+
+export function updateSpinner(message: string): void {
+   return _logger.updateSpinner(message);
+}
+
+export function succeedSpinner(message?: string): void {
+   return _logger.succeedSpinner(message);
+}
+
+export function failSpinner(message?: string): void {
+   return _logger.failSpinner(message);
+}
+
+export function warnSpinner(message?: string): void {
+   return _logger.warnSpinner(message);
+}
+
+export function stopSpinner(): void {
+   return _logger.stopSpinner();
 }

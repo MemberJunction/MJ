@@ -1,486 +1,317 @@
-import { LogError, LogStatus, UserInfo, Metadata } from '@memberjunction/core';
-import { AIAgentEntityExtended, AIPromptEntity } from '@memberjunction/core-entities';
+/**
+ * @fileoverview Base implementation of the MemberJunction AI Agent framework.
+ * 
+ * This module provides the core BaseAgent class that handles agent execution
+ * using a hierarchical prompt system. Agents use their type's system prompt
+ * as a parent prompt and their own configured prompts as child prompts,
+ * enabling sophisticated agent behaviors through prompt composition.
+ * 
+ * @module @memberjunction/ai-agents
+ * @author MemberJunction.com
+ * @since 2.49.0
+ */
+
+import { ActionEntity, AIAgentEntity, AIAgentTypeEntity } from '@memberjunction/core-entities';
+import { UserInfo } from '@memberjunction/core';
+import { AIPromptRunner, AIPromptParams, ChildPromptParam } from '@memberjunction/ai-prompts';
+import { BaseAgentType } from './base-agent-type';
+import { MJGlobal } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIPromptRunner, AIPromptParams } from '@memberjunction/ai-prompts';
-import { ChatMessage } from '@memberjunction/ai';
-import { MJGlobal, RegisterClass } from '@memberjunction/global';
+import { ActionEngineServer } from '@memberjunction/actions';
+import {
+    ExecuteAgentParams, 
+    ExecuteAgentResult, 
+    AgentContextData,
+    BaseAgentNextStep 
+} from './types';
+import { ActionEntityExtended } from '@memberjunction/actions-base';
 
 /**
- * Input parameters for agent execution.
- */
-export interface AgentExecutionParams {
-  /** User context for authentication, permissions, and personalization */
-  contextUser?: UserInfo;
-  /** Data context passed to prompts and templates during execution */
-  data?: Record<string, unknown>;
-  /** Existing conversation messages for multi-turn conversations */
-  conversationMessages?: ChatMessage[];
-  /** Cancellation token to abort execution gracefully */
-  cancellationToken?: AbortSignal;
-  /** Callback for receiving real-time progress updates during execution */
-  onProgress?: (progress: AgentProgressUpdate) => void;
-  /** Callback for receiving streaming content as it's generated */
-  onStreaming?: (chunk: AgentStreamingUpdate) => void;
-}
-
-/**
- * Progress update information during agent execution
- */
-export interface AgentProgressUpdate {
-  /** Current step in the agent execution process */
-  step: 'initialization' | 'prompt_execution' | 'completion';
-  /** Progress percentage (0-100) */
-  percentage: number;
-  /** Human-readable status message */
-  message: string;
-  /** Additional metadata about the current step */
-  metadata?: Record<string, unknown>;
-}
-
-/**
- * Streaming content update during agent execution
- */
-export interface AgentStreamingUpdate {
-  /** The content chunk received */
-  content: string;
-  /** Whether this is the final chunk */
-  isComplete: boolean;
-  /** Which agent is producing this content */
-  sourceId?: string;
-  /** Source name producing this content */
-  sourceName?: string;
-}
-
-/**
- * Result of an AI agent execution.
+ * Base implementation for AI Agents in the MemberJunction framework.
  * 
- * Contains the final outcome, decision history, and comprehensive metadata from
- * the agent's autonomous execution process.
+ * The BaseAgent class provides the core execution logic for AI agents using
+ * a hierarchical prompt system. It implements the following workflow:
  * 
- * @public
- * @see {@link AgentExecutionParams} for the corresponding input structure
- */
-export interface AgentExecutionResult {
-  /** Whether the agent execution completed successfully */
-  success: boolean;
-  /** The main result content (final response or computed value) */
-  result?: unknown;
-  /** Error message if the execution failed */
-  errorMessage?: string;
-  /** Total execution time in milliseconds */
-  executionTimeMS?: number;
-  /** Additional metadata about the execution process */
-  metadata?: Record<string, unknown>;
-  /** Whether the execution was cancelled by the user */
-  cancelled?: boolean;
-  /** All conversation messages generated during execution */
-  conversationMessages?: ChatMessage[];
-}
-
-// Forward declaration to avoid circular dependency
-export interface IAgentFactory {
-  CreateAgentFromEntity(agentEntity: AIAgentEntityExtended, key?: string, ...additionalParams: any[]): BaseAgent;
-  CreateAgent(agentName: string, key?: string, contextUser?: UserInfo, ...additionalParams: any[]): Promise<BaseAgent>
-}
-
-/**
- * Simplified AI Agent that focuses solely on executing its specific prompt/task.
+ * 1. Loads the agent's type to get the system prompt configuration
+ * 2. Validates that the agent type has a properly configured placeholder
+ * 3. Loads the agent's first active prompt (ordered by ExecutionOrder)
+ * 4. Gathers context data including sub-agents and available actions
+ * 5. Executes the prompts hierarchically (system prompt as parent, agent prompt as child)
+ * 6. Uses the agent type to determine the next step based on execution results
  * 
- * This simplified version removes all the complex orchestration logic and decision-making,
- * focusing only on:
- * - Loading and executing the agent's specific prompts
- * - Processing input data and conversation context
- * - Returning results in a standardized format
- * 
- * Orchestration and decision-making are handled by separate classes (ConductorAgent, AgentRunner).
- * 
- * ## Key Features
- * - **Single Responsibility**: Execute agent-specific prompts only
- * - **Metadata-driven configuration** using AIAgentEntity
- * - **Template rendering** with data context
- * - **Conversation support** for multi-turn interactions
- * - **Progress monitoring** and streaming response support
- * - **Context compression** for long conversations
- * 
- * @example Basic Agent Execution
+ * @class BaseAgent
+ * @example
  * ```typescript
- * const agent = new BaseAgent(agentEntity, factory, contextUser);
+ * const agent = new BaseAgent();
  * const result = await agent.Execute({
- *   data: { query: "Analyze this data" },
- *   conversationMessages: []
+ *   agent: myAgentEntity,
+ *   conversationMessages: messages,
+ *   contextUser: currentUser
  * });
+ * 
+ * if (result.nextStep === 'success') {
+ *   console.log('Agent completed successfully:', result.returnValue);
+ * }
  * ```
  */
 export class BaseAgent {
-  private _agent: AIAgentEntityExtended;
-  private _factory: IAgentFactory;
-  private _promptRunner: AIPromptRunner;
-  private _contextUser?: UserInfo;
-  protected _metadata: Metadata;
+    /**
+     * Instance of AIPromptRunner used for executing hierarchical prompts.
+     * @private
+     */
+    private _promptRunner: AIPromptRunner = new AIPromptRunner();
 
-  /**
-   * Creates a new BaseAgent instance for executing a specific agent.
-   * 
-   * @param agent - The agent entity definition
-   * @param factory - Factory for creating additional agent instances
-   * @param contextUser - User context for authentication and permissions
-   * @param promptRunner - Optional prompt runner instance
-   */
-  constructor(agent: AIAgentEntityExtended, factory: IAgentFactory, contextUser: UserInfo, promptRunner?: AIPromptRunner) {
-    this._agent = agent;
-    this._factory = factory;
-    this._promptRunner = promptRunner ? promptRunner : new AIPromptRunner();
-    this._contextUser = contextUser;
-    this._metadata = new Metadata();
-  }
-  
-  public get agent(): AIAgentEntityExtended {
-    return this._agent;
-  }
-  
-  // Protected getters for subclasses to access private fields
-  protected get factory(): IAgentFactory {
-    return this._factory;
-  }
+    /**
+     * Executes an AI agent using hierarchical prompt composition.
+     * 
+     * This method orchestrates the entire agent execution process, from loading
+     * configuration to executing prompts and determining next steps. It ensures
+     * all required metadata is present and handles errors gracefully.
+     * 
+     * @param {ExecuteAgentParams} params - Parameters for agent execution
+     * @param {AIAgentEntity} params.agent - The agent entity to execute
+     * @param {ChatMessage[]} params.conversationMessages - Conversation history
+     * @param {UserInfo} [params.contextUser] - Optional user context
+     * 
+     * @returns {Promise<ExecuteAgentResult>} Result containing next step and any output
+     * 
+     * @throws {Error} Throws if there are issues loading required entities
+     * 
+     * @example
+     * ```typescript
+     * const result = await agent.Execute({
+     *   agent: salesAgent,
+     *   conversationMessages: [{role: 'user', content: 'Help me find products'}],
+     *   contextUser: currentUser
+     * });
+     * ```
+     */
+    public async Execute(params: ExecuteAgentParams): Promise<ExecuteAgentResult> {
+        try {
+            // Ensure AIEngine is configured
+            await AIEngine.Instance.Config(false, params.contextUser);
+            // Ensure ActionEngineServer is configured
+            await ActionEngineServer.Instance.Config(false, params.contextUser);
 
-  protected get promptRunner(): AIPromptRunner {
-    return this._promptRunner;
-  }
+            const engine = AIEngine.Instance;
 
-  protected get contextUser(): UserInfo {
-    return this._contextUser;
-  }
+            // Check if agent is active
+            if (params.agent.Status !== 'Active') {
+                return {
+                    nextStep: 'failed',
+                    errorMessage: `Agent '${params.agent.Name}' is not active. Current status: ${params.agent.Status}`
+                };
+            }
 
-  /**
-   * Executes the agent's specific prompts and returns the result.
-   * 
-   * This simplified execution focuses only on:
-   * 1. Loading agent-specific prompts
-   * 2. Processing conversation context (compression if needed)
-   * 3. Executing prompts with provided data
-   * 4. Returning structured results
-   * 
-   * @param params - Execution parameters including context, data, and callbacks
-   * @returns Promise resolving to the execution result
-   */
-  public async Execute(params: AgentExecutionParams): Promise<AgentExecutionResult> {
-    const startTime = new Date();
-    
-    try {
-      // Report initialization progress
-      this.sendProgress(params.onProgress, {
-        step: 'initialization',
-        percentage: 10,
-        message: `Initializing agent '${this.agent.Name}'`,
-        metadata: { agentName: this.agent.Name, agentId: this.agent.ID }
-      });
+            // Find the agent type using AIEngine
+            const agentType = engine.AgentTypes.find(at => at.ID === params.agent.TypeID);
+            if (!agentType) {
+                return {
+                    nextStep: 'failed',
+                    errorMessage: `Agent type not found for ID: ${params.agent.TypeID}`
+                };
+            }
 
-      // Check for cancellation
-      if (params.cancellationToken?.aborted) {
-        return this.createCancelledResult(startTime);
-      }
+            // Find the system prompt from the agent type
+            const systemPrompt = engine.Prompts.find(p => p.ID === agentType.SystemPromptID);
+            if (!systemPrompt) {
+                return {
+                    nextStep: 'failed',
+                    errorMessage: `System prompt not found for agent type: ${agentType.Name}`
+                };
+            }
 
-      // Initialize conversation messages
-      let conversationMessages = [...(params.conversationMessages || [])];
+            // Find the first agent prompt (child prompt)
+            const agentPrompt = engine.AgentPrompts
+                .filter(ap => ap.AgentID === params.agent.ID && ap.Status === 'Active')
+                .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder)[0];
+            
+            if (!agentPrompt) {
+                return {
+                    nextStep: 'failed',
+                    errorMessage: `No prompts configured for agent: ${params.agent.Name}`
+                };
+            }
 
-      // Apply context compression if configured
-      if (this.agent.EnableContextCompression && 
-          this.agent.ContextCompressionMessageThreshold &&
-          conversationMessages.length > this.agent.ContextCompressionMessageThreshold) {
+            // Find the actual prompt entity for the agent prompt
+            const childPrompt = engine.Prompts.find(p => p.ID === agentPrompt.PromptID);
+            if (!childPrompt) {
+                return {
+                    nextStep: 'failed',
+                    errorMessage: `Child prompt not found for ID: ${agentPrompt.PromptID}`
+                };
+            }
+
+            // Gather context data for the system prompt
+            const contextData = await this.gatherContextData(params.agent, params.contextUser);
+
+            // Set up the hierarchical prompt execution
+            const promptParams = new AIPromptParams();
+            promptParams.prompt = systemPrompt;
+            promptParams.data = contextData;
+            promptParams.contextUser = params.contextUser;
+            promptParams.conversationMessages = params.conversationMessages;
+            promptParams.templateMessageRole = 'system';
+
+            // Check for required placeholder configuration
+            if (!agentType.AgentPromptPlaceholder) {
+                const errorMsg = `Agent type '${agentType.Name}' does not have AgentPromptPlaceholder configured. This field is required to properly inject agent prompt results into the system prompt template.`;
+                console.error(errorMsg);
+                return {
+                    nextStep: 'failed',
+                    errorMessage: errorMsg
+                };
+            }
+            
+            // Setup the prompt parameters for the child prompt, whose template will run BEFORE the parent prompt and then 
+            // the fully rendered child prompt template will be injected into the parent system prompt template
+            // as a placeholder for the agent type's AgentPromptPlaceholder. This allows the agent type to
+            // control the flow of execution while the agent specific prompt can add additional instruction.
+            promptParams.childPrompts = [
+                new ChildPromptParam(
+                    {
+                        prompt: childPrompt,
+                        data: contextData,
+                        contextUser: params.contextUser,
+                        conversationMessages: params.conversationMessages,
+                        templateMessageRole: 'user'
+                    } as AIPromptParams,
+                    agentType.AgentPromptPlaceholder
+                )
+            ];
+
+            // Execute the prompt
+            const result = await this._promptRunner.ExecutePrompt(promptParams);
+
+            if (!result.success) {
+                return {
+                    nextStep: 'failed',
+                    errorMessage: result.errorMessage,
+                    rawResult: result.rawResult
+                };
+            }
+
+            // Get the agent type instance to determine next step
+            // Check if this specific agent has its own DriverClass override
+            let agentTypeInstance: BaseAgentType | null;
+            try {
+                agentTypeInstance = params.agent.DriverClass 
+                    ? await this.getAgentInstanceWithDriverClass(params.agent.DriverClass)
+                    : await this.getAgentTypeInstance(agentType);
+            } catch (error) {
+                return {
+                    nextStep: 'failed',
+                    errorMessage: error.message
+                };
+            }
+
+            // Let the agent type determine the next step
+            const nextStep = await agentTypeInstance.DetermineNextStep(result);
+
+            return {
+                nextStep: nextStep.step,
+                returnValue: nextStep.returnValue || result.result,
+                rawResult: result.rawResult
+            };
+
+        } catch (error) {
+            return {
+                nextStep: 'failed',
+                errorMessage: error.message,
+            };
+        }
+    }
+
+
+    /**
+     * Gathers context data about the agent for use in prompt templates.
+     * 
+     * This method collects information about the agent's sub-agents and available
+     * actions, formatting them for injection into prompt templates. The data is
+     * structured to provide the LLM with comprehensive context about the agent's
+     * capabilities and hierarchical relationships.
+     * 
+     * @param {AIAgentEntity} agent - The agent to gather context for
+     * @param {UserInfo} [contextUser] - Optional user context (reserved for future use)
+     * 
+     * @returns {Promise<AgentContextData>} Structured context data for prompts
+     * 
+     * @throws {Error} If there's an error accessing agent data
+     * 
+     * @private
+     */
+    private async gatherContextData(agent: AIAgentEntity, contextUser?: UserInfo): Promise<AgentContextData> {
+        try {
+            const engine = AIEngine.Instance;
+            
+            // Find sub-agents using AIEngine
+            const subAgents = engine.Agents.filter(a => a.ParentID === agent.ID)
+                .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder);
+            
+            // Load available actions (placeholder for now - would integrate with Actions framework)
+            const agentActions = engine.AgentActions.filter(aa => aa.AgentID === agent.ID);
+            const actions: ActionEntityExtended[] = ActionEngineServer.Instance.Actions.filter(a => agentActions.some(aa => aa.ActionID === a.ID));
+            const activeActions = actions.filter(a => a.Status === 'Active');
+
+            const contextData: AgentContextData = {
+                agentName: agent.Name,
+                agentDescription: agent.Description,
+                subAgentCount: subAgents.length,
+                subAgentDetails: JSON.stringify(subAgents),
+                actionCount: actions.length,
+                actionDetails: JSON.stringify(activeActions)
+            };
+
+            return contextData;
+        } catch (error) {
+            throw new Error(`Error gathering context data: ${error.message}`);
+        }
+    }
+
+
+    /**
+     * Instantiates the appropriate agent type class based on the agent type entity.
+     * 
+     * This method uses the MemberJunction class factory to dynamically instantiate
+     * agent type classes. It uses the DriverClass field if specified, otherwise falls
+     * back to using the agent type's Name. If a specific class doesn't exist, it 
+     * returns a default implementation.
+     * 
+     * @param {AIAgentTypeEntity} agentType - The agent type entity to instantiate
+     * 
+     * @returns {Promise<BaseAgentType | null>} Instance of the agent type class
+     * 
+     * @example
+     * // For an agent type with DriverClass "LoopAgentType"
+     * const agentTypeInstance = await this.getAgentTypeInstance(loopAgentType);
+     * 
+     * @private
+     */
+    private async getAgentTypeInstance(agentType: AIAgentTypeEntity): Promise<BaseAgentType | null> {
+        // Use DriverClass if specified, otherwise use the Name as the lookup key
+        return this.getAgentInstanceWithDriverClass(agentType.DriverClass || agentType.Name);
+    }
+
+    /**
+     * Instantiates an agent type class using a specific driver class name.
+     * 
+     * This method is used when an individual agent has its own DriverClass override,
+     * allowing for specialized implementations per agent instance.
+     * 
+     * @param {string} driverClass - The driver class name to instantiate
+     * 
+     * @returns {Promise<BaseAgentType | null>} Instance of the agent type class
+     * 
+     * @private
+     */
+    private async getAgentInstanceWithDriverClass(driverClass: string): Promise<BaseAgentType | null> {
+        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAgentType>(BaseAgentType, driverClass);
         
-        conversationMessages = await this.compressContext(conversationMessages, params);
-      }
-
-      // Check for cancellation
-      if (params.cancellationToken?.aborted) {
-        return this.createCancelledResult(startTime);
-      }
-
-      // Report prompt execution progress
-      this.sendProgress(params.onProgress, {
-        step: 'prompt_execution',
-        percentage: 30,
-        message: 'Executing agent prompts',
-        metadata: { promptCount: await this.getPromptCount() }
-      });
-
-      // Execute agent prompts
-      const promptResult = await this.executeAgentPrompts(params, conversationMessages);
-
-      // Check for cancellation
-      if (params.cancellationToken?.aborted) {
-        return this.createCancelledResult(startTime);
-      }
-
-      // Calculate final execution time
-      const endTime = new Date();
-      const executionTimeMS = endTime.getTime() - startTime.getTime();
-
-      // Report completion
-      this.sendProgress(params.onProgress, {
-        step: 'completion',
-        percentage: 100,
-        message: `Agent '${this.agent.Name}' execution completed`,
-        metadata: { 
-          success: promptResult.success,
-          executionTimeMS
+        if (!instance) {
+            throw new Error(`No implementation found for agent with DriverClass '${driverClass}'. Please ensure the class is registered with the ClassFactory.`);
         }
-      });
-
-      return {
-        success: promptResult.success,
-        result: promptResult.result,
-        errorMessage: promptResult.errorMessage,
-        executionTimeMS,
-        conversationMessages: promptResult.conversationMessages || conversationMessages,
-        metadata: {
-          agentName: this.agent.Name,
-          agentId: this.agent.ID,
-          promptExecutions: promptResult.promptExecutions || 1
-        }
-      };
-
-    } catch (error) {
-      LogError(`Error executing agent '${this.agent?.Name || 'Unknown'}': ${error.message}`);
-      
-      const endTime = new Date();
-      return {
-        success: false,
-        errorMessage: error.message,
-        executionTimeMS: endTime.getTime() - startTime.getTime(),
-        cancelled: params.cancellationToken?.aborted || false
-      };
+        
+        return instance;
     }
-  }
-
-  /**
-   * Executes all agent-specific prompts in order.
-   */
-  private async executeAgentPrompts(
-    params: AgentExecutionParams, 
-    conversationMessages: ChatMessage[]
-  ): Promise<{
-    success: boolean;
-    result?: unknown;
-    errorMessage?: string;
-    conversationMessages?: ChatMessage[];
-    promptExecutions?: number;
-  }> {
-    try {
-      // Load agent prompts
-      const prompts = await this.loadAgentPrompts();
-      
-      if (prompts.length === 0) {
-        throw new Error(`No active prompts found for agent '${this.agent.Name}'`);
-      }
-
-      let currentMessages = [...conversationMessages];
-      let finalResult: unknown = null;
-      let promptExecutions = 0;
-
-      // Execute each prompt in order
-      for (const prompt of prompts) {
-        // Check for cancellation before each prompt
-        if (params.cancellationToken?.aborted) {
-          return {
-            success: false,
-            errorMessage: 'Execution cancelled',
-            conversationMessages: currentMessages,
-            promptExecutions
-          };
-        }
-
-        // Prepare prompt parameters
-        const promptParams = new AIPromptParams();
-        promptParams.prompt = prompt;
-        promptParams.data = params.data || {};
-        promptParams.conversationMessages = currentMessages;
-        promptParams.contextUser = params.contextUser;
-
-        // Execute the prompt
-        const promptResult = await this._promptRunner.ExecutePrompt(promptParams);
-        promptExecutions++;
-
-        if (!promptResult.success) {
-          return {
-            success: false,
-            errorMessage: `Prompt execution failed: ${promptResult.errorMessage}`,
-            conversationMessages: currentMessages,
-            promptExecutions
-          };
-        }
-
-        // Update conversation with result
-        if (promptResult.rawResult) {
-          currentMessages.push({
-            role: 'assistant',
-            content: promptResult.rawResult
-          });
-          finalResult = promptResult.rawResult;
-        }
-
-        // Handle streaming if callback provided
-        if (params.onStreaming && promptResult.rawResult) {
-          params.onStreaming({
-            content: promptResult.rawResult,
-            isComplete: false,
-            sourceId: this.agent.ID,
-            sourceName: this.agent.Name
-          });
-        }
-      }
-
-      // Send final streaming update
-      if (params.onStreaming) {
-        params.onStreaming({
-          content: '',
-          isComplete: true,
-          sourceId: this.agent.ID,
-          sourceName: this.agent.Name
-        });
-      }
-
-      return {
-        success: true,
-        result: finalResult,
-        conversationMessages: currentMessages,
-        promptExecutions
-      };
-
-    } catch (error) {
-      LogError(`Error executing agent prompts for '${this.agent.Name}': ${error.message}`);
-      return {
-        success: false,
-        errorMessage: error.message
-      };
-    }
-  }
-
-  /**
-   * Loads the prompts associated with this agent.
-   */
-  protected async loadAgentPrompts(): Promise<AIPromptEntity[]> {
-    try {
-      // Get agent prompts ordered by execution order
-      await AIEngine.Instance.Config(false, this.contextUser);
-      const agentPrompts = AIEngine.Instance.AgentPrompts
-        .filter(ap => ap.AgentID === this.agent.ID && ap.Status === 'Active')
-        .sort((a, b) => (a.ExecutionOrder || 0) - (b.ExecutionOrder || 0));
-
-      const results: AIPromptEntity[] = [];
-
-      for (const agentPrompt of agentPrompts) {
-        const prompt = AIEngine.Instance.Prompts.find(p => p.ID === agentPrompt.PromptID);
-        if (prompt && prompt.Status === 'Active') {
-          results.push(prompt);
-        }
-      }
-
-      if (results.length === 0) {
-        LogStatus(`No active prompts found for agent '${this.agent.Name}'`);
-      }
-
-      return results;
-    } catch (error) {
-      LogError(`Error loading agent prompts for '${this.agent.Name}': ${error.message}`);
-      return [];
-    }
-  }
-
-  /**
-   * Gets the count of prompts for progress reporting.
-   */
-  private async getPromptCount(): Promise<number> {
-    const prompts = await this.loadAgentPrompts();
-    return prompts.length;
-  }
-
-  /**
-   * Compresses conversation context using the configured compression prompt.
-   */
-  private async compressContext(
-    conversationMessages: ChatMessage[], 
-    params: AgentExecutionParams
-  ): Promise<ChatMessage[]> {
-    try {
-      if (!this.agent.ContextCompressionPromptID) {
-        LogStatus(`Context compression enabled but no compression prompt configured for agent '${this.agent.Name}'`);
-        return conversationMessages;
-      }
-
-      const retentionCount = this.agent.ContextCompressionMessageRetentionCount || 5;
-      const messagesToCompress = conversationMessages.slice(0, -retentionCount);
-      const messagesToKeep = conversationMessages.slice(-retentionCount);
-
-      if (messagesToCompress.length === 0) {
-        return conversationMessages;
-      }
-
-      // Load compression prompt
-      const compressionPrompt = AIEngine.Instance.Prompts.find(p => p.ID === this.agent.ContextCompressionPromptID);
-      if (!compressionPrompt) {
-        LogError(`Compression prompt not found: ${this.agent.ContextCompressionPromptID}`);
-        return conversationMessages;
-      }
-
-      // Execute compression prompt
-      const compressionParams = new AIPromptParams();
-      compressionParams.prompt = compressionPrompt;
-      compressionParams.data = {
-        messages: messagesToCompress,
-        messageCount: messagesToCompress.length,
-        ...(params.data || {})
-      };
-      compressionParams.contextUser = params.contextUser;
-
-      const compressionResult = await this.promptRunner.ExecutePrompt(compressionParams);
-
-      if (compressionResult.success && compressionResult.rawResult) {
-        // Replace compressed messages with summary
-        const summaryMessage: ChatMessage = {
-          role: 'system',
-          content: `[Conversation Summary] ${compressionResult.rawResult}`
-        };
-
-        LogStatus(`Compressed ${messagesToCompress.length} messages into summary for agent '${this.agent.Name}'`);
-        return [summaryMessage, ...messagesToKeep];
-      }
-
-      return conversationMessages;
-
-    } catch (error) {
-      LogError(`Error compressing context for agent '${this.agent.Name}': ${error.message}`);
-      return conversationMessages;
-    }
-  }
-
-  /**
-   * Sends progress status to the callback if provided.
-   */
-  private sendProgress(callback: ((progress: AgentProgressUpdate) => void) | undefined, progress: AgentProgressUpdate): void {
-    if (callback) {
-      try {
-        callback(progress);
-      } catch (error) {
-        LogError(`Error in progress callback: ${error.message}`);
-      }
-    }
-  }
-
-  /**
-   * Creates a cancelled result.
-   */
-  private createCancelledResult(startTime: Date): AgentExecutionResult {
-    const endTime = new Date();
-    return {
-      success: false,
-      cancelled: true,
-      errorMessage: 'Agent execution was cancelled',
-      executionTimeMS: endTime.getTime() - startTime.getTime()
-    };
-  }
 }
 
-export function LoadBaseAgent() {
-  // This function ensures the class isn't tree-shaken
-}
