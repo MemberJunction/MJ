@@ -2078,13 +2078,76 @@ export class SQLServerDataProvider
     // now we have the dataset and the items, we need to get the update date from the items underlying entities
 
     if (items && items.length > 0) {
-      // fire off all of the item queries in parallel
-      const promises = items.map((item) => {
-        return this.GetDatasetItem(item, itemFilters, datasetName); // no await as Promise.All used below
-      });
+      // Optimization: Use batch SQL execution for multiple items
+      // Build SQL queries for all items
+      const queries: string[] = [];
+      const itemsWithSQL: any[] = [];
+      
+      for (const item of items) {
+        const itemSQL = this.GetDatasetItemSQL(item, itemFilters, datasetName);
+        if (itemSQL) {
+          queries.push(itemSQL);
+          itemsWithSQL.push(item);
+        } else {
+          // Handle invalid SQL case - add to results with error
+          itemsWithSQL.push({ ...item, hasError: true });
+        }
+      }
 
-      // execute all promises in parallel
-      const results = await Promise.all(promises);
+      // Execute all queries in a single batch
+      const batchResults = await this.ExecuteSQLBatch(queries);
+
+      // Process results for each item
+      const results: DatasetItemResultType[] = [];
+      let queryIndex = 0;
+      
+      for (const item of itemsWithSQL) {
+        if (item.hasError) {
+          // Handle error case for invalid columns
+          results.push({
+            EntityID: item.EntityID,
+            EntityName: item.Entity,
+            Code: item.Code,
+            Results: null,
+            LatestUpdateDate: null,
+            Status: 'Invalid columns specified for dataset item',
+            Success: false,
+          });
+        } else {
+          // Process successful query result
+          const itemData = batchResults[queryIndex] || [];
+          
+          const itemUpdatedAt = new Date(item.DatasetItemUpdatedAt);
+          const datasetUpdatedAt = new Date(item.DatasetUpdatedAt);
+          const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime()));
+
+          // get the latest update date
+          let latestUpdateDate = new Date(1900, 1, 1);
+          if (itemData && itemData.length > 0) {
+            itemData.forEach((data) => {
+              if (data[item.DateFieldToCheck] && new Date(data[item.DateFieldToCheck]) > latestUpdateDate) {
+                latestUpdateDate = new Date(data[item.DateFieldToCheck]);
+              }
+            });
+          }
+
+          // finally, compare the latestUpdatedDate to the dataset max date, and use the latter if it is more recent
+          if (datasetMaxUpdatedAt > latestUpdateDate) {
+            latestUpdateDate = datasetMaxUpdatedAt;
+          }
+
+          results.push({
+            EntityID: item.EntityID,
+            EntityName: item.Entity,
+            Code: item.Code,
+            Results: itemData,
+            LatestUpdateDate: latestUpdateDate,
+            Success: itemData !== null && itemData !== undefined,
+          });
+          
+          queryIndex++;
+        }
+      }  
 
       // determine overall success
       const bSuccess = results.every((result) => result.Success);
@@ -2123,19 +2186,36 @@ export class SQLServerDataProvider
     }
   }
 
-  protected async GetDatasetItem(item: any, itemFilters, datasetName): Promise<DatasetItemResultType> {
+
+  /**
+   * Constructs the SQL query for a dataset item.
+   * @param item - The dataset item metadata
+   * @param itemFilters - Optional filters to apply
+   * @param datasetName - Name of the dataset (for error logging)
+   * @returns The SQL query string, or null if columns are invalid
+   */
+  protected GetDatasetItemSQL(item: any, itemFilters: any, datasetName: string): string | null {
     let filterSQL = '';
     if (itemFilters && itemFilters.length > 0) {
       const filter = itemFilters.find((f) => f.ItemCode === item.Code);
       if (filter) filterSQL = (item.WhereClause ? ' AND ' : ' WHERE ') + '(' + filter.Filter + ')';
     }
 
+    const columns = this.GetColumnsForDatasetItem(item, datasetName);
+    if (!columns) {
+      return null; // Invalid columns
+    }
+
+    return `SELECT ${columns} FROM [${item.EntitySchemaName}].[${item.EntityBaseView}] ${item.WhereClause ? 'WHERE ' + item.WhereClause : ''}${filterSQL}`;
+  }
+
+  protected async GetDatasetItem(item: any, itemFilters, datasetName): Promise<DatasetItemResultType> {
     const itemUpdatedAt = new Date(item.DatasetItemUpdatedAt);
     const datasetUpdatedAt = new Date(item.DatasetUpdatedAt);
     const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime()));
 
-    const columns = this.GetColumnsForDatasetItem(item, datasetName);
-    if (!columns) {
+    const itemSQL = this.GetDatasetItemSQL(item, itemFilters, datasetName);
+    if (!itemSQL) {
       // failure condition within columns, return a failed result
       return {
         EntityID: item.EntityID,
@@ -2147,7 +2227,7 @@ export class SQLServerDataProvider
         Success: false,
       };
     }
-    const itemSQL = `SELECT ${columns} FROM [${item.EntitySchemaName}].[${item.EntityBaseView}] ${item.WhereClause ? 'WHERE ' + item.WhereClause : ''}${filterSQL}`;
+
     const itemData = await this.ExecuteSQL(itemSQL);
 
     // get the latest update date
@@ -2326,6 +2406,7 @@ export class SQLServerDataProvider
       };
     }
   }
+
 
   protected async GetApplicationMetadata(): Promise<ApplicationInfo[]> {
     const apps = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwApplications`, null);
@@ -2613,6 +2694,80 @@ export class SQLServerDataProvider
       const result = await request.query(query);
       // Always return array for consistency
       return result.recordset || [];
+    } catch (e) {
+      LogError(e);
+      throw e;
+    }
+  }
+
+  /**
+   * Executes multiple SQL queries in a single batch for optimal performance.
+   * Returns an array of results, one for each query in the batch.
+   * 
+   * @param queries - Array of SQL queries to execute
+   * @param parameters - Optional array of parameter arrays, one for each query
+   * @returns Promise<any[][]> - Array of result arrays, one for each query
+   */
+  public async ExecuteSQLBatch(queries: string[], parameters?: any[][]): Promise<any[][]> {
+    try {
+      let request: sql.Request;
+      
+      if (this._transaction && this._transactionRequest) {
+        // Use transaction request if in a transaction
+        request = this._transactionRequest;
+      } else if (this._transaction) {
+        // Create a new request for this transaction if we don't have one
+        request = new sql.Request(this._transaction);
+      } else {
+        // Use pool request for non-transactional queries
+        request = new sql.Request(this._pool);
+      }
+      
+      // Build combined batch SQL
+      let batchSQL = '';
+      let paramIndex = 0;
+      
+      queries.forEach((query, queryIndex) => {
+        // Add parameters for this query if provided
+        if (parameters && parameters[queryIndex]) {
+          const queryParams = parameters[queryIndex];
+          if (Array.isArray(queryParams)) {
+            // Handle positional parameters
+            queryParams.forEach((value) => {
+              request.input(`p${paramIndex}`, value);
+              paramIndex++;
+            });
+            // Replace @p0, @p1, etc. with actual parameter names
+            let localParamIndex = paramIndex - queryParams.length;
+            query = query.replace(/@p(\d+)/g, () => `@p${localParamIndex++}`);
+          } else if (typeof queryParams === 'object') {
+            // Handle named parameters - prefix with query index to avoid conflicts
+            for (const [key, value] of Object.entries(queryParams)) {
+              const paramName = `q${queryIndex}_${key}`;
+              request.input(paramName, value);
+              // Replace parameter references in query
+              query = query.replace(new RegExp(`@${key}\\b`, 'g'), `@${paramName}`);
+            }
+          }
+        }
+        
+        batchSQL += query;
+        if (queryIndex < queries.length - 1) {
+          batchSQL += ';\n';
+        }
+      });
+      
+      const result = await request.query(batchSQL);
+      
+      // Return array of recordsets - one for each query
+      // Handle both single and multiple recordsets
+      if (result.recordsets && Array.isArray(result.recordsets)) {
+        return result.recordsets;
+      } else if (result.recordset) {
+        return [result.recordset];
+      } else {
+        return [];
+      }
     } catch (e) {
       LogError(e);
       throw e;
