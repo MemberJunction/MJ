@@ -2,7 +2,7 @@ import { GraphQLServerGeneratorBase } from './Misc/graphql_server_codegen';
 import { SQLCodeGenBase } from './Database/sql_codegen';
 import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
 import { SQLServerDataProvider, UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
-import AppDataSource, { MSSQLConnection } from './Config/db-connection';
+import { MSSQLConnection } from './Config/db-connection';
 import { ManageMetadataBase } from './Database/manage-metadata';
 import { outputDir, commands, mj_core_schema, configInfo, getSettingValue } from './Config/config';
 import { logError, logMessage, logStatus, logWarning } from './Misc/status_logging';
@@ -32,18 +32,11 @@ export class RunCodeGenBase {
     /****************************************************************************************
         // First, setup the data source and make sure the metadata and related stuff for MJCore is initialized
         ****************************************************************************************/
-    logStatus('Initializing Data Source...');
-    await AppDataSource.initialize()
-      .then(() => {
-        logStatus('Data Source has been initialized!');
-      })
-      .catch((err) => {
-        logError('Error during Data Source initialization', err);
-      });
-
+    logStatus('Initializing Connection Pool...');
     const pool = await MSSQLConnection(); // get the MSSQL connection pool
+    logStatus('Connection Pool has been initialized!');
 
-    const config = new SQLServerProviderConfigData(AppDataSource, '', mj_core_schema(), 0);
+    const config = new SQLServerProviderConfigData(pool, '', mj_core_schema(), 0);
     const sqlServerProvider: SQLServerDataProvider = await setupSQLServerClient(config);
     return sqlServerProvider;
   }
@@ -60,7 +53,8 @@ export class RunCodeGenBase {
 
       const provider: SQLServerDataProvider = await this.setupDataSource();
 
-      await UserCache.Instance.Refresh(AppDataSource);
+      const pool = await MSSQLConnection();
+      await UserCache.Instance.Refresh(pool);
       const userMatch: MJ.UserInfo = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner')!;
       const currentUser = userMatch ? userMatch : UserCache.Users[0]; // if we don't find an Owner, use the first user in the cache
 
@@ -95,7 +89,7 @@ export class RunCodeGenBase {
         /****************************************************************************************
                 // STEP 0.1 --- Execute any before SQL Scripts specified in the config file
                 ****************************************************************************************/
-        if (!(await sqlCodeGenObject.runCustomSQLScripts(AppDataSource, 'before-all'))) logError('ERROR running before-all SQL Scripts');
+        if (!(await sqlCodeGenObject.runCustomSQLScripts(pool, 'before-all'))) logError('ERROR running before-all SQL Scripts');
 
         /****************************************************************************************
                 // STEP 0.2 --- Create a new user if there is newUserSetup info in the config file
@@ -119,7 +113,7 @@ export class RunCodeGenBase {
                 ****************************************************************************************/
         const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
         logStatus('Managing Metadata...');
-        const metadataSuccess = await manageMD.manageMetadata(AppDataSource, currentUser);
+        const metadataSuccess = await manageMD.manageMetadata(pool, currentUser);
         if (!metadataSuccess) {
           logError('ERROR managing metadata');
         } else {
@@ -133,7 +127,7 @@ export class RunCodeGenBase {
         const sqlOutputDir = outputDir('SQL', true);
         if (sqlOutputDir) {
           logStatus('Managing SQL Scripts and Execution...');
-          const sqlSuccess = await sqlCodeGenObject.manageSQLScriptsAndExecution(AppDataSource, md.Entities, sqlOutputDir, currentUser);
+          const sqlSuccess = await sqlCodeGenObject.manageSQLScriptsAndExecution(pool, md.Entities, sqlOutputDir, currentUser);
           if (!sqlSuccess) {
             logError('Error managing SQL scripts and execution');
           }
@@ -153,7 +147,7 @@ export class RunCodeGenBase {
         // ready for later use.
         const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
         logStatus('Checking/Loading AI Generated Code from Metadata...');
-        const metadataSuccess = await manageMD.loadGeneratedCode(AppDataSource, currentUser);
+        const metadataSuccess = await manageMD.loadGeneratedCode(pool, currentUser);
         if (!metadataSuccess) {
           logError('ERROR checking/loading AI Generated Code from Metadata');
           return; // FATAL ERROR - we can't continue
@@ -197,7 +191,7 @@ export class RunCodeGenBase {
         logStatus('Generating CORE Entity Subclass Code...');
         const entitySubClassGeneratorObject =
           MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
-        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(AppDataSource, coreEntities, coreEntitySubClassOutputDir, skipDB)) {
+        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(pool, coreEntities, coreEntitySubClassOutputDir, skipDB)) {
           logError('Error generating entity subclass code');
         }
       }
@@ -211,7 +205,7 @@ export class RunCodeGenBase {
         logStatus('Generating Entity Subclass Code...');
         const entitySubClassGeneratorObject =
           MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
-        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(AppDataSource, nonCoreEntities, entitySubClassOutputDir, skipDB)) {
+        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(pool, nonCoreEntities, entitySubClassOutputDir, skipDB)) {
           logError('Error generating entity subclass code');
         }
       } else {
@@ -275,7 +269,7 @@ export class RunCodeGenBase {
       SQLLogging.finishSQLLogging(); // finish up the SQL Logging
 
       // now run integrity checks
-      await SystemIntegrityBase.RunIntegrityChecks(AppDataSource, true);
+      await SystemIntegrityBase.RunIntegrityChecks(pool, true);
 
       /****************************************************************************************
       // STEP 8 --- Finalization Step - execute any AFTER commands specified in the config file
@@ -291,7 +285,7 @@ export class RunCodeGenBase {
       // STEP 9 --- Execute any AFTER SQL Scripts specified in the config file
       ****************************************************************************************/
       if (!skipDB) {
-        if (!(await sqlCodeGenObject.runCustomSQLScripts(AppDataSource, 'after-all'))) logError('ERROR running after-all SQL Scripts');
+        if (!(await sqlCodeGenObject.runCustomSQLScripts(pool, 'after-all'))) logError('ERROR running after-all SQL Scripts');
       }
         
       logStatus(md.Entities.length + ' entities processed and outputed to configured directories');

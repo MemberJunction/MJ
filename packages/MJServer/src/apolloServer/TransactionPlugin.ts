@@ -1,5 +1,5 @@
 import { ApolloServerPlugin, GraphQLRequestContextDidEncounterErrors, GraphQLRequestListenerParsingDidEnd } from '@apollo/server';
-import { DataSource } from 'typeorm';
+import sql from 'mssql';
 import { AppContext } from '../types.js';
 
 export const TransactionPlugin: ApolloServerPlugin<AppContext> = {
@@ -15,12 +15,13 @@ export const TransactionPlugin: ApolloServerPlugin<AppContext> = {
     // Start transaction, one or more mutations. If it is just one mutation, this trans wrapper isn't really needed
     // but there's no good way to know if it's one or more mutations, so we just start a transaction anyway and it isn't terribly expensive
     // to do so with SQL Server anyway.
-    const dataSource: DataSource = requestContext.contextValue.dataSource;
-    const queryRunner = dataSource.createQueryRunner();
+    const pool: sql.ConnectionPool = requestContext.contextValue.dataSource;
+    const transaction = new sql.Transaction(pool);
 
-    requestContext.contextValue.queryRunner = queryRunner;
+    // Store transaction in context for resolvers to use
+    (requestContext.contextValue as any).transaction = transaction;
     console.log('Starting transaction wrapper, time spent: ', Date.now() - start, 'ms ');
-    await queryRunner.startTransaction();
+    await transaction.begin();
 
     return {
       didEncounterErrors: async (requestContext) => {
@@ -33,16 +34,15 @@ export const TransactionPlugin: ApolloServerPlugin<AppContext> = {
               if (err) {
                 console.log('Error in transaction, rolling back, time spent: ', Date.now() - start, 'ms ');
                 console.error('Rolling back transaction', err);
-                await queryRunner.rollbackTransaction();
+                await transaction.rollback();
               } else {
                 console.log('Committing transaction, time spent: ', Date.now() - start, 'ms ');
-                await queryRunner.commitTransaction();
+                await transaction.commit();
               }
             } catch (execErr) {
               console.log('Execution Error, time spent: ', Date.now() - start, 'ms ');
               console.error(execErr);
             } finally {
-              await queryRunner.release();
               console.log('Transaction complete, time spent: ', Date.now() - start, 'ms ');
             }
           },

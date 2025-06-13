@@ -4,6 +4,7 @@ import { LogError, LogStatus, Metadata } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { v4 as uuidv4 } from 'uuid';
 import { GetReadOnlyDataSource } from '../util.js';
+import sql from 'mssql';
  
 @InputType() 
 export class GetDataInputType {
@@ -132,8 +133,9 @@ export class GetDataResolver {
             const results = await Promise.allSettled(
                 input.Queries.map(async (query) => {
                     try {
-                        const result = await readOnlyDataSource.query(query);
-                        return { result, error: null };
+                        const request = new sql.Request(readOnlyDataSource);
+                        const result = await request.query(query);
+                        return { result: result.recordset, error: null };
                     } catch (err) {
                         return { result: null, error: err };
                     }

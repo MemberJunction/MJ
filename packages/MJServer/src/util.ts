@@ -5,7 +5,7 @@ import { promisify } from 'util';
 import { URL } from 'url';
 import { z } from 'zod';
 import { DataSourceInfo } from './types';
-import { DataSource } from 'typeorm';
+import sql from 'mssql';
 
 const gzip = promisify(gzipCallback);
 
@@ -120,17 +120,17 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
    * @param options 
    * @returns 
    */
-  export function GetReadOnlyDataSource(dataSources: DataSourceInfo[], options?: {allowFallbackToReadWrite: boolean}): DataSource {
+  export function GetReadOnlyDataSource(dataSources: DataSourceInfo[], options?: {allowFallbackToReadWrite: boolean}): sql.ConnectionPool & { query: (sql: string, params?: any) => Promise<any[]> } {
     const readOnlyDataSource = dataSources.find((ds) => ds.type === 'Read-Only');
     if (readOnlyDataSource) {
-      return readOnlyDataSource.dataSource;
+      return extendConnectionPoolWithQuery(readOnlyDataSource.dataSource);
     } 
     else if (!options || options.allowFallbackToReadWrite) {
       // default behavior for backward compatibility prior to MJ 2.22.3 where we introduced this functionality was to have a single
       // connection, so for back-compatability, if we don't have a read-only data source, we'll fall back to the read-write data source
       const readWriteDataSource = dataSources.find((ds) => ds.type === 'Read-Write');
       if (readWriteDataSource) {
-        return readWriteDataSource.dataSource;
+        return extendConnectionPoolWithQuery(readWriteDataSource.dataSource);
       }
     }
     throw new Error('No suitable data source found');
@@ -141,10 +141,35 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
    * @param dataSources 
    * @returns 
    */
-  export function GetReadWriteDataSource(dataSources: DataSourceInfo[]): DataSource {
+  export function GetReadWriteDataSource(dataSources: DataSourceInfo[]): sql.ConnectionPool & { query: (sql: string, params?: any) => Promise<any[]> } {
     const readWriteDataSource = dataSources.find((ds) => ds.type === 'Read-Write');
     if (readWriteDataSource) {
-      return readWriteDataSource.dataSource;
+      return extendConnectionPoolWithQuery(readWriteDataSource.dataSource);
     }
     throw new Error('No suitable read-write data source found');
+  }
+
+  /**
+   * Extends a ConnectionPool with a query method that returns results in the format expected by generated code
+   * This provides backwards compatibility with code that expects TypeORM-style query results
+   */
+  export function extendConnectionPoolWithQuery(pool: sql.ConnectionPool): sql.ConnectionPool & { query: (sql: string, params?: any) => Promise<any[]> } {
+    const extendedPool = pool as any;
+    extendedPool.query = async (sqlQuery: string, parameters?: any): Promise<any[]> => {
+      const request = new sql.Request(pool);
+      // Add parameters if provided
+      if (parameters) {
+        if (Array.isArray(parameters)) {
+          parameters.forEach((value, index) => {
+            request.input(`p${index}`, value);
+          });
+          // Replace ? with @p0, @p1, etc. in the query
+          let paramIndex = 0;
+          sqlQuery = sqlQuery.replace(/\?/g, () => `@p${paramIndex++}`);
+        }
+      }
+      const result = await request.query(sqlQuery);
+      return result.recordset || [];
+    };
+    return extendedPool;
   }

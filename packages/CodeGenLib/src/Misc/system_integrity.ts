@@ -1,4 +1,4 @@
-import { DataSource } from "typeorm";
+import * as sql from 'mssql';
 import { logError, logStatus } from "./status_logging";
 import { configInfo, mj_core_schema } from "../Config/config";
 
@@ -12,7 +12,7 @@ export type IntegrityCheckResult = {
 export type RunIntegrityCheck = {
     Name: string;
     Enabled: boolean;
-    Run: (ds: DataSource) => Promise<IntegrityCheckResult>;
+    Run: (pool: sql.ConnectionPool) => Promise<IntegrityCheckResult>;
 }
 
 /**
@@ -31,15 +31,15 @@ export class SystemIntegrityBase {
     /**
      * Runs integrity checks on the system. If onlyEnabled is true, then only checks that are enabled in the configuration
      * will be run. If false, all checks will be run.
-     * @param ds
+     * @param pool
      */
-    public static async RunIntegrityChecks(ds: DataSource, onlyEnabled: boolean, logResults: boolean = true): Promise<IntegrityCheckResult[]> {
+    public static async RunIntegrityChecks(pool: sql.ConnectionPool, onlyEnabled: boolean, logResults: boolean = true): Promise<IntegrityCheckResult[]> {
         let results: IntegrityCheckResult[] = [];
         try {
             const runPromises = [];
             for (const check of SystemIntegrityBase._integrityChecks) {
                 if (!onlyEnabled || check.Enabled) {
-                    runPromises.push(check.Run(ds));
+                    runPromises.push(check.Run(pool));
                 }
             }
             // async parallel run all the checks and then push the results into the results array
@@ -73,27 +73,28 @@ export class SystemIntegrityBase {
      * For a given entity, fields should be in sequence starting from 1. There should be no duplicate sequences within a given
      * entity. Invalidation of this could cause downstream issues with the system in particular with execution of Create/Update operations.
      *
-     * @param ds
+     * @param pool
      * @returns
      */
-    public static async CheckEntityFieldSequences(ds: DataSource): Promise<IntegrityCheckResult> {
-        return SystemIntegrityBase.CheckEntityFieldSequencesInternal(ds, "");
+    public static async CheckEntityFieldSequences(pool: sql.ConnectionPool): Promise<IntegrityCheckResult> {
+        return SystemIntegrityBase.CheckEntityFieldSequencesInternal(pool, "");
     }
 
     /**
      * Checks the sequence of fields for a single entity. This is useful when you want to check a single entity at a time.
-     * @param ds
+     * @param pool
      * @param entityName
      * @returns
      */
-    public static async CheckSinleEntityFieldSequences(ds: DataSource, entityName: string): Promise<IntegrityCheckResult> {
-        return SystemIntegrityBase.CheckEntityFieldSequencesInternal(ds, `WHERE Entity='${entityName}'`);
+    public static async CheckSinleEntityFieldSequences(pool: sql.ConnectionPool, entityName: string): Promise<IntegrityCheckResult> {
+        return SystemIntegrityBase.CheckEntityFieldSequencesInternal(pool, `WHERE Entity='${entityName}'`);
     }
 
-    protected static async CheckEntityFieldSequencesInternal(ds: DataSource, filter: string): Promise<IntegrityCheckResult> {
+    protected static async CheckEntityFieldSequencesInternal(pool: sql.ConnectionPool, filter: string): Promise<IntegrityCheckResult> {
         try {
             const sSQL = `SELECT ID, Entity, SchemaName, BaseView, EntityID, Name, Sequence FROM [${mj_core_schema()}].[vwEntityFields] ${filter} ORDER BY Entity, Sequence`;
-            const result = await ds.query(sSQL);
+            const resultResult = await pool.request().query(sSQL);
+      const result = resultResult.recordset;
             if (!result || result.length === 0) {
                 throw new Error("No entity fields found");
             }
@@ -134,11 +135,12 @@ export class SystemIntegrityBase {
                                 // we will do this by SELECT TOP 1 * from the base view
                                 const entity = row.Entity;
                                 const sampleSQL = `SELECT TOP 1 * FROM [${row.SchemaName}].[${row.BaseView}]`;
-                                const sampleResult = await ds.query(sampleSQL);
+                                const sampleResultResult = await pool.request().query(sampleSQL);
+      const sampleResult = sampleResultResult.recordset;
                                 // now check the order of the columns in the result set relative to the
                                 // fields array
-                                if (sampleResult && sampleResult.columns) {
-                                    const columns = Object.keys(sampleResult.columns);
+                                if (sampleResult && sampleResult.length > 0) {
+                                    const columns = Object.keys(sampleResult[0]);
                                     let i = 0;
                                     for (const field of fields) {
                                         if (columns[i] !== field.Name) {

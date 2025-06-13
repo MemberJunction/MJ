@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import path from 'path';
 
 import { SQLUtilityBase } from './sql';
-import { DataSource } from 'typeorm';
+import * as sql from 'mssql';
 import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase, MAX_INDEX_NAME_LENGTH } from '../Config/config';
 import { ManageMetadataBase } from './manage-metadata';
 
@@ -35,14 +35,14 @@ export class SQLCodeGenBase {
         return this._sqlUtilityObject;
     }
 
-    public async manageSQLScriptsAndExecution(ds: DataSource, entities: EntityInfo[], directory: string, currentUser: UserInfo): Promise<boolean> {
+    public async manageSQLScriptsAndExecution(pool: sql.ConnectionPool, entities: EntityInfo[], directory: string, currentUser: UserInfo): Promise<boolean> {
         try {
             // STEP 1 - execute any custom SQL scripts for object creation that need to happen first - for example, if
             //          we have custom base views, need to have them defined before we do
             //          the rest as the generated stuff might use custom base views in compiled
             //          objects like spCreate for a given entity might reference the vw for that entity
             const startTime: Date = new Date();
-            if (! await this.runCustomSQLScripts(ds, 'before-sql'))
+            if (! await this.runCustomSQLScripts(pool, 'before-sql'))
                 return false;
             logStatus(`   Time to run custom SQL scripts: ${(new Date().getTime() - startTime.getTime())/1000} seconds`);
 
@@ -58,7 +58,7 @@ export class SQLCodeGenBase {
             const step2StartTime: Date = new Date();
 
             const genResult = await this.generateAndExecuteEntitySQLToSeparateFiles({
-                ds, 
+                pool, 
                 entities: includedEntities, 
                 directory, 
                 onlyPermissions: false, 
@@ -74,7 +74,7 @@ export class SQLCodeGenBase {
 
             // STEP 2(c) - for the excludedEntities, while we don't want to generate SQL, we do want to generate the permissions files for them
             const genResult2 = await this.generateAndExecuteEntitySQLToSeparateFiles({
-                ds, 
+                pool, 
                 entities: excludedEntities, 
                 directory, 
                 onlyPermissions: true,
@@ -103,7 +103,7 @@ export class SQLCodeGenBase {
             const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
             // STEP 3 - re-run the process to manage entity fields since the Step 1 and 2 above might have resulted in differences in base view columns compared to what we had at first
             // we CAN skip the entity field values part because that wouldn't change from the first time we ran it
-            if (! await manageMD.manageEntityFields(ds, configInfo.excludeSchemas, true, true, currentUser)) {
+            if (! await manageMD.manageEntityFields(pool, configInfo.excludeSchemas, true, true, currentUser)) {
                 logError('Error managing entity fields');
                 return false;
             }
@@ -111,7 +111,7 @@ export class SQLCodeGenBase {
 
             // STEP 4- Apply permissions, executing all .permissions files
             const step4StartTime: Date = new Date();
-            if (! await this.applyPermissions(ds, directory, baselineEntities)) {
+            if (! await this.applyPermissions(pool, directory, baselineEntities)) {
                 logError('Error applying permissions');
                 return false;
             }
@@ -119,7 +119,7 @@ export class SQLCodeGenBase {
             
             // STEP 5 - execute any custom SQL scripts that should run afterwards
             const step5StartTime: Date = new Date();
-            if (! await this.runCustomSQLScripts(ds, 'after-sql'))
+            if (! await this.runCustomSQLScripts(pool, 'after-sql'))
                 return false;
 
             logStatus(`   Time to run custom SQL scripts: ${(new Date().getTime() - step5StartTime.getTime())/1000} seconds`);
@@ -138,7 +138,7 @@ export class SQLCodeGenBase {
         }
     }
 
-    public async runCustomSQLScripts(ds: DataSource, when: string): Promise<boolean> {
+    public async runCustomSQLScripts(pool: sql.ConnectionPool, when: string): Promise<boolean> {
         try {
             const scripts = customSqlScripts(when);
             let bSuccess: boolean = true;
@@ -162,7 +162,7 @@ export class SQLCodeGenBase {
     }
 
 
-    public async applyPermissions(ds: DataSource, directory: string, entities: EntityInfo[], batchSize: number = 5): Promise<boolean> {
+    public async applyPermissions(pool: sql.ConnectionPool, directory: string, entities: EntityInfo[], batchSize: number = 5): Promise<boolean> {
         try {
             let bSuccess = true;
 
@@ -178,7 +178,7 @@ export class SQLCodeGenBase {
                             const fileBuffer = fs.readFileSync(fullPath);
                             const fileContents = fileBuffer.toString();
                             try {
-                                await ds.query(fileContents);                            
+                                await pool.request().query(fileContents);                            
                             }
                             catch (e: any) {
                                 logError(`Error executing permissions file ${fullPath} for entity ${e.Name}: ${e}`);
@@ -218,7 +218,7 @@ export class SQLCodeGenBase {
      * @param onlyPermissions If true, only the permissions files will be generated and executed, not the actual SQL files. Use this if you are simply setting permission changes but no actual changes to the entities have occured.
      */
     public async generateAndExecuteEntitySQLToSeparateFiles(options: {
-        ds: DataSource, 
+        pool: sql.ConnectionPool, 
         entities: EntityInfo[], 
         directory: string, 
         onlyPermissions: boolean, 
@@ -244,7 +244,7 @@ export class SQLCodeGenBase {
                         return {Success: false, Files: []};
                     }
                     return this.generateAndExecuteSingleEntitySQLToSeparateFiles({
-                        ds: options.ds,
+                        pool: options.pool,
                         entity: e,
                         directory: options.directory,
                         onlyPermissions: options.onlyPermissions,
@@ -319,7 +319,7 @@ export class SQLCodeGenBase {
 
 
     public async generateAndExecuteSingleEntitySQLToSeparateFiles(options: {
-        ds: DataSource, 
+        pool: sql.ConnectionPool, 
         entity: EntityInfo, 
         directory: string, 
         onlyPermissions: boolean, 
@@ -331,7 +331,7 @@ export class SQLCodeGenBase {
             const {sql, permissionsSQL, files} = await this.generateSingleEntitySQLToSeparateFiles(options); // this creates the files and returns a single string with all the SQL we can then execute
             if (!options.skipExecution) {
                 return {
-                    Success: await this.SQLUtilityObject.executeSQLScript(options.ds, sql + "\n\nGO\n\n" + permissionsSQL, true), // combine the SQL and permissions and execute it,
+                    Success: await this.SQLUtilityObject.executeSQLScript(options.pool, sql + "\n\nGO\n\n" + permissionsSQL, true), // combine the SQL and permissions and execute it,
                     Files: files
                 }
             }
@@ -354,7 +354,7 @@ export class SQLCodeGenBase {
     }
 
     public async generateSingleEntitySQLToSeparateFiles(options: {
-        ds: DataSource, 
+        pool: sql.ConnectionPool, 
         entity: EntityInfo, 
         directory: string, 
         onlyPermissions: boolean, 
@@ -377,7 +377,7 @@ export class SQLCodeGenBase {
             let permissionsSQL: string = ''
             // Indexes for Fkeys for the table
             if (!options.onlyPermissions){
-                const indexSQL = autoIndexForeignKeys() ? this.generateIndexesForForeignKeys(options.ds, options.entity) : ''; // if autoIndexForeignKeys is true, generate the indexes, otherwise, just add a blank string to the header
+                const indexSQL = autoIndexForeignKeys() ? this.generateIndexesForForeignKeys(options.pool, options.entity) : ''; // if autoIndexForeignKeys is true, generate the indexes, otherwise, just add a blank string to the header
                 const s = this.generateSingleEntitySQLFileHeader(options.entity, 'Index for Foreign Keys') + indexSQL; 
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('index', options.entity.SchemaName, options.entity.BaseTable, false, true));
@@ -391,7 +391,7 @@ export class SQLCodeGenBase {
             // BASE VIEW
             if (!options.onlyPermissions && options.entity.BaseViewGenerated && !options.entity.VirtualEntity) {
                 // generate the base view
-                const s = this.generateSingleEntitySQLFileHeader(options.entity,options.entity.BaseView) + await this.generateBaseView(options.ds, options.entity)
+                const s = this.generateSingleEntitySQLFileHeader(options.entity,options.entity.BaseView) + await this.generateBaseView(options.pool, options.entity)
                 const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('view', options.entity.SchemaName, options.entity.BaseView, false, true));
                 if (options.writeFiles) {
                     this.logSQLForNewOrModifiedEntity(options.entity, s, `Base View SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
@@ -522,7 +522,7 @@ export class SQLCodeGenBase {
             // check to see if the options.entity supports full text search or not
             if (options.entity.FullTextSearchEnabled) {
                 // always generate the code so we can get the function name from the below function call
-                const ft = await this.generateEntityFullTextSearchSQL(options.ds, options.entity);
+                const ft = await this.generateEntityFullTextSearchSQL(options.pool, options.entity);
                 if (!options.onlyPermissions) {
                     // only write the actual sql out if we're not only generating permissions
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('full_text_search_function', options.entity.SchemaName, options.entity.BaseTable, false, true));
@@ -601,11 +601,11 @@ export class SQLCodeGenBase {
      * @param entity 
      * @returns 
      */
-    public async generateEntitySQL(ds: DataSource, entity: EntityInfo): Promise<string> {
+    public async generateEntitySQL(pool: sql.ConnectionPool, entity: EntityInfo): Promise<string> {
         let sOutput: string = ''
         if (entity.BaseViewGenerated && !entity.VirtualEntity)
             // generated the base view (will include permissions)
-            sOutput += await this.generateBaseView(ds, entity) + '\n\n';
+            sOutput += await this.generateBaseView(pool, entity) + '\n\n';
         else
             // still generate the permissions for the view even if a custom view
             sOutput += this.generateViewPermissions(entity) + '\n\n';
@@ -639,12 +639,12 @@ export class SQLCodeGenBase {
 
         // check to see if the entity supports full text search or not
         if (entity.FullTextSearchEnabled) {
-            sOutput += await this.generateEntityFullTextSearchSQL(ds, entity) + '\n\n';
+            sOutput += await this.generateEntityFullTextSearchSQL(pool, entity) + '\n\n';
         }
         return sOutput
     }
 
-    async generateEntityFullTextSearchSQL(ds: DataSource, entity: EntityInfo): Promise<{sql: string, functionName: string}> {
+    async generateEntityFullTextSearchSQL(pool: sql.ConnectionPool, entity: EntityInfo): Promise<{sql: string, functionName: string}> {
         let sql = '';
 
         const catalogName = entity.FullTextCatalog && entity.FullTextCatalog.length > 0 ? entity.FullTextCatalog : dbDatabase + '_FullTextCatalog';
@@ -666,7 +666,7 @@ export class SQLCodeGenBase {
             if (fullTextFields.length === 0)
                 throw new Error(`FullTextIndexGenerated is true for entity ${entity.Name}, but no fields are marked as FullTextSearchEnabled`);
             // drop and recreate the full text index
-            const entity_pk_name = await this.getEntityPrimaryKeyIndexName(ds, entity);
+            const entity_pk_name = await this.getEntityPrimaryKeyIndexName(pool, entity);
             sql += `                -- DROP AND RECREATE THE FULL TEXT INDEX
                 IF EXISTS (
                     SELECT *
@@ -737,7 +737,7 @@ export class SQLCodeGenBase {
         return {sql,functionName};
     }
 
-    async getEntityPrimaryKeyIndexName(ds: DataSource, entity: EntityInfo): Promise<string> {
+    async getEntityPrimaryKeyIndexName(pool: sql.ConnectionPool, entity: EntityInfo): Promise<string> {
         const sSQL = `  SELECT
         i.name AS IndexName
     FROM
@@ -752,7 +752,8 @@ export class SQLCodeGenBase {
         o.schema_id = SCHEMA_ID('${entity.SchemaName}') AND
         kc.type = 'PK';
         `
-        const result = await ds.query(sSQL);
+        const resultResult = await pool.request().query(sSQL);
+            const result = resultResult.recordset;
         if (result && result.length > 0)
             return result[0].IndexName;
         else
@@ -787,10 +788,10 @@ export class SQLCodeGenBase {
 
     /**
      * Generates the SQL for creating indexes for the foreign keys in the entity
-     * @param ds 
+     * @param pool 
      * @param entity 
      */
-    generateIndexesForForeignKeys(ds: DataSource, entity: EntityInfo): string {
+    generateIndexesForForeignKeys(pool: sql.ConnectionPool, entity: EntityInfo): string {
         // iterate through all of the fields in the entity that are foreign keys and generate an index for each one
         let sOutput: string = ''; 
         for (const f of entity.Fields) {
@@ -816,10 +817,10 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
         return sOutput;
     }
 
-    async generateBaseView(ds: DataSource, entity: EntityInfo): Promise<string> {
+    async generateBaseView(pool: sql.ConnectionPool, entity: EntityInfo): Promise<string> {
         const viewName: string = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
         const classNameFirstChar: string = entity.ClassName.charAt(0).toLowerCase();
-        const relatedFieldsString: string = await this.generateBaseViewRelatedFieldsString(ds, entity.Fields);
+        const relatedFieldsString: string = await this.generateBaseViewRelatedFieldsString(pool, entity.Fields);
         const relatedFieldsJoinString: string = this.generateBaseViewJoins(entity, entity.Fields);
         const permissions: string = this.generateViewPermissions(entity);
         const whereClause: string = entity.DeleteType === 'Soft' ? `WHERE
@@ -869,7 +870,7 @@ ${whereClause}GO${permissions}
         return sOutput;
     }
 
-    async generateBaseViewRelatedFieldsString(ds: DataSource, entityFields: EntityFieldInfo[]): Promise<string> {
+    async generateBaseViewRelatedFieldsString(pool: sql.ConnectionPool, entityFields: EntityFieldInfo[]): Promise<string> {
         let sOutput: string = '';
         let fieldCount: number = 0;
         const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
@@ -905,7 +906,7 @@ ${whereClause}GO${permissions}
                     // and it also reflects what the DB will hold
                     ef.RelatedEntityNameFieldMap = ef._RelatedEntityNameFieldMap;
                     // then update the database itself
-                    await manageMD.updateEntityFieldRelatedEntityNameFieldMap(ds, ef.ID, ef.RelatedEntityNameFieldMap);
+                    await manageMD.updateEntityFieldRelatedEntityNameFieldMap(pool, ef.ID, ef.RelatedEntityNameFieldMap);
                 }
                 fieldCount++;
             }

@@ -1,15 +1,15 @@
 import { BaseEntity, Metadata, RunView, LogError, LogStatus, RunReport, RunQuery, SetProvider } from "@memberjunction/core";
 import { SQLServerDataProvider, SQLServerProviderConfigData } from "./SQLServerDataProvider";
-import { DataSource } from "typeorm";
+import * as sql from 'mssql';
 import { UserCache } from "./UserCache";
 
 
 
 export async function setupSQLServerClient(config: SQLServerProviderConfigData): Promise<SQLServerDataProvider> {
     try {
-        // Set the provider for all entities to be GraphQL in this project, can use a different provider in other situations....
-        const ds: DataSource = <DataSource>config.DataSource;
-        if (ds.isInitialized) {
+        // Set the provider for all entities to be SQL Server in this project, can use a different provider in other situations....
+        const pool: sql.ConnectionPool = <sql.ConnectionPool>config.DataSource; // Now expects a ConnectionPool
+        if (pool.connected) {
             const provider = new SQLServerDataProvider()
             await provider.Config(config);
 
@@ -17,7 +17,7 @@ export async function setupSQLServerClient(config: SQLServerProviderConfigData):
             SetProvider(provider);
 
             // now setup the user cache
-            await UserCache.Instance.Refresh(ds,config.CheckRefreshIntervalSeconds);   
+            await UserCache.Instance.Refresh(pool, config.CheckRefreshIntervalSeconds);   
 
             if (config.CheckRefreshIntervalSeconds && config.CheckRefreshIntervalSeconds > 0) {
                 // Start a timer to check for refreshes
@@ -34,13 +34,13 @@ export async function setupSQLServerClient(config: SQLServerProviderConfigData):
             return provider
         }
         else {
-            //dataSource is not initialized, so wait for it
-            LogStatus("dataSource is not initialized, we're going to hang out to wait for it...")
-            await ds.initialize();
-            if (ds.isInitialized)
-                return setupSQLServerClient(config) // one time recursive call since we're now initialized
+            //pool is not connected, so wait for it
+            LogStatus("Connection pool is not connected, we're going to wait for it...")
+            await pool.connect();
+            if (pool.connected)
+                return setupSQLServerClient(config) // one time recursive call since we're now connected
             else
-                throw new Error("Failed to initialize data source"); // don't do recursive call here as it would go on forever
+                throw new Error("Failed to connect to database"); // don't do recursive call here as it would go on forever
         }
     }
     catch (e) {

@@ -27,7 +27,6 @@
     "@memberjunction/core-entities": "2.48.0",
     "@memberjunction/global": "2.48.0",
     "@memberjunction/queue": "2.48.0",
-    "mssql": "^11.0.1",
-    "typeorm": "^0.3.20"
+    "mssql": "^11.0.1"
   }
 }

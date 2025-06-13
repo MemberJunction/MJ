@@ -27,7 +27,7 @@
     "@memberjunction/templates-base-types": "2.48.0",
     "@memberjunction/ai-openai": "2.48.0",
     "dotenv": "^16.4.1",
-    "typeorm": "^0.3.20"
+    "mssql": "^11.0.1"
   },
   "devDependencies": {
     "@types/mssql": "^9.1.5",

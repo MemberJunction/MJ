@@ -74,7 +74,7 @@ import {
 import { AIEngine, EntityAIActionParams } from '@memberjunction/aiengine';
 import { QueueManager } from '@memberjunction/queue';
 
-import { DataSource, QueryRunner } from 'typeorm';
+import * as sql from 'mssql';
 import { SQLServerTransactionGroup } from './SQLServerTransactionGroup';
 
 import { UserCache } from './UserCache';
@@ -120,8 +120,10 @@ export class SQLServerDataProvider
   extends ProviderBase
   implements IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider
 {
-  private _dataSource: DataSource;
-  private _queryRunner: QueryRunner;
+  private _pool: sql.ConnectionPool;
+  private _poolConfig: any; // Store the connection config for later use
+  private _transaction: sql.Transaction;
+  private _transactionRequest: sql.Request;
   private _currentUserEmail: string;
   private _localStorageProvider: ILocalStorageProvider;
   private _bAllowRefresh: boolean = true;
@@ -135,7 +137,7 @@ export class SQLServerDataProvider
 
   public async Config(configData: SQLServerProviderConfigData): Promise<boolean> {
     try {
-      this._dataSource = configData.DataSource;
+      this._pool = configData.DataSource; // Now expects a ConnectionPool instead of DataSource
       this._currentUserEmail = configData.CurrentUserEmail;
 
       return super.Config(configData); // now parent class can do it's config
@@ -146,25 +148,27 @@ export class SQLServerDataProvider
   }
 
   /**
-   * SQL Server Data Provider implementation of this getter returns a TypeORM DataSource object
+   * SQL Server Data Provider implementation of this getter returns an mssql ConnectionPool object
    */
   public get DatabaseConnection(): any {
-    return this._dataSource;
+    return this._pool;
   }
 
   /**
    * For the SQLServerDataProvider the unique instance connection string which is used to identify, uniquely, a given connection is the following format:
-   * type://host:port/instanceName?/database
+   * mssql://host:port/instanceName?/database
    * instanceName is only inserted if it is provided in the options
    */
   public get InstanceConnectionString(): string {
-    const dbOptions: any = this._dataSource.options;
+    // For mssql, we need to access the pool's internal connection options
+    // Since mssql v11 doesn't expose config directly, we'll construct from what we know
+    const pool = this._pool as any;
     const options = {
-      type: dbOptions.type || '',
-      host: dbOptions.host || '',
-      port: dbOptions.port || '',
-      instanceName: dbOptions.instanceName ? '/' + dbOptions.instanceName : '',
-      database: dbOptions.database || '',
+      type: 'mssql',
+      host: pool._config?.server || 'localhost',
+      port: pool._config?.port || 1433,
+      instanceName: pool._config?.options?.instanceName ? '/' + pool._config.options.instanceName : '',
+      database: pool._config?.database || '',
     };
     return options.type + '://' + options.host + ':' + options.port + options.instanceName + '/' + options.database;
   }
@@ -502,14 +506,14 @@ export class SQLServerDataProvider
         }
 
         // now we can run the viewSQL, but only do this if the ResultType !== 'count_only', otherwise we don't need to run the viewSQL
-        const retData = params.ResultType === 'count_only' ? [] : await this._dataSource.query(viewSQL);
+        const retData = params.ResultType === 'count_only' ? [] : await this.ExecuteSQL(viewSQL);
 
         // finally, if we have a countSQL, we need to run that to get the row count
         // but only do that if the # of rows returned is equal to the max rows, otherwise we know we have all the rows
         // OR do that if we are doing a count_only
         let rowCount = null;
         if (countSQL && (params.ResultType === 'count_only' || retData.length === entityInfo.UserViewMaxRows)) {
-          const countResult = await this._dataSource.query(countSQL);
+          const countResult = await this.ExecuteSQL(countSQL);
           if (countResult && countResult.length > 0) {
             rowCount = countResult[0].TotalRowCount;
           }
@@ -688,7 +692,7 @@ export class SQLServerDataProvider
             INSERT INTO @ViewIDList (ID) (SELECT ${entityInfo.FirstPrimaryKey.Name} FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE (${whereSQL}))
             EXEC [${this.MJCoreSchemaName}].spCreateUserViewRunWithDetail(${viewId},${user.Email}, @ViewIDLIst)
             `;
-    const runIDResult = await this._dataSource.query(sSQL);
+    const runIDResult = await this.ExecuteSQL(sSQL);
     const runID: string = runIDResult[0].UserViewRunID;
     const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE ${entityInfo.FirstPrimaryKey.Name} IN
                                     (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE UserViewRunID=${runID})
@@ -1443,7 +1447,7 @@ export class SQLServerDataProvider
             // and when the transaction is committed, we will send all the queries at once
             this._bAllowRefresh = false; // stop refreshes of metadata while we're doing work
             entity.TransactionGroup.AddTransaction(
-              new TransactionItem(entity, entityResult.Type === 'create' ? 'Create' : 'Update', sSQL, null, { dataSource: this._dataSource }, (transactionResult: Record<string, any>, success: boolean) => {
+              new TransactionItem(entity, entityResult.Type === 'create' ? 'Create' : 'Update', sSQL, null, { dataSource: this._pool }, (transactionResult: Record<string, any>, success: boolean) => {
                 // we get here whenever the transaction group does gets around to committing
                 // our query.
                 this._bAllowRefresh = true; // allow refreshes again
@@ -1969,7 +1973,7 @@ export class SQLServerDataProvider
         // we are part of a transaction group, so just add our query to the list
         // and when the transaction is committed, we will send all the queries at once
         entity.TransactionGroup.AddTransaction(
-          new TransactionItem(entity, 'Delete', sSQL, null, { dataSource: this._dataSource }, (transactionResult: Record<string, any>, success: boolean) => {
+          new TransactionItem(entity, 'Delete', sSQL, null, { dataSource: this._pool }, (transactionResult: Record<string, any>, success: boolean) => {
             // we get here whenever the transaction group does gets around to committing
             // our query.
             result.EndedAt = new Date();
@@ -2068,19 +2072,82 @@ export class SQLServerDataProvider
                     ON
                         di.EntityID = e.ID
                     WHERE
-                        d.Name = @0`;
+                        d.Name = @p0`;
 
     const items = await this.ExecuteSQL(sSQL, [datasetName]);
     // now we have the dataset and the items, we need to get the update date from the items underlying entities
 
     if (items && items.length > 0) {
-      // fire off all of the item queries in parallel
-      const promises = items.map((item) => {
-        return this.GetDatasetItem(item, itemFilters, datasetName); // no await as Promise.All used below
-      });
+      // Optimization: Use batch SQL execution for multiple items
+      // Build SQL queries for all items
+      const queries: string[] = [];
+      const itemsWithSQL: any[] = [];
+      
+      for (const item of items) {
+        const itemSQL = this.GetDatasetItemSQL(item, itemFilters, datasetName);
+        if (itemSQL) {
+          queries.push(itemSQL);
+          itemsWithSQL.push(item);
+        } else {
+          // Handle invalid SQL case - add to results with error
+          itemsWithSQL.push({ ...item, hasError: true });
+        }
+      }
 
-      // execute all promises in parallel
-      const results = await Promise.all(promises);
+      // Execute all queries in a single batch
+      const batchResults = await this.ExecuteSQLBatch(queries);
+
+      // Process results for each item
+      const results: DatasetItemResultType[] = [];
+      let queryIndex = 0;
+      
+      for (const item of itemsWithSQL) {
+        if (item.hasError) {
+          // Handle error case for invalid columns
+          results.push({
+            EntityID: item.EntityID,
+            EntityName: item.Entity,
+            Code: item.Code,
+            Results: null,
+            LatestUpdateDate: null,
+            Status: 'Invalid columns specified for dataset item',
+            Success: false,
+          });
+        } else {
+          // Process successful query result
+          const itemData = batchResults[queryIndex] || [];
+          
+          const itemUpdatedAt = new Date(item.DatasetItemUpdatedAt);
+          const datasetUpdatedAt = new Date(item.DatasetUpdatedAt);
+          const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime()));
+
+          // get the latest update date
+          let latestUpdateDate = new Date(1900, 1, 1);
+          if (itemData && itemData.length > 0) {
+            itemData.forEach((data) => {
+              if (data[item.DateFieldToCheck] && new Date(data[item.DateFieldToCheck]) > latestUpdateDate) {
+                latestUpdateDate = new Date(data[item.DateFieldToCheck]);
+              }
+            });
+          }
+
+          // finally, compare the latestUpdatedDate to the dataset max date, and use the latter if it is more recent
+          if (datasetMaxUpdatedAt > latestUpdateDate) {
+            latestUpdateDate = datasetMaxUpdatedAt;
+          }
+
+          results.push({
+            EntityID: item.EntityID,
+            EntityName: item.Entity,
+            Code: item.Code,
+            Results: itemData,
+            LatestUpdateDate: latestUpdateDate,
+            Success: itemData !== null && itemData !== undefined,
+          });
+          
+          queryIndex++;
+        }
+      }  
 
       // determine overall success
       const bSuccess = results.every((result) => result.Success);
@@ -2119,19 +2186,36 @@ export class SQLServerDataProvider
     }
   }
 
-  protected async GetDatasetItem(item: any, itemFilters, datasetName): Promise<DatasetItemResultType> {
+
+  /**
+   * Constructs the SQL query for a dataset item.
+   * @param item - The dataset item metadata
+   * @param itemFilters - Optional filters to apply
+   * @param datasetName - Name of the dataset (for error logging)
+   * @returns The SQL query string, or null if columns are invalid
+   */
+  protected GetDatasetItemSQL(item: any, itemFilters: any, datasetName: string): string | null {
     let filterSQL = '';
     if (itemFilters && itemFilters.length > 0) {
       const filter = itemFilters.find((f) => f.ItemCode === item.Code);
       if (filter) filterSQL = (item.WhereClause ? ' AND ' : ' WHERE ') + '(' + filter.Filter + ')';
     }
 
+    const columns = this.GetColumnsForDatasetItem(item, datasetName);
+    if (!columns) {
+      return null; // Invalid columns
+    }
+
+    return `SELECT ${columns} FROM [${item.EntitySchemaName}].[${item.EntityBaseView}] ${item.WhereClause ? 'WHERE ' + item.WhereClause : ''}${filterSQL}`;
+  }
+
+  protected async GetDatasetItem(item: any, itemFilters, datasetName): Promise<DatasetItemResultType> {
     const itemUpdatedAt = new Date(item.DatasetItemUpdatedAt);
     const datasetUpdatedAt = new Date(item.DatasetUpdatedAt);
     const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime()));
 
-    const columns = this.GetColumnsForDatasetItem(item, datasetName);
-    if (!columns) {
+    const itemSQL = this.GetDatasetItemSQL(item, itemFilters, datasetName);
+    if (!itemSQL) {
       // failure condition within columns, return a failed result
       return {
         EntityID: item.EntityID,
@@ -2143,7 +2227,7 @@ export class SQLServerDataProvider
         Success: false,
       };
     }
-    const itemSQL = `SELECT ${columns} FROM [${item.EntitySchemaName}].[${item.EntityBaseView}] ${item.WhereClause ? 'WHERE ' + item.WhereClause : ''}${filterSQL}`;
+
     const itemData = await this.ExecuteSQL(itemSQL);
 
     // get the latest update date
@@ -2239,7 +2323,7 @@ export class SQLServerDataProvider
             ON
                 di.EntityID = e.ID
             WHERE
-                d.Name = @0`;
+                d.Name = @p0`;
 
     const items = await this.ExecuteSQL(sSQL, [datasetName]);
 
@@ -2322,6 +2406,7 @@ export class SQLServerDataProvider
       };
     }
   }
+
 
   protected async GetApplicationMetadata(): Promise<ApplicationInfo[]> {
     const apps = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwApplications`, null);
@@ -2480,9 +2565,9 @@ export class SQLServerDataProvider
               processedRow[field.Name] = new Date(fieldValue);
             }
           } else if (fieldValue instanceof Date) {
-            // TypeORM has already converted to a Date object using local timezone
+            // DB driver has already converted to a Date object using local timezone
             // We need to adjust it back to UTC
-            // SQL Server stores datetime2 as UTC, but TypeORM interprets it as local
+            // SQL Server stores datetime2 as UTC, but DB Driver interprets it as local
             const localDate = fieldValue;
             const timezoneOffsetMs = localDate.getTimezoneOffset() * 60 * 1000;
             const utcDate = new Date(localDate.getTime() + timezoneOffsetMs);
@@ -2529,13 +2614,44 @@ export class SQLServerDataProvider
    */
   public async ExecuteSQL(query: string, parameters: any = null): Promise<any> {
     try {
-      if (this._queryRunner) {
-        const data = await this._queryRunner.query(query, parameters);
-        return data;
+      let request: sql.Request;
+      
+      if (this._transaction && this._transactionRequest) {
+        // Use transaction request if in a transaction
+        request = this._transactionRequest;
+      } else if (this._transaction) {
+        // Create a new request for this transaction if we don't have one
+        request = new sql.Request(this._transaction);
       } else {
-        const data = await this._dataSource.query(query, parameters);
-        return data;
+        // Use pool request for non-transactional queries
+        request = new sql.Request(this._pool);
       }
+      
+      // Add parameters if provided
+      if (parameters) {
+        if (Array.isArray(parameters)) {
+          // Handle positional parameters (legacy TypeORM style)
+          // Convert to named parameters for mssql
+          parameters.forEach((value, index) => {
+            request.input(`p${index}`, value);
+          });
+          // Replace ? with @p0, @p1, etc. in the query
+          let paramIndex = 0;
+          query = query.replace(/\?/g, () => `@p${paramIndex++}`);
+        } else if (typeof parameters === 'object') {
+          // Handle named parameters
+          for (const [key, value] of Object.entries(parameters)) {
+            request.input(key, value);
+          }
+        }
+      }
+      
+      const result = await request.query(query);
+      // Return recordset for consistency with TypeORM behavior
+      // If multiple recordsets, return recordsets array
+      return result.recordsets && Array.isArray(result.recordsets) && result.recordsets.length > 1 
+        ? result.recordsets 
+        : result.recordset;
     } catch (e) {
       LogError(e);
       throw e; // force caller to handle
@@ -2543,8 +2659,124 @@ export class SQLServerDataProvider
   }
 
   /**
+   * Static helper method for executing SQL queries on an external connection pool.
+   * This method is designed to be used by generated code where a connection pool
+   * is passed in from the context. It returns results as arrays for consistency
+   * with the expected behavior in generated resolvers.
+   * 
+   * @param pool - The mssql ConnectionPool to execute the query on
+   * @param query - The SQL query to execute
+   * @param parameters - Optional parameters for the query
+   * @returns Promise<any[]> - Array of results (empty array if no results)
+   */
+  public static async ExecuteSQLWithPool(pool: sql.ConnectionPool, query: string, parameters?: any): Promise<any[]> {
+    try {
+      const request = new sql.Request(pool);
+      
+      // Add parameters if provided
+      if (parameters) {
+        if (Array.isArray(parameters)) {
+          // Handle positional parameters
+          parameters.forEach((value, index) => {
+            request.input(`p${index}`, value);
+          });
+          // Replace ? with @p0, @p1, etc. in the query
+          let paramIndex = 0;
+          query = query.replace(/\?/g, () => `@p${paramIndex++}`);
+        } else if (typeof parameters === 'object') {
+          // Handle named parameters
+          for (const [key, value] of Object.entries(parameters)) {
+            request.input(key, value);
+          }
+        }
+      }
+      
+      const result = await request.query(query);
+      // Always return array for consistency
+      return result.recordset || [];
+    } catch (e) {
+      LogError(e);
+      throw e;
+    }
+  }
+
+  /**
+   * Executes multiple SQL queries in a single batch for optimal performance.
+   * Returns an array of results, one for each query in the batch.
+   * 
+   * @param queries - Array of SQL queries to execute
+   * @param parameters - Optional array of parameter arrays, one for each query
+   * @returns Promise<any[][]> - Array of result arrays, one for each query
+   */
+  public async ExecuteSQLBatch(queries: string[], parameters?: any[][]): Promise<any[][]> {
+    try {
+      let request: sql.Request;
+      
+      if (this._transaction && this._transactionRequest) {
+        // Use transaction request if in a transaction
+        request = this._transactionRequest;
+      } else if (this._transaction) {
+        // Create a new request for this transaction if we don't have one
+        request = new sql.Request(this._transaction);
+      } else {
+        // Use pool request for non-transactional queries
+        request = new sql.Request(this._pool);
+      }
+      
+      // Build combined batch SQL
+      let batchSQL = '';
+      let paramIndex = 0;
+      
+      queries.forEach((query, queryIndex) => {
+        // Add parameters for this query if provided
+        if (parameters && parameters[queryIndex]) {
+          const queryParams = parameters[queryIndex];
+          if (Array.isArray(queryParams)) {
+            // Handle positional parameters
+            queryParams.forEach((value) => {
+              request.input(`p${paramIndex}`, value);
+              paramIndex++;
+            });
+            // Replace @p0, @p1, etc. with actual parameter names
+            let localParamIndex = paramIndex - queryParams.length;
+            query = query.replace(/@p(\d+)/g, () => `@p${localParamIndex++}`);
+          } else if (typeof queryParams === 'object') {
+            // Handle named parameters - prefix with query index to avoid conflicts
+            for (const [key, value] of Object.entries(queryParams)) {
+              const paramName = `q${queryIndex}_${key}`;
+              request.input(paramName, value);
+              // Replace parameter references in query
+              query = query.replace(new RegExp(`@${key}\\b`, 'g'), `@${paramName}`);
+            }
+          }
+        }
+        
+        batchSQL += query;
+        if (queryIndex < queries.length - 1) {
+          batchSQL += ';\n';
+        }
+      });
+      
+      const result = await request.query(batchSQL);
+      
+      // Return array of recordsets - one for each query
+      // Handle both single and multiple recordsets
+      if (result.recordsets && Array.isArray(result.recordsets)) {
+        return result.recordsets;
+      } else if (result.recordset) {
+        return [result.recordset];
+      } else {
+        return [];
+      }
+    } catch (e) {
+      LogError(e);
+      throw e;
+    }
+  }
+
+  /**
    * Determines whether the database driver requires adjustment for datetimeoffset fields.
-   * This method performs an empirical test on first use to detect if the driver (e.g., TypeORM)
+   * This method performs an empirical test on first use to detect if the driver (e.g., mssql)
    * incorrectly handles timezone information in datetimeoffset columns.
    * 
    * @returns {Promise<boolean>} True if datetimeoffset values need timezone adjustment, false otherwise
@@ -2630,9 +2862,12 @@ export class SQLServerDataProvider
 
   protected async BeginTransaction() {
     try {
-      if (!this._queryRunner) this._queryRunner = this._dataSource.createQueryRunner();
-
-      await this._queryRunner.startTransaction();
+      // Create a new transaction from the pool
+      this._transaction = new sql.Transaction(this._pool);
+      await this._transaction.begin();
+      
+      // Create a request for this transaction that can be reused
+      this._transactionRequest = new sql.Request(this._transaction);
     } catch (e) {
       LogError(e);
       throw e; // force caller to handle
@@ -2641,7 +2876,11 @@ export class SQLServerDataProvider
 
   protected async CommitTransaction() {
     try {
-      await this._queryRunner.commitTransaction();
+      if (this._transaction) {
+        await this._transaction.commit();
+        this._transaction = null;
+        this._transactionRequest = null;
+      }
     } catch (e) {
       LogError(e);
       throw e; // force caller to handle
@@ -2650,7 +2889,11 @@ export class SQLServerDataProvider
 
   protected async RollbackTransaction() {
     try {
-      await this._queryRunner.rollbackTransaction();
+      if (this._transaction) {
+        await this._transaction.rollback();
+        this._transaction = null;
+        this._transactionRequest = null;
+      }
     } catch (e) {
       LogError(e);
       throw e; // force caller to handle

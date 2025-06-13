@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Metadata } from '@memberjunction/core';
 import { AppContext, Arg, Ctx, Int, Query, Resolver, UserPayload } from '@memberjunction/server';
-import { DataSource } from 'typeorm';
 import { UserView_, UserViewResolverBase } from '../generated/generated.js';
 import { UserResolver } from './UserResolver.js';
 import { UserViewEntity, UserViewEntityExtended } from '@memberjunction/core-entities';

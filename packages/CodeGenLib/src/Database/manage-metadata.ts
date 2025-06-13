@@ -1,4 +1,4 @@
-import { DataSource } from "typeorm";
+import * as sql from 'mssql';
 import { configInfo, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
 import { ApplicationInfo, CodeNameFromString, EntityInfo, ExtractActualDefaultValue, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { logError, logMessage, logStatus } from "../Misc/status_logging";
@@ -66,17 +66,17 @@ export class ManageMetadataBase {
 
    /**
     * Primary function to manage metadata within the CodeGen system. This function will call a series of sub-functions to manage the metadata.
-    * @param ds - the DataSource object to use for querying and updating the database
+    * @param pool - the ConnectionPool object to use for querying and updating the database
     * @returns
     */
-   public async manageMetadata(ds: DataSource, currentUser: UserInfo): Promise<boolean> {
+   public async manageMetadata(pool: sql.ConnectionPool, currentUser: UserInfo): Promise<boolean> {
       const md = new Metadata();
       const excludeSchemas = configInfo.excludeSchemas ? configInfo.excludeSchemas : [];
 
       let bSuccess = true;
       let start = new Date();
       logStatus('   Creating new entities...');
-      if (! await this.createNewEntities(ds)) {
+      if (! await this.createNewEntities(pool)) {
          logError('   Error creating new entities');
          bSuccess = false;
       }
@@ -84,7 +84,7 @@ export class ManageMetadataBase {
 
       start = new Date();
       logStatus('   Updating existing entities...');
-      if (! await this.updateExistingEntitiesFromSchema(ds, excludeSchemas)) {
+      if (! await this.updateExistingEntitiesFromSchema(pool, excludeSchemas)) {
          logError('   Error updating existing entities');
          bSuccess = false;
       }
@@ -92,7 +92,7 @@ export class ManageMetadataBase {
 
       start = new Date();
       logStatus('   Scanning for tables that were deleted where entity metadata still exists...');
-      if (! await this.checkAndRemoveMetadataForDeletedTables(ds, excludeSchemas)) {
+      if (! await this.checkAndRemoveMetadataForDeletedTables(pool, excludeSchemas)) {
          logError('   Error removing metadata for tables that were removed');
          bSuccess = false;
       }
@@ -106,7 +106,7 @@ export class ManageMetadataBase {
       const schemasToExclude = getSettingValue('recompile_mj_views', true)
         ? excludeSchemas.filter((s) => s !== adminSchema)
         : excludeSchemas;
-      if (! await sqlUtility.recompileAllBaseViews(ds, schemasToExclude, true, ManageMetadataBase._newEntityList/*exclude the newly created entities from the above step the first time we run as those views don't exist yet*/)) {
+      if (! await sqlUtility.recompileAllBaseViews(pool, schemasToExclude, true, ManageMetadataBase._newEntityList/*exclude the newly created entities from the above step the first time we run as those views don't exist yet*/)) {
          logMessage('   Warning: Non-Fatal error recompiling base views', SeverityType.Warning, false);
          // many times the former versions of base views will NOT succesfully recompile, so don't consider that scenario to be a
          // failure for this entire function
@@ -114,24 +114,24 @@ export class ManageMetadataBase {
       logStatus(`    > Recompiled base views in ${(new Date().getTime() - start.getTime()) / 1000} seconds`);
       start = new Date();
       logStatus('   Managing entity fields...');
-      if (! await this.manageEntityFields(ds, excludeSchemas, false, false, currentUser)) {
+      if (! await this.manageEntityFields(pool, excludeSchemas, false, false, currentUser)) {
          logError('   Error managing entity fields');
          bSuccess = false;
       }
       logStatus(`    > Managed entity fields in ${(new Date().getTime() - start.getTime()) / 1000} seconds`);
       start = new Date();
       logStatus('   Managing entity relationships...');
-      if (! await this.manageEntityRelationships(ds, excludeSchemas, md)) {
+      if (! await this.manageEntityRelationships(pool, excludeSchemas, md)) {
          logError('   Error managing entity relationships');
          bSuccess = false;
       }
       logStatus(`    > Managed entity relationships in ${(new Date().getTime() - start.getTime()) / 1000} seconds`);
 
       if (ManageMetadataBase.newEntityList.length > 0) {
-         await this.generateNewEntityDescriptions(ds, md); // don't pass excludeSchemas becuase by definition this is the NEW entities we created
+         await this.generateNewEntityDescriptions(pool, md); // don't pass excludeSchemas becuase by definition this is the NEW entities we created
       }
 
-      const veResult = await this.manageVirtualEntities(ds)
+      const veResult = await this.manageVirtualEntities(pool)
       if (! veResult.success) {
          logError('   Error managing virtual entities');
          bSuccess = false;
@@ -140,18 +140,19 @@ export class ManageMetadataBase {
       return bSuccess;
    }
 
-   protected async manageVirtualEntities(ds: DataSource): Promise<{success: boolean, anyUpdates: boolean}> {
+   protected async manageVirtualEntities(pool: sql.ConnectionPool): Promise<{success: boolean, anyUpdates: boolean}> {
       let bSuccess = true;
       // virtual entities are records defined in the entity metadata and do NOT define a distinct base table
       // but they do specify a base view. We DO NOT generate a base view for a virtual entity, we simply use it to figure
       // out the fields that should be in the entity definition and add/update/delete the entity definition to match what's in the view when this runs
       const sql = `SELECT * FROM [${mj_core_schema()}].vwEntities WHERE VirtualEntity = 1`;
-      const virtualEntities = await ds.query(sql);
+      const virtualEntitiesResult = await pool.request().query(sql);
+      const virtualEntities = virtualEntitiesResult.recordset;
       let anyUpdates: boolean = false;
       if (virtualEntities && virtualEntities.length > 0) {
          // we have 1+ virtual entities, now loop through them and process each one
          for (const ve of virtualEntities) {
-            const {success, updatedEntity} = await this.manageSingleVirtualEntity(ds, ve);
+            const {success, updatedEntity} = await this.manageSingleVirtualEntity(pool, ve);
             anyUpdates = anyUpdates || updatedEntity;
             if (! success) {
                logError(`   Error managing virtual entity ${ve.Name}`);
@@ -162,7 +163,7 @@ export class ManageMetadataBase {
       return {success: bSuccess, anyUpdates: anyUpdates};
    }
 
-   protected async manageSingleVirtualEntity(ds: DataSource, virtualEntity: EntityInfo): Promise<{success: boolean, updatedEntity: boolean}> {
+   protected async manageSingleVirtualEntity(pool: sql.ConnectionPool, virtualEntity: EntityInfo): Promise<{success: boolean, updatedEntity: boolean}> {
       let bSuccess = true;
       let bUpdated = false;
       try {
@@ -181,7 +182,8 @@ export class ManageMetadataBase {
                            SCHEMA_NAME(v.schema_id) = '${virtualEntity.SchemaName}'
                         ORDER BY
                            c.column_id`;
-         const veFields = await ds.query(sql);
+         const veFieldsResult = await pool.request().query(sql);
+      const veFields = veFieldsResult.recordset;
          if (veFields && veFields.length > 0) {
             // we have 1+ fields, now loop through them and process each one
             // first though, remove any fields that are no longer in the view
@@ -197,7 +199,7 @@ export class ManageMetadataBase {
                if (removeList.length > 0) {
                   const sqlRemove = `DELETE FROM [${mj_core_schema()}].EntityField WHERE ID IN (${removeList.map(removeId => `'${removeId}'`).join(',')})`;
                   // this removes the fields that shouldn't be there anymore
-                  await this.LogSQLAndExecute(ds, sqlRemove, `SQL text to remove fields from entity ${virtualEntity.Name}`);
+                  await this.LogSQLAndExecute(pool, sqlRemove, `SQL text to remove fields from entity ${virtualEntity.Name}`);
                   bUpdated = true;
                }
 
@@ -208,7 +210,7 @@ export class ManageMetadataBase {
                // now create/update the fields that are in the view
                for (let i = 0; i < veFields.length; i++) {
                   const vef = veFields[i];
-                  const {success, updatedField} = await this.manageSingleVirtualEntityField(ds, virtualEntity, vef, i + 1, !hasPkey && i === 0);
+                  const {success, updatedField} = await this.manageSingleVirtualEntityField(pool, virtualEntity, vef, i + 1, !hasPkey && i === 0);
                   bUpdated = bUpdated || updatedField;
                   if (!success) {
                      logError(`Error managing virtual entity field ${vef.FieldName} for virtual entity ${virtualEntity.Name}`);
@@ -221,7 +223,7 @@ export class ManageMetadataBase {
          if (bUpdated) {
             // finally make sure we update the UpdatedAt field for the entity if we made changes to its fields
             const sqlUpdate = `UPDATE [${mj_core_schema()}].Entity SET [${EntityInfo.UpdatedAtFieldName}]=GETUTCDATE() WHERE ID='${virtualEntity.ID}'`;
-            await this.LogSQLAndExecute(ds, sqlUpdate, `SQL text to update virtual entity updated date for ${virtualEntity.Name}`);
+            await this.LogSQLAndExecute(pool, sqlUpdate, `SQL text to update virtual entity updated date for ${virtualEntity.Name}`);
          }
 
          return {success: bSuccess, updatedEntity: bUpdated};
@@ -232,7 +234,7 @@ export class ManageMetadataBase {
       }
    }
 
-   protected async manageSingleVirtualEntityField(ds: DataSource, virtualEntity: any, veField: any, fieldSequence: number, makePrimaryKey: boolean): Promise<{success: boolean, updatedField: boolean, newFieldID: string | null}> {
+   protected async manageSingleVirtualEntityField(pool: sql.ConnectionPool, virtualEntity: any, veField: any, fieldSequence: number, makePrimaryKey: boolean): Promise<{success: boolean, updatedField: boolean, newFieldID: string | null}> {
       // this protected checks to see if the field exists in the entity definition, and if not, adds it
       // if it exist it updates the entity field to match the view's data type and nullability attributes
 
@@ -266,7 +268,7 @@ export class ManageMetadataBase {
                                   WHERE
                                     ID = '${field.ID}'`; // don't need to update the __mj_UpdatedAt field here, that happens automatically via the trigger
 
-               await this.LogSQLAndExecute(ds, sqlUpdate, `SQL text to update virtual entity field ${veField.FieldName} for entity ${virtualEntity.Name}`);
+               await this.LogSQLAndExecute(pool, sqlUpdate, `SQL text to update virtual entity field ${veField.FieldName} for entity ${virtualEntity.Name}`);
                didUpdate = true;
             }
          }
@@ -281,7 +283,7 @@ export class ManageMetadataBase {
                                        ${veField.Length}, ${veField.Precision}, ${veField.Scale},
                                        ${fieldSequence}, ${makePrimaryKey ? 1 : 0}, ${makePrimaryKey ? 1 : 0}
                                     )`;
-            await this.LogSQLAndExecute(ds, sqlAdd, `SQL text to add virtual entity field ${veField.FieldName} for entity ${virtualEntity.Name}`);
+            await this.LogSQLAndExecute(pool, sqlAdd, `SQL text to add virtual entity field ${veField.FieldName} for entity ${virtualEntity.Name}`);
             didUpdate = true;
          }
       }
@@ -291,26 +293,26 @@ export class ManageMetadataBase {
 
    /**
     * This method creates and updates relationships in the metadata based on foreign key relationships in the database.
-    * @param ds
+    * @param pool
     * @param excludeSchemas - specify any schemas to exclude here and any relationships to/from the specified schemas will be ignored
     * @param md
     * @returns
     */
-   protected async manageEntityRelationships(ds: DataSource, excludeSchemas: string[], md: Metadata, batchItems: number = 5): Promise<boolean> {
+   protected async manageEntityRelationships(pool: sql.ConnectionPool, excludeSchemas: string[], md: Metadata, batchItems: number = 5): Promise<boolean> {
       let bResult: boolean = true;
-      bResult = bResult && await this.manageManyToManyEntityRelationships(ds, excludeSchemas, batchItems);
-      bResult = bResult && await this.manageOneToManyEntityRelationships(ds, excludeSchemas, md, batchItems);
+      bResult = bResult && await this.manageManyToManyEntityRelationships(pool, excludeSchemas, batchItems);
+      bResult = bResult && await this.manageOneToManyEntityRelationships(pool, excludeSchemas, md, batchItems);
       return bResult;
    }
 
    /**
     * Manages 1->M relationships between entities in the metadata based on foreign key relationships in the database.
-    * @param ds
+    * @param pool
     * @param excludeSchemas - specify any schemas to exclude here and any relationships to/from the specified schemas will be ignored
     * @param md
     * @returns
     */
-   protected async manageOneToManyEntityRelationships(ds: DataSource, excludeSchemas: string[],  md: Metadata, batchItems: number = 5): Promise<boolean> {
+   protected async manageOneToManyEntityRelationships(pool: sql.ConnectionPool, excludeSchemas: string[],  md: Metadata, batchItems: number = 5): Promise<boolean> {
       // the way this works is that we look for entities in our catalog and we look for
       // foreign keys in those entities. For example, if we saw an entity called Persons and that entity
       // had a foreign key linking to an entity called Organizations via a field called OrganizationID, then we would create a relationship
@@ -333,11 +335,13 @@ export class ManageMetadataBase {
                              IsVirtual = 0 AND
                              EntityID NOT IN (SELECT ID FROM ${mj_core_schema()}.Entity WHERE SchemaName IN (${excludeSchemas.map(s => `'${s}'`).join(',')}))
                        ORDER BY RelatedEntityID`;
-         const entityFields = await ds.query(sSQL);
+         const entityFieldsResult = await pool.request().query(sSQL);
+      const entityFields = entityFieldsResult.recordset;
 
          // Get the relationship counts for each entity
          const sSQLRelationshipCount = `SELECT EntityID, COUNT(*) AS Count FROM ${mj_core_schema()}.EntityRelationship GROUP BY EntityID`;
-         const relationshipCounts = await ds.query(sSQLRelationshipCount);
+         const relationshipCountsResult = await pool.request().query(sSQLRelationshipCount);
+      const relationshipCounts = relationshipCountsResult.recordset;
 
          const relationshipCountMap = new Map<number, number>();
          for (const rc of relationshipCounts) {
@@ -346,7 +350,8 @@ export class ManageMetadataBase {
 
          // get all relationships in one query for performance improvement
          const sSQLRelationship = `SELECT * FROM ${mj_core_schema()}.EntityRelationship`;
-         const allRelationships = await ds.query(sSQLRelationship);
+         const allRelationshipsResult = await pool.request().query(sSQLRelationship);
+      const allRelationships = allRelationshipsResult.recordset;
 
 
          // Function to process a batch of entity fields
@@ -379,7 +384,7 @@ export class ManageMetadataBase {
             });
 
             if (batchSQL.length > 0){
-               await this.LogSQLAndExecute(ds, batchSQL, `SQL text to create Entitiy Relationships`);
+               await this.LogSQLAndExecute(pool, batchSQL, `SQL text to create Entitiy Relationships`);
             }
          };
 
@@ -404,10 +409,11 @@ export class ManageMetadataBase {
     * @param ds
     * @param excludeSchemas
     */
-   protected async checkAndRemoveMetadataForDeletedTables(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
+   protected async checkAndRemoveMetadataForDeletedTables(pool: sql.ConnectionPool, excludeSchemas: string[]): Promise<boolean> {
       try {
          const sql = `SELECT * FROM ${mj_core_schema()}.vwEntitiesWithMissingBaseTables WHERE VirtualEntity=0`
-         const entities = <EntityInfo[]>await ds.query(sql);
+         const entitiesResult = await pool.request().query(sql);
+         const entities = <EntityInfo[]>entitiesResult.recordset;
          if (entities && entities.length > 0) {
             for (const e of entities) {
                // for the given entity, wipe out the entity metadata and its core deps.
@@ -415,16 +421,16 @@ export class ManageMetadataBase {
                // for the admin to handle manually
                try {
                   const sqlDelete = `__mj.spDeleteEntityWithCoreDependencies @EntityID='${e.ID}'`;
-                  await this.LogSQLAndExecute(ds, sqlDelete, `SQL text to remove entity ${e.Name}`);
+                  await this.LogSQLAndExecute(pool, sqlDelete, `SQL text to remove entity ${e.Name}`);
                   logStatus(`      > Removed metadata for table ${e.SchemaName}.${e.BaseTable}`);
 
                   // next up we need to remove the spCreate, spDelete, spUpdate, BaseView, and FullTextSearchFunction, if provided.
                   // We only remoe these artifcacts when they are generated which is info we have in the BaseViewGenerated, spCreateGenerated, etc. fields
-                  await this.checkDropSQLObject(ds, e.BaseViewGenerated, 'view', e.SchemaName, e.BaseView);
-                  await this.checkDropSQLObject(ds, e.spCreateGenerated, 'procedure', e.SchemaName, e.spCreate ? e.spCreate : `spCreate${e.ClassName}`);
-                  await this.checkDropSQLObject(ds, e.spDeleteGenerated, 'procedure', e.SchemaName, e.spDelete ? e.spDelete : `spDelete${e.ClassName}`);
-                  await this.checkDropSQLObject(ds, e.spUpdateGenerated, 'procedure', e.SchemaName, e.spUpdate ? e.spUpdate : `spUpdate${e.ClassName}`);
-                  await this.checkDropSQLObject(ds, e.FullTextSearchFunctionGenerated, 'function', e.SchemaName, e.FullTextSearchFunction);
+                  await this.checkDropSQLObject(pool, e.BaseViewGenerated, 'view', e.SchemaName, e.BaseView);
+                  await this.checkDropSQLObject(pool, e.spCreateGenerated, 'procedure', e.SchemaName, e.spCreate ? e.spCreate : `spCreate${e.ClassName}`);
+                  await this.checkDropSQLObject(pool, e.spDeleteGenerated, 'procedure', e.SchemaName, e.spDelete ? e.spDelete : `spDelete${e.ClassName}`);
+                  await this.checkDropSQLObject(pool, e.spUpdateGenerated, 'procedure', e.SchemaName, e.spUpdate ? e.spUpdate : `spUpdate${e.ClassName}`);
+                  await this.checkDropSQLObject(pool, e.FullTextSearchFunctionGenerated, 'function', e.SchemaName, e.FullTextSearchFunction);
                }
                catch (ex) {
                   logError(`Error removing metadata for entity ${(ex as any).Name}, error: ${ex}`);
@@ -443,11 +449,11 @@ export class ManageMetadataBase {
       }
    }
 
-   protected async checkDropSQLObject(ds: DataSource, proceed: boolean, type: 'procedure' | 'view' | 'function', schemaName: string, name: string) {
+   protected async checkDropSQLObject(pool: sql.ConnectionPool, proceed: boolean, type: 'procedure' | 'view' | 'function', schemaName: string, name: string) {
       try {
          if (proceed && schemaName && name && schemaName.trim().length > 0 && name.trim().length > 0) {
             const sqlDelete = `DROP ${type} IF EXISTS [${schemaName}].[${name}]`;
-            await this.LogSQLAndExecute(ds, sqlDelete, `SQL text to remove ${type} ${schemaName}.${name}`);
+            await this.LogSQLAndExecute(pool, sqlDelete, `SQL text to remove ${type} ${schemaName}.${name}`);
 
             // next up, we need to clean up the cache of saved DB objects that may exist for this entity in the appropriate sub-directory.
             const sqlOutputDir = outputDir('SQL', true);
@@ -481,23 +487,23 @@ export class ManageMetadataBase {
     * @param excludeSchemas
     * @returns
     */
-   protected async manageManyToManyEntityRelationships(ds: DataSource, excludeSchemas: string[], batchItems: number = 5): Promise<boolean> {
+   protected async manageManyToManyEntityRelationships(pool: sql.ConnectionPool, excludeSchemas: string[], batchItems: number = 5): Promise<boolean> {
       return true; // not implemented for now, require the admin to manually create these relationships
    }
 
    /**
     * Manages the creation, updating and deletion of entity field records in the metadata based on the database schema.
-    * @param ds
+    * @param pool
     * @param excludeSchemas
     * @returns
     */
-   public async manageEntityFields(ds: DataSource, excludeSchemas: string[], skipCreatedAtUpdatedAtDeletedAtFieldValidation: boolean, skipEntityFieldValues: boolean, currentUser: UserInfo): Promise<boolean> {
+   public async manageEntityFields(pool: sql.ConnectionPool, excludeSchemas: string[], skipCreatedAtUpdatedAtDeletedAtFieldValidation: boolean, skipEntityFieldValues: boolean, currentUser: UserInfo): Promise<boolean> {
       let bSuccess = true;
       const startTime: Date = new Date();
 
       if (!skipCreatedAtUpdatedAtDeletedAtFieldValidation) {
-         if (!await this.ensureCreatedAtUpdatedAtFieldsExist(ds, excludeSchemas) ||
-             !await this.ensureDeletedAtFieldsExist(ds, excludeSchemas)) {
+         if (!await this.ensureCreatedAtUpdatedAtFieldsExist(pool, excludeSchemas) ||
+             !await this.ensureDeletedAtFieldsExist(pool, excludeSchemas)) {
             logError (`Error ensuring ${EntityInfo.CreatedAtFieldName}, ${EntityInfo.UpdatedAtFieldName} and ${EntityInfo.DeletedAtFieldName} fields exist`);
             bSuccess = false;
          }
@@ -505,35 +511,35 @@ export class ManageMetadataBase {
       }
 
       const step1StartTime: Date = new Date();
-      if (! await this.deleteUnneededEntityFields(ds, excludeSchemas)) {
+      if (! await this.deleteUnneededEntityFields(pool, excludeSchemas)) {
          logError ('Error deleting unneeded entity fields');
          bSuccess = false;
       }
       logStatus(`      Deleted unneeded entity fields in ${(new Date().getTime() - step1StartTime.getTime()) / 1000} seconds`);
 
       const step2StartTime: Date = new Date();
-      if (! await this.updateExistingEntityFieldsFromSchema(ds, excludeSchemas)) {
+      if (! await this.updateExistingEntityFieldsFromSchema(pool, excludeSchemas)) {
          logError ('Error updating existing entity fields from schema')
          bSuccess = false;
       }
       logStatus(`      Updated existing entity fields from schema in ${(new Date().getTime() - step2StartTime.getTime()) / 1000} seconds`);
 
       const step3StartTime: Date = new Date();
-      if (! await this.createNewEntityFieldsFromSchema(ds)) { // has its own internal filtering for exclude schema/table so don't pass in
+      if (! await this.createNewEntityFieldsFromSchema(pool)) { // has its own internal filtering for exclude schema/table so don't pass in
          logError ('Error creating new entity fields from schema')
          bSuccess = false;
       }
       logStatus(`      Created new entity fields from schema in ${(new Date().getTime() - step3StartTime.getTime()) / 1000} seconds`);
 
       const step4StartTime: Date = new Date();
-      if (! await this.setDefaultColumnWidthWhereNeeded(ds, excludeSchemas)) {
+      if (! await this.setDefaultColumnWidthWhereNeeded(pool, excludeSchemas)) {
          logError ('Error setting default column width where needed')
          bSuccess = false;
       }
       logStatus(`      Set default column width where needed in ${(new Date().getTime() - step4StartTime.getTime()) / 1000} seconds`);
 
       const step5StartTime: Date = new Date();
-      if (! await this.updateEntityFieldDisplayNameWhereNull(ds, excludeSchemas)) {
+      if (! await this.updateEntityFieldDisplayNameWhereNull(pool, excludeSchemas)) {
          logError('Error updating entity field display name where null');
          bSuccess = false;
       }
@@ -542,7 +548,7 @@ export class ManageMetadataBase {
       if (!skipEntityFieldValues) {
          const step6StartTime: Date = new Date();
          logStatus(`      Starting to manage entity field values...`);
-         if (! await this.manageEntityFieldValuesAndValidatorFunctions(ds, excludeSchemas, currentUser, false)) {
+         if (! await this.manageEntityFieldValuesAndValidatorFunctions(pool, excludeSchemas, currentUser, false)) {
             logError('Error managing entity field values');
             bSuccess = false;
          }
@@ -558,7 +564,7 @@ export class ManageMetadataBase {
    /**
     * This method ensures that the __mj_DeletedAt field exists in each entity that has DeleteType=Soft. If the field does not exist, it is created.
     */
-   protected async ensureDeletedAtFieldsExist(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
+   protected async ensureDeletedAtFieldsExist(pool: sql.ConnectionPool, excludeSchemas: string[]): Promise<boolean> {
       try {
          const sqlEntities = `SELECT
                                  *
@@ -568,7 +574,8 @@ export class ManageMetadataBase {
                                  VirtualEntity=0 AND
                                  DeleteType='Soft' AND
                                  SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
-         const entities = await ds.query(sqlEntities);
+         const entitiesResult = await pool.request().query(sqlEntities);
+      const entities = entitiesResult.recordset;
          let overallResult = true;
          if (entities.length > 0) {
             // we have 1+ entities that need the special fields, so loop through them and ensure the fields exist
@@ -578,14 +585,15 @@ export class ManageMetadataBase {
                          WHERE
                          ${entities.map((e: { SchemaName: any; BaseTable: any; }) => `(TABLE_SCHEMA='${e.SchemaName}' AND TABLE_NAME='${e.BaseTable}')`).join(' OR ')}
                          AND COLUMN_NAME='${EntityInfo.DeletedAtFieldName}'`
-            const result = await ds.query(sql);
+            const resultResult = await pool.request().query(sql);
+      const result = resultResult.recordset;
 
             for (const e of entities) {
                const eResult = result.filter((r: { TABLE_NAME: any; TABLE_SCHEMA: any; }) => r.TABLE_NAME === e.BaseTable && r.TABLE_SCHEMA === e.SchemaName); // get just the fields for this entity
                const deletedAt = eResult.find((r: { COLUMN_NAME: string; }) => r.COLUMN_NAME.trim().toLowerCase() === EntityInfo.DeletedAtFieldName.trim().toLowerCase());
 
                // now, if we have the fields, we need to check the default value and update if necessary
-               const fieldResult = await this.ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(ds, e, EntityInfo.DeletedAtFieldName, deletedAt, true)
+               const fieldResult = await this.ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(pool, e, EntityInfo.DeletedAtFieldName, deletedAt, true)
 
                overallResult = overallResult && fieldResult;
             }
@@ -602,9 +610,9 @@ export class ManageMetadataBase {
     * This method ensures that the __mj_CreatedAt and __mj_UpdatedAt fields exist in each entity that has TrackRecordChanges set to true. If the fields do not exist, they are created.
     * If the fields exist but have incorrect default values, the default values are updated. The default value that is to be used for these special fields is GETUTCDATE() which is the
     * UTC date and time. This method is called as part of the manageEntityFields method and is not intended to be called directly.
-    * @param ds
+    * @param pool
     */
-   protected async ensureCreatedAtUpdatedAtFieldsExist(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
+   protected async ensureCreatedAtUpdatedAtFieldsExist(pool: sql.ConnectionPool, excludeSchemas: string[]): Promise<boolean> {
       try {
          const sqlEntities = `SELECT
                                  *
@@ -614,7 +622,8 @@ export class ManageMetadataBase {
                                  VirtualEntity = 0 AND
                                  TrackRecordChanges = 1 AND
                                  SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
-         const entities = await ds.query(sqlEntities);
+         const entitiesResult = await pool.request().query(sqlEntities);
+      const entities = entitiesResult.recordset;
          let overallResult = true;
          if (entities.length > 0) {
             // we have 1+ entities that need the special fields, so loop through them and ensure the fields exist
@@ -625,7 +634,8 @@ export class ManageMetadataBase {
                                        WHERE
                                           ${entities.map((e: { SchemaName: any; BaseTable: any; }) => `(TABLE_SCHEMA='${e.SchemaName}' AND TABLE_NAME='${e.BaseTable}')`).join(' OR ')}
                                        AND COLUMN_NAME IN ('${EntityInfo.CreatedAtFieldName}','${EntityInfo.UpdatedAtFieldName}')`
-            const result = await ds.query(sqlCreatedUpdated);
+            const resultResult = await pool.request().query(sqlCreatedUpdated);
+      const result = resultResult.recordset;
             for (const e of entities) {
                // result has both created at and updated at fields, so filter on the result for each and do what we need to based on that
                const eResult = result.filter((r: { TABLE_NAME: any; TABLE_SCHEMA: any; }) => r.TABLE_NAME === e.BaseTable && r.TABLE_SCHEMA === e.SchemaName); // get just the fields for this entity
@@ -633,8 +643,8 @@ export class ManageMetadataBase {
                const updatedAt = eResult.find((r: { COLUMN_NAME: string; }) => r.COLUMN_NAME.trim().toLowerCase() === EntityInfo.UpdatedAtFieldName.trim().toLowerCase());
 
                // now, if we have the fields, we need to check the default value and update if necessary
-               const fieldResult = await this.ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(ds, e, EntityInfo.CreatedAtFieldName, createdAt, false) &&
-                                   await this.ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(ds, e, EntityInfo.UpdatedAtFieldName, updatedAt, false);
+               const fieldResult = await this.ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(pool, e, EntityInfo.CreatedAtFieldName, createdAt, false) &&
+                                   await this.ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(pool, e, EntityInfo.UpdatedAtFieldName, updatedAt, false);
 
                overallResult = overallResult && fieldResult;
             }
@@ -654,12 +664,12 @@ export class ManageMetadataBase {
     * @param fieldName
     * @param currentFieldData
     */
-   protected async ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(ds: DataSource, entity: any, fieldName: string, currentFieldData: any, allowNull: boolean): Promise<boolean> {
+   protected async ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(pool: sql.ConnectionPool, entity: any, fieldName: string, currentFieldData: any, allowNull: boolean): Promise<boolean> {
       try {
          if (!currentFieldData) {
             // field doesn't exist, let's create it
             const sql = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ADD ${fieldName} DATETIMEOFFSET ${allowNull ? 'NULL' : 'NOT NULL DEFAULT GETUTCDATE()'}`;
-            await this.LogSQLAndExecute(ds, sql, `SQL text to add special date field ${fieldName} to entity ${entity.SchemaName}.${entity.BaseTable}`);
+            await this.LogSQLAndExecute(pool, sql, `SQL text to add special date field ${fieldName} to entity ${entity.SchemaName}.${entity.BaseTable}`);
          }
          else {
             // field does exist, let's first check the data type/nullability
@@ -668,13 +678,13 @@ export class ManageMetadataBase {
                 (currentFieldData.IS_NULLABLE.trim().toLowerCase() === 'no' && allowNull)) {
                // the column is the wrong type, or has wrong nullability attribute, so let's update it, first removing the default constraint, then
                // modifying the column, and finally adding the default constraint back in.
-               await this.dropExistingDefaultConstraint(ds, entity, fieldName);
+               await this.dropExistingDefaultConstraint(pool, entity, fieldName);
 
                const sql = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ALTER COLUMN ${fieldName} DATETIMEOFFSET ${allowNull ? 'NULL' : 'NOT NULL'}`;
-               await this.LogSQLAndExecute(ds, sql, `SQL text to update special date field ${fieldName} in entity ${entity.SchemaName}.${entity.BaseTable}`);
+               await this.LogSQLAndExecute(pool, sql, `SQL text to update special date field ${fieldName} in entity ${entity.SchemaName}.${entity.BaseTable}`);
 
                if (!allowNull)
-                  await this.createDefaultConstraintForSpecialDateField(ds, entity, fieldName);
+                  await this.createDefaultConstraintForSpecialDateField(pool, entity, fieldName);
             }
             else {
                // if we get here that means the column is the correct type and nullability, so now let's check the default value, but we only do that if we are dealing with a
@@ -683,7 +693,7 @@ export class ManageMetadataBase {
                   const defaultValue = currentFieldData.COLUMN_DEFAULT;
                   const realDefaultValue = ExtractActualDefaultValue(defaultValue);
                   if (!realDefaultValue || realDefaultValue.trim().toLowerCase() !== 'getutcdate()') {
-                     await this.dropAndCreateDefaultConstraintForSpecialDateField(ds, entity, fieldName);
+                     await this.dropAndCreateDefaultConstraintForSpecialDateField(pool, entity, fieldName);
                   }
                }
             }
@@ -700,10 +710,10 @@ export class ManageMetadataBase {
    /**
     * Creates the default constraint for a special date field. This method is called as part of the ensureSpecialDateFieldExistsAndHasCorrectDefaultValue method and is not intended to be called directly.
     */
-   protected async createDefaultConstraintForSpecialDateField(ds: DataSource, entity: any, fieldName: string) {
+   protected async createDefaultConstraintForSpecialDateField(pool: sql.ConnectionPool, entity: any, fieldName: string) {
       try {
          const sqlAddDefaultConstraint = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ADD CONSTRAINT DF_${entity.SchemaName}_${CodeNameFromString(entity.BaseTable)}_${fieldName} DEFAULT GETUTCDATE() FOR [${fieldName}]`;
-         await this.LogSQLAndExecute(ds, sqlAddDefaultConstraint, `SQL text to add default constraint for special date field ${fieldName} in entity ${entity.SchemaName}.${entity.BaseTable}`);
+         await this.LogSQLAndExecute(pool, sqlAddDefaultConstraint, `SQL text to add default constraint for special date field ${fieldName} in entity ${entity.SchemaName}.${entity.BaseTable}`);
       }
       catch (e) {
          logError(e as string);
@@ -716,19 +726,19 @@ export class ManageMetadataBase {
     * @param entity
     * @param fieldName
     */
-   protected async dropAndCreateDefaultConstraintForSpecialDateField(ds: DataSource, entity: any, fieldName: string) {
+   protected async dropAndCreateDefaultConstraintForSpecialDateField(pool: sql.ConnectionPool, entity: any, fieldName: string) {
       // default value is not correct, so let's update it
-      await this.dropExistingDefaultConstraint(ds, entity, fieldName);
-      await this.createDefaultConstraintForSpecialDateField(ds, entity, fieldName);
+      await this.dropExistingDefaultConstraint(pool, entity, fieldName);
+      await this.createDefaultConstraintForSpecialDateField(pool, entity, fieldName);
    }
 
    /**
     * Drops an existing default constraint from a given column within a given entity, if it exists
-    * @param ds
+    * @param pool
     * @param entity
     * @param fieldName
     */
-   protected async dropExistingDefaultConstraint(ds: DataSource, entity: any, fieldName: string) {
+   protected async dropExistingDefaultConstraint(pool: sql.ConnectionPool, entity: any, fieldName: string) {
       try {
          const sqlDropDefaultConstraint = `
          DECLARE @constraintName NVARCHAR(255);
@@ -749,7 +759,7 @@ export class ManageMetadataBase {
             EXEC('ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] DROP CONSTRAINT ' + @constraintName);
          END
          `;
-         await this.LogSQLAndExecute(ds, sqlDropDefaultConstraint, `SQL text to drop default existing default constraints in entity ${entity.SchemaName}.${entity.BaseTable}`);
+         await this.LogSQLAndExecute(pool, sqlDropDefaultConstraint, `SQL text to drop default existing default constraints in entity ${entity.SchemaName}.${entity.BaseTable}`);
       }
       catch (e) {
          logError(e as string);
@@ -760,10 +770,10 @@ export class ManageMetadataBase {
    /**
     * This method generates descriptions for entities in teh system where there is no existing description. This is an experimental feature and is done using AI. In order for it
     * to be invoked, the EntityDescriptions feature must be enabled in the Advanced Generation configuration.
-    * @param ds
+    * @param pool
     * @param md
     */
-   protected async generateNewEntityDescriptions(ds: DataSource, md: Metadata) {
+   protected async generateNewEntityDescriptions(pool: sql.ConnectionPool, md: Metadata) {
       // for the list of new entities, go through and attempt to generate new entity descriptions
       const ag = new AdvancedGeneration();
       if (ag.featureEnabled('EntityDescriptions')) {
@@ -774,8 +784,10 @@ export class ManageMetadataBase {
          const userMessage = prompt.userMessage + '\n\n';
          // now loop through the new entities and generate descriptions for them
          for (let e of ManageMetadataBase.newEntityList) {
-            const data = await ds.query(`SELECT * FROM [${mj_core_schema()}].vwEntities WHERE Name = '${e}'`);
-            const fields = await ds.query(`SELECT * FROM [${mj_core_schema()}].vwEntityFields WHERE EntityID='${data[0].ID}'`);
+            const dataResult = await pool.request().query(`SELECT * FROM [${mj_core_schema()}].vwEntities WHERE Name = '${e}'`);
+      const data = dataResult.recordset;
+            const fieldsResult = await pool.request().query(`SELECT * FROM [${mj_core_schema()}].vwEntityFields WHERE EntityID='${data[0].ID}'`);
+      const fields = fieldsResult.recordset;
             const entityUserMessage = userMessage + `Entity Name: ${e},
                                                      Base Table: ${data[0].BaseTable},
                                                      Schema: ${data[0].SchemaName}.
@@ -800,7 +812,7 @@ export class ManageMetadataBase {
                   const structuredResult: EntityDescriptionResult = JSON.parse(resultText);
                   if (structuredResult?.entityDescription && structuredResult.entityDescription.length > 0) {
                      const sSQL = `UPDATE [${mj_core_schema()}].Entity SET Description = '${structuredResult.entityDescription}' WHERE Name = '${e}'`;
-                     await this.LogSQLAndExecute(ds, sSQL, `SQL text to update entity description for entity ${e}`);
+                     await this.LogSQLAndExecute(pool, sSQL, `SQL text to update entity description for entity ${e}`);
                   }
                   else {
                      console.warn('   >>> Advanced Generation Error: LLM returned a blank entity description, skipping entity description for entity ' + e);
@@ -825,7 +837,7 @@ export class ManageMetadataBase {
     * @param excludeSchemas
     * @returns
     */
-   protected async updateEntityFieldDisplayNameWhereNull(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
+   protected async updateEntityFieldDisplayNameWhereNull(pool: sql.ConnectionPool, excludeSchemas: string[]): Promise<boolean> {
       try   {
          const sql = `SELECT
                         ef.ID, ef.Name
@@ -841,13 +853,14 @@ export class ManageMetadataBase {
                         ef.Name <> \'ID\' AND
                         e.SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})
                         `
-         const fields = await ds.query(sql)
+         const fieldsResult = await pool.request().query(sql)
+         const fields = fieldsResult.recordset;
          if (fields && fields.length > 0)
             for (const field of fields) {
                const sDisplayName = stripTrailingChars(convertCamelCaseToHaveSpaces(field.Name), 'ID', true).trim()
                if (sDisplayName.length > 0 && sDisplayName.toLowerCase().trim() !== field.Name.toLowerCase().trim()) {
                   const sSQL = `UPDATE [${mj_core_schema()}].EntityField SET ${EntityInfo.UpdatedAtFieldName}=GETUTCDATE(), DisplayName = '${sDisplayName}' WHERE ID = '${field.ID}'`
-                  await this.LogSQLAndExecute(ds, sSQL, `SQL text to update display name for field ${field.Name}`);
+                  await this.LogSQLAndExecute(pool, sSQL, `SQL text to update display name for field ${field.Name}`);
                }
             }
 
@@ -863,14 +876,14 @@ export class ManageMetadataBase {
     * This method updates the DefaultColumnWidth field in the EntityField metadata. The default logic uses a stored procedure called spSetDefaultColumnWidthWhereNeeded
     * which is part of the MJ Core Schema. You can override this method to implement custom logic for setting default column widths. It is NOT recommended to
     * modify the stored procedure in the MJ Core Schema because your changes will be overriden during a future upgrade.
-    * @param ds
+    * @param pool
     * @param excludeSchemas
     * @returns
     */
-   protected async setDefaultColumnWidthWhereNeeded(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
+   protected async setDefaultColumnWidthWhereNeeded(pool: sql.ConnectionPool, excludeSchemas: string[]): Promise<boolean> {
       try   {
          const sSQL = `EXEC ${mj_core_schema()}.spSetDefaultColumnWidthWhereNeeded @ExcludedSchemaNames='${excludeSchemas.join(',')}'`
-         await this.LogSQLAndExecute(ds, sSQL, `SQL text to set default column width where needed`, true);
+         await this.LogSQLAndExecute(pool, sSQL, `SQL text to set default column width where needed`, true);
          return true;
       }
       catch (e) {
@@ -1099,11 +1112,14 @@ export class ManageMetadataBase {
       return sResult;
    }
 
-   protected async createNewEntityFieldsFromSchema(ds: DataSource): Promise<boolean> {
+   protected async createNewEntityFieldsFromSchema(pool: sql.ConnectionPool): Promise<boolean> {
       try   {
          const sSQL = this.getPendingEntityFieldsSELECTSQL();
-         const newEntityFields = await ds.query(sSQL);
-         await ds.transaction(async () => {
+         const newEntityFieldsResult = await pool.request().query(sSQL);
+      const newEntityFields = newEntityFieldsResult.recordset;
+         const transaction = new sql.Transaction(pool);
+         await transaction.begin();
+         try {
             // wrap in a transaction so we get all of it or none of it
             for (let i = 0; i < newEntityFields.length; ++i) {
                const n = newEntityFields[i];
@@ -1113,7 +1129,7 @@ export class ManageMetadataBase {
                   const newEntityFieldUUID = this.createNewUUID();
                   const sSQLInsert = this.getPendingEntityFieldINSERTSQL(newEntityFieldUUID, n);
                   try {
-                     await this.LogSQLAndExecute(ds, sSQLInsert, `SQL text to insert new entity field`);
+                     await this.LogSQLAndExecute(pool, sSQLInsert, `SQL text to insert new entity field`);
                      // if we get here, we're okay, otherwise we have an exception, which we want as it blows up transaction
                   }
                   catch (e) {
@@ -1123,7 +1139,11 @@ export class ManageMetadataBase {
                   }
                }
             }
-         });
+            await transaction.commit();
+         } catch (e) {
+            await transaction.rollback();
+            throw e;
+         }
 
          // if we get here now send a distinct list of the entities that had new fields to the modified entity list
          // column in the resultset is called EntityName, we dont have to dedupe them here because the method below
@@ -1145,13 +1165,13 @@ export class ManageMetadataBase {
     * @param relatedEntityNameFieldMap
     * @returns
     */
-   public async updateEntityFieldRelatedEntityNameFieldMap(ds: DataSource, entityFieldID: string, relatedEntityNameFieldMap: string): Promise<boolean> {
+   public async updateEntityFieldRelatedEntityNameFieldMap(pool: sql.ConnectionPool, entityFieldID: string, relatedEntityNameFieldMap: string): Promise<boolean> {
       try   {
          const sSQL = `EXEC [${mj_core_schema()}].spUpdateEntityFieldRelatedEntityNameFieldMap
          @EntityFieldID='${entityFieldID}',
          @RelatedEntityNameFieldMap='${relatedEntityNameFieldMap}'`
 
-         await this.LogSQLAndExecute(ds, sSQL, `SQL text to update entity field related entity name field map for entity field ID ${entityFieldID}`);
+         await this.LogSQLAndExecute(pool, sSQL, `SQL text to update entity field related entity name field map for entity field ID ${entityFieldID}`);
          return true;
       }
       catch (e) {
@@ -1159,10 +1179,10 @@ export class ManageMetadataBase {
          return false;
       }
    }
-   protected async updateExistingEntitiesFromSchema(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
+   protected async updateExistingEntitiesFromSchema(pool: sql.ConnectionPool, excludeSchemas: string[]): Promise<boolean> {
       try   {
          const sSQL = `EXEC [${mj_core_schema()}].spUpdateExistingEntitiesFromSchema @ExcludedSchemaNames='${excludeSchemas.join(',')}'`;
-         const result = await this.LogSQLAndExecute(ds, sSQL, `SQL text to update existing entities from schema`, true);
+         const result = await this.LogSQLAndExecute(pool, sSQL, `SQL text to update existing entities from schema`, true);
          // result contains the updated entities, and there is a property of each row called Name which has the entity name that was modified
          // add these to the modified entity list if they're not already in there
          if (result && result.length > 0 ) {
@@ -1186,10 +1206,10 @@ export class ManageMetadataBase {
       ManageMetadataBase._modifiedEntityList = ManageMetadataBase._modifiedEntityList.concat(newlyModifiedEntityNames);
    }
 
-   protected async updateExistingEntityFieldsFromSchema(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
+   protected async updateExistingEntityFieldsFromSchema(pool: sql.ConnectionPool, excludeSchemas: string[]): Promise<boolean> {
       try   {
          const sSQL = `EXEC [${mj_core_schema()}].spUpdateExistingEntityFieldsFromSchema @ExcludedSchemaNames='${excludeSchemas.join(',')}'`
-         const result = await this.LogSQLAndExecute(ds, sSQL, `SQL text to update existing entity fields from schema`, true);
+         const result = await this.LogSQLAndExecute(pool, sSQL, `SQL text to update existing entity fields from schema`, true);
          // result contains the updated entity fields
          // there is a field in there called EntityName. Get a distinct list of entity names from this and add them
          // to the modified entity list if they're not already in there
@@ -1203,10 +1223,10 @@ export class ManageMetadataBase {
          return false;
       }
    }
-   protected async deleteUnneededEntityFields(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
+   protected async deleteUnneededEntityFields(pool: sql.ConnectionPool, excludeSchemas: string[]): Promise<boolean> {
       try   {
          const sSQL = `EXEC [${mj_core_schema()}].spDeleteUnneededEntityFields @ExcludedSchemaNames='${excludeSchemas.join(',')}'`;
-         const result = await this.LogSQLAndExecute(ds, sSQL, `SQL text to delete unneeded entity fields`, true);
+         const result = await this.LogSQLAndExecute(pool, sSQL, `SQL text to delete unneeded entity fields`, true);
          // result contains the DELETED entity fields
          // there is a field in there called Entity. Get a distinct list of entity names from this and add them
          // to the modified entity list if they're not already in there
@@ -1221,7 +1241,7 @@ export class ManageMetadataBase {
       }
    }
 
-   protected async manageEntityFieldValuesAndValidatorFunctions(ds: DataSource, excludeSchemas: string[], currentUser: UserInfo, skipDBUpdate: boolean): Promise<boolean> {
+   protected async manageEntityFieldValuesAndValidatorFunctions(pool: sql.ConnectionPool, excludeSchemas: string[], currentUser: UserInfo, skipDBUpdate: boolean): Promise<boolean> {
       try  {
          // here we want to get all of the entity fields that have check constraints attached to them. For each field that has a check constraint, we want to
          // evaluate it to see if it is a simple series of OR statements or not, if it is a simple series of OR statements, we can parse the possible values
@@ -1229,13 +1249,16 @@ export class ManageMetadataBase {
          // just ignore it.
          const filter = excludeSchemas && excludeSchemas.length > 0 ? ` WHERE SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})` : '';
          const sSQL = `SELECT * FROM [${mj_core_schema()}].vwEntityFieldsWithCheckConstraints${filter}`
-         const result = await ds.query(sSQL);
+         const resultResult = await pool.request().query(sSQL);
+      const result = resultResult.recordset;
 
          const efvSQL = `SELECT * FROM [${mj_core_schema()}].EntityFieldValue`;
-         const allEntityFieldValues = await ds.query(efvSQL);
+         const allEntityFieldValuesResult = await pool.request().query(efvSQL);
+      const allEntityFieldValues = allEntityFieldValuesResult.recordset;
 
          const efSQL = `SELECT * FROM [${mj_core_schema()}].vwEntityFields ORDER BY EntityID, Sequence`;
-         const allEntityFields = await ds.query(efSQL);
+         const allEntityFieldsResult = await pool.request().query(efSQL);
+      const allEntityFields = allEntityFieldsResult.recordset;
 
          const generationPromises = [];
 
@@ -1254,15 +1277,16 @@ export class ManageMetadataBase {
                      parsedValues.reverse();
 
                      // we have parsed values from the check constraint, so sync them with the entity field values
-                     await this.syncEntityFieldValues(ds, r.EntityFieldID, parsedValues, allEntityFieldValues);
+                     await this.syncEntityFieldValues(pool, r.EntityFieldID, parsedValues, allEntityFieldValues);
 
                      // finally, make sure the ValueListType column within the EntityField table is set to "List" because for check constraints we only allow the values specified in the list.
                      // check to see if the ValueListType is already set to "List", if not, update it
                      const sSQLCheck: string = `SELECT ValueListType FROM [${mj_core_schema()}].EntityField WHERE ID='${r.EntityFieldID}'`;
-                     const checkResult = await ds.query(sSQLCheck);
+                     const checkResultResult = await pool.request().query(sSQLCheck);
+      const checkResult = checkResultResult.recordset;
                      if (checkResult && checkResult.length > 0 && checkResult[0].ValueListType.trim().toLowerCase() !== 'list') {
                         const sSQL: string = `UPDATE [${mj_core_schema()}].EntityField SET ValueListType='List' WHERE ID='${r.EntityFieldID}'`
-                        await this.LogSQLAndExecute(ds, sSQL, `SQL text to update ValueListType for entity field ID ${r.EntityFieldID}`);
+                        await this.LogSQLAndExecute(pool, sSQL, `SQL text to update ValueListType for entity field ID ${r.EntityFieldID}`);
                      }
                   }
                   else {
@@ -1304,13 +1328,13 @@ export class ManageMetadataBase {
 
    /**
     * This method will load all generated code from the database - this is intended to be used when you are bypassing managing the metadata.
-    * @param ds 
+    * @param pool 
     * @param currentUser 
     */
-   public async loadGeneratedCode(ds: DataSource, currentUser: UserInfo): Promise<boolean> {
+   public async loadGeneratedCode(pool: sql.ConnectionPool, currentUser: UserInfo): Promise<boolean> {
       try {
          // right now we're just doing validator functions which are handled here
-         return await this.manageEntityFieldValuesAndValidatorFunctions(ds, [], currentUser, true);
+         return await this.manageEntityFieldValuesAndValidatorFunctions(pool, [], currentUser, true);
       }
       catch (e) {
          logError(e as string);
@@ -1428,7 +1452,7 @@ export class ManageMetadataBase {
       }
    }
 
-   protected async syncEntityFieldValues(ds: DataSource, entityFieldID: number, possibleValues: string[], allEntityFieldValues: any): Promise<boolean> {
+   protected async syncEntityFieldValues(ds: sql.ConnectionPool, entityFieldID: number, possibleValues: string[], allEntityFieldValues: any): Promise<boolean> {
       try {
          // first, get a list of all of the existing entity field values for the field already in the database
          const existingValues = allEntityFieldValues.filter((efv: { EntityFieldID: number; }) => efv.EntityFieldID === entityFieldID);
@@ -1436,7 +1460,9 @@ export class ManageMetadataBase {
 
          // Step 1: for any existing value that is NOT in the list of possible Values, delete it
          let numRemoved: number = 0;
-         await ds.transaction(async () => {
+         const transaction = new sql.Transaction(ds);
+         await transaction.begin();
+         try {
             for (const ev of existingValues) {
                if (!possibleValues.find(v => v === ev.Value)) {
                   // delete the value from the database
@@ -1471,7 +1497,11 @@ export class ManageMetadataBase {
                   numUpdated++;
                }
             }
-         });
+            await transaction.commit();
+         } catch (e) {
+            await transaction.rollback();
+            throw e;
+         }
 
          return true;
       }
@@ -1545,20 +1575,27 @@ export class ManageMetadataBase {
       return sWhere;
    }
 
-   protected async createNewEntities(ds: DataSource): Promise<boolean> {
+   protected async createNewEntities(pool: sql.ConnectionPool): Promise<boolean> {
       try   {
          const sSQL = `SELECT * FROM [${mj_core_schema()}].vwSQLTablesAndEntities WHERE EntityID IS NULL ` + this.createExcludeTablesAndSchemasFilter('');
-         const newEntities = await ds.query(sSQL);
+         const newEntitiesResult = await pool.request().query(sSQL);
+      const newEntities = newEntitiesResult.recordset;
 
          if (newEntities && newEntities.length > 0 ) {
             const md = new Metadata()
-            await ds.transaction(async () => {
+            const transaction = new sql.Transaction(pool);
+            await transaction.begin();
+            try {
                // wrap in a transaction so we get all of it or none of it
                for ( let i = 0; i < newEntities.length; ++i) {
                   // process each of the new entities
-                  await this.createNewEntity(ds, newEntities[i], md);
+                  await this.createNewEntity(pool, newEntities[i], md);
                }
-            })
+               await transaction.commit();
+            } catch (e) {
+               await transaction.rollback();
+               throw e;
+            }
 
             if (ManageMetadataBase.newEntityList.length > 0) {
                // only do this if we actually created new entities
@@ -1574,7 +1611,7 @@ export class ManageMetadataBase {
       }
    }
 
-   protected async shouldCreateNewEntity(ds: DataSource, newEntity: any): Promise<{shouldCreate: boolean, validationMessage: string}> {
+   protected async shouldCreateNewEntity(ds: sql.ConnectionPool, newEntity: any): Promise<{shouldCreate: boolean, validationMessage: string}> {
       // validate that the new entity meets our criteria for creation
       // criteria:
       // 1) entity has a field that is a primary key
@@ -1583,7 +1620,8 @@ export class ManageMetadataBase {
       const query = `EXEC ${Metadata.Provider.ConfigData.MJCoreSchemaName}.spGetPrimaryKeyForTable @TableName='${newEntity.TableName}', @SchemaName='${newEntity.SchemaName}'`;
 
       try {
-          const result = await ds.query(query);
+          const resultResult = await ds.request().query(query);
+      const result = resultResult.recordset;
           if (result.length === 0) {
               return { shouldCreate: false, validationMessage: "No primary key found" };
           }
@@ -1682,9 +1720,9 @@ export class ManageMetadataBase {
       return uuidv4();
    }
 
-   protected async createNewEntity(ds: DataSource, newEntity: any, md: Metadata) {
+   protected async createNewEntity(pool: sql.ConnectionPool, newEntity: any, md: Metadata) {
       try {
-         const {shouldCreate, validationMessage} = await this.shouldCreateNewEntity(ds, newEntity);
+         const {shouldCreate, validationMessage} = await this.shouldCreateNewEntity(pool, newEntity);
          if (shouldCreate) {
             // process a single new entity
             let newEntityName: string = await this.createNewEntityName(newEntity);
@@ -1699,10 +1737,10 @@ export class ManageMetadataBase {
                LogError(`   >>>> WARNING: Entity name already exists, so using ${newEntityName} instead. If you did not intend for this, please rename the ${newEntity.SchemaName}.${newEntity.TableName} table in the database.`)
             }
 
-            const isNewSchema = await this.isSchemaNew(ds, newEntity.SchemaName);
+            const isNewSchema = await this.isSchemaNew(pool, newEntity.SchemaName);
             const newEntityID = this.createNewUUID();
             const sSQLInsert = this.createNewEntityInsertSQL(newEntityID, newEntityName, newEntity, suffix);
-            await this.LogSQLAndExecute(ds, sSQLInsert, `SQL generated to create new entity ${newEntityName}`);
+            await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to create new entity ${newEntityName}`);
 
             // if we get here we created a new entity safely, otherwise we get exception
 
@@ -1716,11 +1754,11 @@ export class ManageMetadataBase {
                // new schema and config option is to create a new application from the schema name so do that
 
                // check to see if the app already exists
-               apps = await this.getApplicationIDForSchema(ds, newEntity.SchemaName);
+               apps = await this.getApplicationIDForSchema(pool, newEntity.SchemaName);
                if (!apps || apps.length === 0) {
                   // doesn't already exist, so create it
                   const appUUID = this.createNewUUID();
-                  const newAppID = await this.createNewApplication(ds, appUUID, newEntity.SchemaName, newEntity.SchemaName);
+                  const newAppID = await this.createNewApplication(pool, appUUID, newEntity.SchemaName, newEntity.SchemaName);
                   if (newAppID) {
                      apps = [newAppID];
                   }
@@ -1733,7 +1771,7 @@ export class ManageMetadataBase {
             }
             else {
                // not a new schema, attempt to look up the application for this schema
-               apps = await this.getApplicationIDForSchema(ds, newEntity.SchemaName);
+               apps = await this.getApplicationIDForSchema(pool, newEntity.SchemaName);
             }
 
             if (apps && apps.length > 0) {
@@ -1743,7 +1781,7 @@ export class ManageMetadataBase {
                      const sSQLInsertApplicationEntity = `INSERT INTO ${mj_core_schema()}.ApplicationEntity
                                        (ApplicationID, EntityID, Sequence) VALUES
                                        ('${appUUID}', '${newEntityID}', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.ApplicationEntity WHERE ApplicationID = '${appUUID}'))`;
-                     await this.LogSQLAndExecute(ds, sSQLInsertApplicationEntity, `SQL generated to add new entity ${newEntityName} to application ID: '${appUUID}'`);
+                     await this.LogSQLAndExecute(pool, sSQLInsertApplicationEntity, `SQL generated to add new entity ${newEntityName} to application ID: '${appUUID}'`);
                   }
                }
                else {
@@ -1765,7 +1803,7 @@ export class ManageMetadataBase {
                      const sSQLInsertPermission = `INSERT INTO ${mj_core_schema()}.EntityPermission
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
                                                    ('${newEntityID}', '${RoleID}', ${p.CanRead ? 1 : 0}, ${p.CanCreate ? 1 : 0}, ${p.CanUpdate ? 1 : 0}, ${p.CanDelete ? 1 : 0})`;
-                     await this.LogSQLAndExecute(ds, sSQLInsertPermission, `SQL generated to add new permission for entity ${newEntityName} for role ${p.RoleName}`);
+                     await this.LogSQLAndExecute(pool, sSQLInsertPermission, `SQL generated to add new permission for entity ${newEntityName} for role ${p.RoleName}`);
                   }
                   else
                      LogError(`   >>>> ERROR: Unable to find Role ID for role ${p.RoleName} to add permissions for new entity ${newEntityName}`);
@@ -1784,17 +1822,18 @@ export class ManageMetadataBase {
       }
    }
 
-   protected async isSchemaNew(ds: DataSource, schemaName: string): Promise<boolean> {
+   protected async isSchemaNew(pool: sql.ConnectionPool, schemaName: string): Promise<boolean> {
       // check to see if there are any entities in the db with this schema name
       const sSQL: string = `SELECT COUNT(*) AS Count FROM [${mj_core_schema()}].Entity WHERE SchemaName = '${schemaName}'`;
-      const result = await ds.query(sSQL);
+      const resultResult = await pool.request().query(sSQL);
+      const result = resultResult.recordset;
       return result && result.length > 0 ? result[0].Count === 0 : true;
    }
 
-   protected async createNewApplication(ds: DataSource, appID: string, appName: string, schemaName: string): Promise<string | null>{
+   protected async createNewApplication(pool: sql.ConnectionPool, appID: string, appName: string, schemaName: string): Promise<string | null>{
       try {
          const sSQL: string = "INSERT INTO [" + mj_core_schema() + "].Application (ID, Name, Description, SchemaAutoAddNewEntities) VALUES ('" + appID + "', '" + appName + "', 'Generated for schema', '" + schemaName + "')";
-         await this.LogSQLAndExecute(ds, sSQL, `SQL generated to create new application ${appName}`);
+         await this.LogSQLAndExecute(pool, sSQL, `SQL generated to create new application ${appName}`);
          return appID; // if we get here, we successfully created the application, so return the ID
       }
       catch (e) {
@@ -1803,16 +1842,18 @@ export class ManageMetadataBase {
       }
    }
 
-   protected async applicationExists(ds: DataSource, applicationName: string): Promise<boolean>{
+   protected async applicationExists(pool: sql.ConnectionPool, applicationName: string): Promise<boolean>{
       const sSQL: string = `SELECT ID FROM [${mj_core_schema()}].Application WHERE Name = '${applicationName}'`;
-      const result = await ds.query(sSQL);
+      const resultResult = await pool.request().query(sSQL);
+      const result = resultResult.recordset;
       return result && result.length > 0 ? result[0].ID.length > 0 : false;
    }
 
-   protected async getApplicationIDForSchema(ds: DataSource, schemaName: string): Promise<string[] | null>{
+   protected async getApplicationIDForSchema(pool: sql.ConnectionPool, schemaName: string): Promise<string[] | null>{
       // get all the apps each time from DB as we might be adding, don't use Metadata here for that reason
       const sSQL: string = `SELECT ID, Name, SchemaAutoAddNewEntities FROM [${mj_core_schema()}].vwApplications`;
-      const result = await ds.query(sSQL);
+      const resultResult = await pool.request().query(sSQL);
+      const result = resultResult.recordset;
 
       if (!result || result.length === 0) {
          // no applications found, return null
@@ -1881,16 +1922,16 @@ export class ManageMetadataBase {
 
 
    /**
-    * Executes the given SQL query using the given DataSource object.
+    * Executes the given SQL query using the given ConnectionPool object.
     * If the appendToLogFile parameter is true, the query will also be appended to the log file.
     * Note that in order to append to the log file, ManageMetadataBase.manageMetaDataLogging must be called first.
-    * @param ds - The DataSource object to use to execute the query.
+    * @param pool - The ConnectionPool object to use to execute the query.
     * @param query - The SQL query to execute.
     * @param description - A description of the query to append to the log file.
     * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
     * @returns - The result of the query execution.
     */
-   private async LogSQLAndExecute(ds: DataSource, query: string, description?: string, isRecurringScript: boolean = false): Promise<any> {
-      return await SQLLogging.LogSQLAndExecute(ds, query, description, isRecurringScript);
+   private async LogSQLAndExecute(pool: sql.ConnectionPool, query: string, description?: string, isRecurringScript: boolean = false): Promise<any> {
+      return await SQLLogging.LogSQLAndExecute(pool, query, description, isRecurringScript);
    }
 }
