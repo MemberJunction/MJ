@@ -1870,12 +1870,15 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   }
 
   onDataPointClick(event: DataPointClickEvent): void {
+    console.log('onDataPointClick received:', event);
     const timestamp = event.data.timestamp;
     const metric = event.metric;
     
     // Create new drill-down tab
     const tabId = `drill-down-${timestamp.getTime()}-${metric}`;
     const tabTitle = `${this.getMetricDisplayLabel(metric)} - ${this.formatTimestamp(timestamp)}`;
+    
+    console.log('Creating drill-down tab:', { tabId, tabTitle, timestamp, metric });
     
     const newTab: DrillDownTab = {
       id: tabId,
@@ -1888,7 +1891,10 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
     
     // Add tab if it doesn't exist
     if (!this.drillDownTabs.find(tab => tab.id === tabId)) {
+      console.log('Adding new tab to drillDownTabs');
       this.drillDownTabs.push(newTab);
+    } else {
+      console.log('Tab already exists, switching to it');
     }
     
     // Switch to the new tab

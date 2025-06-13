@@ -242,7 +242,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   @Input() showLegend = true;
   @Input() showControls = true;
   
-  @Output() dataPointClick = new EventEmitter<DataPointClickEvent>();
+  @Output() dataPointClick: EventEmitter<DataPointClickEvent> = new EventEmitter<DataPointClickEvent>();
   @Output() timeRangeChange = new EventEmitter<string>();
 
   @ViewChild('chartSvg', { static: true }) chartSvg!: ElementRef<SVGElement>;
@@ -271,6 +271,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   ];
 
   ngOnInit() {
+    console.log('TimeSeriesChart initialized, dataPointClick emitter:', this.dataPointClick);
     this.applyConfig();
   }
 
@@ -541,11 +542,9 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   private drawMetrics(g: any, xScale: any, scales: any) {
     // Create a group for lines and areas
     const linesGroup = g.append('g').attr('class', 'lines-group');
-    // Create a group for dots (drawn on top)
-    const dotsGroup = g.append('g').attr('class', 'dots-group');
     
-    // Draw metrics in reverse order so first metrics appear on top
-    [...this.visibleMetrics].reverse().forEach((metric, index) => {
+    // First draw all lines and areas
+    this.visibleMetrics.forEach((metric) => {
       if (this.hiddenMetrics.has(metric) || !scales[metric]) return;
 
       const color = this.getMetricColor(metric);
@@ -591,14 +590,27 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
         .attr('class', `chart-line chart-line--${metric}`)
         .attr('d', line)
         .attr('stroke', color);
-
+    });
+    
+    // Then create dots group on top of everything
+    const dotsGroup = g.append('g').attr('class', 'dots-group').style('pointer-events', 'all');
+    
+    // Draw all dots in a separate pass so they're all on top
+    this.visibleMetrics.forEach((metric) => {
+      if (this.hiddenMetrics.has(metric) || !scales[metric]) return;
+      
+      const color = this.getMetricColor(metric);
+      const scale = scales[metric];
+      
       // Draw dots with click events - only for non-zero values
       const dotsData = this.data.filter(d => {
         const value = this.getMetricValue(d, metric);
         return value != null && value > 0;
       });
       
-      dotsGroup.selectAll(`.chart-dot--${metric}`)
+      console.log(`Creating dots for ${metric}:`, dotsData.length, 'dots');
+      
+      const dots = dotsGroup.selectAll(`.chart-dot--${metric}`)
         .data(dotsData)
         .enter().append('circle')
         .attr('class', `chart-dot chart-dot--${metric}`)
@@ -616,50 +628,56 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
         .attr('fill', 'white')
         .style('cursor', 'pointer')
         .style('pointer-events', 'all') // Ensure clicks are captured
-        .on('mouseenter', function(this: SVGCircleElement, event: MouseEvent, d: TrendData) {
+        .style('z-index', 1000) // Ensure dots are on top
+        .attr('data-metric', metric) // Add data attribute for debugging
+        .on('mouseenter', (event: MouseEvent, d: TrendData) => {
+          console.log(`Mouse enter on ${metric} dot`);
           // Bring to front on hover
-          d3.select(this).raise();
-          d3.select(this).attr('r', 6);
+          const dot = d3.select(event.currentTarget as SVGCircleElement);
+          dot.raise();
+          dot.attr('r', 6);
+          // Show tooltip
+          if (this.config.showTooltip !== false) {
+            this.showTooltip(event, d);
+          }
         })
-        .on('mouseleave', function(this: SVGCircleElement, event: MouseEvent, d: TrendData) {
-          d3.select(this).attr('r', 4);
+        .on('mouseleave', (event: MouseEvent, d: TrendData) => {
+          const dot = d3.select(event.currentTarget as SVGCircleElement);
+          dot.attr('r', 4);
+          // Hide tooltip
+          if (this.config.showTooltip !== false) {
+            this.hideTooltip();
+          }
         })
         .on('click', (event: MouseEvent, d: TrendData) => {
+          console.log('Dot clicked!', { metric, data: d, event });
           event.stopPropagation();
           event.preventDefault();
           // Only emit if there's actual data
           const value = this.getMetricValue(d, metric);
+          console.log('Value for metric:', { metric, value });
           if (value != null && value > 0) {
+            console.log('Emitting dataPointClick event');
             this.dataPointClick.emit({ data: d, metric, event });
+          } else {
+            console.log('Not emitting - value is null or <= 0');
           }
         });
+      
+      console.log(`Added click handlers to ${metric} dots:`, dots.size(), 'dots');
+      console.log(`${metric} dots positions:`, dots.nodes().map((node: any) => ({
+        cx: node.getAttribute('cx'),
+        cy: node.getAttribute('cy'),
+        r: node.getAttribute('r')
+      })));
     });
   }
 
   private drawInteractiveElements(g: any, xScale: any, scales: any) {
     if (this.config.showTooltip === false) return;
 
-    // Create invisible overlay for mouse events
-    const overlay = g.append('rect')
-      .attr('class', 'chart-overlay')
-      .attr('width', this.width)
-      .attr('height', this.height)
-      .attr('fill', 'none')
-      .attr('pointer-events', 'all');
-
-    // Tooltip interactions
-    overlay
-      .on('mousemove', (event: MouseEvent) => {
-        const [mouseX] = d3.pointer(event);
-        const date = xScale.invert(mouseX);
-        const closest = this.findClosestDataPoint(date);
-        if (closest) {
-          this.showTooltip(event, closest);
-        }
-      })
-      .on('mouseout', () => {
-        this.hideTooltip();
-      });
+    // Note: We don't need an overlay for tooltips as the dots themselves handle interactions
+    // The overlay was preventing click events on dots
   }
 
   private findClosestDataPoint(targetDate: Date): TrendData | null {
