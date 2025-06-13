@@ -3066,26 +3066,32 @@ export class SQLServerDataProvider
   }
 
   /**
-   * Executes multiple SQL queries in a single batch for optimal performance.
-   * Returns an array of results, one for each query in the batch.
+   * Static method to execute a batch of SQL queries using a provided connection source.
+   * This allows the batch logic to be reused from external contexts like TransactionGroup.
+   * All queries are combined into a single SQL statement and executed together within
+   * the same connection/transaction context.
    * 
+   * @param connectionSource - Either a sql.ConnectionPool, sql.Transaction, or sql.Request to use for execution
    * @param queries - Array of SQL queries to execute
    * @param parameters - Optional array of parameter arrays, one for each query
    * @returns Promise<any[][]> - Array of result arrays, one for each query
    */
-  public async ExecuteSQLBatch(queries: string[], parameters?: any[][], options?: { description?: string; ignoreLogging?: boolean; isMutation?: boolean }): Promise<any[][]> {
+  public static async ExecuteSQLBatchStatic(
+    connectionSource: sql.ConnectionPool | sql.Transaction | sql.Request,
+    queries: string[], 
+    parameters?: any[][]
+  ): Promise<any[][]> {
     try {
       let request: sql.Request;
       
-      if (this._transaction && this._transactionRequest) {
-        // Use transaction request if in a transaction
-        request = this._transactionRequest;
-      } else if (this._transaction) {
-        // Create a new request for this transaction if we don't have one
-        request = new sql.Request(this._transaction);
+      // Determine the request to use based on connection source type
+      if (connectionSource instanceof sql.Request) {
+        request = connectionSource;
+      } else if (connectionSource instanceof sql.Transaction) {
+        request = new sql.Request(connectionSource);
       } else {
-        // Use pool request for non-transactional queries
-        request = new sql.Request(this._pool);
+        // Assume it's a ConnectionPool
+        request = new sql.Request(connectionSource);
       }
       
       // Build combined batch SQL
@@ -3122,15 +3128,8 @@ export class SQLServerDataProvider
         }
       });
       
-      // Log batch SQL statement to all active logging sessions (runs in parallel with execution)
-      const description = options?.description ? `${options.description} (Batch: ${queries.length} queries)` : `Batch execution: ${queries.length} queries`;
-      const loggingPromise = this._logSqlStatement(batchSQL, parameters, description, options?.ignoreLogging, options?.isMutation);
-      
-      // Execute SQL and logging in parallel, but wait for both to complete
-      const [result] = await Promise.all([
-        request.query(batchSQL),
-        loggingPromise
-      ]);
+      // Execute the batch SQL
+      const result = await request.query(batchSQL);
       
       // Return array of recordsets - one for each query
       // Handle both single and multiple recordsets
@@ -3141,6 +3140,50 @@ export class SQLServerDataProvider
       } else {
         return [];
       }
+    } catch (e) {
+      LogError(e);
+      throw e;
+    }
+  }
+
+  /**
+   * Executes multiple SQL queries in a single batch for optimal performance.
+   * All queries are combined into a single SQL statement and executed together.
+   * This is particularly useful for bulk operations where you need to execute
+   * many similar queries and want to minimize round trips to the database.
+   * 
+   * @param queries - Array of SQL queries to execute
+   * @param parameters - Optional array of parameter arrays, one for each query
+   * @param options - Optional execution options for logging and description
+   * @returns Promise<any[][]> - Array of result arrays, one for each query
+   */
+  public async ExecuteSQLBatch(queries: string[], parameters?: any[][], options?: { description?: string; ignoreLogging?: boolean; isMutation?: boolean }): Promise<any[][]> {
+    try {
+      let connectionSource: sql.ConnectionPool | sql.Transaction | sql.Request;
+      
+      if (this._transaction && this._transactionRequest) {
+        // Use transaction request if in a transaction
+        connectionSource = this._transactionRequest;
+      } else if (this._transaction) {
+        // Use transaction if we have one
+        connectionSource = this._transaction;
+      } else {
+        // Use pool request for non-transactional queries
+        connectionSource = this._pool;
+      }
+      
+      // Log batch SQL statement to all active logging sessions
+      const description = options?.description ? `${options.description} (Batch: ${queries.length} queries)` : `Batch execution: ${queries.length} queries`;
+      const batchSQL = queries.join(';\n');
+      const loggingPromise = this._logSqlStatement(batchSQL, parameters, description, options?.ignoreLogging, options?.isMutation);
+      
+      // Execute SQL and logging in parallel, but wait for both to complete
+      const [result] = await Promise.all([
+        SQLServerDataProvider.ExecuteSQLBatchStatic(connectionSource, queries, parameters),
+        loggingPromise
+      ]);
+      
+      return result;
     } catch (e) {
       LogError(e);
       throw e;

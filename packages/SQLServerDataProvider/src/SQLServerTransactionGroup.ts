@@ -64,31 +64,37 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                     }    
                 }
                 else {
-                    // can execute in parallel since there are no dependencies between the transaction items
-                    const promises = [];
+                    // can execute in batch since there are no dependencies between the transaction items
+                    const queries: string[] = [];
+                    const parameters: any[][] = [];
+                    
+                    // Prepare queries and parameters for batch execution
                     for (const item of items) {
-                        const request = new sql.Request(transaction);
+                        let query = item.Instruction;
+                        let queryParams: any[] = [];
                         
-                        // Add parameters if any
+                        // Handle parameters if any
                         if (item.Vars && Array.isArray(item.Vars)) {
-                            item.Vars.forEach((value, index) => {
-                                request.input(`p${index}`, value);
-                            });
+                            queryParams = item.Vars;
                             // Replace ? with @p0, @p1, etc. in the query
                             let paramIndex = 0;
-                            const modifiedInstruction = item.Instruction.replace(/\?/g, () => `@p${paramIndex++}`);
-                            promises.push(request.query(modifiedInstruction));
-                        } else {
-                            promises.push(request.query(item.Instruction));
+                            query = query.replace(/\?/g, () => `@p${paramIndex++}`);
                         }
+                        
+                        queries.push(query);
+                        parameters.push(queryParams);
                     }
-                    const rawResults = await Promise.all(promises);
+                    
+                    // Execute all queries in a single batch using the static method
+                    const rawResults = await SQLServerDataProvider.ExecuteSQLBatchStatic(transaction, queries, parameters);
+                    
+                    // Process results for each item
                     for (let i = 0; i < items.length; i++) {
                         const item = items[i];
                         let result = null;
-                        if (rawResults[i] && rawResults[i].recordset && rawResults[i].recordset.length > 0) {
+                        if (rawResults[i] && rawResults[i].length > 0) {
                             // Process the result to handle timezone conversions
-                            const processedResults = sqlProvider.ProcessEntityRows(rawResults[i].recordset, item.BaseEntity.EntityInfo);
+                            const processedResults = sqlProvider.ProcessEntityRows(rawResults[i], item.BaseEntity.EntityInfo);
                             result = processedResults[0]; // get the first row of the processed result
                         }
                         returnResults.push(new TransactionResult(item, result, result !== null));
