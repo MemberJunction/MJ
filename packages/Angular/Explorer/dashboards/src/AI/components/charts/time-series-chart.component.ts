@@ -82,7 +82,7 @@ export interface DataPointClickEvent {
 
     .chart-title {
       margin: 0;
-      font-size: 16px;
+      font-size: 14px;
       font-weight: 600;
       color: #333;
     }
@@ -96,10 +96,10 @@ export interface DataPointClickEvent {
     .legend-item {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 4px;
       cursor: pointer;
       transition: opacity 0.2s ease;
-      font-size: 12px;
+      font-size: 11px;
     }
 
     .legend-item--disabled {
@@ -181,16 +181,11 @@ export interface DataPointClickEvent {
     }
 
     :host ::ng-deep .chart-dot {
-      fill: white;
-      stroke-width: 2;
-      r: 3;
-      z-index: 10;
+      transition: r 0.1s ease;
     }
 
     :host ::ng-deep .chart-dot:hover {
-      r: 5;
       filter: drop-shadow(0 0 4px rgba(0,0,0,0.3));
-      z-index: 20;
     }
 
     :host ::ng-deep .grid-line {
@@ -328,7 +323,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
     const containerHeight = container.clientHeight;
     
     // Reserve space for controls if they're shown
-    const controlsHeight = this.showControls ? 60 : 0;
+    const controlsHeight = this.showControls ? 70 : 0;
     const adjustedHeight = containerHeight - controlsHeight;
     
     // Use config dimensions or fallback to container dimensions
@@ -549,7 +544,8 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
     // Create a group for dots (drawn on top)
     const dotsGroup = g.append('g').attr('class', 'dots-group');
     
-    this.visibleMetrics.forEach((metric, index) => {
+    // Draw metrics in reverse order so first metrics appear on top
+    [...this.visibleMetrics].reverse().forEach((metric, index) => {
       if (this.hiddenMetrics.has(metric) || !scales[metric]) return;
 
       const color = this.getMetricColor(metric);
@@ -597,11 +593,13 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
         .attr('stroke', color);
 
       // Draw dots with click events - only for non-zero values
+      const dotsData = this.data.filter(d => {
+        const value = this.getMetricValue(d, metric);
+        return value != null && value > 0;
+      });
+      
       dotsGroup.selectAll(`.chart-dot--${metric}`)
-        .data(this.data.filter(d => {
-          const value = this.getMetricValue(d, metric);
-          return value != null && value > 0;
-        }))
+        .data(dotsData)
         .enter().append('circle')
         .attr('class', `chart-dot chart-dot--${metric}`)
         .attr('cx', (d: TrendData) => xScale(d.timestamp))
@@ -612,11 +610,23 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
             ? value / 1000 : value;
           return scale(transformedValue);
         })
+        .attr('r', 4) // Slightly larger for easier clicking
         .attr('stroke', color)
+        .attr('stroke-width', 2)
+        .attr('fill', 'white')
         .style('cursor', 'pointer')
         .style('pointer-events', 'all') // Ensure clicks are captured
+        .on('mouseenter', function(this: SVGCircleElement, event: MouseEvent, d: TrendData) {
+          // Bring to front on hover
+          d3.select(this).raise();
+          d3.select(this).attr('r', 6);
+        })
+        .on('mouseleave', function(this: SVGCircleElement, event: MouseEvent, d: TrendData) {
+          d3.select(this).attr('r', 4);
+        })
         .on('click', (event: MouseEvent, d: TrendData) => {
           event.stopPropagation();
+          event.preventDefault();
           // Only emit if there's actual data
           const value = this.getMetricValue(d, metric);
           if (value != null && value > 0) {
