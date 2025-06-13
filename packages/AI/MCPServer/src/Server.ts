@@ -1,43 +1,32 @@
 import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { FastMCP, Resource, ResourceResult } from "fastmcp";
-import { DataSource } from "typeorm";
+import * as sql from "mssql";
 import { z } from "zod";
-import { DataSourceOptions } from 'typeorm';
 import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate, mcpServerSettings } from './config.js';
 import { match } from "assert";
 
 
 const mcpServerPort = mcpServerSettings?.port || 3100;
 
-// Prepare ORM configuration
-const ormConfig = {
-    type: 'mssql' as const,
-    entities: [],
-    logging: false,
-    host: dbHost,
+// Prepare mssql configuration
+const poolConfig: sql.config = {
+    server: dbHost,
     port: dbPort,
-    username: dbUsername,
+    user: dbUsername,
     password: dbPassword,
     database: dbDatabase,
-    synchronize: false,
     requestTimeout: configInfo.databaseSettings.requestTimeout,
     connectionTimeout: configInfo.databaseSettings.connectionTimeout,
-    options: {},
+    options: {
+        encrypt: true,
+        enableArithAbort: true,
+        trustServerCertificate: dbTrustServerCertificate === 'Y'
+    },
 };
 
 if (dbInstanceName !== null && dbInstanceName !== undefined && dbInstanceName.trim().length > 0) {
-    ormConfig.options = {
-        ...ormConfig.options,
-        instanceName: dbInstanceName,
-    };
-}
-
-if (dbTrustServerCertificate !== null && dbTrustServerCertificate !== undefined) {
-    ormConfig.options = {
-        ...ormConfig.options,
-        trustServerCertificate: dbTrustServerCertificate === 'Y',
-    };
+    poolConfig.options!.instanceName = dbInstanceName;
 }
 
 // Create FastMCP server instance
@@ -54,11 +43,11 @@ async function initializeServer() {
             throw new Error("MCP Server is disabled in the configuration.");
        }
         // Initialize database connection
-        const dataSource = new DataSource(ormConfig);
-        await dataSource.initialize();
+        const pool = new sql.ConnectionPool(poolConfig);
+        await pool.connect();
         
         // Setup SQL Server client
-        const config = new SQLServerProviderConfigData(dataSource, '', configInfo.mjCoreSchema);
+        const config = new SQLServerProviderConfigData(pool, '', configInfo.mjCoreSchema);
         await setupSQLServerClient(config);
         console.log("Database connection setup completed.");
 

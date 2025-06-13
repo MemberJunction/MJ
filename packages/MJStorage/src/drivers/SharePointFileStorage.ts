@@ -11,6 +11,14 @@ import {
   UnsupportedOperationError 
 } from '../generic/FileStorageBase';
 
+// Define types for Microsoft OAuth token response
+interface MicrosoftTokenResponse {
+  access_token: string;
+  expires_in: number;
+  ext_expires_in?: number;
+  token_type: string;
+}
+
 /**
  * Implementation of the Microsoft Graph API AuthenticationProvider interface 
  * that uses the OAuth2 client credentials flow for authentication.
@@ -102,7 +110,7 @@ class ClientCredentialsAuthProvider implements AuthenticationProvider {
       throw new Error(`Failed to get access token: ${response.statusText}`);
     }
 
-    const json = await response.json();
+    const json = await response.json() as MicrosoftTokenResponse;
     this.accessToken = json.access_token;
     
     // Set token expiration time (subtract 5 minutes as a buffer)

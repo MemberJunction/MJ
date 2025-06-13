@@ -2484,9 +2484,9 @@ export class SQLServerDataProvider
               processedRow[field.Name] = new Date(fieldValue);
             }
           } else if (fieldValue instanceof Date) {
-            // TypeORM has already converted to a Date object using local timezone
+            // DB driver has already converted to a Date object using local timezone
             // We need to adjust it back to UTC
-            // SQL Server stores datetime2 as UTC, but TypeORM interprets it as local
+            // SQL Server stores datetime2 as UTC, but DB Driver interprets it as local
             const localDate = fieldValue;
             const timezoneOffsetMs = localDate.getTimezoneOffset() * 60 * 1000;
             const utcDate = new Date(localDate.getTime() + timezoneOffsetMs);
@@ -2621,7 +2621,7 @@ export class SQLServerDataProvider
 
   /**
    * Determines whether the database driver requires adjustment for datetimeoffset fields.
-   * This method performs an empirical test on first use to detect if the driver (e.g., TypeORM)
+   * This method performs an empirical test on first use to detect if the driver (e.g., mssql)
    * incorrectly handles timezone information in datetimeoffset columns.
    * 
    * @returns {Promise<boolean>} True if datetimeoffset values need timezone adjustment, false otherwise

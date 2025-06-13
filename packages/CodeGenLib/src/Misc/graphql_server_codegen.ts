@@ -119,7 +119,6 @@ import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { Metadata, EntityPermissionType, CompositeKey } from '@memberjunction/core'
 
 import { MaxLength } from 'class-validator';
-// TypeORM import removed - no longer needed
 ${
   isInternal
     ? `import { mj_core_schema } from '../config.js';\n`
@@ -139,7 +138,7 @@ ${entities.length > 0 ? `import { ${entities.map((e) => `${e.ClassName}Entity`).
   ): string {
     const md = new Metadata();
     let sRet: string = `/********************************************************************************
-* ${entity.Name} TypeORM/TypeGraphQL Type Class Definition - AUTO GENERATED FILE
+* ${entity.Name} TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 *
 * GENERATED: ${new Date().toLocaleString()}
 *

@@ -4,10 +4,10 @@
  * 
  * This module provides utilities for initializing and managing the database
  * connection, accessing system users, and finding entity directories. It handles
- * the TypeORM DataSource lifecycle and MemberJunction provider initialization.
+ * the mssql ConnectionPool lifecycle and MemberJunction provider initialization.
  */
 
-import { DataSource } from 'typeorm';
+import * as sql from 'mssql';
 import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
 import type { MJConfig } from '../config';
 import * as fs from 'fs';
@@ -15,8 +15,8 @@ import * as path from 'path';
 import { UserInfo } from '@memberjunction/core';
 import { configManager } from './config-manager';
 
-/** Global DataSource instance for connection lifecycle management */
-let globalDataSource: DataSource | null = null;
+/** Global ConnectionPool instance for connection lifecycle management */
+let globalPool: sql.ConnectionPool | null = null;
 
 /** Global provider instance to ensure single initialization */
 let globalProvider: SQLServerDataProvider | null = null;
@@ -27,7 +27,7 @@ let initializationPromise: Promise<SQLServerDataProvider> | null = null;
 /**
  * Initialize a SQLServerDataProvider with the given configuration
  * 
- * Creates and initializes a TypeORM DataSource for SQL Server, then sets up
+ * Creates and initializes a mssql ConnectionPool for SQL Server, then sets up
  * the MemberJunction SQLServerDataProvider. The connection is stored globally
  * for proper cleanup. Auto-detects Azure SQL databases for encryption settings.
  * 
@@ -55,33 +55,32 @@ export async function initializeProvider(config: MJConfig): Promise<SQLServerDat
   
   // Start new initialization
   initializationPromise = (async () => {
-    // Create TypeORM DataSource
-    const dataSource = new DataSource({
-      type: 'mssql',
-      host: config.dbHost,
+    // Create mssql config
+    const poolConfig: sql.config = {
+      server: config.dbHost,
       port: config.dbPort ? Number(config.dbPort) : 1433,
       database: config.dbDatabase,
-      username: config.dbUsername,
+      user: config.dbUsername,
       password: config.dbPassword,
-      synchronize: false,
-      logging: false,
       options: {
         encrypt: config.dbEncrypt === 'Y' || config.dbEncrypt === 'true' || 
                  config.dbHost.includes('.database.windows.net'), // Auto-detect Azure SQL
         trustServerCertificate: config.dbTrustServerCertificate === 'Y',
-        instanceName: config.dbInstanceName
+        instanceName: config.dbInstanceName,
+        enableArithAbort: true
       }
-    });
+    };
     
-    // Initialize the data source
-    await dataSource.initialize();
+    // Create and connect pool
+    const pool = new sql.ConnectionPool(poolConfig);
+    await pool.connect();
     
     // Store for cleanup
-    globalDataSource = dataSource;
+    globalPool = pool;
     
     // Create provider config
     const providerConfig = new SQLServerProviderConfigData(
-      dataSource,
+      pool,
       'system@sync.cli', // Default user for CLI
       config.mjCoreSchema || '__mj',
       0
@@ -98,7 +97,7 @@ export async function initializeProvider(config: MJConfig): Promise<SQLServerDat
 /**
  * Clean up the global database connection
  * 
- * Destroys the TypeORM DataSource if it exists and is initialized.
+ * Closes the mssql ConnectionPool if it exists and is connected.
  * Should be called when the CLI command completes to ensure proper cleanup.
  * 
  * @returns Promise that resolves when cleanup is complete
@@ -113,9 +112,9 @@ export async function initializeProvider(config: MJConfig): Promise<SQLServerDat
  * ```
  */
 export async function cleanupProvider(): Promise<void> {
-  if (globalDataSource && globalDataSource.isInitialized) {
-    await globalDataSource.destroy();
-    globalDataSource = null;
+  if (globalPool && globalPool.connected) {
+    await globalPool.close();
+    globalPool = null;
   }
   globalProvider = null;
   initializationPromise = null;
