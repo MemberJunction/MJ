@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef, OnChanges, SimpleChanges, Output, EventEmitter } from '@angular/core';
 import * as d3 from 'd3';
 import { TrendData } from '../../services/ai-instrumentation.service';
 
@@ -10,6 +10,13 @@ export interface TimeSeriesConfig {
   showTooltip?: boolean;
   animationDuration?: number;
   colors?: string[];
+  useDualAxis?: boolean;
+}
+
+export interface DataPointClickEvent {
+  data: TrendData;
+  metric: string;
+  event: MouseEvent;
 }
 
 @Component({
@@ -112,6 +119,12 @@ export interface TimeSeriesConfig {
       flex: 1;
       position: relative;
       overflow: hidden;
+      min-height: 0; /* Important: allows flex child to shrink below content size */
+    }
+
+    .chart-container svg {
+      width: 100%;
+      height: 100%;
     }
 
     .chart-tooltip {
@@ -172,6 +185,7 @@ export interface TimeSeriesConfig {
 
     :host ::ng-deep .chart-dot:hover {
       r: 5;
+      filter: drop-shadow(0 0 4px rgba(0,0,0,0.3));
     }
 
     :host ::ng-deep .grid-line {
@@ -190,6 +204,18 @@ export interface TimeSeriesConfig {
 
     :host ::ng-deep .axis .tick line {
       stroke: #ddd;
+    }
+
+    :host ::ng-deep .axis-y-left {
+      color: #2196f3;
+    }
+
+    :host ::ng-deep .axis-y-right {
+      color: #4caf50;
+    }
+
+    :host ::ng-deep .axis-label {
+      font-weight: 500;
     }
 
     @media (max-width: 768px) {
@@ -215,6 +241,9 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   @Input() config: TimeSeriesConfig = {};
   @Input() showLegend = true;
   @Input() showControls = true;
+  
+  @Output() dataPointClick = new EventEmitter<DataPointClickEvent>();
+  @Output() timeRangeChange = new EventEmitter<string>();
 
   @ViewChild('chartSvg', { static: true }) chartSvg!: ElementRef<SVGElement>;
   @ViewChild('tooltip', { static: true }) tooltip!: ElementRef<HTMLDivElement>;
@@ -222,7 +251,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   private svg!: d3.Selection<SVGElement, unknown, null, undefined>;
   private width = 0;
   private height = 0;
-  private margin = { top: 20, right: 30, bottom: 40, left: 60 };
+  private margin = { top: 20, right: 80, bottom: 40, left: 80 }; // Increased margins for dual axis
 
   // Chart configuration
   private defaultColors = ['#2196f3', '#4caf50', '#ff9800', '#f44336', '#9c27b0'];
@@ -290,8 +319,16 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
 
   private calculateDimensions() {
     const container = this.chartSvg.nativeElement.parentElement!;
-    this.width = (this.config.width || container.clientWidth) - this.margin.left - this.margin.right;
-    this.height = (this.config.height || container.clientHeight || 300) - this.margin.top - this.margin.bottom;
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
+    
+    // Use config dimensions or fallback to container dimensions
+    this.width = (this.config.width || containerWidth) - this.margin.left - this.margin.right;
+    this.height = (this.config.height || Math.max(containerHeight, 250)) - this.margin.top - this.margin.bottom;
+    
+    // Ensure minimum dimensions for usability
+    this.width = Math.max(this.width, 200);
+    this.height = Math.max(this.height, 200);
     
     this.svg
       .attr('width', this.width + this.margin.left + this.margin.right)
@@ -328,29 +365,69 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   private createMetricScales() {
     const scales: { [key: string]: d3.ScaleLinear<number, number> } = {};
 
-    // Group metrics by scale type (some share scales for better comparison)
-    const metricGroups = {
-      count: ['executions', 'errors'],
-      cost: ['cost'],
-      tokens: ['tokens'],
-      time: ['avgTime']
-    };
+    if (this.config.useDualAxis !== false) {
+      // Dual axis mode: Left axis (cost, avgTime), Right axis (executions, tokens, errors)
+      const leftAxisMetrics = ['cost', 'avgTime'];
+      const rightAxisMetrics = ['executions', 'tokens', 'errors'];
 
-    Object.entries(metricGroups).forEach(([groupName, metrics]) => {
-      const allValues = metrics.flatMap(metric =>
-        this.data.map(d => this.getMetricValue(d, metric)).filter((v): v is number => v != null)
+      // Create left axis scale (cost and time)
+      const leftValues = leftAxisMetrics.flatMap(metric =>
+        this.data.map(d => {
+          const value = this.getMetricValue(d, metric);
+          // Normalize avgTime to seconds for better scale comparison with cost
+          return metric === 'avgTime' ? (value || 0) / 1000 : (value || 0);
+        }).filter((v): v is number => v != null)
       );
 
-      if (allValues.length > 0) {
-        const maxValue = Math.max(...allValues);
-        const scale = d3.scaleLinear()
-          .domain([0, maxValue])
+      if (leftValues.length > 0) {
+        const maxLeftValue = Math.max(...leftValues);
+        const leftScale = d3.scaleLinear()
+          .domain([0, maxLeftValue])
           .range([this.height, 0])
           .nice();
 
-        metrics.forEach(metric => scales[metric] = scale);
+        leftAxisMetrics.forEach(metric => scales[metric] = leftScale);
       }
-    });
+
+      // Create right axis scale (count-based metrics)
+      const rightValues = rightAxisMetrics.flatMap(metric =>
+        this.data.map(d => this.getMetricValue(d, metric)).filter((v): v is number => v != null)
+      );
+
+      if (rightValues.length > 0) {
+        const maxRightValue = Math.max(...rightValues);
+        const rightScale = d3.scaleLinear()
+          .domain([0, maxRightValue])
+          .range([this.height, 0])
+          .nice();
+
+        rightAxisMetrics.forEach(metric => scales[metric] = rightScale);
+      }
+    } else {
+      // Single axis mode (original behavior)
+      const metricGroups = {
+        count: ['executions', 'errors'],
+        cost: ['cost'],
+        tokens: ['tokens'],
+        time: ['avgTime']
+      };
+
+      Object.entries(metricGroups).forEach(([groupName, metrics]) => {
+        const allValues = metrics.flatMap(metric =>
+          this.data.map(d => this.getMetricValue(d, metric)).filter((v): v is number => v != null)
+        );
+
+        if (allValues.length > 0) {
+          const maxValue = Math.max(...allValues);
+          const scale = d3.scaleLinear()
+            .domain([0, maxValue])
+            .range([this.height, 0])
+            .nice();
+
+          metrics.forEach(metric => scales[metric] = scale);
+        }
+      });
+    }
 
     return scales;
   }
@@ -389,12 +466,71 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
         .ticks(6)
         .tickFormat(d3.timeFormat('%H:%M') as any));
 
-    // Y axis (use first scale)
-    const firstScale = Object.values(scales)[0] as d3.ScaleLinear<number, number>;
-    if (firstScale) {
-      g.append('g')
-        .attr('class', 'axis axis-y')
-        .call(d3.axisLeft(firstScale).ticks(5));
+    if (this.config.useDualAxis !== false) {
+      // Dual Y-axis mode
+      const leftAxisMetrics = ['cost', 'avgTime'];
+      const rightAxisMetrics = ['executions', 'tokens', 'errors'];
+
+      // Left Y axis (cost, time)
+      const leftScale = scales[leftAxisMetrics[0]];
+      if (leftScale) {
+        g.append('g')
+          .attr('class', 'axis axis-y axis-y-left')
+          .call(d3.axisLeft(leftScale)
+            .ticks(5)
+            .tickFormat((d) => {
+              const value = d as number;
+              // Format based on value range - if > 1, likely cost, else time in seconds
+              return value > 1 ? `$${value.toFixed(2)}` : `${value.toFixed(1)}s`;
+            }));
+
+        // Left axis label
+        g.append('text')
+          .attr('class', 'axis-label axis-label-left')
+          .attr('transform', 'rotate(-90)')
+          .attr('y', 0 - this.margin.left + 20)
+          .attr('x', 0 - (this.height / 2))
+          .style('text-anchor', 'middle')
+          .style('font-size', '12px')
+          .style('fill', '#666')
+          .text('Cost ($) / Time (s)');
+      }
+
+      // Right Y axis (counts)
+      const rightScale = scales[rightAxisMetrics[0]];
+      if (rightScale) {
+        g.append('g')
+          .attr('class', 'axis axis-y axis-y-right')
+          .attr('transform', `translate(${this.width},0)`)
+          .call(d3.axisRight(rightScale)
+            .ticks(5)
+            .tickFormat((d) => {
+              const value = d as number;
+              // Format large numbers with K/M suffixes
+              if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+              if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
+              return value.toString();
+            }));
+
+        // Right axis label
+        g.append('text')
+          .attr('class', 'axis-label axis-label-right')
+          .attr('transform', 'rotate(90)')
+          .attr('y', 0 - this.width - this.margin.right + 20)
+          .attr('x', this.height / 2)
+          .style('text-anchor', 'middle')
+          .style('font-size', '12px')
+          .style('fill', '#666')
+          .text('Count (Executions / Tokens)');
+      }
+    } else {
+      // Single Y axis (original behavior)
+      const firstScale = Object.values(scales)[0] as d3.ScaleLinear<number, number>;
+      if (firstScale) {
+        g.append('g')
+          .attr('class', 'axis axis-y')
+          .call(d3.axisLeft(firstScale).ticks(5));
+      }
     }
   }
 
@@ -405,17 +541,29 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
       const color = this.getMetricColor(metric);
       const scale = scales[metric];
 
-      // Create line generator
+      // Create line generator with proper value transformation
       const line = d3.line<TrendData>()
         .x(d => xScale(d.timestamp))
-        .y(d => scale(this.getMetricValue(d, metric) || 0))
+        .y(d => {
+          const value = this.getMetricValue(d, metric) || 0;
+          // Normalize avgTime to seconds if using dual axis
+          const transformedValue = (this.config.useDualAxis !== false && metric === 'avgTime') 
+            ? value / 1000 : value;
+          return scale(transformedValue);
+        })
         .curve(d3.curveMonotoneX);
 
-      // Create area generator
+      // Create area generator with proper value transformation
       const area = d3.area<TrendData>()
         .x(d => xScale(d.timestamp))
         .y0(this.height)
-        .y1(d => scale(this.getMetricValue(d, metric) || 0))
+        .y1(d => {
+          const value = this.getMetricValue(d, metric) || 0;
+          // Normalize avgTime to seconds if using dual axis
+          const transformedValue = (this.config.useDualAxis !== false && metric === 'avgTime') 
+            ? value / 1000 : value;
+          return scale(transformedValue);
+        })
         .curve(d3.curveMonotoneX);
 
       // Draw area (optional)
@@ -434,14 +582,25 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
         .attr('d', line)
         .attr('stroke', color);
 
-      // Draw dots
+      // Draw dots with click events
       g.selectAll(`.chart-dot--${metric}`)
         .data(this.data)
         .enter().append('circle')
         .attr('class', `chart-dot chart-dot--${metric}`)
         .attr('cx', (d: TrendData) => xScale(d.timestamp))
-        .attr('cy', (d: TrendData) => scale(this.getMetricValue(d, metric) || 0))
-        .attr('stroke', color);
+        .attr('cy', (d: TrendData) => {
+          const value = this.getMetricValue(d, metric) || 0;
+          // Normalize avgTime to seconds if using dual axis
+          const transformedValue = (this.config.useDualAxis !== false && metric === 'avgTime') 
+            ? value / 1000 : value;
+          return scale(transformedValue);
+        })
+        .attr('stroke', color)
+        .style('cursor', 'pointer')
+        .on('click', (event: MouseEvent, d: TrendData) => {
+          event.stopPropagation();
+          this.dataPointClick.emit({ data: d, metric, event });
+        });
     });
   }
 
@@ -486,11 +645,14 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
     
     const content = `
       <div><strong>${d3.timeFormat('%H:%M')(data.timestamp)}</strong></div>
-      <div>Executions: ${data.executions}</div>
+      <div>Executions: ${data.executions.toLocaleString()}</div>
       <div>Cost: $${data.cost.toFixed(4)}</div>
       <div>Tokens: ${data.tokens.toLocaleString()}</div>
       <div>Avg Time: ${(data.avgTime / 1000).toFixed(1)}s</div>
       <div>Errors: ${data.errors}</div>
+      <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3); font-size: 11px; color: rgba(255,255,255,0.8);">
+        Click data points to drill down
+      </div>
     `;
 
     tooltip
@@ -548,8 +710,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
 
   selectTimeRange(range: string): void {
     this.selectedTimeRange = range;
-    // Emit event or filter data based on range
-    // This would typically trigger a data reload in the parent component
+    this.timeRangeChange.emit(range);
   }
 
   trackByMetric(index: number, metric: string): string {

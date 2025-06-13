@@ -1208,6 +1208,11 @@ export interface ExecutionRecord {
       padding: 0;
     }
 
+    .trends-chart app-time-series-chart {
+      height: 100%;
+      display: block;
+    }
+
     /* Drill-down specific styles */
     .executions-drill-down {
       padding: 20px;
@@ -1548,7 +1553,6 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
 
   // Chart configurations
   timeSeriesConfig = {
-    height: 350,
     showGrid: true,
     showTooltip: true,
     animationDuration: 500,
