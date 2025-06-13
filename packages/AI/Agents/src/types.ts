@@ -32,36 +32,18 @@ export type ExecuteAgentParams = {
  * Result returned from executing an AI Agent.
  * 
  * @interface ExecuteAgentResult
- * @property {'success' | 'failed' | 'subagent' | 'action'} nextStep - The determined next step after execution
+ * @property {BaseAgentNextStep['step']} nextStep - The determined next step after execution (success, failed, retry, sub-agent, action)
  * @property {any} [returnValue] - Optional return value from the agent execution, type depends on agent implementation
  * @property {string} [rawResult] - Optional raw text result from the underlying LLM execution
  * @property {string} [errorMessage] - Error message if execution failed
  */
 export type ExecuteAgentResult = {
-    nextStep: 'success' | 'failed' | 'subagent' | 'action';
+    nextStep: BaseAgentNextStep['step'];
     returnValue?: any;
     rawResult?: string;
     errorMessage?: string;
 }
 
-/**
- * Information about an action available to an agent.
- * 
- * This type represents actions from the MemberJunction Actions framework that
- * can be invoked by agents during execution.
- * 
- * @interface ActionInfo
- * @property {string} id - Unique identifier of the action
- * @property {string} name - Human-readable name of the action
- * @property {string | null} description - Detailed description of what the action does
- * @property {string} [category] - Optional category for grouping related actions
- */
-export type ActionInfo = {
-    id: string;
-    name: string;
-    description: string | null;
-    category?: string;
-}
 
 /**
  * Context data provided to agent prompts during execution.
@@ -76,7 +58,7 @@ export type ActionInfo = {
  * @property {number} subAgentCount - Number of sub-agents available to this agent
  * @property {string} subAgentDetails - JSON stringified array of AIAgentEntity objects representing sub-agents
  * @property {number} actionCount - Number of actions available to this agent
- * @property {string} actionDetails - JSON stringified array of ActionInfo objects representing available actions
+ * @property {string} actionDetails - JSON stringified array of ActionEntity objects representing available actions
  */
 export type AgentContextData = {
     agentName: string | null;
@@ -84,24 +66,40 @@ export type AgentContextData = {
     subAgentCount: number;
     subAgentDetails: string;  // JSON stringified AIAgentEntity[]
     actionCount: number;
-    actionDetails: string;     // JSON stringified ActionInfo[]
+    actionDetails: string;     // JSON stringified ActionEntity[]
 }
 
 /**
  * Represents the next step determination from an agent type.
  * 
  * Agent types analyze the output of prompt execution and determine what should
- * happen next in the agent workflow. This type encapsulates that decision.
+ * happen next in the agent workflow. This type encapsulates that decision along
+ * with any necessary context for the determined action.
  * 
  * @interface BaseAgentNextStep
- * @property {'success' | 'failed' | 'subagent' | 'action'} step - The determined next step
+ * @property {'success' | 'failed' | 'retry' | 'sub-agent' | 'action'} step - The determined next step
  *   - 'success': The agent has completed its task successfully
  *   - 'failed': The agent has failed to complete its task
- *   - 'subagent': The agent should spawn a sub-agent to handle a specific task
+ *   - 'retry': The agent should retry the last step by running it again
+ *   - 'sub-agent': The agent should spawn a sub-agent to handle a specific task
  *   - 'action': The agent should perform a specific action using the Actions framework
  * @property {any} [returnValue] - Optional value to return with the step determination
+ * @property {string} [errorMessage] - Error message when step is 'failed'
+ * @property {string} [retryReason] - Reason for retry when step is 'retry'
+ * @property {string} [retryInstructions] - Instructions for the retry attempt
+ * @property {string} [subAgentName] - Name/ID of the sub-agent to execute when step is 'sub-agent'
+ * @property {Record<string, unknown>} [subAgentInstructions] - Instructions/parameters for the sub-agent
+ * @property {string} [actionName] - Name/ID of the action to execute when step is 'action'
+ * @property {Record<string, unknown>} [actionParameters] - Parameters to pass to the action
  */
 export type BaseAgentNextStep = {
-    step: 'success' | 'failed' | 'subagent' | 'action';
+    step: 'success' | 'failed' | 'retry' | 'sub-agent' | 'action';
     returnValue?: any;
+    errorMessage?: string;
+    retryReason?: string;
+    retryInstructions?: string;
+    subAgentName?: string;
+    subAgentInstructions?: Record<string, unknown>;
+    actionName?: string;
+    actionParameters?: Record<string, unknown>;
 }

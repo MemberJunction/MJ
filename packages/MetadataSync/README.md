@@ -851,6 +851,81 @@ Configuration follows a hierarchical structure:
 - **Entity configs**: Each entity directory has its own config defining the entity type
 - **Inheritance**: All files within an entity directory are treated as records of that entity type
 
+### SQL Logging (NEW)
+
+The MetadataSync tool now supports SQL logging for capturing all database operations during push commands. This feature is useful for:
+- Creating migration files from MetadataSync operations
+- Debugging database changes
+- Understanding what SQL operations occur during push
+- Creating migration scripts for deployment to other environments
+
+#### SQL Logging Configuration
+
+SQL logging is configured in the root-level `.mj-sync.json` file only (not inherited by subdirectories):
+
+```json
+{
+  "version": "1.0.0",
+  "sqlLogging": {
+    "enabled": true,
+    "outputDirectory": "./sql_logging",
+    "formatAsMigration": true
+  }
+}
+```
+
+#### SQL Logging Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | boolean | false | Whether to enable SQL logging during push operations |
+| `outputDirectory` | string | "./sql_logging" | Directory to output SQL log files (relative to command execution directory) |
+| `formatAsMigration` | boolean | false | Whether to format SQL as migration-ready files with Flyway schema placeholders |
+
+#### SQL Log File Format
+
+When `formatAsMigration` is `false`, log files are named:
+```
+metadatasync-push-YYYY-MM-DDTHH-MM-SS.sql
+```
+
+When `formatAsMigration` is `true`, log files are named as Flyway migrations:
+```
+VYYYYMMDDHHMMSS__MetadataSync_Push.sql
+```
+
+Migration files include:
+- Header comments with timestamp and description
+- Schema placeholders that can be replaced during deployment
+- Properly formatted SQL statements with parameters
+
+#### Example Usage
+
+1. **Enable SQL logging** in your root `.mj-sync.json`:
+   ```json
+   {
+     "version": "1.0.0",
+     "sqlLogging": {
+       "enabled": true,
+       "outputDirectory": "./migrations",
+       "formatAsMigration": true
+     }
+   }
+   ```
+
+2. **Run push command** as normal:
+   ```bash
+   mj-sync push
+   ```
+
+3. **Review generated SQL** in the output directory:
+   ```
+   migrations/
+   └── V20241215103045__MetadataSync_Push.sql
+   ```
+
+The SQL logging runs in parallel with the actual database operations, ensuring minimal performance impact while capturing all SQL statements for review and potential migration use.
+
 ### Root Configuration (metadata/.mj-sync.json)
 ```json
 {
@@ -858,6 +933,11 @@ Configuration follows a hierarchical structure:
   "push": {
     "validateBeforePush": true,
     "requireConfirmation": true
+  },
+  "sqlLogging": {
+    "enabled": true,
+    "outputDirectory": "./sql_logging",
+    "formatAsMigration": false
   },
   "watch": {
     "debounceMs": 1000,

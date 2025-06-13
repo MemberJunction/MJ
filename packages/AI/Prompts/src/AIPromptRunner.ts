@@ -9,342 +9,34 @@ import { ParallelExecutionCoordinator } from './ParallelExecutionCoordinator';
 import { ResultSelectionConfig } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
 import Ajv, { JSONSchemaType, ValidateFunction, ErrorObject } from 'ajv';
+import { SystemPlaceholderManager } from './SystemPlaceholders';
+import { 
+    ExecutionProgressCallback, 
+    ExecutionStreamingCallback, 
+    TemplateMessageRole,
+    ChildPromptParam,
+    AIPromptParams,
+    ExecutionStatus,
+    CancellationReason,
+    ModelInfo,
+    JudgeMetadata,
+    ValidationAttempt,
+    AIPromptRunResult
+} from './types';
 
-/**
- * Callback function type for execution progress updates
- */
-export type ExecutionProgressCallback = (progress: {
-  /** Current step in the execution process */
-  step: 'template_rendering' | 'model_selection' | 'execution' | 'validation' | 'parallel_coordination' | 'result_selection';
-  /** Progress percentage (0-100) */
-  percentage: number;
-  /** Human-readable status message */
-  message: string;
-  /** Additional metadata about the current step */
-  metadata?: Record<string, unknown>;
-}) => void;
-
-/**
- * Callback function type for streaming content updates during execution
- */
-export type ExecutionStreamingCallback = (chunk: {
-  /** The content chunk received */
-  content: string;
-  /** Whether this is the final chunk */
-  isComplete: boolean;
-  /** Which task/model is producing this content (for parallel execution) */
-  taskId?: string;
-  /** Model name producing this content */
-  modelName?: string;
-}) => void;
-
-/**
- * Template message role type for better type safety
- */
-export type TemplateMessageRole = 'system' | 'user' | 'none';
-
-/**
- * Represents a child prompt to be executed and embedded in a parent prompt
- */
-export class ChildPromptParam {
-  /**
-   * The child prompt to execute - a full AIPromptParams that can contain its own child prompts
-   */
-  childPrompt: AIPromptParams;
-
-  /**
-   * The placeholder name in the parent template where this child's result will be inserted
-   */
-  parentPlaceholder: string;
-
-  constructor(childPrompt: AIPromptParams, parentPlaceholder: string) {
-    this.childPrompt = childPrompt;
-    this.parentPlaceholder = parentPlaceholder;
-  }
-}
-
-/**
- * Parameters for executing an AI prompt
- */
-export class AIPromptParams {
-  /**
-   * The AI prompt to execute.
-   * Note: Get prompts from AIEngine.Instance.Prompts after calling AIEngine.Config()
-   */
-  prompt: AIPromptEntity;
-
-  /**
-   * Data context for template rendering and prompt execution
-   */
-  data?: Record<string, unknown>;
-
-  /**
-   * Optional specific model to use (overrides prompt's model selection)
-   */
-  modelId?: string;
-
-  /**
-   * Optional specific vendor to use for inference routing
-   */
-  vendorId?: string;
-
-  /**
-   * Optional configuration ID for environment-specific behavior
-   */
-  configurationId?: string;
-
-  /**
-   * User context for authentication and permissions
-   */
-  contextUser?: UserInfo;
-
-  /**
-   * Whether to skip validation of the prompt output
-   */
-  skipValidation?: boolean;
-
-  /**
-   * Optional custom template data that augments the main data context
-   */
-  templateData?: Record<string, unknown>;
-
-  /**
-   * Optional conversation messages for multi-turn conversations
-   * When provided, these messages will be combined with the rendered template
-   * for direct conversation-style prompting
-   */
-  conversationMessages?: ChatMessage[];
-
-  /**
-   * Determines how the rendered template should be used in conversation messages
-   * 'system' - Add rendered template as system message (default)
-   * 'user' - Add rendered template as user message
-   * 'none' - Don't add rendered template to conversation
-   */
-  templateMessageRole?: TemplateMessageRole;
-
-  /**
-   * Optional cancellation token to abort the prompt execution
-   * When this signal is aborted, the execution will be cancelled and any
-   * running operations will be terminated as gracefully as possible
-   */
-  cancellationToken?: AbortSignal;
-
-  /**
-   * Optional callback for receiving execution progress updates
-   * Provides real-time information about the execution progress
-   */
-  onProgress?: ExecutionProgressCallback;
-
-  /**
-   * Optional callback for receiving streaming content updates
-   * Called when AI models support streaming responses
-   */
-  onStreaming?: ExecutionStreamingCallback;
-
-  /**
-   * Optional agent run ID to link this prompt execution to a parent agent run
-   * When provided, the AIPromptRun record will include this as AgentRunID for comprehensive execution tracking
-   */
-  agentRunId?: string;
+// Re-export types that other modules need
+export { TemplateMessageRole, AIPromptParams } from './types';
 
 
-  /**
-   * Optional array of child prompts to execute before this prompt.
-   * 
-   * When provided, the AIPromptRunner will:
-   * 1. Execute all child prompts in a depth-first manner
-   * 2. At each level, execute sibling prompts in parallel for performance
-   * 3. Collect all child prompt results
-   * 4. Replace the corresponding placeholders in the parent template with child results
-   * 5. Execute the parent prompt with all child results embedded
-   * 
-   * This enables hierarchical prompt architectures where:
-   * - Child prompts can contain their own nested child prompts (unlimited depth)
-   * - Each child result is embedded at a specific placeholder in the parent template
-   * - Parallel execution optimizes performance at each level
-   * - Complex multi-step reasoning can be decomposed into manageable units
-   * 
-   * Each child prompt can specify its own execution parameters including models, validation, etc.
-   * 
-   * @example
-   * ```typescript
-   * const params = new AIPromptParams();
-   * params.prompt = parentPrompt;
-   * params.childPrompts = [
-   *   new ChildPromptParam(childPrompt1, 'analysis'),
-   *   new ChildPromptParam(childPrompt2, 'summary')
-   * ];
-   * // Parent template can use {{ analysis }} and {{ summary }} placeholders
-   * ```
-   */
-  childPrompts?: ChildPromptParam[];
-}
 
-/**
- * Execution status enumeration for better type safety
- */
-export type ExecutionStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 
-/**
- * Cancellation reason enumeration
- */
-export type CancellationReason = 'user_requested' | 'timeout' | 'error' | 'resource_limit';
 
-/**
- * Model information type for consistent usage across results
- */
-export interface ModelInfo {
-  modelId: string;
-  modelName: string;
-  vendorId?: string;
-  vendorName?: string;
-  powerRank?: number;
-  modelType?: string;
-}
 
-/**
- * Judge metadata type for consistent usage
- */
-export interface JudgeMetadata {
-  judgePromptId: string;
-  judgeExecutionTimeMS: number;
-  judgeTokensUsed?: number;
-  judgeCancelled?: boolean;
-  judgeErrorMessage?: string;
-}
 
-/**
- * Extended validation result with detailed information about validation attempts
- */
-export interface ValidationAttempt {
-  /** Attempt number (1-based) */
-  attemptNumber: number;
-  /** Whether this attempt passed validation */
-  success: boolean;
-  /** Error message if validation failed */
-  errorMessage?: string;
-  /** Detailed validation errors */
-  validationErrors?: ValidationErrorInfo[];
-  /** Raw output that was validated */
-  rawOutput: string;
-  /** Parsed output if successful */
-  parsedOutput?: unknown;
-  /** Timestamp of this validation attempt */
-  timestamp: Date;
-}
 
-/**
- * Result of an AI prompt execution with generic type for the result
- */
-export class AIPromptRunResult<T = unknown> {
-  /**
-   * Whether the execution was successful
-   */
-  success: boolean;
 
-  /**
-   * Current execution status
-   */
-  status?: ExecutionStatus;
 
-  /**
-   * Whether the execution was cancelled
-   */
-  cancelled?: boolean;
 
-  /**
-   * Reason for cancellation if applicable
-   */
-  cancellationReason?: CancellationReason;
-
-  /**
-   * The raw result from the AI model
-   */
-  rawResult?: string;
-
-  /**
-   * The parsed/validated result based on OutputType
-   */
-  result?: T;
-
-  /**
-   * The ChatResult object containing the full response from the AI model, many
-   * of the properties of this object are included in the result object
-   */
-  chatResult: ChatResult;
-
-  /**
-   * Error message if execution failed
-   */
-  errorMessage?: string;
-
-  /**
-   * The AIPromptRun entity that was created for tracking
-   */
-  promptRun?: AIPromptRunEntity;
-
-  /**
-   * Total execution time in milliseconds
-   */
-  executionTimeMS?: number;
-
-  /**
-   * Tokens used in the execution
-   */
-  tokensUsed?: number;
-
-  /**
-   * Validation result if output validation was performed
-   */
-  validationResult?: ValidationResult;
-
-  /**
-   * Detailed information about all validation attempts made
-   */
-  validationAttempts?: ValidationAttempt[];
-
-  /**
-   * Additional results from parallel execution, ranked by judge
-   * Index 0 = second best, Index 1 = third best, etc.
-   * (The best result is the main result object itself)
-   */
-  additionalResults?: AIPromptRunResult<T>[];
-
-  /**
-   * Ranking assigned by judge (1 = best, 2 = second best, etc.)
-   */
-  ranking?: number;
-
-  /**
-   * Judge's rationale for this ranking
-   */
-  judgeRationale?: string;
-
-  /**
-   * Model information for this result
-   */
-  modelInfo?: ModelInfo;
-
-  /**
-   * Metadata about the judging process (only present on the main result)
-   */
-  judgeMetadata?: JudgeMetadata;
-
-  /**
-   * Whether streaming was used for this execution
-   */
-  wasStreamed?: boolean;
-
-  /**
-   * Cache information if caching was involved
-   */
-  cacheInfo?: {
-    cacheHit: boolean;
-    cacheKey?: string;
-    cacheSource?: string;
-  };
-}
 
 /**
  * Advanced AI Prompt execution engine with comprehensive template support, hierarchical prompt execution,
@@ -473,7 +165,7 @@ export class AIPromptRunner {
 
     // Check for cancellation at the start
     if (params.cancellationToken?.aborted) {
-      return {
+      const result: AIPromptRunResult<T> = {
         success: false,
         status: 'cancelled',
         cancelled: true,
@@ -481,7 +173,10 @@ export class AIPromptRunner {
         errorMessage: 'Prompt execution was cancelled before starting',
         executionTimeMS: 0,
         chatResult: { success: false, errorMessage: 'Prompt execution was cancelled before starting' } as ChatResult,
+        tokensUsed: 0,
+        combinedTokensUsed: 0
       };
+      return result;
     }
 
     try {
@@ -497,18 +192,33 @@ export class AIPromptRunner {
 
       let renderedPromptText: string = '';
 
+      // For hierarchical prompts, we need to create the parent prompt run first to get its ID
+      let parentPromptRun: AIPromptRunEntity | undefined;
+      let selectedModel: AIModelEntityExtended | undefined;
+      let childExecutionResult: { results: Record<string, string>; totalPromptTokens: number; totalCompletionTokens: number; totalCost?: number; hasCost: boolean } | undefined;
+
       // Handle different prompt execution modes
       if (params.childPrompts && params.childPrompts.length > 0) {
-        // New child prompt execution mode - execute children first, then render parent with results
+        // New child prompt execution mode - create parent run first, then execute children
         LogStatus(`🌳 Executing prompt with ${params.childPrompts.length} child prompts in hierarchical mode`);
         
-        // Execute all child prompts recursively
-        const childResults = await this.executeChildPrompts(params.childPrompts, params.cancellationToken);
+        // Select model for parent prompt execution
+        selectedModel = await this.selectModel(prompt, params.modelId, params.contextUser, params.configurationId, params.vendorId);
+        if (!selectedModel) {
+          throw new Error(`No suitable model found for prompt ${prompt.Name}`);
+        }
+
+        // Create parent prompt run to establish the hierarchy
+        parentPromptRun = await this.createPromptRun(prompt, selectedModel, params, startTime, params.vendorId);
+        LogStatus(`📝 Created parent prompt run ${parentPromptRun.ID} for hierarchical execution`);
+        
+        // Execute all child prompts recursively with parent ID
+        childExecutionResult = await this.executeChildPrompts(params.childPrompts, params.cancellationToken, parentPromptRun.ID);
         
         // Render the parent prompt with child results embedded
-        renderedPromptText = await this.renderPromptWithChildResults(prompt, params, childResults);
+        renderedPromptText = await this.renderPromptWithChildResults(prompt, params, childExecutionResult.results);
         
-        LogStatus(`✅ Hierarchical prompt execution completed with ${Object.keys(childResults).length} child results embedded`);
+        LogStatus(`✅ Hierarchical prompt execution completed with ${Object.keys(childExecutionResult.results).length} child results embedded`);
         
       } else if (prompt.TemplateID && (!params.conversationMessages || params.templateMessageRole !== 'none')) {
         // Regular template rendering mode
@@ -521,8 +231,8 @@ export class AIPromptRunner {
           throw new Error(`Template with ID ${prompt.TemplateID} not found for prompt ${prompt.Name}`);
         }
 
-        // Render the template with provided data
-        const renderedPrompt = await this.renderPromptTemplate(template, params.data, params.templateData);
+        // Render the template with full params context
+        const renderedPrompt = await this.renderPromptTemplate(template, params);
         if (!renderedPrompt.Success) {
           throw new Error(`Failed to render template for prompt ${prompt.Name}: ${renderedPrompt.Message}`);
         }
@@ -538,13 +248,45 @@ export class AIPromptRunner {
       // Check if we need parallel execution based on ParallelizationMode
       const shouldUseParallelExecution = prompt.ParallelizationMode && prompt.ParallelizationMode !== 'None';
 
+      let result: AIPromptRunResult<T>;
       if (shouldUseParallelExecution) {
         // Use parallel execution path
-        return await this.executePromptInParallel<T>(prompt, renderedPromptText, params, startTime);
+        result = await this.executePromptInParallel<T>(prompt, renderedPromptText, params, startTime, parentPromptRun);
       } else {
         // Use traditional single execution path
-        return await this.executeSinglePrompt<T>(prompt, renderedPromptText, params, startTime);
+        result = await this.executeSinglePrompt<T>(prompt, renderedPromptText, params, startTime, parentPromptRun, selectedModel);
       }
+
+      // Add rollup information if we have child executions
+      if (childExecutionResult && result.promptRun) {
+        // Calculate rollup values: parent's own usage + all children's usage
+        const rollupPromptTokens = (result.promptTokens || 0) + childExecutionResult.totalPromptTokens;
+        const rollupCompletionTokens = (result.completionTokens || 0) + childExecutionResult.totalCompletionTokens;
+        const rollupCost = childExecutionResult.hasCost ? 
+          ((result.cost || 0) + (childExecutionResult.totalCost || 0)) : 
+          undefined;
+
+        // Update the prompt run with rollup values
+        result.promptRun.TokensPromptRollup = rollupPromptTokens;
+        result.promptRun.TokensCompletionRollup = rollupCompletionTokens;
+        result.promptRun.TokensUsedRollup = rollupPromptTokens + rollupCompletionTokens;
+        if (rollupCost !== undefined) {
+          result.promptRun.TotalCost = rollupCost;
+        }
+
+        // Save the updated rollup values
+        const saveResult = await result.promptRun.Save();
+        if (!saveResult) {
+          LogError(`Failed to save rollup values to AIPromptRun: ${result.promptRun.LatestResult?.Message || 'Unknown error'}`);
+        }
+
+        // Update the result object with combined values
+        result.combinedPromptTokens = rollupPromptTokens;
+        result.combinedCompletionTokens = rollupCompletionTokens;
+        result.combinedCost = rollupCost;
+      }
+
+      return result;
     } catch (error) {
       LogError(error);
 
@@ -562,13 +304,16 @@ export class AIPromptRunner {
         }
       }
 
-      return {
+      const errorResult: AIPromptRunResult<T> = {
         success: false,
         errorMessage: error.message,
         promptRun,
         executionTimeMS,
         chatResult: { success: false, errorMessage: error.message } as ChatResult,
+        tokensUsed: 0,
+        combinedTokensUsed: 0
       };
+      return errorResult;
     }
   }
 
@@ -581,14 +326,21 @@ export class AIPromptRunner {
    * @param startTime - Execution start time
    * @returns Promise<AIPromptRunResult<T>> - The execution result
    */
-  private async executeSinglePrompt<T = unknown>(prompt: AIPromptEntity, renderedPromptText: string, params: AIPromptParams, startTime: Date): Promise<AIPromptRunResult<T>> {
+  private async executeSinglePrompt<T = unknown>(
+    prompt: AIPromptEntity, 
+    renderedPromptText: string, 
+    params: AIPromptParams, 
+    startTime: Date,
+    existingPromptRun?: AIPromptRunEntity,
+    existingModel?: AIModelEntityExtended
+  ): Promise<AIPromptRunResult<T>> {
     // Check for cancellation before model selection
     if (params.cancellationToken?.aborted) {
       throw new Error('Prompt execution was cancelled before model selection');
     }
 
-    // Select the model to use based on prompt configuration
-    const selectedModel = await this.selectModel(prompt, params.modelId, params.contextUser, params.configurationId, params.vendorId);
+    // Use existing model if provided (hierarchical case) or select one
+    const selectedModel = existingModel || await this.selectModel(prompt, params.modelId, params.contextUser, params.configurationId, params.vendorId);
     if (!selectedModel) {
       throw new Error(`No suitable model found for prompt ${prompt.Name}`);
     }
@@ -598,8 +350,8 @@ export class AIPromptRunner {
       throw new Error('Prompt execution was cancelled after model selection');
     }
 
-    // Create AIPromptRun record for tracking
-    const promptRun = await this.createPromptRun(prompt, selectedModel, params, startTime, params.vendorId);
+    // Use existing prompt run if provided (hierarchical case) or create new one
+    const promptRun = existingPromptRun || await this.createPromptRun(prompt, selectedModel, params, startTime, params.vendorId);
 
     // Check for cancellation before model execution
     if (params.cancellationToken?.aborted) {
@@ -623,6 +375,8 @@ export class AIPromptRunner {
     await this.updatePromptRun(promptRun, modelResult, parsedResult, endTime, executionTimeMS, validationAttempts);
 
     const chatResult = modelResult as ChatResult;
+    const usage = chatResult.data?.usage;
+    
     return {
       success: true,
       rawResult: chatResult.data?.choices?.[0]?.message?.content,
@@ -630,9 +384,14 @@ export class AIPromptRunner {
       chatResult,
       promptRun,
       executionTimeMS,
-      tokensUsed: chatResult.data?.usage?.totalTokens,
+      promptTokens: usage?.promptTokens,
+      completionTokens: usage?.completionTokens,
+      tokensUsed: (usage?.promptTokens || 0) + (usage?.completionTokens || 0),
+      cost: usage?.cost,
+      costCurrency: usage?.costCurrency,
       validationResult: parsedResult.validationResult,
       validationAttempts,
+      combinedTokensUsed: (usage?.promptTokens || 0) + (usage?.completionTokens || 0) // For single execution, same as tokensUsed
     };
   }
 
@@ -650,6 +409,7 @@ export class AIPromptRunner {
     renderedPromptText: string,
     params: AIPromptParams,
     startTime: Date,
+    existingPromptRun?: AIPromptRunEntity,
   ): Promise<AIPromptRunResult<T>> {
     // Check for cancellation before starting parallel execution
     if (params.cancellationToken?.aborted) {
@@ -716,8 +476,26 @@ export class AIPromptRunner {
       }
     }
 
-    // Create a consolidated AIPromptRun record for the parallel execution
-    const consolidatedPromptRun = await this.createPromptRun(prompt, selectedResult.task.model, params, startTime, params.vendorId);
+    // Calculate total tokens and costs from all parallel executions
+    let totalPromptTokens = 0;
+    let totalCompletionTokens = 0;
+    let totalCost = 0;
+    let hasCost = false;
+    
+    for (const result of successfulResults) {
+      const usage = result.modelResult?.data?.usage;
+      if (usage) {
+        totalPromptTokens += usage.promptTokens || 0;
+        totalCompletionTokens += usage.completionTokens || 0;
+        if (usage.cost !== undefined) {
+          totalCost += usage.cost;
+          hasCost = true;
+        }
+      }
+    }
+
+    // Use existing prompt run if provided (hierarchical case) or create new one
+    const consolidatedPromptRun = existingPromptRun || await this.createPromptRun(prompt, selectedResult.task.model, params, startTime, params.vendorId);
 
     // Update with parallel execution metadata
     const endTime = new Date();
@@ -725,6 +503,19 @@ export class AIPromptRunner {
     consolidatedPromptRun.ExecutionTimeMS = parallelResult.totalExecutionTimeMS;
     consolidatedPromptRun.Result = selectedResult.rawResult || '';
     consolidatedPromptRun.TokensUsed = parallelResult.totalTokensUsed;
+    
+    // Extract token and cost info from selected result
+    const selectedResultUsage = selectedResult.modelResult?.data?.usage;
+    if (selectedResultUsage) {
+      consolidatedPromptRun.TokensPrompt = selectedResultUsage.promptTokens;
+      consolidatedPromptRun.TokensCompletion = selectedResultUsage.completionTokens;
+      if (selectedResultUsage.cost !== undefined) {
+        consolidatedPromptRun.Cost = selectedResultUsage.cost;
+      }
+      if (selectedResultUsage.costCurrency !== undefined) {
+        consolidatedPromptRun.CostCurrency = selectedResultUsage.costCurrency;
+      }
+    }
 
     // Add parallel execution metadata to Messages field
     const parallelMetadata = {
@@ -742,6 +533,15 @@ export class AIPromptRunner {
         templateData: params.templateData,
         parallelExecution: parallelMetadata,
       });
+    }
+
+    // For parallel execution without children, set rollup fields to match totals
+    // These will be overwritten later if this prompt has children
+    consolidatedPromptRun.TokensPromptRollup = totalPromptTokens;
+    consolidatedPromptRun.TokensCompletionRollup = totalCompletionTokens;
+    consolidatedPromptRun.TokensUsedRollup = totalPromptTokens + totalCompletionTokens;
+    if (hasCost) {
+      consolidatedPromptRun.TotalCost = totalCost;
     }
 
     const saveResult = await consolidatedPromptRun.Save();
@@ -766,13 +566,18 @@ export class AIPromptRunner {
         const { result: parsedResultData, validationResult, validationErrors } = await this.parseAndValidateResultEnhanced(result.modelResult!, prompt, params.skipValidation);
         const parsedResult = { result: parsedResultData, validationResult };
 
+        const resultUsage = result.modelResult?.data?.usage;
         additionalResults.push({
           success: result.success,
           rawResult: result.rawResult,
           result: parsedResult.result as T,
           chatResult: result.modelResult!,
           executionTimeMS: result.executionTimeMS,
-          tokensUsed: result.tokensUsed,
+          promptTokens: resultUsage?.promptTokens,
+          completionTokens: resultUsage?.completionTokens,
+          tokensUsed: (resultUsage?.promptTokens || 0) + (resultUsage?.completionTokens || 0),
+          cost: resultUsage?.cost,
+          costCurrency: resultUsage?.costCurrency,
           validationResult: parsedResult.validationResult,
           ranking: result.ranking,
           judgeRationale: result.judgeRationale,
@@ -782,6 +587,7 @@ export class AIPromptRunner {
             vendorId: undefined, // VendorID not directly available on AIModel
             vendorName: result.task.model.Vendor,
           },
+          combinedTokensUsed: (resultUsage?.promptTokens || 0) + (resultUsage?.completionTokens || 0)
         });
       }
     }
@@ -789,6 +595,7 @@ export class AIPromptRunner {
     // Parse and validate the selected result
     const { result: selectedResultData, validationResult: selectedValidationResult } = await this.parseAndValidateResultEnhanced(selectedResult.modelResult!, prompt, params.skipValidation);
     const selectedParsedResult = { result: selectedResultData, validationResult: selectedValidationResult };
+    const selectedUsage = selectedResult.modelResult?.data?.usage;
 
     return {
       success: true,
@@ -797,7 +604,16 @@ export class AIPromptRunner {
       chatResult: selectedResult.modelResult!,
       promptRun: consolidatedPromptRun,
       executionTimeMS: parallelResult.totalExecutionTimeMS,
-      tokensUsed: parallelResult.totalTokensUsed,
+      promptTokens: selectedUsage?.promptTokens,
+      completionTokens: selectedUsage?.completionTokens,
+      tokensUsed: (selectedUsage?.promptTokens || 0) + (selectedUsage?.completionTokens || 0),
+      cost: selectedUsage?.cost,
+      costCurrency: selectedUsage?.costCurrency,
+      // Combined totals for parallel execution
+      combinedPromptTokens: totalPromptTokens,
+      combinedCompletionTokens: totalCompletionTokens,
+      combinedTokensUsed: totalPromptTokens + totalCompletionTokens,
+      combinedCost: hasCost ? totalCost : undefined,
       validationResult: selectedParsedResult.validationResult,
       additionalResults: additionalResults.length > 0 ? additionalResults : undefined,
       ranking: selectedResult.ranking || 1,
@@ -832,14 +648,28 @@ export class AIPromptRunner {
    * 
    * @param childPrompts - Array of child prompts to execute
    * @param cancellationToken - Cancellation token for aborting execution
-   * @returns Promise<Record<string, string>> - Map of placeholder names to execution results
+   * @param parentPromptRunId - ID of the parent prompt run for hierarchical tracking
+   * @returns Promise with both results map and aggregated token/cost information
    */
   private async executeChildPrompts(
     childPrompts: ChildPromptParam[],
-    cancellationToken?: AbortSignal
-  ): Promise<Record<string, string>> {
+    cancellationToken?: AbortSignal,
+    parentPromptRunId?: string
+  ): Promise<{
+    results: Record<string, string>;
+    totalPromptTokens: number;
+    totalCompletionTokens: number;
+    totalCost?: number;
+    hasCost: boolean;
+  }> {
     if (!childPrompts || childPrompts.length === 0) {
-      return {};
+      return {
+        results: {},
+        totalPromptTokens: 0,
+        totalCompletionTokens: 0,
+        totalCost: undefined,
+        hasCost: false
+      };
     }
 
     // Check for cancellation
@@ -862,11 +692,12 @@ export class AIPromptRunner {
         if (childParam.childPrompt.childPrompts && childParam.childPrompt.childPrompts.length > 0) {
           const grandchildResults = await this.executeChildPrompts(
             childParam.childPrompt.childPrompts,
-            cancellationToken
+            cancellationToken,
+            parentPromptRunId  // Pass parent ID down the hierarchy
           );
           
           // Merge grandchild results into the child's data context
-          childData = { ...childData, ...grandchildResults };
+          childData = { ...childData, ...grandchildResults.results };
         }
 
         // Create a new AIPromptParams for the child execution with merged data
@@ -874,6 +705,7 @@ export class AIPromptRunner {
         Object.assign(childExecutionParams, childParam.childPrompt);
         childExecutionParams.data = childData;
         childExecutionParams.cancellationToken = cancellationToken;
+        childExecutionParams.parentPromptRunId = parentPromptRunId;  // Set parent ID for hierarchical tracking
 
         // Execute the child prompt
         LogStatus(`  🔹 Executing child prompt: ${childParam.childPrompt.prompt.Name} -> ${childParam.parentPlaceholder}`);
@@ -883,11 +715,15 @@ export class AIPromptRunner {
           throw new Error(`Child prompt execution failed: ${childResult.errorMessage}`);
         }
 
-        // Return the placeholder name and result
+        // Return the placeholder name, result, and token/cost information
         return {
           placeholder: childParam.parentPlaceholder,
           result: childResult.rawResult || JSON.stringify(childResult.result),
-          success: true
+          success: true,
+          promptTokens: childResult.combinedPromptTokens || childResult.promptTokens || 0,
+          completionTokens: childResult.combinedCompletionTokens || childResult.completionTokens || 0,
+          cost: childResult.combinedCost || childResult.cost,
+          hasCost: (childResult.combinedCost !== undefined) || (childResult.cost !== undefined)
         };
 
       } catch (error) {
@@ -897,7 +733,11 @@ export class AIPromptRunner {
         return {
           placeholder: childParam.parentPlaceholder,
           result: `ERROR: ${error.message}`,
-          success: false
+          success: false,
+          promptTokens: 0,
+          completionTokens: 0,
+          cost: undefined,
+          hasCost: false
         };
       }
     });
@@ -912,14 +752,33 @@ export class AIPromptRunner {
       // Continue with available results rather than failing completely
     }
 
-    // Build result map
+    // Build result map and aggregate token/cost information
     const resultMap: Record<string, string> = {};
+    let totalPromptTokens = 0;
+    let totalCompletionTokens = 0;
+    let totalCost = 0;
+    let hasCost = false;
+    
     for (const childResult of childResults) {
       resultMap[childResult.placeholder] = childResult.result;
+      totalPromptTokens += childResult.promptTokens;
+      totalCompletionTokens += childResult.completionTokens;
+      
+      if (childResult.hasCost && childResult.cost !== undefined) {
+        totalCost += childResult.cost;
+        hasCost = true;
+      }
     }
 
-    LogStatus(`✅ Completed execution of ${childResults.length} child prompts`);
-    return resultMap;
+    LogStatus(`✅ Completed execution of ${childResults.length} child prompts (${totalPromptTokens} prompt tokens, ${totalCompletionTokens} completion tokens)`);
+    
+    return {
+      results: resultMap,
+      totalPromptTokens,
+      totalCompletionTokens,
+      totalCost: hasCost ? totalCost : undefined,
+      hasCost
+    };
   }
 
   /**
@@ -950,14 +809,18 @@ export class AIPromptRunner {
         throw new Error(`Template with ID ${prompt.TemplateID} not found for prompt ${prompt.Name}`);
       }
 
-      // Merge original data with child results and template data
+      // Resolve system placeholders with full prompt context
+      const systemPlaceholders = await SystemPlaceholderManager.resolveAllPlaceholders(params);
+
+      // Merge all data sources with proper priority order
       const mergedData = {
+        ...systemPlaceholders,    // System placeholders (lowest priority)
         ...params.data,           // Original data context
         ...childResults,          // Child prompt results with placeholder names as keys
         ...params.templateData    // Additional template data (highest priority)
       };
 
-      LogStatus(`🔧 Rendering prompt template with ${Object.keys(childResults).length} child results embedded`);
+      LogStatus(`🔧 Rendering prompt template with ${Object.keys(childResults).length} child results and ${Object.keys(systemPlaceholders).length} system placeholders`);
       
       // Log placeholder replacement for debugging
       for (const [placeholder, result] of Object.entries(childResults)) {
@@ -965,8 +828,14 @@ export class AIPromptRunner {
         LogStatus(`  📝 ${placeholder} -> ${truncatedResult}`);
       }
 
-      // Render the template with merged data
-      const renderedPrompt = await this.renderPromptTemplate(template, mergedData);
+      // Render the template with the full params context
+      // We already have system placeholders resolved, so we'll render directly
+      const renderedPrompt = await this._templateEngine.RenderTemplate(
+        template, 
+        template.GetHighestPriorityContent()!, 
+        mergedData
+      );
+      
       if (!renderedPrompt.Success) {
         throw new Error(`Failed to render template for prompt ${prompt.Name}: ${renderedPrompt.Message}`);
       }
@@ -1125,6 +994,11 @@ export class AIPromptRunner {
         promptRun.AgentRunID = params.agentRunId;
       }
 
+      // Set ParentID for hierarchical prompt execution tracking
+      if (params.parentPromptRunId) {
+        promptRun.ParentID = params.parentPromptRunId;
+      }
+
       // Store the input data/context as JSON in Messages field
       if (params.data || params.templateData) {
         promptRun.Messages = JSON.stringify({
@@ -1151,8 +1025,7 @@ export class AIPromptRunner {
    */
   private async renderPromptTemplate(
     template: TemplateEntityExtended,
-    data?: Record<string, unknown>,
-    templateData?: Record<string, unknown>,
+    params: AIPromptParams
   ): Promise<TemplateRenderResult> {
     try {
       // Get the highest priority content for the template
@@ -1161,8 +1034,17 @@ export class AIPromptRunner {
         throw new Error(`No content found for template ${template.Name}`);
       }
 
-      // Merge data contexts
-      const mergedData = { ...data, ...templateData };
+      // Resolve system placeholders with full params context
+      const systemPlaceholders = await SystemPlaceholderManager.resolveAllPlaceholders(params);
+
+      // Merge data contexts with system placeholders having lowest priority
+      const mergedData = { 
+        ...systemPlaceholders,     // System placeholders first (lowest priority)
+        ...params.data,            // User data overrides system placeholders
+        ...params.templateData     // Template data has highest priority
+      };
+
+      LogStatus(`🔧 Rendering template '${template.Name}' with ${Object.keys(systemPlaceholders).length} system placeholders`);
 
       // Render the template
       return await this._templateEngine.RenderTemplate(template, templateContent, mergedData);
@@ -1848,11 +1730,19 @@ export class AIPromptRunner {
       promptRun.ExecutionTimeMS = executionTimeMS;
       promptRun.Result = typeof parsedResult.result === 'string' ? parsedResult.result : JSON.stringify(parsedResult.result);
 
-      // Extract token usage if available
+      // Extract token usage and cost if available
       if (modelResult.data?.usage) {
         promptRun.TokensUsed = modelResult.data.usage.totalTokens;
         promptRun.TokensPrompt = modelResult.data.usage.promptTokens;
         promptRun.TokensCompletion = modelResult.data.usage.completionTokens;
+        
+        // Save cost information if available
+        if (modelResult.data.usage.cost !== undefined) {
+          promptRun.Cost = modelResult.data.usage.cost;
+        }
+        if (modelResult.data.usage.costCurrency !== undefined) {
+          promptRun.CostCurrency = modelResult.data.usage.costCurrency;
+        }
       }
 
       // Add validation information to Messages field
@@ -1894,8 +1784,14 @@ export class AIPromptRunner {
       // Set Success flag based on validation result
       promptRun.Success = modelResult.success && (parsedResult.validationResult?.Success !== false);
 
-      // Calculate cost if possible (would need cost per token data)
-      // TODO: Implement cost calculation based on model pricing
+      // For leaf nodes (no children), rollup fields equal the regular fields
+      // This ensures the hierarchical pattern works correctly
+      promptRun.TokensPromptRollup = promptRun.TokensPrompt;
+      promptRun.TokensCompletionRollup = promptRun.TokensCompletion;
+      promptRun.TokensUsedRollup = promptRun.TokensUsed;
+      if (promptRun.Cost !== undefined) {
+        promptRun.TotalCost = promptRun.Cost;
+      }
 
       const saveResult = await promptRun.Save();
       if (!saveResult) {

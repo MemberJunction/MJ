@@ -11,6 +11,7 @@
  * @since 2.49.0
  */
 
+import { AIPromptRunResult } from '@memberjunction/ai-prompts';
 import { BaseAgentNextStep } from './types';
 
 /**
@@ -75,5 +76,5 @@ export abstract class BaseAgentType {
      * }
      * ```
      */
-    public abstract DetermineNextStep(): Promise<BaseAgentNextStep>  
+    public abstract DetermineNextStep(promptResult: AIPromptRunResult): Promise<BaseAgentNextStep>  
 }

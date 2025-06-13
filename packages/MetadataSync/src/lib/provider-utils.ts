@@ -144,6 +144,26 @@ export function getSystemUser(): UserInfo {
 }
 
 /**
+ * Get the current data provider instance
+ * 
+ * Returns the global SQLServerDataProvider instance that was initialized by
+ * initializeProvider. This allows access to data provider features like SQL logging.
+ * 
+ * @returns The global SQLServerDataProvider instance or null if not initialized
+ * 
+ * @example
+ * ```typescript
+ * const provider = getDataProvider();
+ * if (provider?.createSqlLogger) {
+ *   const logger = await provider.createSqlLogger('/path/to/log.sql');
+ * }
+ * ```
+ */
+export function getDataProvider(): SQLServerDataProvider | null {
+  return globalProvider;
+}
+
+/**
  * Find entity directories at the immediate level only
  * 
  * Searches for directories containing .mj-sync.json files, which indicate

@@ -11,19 +11,20 @@
  * @since 2.49.0
  */
 
-import { AIAgentEntity, AIAgentTypeEntity } from '@memberjunction/core-entities';
+import { ActionEntity, AIAgentEntity, AIAgentTypeEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { AIPromptRunner, AIPromptParams, ChildPromptParam } from '@memberjunction/ai-prompts';
 import { BaseAgentType } from './base-agent-type';
 import { MJGlobal } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
-import { 
+import { ActionEngineServer } from '@memberjunction/actions';
+import {
     ExecuteAgentParams, 
     ExecuteAgentResult, 
-    AgentContextData, 
-    ActionInfo,
+    AgentContextData,
     BaseAgentNextStep 
 } from './types';
+import { ActionEntityExtended } from '@memberjunction/actions-base';
 
 /**
  * Base implementation for AI Agents in the MemberJunction framework.
@@ -89,7 +90,18 @@ export class BaseAgent {
         try {
             // Ensure AIEngine is configured
             await AIEngine.Instance.Config(false, params.contextUser);
+            // Ensure ActionEngineServer is configured
+            await ActionEngineServer.Instance.Config(false, params.contextUser);
+
             const engine = AIEngine.Instance;
+
+            // Check if agent is active
+            if (params.agent.Status !== 'Active') {
+                return {
+                    nextStep: 'failed',
+                    errorMessage: `Agent '${params.agent.Name}' is not active. Current status: ${params.agent.Status}`
+                };
+            }
 
             // Find the agent type using AIEngine
             const agentType = engine.AgentTypes.find(at => at.ID === params.agent.TypeID);
@@ -151,8 +163,10 @@ export class BaseAgent {
                 };
             }
             
-            const placeholderName = agentType.AgentPromptPlaceholder;
-            
+            // Setup the prompt parameters for the child prompt, whose template will run BEFORE the parent prompt and then 
+            // the fully rendered child prompt template will be injected into the parent system prompt template
+            // as a placeholder for the agent type's AgentPromptPlaceholder. This allows the agent type to
+            // control the flow of execution while the agent specific prompt can add additional instruction.
             promptParams.childPrompts = [
                 new ChildPromptParam(
                     {
@@ -162,7 +176,7 @@ export class BaseAgent {
                         conversationMessages: params.conversationMessages,
                         templateMessageRole: 'user'
                     } as AIPromptParams,
-                    placeholderName
+                    agentType.AgentPromptPlaceholder
                 )
             ];
 
@@ -178,16 +192,21 @@ export class BaseAgent {
             }
 
             // Get the agent type instance to determine next step
-            const agentTypeInstance = await this.getAgentTypeInstance(agentType);
-            if (!agentTypeInstance) {
+            // Check if this specific agent has its own DriverClass override
+            let agentTypeInstance: BaseAgentType | null;
+            try {
+                agentTypeInstance = params.agent.DriverClass 
+                    ? await this.getAgentInstanceWithDriverClass(params.agent.DriverClass)
+                    : await this.getAgentTypeInstance(agentType);
+            } catch (error) {
                 return {
                     nextStep: 'failed',
-                    errorMessage: `Could not instantiate agent type: ${agentType.Name}`
+                    errorMessage: error.message
                 };
             }
 
             // Let the agent type determine the next step
-            const nextStep = await agentTypeInstance.DetermineNextStep();
+            const nextStep = await agentTypeInstance.DetermineNextStep(result);
 
             return {
                 nextStep: nextStep.step,
@@ -230,7 +249,9 @@ export class BaseAgent {
                 .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder);
             
             // Load available actions (placeholder for now - would integrate with Actions framework)
-            const actions: ActionInfo[] = []; // TODO: Implement action loading from Actions framework
+            const agentActions = engine.AgentActions.filter(aa => aa.AgentID === agent.ID);
+            const actions: ActionEntityExtended[] = ActionEngineServer.Instance.Actions.filter(a => agentActions.some(aa => aa.ActionID === a.ID));
+            const activeActions = actions.filter(a => a.Status === 'Active');
 
             const contextData: AgentContextData = {
                 agentName: agent.Name,
@@ -238,7 +259,7 @@ export class BaseAgent {
                 subAgentCount: subAgents.length,
                 subAgentDetails: JSON.stringify(subAgents),
                 actionCount: actions.length,
-                actionDetails: JSON.stringify(actions)
+                actionDetails: JSON.stringify(activeActions)
             };
 
             return contextData;
@@ -252,59 +273,45 @@ export class BaseAgent {
      * Instantiates the appropriate agent type class based on the agent type entity.
      * 
      * This method uses the MemberJunction class factory to dynamically instantiate
-     * agent type classes. It follows the naming convention of appending "AgentType"
-     * to the agent type name. If a specific class doesn't exist, it returns a
-     * default implementation.
+     * agent type classes. It uses the DriverClass field if specified, otherwise falls
+     * back to using the agent type's Name. If a specific class doesn't exist, it 
+     * returns a default implementation.
      * 
      * @param {AIAgentTypeEntity} agentType - The agent type entity to instantiate
      * 
      * @returns {Promise<BaseAgentType | null>} Instance of the agent type class
      * 
      * @example
-     * // For an agent type named "Loop", this will try to instantiate "LoopAgentType"
+     * // For an agent type with DriverClass "LoopAgentType"
      * const agentTypeInstance = await this.getAgentTypeInstance(loopAgentType);
      * 
      * @private
      */
     private async getAgentTypeInstance(agentType: AIAgentTypeEntity): Promise<BaseAgentType | null> {
-        try {
-            // Use the class factory to instantiate the agent type based on its name
-            const className = `${agentType.Name}AgentType`;
-            return MJGlobal.Instance.ClassFactory.CreateInstance<BaseAgentType>(BaseAgentType, className);
-        } catch (error) {
-            // If specific agent type class doesn't exist, return a default implementation
-            return new DefaultAgentType();
+        // Use DriverClass if specified, otherwise use the Name as the lookup key
+        return this.getAgentInstanceWithDriverClass(agentType.DriverClass || agentType.Name);
+    }
+
+    /**
+     * Instantiates an agent type class using a specific driver class name.
+     * 
+     * This method is used when an individual agent has its own DriverClass override,
+     * allowing for specialized implementations per agent instance.
+     * 
+     * @param {string} driverClass - The driver class name to instantiate
+     * 
+     * @returns {Promise<BaseAgentType | null>} Instance of the agent type class
+     * 
+     * @private
+     */
+    private async getAgentInstanceWithDriverClass(driverClass: string): Promise<BaseAgentType | null> {
+        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAgentType>(BaseAgentType, driverClass);
+        
+        if (!instance) {
+            throw new Error(`No implementation found for agent with DriverClass '${driverClass}'. Please ensure the class is registered with the ClassFactory.`);
         }
+        
+        return instance;
     }
 }
 
-/**
- * Default implementation of BaseAgentType used as a fallback.
- * 
- * This class is used when a specific agent type implementation cannot be found
- * in the class factory. It provides a simple success response, allowing agents
- * to function even without custom type implementations.
- * 
- * @class DefaultAgentType
- * @extends {BaseAgentType}
- * 
- * @internal
- */
-class DefaultAgentType extends BaseAgentType {
-    /**
-     * Determines the next step for the agent execution.
-     * 
-     * This default implementation always returns 'success', providing a simple
-     * pass-through behavior for agents without custom type logic.
-     * 
-     * @returns {Promise<BaseAgentNextStep>} Always returns success step
-     * 
-     * @override
-     */
-    public async DetermineNextStep(): Promise<BaseAgentNextStep> {
-        // Default behavior - just return success
-        return {
-            step: 'success'
-        };
-    }
-}

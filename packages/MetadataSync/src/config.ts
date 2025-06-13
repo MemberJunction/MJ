@@ -60,6 +60,15 @@ export interface SyncConfig {
     /** Whether to require user confirmation before push */
     requireConfirmation?: boolean;
   };
+  /** SQL logging configuration (only applies to root-level config, not inherited by subdirectories) */
+  sqlLogging?: {
+    /** Whether to enable SQL logging during push operations */
+    enabled?: boolean;
+    /** Directory to output SQL log files (relative to command execution directory, defaults to './sql_logging') */
+    outputDirectory?: string;
+    /** Whether to format SQL as migration-ready files with Flyway schema placeholders */
+    formatAsMigration?: boolean;
+  };
   /** Watch command configuration */
   watch?: {
     /** Milliseconds to wait before processing file changes */

@@ -11,6 +11,7 @@ import { BaseEntity } from '@memberjunction/core';
 import { cleanupProvider } from '../../lib/provider-utils';
 import { configManager } from '../../lib/config-manager';
 import { getSyncEngine, resetSyncEngine } from '../../lib/singleton-manager';
+import type { SqlLoggingSession } from '@memberjunction/sqlserver-dataprovider';
 
 export default class Push extends Command {
   static description = 'Push local file changes to the database';
@@ -32,6 +33,7 @@ export default class Push extends Command {
   async run(): Promise<void> {
     const { flags } = await this.parse(Push);
     const spinner = ora();
+    let sqlLogger: SqlLoggingSession | null = null;
     
     try {
       // Load configurations
@@ -48,6 +50,37 @@ export default class Push extends Command {
       
       // Initialize data provider
       await initializeProvider(mjConfig);
+      
+      // Initialize SQL logging if configured
+      if (syncConfig?.sqlLogging?.enabled) {
+        const outputDir = syncConfig.sqlLogging.outputDirectory || './sql_logging';
+        const formatAsMigration = syncConfig.sqlLogging.formatAsMigration || false;
+        
+        // Ensure output directory exists
+        const fullOutputDir = path.resolve(outputDir);
+        await fs.ensureDir(fullOutputDir);
+        
+        // Generate filename with timestamp
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5); // Remove milliseconds
+        const filename = formatAsMigration 
+          ? `V${timestamp.replace(/[-T]/g, '')}__MetadataSync_Push.sql`
+          : `metadatasync-push-${timestamp}.sql`;
+        const logFilePath = path.join(fullOutputDir, filename);
+        
+        // Import and access the data provider from the provider utils
+        const { getDataProvider } = await import('../../lib/provider-utils');
+        const dataProvider = getDataProvider();
+        if (dataProvider && typeof dataProvider.createSqlLogger === 'function') {
+          sqlLogger = await dataProvider.createSqlLogger(logFilePath, {
+            formatAsMigration,
+            description: 'MetadataSync Push Operation'
+          });
+          
+          this.log(`📝 SQL logging enabled: ${path.relative(process.cwd(), logFilePath)}`);
+        } else {
+          this.warn('SQL logging requested but data provider does not support createSqlLogger');
+        }
+      }
       
       // Initialize sync engine using singleton pattern
       const syncEngine = await getSyncEngine(getSystemUser());
@@ -134,6 +167,16 @@ export default class Push extends Command {
       
       this.error(error as Error);
     } finally {
+      // Dispose SQL logging session if active
+      if (sqlLogger) {
+        try {
+          await sqlLogger.dispose();
+          this.log('✅ SQL logging session closed');
+        } catch (error) {
+          this.warn(`Failed to close SQL logging session: ${error}`);
+        }
+      }
+      
       // Reset sync engine singleton
       resetSyncEngine();
       // Clean up database connection
