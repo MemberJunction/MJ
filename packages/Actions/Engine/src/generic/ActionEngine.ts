@@ -155,7 +155,7 @@ export class ActionEngineServer extends ActionEngineBase {
          logEntry = await this.StartActionLog(params);
       }
 
-      const action = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(BaseAction, params.Action.Name);
+      const action = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(BaseAction, params.Action.DriverClass || params.Action.Name, params.ContextUser);
       if (!action || action.constructor === BaseAction) {
          throw new Error(`Could not find a class for action ${params.Action.Name}.`);
       }
