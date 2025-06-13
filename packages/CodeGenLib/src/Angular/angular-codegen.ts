@@ -6,25 +6,85 @@ import { mjCoreSchema, outputOptionValue } from '../Config/config';
 import { RegisterClass } from '@memberjunction/global';
 import { GenerationResult, RelatedEntityDisplayComponentGeneratorBase } from './related-entity-components';
 
+/**
+ * Represents metadata about an Angular form section that is generated for an entity
+ */
 export class AngularFormSectionInfo {
+    /**
+     * The type of form section (e.g., Top, Category, Details)
+     */
     Type!: GeneratedFormSectionType;
+    
+    /**
+     * The display name of the section
+     */
     Name!: string;
+    
+    /**
+     * The generated HTML code for the tab
+     */
     TabCode!: string;
+    
+    /**
+     * The TypeScript class name for the section component
+     */
     ClassName?: string;
+    
+    /**
+     * The filename where the section component will be saved
+     */
     FileName?: string;
+    
+    /**
+     * The complete TypeScript component code for the section
+     */
     ComponentCode?: string;
+    
+    /**
+     * Array of entity fields that belong to this section
+     */
     Fields?: EntityFieldInfo[];
+    
+    /**
+     * The filename without the .ts extension
+     */
     FileNameWithoutExtension?: string;
+    
+    /**
+     * The class name of the entity this section belongs to
+     */
     EntityClassName?: string;
+    
+    /**
+     * Indicates if this section represents a related entity tab
+     */
     IsRelatedEntity?: boolean = false;
+    
+    /**
+     * Specifies where related entity tabs should be displayed relative to field tabs
+     */
     RelatedEntityDisplayLocation?: 'Before Field Tabs' | 'After Field Tabs' = 'After Field Tabs'
+    
+    /**
+     * The generation result for related entity components
+     */
     GeneratedOutput?: GenerationResult;
 }
 
 /**
- * Base class for generating Angular client code, you can sub-class this class to create your own Angular client code generator logic
+ * Base class for generating Angular client code for MemberJunction entities.
+ * This class handles the generation of Angular components, forms, and modules based on entity metadata.
+ * You can sub-class this class to create your own Angular client code generator logic.
  */
 export class AngularClientGeneratorBase {
+    /**
+     * Main entry point for generating Angular code for a collection of entities
+     * @param entities Array of EntityInfo objects to generate Angular code for
+     * @param directory The output directory where generated files will be saved
+     * @param modulePrefix A prefix to use for the generated module name
+     * @param contextUser The user context for permission checking and personalization
+     * @returns Promise<boolean> True if generation was successful, false otherwise
+     */
     public async generateAngularCode(entities: EntityInfo[], directory: string, modulePrefix: string, contextUser: UserInfo): Promise<boolean> {
         try {
           const entityPath = path.join(directory, 'Entities');
@@ -112,6 +172,16 @@ export class AngularClientGeneratorBase {
       }
        
       
+      /**
+       * Generates the main Angular module that imports all generated components and sub-modules
+       * @param componentImports Array of import statements for generated components
+       * @param componentNames Array of component names with their required related entity items
+       * @param relatedEntityModuleImports Array of library imports for related entity modules
+       * @param sections Array of form section information
+       * @param modulePrefix Prefix for the module name
+       * @param maxComponentsPerModule Maximum number of components to include in each sub-module (default: 25)
+       * @returns The generated TypeScript code for the Angular module
+       */
       protected generateAngularModule(componentImports: string[], 
                                       componentNames: {componentName: string, relatedEntityItemsRequired: {itemClassName: string, moduleClassName: string}[]}[], 
                                       relatedEntityModuleImports: {library: string, modules: string[]}[], 
@@ -176,6 +246,14 @@ export function Load${modulePrefix}GeneratedForms() {
     `
       }
       
+      /**
+       * Generates sub-modules to handle large numbers of components by breaking them into smaller chunks
+       * @param componentNames Array of component names with their required related entity items
+       * @param sections Array of form section information
+       * @param maxComponentsPerModule Maximum components per sub-module
+       * @param modulePrefix Prefix for module naming
+       * @returns Generated TypeScript code for all sub-modules and the master module
+       */
       protected generateAngularModuleCode(componentNames: {componentName: string, relatedEntityItemsRequired: {itemClassName: string, moduleClassName: string}[]}[], 
                                           sections: AngularFormSectionInfo[], 
                                           maxComponentsPerModule: number, 
@@ -236,14 +314,26 @@ export class ${modulePrefix}GeneratedFormsModule { }`;
           
       }
       
-      protected subModule_BaseName: string = 'GeneratedForms_SubModule_';
       /**
-       * Get the base name for the sub-modules, override this method to change the base name. Defaults to 'GeneratedForms_SubModule_'
+       * Base name used for generating sub-module names
+       * @protected
+       */
+      protected subModule_BaseName: string = 'GeneratedForms_SubModule_';
+      
+      /**
+       * Get the base name for the sub-modules. Override this method to change the base name.
+       * @returns The base name for sub-modules (default: 'GeneratedForms_SubModule_')
        */
       public get SubModuleBaseName(): string { 
         return this.subModule_BaseName;
       }
 
+      /**
+       * Generates the closing section of a sub-module including imports and exports
+       * @param moduleNumber The sequential number of this sub-module
+       * @param additionalModulesToImport Array of additional module names to import
+       * @returns TypeScript code for the sub-module ending
+       */
       protected generateSubModuleEnding(moduleNumber: number, additionalModulesToImport: string[]): string {
       return `],
 imports: [
@@ -270,6 +360,13 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
       }
       
       
+      /**
+       * Generates the TypeScript component code for a single entity
+       * @param entity The entity to generate the component for
+       * @param additionalSections Array of additional form sections for this entity
+       * @param relatedEntitySections Array of related entity sections
+       * @returns Generated TypeScript component code
+       */
       protected generateSingleEntityTypeScriptForAngular(entity: EntityInfo, additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
         const entityObjectClass: string = entity.ClassName
         const sectionImports: string = additionalSections.length > 0 ? additionalSections.map(s => `import { Load${s.ClassName} } from "./sections/${s.FileNameWithoutExtension}"`).join('\n') : '';
@@ -328,9 +425,19 @@ export function Load${entity.ClassName}FormComponent() {
 `
       }
       
+      /**
+       * Checks if an entity has any fields designated for the top area section
+       * @param entity The entity to check
+       * @returns True if the entity has top area fields, false otherwise
+       */
       protected entityHasTopArea(entity: EntityInfo): boolean {
           return entity.Fields.some(f => f.GeneratedFormSectionType === GeneratedFormSectionType.Top);
       }
+      /**
+       * Generates HTML for the top area section of an entity form
+       * @param entity The entity to generate top area HTML for
+       * @returns HTML string for the top area section, or empty string if no top area exists
+       */
       protected generateTopAreaHTMLForAngular(entity: EntityInfo): string {
           if (!this.entityHasTopArea(entity)) 
               return '';
@@ -338,6 +445,13 @@ export function Load${entity.ClassName}FormComponent() {
               return `<mj-form-section Entity="${entity.Name}" Section="top-area" [record]="record" [EditMode]="this.EditMode"></mj-form-section>`
       } 
       
+      /**
+       * Adds a new section to the sections array if it doesn't already exist
+       * @param entity The entity the section belongs to
+       * @param sections Array of existing sections
+       * @param type The type of section to add
+       * @param name The name of the section
+       */
       protected AddSectionIfNeeded(entity: EntityInfo, sections: AngularFormSectionInfo[], type: GeneratedFormSectionType, name: string) {
           const section = sections.find(s => s.Name === name && s.Type === type);
           const fName = `${this.stripWhiteSpace(name.toLowerCase())}.component`
@@ -354,6 +468,12 @@ export function Load${entity.ClassName}FormComponent() {
                   FileNameWithoutExtension: fName
               });
       }
+      /**
+       * Generates additional form sections based on entity field metadata
+       * @param entity The entity to generate sections for
+       * @param startIndex Starting index for tab ordering
+       * @returns Array of generated form sections
+       */
       protected generateAngularAdditionalSections(entity: EntityInfo, startIndex: number): AngularFormSectionInfo[] {
           const sections: AngularFormSectionInfo[] = [];
           let index = startIndex;
@@ -430,6 +550,12 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
           return sections;
       }
       
+      /**
+       * Generates HTML for a specific form section
+       * @param entity The entity containing the fields
+       * @param section The section to generate HTML for
+       * @returns HTML string for the form section
+       */
       protected generateSectionHTMLForAngular(entity: EntityInfo, section: AngularFormSectionInfo): string {
           let html: string = ''
       
@@ -524,10 +650,11 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
       }
 
       /**
-       * This method generates the tab name for a related entity tab. It will append the field's name(display name, if available) to the tab name if there are multiple tabs for the same related entity
-       * @param relatedEntity 
-       * @param sortedRelatedEntities 
-       * @returns 
+       * Generates the tab name for a related entity tab. Appends the field's display name to the tab name 
+       * if there are multiple tabs for the same related entity to differentiate them.
+       * @param relatedEntity The relationship information for the related entity
+       * @param sortedRelatedEntities All related entities sorted by sequence
+       * @returns The generated tab name
        */
       protected generateRelatedEntityTabName(relatedEntity: EntityRelationshipInfo, sortedRelatedEntities: EntityRelationshipInfo[]): string {  
         if (relatedEntity.DisplayName && relatedEntity.DisplayName.length > 0) {
@@ -558,6 +685,13 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
         }
       }
       
+      /**
+       * Generates tabs for all related entities that should be displayed in the form
+       * @param entity The parent entity
+       * @param startIndex Starting index for tab ordering
+       * @param contextUser User context for permission checking
+       * @returns Promise resolving to array of related entity tab sections
+       */
       protected async generateRelatedEntityTabs(entity: EntityInfo, startIndex: number, contextUser: UserInfo): Promise<AngularFormSectionInfo[]> {
         const md = new Metadata();
         const tabs: AngularFormSectionInfo[] = [];
@@ -612,10 +746,21 @@ ${componentCodeWithTabs}
         return tabs;
       }
       
+      /**
+       * Removes all whitespace from a string
+       * @param s The string to process
+       * @returns String with all whitespace removed
+       */
       protected stripWhiteSpace(s: string): string {
           return s.replace(/\s/g, '');
       }
       
+      /**
+       * Generates the complete HTML template for a single entity form
+       * @param entity The entity to generate HTML for
+       * @param contextUser User context for permission checking
+       * @returns Promise resolving to an object containing the HTML code and section information
+       */
       protected async generateSingleEntityHTMLForAngular(entity: EntityInfo, contextUser: UserInfo): Promise<{htmlCode: string, 
                                                                                                               additionalSections: AngularFormSectionInfo[], 
                                                                                                               relatedEntitySections: AngularFormSectionInfo[]}> {
@@ -630,6 +775,13 @@ ${componentCodeWithTabs}
       }
       
       
+      /**
+       * Generates HTML with a vertical splitter layout for entities with a top area
+       * @param topArea HTML for the top area section
+       * @param additionalSections Array of additional form sections
+       * @param relatedEntitySections Array of related entity sections
+       * @returns Generated HTML with splitter layout
+       */
       protected generateSingleEntityHTMLWithSplitterForAngular(topArea: string, additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
           const htmlCode: string =  `<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
@@ -648,6 +800,11 @@ ${this.innerTabStripHTML(additionalSections, relatedEntitySections)}
           return htmlCode;
       }
       
+      /**
+       * Generates the inner HTML for the top area section
+       * @param topArea The top area content
+       * @returns HTML string for the top area container, or empty string if no content
+       */
       protected innerTopAreaHTML(topArea: string): string {
         if (topArea.trim().length === 0)
             return '';
@@ -656,6 +813,12 @@ ${this.innerTabStripHTML(additionalSections, relatedEntitySections)}
                     ${topArea}
                 </div>`
       }
+      /**
+       * Generates the HTML for the tab strip containing all form sections
+       * @param additionalSections Array of field-based form sections
+       * @param relatedEntitySections Array of related entity sections
+       * @returns HTML string for the complete tab strip
+       */
       protected innerTabStripHTML(additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
         // come up with the overall order by looking for the tabs that have DisplayLocation === 'Before Field Tabs' and put those, in sequence order
         // ahead of the additionalSections, then do the additionalSections, and then do the relatedEntitySections
@@ -669,6 +832,13 @@ ${this.innerTabStripHTML(additionalSections, relatedEntitySections)}
                 </mj-tabstrip>`
       }
       
+      /**
+       * Generates HTML without a splitter layout for entities without a top area
+       * @param topArea HTML for the top area section (expected to be empty)
+       * @param additionalSections Array of additional form sections
+       * @param relatedEntitySections Array of related entity sections
+       * @returns Generated HTML without splitter layout
+       */
       protected generateSingleEntityHTMLWithOUTSplitterForAngular(topArea: string, additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
           const htmlCode: string =  `<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>

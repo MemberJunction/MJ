@@ -1,3 +1,10 @@
+/**
+ * Main orchestrator for the MemberJunction code generation process.
+ * Coordinates all aspects of code generation including database schema analysis,
+ * metadata management, SQL generation, TypeScript entities, Angular components,
+ * GraphQL resolvers, and more.
+ */
+
 import { GraphQLServerGeneratorBase } from './Misc/graphql_server_codegen';
 import { SQLCodeGenBase } from './Database/sql_codegen';
 import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
@@ -18,15 +25,48 @@ import { SQLLogging } from './Misc/sql_logging';
 import { SystemIntegrityBase } from './Misc/system_integrity';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 
+/** Extract core schema name from configuration */
 const { mjCoreSchema } = configInfo;
 
 /**
- * This class is the main entry point for running the code generation process. It will handle all the steps required to generate the code for the MemberJunction system. You can sub-class this class
- * and override specific methods as desired to customize the code generation process.
+ * Main orchestrator class for the MemberJunction code generation process.
+ * 
+ * This class coordinates a comprehensive code generation pipeline that transforms
+ * database schemas into a complete, type-safe, full-stack application. The process includes:
+ * 
+ * **Pipeline Steps:**
+ * 1. **Database Setup** - Initialize connections and metadata
+ * 2. **Metadata Management** - Analyze schema changes and update metadata
+ * 3. **SQL Generation** - Create views, procedures, and indexes
+ * 4. **TypeScript Entities** - Generate entity classes with validation
+ * 5. **Angular Components** - Create forms and UI components
+ * 6. **GraphQL Resolvers** - Generate API endpoints
+ * 7. **Action Classes** - Create business logic containers
+ * 8. **Documentation** - Generate schema JSON for AI/documentation
+ * 9. **Post-processing** - Run commands and integrity checks
+ * 
+ * **Customization:**
+ * You can sub-class this class and override specific methods to customize
+ * the code generation process for your specific needs.
+ * 
+ * @example
+ * ```typescript
+ * const codeGen = new RunCodeGenBase();
+ * await codeGen.Run(); // Full generation
+ * await codeGen.Run(true); // Skip database operations
+ * ```
  */
 export class RunCodeGenBase {
   /**
-   * This method is called to setup the data source for the code generation process. You can override this method to customize the data source setup process.
+   * Sets up the SQL Server data source and initializes the MemberJunction core metadata.
+   * This method establishes the database connection pool and configures the data provider
+   * that will be used throughout the code generation process.
+   * 
+   * Override this method to customize the data source setup process for different
+   * database providers or connection configurations.
+   * 
+   * @returns Promise resolving to the configured SQLServerDataProvider instance
+   * @throws Error if connection setup fails
    */
   public async setupDataSource(): Promise<SQLServerDataProvider> {
     /****************************************************************************************
@@ -42,9 +82,29 @@ export class RunCodeGenBase {
   }
 
   /**
-   * Main entry point to run the code generation process. This method will handle all the steps required to generate the code for the MemberJunction system. You can sub-class this class and
-   * override this method to customize the code generation process.
-   * @param skipDatabaseGeneration
+   * Main entry point for the complete code generation process.
+   * 
+   * Orchestrates the entire pipeline from database schema analysis to final code output.
+   * The process is highly configurable through the configuration file and can be
+   * partially skipped for faster iteration during development.
+   * 
+   * **Process Flow:**
+   * 1. Initialize data sources and user context
+   * 2. Execute pre-generation commands and scripts
+   * 3. Manage metadata and schema changes
+   * 4. Generate SQL objects (views, procedures, indexes)
+   * 5. Generate TypeScript entity classes
+   * 6. Generate Angular UI components
+   * 7. Generate GraphQL API resolvers
+   * 8. Generate Action business logic classes
+   * 9. Create documentation JSON
+   * 10. Run integrity checks
+   * 11. Execute post-generation commands
+   * 
+   * @param skipDatabaseGeneration If true, skips all database-related operations
+   *   (metadata management, SQL generation). Useful for faster UI-only regeneration.
+   * @throws Error if any critical step fails
+   * @returns Promise that resolves when generation is complete
    */
   public async Run(skipDatabaseGeneration: boolean = false) {
     try {
@@ -305,6 +365,26 @@ export class RunCodeGenBase {
   }
 }
 
+/**
+ * Convenience function to run the MemberJunction code generation process.
+ * Creates a new instance of RunCodeGenBase and executes the full generation pipeline.
+ * 
+ * This is the recommended way to trigger code generation from external scripts
+ * or applications.
+ * 
+ * @param skipDatabaseGeneration Whether to skip database-related operations
+ * @returns Promise that resolves when generation is complete
+ * @throws Error if generation fails
+ * 
+ * @example
+ * ```typescript
+ * // Full generation
+ * await runMemberJunctionCodeGeneration();
+ * 
+ * // Skip database operations for faster UI generation
+ * await runMemberJunctionCodeGeneration(true);
+ * ```
+ */
 export async function runMemberJunctionCodeGeneration(skipDatabaseGeneration: boolean = false) {
   const runObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCodeGenBase>(RunCodeGenBase)!;
   return await runObject.Run(skipDatabaseGeneration);
