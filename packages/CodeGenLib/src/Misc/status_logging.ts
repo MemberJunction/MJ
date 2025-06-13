@@ -34,6 +34,9 @@ export class LoggerBase {
          this.ensureSpinner();
          if (this._spinner) {
             this._spinner.start(message);
+         } else {
+            // Fallback if spinner creation failed
+            console.log(`🔄 ${message}`);
          }
       } else {
          this.logStatus(message, SeverityType.Info);
@@ -48,6 +51,9 @@ export class LoggerBase {
          this.ensureSpinner();
          if (this._spinner) {
             this._spinner.text = message;
+         } else {
+            // Fallback if spinner creation failed
+            console.log(`🔄 ${message}`);
          }
       } else {
          this.logStatus(message, SeverityType.Info);
@@ -62,6 +68,9 @@ export class LoggerBase {
          this.ensureSpinner();
          if (this._spinner) {
             this._spinner.succeed(message);
+         } else if (message) {
+            // Fallback if spinner creation failed
+            console.log(`✅ ${message}`);
          }
       } else if (message) {
          this.logStatus(`✓ ${message}`, SeverityType.Info);
@@ -76,6 +85,9 @@ export class LoggerBase {
          this.ensureSpinner();
          if (this._spinner) {
             this._spinner.fail(message);
+         } else if (message) {
+            // Fallback if spinner creation failed
+            console.log(`❌ ${message}`);
          }
       } else if (message) {
          this.logError(`✗ ${message}`, SeverityType.Critical);
@@ -90,6 +102,9 @@ export class LoggerBase {
          this.ensureSpinner();
          if (this._spinner) {
             this._spinner.warn(message);
+         } else if (message) {
+            // Fallback if spinner creation failed
+            console.log(`⚠️ ${message}`);
          }
       } else if (message) {
          this.logError(`⚠ ${message}`, SeverityType.Warning);

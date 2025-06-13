@@ -215,9 +215,9 @@ const codegenConfig = {
     omitRecurringScriptsFromLog: true,
   },
   forceRegeneration: {
-    enabled: true,  // Set to true to force regeneration even without schema changes
+    enabled: false,  // Set to true to force regeneration even without schema changes
     baseViews: false,
-    spCreate: true,  // Set this to true to regenerate all spCreate procedures
+    spCreate: false,  // Set this to true to regenerate all spCreate procedures
     spUpdate: false,
     spDelete: false,
     allStoredProcedures: false,  // Overrides individual SP flags when true

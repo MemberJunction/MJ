@@ -104,7 +104,7 @@ export class SQLCodeGenBase {
             // STEP 2(e) ---- FINALLY, we now execute all the combined files by schema;
             startSpinner('Executing combined entity SQL files...');
             const step2eStartTime: Date = new Date();
-            if (! await this.SQLUtilityObject.executeSQLFiles(allEntityFiles, true)) {
+            if (! await this.SQLUtilityObject.executeSQLFiles(allEntityFiles, configInfo?.verboseOutput ?? false)) {
                 failSpinner('Failed to execute combined entity SQL files');
                 return false;
             }

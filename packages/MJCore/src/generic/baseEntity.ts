@@ -1183,6 +1183,25 @@ export abstract class BaseEntity<T = unknown> {
      */
     public LoadFromData(data: any, replaceOldValues: boolean = false) : boolean {
         this.SetMany(data, true);
+        // now, check to see if we have the primary key set, if so, we should consider ourselves
+        // loaded from the database and set the _recordLoaded flag to true along with the _everSaved flag
+        if (this.PrimaryKeys && this.PrimaryKeys.length > 0) {
+            // chck each pkey's value to make sur it is set
+            this._recordLoaded = true; // all primary keys are set, so we are loaded
+            this._everSaved = true; // Mark as saved since we loaded from data
+            for (let pkey of this.PrimaryKeys) {
+                if (pkey.Value === null || pkey.Value === undefined) {
+                    this._recordLoaded = false;
+                    this._everSaved = false; // if any primary key is not set, we cannot consider ourselves loaded
+                }
+            }
+        }
+        else {
+            // this is an error state as every entity must have > 0 primary keys defined
+            LogError(`BaseEntity.LoadFromData() called on ${this.EntityInfo.Name} with no primary keys defined. This is an error state and should not happen.`);
+            this._recordLoaded = false;
+            this._everSaved = false; // Mark as NOT saved since we loaded from data without primary keys
+        }
         return true;
     }
 
