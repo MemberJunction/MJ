@@ -1,4 +1,4 @@
-<div class="ai-dashboard-container" mjFillContainer [rightMargin]="8" [bottomMargin]="8">
+<div class="ai-dashboard-container">
   @if (isLoading) {
     <div class="loading-container">
       <div class="loading-content">
@@ -37,7 +37,7 @@
             [initialState]="agentConfigurationState"
             (openEntityRecord)="onOpenEntityRecord($event)"
             (stateChange)="onAgentConfigurationStateChange($event)"
-            mjFillContainer>
+            >
           </app-agent-configuration>
         }
         
@@ -54,7 +54,7 @@
           <app-system-configuration
             (openEntityRecord)="onOpenEntityRecord($event)"
             (stateChange)="onSystemConfigurationStateChange($event)"
-            mjFillContainer>
+            >
           </app-system-configuration>
         }
       </div>

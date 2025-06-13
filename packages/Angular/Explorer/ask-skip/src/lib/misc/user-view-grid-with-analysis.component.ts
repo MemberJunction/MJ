@@ -7,7 +7,7 @@ import { MJTabStripComponent } from "@memberjunction/ng-tabstrip";
 @Component({
     selector: 'mj-user-view-grid-with-analysis',
     template: ` 
-    <mj-tabstrip mjFillContainer [bottomMargin]="BottomMargin" (TabSelectedabSelect)="selectTabHandler()" (ResizeContainer)="sharedService.InvokeManualResize()">
+    <mj-tabstrip (TabSelectedabSelect)="selectTabHandler()" (ResizeContainer)="sharedService.InvokeManualResize()">
         <mj-tab [TabSelected]="true"> Data </mj-tab>
         <mj-tab-body>
             <mj-user-view-grid [Params]="Params" [InEditMode]="InEditMode" [EditMode]="EditMode" [AutoNavigate]="AutoNavigate" 
@@ -17,7 +17,7 @@ import { MJTabStripComponent } from "@memberjunction/ng-tabstrip";
 
         <mj-tab> Analysis </mj-tab>
         <mj-tab-body>
-            <skip-chat mjFillContainer [AllowNewConversations]="false" [ShowConversationList]="false" [UpdateAppRoute]="false" 
+            <skip-chat  [AllowNewConversations]="false" [ShowConversationList]="false" [UpdateAppRoute]="false" 
                                           [LinkedEntity]="'User Views'" [LinkedEntityCompositeKey]="ViewIDAsCompositeKey">
             </skip-chat>
         </mj-tab-body>

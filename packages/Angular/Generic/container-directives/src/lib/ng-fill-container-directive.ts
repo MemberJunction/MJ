@@ -14,15 +14,15 @@ import { MJEventType, MJGlobal } from '@memberjunction/global';
  *
  * @example
  * <!-- Basic usage (fills both width and height) -->
- * <div mjFillContainer>Content</div>
+ * <div >Content</div>
  *
  * <!-- With custom settings -->
- * <div mjFillContainer [fillWidth]="true" [fillHeight]="true" [rightMargin]="10" [bottomMargin]="20">
+ * <div  [fillWidth]="true" [fillHeight]="true" [rightMargin]="10" [bottomMargin]="20">
  *   Content with margins
  * </div>
  */
 @Directive({
-  selector: '[mjFillContainer]'
+  selector: '[]'
 })
 export class FillContainer implements OnInit, OnDestroy {
   /** Whether to fill the parent's width. Default is true. */

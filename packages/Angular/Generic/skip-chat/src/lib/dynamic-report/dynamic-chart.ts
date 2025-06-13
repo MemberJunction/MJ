@@ -13,11 +13,11 @@ import { InvokeManualResize } from '@memberjunction/global';
       <span class="fa-regular fa-image"></span>
       Save 
     </button>
-    <div #plotContainer mjFillContainer>
+    <div #plotContainer >
       <plotly-plot #plotlyPlot 
                    [data]="plotData" 
                    [layout]="plotLayout" 
-                   mjFillContainer 
+                    
                    [useResizeHandler]="true"
                    (plotlyClick)="handleChartClick($event)">
       </plotly-plot>

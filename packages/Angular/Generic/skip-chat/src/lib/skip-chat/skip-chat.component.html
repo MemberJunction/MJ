@@ -1,4 +1,4 @@
-<div class = "chat-container" mjFillContainer #topLevelDiv [bottomMargin]="10" [rightMargin]="10">
+<div class="chat-container"  #topLevelDiv>
     <div class="layout">
         @if (IsConversationListVisible) {
             <div class="left-panel">
@@ -17,9 +17,6 @@
                         [data]="Conversations"
                         [style.height.px]="280"
                         [itemClass]="{ 'item-border': true }" 
-                        mjFillContainer 
-                        [fillWidth]="false"
-                        [bottomMargin]="50"
                         #conversationList
                         >
                         <ng-template kendoListViewItemTemplate let-dataItem="dataItem">

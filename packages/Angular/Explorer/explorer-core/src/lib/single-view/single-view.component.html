@@ -7,7 +7,7 @@
 
   </mj-request-resource-access>
 }
-<div class="single-view-wrap" mjFillContainer [bottomMargin]="20"
+<div class="single-view-wrap"
      [ngStyle]="dynamicWrapperStyle()">
 
   <div class="card-container" class="searchBox">
@@ -25,5 +25,5 @@
     </div>
   </div>
 
-  <mj-user-view-grid-with-analysis class="analysis-wrapper" (rowClicked)="handleRowClick($event)" [AutoNavigate]="false" mjFillContainer/>
+  <mj-user-view-grid-with-analysis class="analysis-wrapper" (rowClicked)="handleRowClick($event)" [AutoNavigate]="false" />
 </div>

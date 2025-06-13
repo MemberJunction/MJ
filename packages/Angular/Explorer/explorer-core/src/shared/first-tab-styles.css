@@ -1,23 +1,23 @@
-
 .main-area {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  width: 100%;
   gap: 24px;
   padding: 24px 0;
 }
+
 .list-view {
   padding: 16px;
   min-width: 300px;
   border-radius: 4px;
-  background:  #FAFAFA;
+  background: #FAFAFA;
   border: none;
 }
-::ng-deep .list-view .k-listview-header, 
+
+::ng-deep .list-view .k-listview-header,
 ::ng-deep .list-view .k-listview-footer {
   border: none;
 }
+
 ::ng-deep .list-view .k-listview-content {
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 4px;
@@ -30,7 +30,7 @@
   color: #424242;
   font-size: 16px;
   height: auto;
-  margin:0;
+  margin: 0;
 }
 
 .header {
@@ -40,15 +40,16 @@
   justify-content: space-between;
   align-items: center;
 }
+
 .header .head-tag {
   display: flex;
   align-items: center;
   gap: 8px;
-  color:  #424242;
-font-size: 16px;
-font-style: normal;
-font-weight: 400;
-line-height: 20px;
+  color: #424242;
+  font-size: 16px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 20px;
 }
 
 .header .count {
@@ -62,13 +63,14 @@ line-height: 20px;
   background: rgba(0, 0, 0, 0.08);
   border-radius: 50%;
 }
+
 .footer {
   font-size: 14px;
   margin-top: 16px;
 }
 
 .list-item {
-  color:  #424242;
+  color: #424242;
   font-size: 14px;
   font-style: normal;
   font-weight: 400;
@@ -76,11 +78,13 @@ line-height: 20px;
   cursor: pointer;
   margin: 4px;
 }
+
 .card-container {
   margin: 0;
   padding: 0;
   box-shadow: none;
 }
+
 .card-header-entity {
   display: flex;
   justify-content: space-between;
@@ -88,6 +92,7 @@ line-height: 20px;
   padding-bottom: 20px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
+
 .card-header-entity .title-wrap h1 {
   color: #424242;
   font-size: 28px;
@@ -96,10 +101,12 @@ line-height: 20px;
   line-height: 28px;
   margin-bottom: 15px;
 }
+
 .card-header-entity .title-wrap {
   display: flex;
   flex-direction: column;
 }
+
 .card-header-entity .title-wrap p {
   margin: 0;
   display: flex;
@@ -115,19 +122,22 @@ line-height: 20px;
 
 
 
- 
+
 .view-card .view-icon {
   color: var(--sideNav);
 }
+
 .card-wrapper {
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 6px;
   width: 100% !important;
 }
+
 .card-wrapper .k-card-body {
   background: #fff;
   padding: 12px 20px;
 }
+
 .card-wrapper .view-card {
   overflow: auto;
   display: flex;
@@ -136,6 +146,7 @@ line-height: 20px;
   background: #fafafa;
   padding: 4px 15px;
 }
+
 .view-card .btn-wrapper {
   display: flex;
   align-items: center;
@@ -150,6 +161,7 @@ line-height: 20px;
   margin-bottom: 0;
   letter-spacing: 0.18px;
 }
+
 .k-card-body .view-card-content p {
   color: #666;
   font-size: 14px;
@@ -159,11 +171,13 @@ line-height: 20px;
   height: 48px;
   margin-bottom: 0;
 }
+
 .card-container {
   padding: 0;
   margin: 0;
   box-shadow: none;
 }
+
 .card-header-entity {
   display: flex;
   justify-content: space-between;
@@ -180,10 +194,12 @@ line-height: 20px;
   line-height: 28px;
   margin-bottom: 15px;
 }
+
 .card-header-entity .title-wrap {
   display: flex;
   flex-direction: column;
 }
+
 .card-header-entity .title-wrap p {
   margin: 0;
   display: flex;
@@ -195,6 +211,7 @@ line-height: 20px;
   font-weight: 400;
   line-height: 20px;
 }
+
 .main-area .card-list {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

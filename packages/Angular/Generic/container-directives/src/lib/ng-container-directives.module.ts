@@ -9,7 +9,7 @@ import { Container } from './ng-container-directive';
  *
  * Includes:
  * - `mjContainer` directive for view container management
- * - `mjFillContainer` directive for responsive filling of parent containers
+ * - `` directive for responsive filling of parent containers
  *
  * @example
  * ```typescript

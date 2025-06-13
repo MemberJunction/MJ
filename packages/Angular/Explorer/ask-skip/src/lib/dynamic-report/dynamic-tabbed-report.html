@@ -12,7 +12,7 @@
       </kendo-button>
     </div>  
   }
-  <mj-tabstrip class="report-tabstrip" (TabSelected)="onTabSelect($event)" mjFillContainer [bottomMargin]="25" (ResizeContainer)="sharedService.InvokeManualResize()">
+  <mj-tabstrip class="report-tabstrip" (TabSelected)="onTabSelect($event)" (ResizeContainer)="sharedService.InvokeManualResize()">
     <mj-tab [TabSelected]="isTabSelected(0)" *ngIf="IsHTML">
       <span class="fa-solid fa-magnifying-glass-chart"></span>
       <span class="report-tab-title">Report</span>
@@ -29,8 +29,8 @@
       <span class="report-tab-title">Chart</span>
     </mj-tab>
     <mj-tab-body *ngIf="IsChart">
-      <div class="report-tab-contents" mjFillContainer [bottomMargin]="20" [rightMargin]="20" [style]="{overflowY: 'hidden', overflowX: 'hidden'}">
-        <skip-dynamic-chart mjFillContainer #theChart [AutoResizeChart]="true" [SkipData]="SkipData" [AllowDrillDown]="AllowDrillDown" (DrillDownEvent)="handleChartDrillDown($event)" style="display:block;">
+      <div class="report-tab-contents" [style]="{overflowY: 'hidden', overflowX: 'hidden'}">
+        <skip-dynamic-chart  #theChart [AutoResizeChart]="true" [SkipData]="SkipData" [AllowDrillDown]="AllowDrillDown" (DrillDownEvent)="handleChartDrillDown($event)" style="display:block;">
         </skip-dynamic-chart>  
       </div>
     </mj-tab-body>
@@ -40,8 +40,8 @@
       <span class="report-tab-title">Table</span>
     </mj-tab>
     <mj-tab-body>
-      <div class="report-tab-contents"  mjFillContainer [bottomMargin]="20" [rightMargin]="20">
-        <skip-dynamic-grid mjFillContainer #theGrid [SkipData]="SkipData" [AllowDrillDown]="AllowDrillDown" (DrillDownEvent)="handleGridDrillDown($event)">
+      <div class="report-tab-contents">
+        <skip-dynamic-grid  #theGrid [SkipData]="SkipData" [AllowDrillDown]="AllowDrillDown" (DrillDownEvent)="handleGridDrillDown($event)">
         </skip-dynamic-grid>
       </div>
     </mj-tab-body>
@@ -51,8 +51,8 @@
       <span class="report-tab-title">Drill Down</span>
     </mj-tab>
     <mj-tab-body *ngIf="AllowDrillDown && DrillDowns.length > 0">
-      <div class="report-tab-contents"  mjFillContainer [bottomMargin]="20" [rightMargin]="20">
-        <mj-dynamic-report-drill-down #drillDownComponent [DrillDowns]="DrillDowns" mjFillContainer style="display:block;"></mj-dynamic-report-drill-down>
+      <div class="report-tab-contents">
+        <mj-dynamic-report-drill-down #drillDownComponent [DrillDowns]="DrillDowns"  style="display:block;"></mj-dynamic-report-drill-down>
       </div>  
     </mj-tab-body>
 
@@ -62,7 +62,7 @@
       <span class="report-tab-title">Analysis</span>
     </mj-tab>
     <mj-tab-body>
-      <div class="report-tab-contents"  mjFillContainer [bottomMargin]="20" [rightMargin]="15" style="overflow-x: hidden">
+      <div class="report-tab-contents" style="overflow-x: hidden">
         <markdown [data]="SkipData.analysis"></markdown>
       </div>
     </mj-tab-body>
@@ -72,7 +72,7 @@
       <span class="report-tab-title">Explanation</span>
     </mj-tab> 
     <mj-tab-body>
-      <div class="report-tab-contents" mjFillContainer [bottomMargin]="20" [rightMargin]="20">
+      <div class="report-tab-contents">
         {{SkipData.userExplanation || 'No Explanation Provided'}}
       </div>
     </mj-tab-body>
@@ -82,16 +82,16 @@
       <span class="report-tab-title">Details</span>
     </mj-tab>
     <mj-tab-body>
-      <div class="report-tab-contents" mjFillContainer [bottomMargin]="20" [rightMargin]="20">
+      <div class="report-tab-contents">
         <div *ngIf="ConversationID!==null"><b>Skip Conversation ID:</b><span>{{ConversationID}}</span></div>
         <div *ngIf="ConversationDetailID!==null"><b>Skip Conversation Detail ID:</b><span>{{ConversationDetailID}}</span></div>
         <div *ngIf="SkipData?.techExplanation">
           <span><b>Technical Explanation</b></span>
           <span><textarea [disabled]="true" [style]="'height: 100px; width: 100%'">{{SkipData.techExplanation}}</textarea></span>
         </div>
-        <div *ngIf="SkipData?.scriptText" mjFillContainer>
+        <div *ngIf="SkipData?.scriptText" >
           <span><b>Script</b></span>
-          <span><textarea mjFillContainer [disabled]="true" [bottomMargin]="20">{{SkipData.scriptText}}</textarea></span>
+          <span><textarea  [disabled]="true">{{SkipData.scriptText}}</textarea></span>
         </div>
       </div>
     </mj-tab-body>

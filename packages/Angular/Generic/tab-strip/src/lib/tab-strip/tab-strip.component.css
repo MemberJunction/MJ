@@ -1,7 +1,7 @@
 .tabstrip-container {
   display: block;
-  overflow: hidden;
-  font-size: 14px; /*default font size*/
+  height: calc(100vh - 80px);
+  overflow-y: auto;
 }
 
 .tab-header-outer {
