@@ -1,5 +1,5 @@
 import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, Metadata, UserInfo, EntityFieldTSType } from '@memberjunction/core';
-import { logError, logMessage, logStatus, logWarning } from '../Misc/status_logging';
+import { logError, logMessage, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner } from '../Misc/status_logging';
 import * as fs from 'fs';
 import path from 'path';
 
@@ -41,10 +41,13 @@ export class SQLCodeGenBase {
             //          we have custom base views, need to have them defined before we do
             //          the rest as the generated stuff might use custom base views in compiled
             //          objects like spCreate for a given entity might reference the vw for that entity
+            startSpinner('Running custom SQL scripts...');
             const startTime: Date = new Date();
-            if (! await this.runCustomSQLScripts(pool, 'before-sql'))
+            if (! await this.runCustomSQLScripts(pool, 'before-sql')) {
+                failSpinner('Failed to run custom SQL scripts');
                 return false;
-            logStatus(`   Time to run custom SQL scripts: ${(new Date().getTime() - startTime.getTime())/1000} seconds`);
+            }
+            succeedSpinner(`Custom SQL scripts completed (${(new Date().getTime() - startTime.getTime())/1000}s)`);
 
             // ALWAYS use the first filter where we only include entities that have IncludeInAPI = 1
             const baselineEntities = entities.filter(e => e.IncludeInAPI);
@@ -52,9 +55,12 @@ export class SQLCodeGenBase {
             const excludedEntities = baselineEntities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) !== undefined); //only include entities that ARE in the excludeSchemas list in this array
 
             // STEP 2(a) - clean out all *.generated.sql and *.permissions.generated.sql files from the directory
+            startSpinner('Cleaning generated files...');
             this.deleteGeneratedEntityFiles(directory, baselineEntities);
+            succeedSpinner('Cleaned generated files');
 
             // STEP 2(b) - generate all the SQL files and execute them
+            startSpinner(`Generating SQL for ${includedEntities.length} entities...`);
             const step2StartTime: Date = new Date();
 
             const genResult = await this.generateAndExecuteEntitySQLToSeparateFiles({
@@ -68,11 +74,12 @@ export class SQLCodeGenBase {
                 enableSQLLoggingForNewOrModifiedEntities: true
             }); // enable sql logging for NEW entities....
             if (!genResult.Success) {
-                logError('Error generating all entities SQL to separate files');
+                failSpinner('Failed to generate entity SQL files');
                 return false;
             }
 
             // STEP 2(c) - for the excludedEntities, while we don't want to generate SQL, we do want to generate the permissions files for them
+            updateSpinner(`Generating permissions for ${excludedEntities.length} excluded entities...`);
             const genResult2 = await this.generateAndExecuteEntitySQLToSeparateFiles({
                 pool, 
                 entities: excludedEntities, 
@@ -84,47 +91,56 @@ export class SQLCodeGenBase {
                 enableSQLLoggingForNewOrModifiedEntities: false /*don't log this stuff, it is just permissions for excluded entities*/
             });
             if (!genResult2.Success) {
-                logError('Error generating permissions SQL for excluded entities to separate files');
+                failSpinner('Failed to generate permissions for excluded entities');
                 return false;
             }
-            logStatus(`   Time to generate entity SQL: ${(new Date().getTime() - step2StartTime.getTime())/1000} seconds`);
+            succeedSpinner(`Entity generation completed (${(new Date().getTime() - step2StartTime.getTime())/1000}s)`);
 
             // STEP 2(d) now that we've generated the SQL, let's create a combined file in each schema sub-directory for convenience for a DBA
+            startSpinner('Creating combined SQL files...');
             const allEntityFiles = this.createCombinedEntitySQLFiles(directory, baselineEntities);
+            succeedSpinner(`Created combined SQL files for ${allEntityFiles.length} schemas`);
+            
             // STEP 2(e) ---- FINALLY, we now execute all the combined files by schema;
+            startSpinner('Executing combined entity SQL files...');
             const step2eStartTime: Date = new Date();
             if (! await this.SQLUtilityObject.executeSQLFiles(allEntityFiles, true)) {
-                logError('Error executing combined entity SQL files');
+                failSpinner('Failed to execute combined entity SQL files');
                 return false;
             }
             const step2eEndTime: Date = new Date();
-            logStatus(`   Time to Execute Combined Entity SQL: ${(step2eEndTime.getTime() - step2eStartTime.getTime())/1000} seconds`);
+            succeedSpinner(`SQL execution completed (${(step2eEndTime.getTime() - step2eStartTime.getTime())/1000}s)`);
 
             const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
             // STEP 3 - re-run the process to manage entity fields since the Step 1 and 2 above might have resulted in differences in base view columns compared to what we had at first
             // we CAN skip the entity field values part because that wouldn't change from the first time we ran it
+            startSpinner('Managing entity fields metadata...');
             if (! await manageMD.manageEntityFields(pool, configInfo.excludeSchemas, true, true, currentUser)) {
-                logError('Error managing entity fields');
+                failSpinner('Failed to manage entity fields');
                 return false;
             }
+            succeedSpinner('Entity fields metadata updated');
             // no logStatus/timer for this because manageEntityFields() has its own internal logging for this including the total, so it is redundant to log it here
 
             // STEP 4- Apply permissions, executing all .permissions files
+            startSpinner('Applying permissions...');
             const step4StartTime: Date = new Date();
             if (! await this.applyPermissions(pool, directory, baselineEntities)) {
-                logError('Error applying permissions');
+                failSpinner('Failed to apply permissions');
                 return false;
             }
-            logStatus(`   Time to Apply Permissions: ${(new Date().getTime() - step4StartTime.getTime())/1000} seconds`);
+            succeedSpinner(`Permissions applied (${(new Date().getTime() - step4StartTime.getTime())/1000}s)`);
             
             // STEP 5 - execute any custom SQL scripts that should run afterwards
+            startSpinner('Running post-generation SQL scripts...');
             const step5StartTime: Date = new Date();
-            if (! await this.runCustomSQLScripts(pool, 'after-sql'))
+            if (! await this.runCustomSQLScripts(pool, 'after-sql')) {
+                failSpinner('Failed to run post-generation SQL scripts');
                 return false;
+            }
+            succeedSpinner(`Post-generation scripts completed (${(new Date().getTime() - step5StartTime.getTime())/1000}s)`);
 
-            logStatus(`   Time to run custom SQL scripts: ${(new Date().getTime() - step5StartTime.getTime())/1000} seconds`);
-
-            logStatus('   Total time to run generate and execute SQL scripts: ' + ((new Date().getTime() - startTime.getTime())/1000) + ' seconds');
+            succeedSpinner(`CodeGen completed successfully (${((new Date().getTime() - startTime.getTime())/1000)}s total)`);
 
             // now - we need to tell our metadata object to refresh itself
             const md = new Metadata();
@@ -1048,12 +1064,12 @@ ${whereClause}GO${permissions}
         -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
         INSERT INTO [${entity.SchemaName}].[${entity.BaseTable}]
             (
-                ${this.createEntityFieldsInsertString(entity, entity.Fields, '')}
+                ${this.createEntityFieldsInsertString(entity, entity.Fields, '', true)}
             )
         OUTPUT INSERTED.[${entity.FirstPrimaryKey.Name}] INTO @InsertedRow
         VALUES
             (
-                ${this.createEntityFieldsInsertString(entity, entity.Fields, '@')}
+                ${this.createEntityFieldsInsertString(entity, entity.Fields, '@', true)}
             )
     END`;
                 

@@ -3372,7 +3372,6 @@ BEGIN
         -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
         INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
             (
-                [ID],
                 [ApplicationID],
                 [EntityID],
                 [Sequence],
@@ -3381,7 +3380,6 @@ BEGIN
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
             (
-                @ID,
                 @ApplicationID,
                 @EntityID,
                 @Sequence,
@@ -3561,7 +3559,6 @@ BEGIN
         -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
         INSERT INTO [${flyway:defaultSchema}].[Application]
             (
-                [ID],
                 [Name],
                 [Description],
                 [Icon],
@@ -3573,7 +3570,6 @@ BEGIN
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
             (
-                @ID,
                 @Name,
                 @Description,
                 @Icon,
@@ -3667,7 +3663,6 @@ BEGIN
         -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
         INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
             (
-                [ID],
                 [EntityID],
                 [RoleID],
                 [CanCreate],
@@ -3682,7 +3677,6 @@ BEGIN
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
             (
-                @ID,
                 @EntityID,
                 @RoleID,
                 @CanCreate,
@@ -3758,7 +3752,6 @@ BEGIN
         -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
         INSERT INTO [${flyway:defaultSchema}].[UserApplicationEntity]
             (
-                [ID],
                 [UserApplicationID],
                 [EntityID],
                 [Sequence]
@@ -3766,7 +3759,6 @@ BEGIN
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
             (
-                @ID,
                 @UserApplicationID,
                 @EntityID,
                 @Sequence
@@ -3838,7 +3830,6 @@ BEGIN
         -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
         INSERT INTO [${flyway:defaultSchema}].[UserApplication]
             (
-                [ID],
                 [UserID],
                 [ApplicationID],
                 [Sequence],
@@ -3847,7 +3838,6 @@ BEGIN
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
             (
-                @ID,
                 @UserID,
                 @ApplicationID,
                 @Sequence,
@@ -3926,7 +3916,6 @@ BEGIN
         -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
         INSERT INTO [${flyway:defaultSchema}].[CompanyIntegrationRunAPILog]
             (
-                [ID],
                 [CompanyIntegrationRunID],
                 [ExecutedAt],
                 [IsSuccess],
@@ -3937,7 +3926,6 @@ BEGIN
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
             (
-                @ID,
                 @CompanyIntegrationRunID,
                 @ExecutedAt,
                 @IsSuccess,
@@ -4021,7 +4009,6 @@ BEGIN
         -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
         INSERT INTO [${flyway:defaultSchema}].[List]
             (
-                [ID],
                 [Name],
                 [Description],
                 [EntityID],
@@ -4033,7 +4020,6 @@ BEGIN
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
             (
-                @ID,
                 @Name,
                 @Description,
                 @EntityID,
@@ -4103,14 +4089,12 @@ BEGIN
         -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
         INSERT INTO [${flyway:defaultSchema}].[UserViewRunDetail]
             (
-                [ID],
                 [UserViewRunID],
                 [RecordID]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
             (
-                @ID,
                 @UserViewRunID,
                 @RecordID
             )
@@ -4184,7 +4168,6 @@ BEGIN
         -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
         INSERT INTO [${flyway:defaultSchema}].[ListDetail]
             (
-                [ID],
                 [ListID],
                 [RecordID],
                 [Sequence],
@@ -4194,7 +4177,6 @@ BEGIN
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
             (
-                @ID,
                 @ListID,
                 @RecordID,
                 @Sequence,
@@ -4265,7 +4247,6 @@ BEGIN
         -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
         INSERT INTO [${flyway:defaultSchema}].[UserViewRun]
             (
-                [ID],
                 [UserViewID],
                 [RunAt],
                 [RunByUserID]
@@ -4273,7 +4254,6 @@ BEGIN
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
             (
-                @ID,
                 @UserViewID,
                 @RunAt,
                 @RunByUserID

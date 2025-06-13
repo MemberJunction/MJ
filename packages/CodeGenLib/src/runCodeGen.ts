@@ -12,7 +12,7 @@ import { SQLServerDataProvider, UserCache, setupSQLServerClient } from '@memberj
 import { MSSQLConnection } from './Config/db-connection';
 import { ManageMetadataBase } from './Database/manage-metadata';
 import { outputDir, commands, mj_core_schema, configInfo, getSettingValue } from './Config/config';
-import { logError, logMessage, logStatus, logWarning } from './Misc/status_logging';
+import { logError, logMessage, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner } from './Misc/status_logging';
 import * as MJ from '@memberjunction/core';
 import { RunCommandsBase } from './Misc/runCommand';
 import { DBSchemaGeneratorBase } from './Database/dbSchema';
@@ -72,12 +72,11 @@ export class RunCodeGenBase {
     /****************************************************************************************
         // First, setup the data source and make sure the metadata and related stuff for MJCore is initialized
         ****************************************************************************************/
-    logStatus('Initializing Connection Pool...');
+    startSpinner('Initializing database connection...');
     const pool = await MSSQLConnection(); // get the MSSQL connection pool
-    logStatus('Connection Pool has been initialized!');
-
     const config = new SQLServerProviderConfigData(pool, '', mj_core_schema(), 0);
     const sqlServerProvider: SQLServerDataProvider = await setupSQLServerClient(config);
+    succeedSpinner('Database connection initialized');
     return sqlServerProvider;
   }
 
@@ -109,10 +108,11 @@ export class RunCodeGenBase {
   public async Run(skipDatabaseGeneration: boolean = false) {
     try {
       const startTime = new Date();
-      logStatus('\n\nSTARTING MJ CodeGen Run... @ ' + startTime.toLocaleString());
+      startSpinner(`Starting MemberJunction CodeGen @ ${startTime.toLocaleString()}`);
 
       const provider: SQLServerDataProvider = await this.setupDataSource();
 
+      updateSpinner('Loading user cache and metadata...');
       const pool = await MSSQLConnection();
       await UserCache.Instance.Refresh(pool);
       const userMatch: MJ.UserInfo = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner')!;
@@ -121,9 +121,10 @@ export class RunCodeGenBase {
       // get the entity metadata
       const md = new MJ.Metadata();
       if (md.Entities.length === 0) {
-        logError('No entities found in metadata, exiting...'); // TODO: add a way to generate the metadata if it doesn't exist
+        failSpinner('No entities found in metadata');
         process.exit(1);
       }
+      succeedSpinner(`Loaded ${md.Entities.length} entities from metadata`);
 
       const runCommandsObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCommandsBase>(RunCommandsBase)!;
       const sqlCodeGenObject = MJGlobal.Instance.ClassFactory.CreateInstance<SQLCodeGenBase>(SQLCodeGenBase)!;

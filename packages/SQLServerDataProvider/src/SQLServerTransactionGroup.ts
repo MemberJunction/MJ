@@ -64,40 +64,45 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                     }    
                 }
                 else {
-                    // can execute in batch since there are no dependencies between the transaction items
-                    const queries: string[] = [];
-                    const parameters: any[][] = [];
-                    
-                    // Prepare queries and parameters for batch execution
+                    // execute individually since there are no variable dependencies, but we want to avoid 
+                    // variable conflicts between different stored procedure calls that might use same variable names
                     for (const item of items) {
-                        let query = item.Instruction;
-                        let queryParams: any[] = [];
-                        
-                        // Handle parameters if any
-                        if (item.Vars && Array.isArray(item.Vars)) {
-                            queryParams = item.Vars;
-                            // Replace ? with @p0, @p1, etc. in the query
-                            let paramIndex = 0;
-                            query = query.replace(/\?/g, () => `@p${paramIndex++}`);
+                        let result: any = null, bSuccess: boolean = false;
+                        try {
+                            // Create a request for this transaction
+                            const request = new sql.Request(transaction);
+                            
+                            // Add parameters if any
+                            if (item.Vars && Array.isArray(item.Vars)) {
+                                item.Vars.forEach((value, index) => {
+                                    request.input(`p${index}`, value);
+                                });
+                                // Replace ? with @p0, @p1, etc. in the query
+                                let paramIndex = 0;
+                                const modifiedInstruction = item.Instruction.replace(/\?/g, () => `@p${paramIndex++}`);
+                                const queryResult = await request.query(modifiedInstruction);
+                                const rawResult = queryResult.recordset;
+                                
+                                if (rawResult && rawResult.length > 0) {
+                                    // Process the result to handle timezone conversions
+                                    result = sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo);
+                                }
+                            } else {
+                                const queryResult = await request.query(item.Instruction);
+                                const rawResult = queryResult.recordset;
+                                
+                                if (rawResult && rawResult.length > 0) {
+                                    // Process the result to handle timezone conversions
+                                    result = sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo);
+                                }
+                            }
+                            bSuccess = (result && result.length > 0); // success if we have a result and it has rows 
                         }
-                        
-                        queries.push(query);
-                        parameters.push(queryParams);
-                    }
-                    
-                    // Execute all queries in a single batch using the static method
-                    const rawResults = await SQLServerDataProvider.ExecuteSQLBatchStatic(transaction, queries, parameters);
-                    
-                    // Process results for each item
-                    for (let i = 0; i < items.length; i++) {
-                        const item = items[i];
-                        let result = null;
-                        if (rawResults[i] && rawResults[i].length > 0) {
-                            // Process the result to handle timezone conversions
-                            const processedResults = sqlProvider.ProcessEntityRows(rawResults[i], item.BaseEntity.EntityInfo);
-                            result = processedResults[0]; // get the first row of the processed result
+                        catch (e) {
+                            result = e; // push the exception to the result
                         }
-                        returnResults.push(new TransactionResult(item, result, result !== null));
+                        // save the results
+                        returnResults.push(new TransactionResult(item, result && result.length > 0 ? result[0] : result, bSuccess));
                     }
                 }
                 

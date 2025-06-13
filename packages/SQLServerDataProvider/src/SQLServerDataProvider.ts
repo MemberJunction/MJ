@@ -3069,7 +3069,7 @@ export class SQLServerDataProvider
    * Static method to execute a batch of SQL queries using a provided connection source.
    * This allows the batch logic to be reused from external contexts like TransactionGroup.
    * All queries are combined into a single SQL statement and executed together within
-   * the same connection/transaction context.
+   * the same connection/transaction context for optimal performance.
    * 
    * @param connectionSource - Either a sql.ConnectionPool, sql.Transaction, or sql.Request to use for execution
    * @param queries - Array of SQL queries to execute
