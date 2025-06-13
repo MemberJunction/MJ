@@ -13,6 +13,7 @@ import fs from 'fs-extra';
 import crypto from 'crypto';
 import axios from 'axios';
 import { EntityInfo, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
+import { uuidv4 } from '@memberjunction/global';
 import { EntityConfig, FolderConfig } from '../config';
 
 /**
@@ -263,6 +264,17 @@ export class SyncEngine {
       }
       
       newEntity.NewRecord();
+      
+      // Handle explicit ID setting for new records
+      if (entityInfo.PrimaryKeys.length > 0) {
+        for (const pk of entityInfo.PrimaryKeys) {
+          if (!pk.AutoIncrement && pk.Type.toLowerCase() === 'uniqueidentifier') {
+            // Generate UUID for this primary key and set it explicitly
+            const uuid = uuidv4();
+            (newEntity as any)[pk.Name] = uuid;
+          }
+        }
+      }
       
       // Set the lookup field
       if (fieldName in newEntity) {
@@ -648,15 +660,4 @@ export class SyncEngine {
     return result;
   }
   
-  /**
-   * Generate a UUID v4
-   * @returns A new UUID string in standard format
-   */
-  generateUUID(): string {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0;
-      const v = c === 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    }).toUpperCase();
-  }
 }
