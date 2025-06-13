@@ -9,8 +9,35 @@ import {
   ChartData,
   ExecutionDetails 
 } from '../services/ai-instrumentation.service';
+import { DataPointClickEvent } from './charts/time-series-chart.component';
 import { KPICardData } from './widgets/kpi-card.component';
 import { HeatmapData } from './charts/performance-heatmap.component';
+import { RunView } from '@memberjunction/core';
+import { AIPromptRunEntity, AIAgentRunEntity, AIModelEntity, AIPromptEntity, AIAgentEntity } from '@memberjunction/core-entities';
+
+export interface DrillDownTab {
+  id: string;
+  title: string;
+  type: 'chart' | 'executions' | 'model-detail';
+  data?: any;
+  timestamp?: Date;
+  metric?: string;
+  closeable: boolean;
+}
+
+export interface ExecutionRecord {
+  id: string;
+  type: 'prompt' | 'agent';
+  name: string;
+  model?: string;
+  status: string;
+  startTime: Date;
+  endTime?: Date;
+  duration: number;
+  cost: number;
+  tokens: number;
+  errorMessage?: string;
+}
 
 @Component({
   selector: 'app-execution-monitoring',
@@ -57,7 +84,11 @@ import { HeatmapData } from './charts/performance-heatmap.component';
       <div class="kpi-dashboard">
         <div class="kpi-grid">
           @for (kpi of kpiCards$ | async; track kpi.title) {
-            <app-kpi-card [data]="kpi"></app-kpi-card>
+            <app-kpi-card 
+              [data]="kpi"
+              (click)="onKpiClick(kpi)"
+              [class.clickable]="isKpiClickable(kpi)"
+            ></app-kpi-card>
           }
         </div>
       </div>
@@ -77,14 +108,168 @@ import { HeatmapData } from './charts/performance-heatmap.component';
               </div>
             </kendo-splitter-pane>
             
-            <!-- Execution Trends Chart - No size specified to allow resizing -->
+            <!-- Drill-down Tab Container -->
             <kendo-splitter-pane [resizable]="true" [collapsible]="false">
-              <div class="dashboard-section trends-chart">
-                <app-time-series-chart
-                  [data]="(trends$ | async) ?? []"
-                  title="Execution Trends"
-                  [config]="timeSeriesConfig"
-                ></app-time-series-chart>
+              <div class="dashboard-section drill-down-container">
+                <div class="drill-down-tabs">
+                  <div class="tab-header">
+                    @for (tab of drillDownTabs; track tab.id) {
+                      <div 
+                        class="tab-item"
+                        [class.active]="activeTabId === tab.id"
+                        (click)="selectTab(tab.id)"
+                      >
+                        <span class="tab-title">{{ tab.title }}</span>
+                        @if (tab.closeable) {
+                          <button 
+                            class="tab-close"
+                            (click)="closeTab($event, tab.id)"
+                            title="Close tab"
+                          >
+                            <i class="fa-solid fa-times"></i>
+                          </button>
+                        }
+                      </div>
+                    }
+                  </div>
+                  
+                  <div class="tab-content">
+                    @if (activeTab?.type === 'chart') {
+                      <div class="tab-pane trends-chart">
+                        <app-time-series-chart
+                          [data]="(trends$ | async) ?? []"
+                          title="Execution Trends"
+                          [config]="timeSeriesConfig"
+                          (dataPointClick)="onDataPointClick($event)"
+                          (timeRangeChange)="onChartTimeRangeChange($event)"
+                        ></app-time-series-chart>
+                      </div>
+                    }
+                    
+                    @if (activeTab?.type === 'executions') {
+                      <div class="tab-pane executions-drill-down">
+                        <div class="drill-down-header">
+                          <h4>
+                            <i class="fa-solid fa-list"></i>
+                            {{ activeTab?.title }}
+                          </h4>
+                          <div class="drill-down-meta">
+                            @if (activeTab?.timestamp) {
+                              <span class="timestamp">{{ getFormattedTimestamp(activeTab) }}</span>
+                            }
+                            @if (activeTab?.metric) {
+                              <span class="metric-badge">{{ getFormattedMetricLabel(activeTab) }}</span>
+                            }
+                          </div>
+                        </div>
+                        
+                        @if (loadingDrillDown) {
+                          <div class="loading-spinner">
+                            <i class="fa-solid fa-spinner fa-spin"></i>
+                            Loading execution details...
+                          </div>
+                        } @else if (activeTab?.data?.length > 0) {
+                          <div class="executions-table">
+                            <div class="table-header">
+                              <div class="header-cell">Type</div>
+                              <div class="header-cell">Name</div>
+                              <div class="header-cell">Model</div>
+                              <div class="header-cell">Status</div>
+                              <div class="header-cell">Duration</div>
+                              <div class="header-cell">Cost</div>
+                              <div class="header-cell">Tokens</div>
+                              <div class="header-cell">Time</div>
+                            </div>
+                            @for (execution of activeTab?.data; track execution.id) {
+                              <div 
+                                class="table-row"
+                                (click)="viewExecutionDetail(execution)"
+                              >
+                                <div class="table-cell">
+                                  <span class="type-badge" [class]="'type-badge--' + execution.type">
+                                    {{ execution.type }}
+                                  </span>
+                                </div>
+                                <div class="table-cell">{{ execution.name }}</div>
+                                <div class="table-cell">{{ execution.model || 'N/A' }}</div>
+                                <div class="table-cell">
+                                  <span class="status-badge" [class]="'status-badge--' + execution.status">
+                                    {{ execution.status }}
+                                  </span>
+                                </div>
+                                <div class="table-cell">{{ formatDuration(execution.duration) }}</div>
+                                <div class="table-cell">{{ formatCurrency(execution.cost) }}</div>
+                                <div class="table-cell">{{ execution.tokens.toLocaleString() }}</div>
+                                <div class="table-cell">{{ formatTime(execution.startTime) }}</div>
+                              </div>
+                            }
+                          </div>
+                        } @else {
+                          <div class="no-data">
+                            <i class="fa-solid fa-inbox"></i>
+                            <p>No executions found for this time period</p>
+                          </div>
+                        }
+                      </div>
+                    }
+                    
+                    @if (activeTab?.type === 'model-detail') {
+                      <div class="tab-pane model-detail">
+                        <div class="drill-down-header">
+                          <h4>
+                            <i class="fa-solid fa-microchip"></i>
+                            Model Details: {{ activeTab?.data?.name }}
+                          </h4>
+                        </div>
+                        
+                        @if (loadingDrillDown) {
+                          <div class="loading-spinner">
+                            <i class="fa-solid fa-spinner fa-spin"></i>
+                            Loading model details...
+                          </div>
+                        } @else if (activeTab?.data) {
+                          <div class="model-details">
+                            <div class="model-info-grid">
+                              <div class="info-item">
+                                <label>Model Name:</label>
+                                <span>{{ activeTab?.data?.name }}</span>
+                              </div>
+                              <div class="info-item">
+                                <label>Vendor:</label>
+                                <span>{{ activeTab?.data?.vendor }}</span>
+                              </div>
+                              <div class="info-item">
+                                <label>API Name:</label>
+                                <span>{{ activeTab?.data?.apiName }}</span>
+                              </div>
+                              <div class="info-item">
+                                <label>Input Cost:</label>
+                                <span>\${{ activeTab?.data?.inputTokenCost?.toFixed(6) || '0' }} per token</span>
+                              </div>
+                              <div class="info-item">
+                                <label>Output Cost:</label>
+                                <span>\${{ activeTab?.data?.outputTokenCost?.toFixed(6) || '0' }} per token</span>
+                              </div>
+                              <div class="info-item">
+                                <label>Active:</label>
+                                <span class="status-indicator" [class.active]="activeTab?.data?.isActive">
+                                  {{ activeTab?.data?.isActive ? 'Yes' : 'No' }}
+                                </span>
+                              </div>
+                            </div>
+                            
+                            @if (activeTab?.data?.description) {
+                              <div class="model-description">
+                                <h5>Description</h5>
+                                <p>{{ activeTab?.data?.description }}</p>
+                              </div>
+                            }
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                </div>
               </div>
             </kendo-splitter-pane>
           </kendo-splitter>
@@ -928,11 +1113,349 @@ import { HeatmapData } from './charts/performance-heatmap.component';
       animation: spin 1s linear infinite;
     }
 
+    /* Drill-down Tab Styles */
+    .drill-down-container {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .drill-down-tabs {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .tab-header {
+      display: flex;
+      border-bottom: 1px solid #e0e0e0;
+      background: #f8f9fa;
+      min-height: 40px;
+      overflow-x: auto;
+    }
+
+    .tab-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: #f8f9fa;
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      color: #666;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+      min-width: 120px;
+      justify-content: space-between;
+    }
+
+    .tab-item:hover {
+      background: #e9ecef;
+      color: #333;
+    }
+
+    .tab-item.active {
+      background: white;
+      color: #2196f3;
+      border-bottom-color: #2196f3;
+    }
+
+    .tab-title {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tab-close {
+      background: none;
+      border: none;
+      color: #999;
+      cursor: pointer;
+      padding: 2px;
+      border-radius: 2px;
+      font-size: 10px;
+      width: 16px;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    .tab-close:hover {
+      background: rgba(0, 0, 0, 0.1);
+      color: #333;
+    }
+
+    .tab-content {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .tab-pane {
+      height: 100%;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .trends-chart {
+      padding: 0;
+    }
+
+    /* Drill-down specific styles */
+    .executions-drill-down {
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .drill-down-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .drill-down-header h4 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .drill-down-meta {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      font-size: 12px;
+    }
+
+    .timestamp {
+      color: #666;
+      background: #f0f0f0;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+
+    .metric-badge {
+      background: #2196f3;
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+
+    .loading-spinner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      color: #666;
+      gap: 12px;
+    }
+
+    .executions-table {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .table-header {
+      display: grid;
+      grid-template-columns: 80px 1fr 120px 100px 100px 80px 100px 120px;
+      gap: 12px;
+      background: #f8f9fa;
+      padding: 12px 16px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .table-row {
+      display: grid;
+      grid-template-columns: 80px 1fr 120px 100px 100px 80px 100px 120px;
+      gap: 12px;
+      padding: 12px 16px;
+      border-top: 1px solid #f0f0f0;
+      cursor: pointer;
+      transition: background 0.2s ease;
+      align-items: center;
+    }
+
+    .table-row:hover {
+      background: #f8f9fa;
+    }
+
+    .table-cell {
+      font-size: 12px;
+      color: #333;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .type-badge {
+      background: #e9ecef;
+      color: #666;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+
+    .type-badge--prompt {
+      background: rgba(33, 150, 243, 0.1);
+      color: #2196f3;
+    }
+
+    .type-badge--agent {
+      background: rgba(76, 175, 80, 0.1);
+      color: #4caf50;
+    }
+
+    .no-data {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      color: #999;
+      gap: 16px;
+    }
+
+    .no-data i {
+      font-size: 48px;
+      color: #ddd;
+    }
+
+    .no-data p {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    /* Model detail styles */
+    .model-detail {
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .model-details {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .model-info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
+    }
+
+    .info-item {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 16px;
+      background: #f8f9fa;
+      border-radius: 6px;
+    }
+
+    .info-item label {
+      font-size: 11px;
+      color: #666;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 0;
+    }
+
+    .info-item span {
+      font-size: 14px;
+      color: #333;
+      font-weight: 500;
+    }
+
+    .status-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+    }
+
+    .status-indicator.active {
+      color: #4caf50;
+    }
+
+    .status-indicator.active::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      background: #4caf50;
+      border-radius: 50%;
+    }
+
+    .model-description {
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 8px;
+    }
+
+    .model-description h5 {
+      margin: 0 0 12px 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .model-description p {
+      margin: 0;
+      font-size: 13px;
+      color: #666;
+      line-height: 1.5;
+    }
+
+    /* Clickable KPI cards */
+    .clickable {
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .clickable:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
     /* Responsive Design */
     @media (max-width: 1200px) {
       .dashboard-splitter {
         height: calc(100vh - 200px); /* Added 20px margin */
         margin-bottom: 20px;
+      }
+      
+      .table-header,
+      .table-row {
+        grid-template-columns: 60px 1fr 100px 80px 80px 60px 80px 100px;
+        gap: 8px;
+      }
+      
+      .model-info-grid {
+        grid-template-columns: 1fr;
       }
     }
 
@@ -973,6 +1496,45 @@ import { HeatmapData } from './charts/performance-heatmap.component';
       :host ::ng-deep .k-splitter-vertical > .k-splitter-pane {
         padding: 2px 5px;
       }
+      
+      .tab-header {
+        overflow-x: auto;
+      }
+      
+      .tab-item {
+        min-width: 100px;
+        padding: 6px 12px;
+      }
+      
+      .table-header,
+      .table-row {
+        grid-template-columns: 1fr;
+        gap: 4px;
+        text-align: left;
+      }
+      
+      .table-row {
+        display: block;
+        padding: 16px;
+      }
+      
+      .table-cell {
+        display: block;
+        margin-bottom: 8px;
+      }
+      
+      .table-cell:before {
+        content: attr(data-label) ': ';
+        font-weight: 600;
+        color: #666;
+        font-size: 11px;
+        text-transform: uppercase;
+      }
+      
+      .executions-drill-down,
+      .model-detail {
+        padding: 12px;
+      }
     }
   `]
 })
@@ -989,7 +1551,8 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
     height: 350,
     showGrid: true,
     showTooltip: true,
-    animationDuration: 500
+    animationDuration: 500,
+    useDualAxis: true
   };
 
   heatmapConfig = {
@@ -1014,6 +1577,15 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   selectedExecution: LiveExecution | null = null;
   executionDetails: ExecutionDetails | null = null;
   loadingExecutionDetails = false;
+
+  // Drill-down tab state
+  drillDownTabs: DrillDownTab[] = [];
+  activeTabId: string = 'main-chart';
+  loadingDrillDown = false;
+
+  get activeTab(): DrillDownTab | undefined {
+    return this.drillDownTabs.find(tab => tab.id === this.activeTabId);
+  }
 
   constructor(
     private instrumentationService: AIInstrumentationService
@@ -1050,6 +1622,16 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.instrumentationService.setRefreshInterval(this.refreshInterval);
     this.setTimeRange(this.selectedTimeRange);
+    
+    // Initialize with main chart tab
+    this.drillDownTabs = [
+      {
+        id: 'main-chart',
+        title: 'Execution Trends',
+        type: 'chart',
+        closeable: false
+      }
+    ];
   }
 
   ngOnDestroy() {
@@ -1155,6 +1737,62 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
     this.loadExecutionDetails(execution);
   }
 
+  onDataPointClick(event: DataPointClickEvent): void {
+    const timestamp = event.data.timestamp;
+    const metric = event.metric;
+    
+    // Create new drill-down tab
+    const tabId = `drill-down-${timestamp.getTime()}-${metric}`;
+    const tabTitle = `${this.getMetricDisplayLabel(metric)} - ${this.formatTimestamp(timestamp)}`;
+    
+    const newTab: DrillDownTab = {
+      id: tabId,
+      title: tabTitle,
+      type: 'executions',
+      timestamp: timestamp,
+      metric: metric,
+      closeable: true
+    };
+    
+    // Add tab if it doesn't exist
+    if (!this.drillDownTabs.find(tab => tab.id === tabId)) {
+      this.drillDownTabs.push(newTab);
+    }
+    
+    // Switch to the new tab
+    this.selectTab(tabId);
+    
+    // Load drill-down data
+    this.loadDrillDownData(newTab);
+  }
+
+  onChartTimeRangeChange(range: string): void {
+    this.selectedTimeRange = range;
+    this.setTimeRange(range);
+  }
+
+  private getMetricValue(data: TrendData, metric: string): number {
+    switch (metric) {
+      case 'executions': return data.executions;
+      case 'cost': return data.cost;
+      case 'tokens': return data.tokens;
+      case 'avgTime': return data.avgTime;
+      case 'errors': return data.errors;
+      default: return 0;
+    }
+  }
+
+  private formatMetricValue(metric: string, value: number): string {
+    switch (metric) {
+      case 'executions': return value.toLocaleString();
+      case 'cost': return `$${value.toFixed(4)}`;
+      case 'tokens': return value.toLocaleString();
+      case 'avgTime': return `${(value / 1000).toFixed(1)}s`;
+      case 'errors': return value.toString();
+      default: return value.toString();
+    }
+  }
+
   private async loadExecutionDetails(execution: LiveExecution): Promise<void> {
     this.loadingExecutionDetails = true;
     this.executionDetails = null;
@@ -1231,6 +1869,275 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   getCostPerToken(cost: number, tokens: number): string {
     const costPer1K = tokens > 0 ? (cost / tokens) * 1000 : 0;
     return costPer1K.toFixed(4);
+  }
+
+  // Tab management methods
+  selectTab(tabId: string): void {
+    this.activeTabId = tabId;
+  }
+
+  closeTab(event: MouseEvent, tabId: string): void {
+    event.stopPropagation();
+    
+    const tabIndex = this.drillDownTabs.findIndex(tab => tab.id === tabId);
+    if (tabIndex === -1) return;
+    
+    // Remove the tab
+    this.drillDownTabs.splice(tabIndex, 1);
+    
+    // If we closed the active tab, switch to another tab
+    if (this.activeTabId === tabId) {
+      if (this.drillDownTabs.length > 0) {
+        // Switch to the previous tab or first tab
+        const newActiveIndex = Math.max(0, tabIndex - 1);
+        this.activeTabId = this.drillDownTabs[newActiveIndex].id;
+      } else {
+        // No tabs left, this shouldn't happen as main chart is not closeable
+        this.activeTabId = 'main-chart';
+      }
+    }
+  }
+
+  // KPI click handling
+  onKpiClick(kpi: KPICardData): void {
+    if (kpi.title === 'Top Model' && kpi.value !== 'N/A') {
+      this.openModelDrillDown(String(kpi.value));
+    }
+    // Add other KPI drill-downs as needed
+  }
+
+  isKpiClickable(kpi: KPICardData): boolean {
+    return kpi.title === 'Top Model' && kpi.value !== 'N/A';
+  }
+
+  private async openModelDrillDown(modelName: string): Promise<void> {
+    const tabId = `model-detail-${modelName.replace(/[^a-zA-Z0-9]/g, '-')}`;
+    const tabTitle = `Model: ${modelName}`;
+    
+    // Check if tab already exists
+    if (this.drillDownTabs.find(tab => tab.id === tabId)) {
+      this.selectTab(tabId);
+      return;
+    }
+    
+    // Create new model detail tab
+    const newTab: DrillDownTab = {
+      id: tabId,
+      title: tabTitle,
+      type: 'model-detail',
+      closeable: true
+    };
+    
+    this.drillDownTabs.push(newTab);
+    this.selectTab(tabId);
+    
+    // Load model details
+    this.loadModelDetails(newTab, modelName);
+  }
+
+  private async loadDrillDownData(tab: DrillDownTab): Promise<void> {
+    if (!tab.timestamp) return;
+    
+    this.loadingDrillDown = true;
+    
+    try {
+      // Create time window around the clicked point (±30 minutes)
+      const startTime = new Date(tab.timestamp.getTime() - 30 * 60 * 1000);
+      const endTime = new Date(tab.timestamp.getTime() + 30 * 60 * 1000);
+      
+      // Load executions for this time period
+      const [promptResults, agentResults] = await Promise.all([
+        new RunView().RunView<AIPromptRunEntity>({
+          EntityName: 'MJ: AI Prompt Runs',
+          ExtraFilter: `RunAt >= '${startTime.toISOString()}' AND RunAt <= '${endTime.toISOString()}'`,
+          OrderBy: 'RunAt DESC',
+          ResultType: 'entity_object'
+        }),
+        new RunView().RunView<AIAgentRunEntity>({
+          EntityName: 'MJ: AI Agent Runs',
+          ExtraFilter: `StartedAt >= '${startTime.toISOString()}' AND StartedAt <= '${endTime.toISOString()}'`,
+          OrderBy: 'StartedAt DESC',
+          ResultType: 'entity_object'
+        })
+      ]);
+      
+      // Convert to ExecutionRecord format
+      const executions: ExecutionRecord[] = [];
+      
+      // Add prompt executions
+      for (const run of promptResults.Results) {
+        const duration = run.CompletedAt ? 
+          new Date(run.CompletedAt).getTime() - new Date(run.RunAt).getTime() : 
+          Date.now() - new Date(run.RunAt).getTime();
+          
+        executions.push({
+          id: run.ID,
+          type: 'prompt',
+          name: await this.getPromptName(run.PromptID),
+          model: run.ModelID ? await this.getModelName(run.ModelID) : undefined,
+          status: run.Success ? 'completed' : (run.Success === false ? 'failed' : 'running'),
+          startTime: new Date(run.RunAt),
+          endTime: run.CompletedAt ? new Date(run.CompletedAt) : undefined,
+          duration: duration,
+          cost: run.Cost || 0,
+          tokens: run.TokensUsed || 0,
+          errorMessage: run.ErrorMessage || undefined
+        });
+      }
+      
+      // Add agent executions
+      for (const run of agentResults.Results) {
+        const duration = run.CompletedAt ? 
+          new Date(run.CompletedAt).getTime() - new Date(run.StartedAt).getTime() : 
+          Date.now() - new Date(run.StartedAt).getTime();
+          
+        executions.push({
+          id: run.ID,
+          type: 'agent',
+          name: await this.getAgentName(run.AgentID),
+          status: run.Status.toLowerCase(),
+          startTime: new Date(run.StartedAt),
+          endTime: run.CompletedAt ? new Date(run.CompletedAt) : undefined,
+          duration: duration,
+          cost: run.TotalCost || 0,
+          tokens: run.TotalTokensUsed || 0,
+          errorMessage: run.ErrorMessage || undefined
+        });
+      }
+      
+      // Sort by start time (most recent first)
+      executions.sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
+      
+      // Update tab data
+      tab.data = executions;
+      
+    } catch (error) {
+      console.error('Error loading drill-down data:', error);
+      tab.data = [];
+    } finally {
+      this.loadingDrillDown = false;
+    }
+  }
+
+  private async loadModelDetails(tab: DrillDownTab, modelName: string): Promise<void> {
+    this.loadingDrillDown = true;
+    
+    try {
+      // Find model by name
+      const rv = new RunView();
+      const result = await rv.RunView<AIModelEntity>({
+        EntityName: 'AI Models',
+        ExtraFilter: `Name = '${modelName.replace(/'/g, "''")}'`,
+        ResultType: 'entity_object'
+      });
+      
+      const model = result.Results[0];
+      if (model) {
+        tab.data = {
+          name: model.Name,
+          vendor: model.Vendor,
+          apiName: model.APIName,
+          inputTokenCost: 0, // Not available in current model
+          outputTokenCost: 0, // Not available in current model  
+          isActive: model.IsActive,
+          description: model.Description
+        };
+      } else {
+        tab.data = null;
+      }
+      
+    } catch (error) {
+      console.error('Error loading model details:', error);
+      tab.data = null;
+    } finally {
+      this.loadingDrillDown = false;
+    }
+  }
+
+  // Helper methods for drill-down
+  private async getPromptName(promptId: string): Promise<string> {
+    try {
+      const rv = new RunView();
+      const result = await rv.RunView<AIPromptEntity>({
+        EntityName: 'AI Prompts',
+        ExtraFilter: `ID = '${promptId}'`,
+        ResultType: 'entity_object'
+      });
+      return result.Results[0]?.Name || 'Unknown Prompt';
+    } catch {
+      return 'Unknown Prompt';
+    }
+  }
+
+  private async getAgentName(agentId: string): Promise<string> {
+    try {
+      const rv = new RunView();
+      const result = await rv.RunView<AIAgentEntity>({
+        EntityName: 'AI Agents',
+        ExtraFilter: `ID = '${agentId}'`,
+        ResultType: 'entity_object'
+      });
+      return result.Results[0]?.Name || 'Unknown Agent';
+    } catch {
+      return 'Unknown Agent';
+    }
+  }
+
+  private async getModelName(modelId: string): Promise<string> {
+    try {
+      const rv = new RunView();
+      const result = await rv.RunView<AIModelEntity>({
+        EntityName: 'AI Models',
+        ExtraFilter: `ID = '${modelId}'`,
+        ResultType: 'entity_object'
+      });
+      return result.Results[0]?.Name || 'Unknown Model';
+    } catch {
+      return 'Unknown Model';
+    }
+  }
+
+  formatTimestamp(timestamp: Date): string {
+    return timestamp.toLocaleString();
+  }
+
+  formatTime(time: Date): string {
+    return time.toLocaleTimeString();
+  }
+
+  getMetricDisplayLabel(metric: string): string {
+    const labels: { [key: string]: string } = {
+      executions: 'Executions',
+      cost: 'Cost',
+      tokens: 'Tokens',
+      avgTime: 'Avg Time',
+      errors: 'Errors'
+    };
+    return labels[metric] || metric;
+  }
+
+  getFormattedTimestamp(tab: DrillDownTab | undefined): string {
+    return tab?.timestamp ? this.formatTimestamp(tab.timestamp) : '';
+  }
+
+  getFormattedMetricLabel(tab: DrillDownTab | undefined): string {
+    return tab?.metric ? this.getMetricDisplayLabel(tab.metric) : '';
+  }
+
+  viewExecutionDetail(execution: ExecutionRecord): void {
+    // Convert ExecutionRecord to LiveExecution format for the modal
+    const liveExecution: LiveExecution = {
+      id: execution.id,
+      type: execution.type,
+      name: execution.name,
+      status: execution.status as 'running' | 'completed' | 'failed',
+      startTime: execution.startTime,
+      duration: execution.duration,
+      cost: execution.cost,
+      tokens: execution.tokens
+    };
+    
+    this.onExecutionClick(liveExecution);
   }
 
   formatDuration(milliseconds: number): string {
