@@ -21,24 +21,45 @@
     align-items: center;
     gap: 20px;
     
-    .back-btn {
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .back-btn, .open-btn {
       display: flex;
       align-items: center;
       gap: 8px;
       padding: 8px 16px;
-      background: #f8f9fa;
       border: 1px solid #e0e0e0;
       border-radius: 4px;
-      color: #666;
       text-decoration: none;
       font-size: 14px;
       cursor: pointer;
       transition: all 0.2s;
       
       &:hover {
-        background: #e9ecef;
         border-color: #ccc;
+      }
+    }
+    
+    .back-btn {
+      background: #f8f9fa;
+      color: #666;
+      
+      &:hover {
+        background: #e9ecef;
         color: #333;
+      }
+    }
+    
+    .open-btn {
+      background: #007bff;
+      color: white;
+      
+      &:hover {
+        background: #0056b3;
       }
     }
     

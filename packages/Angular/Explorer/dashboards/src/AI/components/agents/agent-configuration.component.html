@@ -6,6 +6,7 @@
       [agentId]="selectedAgentId"
       (close)="closeAgentEditor()"
       (openAgent)="onOpenAgentFromEditor($event)"
+      (openEntityRecord)="onOpenRecord($event.entityName, $event.recordId)"
       mjFillContainer>
     </mj-agent-editor>
   } @else {

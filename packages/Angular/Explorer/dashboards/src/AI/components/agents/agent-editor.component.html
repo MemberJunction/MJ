@@ -2,14 +2,27 @@
   <!-- Header -->
   <div class="editor-header">
     <div class="header-info">
-      <button 
-        type="button" 
-        class="back-btn"
-        (click)="closeEditor()"
-        title="Back to Agent List">
-        <i class="fa-solid fa-arrow-left"></i>
-        Back to Agents
-      </button>
+      <div class="header-actions">
+        <button 
+          type="button" 
+          class="back-btn"
+          (click)="closeEditor()"
+          title="Back to Agent List">
+          <i class="fa-solid fa-arrow-left"></i>
+          Back to Agents
+        </button>
+        
+        @if (currentAgent) {
+          <button 
+            type="button" 
+            class="open-btn"
+            (click)="openCurrentAgentRecord()"
+            title="Open Agent Record">
+            <i class="fa-solid fa-external-link"></i>
+            Open Record
+          </button>
+        }
+      </div>
       
       @if (currentAgent) {
         <div class="agent-breadcrumb">

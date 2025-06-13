@@ -13,3 +13,4 @@ export * from './types';
 export * from './base-agent-type';
 export * from './base-agent';
 export * from './agent-types';
+export * from './AgentRunner';
