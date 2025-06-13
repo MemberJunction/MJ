@@ -95,16 +95,67 @@ export interface ExecutionRecord {
 
       <!-- Main Dashboard with Kendo Splitter -->
       <kendo-splitter class="dashboard-splitter" orientation="vertical">
-        <!-- Top Row: Live Executions and Trends Chart -->
+        <!-- Top Row: System Health and Trends Chart -->
         <kendo-splitter-pane size="45%" [resizable]="true" [collapsible]="false">
           <kendo-splitter orientation="horizontal">
-            <!-- Live Executions -->
+            <!-- System Health -->
             <kendo-splitter-pane size="30%" [resizable]="true" [collapsible]="true" [collapsed]="false">
-              <div class="dashboard-section live-executions">
-                <app-live-execution-widget
-                  [executions]="(liveExecutions$ | async) ?? []"
-                  (executionClick)="onExecutionClick($event)"
-                ></app-live-execution-widget>
+              <div class="dashboard-section system-status">
+                <div class="status-container">
+                  <div class="chart-header">
+                    <h4 class="chart-title">
+                      <i class="fa-solid fa-heartbeat"></i>
+                      System Health
+                    </h4>
+                  </div>
+                  @if (kpis$ | async; as kpis) {
+                    <div class="status-metrics">
+                      <div class="status-metric">
+                        <div class="status-icon status-icon--success">
+                          <i class="fa-solid fa-check"></i>
+                        </div>
+                        <div class="status-info">
+                          <div class="status-label">Success Rate</div>
+                          <div class="status-value">{{ (kpis.successRate * 100).toFixed(1) }}%</div>
+                          <div class="status-subtitle">Last {{ selectedTimeRange }}</div>
+                        </div>
+                      </div>
+                      
+                      <div class="status-metric">
+                        <div class="status-icon status-icon--warning">
+                          <i class="fa-solid fa-exclamation-triangle"></i>
+                        </div>
+                        <div class="status-info">
+                          <div class="status-label">Error Rate</div>
+                          <div class="status-value">{{ (kpis.errorRate * 100).toFixed(1) }}%</div>
+                          <div class="status-subtitle">{{ kpis.totalExecutions }} total executions</div>
+                        </div>
+                      </div>
+                      
+                      <div class="status-metric">
+                        <div class="status-icon status-icon--info">
+                          <i class="fa-solid fa-clock"></i>
+                        </div>
+                        <div class="status-info">
+                          <div class="status-label">Avg Response Time</div>
+                          <div class="status-value">{{ (kpis.avgExecutionTime / 1000).toFixed(2) }}s</div>
+                          <div class="status-subtitle">Across all models</div>
+                        </div>
+                      </div>
+                      
+                      <div class="status-metric">
+                        <div class="status-icon status-icon--primary">
+                          <i class="fa-solid fa-bolt"></i>
+                        </div>
+                        <div class="status-info">
+                          <div class="status-label">Active Executions</div>
+                          <div class="status-value">{{ kpis.activeExecutions }}</div>
+                          <div class="status-subtitle">Currently running</div>
+                        </div>
+                      </div>
+                    </div>
+                  }
+                </div>
               </div>
             </kendo-splitter-pane>
             
@@ -275,10 +326,10 @@ export interface ExecutionRecord {
           </kendo-splitter>
         </kendo-splitter-pane>
 
-        <!-- Bottom Row: Performance Matrix and Side Panels - No size specified to allow resizing -->
+        <!-- Bottom Row: Analysis Panels with Expansion Layout -->
         <kendo-splitter-pane [resizable]="true" [collapsible]="false">
           <kendo-splitter orientation="horizontal">
-            <!-- Performance Heatmap -->
+            <!-- Left: Performance Heatmap -->
             <kendo-splitter-pane size="50%" [resizable]="true" [collapsible]="false">
               <div class="dashboard-section performance-matrix">
                 <app-performance-heatmap
@@ -289,19 +340,21 @@ export interface ExecutionRecord {
               </div>
             </kendo-splitter-pane>
 
-            <!-- Right Side Panel: Cost, Token Efficiency, System Health - No size specified to allow resizing -->
-            <kendo-splitter-pane [resizable]="true" [collapsible]="true" [collapsed]="false">
-              <kendo-splitter orientation="vertical">
-                <!-- Cost Analysis -->
-                <kendo-splitter-pane size="33%" [resizable]="true" [collapsible]="true" [collapsed]="false">
-                  <div class="dashboard-section cost-analysis">
-                    <div class="cost-chart-container">
-                      <div class="chart-header">
-                        <h4 class="chart-title">
-                          <i class="fa-solid fa-dollar-sign"></i>
-                          Cost by Model
-                        </h4>
-                      </div>
+            <!-- Right: Analysis Panels with Collapsible Sections -->
+            <kendo-splitter-pane [resizable]="true" [collapsible]="false">
+              <div class="dashboard-section analysis-panels">
+                
+                <!-- Cost Analysis Panel -->
+                <div class="analysis-panel">
+                  <div class="panel-header" (click)="togglePanel('cost')">
+                    <span class="panel-title">
+                      <i class="fa-solid fa-dollar-sign"></i>
+                      Cost Analysis
+                    </span>
+                    <i class="fa-solid panel-toggle-icon" [class.fa-chevron-down]="!panelStates.cost" [class.fa-chevron-up]="panelStates.cost"></i>
+                  </div>
+                  @if (panelStates.cost) {
+                    <div class="panel-content">
                       @if (costData$ | async; as costData) {
                         <div class="cost-bars">
                           @for (item of costData.slice(0, 8); track item.model) {
@@ -324,19 +377,20 @@ export interface ExecutionRecord {
                         </div>
                       }
                     </div>
-                  </div>
-                </kendo-splitter-pane>
+                  }
+                </div>
 
-                <!-- Token Efficiency -->
-                <kendo-splitter-pane size="33%" [resizable]="true" [collapsible]="true" [collapsed]="false">
-                  <div class="dashboard-section token-efficiency">
-                    <div class="efficiency-chart-container">
-                      <div class="chart-header">
-                        <h4 class="chart-title">
-                          <i class="fa-solid fa-chart-pie"></i>
-                          Token Efficiency
-                        </h4>
-                      </div>
+                <!-- Token Efficiency Panel -->
+                <div class="analysis-panel">
+                  <div class="panel-header" (click)="togglePanel('efficiency')">
+                    <span class="panel-title">
+                      <i class="fa-solid fa-chart-pie"></i>
+                      Token Efficiency
+                    </span>
+                    <i class="fa-solid panel-toggle-icon" [class.fa-chevron-down]="!panelStates.efficiency" [class.fa-chevron-up]="panelStates.efficiency"></i>
+                  </div>
+                  @if (panelStates.efficiency) {
+                    <div class="panel-content">
                       @if (tokenEfficiency$ | async; as efficiencyData) {
                         <div class="efficiency-items">
                           @for (item of efficiencyData.slice(0, 6); track item.model) {
@@ -371,70 +425,28 @@ export interface ExecutionRecord {
                         </div>
                       }
                     </div>
-                  </div>
-                </kendo-splitter-pane>
+                  }
+                </div>
 
-                <!-- System Status - No size specified to allow resizing -->
-                <kendo-splitter-pane [resizable]="true" [collapsible]="true" [collapsed]="false">
-                  <div class="dashboard-section system-status">
-                    <div class="status-container">
-                      <div class="chart-header">
-                        <h4 class="chart-title">
-                          <i class="fa-solid fa-heartbeat"></i>
-                          System Health
-                        </h4>
-                      </div>
-                      @if (kpis$ | async; as kpis) {
-                        <div class="status-metrics">
-                          <div class="status-metric">
-                            <div class="status-icon status-icon--success">
-                              <i class="fa-solid fa-check"></i>
-                            </div>
-                            <div class="status-info">
-                              <div class="status-label">Success Rate</div>
-                              <div class="status-value">{{ (kpis.successRate * 100).toFixed(1) }}%</div>
-                              <div class="status-subtitle">Last {{ selectedTimeRange }}</div>
-                            </div>
-                          </div>
-                          
-                          <div class="status-metric">
-                            <div class="status-icon status-icon--warning">
-                              <i class="fa-solid fa-exclamation-triangle"></i>
-                            </div>
-                            <div class="status-info">
-                              <div class="status-label">Error Rate</div>
-                              <div class="status-value">{{ (kpis.errorRate * 100).toFixed(1) }}%</div>
-                              <div class="status-subtitle">{{ kpis.totalExecutions }} total executions</div>
-                            </div>
-                          </div>
-                          
-                          <div class="status-metric">
-                            <div class="status-icon status-icon--info">
-                              <i class="fa-solid fa-clock"></i>
-                            </div>
-                            <div class="status-info">
-                              <div class="status-label">Avg Response Time</div>
-                              <div class="status-value">{{ (kpis.avgExecutionTime / 1000).toFixed(2) }}s</div>
-                              <div class="status-subtitle">Across all models</div>
-                            </div>
-                          </div>
-                          
-                          <div class="status-metric">
-                            <div class="status-icon status-icon--primary">
-                              <i class="fa-solid fa-bolt"></i>
-                            </div>
-                            <div class="status-info">
-                              <div class="status-label">Active Executions</div>
-                              <div class="status-value">{{ kpis.activeExecutions }}</div>
-                              <div class="status-subtitle">Currently running</div>
-                            </div>
-                          </div>
-                        </div>
-                      }
-                    </div>
+                <!-- Live Executions Panel -->
+                <div class="analysis-panel">
+                  <div class="panel-header" (click)="togglePanel('executions')">
+                    <span class="panel-title">
+                      <i class="fa-solid fa-bolt"></i>
+                      Live Executions
+                    </span>
+                    <i class="fa-solid panel-toggle-icon" [class.fa-chevron-down]="!panelStates.executions" [class.fa-chevron-up]="panelStates.executions"></i>
                   </div>
-                </kendo-splitter-pane>
-              </kendo-splitter>
+                  @if (panelStates.executions) {
+                    <div class="panel-content live-executions-panel">
+                      <app-live-execution-widget
+                        [executions]="(liveExecutions$ | async) ?? []"
+                        (executionClick)="onExecutionClick($event)"
+                      ></app-live-execution-widget>
+                    </div>
+                  }
+                </div>
+              </div>
             </kendo-splitter-pane>
           </kendo-splitter>
         </kendo-splitter-pane>
@@ -1446,6 +1458,87 @@ export interface ExecutionRecord {
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
 
+    /* Collapsible Panel Styles */
+    .analysis-panels {
+      padding: 10px;
+      height: 100%;
+      overflow-y: auto;
+      background: #f8f9fa;
+    }
+
+    .analysis-panel {
+      margin-bottom: 12px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      background: white;
+      overflow: hidden;
+    }
+
+    .analysis-panel:last-child {
+      margin-bottom: 0;
+    }
+
+    .panel-header {
+      padding: 12px 16px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #e0e0e0;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background 0.2s ease;
+    }
+
+    .panel-header:hover {
+      background: #e9ecef;
+    }
+
+    .panel-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      color: #333;
+      font-size: 14px;
+    }
+
+    .panel-title i {
+      color: #2196f3;
+      width: 16px;
+    }
+
+    .panel-toggle-icon {
+      color: #666;
+      font-size: 12px;
+      transition: transform 0.2s ease;
+    }
+
+    .panel-content {
+      padding: 16px;
+      border-top: 1px solid #f0f0f0;
+      animation: slideDown 0.2s ease-out;
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        max-height: 0;
+      }
+      to {
+        opacity: 1;
+        max-height: 500px;
+      }
+    }
+
+    .live-executions-panel {
+      padding: 0;
+    }
+
+    .live-executions-panel app-live-execution-widget {
+      height: 300px;
+      display: block;
+    }
+
     /* Responsive Design */
     @media (max-width: 1200px) {
       .dashboard-splitter {
@@ -1461,6 +1554,14 @@ export interface ExecutionRecord {
       
       .model-info-grid {
         grid-template-columns: 1fr;
+      }
+      
+      .analysis-panels {
+        padding: 8px;
+      }
+      
+      .analysis-panel {
+        margin-bottom: 8px;
       }
     }
 
@@ -1540,6 +1641,18 @@ export interface ExecutionRecord {
       .model-detail {
         padding: 12px;
       }
+      
+      .panel-content {
+        padding: 12px;
+      }
+      
+      .panel-header {
+        padding: 10px 12px;
+      }
+      
+      .panel-title {
+        font-size: 13px;
+      }
     }
   `]
 })
@@ -1586,6 +1699,13 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   drillDownTabs: DrillDownTab[] = [];
   activeTabId: string = 'main-chart';
   loadingDrillDown = false;
+
+  // Panel state for collapsible sections
+  panelStates = {
+    cost: true,
+    efficiency: false,
+    executions: false
+  };
 
   get activeTab(): DrillDownTab | undefined {
     return this.drillDownTabs.find(tab => tab.id === this.activeTabId);
@@ -2126,6 +2246,11 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
 
   getFormattedMetricLabel(tab: DrillDownTab | undefined): string {
     return tab?.metric ? this.getMetricDisplayLabel(tab.metric) : '';
+  }
+
+  // Panel management methods
+  togglePanel(panelName: 'cost' | 'efficiency' | 'executions'): void {
+    this.panelStates[panelName] = !this.panelStates[panelName];
   }
 
   viewExecutionDetail(execution: ExecutionRecord): void {
