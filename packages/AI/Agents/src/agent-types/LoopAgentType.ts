@@ -10,6 +10,7 @@
  * @since 2.49.0
  */
 
+import { RegisterClass } from '@memberjunction/global';
 import { BaseAgentType } from '../base-agent-type';
 import { BaseAgentNextStep } from '../types';
 import { AIPromptRunResult } from '@memberjunction/ai-prompts';
@@ -72,6 +73,7 @@ interface LoopAgentResponse {
  * }
  * ```
  */
+@RegisterClass(BaseAgentType, "LoopAgentType")
 export class LoopAgentType extends BaseAgentType {
     /**
      * Determines the next step based on the structured response from the AI model.

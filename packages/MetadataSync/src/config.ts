@@ -53,6 +53,12 @@ export interface MJConfig {
 export interface SyncConfig {
   /** Version of the sync configuration format */
   version: string;
+  /** 
+   * Directory processing order (only applies to root-level config, not inherited by subdirectories)
+   * Specifies the order in which subdirectories should be processed to handle dependencies.
+   * Directories not listed in this array will be processed after the ordered ones in alphabetical order.
+   */
+  directoryOrder?: string[];
   /** Push command configuration */
   push?: {
     /** Whether to validate records before pushing to database */

@@ -83,6 +83,7 @@ import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 import { EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult } from '@memberjunction/actions-base';
 import { v4 as uuidv4 } from 'uuid';
+import { format as formatSql } from 'sql-formatter';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -126,6 +127,12 @@ export interface SqlLoggingOptions {
   formatAsMigration?: boolean;
   /** Optional description to include as a comment at the start of the log */
   description?: string;
+  /** Which types of statements to log: 'queries' (all), 'mutations' (only data changes), 'both' (default) */
+  statementTypes?: 'queries' | 'mutations' | 'both';
+  /** Optional batch separator to emit after each statement (e.g., "GO" for SQL Server) */
+  batchSeparator?: string;
+  /** Whether to pretty print SQL statements with proper formatting */
+  prettyPrint?: boolean;
 }
 
 /**
@@ -182,9 +189,18 @@ class SqlLoggingSessionImpl implements SqlLoggingSession {
     await this._fileHandle.writeFile(header);
   }
 
-  public async logSqlStatement(query: string, parameters?: any, description?: string): Promise<void> {
+  public async logSqlStatement(query: string, parameters?: any, description?: string, isMutation: boolean = false): Promise<void> {
     if (this._disposed || !this._fileHandle) {
       return;
+    }
+
+    // Filter statements based on statementTypes option
+    const statementTypes = this.options.statementTypes || 'both';
+    if (statementTypes === 'mutations' && !isMutation) {
+      return; // Skip logging non-mutation statements
+    }
+    if (statementTypes === 'queries' && isMutation) {
+      return; // Skip logging mutation statements
     }
 
     let logEntry = '';
@@ -194,14 +210,21 @@ class SqlLoggingSessionImpl implements SqlLoggingSession {
       logEntry += `-- ${description}\n`;
     }
 
-    // Log the SQL statement
+    // Process the SQL statement
+    let processedQuery = query;
+    
+    // Replace schema names with Flyway placeholders if migration format
     if (this.options.formatAsMigration) {
-      // Replace schema names with Flyway placeholders
-      const migrationQuery = query.replace(/\[(\w+)\]\./g, '[${flyway:defaultSchema}].');
-      logEntry += `${migrationQuery};\n`;
-    } else {
-      logEntry += `${query};\n`;
+      processedQuery = processedQuery.replace(/\[(\w+)\]\./g, '[${flyway:defaultSchema}].');
     }
+    
+    // Apply pretty printing if enabled
+    if (this.options.prettyPrint) {
+      processedQuery = this._prettyPrintSql(processedQuery);
+    }
+    
+    // Add the SQL statement
+    logEntry += `${processedQuery};\n`;
 
     // Add parameter comment if parameters exist
     if (parameters) {
@@ -215,6 +238,11 @@ class SqlLoggingSessionImpl implements SqlLoggingSession {
           logEntry += `-- Parameters: ${paramStr}\n`;
         }
       }
+    }
+
+    // Add batch separator if specified
+    if (this.options.batchSeparator) {
+      logEntry += `\n${this.options.batchSeparator}\n`;
     }
 
     logEntry += '\n'; // Add blank line between statements
@@ -271,6 +299,58 @@ class SqlLoggingSessionImpl implements SqlLoggingSession {
     footer += `-- Total Statements: ${this._statementCount}\n`;
     
     return footer;
+  }
+
+  /**
+   * Format SQL using sql-formatter library with SQL Server dialect
+   */
+  private _prettyPrintSql(sql: string): string {
+    if (!sql) return sql;
+    
+    try {
+      let formatted = formatSql(sql, {
+        language: 'tsql', // SQL Server Transact-SQL dialect
+        tabWidth: 2,
+        keywordCase: 'upper',
+        functionCase: 'upper',
+        dataTypeCase: 'upper',
+        linesBetweenQueries: 1
+      });
+      
+      // Post-process to fix BEGIN/END formatting
+      formatted = this._postProcessBeginEnd(formatted);
+      
+      return formatted;
+    } catch (error) {
+      // If formatting fails, return original SQL
+      console.warn('SQL formatting failed, returning original:', error);
+      return sql;
+    }
+  }
+
+  /**
+   * Post-process SQL to ensure BEGIN, END, and EXEC keywords are on their own lines
+   */
+  private _postProcessBeginEnd(sql: string): string {
+    if (!sql) return sql;
+    
+    // Fix BEGIN keyword - ensure it's on its own line
+    // Match: any non-whitespace followed by space(s) followed by BEGIN (word boundary)
+    sql = sql.replace(/(\S)\s+(BEGIN\b)/g, '$1\n$2');
+    
+    // Fix BEGIN followed by other keywords - ensure what follows BEGIN is on a new line
+    // Match: BEGIN followed by space(s) followed by non-whitespace
+    sql = sql.replace(/(BEGIN\b)\s+(\S)/g, '$1\n$2');
+    
+    // Fix END keyword - ensure it's on its own line  
+    // Match: any non-whitespace followed by space(s) followed by END (word boundary)
+    sql = sql.replace(/(\S)\s+(END\b)/g, '$1\n$2');
+    
+    // Fix EXEC keyword - ensure it's on its own line
+    // Match: any non-whitespace followed by space(s) followed by EXEC (word boundary)
+    sql = sql.replace(/(\S)\s+(EXEC\b)/g, '$1\n$2');
+    
+    return sql;
   }
 }
 
@@ -436,14 +516,14 @@ export class SQLServerDataProvider
    * @param description - Optional description for this operation
    * @param ignoreLogging - If true, this statement will not be logged
    */
-  private async _logSqlStatement(query: string, parameters?: any, description?: string, ignoreLogging: boolean = false): Promise<void> {
+  private async _logSqlStatement(query: string, parameters?: any, description?: string, ignoreLogging: boolean = false, isMutation: boolean = false): Promise<void> {
     if (ignoreLogging || this._sqlLoggingSessions.size === 0) {
       return;
     }
 
     // Log to all active sessions in parallel
     const logPromises = Array.from(this._sqlLoggingSessions.values()).map(session => 
-      session.logSqlStatement(query, parameters, description)
+      session.logSqlStatement(query, parameters, description, isMutation)
     );
     
     await Promise.all(logPromises);
@@ -1533,24 +1613,26 @@ export class SQLServerDataProvider
       sSQL = `
                     DECLARE @ResultTable TABLE (
                         ${this.getAllEntityColumnsSQL(entity.EntityInfo)}
-                    )
+                    );
 
                     INSERT INTO @ResultTable
-                    ${sSimpleSQL}
+                    ${sSimpleSQL};
 
-                    DECLARE @ID NVARCHAR(MAX)
-                    SELECT @ID = ${concatPKIDString} FROM @ResultTable
+                    DECLARE @ID NVARCHAR(MAX);
+                    
+                    SELECT @ID = ${concatPKIDString} FROM @ResultTable;
+                    
                     IF @ID IS NOT NULL
                     BEGIN
                         DECLARE @ResultChangesTable TABLE (
                             ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
-                        )
+                        );
 
                         INSERT INTO @ResultChangesTable
-                        ${this.GetLogRecordChangeSQL(entity.GetAll(false), oldData, entity.EntityInfo.Name, '@ID', entity.EntityInfo, bNewRecord ? 'Create' : 'Update', user, false)}
-                    END
+                        ${this.GetLogRecordChangeSQL(entity.GetAll(false), oldData, entity.EntityInfo.Name, '@ID', entity.EntityInfo, bNewRecord ? 'Create' : 'Update', user, false)};
+                    END;
 
-                    SELECT * FROM @ResultTable`; // NOTE - in the above, we call the T-SQL variable @ID for simplicity just as a variable name, even though for each entity the pkey could be something else. Entity pkeys are not always a field called ID could be something else including composite keys.
+                    SELECT * FROM @ResultTable;`; // NOTE - in the above, we call the T-SQL variable @ID for simplicity just as a variable name, even though for each entity the pkey could be something else. Entity pkeys are not always a field called ID could be something else including composite keys.
     } else {
       // not doing track changes for this entity, keep it simple
       sSQL = sSimpleSQL;
@@ -1760,7 +1842,7 @@ export class SQLServerDataProvider
               result = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
             }
             else {
-              const rawResult = await this.ExecuteSQL(sSQL);
+              const rawResult = await this.ExecuteSQL(sSQL, null, { isMutation: true, description: `Save ${entity.EntityInfo.Name}` });
               result = await this.ProcessEntityRows(rawResult, entity.EntityInfo);
             }
 
@@ -2285,7 +2367,7 @@ export class SQLServerDataProvider
           d = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
         }
         else {
-          d = await this.ExecuteSQL(sSQL);
+          d = await this.ExecuteSQL(sSQL, null, { isMutation: true, description: `Delete ${entity.EntityInfo.Name}` });
         }
 
         if (d && d[0]) {
@@ -2884,7 +2966,7 @@ export class SQLServerDataProvider
    * @param parameters
    * @returns
    */
-  public async ExecuteSQL(query: string, parameters: any = null, options?: { description?: string; ignoreLogging?: boolean }): Promise<any> {
+  public async ExecuteSQL(query: string, parameters: any = null, options?: { description?: string; ignoreLogging?: boolean; isMutation?: boolean }): Promise<any> {
     try {
       let request: sql.Request;
       
@@ -2919,7 +3001,7 @@ export class SQLServerDataProvider
       }
       
       // Log SQL statement to all active logging sessions (runs in parallel with execution)
-      const loggingPromise = this._logSqlStatement(query, parameters, options?.description, options?.ignoreLogging);
+      const loggingPromise = this._logSqlStatement(query, parameters, options?.description, options?.ignoreLogging, options?.isMutation);
       
       // Execute SQL and logging in parallel, but wait for both to complete
       const [result] = await Promise.all([
@@ -2987,7 +3069,7 @@ export class SQLServerDataProvider
    * @param parameters - Optional array of parameter arrays, one for each query
    * @returns Promise<any[][]> - Array of result arrays, one for each query
    */
-  public async ExecuteSQLBatch(queries: string[], parameters?: any[][], options?: { description?: string; ignoreLogging?: boolean }): Promise<any[][]> {
+  public async ExecuteSQLBatch(queries: string[], parameters?: any[][], options?: { description?: string; ignoreLogging?: boolean; isMutation?: boolean }): Promise<any[][]> {
     try {
       let request: sql.Request;
       
@@ -3038,7 +3120,7 @@ export class SQLServerDataProvider
       
       // Log batch SQL statement to all active logging sessions (runs in parallel with execution)
       const description = options?.description ? `${options.description} (Batch: ${queries.length} queries)` : `Batch execution: ${queries.length} queries`;
-      const loggingPromise = this._logSqlStatement(batchSQL, parameters, description, options?.ignoreLogging);
+      const loggingPromise = this._logSqlStatement(batchSQL, parameters, description, options?.ignoreLogging, options?.isMutation);
       
       // Execute SQL and logging in parallel, but wait for both to complete
       const [result] = await Promise.all([
@@ -3112,7 +3194,7 @@ export class SQLServerDataProvider
         SELECT TestDateTime FROM @TestTable;
       `;
 
-      const result = await this.ExecuteSQL(testQuery);
+      const result = await this.ExecuteSQL(testQuery, null, { description: 'DatetimeOffset handling test' });
       if (result && result.length > 0) {
         const testDate = result[0].TestDateTime;
         

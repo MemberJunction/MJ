@@ -119,3 +119,5 @@ mj.config.ts
 packages/AI/MCPServer/build/Server.js
 
 **/.claude/settings.local.json
+sql_logging/metadata-sync-push_metadata_2025-06-13_15-04-04.sql
+sql_logging/metadata-sync-push_metadata_2025-06-13_15-10-50.sql

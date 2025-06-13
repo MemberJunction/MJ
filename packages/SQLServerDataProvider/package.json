@@ -29,6 +29,7 @@
     "@memberjunction/global": "2.48.0",
     "@memberjunction/queue": "2.48.0",
     "mssql": "^11.0.1",
+    "sql-formatter": "^15.3.2",
     "uuid": "^10.0.0"
   }
 }

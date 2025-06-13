@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Loop Agent Type: System Prompt",
-      "Description": "Basic control structure for the Loop Agent Type.",
+      "Description": "Basic control structure for the Loop Agent Type",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",
       "TemplateText": "@file:templates/loop-agent-type-system-prompt.template.md",
       "Status": "Active",
@@ -28,9 +28,23 @@
             "ModelID": "@lookup:AI Models.Name=GPT 4.1",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "C19E433E-F36B-1410-8DB1-00021F8B792E"
+          },
+          "sync": {
+            "lastModified": "2025-06-13T15:10:50.572Z",
+            "checksum": "6b6154f0c49d785c4e5b90e56012aa3cd00ff1a13d77a526dd3f5945ac7e29fd"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "B79E433E-F36B-1410-8DB1-00021F8B792E"
+    },
+    "sync": {
+      "lastModified": "2025-06-13T15:10:50.572Z",
+      "checksum": "46f13994daa5f884a7d648926c5cc25207417898b1630cf820a349428ce00417"
     }
-}
+  }
 ]

@@ -43,7 +43,9 @@ export default class Push extends Command {
         this.error('No mj.config.cjs found in current directory or parent directories');
       }
       
-      const syncConfig = await loadSyncConfig(configManager.getOriginalCwd());
+      // Load sync config from target directory if --dir is specified, otherwise from current directory
+      const syncConfigDir = flags.dir ? path.resolve(configManager.getOriginalCwd(), flags.dir) : configManager.getOriginalCwd();
+      const syncConfig = await loadSyncConfig(syncConfigDir);
       
       // Stop spinner before provider initialization (which logs to console)
       spinner.stop();
@@ -51,7 +53,13 @@ export default class Push extends Command {
       // Initialize data provider
       await initializeProvider(mjConfig);
       
-      // Initialize SQL logging if configured
+      // Initialize sync engine using singleton pattern
+      const syncEngine = await getSyncEngine(getSystemUser());
+      
+      // Show success after all initialization is complete
+      spinner.succeed('Configuration and metadata loaded');
+      
+      // Initialize SQL logging AFTER provider setup is complete
       if (syncConfig?.sqlLogging?.enabled) {
         const outputDir = syncConfig.sqlLogging.outputDirectory || './sql_logging';
         const formatAsMigration = syncConfig.sqlLogging.formatAsMigration || false;
@@ -60,20 +68,33 @@ export default class Push extends Command {
         const fullOutputDir = path.resolve(outputDir);
         await fs.ensureDir(fullOutputDir);
         
-        // Generate filename with timestamp
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5); // Remove milliseconds
+        // Generate filename with timestamp and directory name
+        const now = new Date();
+        const humanReadableTimestamp = now.toISOString()
+          .replace('T', '_')
+          .replace(/:/g, '-')
+          .slice(0, -5); // Remove milliseconds and Z
+        
+        // Get directory name for filename
+        const targetDir = flags.dir ? path.resolve(configManager.getOriginalCwd(), flags.dir) : configManager.getOriginalCwd();
+        const dirName = path.basename(targetDir);
+        
         const filename = formatAsMigration 
-          ? `V${timestamp.replace(/[-T]/g, '')}__MetadataSync_Push.sql`
-          : `metadatasync-push-${timestamp}.sql`;
+          ? `V${now.toISOString().replace(/[:.T-]/g, '').slice(0, -5)}__MetadataSync_Push.sql`
+          : `metadata-sync-push_${dirName}_${humanReadableTimestamp}.sql`;
         const logFilePath = path.join(fullOutputDir, filename);
         
         // Import and access the data provider from the provider utils
         const { getDataProvider } = await import('../../lib/provider-utils');
         const dataProvider = getDataProvider();
+        
         if (dataProvider && typeof dataProvider.createSqlLogger === 'function') {
           sqlLogger = await dataProvider.createSqlLogger(logFilePath, {
             formatAsMigration,
-            description: 'MetadataSync Push Operation'
+            description: 'MetadataSync Push Operation',
+            statementTypes: 'mutations', // Only log mutations (data changes)
+            batchSeparator: 'GO', // Add GO statements for SQL Server batch processing
+            prettyPrint: true     // Enable pretty printing for readable output
           });
           
           this.log(`📝 SQL logging enabled: ${path.relative(process.cwd(), logFilePath)}`);
@@ -82,14 +103,8 @@ export default class Push extends Command {
         }
       }
       
-      // Initialize sync engine using singleton pattern
-      const syncEngine = await getSyncEngine(getSystemUser());
-      
-      // Show success after all initialization is complete
-      spinner.succeed('Configuration and metadata loaded');
-      
       // Find entity directories to process
-      const entityDirs = findEntityDirectories(configManager.getOriginalCwd(), flags.dir);
+      const entityDirs = findEntityDirectories(configManager.getOriginalCwd(), flags.dir, syncConfig?.directoryOrder);
       
       if (entityDirs.length === 0) {
         this.error('No entity directories found');
