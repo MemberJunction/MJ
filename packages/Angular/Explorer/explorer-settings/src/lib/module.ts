@@ -25,6 +25,7 @@ import { SingleApplicationComponent } from './single-application/single-applicat
 import { ApplicationEntitiesGridComponent } from './application-entities-grid/application-entities-grid.component';
 import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
 import { JoinGridModule } from '@memberjunction/ng-join-grid';
+import { SqlLoggingComponent } from './sql-logging/sql-logging.component';
 
 @NgModule({
   declarations: [
@@ -52,7 +53,8 @@ import { JoinGridModule } from '@memberjunction/ng-join-grid';
     IndicatorsModule,
     UserViewGridModule,
     SimpleRecordListModule,
-    JoinGridModule
+    JoinGridModule,
+    SqlLoggingComponent
   ],
   exports: [
     SingleRoleComponent,
@@ -60,7 +62,8 @@ import { JoinGridModule } from '@memberjunction/ng-join-grid';
     UserRolesGridComponent,
     SingleUserComponent,
     SingleApplicationComponent,
-    ApplicationEntitiesGridComponent
+    ApplicationEntitiesGridComponent,
+    SqlLoggingComponent
   ]
 })
 export class ExplorerSettingsModule { }

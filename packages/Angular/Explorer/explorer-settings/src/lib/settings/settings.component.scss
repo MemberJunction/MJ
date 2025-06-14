@@ -1,0 +1,108 @@
+// Modern color palette inspired by AI dashboard
+$primary-blue: #2196f3;
+$primary-blue-dark: #1976d2;
+$primary-blue-light: rgba(33, 150, 243, 0.1);
+$background-light: #f8f9fa;
+$background-white: #ffffff;
+$border-color: #e0e0e0;
+$text-primary: #333;
+$text-secondary: #666;
+$box-shadow-hover: 0 2px 8px rgba(33, 150, 243, 0.2);
+$transition: all 0.2s ease;
+
+:host {
+  display: block;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.container {
+  display: flex !important;
+  flex-direction: row !important;
+  width: 100%;
+  height: 100%;
+  min-height: 0; // Important for flexbox children
+  overflow: hidden;
+  background-color: $background-light;
+  position: relative;
+  
+  // Clear any floats
+  &::after {
+    content: '';
+    display: table;
+    clear: both;
+  }
+}
+
+.options-container {
+  width: 200px;
+  min-width: 200px;
+  max-width: 200px;
+  flex: 0 0 200px;
+  background-color: $background-white;
+  border-right: 1px solid $border-color;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 0;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.option-item {
+  cursor: pointer;
+  padding: 12px 20px;
+  margin: 0 12px 4px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  color: $text-primary;
+  transition: $transition;
+  position: relative;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 0;
+    background-color: $primary-blue;
+    transition: height 0.2s ease;
+  }
+  
+  &:hover {
+    background-color: $background-light;
+    color: $primary-blue;
+  }
+  
+  &.selected {
+    background-color: $primary-blue-light;
+    color: $primary-blue;
+    font-weight: 500;
+    
+    &::before {
+      height: 24px;
+    }
+  }
+}
+
+.display-container {
+  flex: 1 1 auto;
+  min-width: 0; // Important for flexbox
+  overflow: auto;
+  box-sizing: border-box;
+  background-color: $background-white;
+  padding: 20px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  
+  // Ensure child components can fill the container
+  > * {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+  }
+}

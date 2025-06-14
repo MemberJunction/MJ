@@ -21,6 +21,10 @@
     },
     "include": [
       "src/**/*.ts"
-  ]
+    ],
+    "exclude": [
+      "src/**/EXAMPLE-*.ts",
+      "src/**/*.example.ts"
+    ]
   }
   

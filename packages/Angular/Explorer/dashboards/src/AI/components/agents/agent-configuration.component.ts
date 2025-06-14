@@ -1,5 +1,5 @@
-import { Component, Output, EventEmitter, OnInit } from '@angular/core';
-import { RunView } from '@memberjunction/core';
+import { Component, Output, EventEmitter, OnInit, Inject, Optional } from '@angular/core';
+import { RunView, CompositeKey } from '@memberjunction/core';
 import { AIAgentEntity } from '@memberjunction/core-entities';
 
 interface AgentFilter {
@@ -19,8 +19,8 @@ export class AgentConfigurationComponent implements OnInit {
 
   public isLoading = false;
   public filterPanelVisible = true;
-  public showEditor = false;
-  public selectedAgentId: string | null = null;
+  public viewMode: 'grid' | 'list' = 'grid';
+  public expandedAgentId: string | null = null;
   
   public agents: AIAgentEntity[] = [];
   public filteredAgents: AIAgentEntity[] = [];
@@ -30,6 +30,8 @@ export class AgentConfigurationComponent implements OnInit {
     executionMode: 'all',
     exposeAsAction: 'all'
   };
+
+  constructor() {}
 
   ngOnInit(): void {
     this.loadAgents();
@@ -116,6 +118,37 @@ export class AgentConfigurationComponent implements OnInit {
     this.stateChange.emit(state);
   }
 
+  public setViewMode(mode: 'grid' | 'list'): void {
+    this.viewMode = mode;
+    this.emitStateChange();
+  }
+
+  public toggleAgentExpansion(agentId: string): void {
+    this.expandedAgentId = this.expandedAgentId === agentId ? null : agentId;
+  }
+
+  public openAgentRecord(agentId: string): void {
+    this.openEntityRecord.emit({ entityName: 'AI Agents', recordId: agentId });
+  }
+
+  public createNewAgent(): void {
+    // Emit event to open a new agent form
+    const compositeKey = new CompositeKey([]);
+    this.openEntityRecord.emit({ entityName: 'AI Agents', recordId: '' });
+  }
+
+  public async runAgent(agent: AIAgentEntity): Promise<void> {
+    // Emit event to open test harness for the agent
+    this.openEntityRecord.emit({ entityName: 'AI Agents', recordId: agent.ID });
+  }
+
+  public getAgentIconColor(agent: AIAgentEntity): string {
+    // Generate a consistent color based on agent properties
+    const colors = ['#17a2b8', '#28a745', '#ffc107', '#dc3545', '#6c757d', '#007bff'];
+    const index = (agent.Name?.charCodeAt(0) || 0) % colors.length;
+    return colors[index];
+  }
+
   public onOpenRecord(entityName: string, recordId: string): void {
     this.openEntityRecord.emit({ entityName: entityName, recordId: recordId });
   }
@@ -136,18 +169,4 @@ export class AgentConfigurationComponent implements OnInit {
     }
   }
 
-  public openAgentEditor(agentId: string): void {
-    this.selectedAgentId = agentId;
-    this.showEditor = true;
-  }
-
-  public closeAgentEditor(): void {
-    this.showEditor = false;
-    this.selectedAgentId = null;
-  }
-
-  public onOpenAgentFromEditor(agentId: string): void {
-    this.selectedAgentId = agentId;
-    // Editor stays open, just switches to different agent
-  }
 }

@@ -1,0 +1,717 @@
+// MemberJunction AI Dashboard Color Palette
+// Primary Colors
+$primary-blue: #2196f3;
+$primary-blue-hover: #1976d2;
+$primary-blue-light: rgba(33, 150, 243, 0.1);
+$primary-blue-border: rgba(33, 150, 243, 0.2);
+
+// Neutral Colors
+$white: #ffffff;
+$background-light: #fafafa;
+$background-lighter: #f8f9fa;
+$gray-lightest: #f5f5f5;
+$gray-lighter: #f0f0f0;
+$gray-light: #e0e0e0;
+$gray-medium: #ccc;
+$gray-dark: #999;
+$gray-darker: #666;
+$gray-darkest: #333;
+$gray-text: #555;
+
+// Semantic Colors
+$success-green: #4caf50;
+$success-green-light: #e8f5e8;
+$success-green-text: #2e7d32;
+
+$warning-yellow: #ffc107;
+$warning-yellow-light: #fff3e0;
+$warning-yellow-text: #f57c00;
+
+$error-red: #f44336;
+$error-red-hover: #d32f2f;
+$error-red-light: #ffebee;
+$error-red-text: #c62828;
+
+$info-blue-light: #e3f2fd;
+$info-blue-text: #1976d2;
+
+// Additional Accent Colors
+$purple: #9c27b0;
+$orange: #ff6b35;
+$text-muted: #7f8c8d;
+$text-heading: #2c3e50;
+
+// Shadows and effects
+$box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+$box-shadow-hover: 0 2px 8px rgba(33, 150, 243, 0.1);
+$transition: all 0.2s ease;
+
+// Container following AI dashboard pattern
+.sql-logging-container {
+  overflow: hidden;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+// Dashboard header following AI dashboard pattern
+.dashboard-header {
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+  
+  .header-info {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    
+    h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 500;
+      color: $gray-darkest;
+    }
+    
+    .info-badge {
+      font-size: 12px;
+      color: $primary-blue;
+      font-weight: 600;
+      background: $primary-blue-light;
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid $primary-blue-border;
+    }
+  }
+  
+  .header-controls {
+    display: flex;
+    gap: 8px;
+  }
+}
+
+// Status bar
+.status-bar {
+  background: $white;
+  border: 1px solid $gray-light;
+  border-radius: 4px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  
+  .status-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    
+    .status-label {
+      font-size: 12px;
+      color: $gray-text;
+      font-weight: 500;
+    }
+    
+    .status-value {
+      font-size: 12px;
+      font-weight: 600;
+      color: $gray-darkest;
+    }
+  }
+}
+
+// Warning and error messages following AI dashboard pattern
+.warning-message {
+  background: $warning-yellow-light;
+  border: 1px solid $warning-yellow;
+  color: $warning-yellow-text;
+  padding: 12px 16px;
+  border-radius: 4px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  
+  .fa-solid {
+    color: $warning-yellow;
+  }
+}
+
+.error-banner {
+  background: $error-red-light;
+  border: 1px solid $error-red;
+  color: $error-red-text;
+  padding: 12px 16px;
+  border-radius: 4px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  
+  .fa-solid {
+    color: $error-red;
+  }
+}
+
+// Dashboard content following AI dashboard pattern
+.dashboard-content {
+  overflow: hidden;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+// Loading state following AI dashboard pattern
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: $background-light;
+  flex: 1;
+  
+  p {
+    color: $gray-darker;
+    font-size: 14px;
+  }
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.loading-spinner {
+  position: relative;
+  width: 60px;
+  height: 60px;
+}
+
+.spinner-ring {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: 3px solid transparent;
+  border-radius: 50%;
+  animation: spin 1.5s linear infinite;
+  
+  &:nth-child(1) {
+    border-top-color: $primary-blue;
+    animation-delay: 0s;
+  }
+  
+  &:nth-child(2) {
+    border-top-color: $purple;
+    animation-delay: 0.3s;
+    transform: scale(0.8);
+  }
+  
+  &:nth-child(3) {
+    border-top-color: $orange;
+    animation-delay: 0.6s;
+    transform: scale(0.6);
+  }
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+// Empty state following AI dashboard pattern
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: $gray-darker;
+  
+  .fa-solid {
+    font-size: 48px;
+    margin-bottom: 16px;
+    color: $gray-medium;
+  }
+  
+  h3 {
+    margin: 0 0 8px 0;
+    color: $gray-darkest;
+    font-size: 18px;
+    font-weight: 500;
+  }
+  
+  p {
+    margin: 0;
+    font-size: 14px;
+    color: $gray-darker;
+    max-width: 400px;
+    margin: 0 auto;
+    
+    code {
+      background-color: $gray-lightest;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 12px;
+      color: $gray-darkest;
+    }
+  }
+  
+  .info-box {
+    background: $warning-yellow-light;
+    border: 1px solid $warning-yellow;
+    color: $warning-yellow-text;
+    border-radius: 4px;
+    padding: 16px;
+    margin: 20px auto;
+    max-width: 500px;
+    text-align: left;
+    
+    h4 {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: $warning-yellow-text;
+    }
+    
+    ol {
+      margin: 8px 0 0 0;
+      padding-left: 20px;
+      font-size: 13px;
+      
+      li {
+        margin-bottom: 6px;
+      }
+    }
+  }
+}
+
+// Sessions layout following AI dashboard split pattern
+.sessions-layout {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+  gap: 4px;
+}
+
+// Sessions panel following AI dashboard filter panel pattern
+.sessions-panel {
+  width: 320px;
+  background: $background-light;
+  border: 1px solid $gray-light;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  
+  .panel-header {
+    padding: 16px;
+    border-bottom: 1px solid $gray-light;
+    background: $white;
+    
+    h3 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: $gray-darkest;
+    }
+  }
+  
+  .sessions-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+  }
+}
+
+// Session card following AI dashboard card pattern
+.session-card {
+  background: $white;
+  border: 1px solid $gray-light;
+  border-radius: 4px;
+  padding: 16px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: $transition;
+  
+  &:hover {
+    border-color: $primary-blue;
+    box-shadow: $box-shadow-hover;
+    transform: translateY(-1px);
+  }
+  
+  &.selected {
+    border-color: $primary-blue;
+    background: $primary-blue-light;
+  }
+  
+  .session-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    margin-bottom: 12px;
+    
+    .session-title {
+      font-weight: 600;
+      color: $gray-darkest;
+      font-size: 13px;
+      flex: 1;
+      word-break: break-word;
+      line-height: 1.4;
+    }
+  }
+  
+  .session-details {
+    margin-bottom: 12px;
+    
+    .detail-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+      font-size: 12px;
+      
+      .fa-solid {
+        color: $gray-dark;
+        font-size: 11px;
+        width: 14px;
+      }
+      
+      .detail-label {
+        color: $gray-text;
+      }
+      
+      .detail-value {
+        color: $gray-darkest;
+        font-weight: 500;
+      }
+    }
+  }
+  
+  .session-options {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    
+    .status-badge {
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 500;
+      text-transform: uppercase;
+      
+      &.status-active {
+        background: $success-green-light;
+        color: $success-green-text;
+      }
+      
+      &.status-migration {
+        background: lighten($purple, 40%);
+        color: darken($purple, 10%);
+      }
+    }
+  }
+}
+
+// Log viewer panel following AI dashboard pattern
+.log-viewer-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: $white;
+  border: 1px solid $gray-light;
+  border-radius: 4px;
+  overflow: hidden;
+  
+  .panel-header {
+    padding: 16px;
+    border-bottom: 1px solid $gray-light;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: $white;
+    
+    h3 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: $gray-darkest;
+    }
+    
+    .panel-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      
+      .auto-refresh-toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: $gray-text;
+        cursor: pointer;
+        
+        input[type="checkbox"] {
+          margin: 0;
+          cursor: pointer;
+        }
+        
+        &:hover {
+          color: $gray-darkest;
+        }
+      }
+    }
+  }
+  
+  .log-content {
+    flex: 1;
+    overflow: hidden;
+    background: $gray-lightest;
+    
+    mj-code-editor {
+      height: 100%;
+    }
+  }
+}
+
+// Dialog styles following AI dashboard pattern
+.dialog-content {
+  padding: 24px;
+  
+  .form-field {
+    margin-bottom: 16px;
+    
+    &.checkbox-field {
+      margin-bottom: 12px;
+    }
+    
+    .field-label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: $gray-text;
+    }
+    
+    .field-hint {
+      margin-top: 4px;
+      font-size: 11px;
+      color: $gray-dark;
+    }
+  }
+  
+  .form-row {
+    display: flex;
+    gap: 16px;
+    
+    .form-field {
+      flex: 1;
+    }
+  }
+}
+
+// Log viewer styles
+.log-viewer {
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px;
+  margin: 0;
+  overflow: auto;
+  height: 100%;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+// Status text colors
+.text-success {
+  color: $success-green !important;
+}
+
+.text-danger {
+  color: $error-red !important;
+}
+
+// Button styles following AI dashboard pattern
+.control-btn {
+  padding: 8px 12px;
+  border: 1px solid $gray-medium;
+  border-radius: 4px;
+  background: $white;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: $transition;
+  color: $gray-text;
+  font-weight: 500;
+  
+  &:hover {
+    background-color: $gray-lighter;
+    border-color: $primary-blue;
+    color: $primary-blue;
+  }
+  
+  &.active,
+  &.control-btn-primary {
+    background-color: $primary-blue;
+    border-color: $primary-blue;
+    color: $white;
+    
+    &:hover {
+      background-color: $primary-blue-hover;
+      border-color: $primary-blue-hover;
+    }
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    
+    &:hover {
+      background-color: $white;
+      border-color: $gray-medium;
+      color: $gray-text;
+    }
+  }
+  
+  .fa-solid {
+    font-size: 11px;
+  }
+}
+
+.action-btn {
+  padding: 6px 12px;
+  border: 1px solid $gray-light;
+  border-radius: 3px;
+  background: $white;
+  cursor: pointer;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: $transition;
+  
+  &:hover {
+    background-color: $gray-lightest;
+    border-color: $gray-dark;
+  }
+  
+  &.action-btn-primary {
+    background-color: $primary-blue;
+    border-color: $primary-blue;
+    color: $white;
+    
+    &:hover {
+      background-color: $primary-blue-hover;
+    }
+  }
+  
+  &.action-btn-danger {
+    &:hover {
+      background-color: $error-red-light;
+      border-color: $error-red;
+      color: $error-red;
+    }
+  }
+  
+  .fa-solid {
+    font-size: 10px;
+  }
+}
+
+// Kendo UI customizations following AI dashboard pattern
+::ng-deep {
+  .sql-logging-container {
+    .k-button {
+      font-size: 12px;
+      font-weight: 500;
+      padding: 8px 12px;
+      border-radius: 4px;
+      transition: $transition;
+      
+      &.k-button-solid-primary {
+        background-color: $primary-blue;
+        border-color: $primary-blue;
+        
+        &:hover:not(:disabled) {
+          background-color: $primary-blue-hover;
+          border-color: $primary-blue-hover;
+        }
+      }
+      
+      &.k-button-flat {
+        &:hover:not(:disabled) {
+          background-color: $gray-lighter;
+        }
+      }
+      
+      &.k-button-small {
+        font-size: 11px;
+        padding: 6px 10px;
+      }
+      
+      .fa-solid {
+        margin-right: 4px;
+      }
+    }
+    
+    .k-dialog {
+      .k-dialog-titlebar {
+        background-color: $white;
+        border-bottom: 1px solid $gray-light;
+        padding: 16px 24px;
+        
+        .k-dialog-title {
+          font-size: 16px;
+          font-weight: 600;
+          color: $gray-darkest;
+        }
+      }
+      
+      .k-dialog-actions {
+        background-color: $background-light;
+        border-top: 1px solid $gray-light;
+        padding: 16px 24px;
+        gap: 8px;
+      }
+    }
+    
+    .k-textbox,
+    .k-textarea,
+    .k-dropdown {
+      font-size: 12px;
+      border-color: $gray-light;
+      
+      &:hover {
+        border-color: $gray-medium;
+      }
+      
+      &:focus,
+      &.k-focus {
+        border-color: $primary-blue;
+        box-shadow: 0 0 0 1px $primary-blue;
+      }
+    }
+    
+    .k-checkbox {
+      margin-right: 6px;
+      cursor: pointer;
+      
+      + span {
+        cursor: pointer;
+      }
+    }
+    
+    .k-dropdown {
+      width: 100%;
+    }
+  }
+}

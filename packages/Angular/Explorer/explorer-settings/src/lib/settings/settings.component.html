@@ -1,6 +1,6 @@
-<div class="container" mjFillContainer [bottomMargin]="5" [rightMargin]="0">
+<div class="container">
     <!-- Options container -->
-    <div class="options-container" mjFillContainer [fillWidth]="false">
+    <div class="options-container">
         <div *ngFor="let o of options"
             class="option-item"
             [class.selected]="leftNavItemSelected(o)"
@@ -9,7 +9,7 @@
     </div>
 
     <!-- Display container -->
-    <div class="display-container" mjFillContainer [fillWidth]="false">
+    <div class="display-container">
         <!-- <mj-join-grid
             RowsEntityName="Entities"
             RowsEntityDisplayField="Name"
@@ -63,7 +63,7 @@
                 ></mj-simple-record-list>
             }
             @case ('Role') {
-                <mj-single-role [RoleID]="selectedRoleID" mjFillContainer></mj-single-role>
+                <mj-single-role [RoleID]="selectedRoleID"></mj-single-role>
             }
             @case ('Applications') {
                 <mj-simple-record-list
@@ -75,6 +75,9 @@
             }
             @case ('Application') {
                 <mj-single-application [ApplicationID]="selectedApplicationID"></mj-single-application>
+            }
+            @case ('SqlLogging') {
+                <mj-sql-logging></mj-sql-logging>
             }
         }
     </div>

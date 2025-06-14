@@ -111,23 +111,24 @@
                     <!-- Right: Action Buttons -->
                     <div class="action-buttons" style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
                         <div style="display: flex; gap: 8px;">
-                            @if (record.ID && canExecute) {
+                            @if (record.ID) {
                                 <kendo-button themeColor="primary" size="large"
-                                            (click)="executeAIPrompt()"
-                                            title="Execute this AI prompt">
-                                    <i class="fa-solid fa-play"></i> Execute Prompt
-                                </kendo-button>
-                            } @else if (record.ID && !canExecute) {
-                                <kendo-button themeColor="primary" size="large" [disabled]="true"
-                                            title="Prompt must be Active and have a Template to execute">
-                                    <i class="fa-solid fa-exclamation-triangle"></i> Cannot Execute
+                                            (click)="openTestHarness()"
+                                            title="Open AI Prompt Test Harness">
+                                    <i class="fa-solid fa-flask"></i> Test Harness
                                 </kendo-button>
                             }
                             
-                            @if (record.ID) {
-                                <kendo-button fillMode="outline" themeColor="info"
-                                            title="View execution history">
-                                    <i class="fa-solid fa-history"></i> History
+                            @if (record.ID && canExecute) {
+                                <kendo-button themeColor="info" size="large"
+                                            (click)="executeAIPrompt()"
+                                            title="Execute this AI prompt (legacy)">
+                                    <i class="fa-solid fa-play"></i> Execute
+                                </kendo-button>
+                            } @else if (record.ID && !canExecute) {
+                                <kendo-button themeColor="info" size="large" [disabled]="true"
+                                            title="Prompt must be Active and have a Template to execute">
+                                    <i class="fa-solid fa-exclamation-triangle"></i> Cannot Execute
                                 </kendo-button>
                             }
                         </div>
@@ -742,4 +743,15 @@
         [aiPrompt]="record"
         [(isVisible)]="showExecutionDialog">
     </mj-ai-prompt-execution-dialog>
+    
+    <!-- AI Prompt Test Harness -->
+    @if (showTestHarness) {
+        <mj-ai-prompt-test-harness
+            [aiPrompt]="record"
+            [template]="template"
+            [templateContent]="templateContent"
+            [isVisible]="showTestHarness"
+            (visibilityChange)="onTestHarnessVisibilityChanged($event)">
+        </mj-ai-prompt-test-harness>
+    }
 </div>

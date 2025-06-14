@@ -12,7 +12,7 @@
  */
 
 import { AIPromptRunResult } from '@memberjunction/ai-prompts';
-import { BaseAgentNextStep } from './types';
+import { BaseAgentNextStep } from '../types';
 
 /**
  * Abstract base class for agent type implementations.

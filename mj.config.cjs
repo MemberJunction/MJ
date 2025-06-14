@@ -278,7 +278,7 @@ const mjServerConfig = {
     },
   },
   sqlLogging: {
-    enabled: false,  // Master switch for SQL logging capability
+    enabled: true,  // Master switch for SQL logging capability
     defaultOptions: {
       formatAsMigration: false,
       statementTypes: 'both', // 'queries' | 'mutations' | 'both'

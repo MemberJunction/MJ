@@ -14,13 +14,14 @@ export enum SettingsItem {
   Roles = 'Roles',
   Role = 'Role',
   Applications = 'Applications',
-  Application = 'Application'
+  Application = 'Application',
+  SqlLogging = 'SqlLogging'
 }
 
 @Component({
   selector: 'mj-settings',
   templateUrl: './settings.component.html',
-  styleUrls: ['./settings.component.css']
+  styleUrls: ['./settings.component.scss']
 })
 @RegisterClass(BaseNavigationComponent, 'Settings')
 export class SettingsComponent extends BaseNavigationComponent implements OnInit {
@@ -36,7 +37,8 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
     { label: 'Users', value: SettingsItem.Users },
     { label: 'Roles', value: SettingsItem.Roles },
     { label: 'Applications', value: SettingsItem.Applications },
-    { label: 'Entity Permissions', value: SettingsItem.EntityPermissions }
+    { label: 'Entity Permissions', value: SettingsItem.EntityPermissions },
+    { label: 'SQL Logging', value: SettingsItem.SqlLogging }
   ];
 
 
@@ -107,6 +109,9 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
       case 'role':
         this.selectedRoleID = segments.length > 2 ? segments[2] : '';
         this.selectItem(SettingsItem.Role, false);
+        break;
+      case 'sqllogging':
+        this.selectItem(SettingsItem.SqlLogging, false);
         break;
       default:
         break;

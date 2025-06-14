@@ -12,6 +12,7 @@ The `@memberjunction/ng-explorer-settings` package provides a complete settings 
 - **Role Management**: Define and manage security roles with user assignments
 - **Application Configuration**: Configure applications and their associated entities
 - **Entity Permissions**: Granular control over entity-level permissions
+- **SQL Logging Management**: Real-time SQL logging configuration and session control
 - **Transaction-based Updates**: Batch updates using MemberJunction's transaction system
 - **Responsive Navigation**: Left-side navigation with dynamic content area
 - **Real-time Updates**: Immediate reflection of permission and assignment changes
@@ -73,6 +74,7 @@ The main navigation component that provides a consistent interface for all setti
 - `/settings/applications` - Application list view
 - `/settings/application/:name` - Individual application details
 - `/settings/entitypermissions` - Entity permission management
+- `/settings/sqllogging` - SQL logging configuration and session management
 
 **Example**:
 ```typescript
@@ -206,6 +208,87 @@ Manages entity associations with applications.
 </mj-application-entities-grid>
 ```
 
+### SqlLoggingComponent
+
+Provides comprehensive SQL logging management for debugging and migration generation.
+
+**Selector**: `mj-sql-logging`
+
+**Features**:
+- Real-time SQL logging session management
+- Owner-level access control (requires `Type = 'Owner'`)
+- Session configuration with filtering options
+- Live session monitoring with statement counts
+- Multiple concurrent session support
+- Auto-refresh capabilities
+- Integration with MemberJunction's GraphQL API
+
+**Key Capabilities**:
+- **Session Creation**: Start new SQL logging sessions with custom options
+- **User Filtering**: Capture SQL statements from specific users only
+- **Format Options**: Standard SQL logs or migration-ready files
+- **Real-time Monitoring**: View active sessions and their progress
+- **Batch Operations**: Stop individual sessions or all sessions at once
+- **Auto-cleanup**: Sessions automatically expire and clean up empty files
+
+**Security Requirements**:
+- User must have `Type = 'Owner'` in the Users table
+- SQL logging must be enabled in server configuration
+- Valid authentication required for all operations
+
+**Example Usage**:
+```html
+<!-- Include in settings navigation -->
+<mj-sql-logging></mj-sql-logging>
+```
+
+**Session Configuration Options**:
+```typescript
+interface SessionOptions {
+  fileName?: string;              // Custom log file name
+  sessionName?: string;           // Human-readable session name
+  filterToCurrentUser?: boolean;  // Filter to current user's SQL only
+  formatAsMigration?: boolean;    // Format as migration file
+  prettyPrint?: boolean;          // Format SQL with indentation
+  statementTypes?: 'queries' | 'mutations' | 'both';  // SQL types to capture
+}
+```
+
+**GraphQL Integration**:
+```typescript
+// The component automatically handles GraphQL operations:
+// - sqlLoggingConfig: Get current configuration
+// - activeSqlLoggingSessions: List active sessions
+// - startSqlLogging: Create new session
+// - stopSqlLogging: Stop specific session
+// - stopAllSqlLogging: Stop all sessions
+```
+
+**UI Features**:
+- **Dashboard-style interface** with modern AI dashboard styling
+- **Status indicators** showing configuration state and active sessions
+- **Interactive session cards** with duration, statement counts, and controls
+- **Dialog-based session creation** with comprehensive options
+- **Auto-refresh toggle** for real-time session monitoring
+- **Responsive layout** optimized for desktop use
+
+**Access Control**:
+- Non-Owner users see access denied message with permission refresh option
+- Disabled state shown when SQL logging not enabled in server config
+- Clear instructions provided for enabling SQL logging
+
+**Error Handling**:
+- Comprehensive error messages for common issues
+- Graceful handling of permission and configuration problems
+- User-friendly notifications for all operations
+- Debug logging for troubleshooting
+
+**Integration Notes**:
+- Requires MJServer with SqlLoggingConfigResolver
+- Works with SQLServerDataProvider logging capabilities
+- Follows MemberJunction's security and styling patterns
+- Compatible with modern Angular control flow syntax (`@if`, `@for`)
+
 ## User Management Features
 
 ### User Activation/Deactivation
@@ -269,7 +352,8 @@ public options = [
   { label: 'Users', value: SettingsItem.Users },
   { label: 'Roles', value: SettingsItem.Roles },
   { label: 'Applications', value: SettingsItem.Applications },
-  { label: 'Entity Permissions', value: SettingsItem.EntityPermissions }
+  { label: 'Entity Permissions', value: SettingsItem.EntityPermissions },
+  { label: 'SQL Logging', value: SettingsItem.SqlLogging }
 ];
 ```
 
@@ -302,6 +386,7 @@ This package depends on several MemberJunction and third-party packages:
 - `@memberjunction/ng-user-view-grid`: User view grid component
 - `@memberjunction/ng-simple-record-list`: Record list component
 - `@memberjunction/ng-tabstrip`: Tab navigation component
+- `@memberjunction/graphql-dataprovider`: GraphQL operations for SQL logging
 
 ### Kendo UI Dependencies
 - `@progress/kendo-angular-dropdowns`: Dropdown components
@@ -310,6 +395,9 @@ This package depends on several MemberJunction and third-party packages:
 - `@progress/kendo-angular-dialog`: Dialog components
 - `@progress/kendo-angular-layout`: Layout utilities
 - `@progress/kendo-angular-indicators`: Loading indicators
+- `@progress/kendo-angular-inputs`: Form input components
+- `@progress/kendo-angular-label`: Label components
+- `@progress/kendo-angular-dialog`: Modal dialogs for session configuration
 
 ### Angular Dependencies (Peer)
 - `@angular/common`: ^18.0.2
