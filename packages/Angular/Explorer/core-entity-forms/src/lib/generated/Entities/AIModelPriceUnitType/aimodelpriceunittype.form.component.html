@@ -1,0 +1,34 @@
+<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
+    <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer (ResizeContainer)="InvokeManualResize()">
+                    
+                    <mj-tab Name="Details">
+                        Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section 
+                            Entity="MJ: AI Model Price Unit Types" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
+                    </mj-tab-body>
+                    
+                    <mj-tab Name="MJ: AI Model Costs" [Visible]="record.IsSaved"> 
+                        MJ: AI Model Costs
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Model Costs','UnitTypeID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: AI Model Costs')"
+                            [AllowLoad]="IsCurrentTab('MJ: AI Model Costs')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+                </mj-tabstrip>
+    </form>
+</div>
+        
