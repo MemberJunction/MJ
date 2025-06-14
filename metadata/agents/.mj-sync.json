@@ -8,15 +8,14 @@
     "createNewFileIfNotFound": true,
     "newFileName": ".agents.json",
     "appendRecordsToExistingFile": true,
-    "updateExistingRecords": true,   
-    "preserveFields": [],  
+    "updateExistingRecords": true,
+    "preserveFields": [],
     "excludeFields": [],
-    "mergeStrategy": "merge",   
+    "mergeStrategy": "merge",
     "backupBeforeUpdate": true,
-    "backupDirectory": ".backups",   
+    "backupDirectory": ".backups",
     "filter": "Name LIKE '%Demo%'",
-    "externalizeFields": [
-    ],
+    "externalizeFields": [],
     "lookupFields": {
       "TypeID": {
         "entity": "MJ: AI Agent Types",

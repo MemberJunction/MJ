@@ -8,22 +8,20 @@
     "createNewFileIfNotFound": true,
     "newFileName": "actions.json",
     "appendRecordsToExistingFile": true,
-    "updateExistingRecords": true,   
-    "preserveFields": [],  
+    "updateExistingRecords": true,
+    "preserveFields": [],
     "excludeFields": [],
-    "mergeStrategy": "merge",   
+    "mergeStrategy": "merge",
     "backupBeforeUpdate": true,
-    "backupDirectory": ".backups",   
+    "backupDirectory": ".backups",
     "filter": "CategoryID IN (SELECT ID FROM [__mj].vwActions WHERE Name = 'System')",
-    "externalizeFields": [
-    ],
+    "externalizeFields": [],
     "lookupFields": {
       "CategoryID": {
         "entity": "Action Categories",
         "field": "Name"
       }
     },
-    "relatedEntities": {
-    }
+    "relatedEntities": {}
   }
 }

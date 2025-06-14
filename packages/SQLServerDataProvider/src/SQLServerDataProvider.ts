@@ -291,8 +291,8 @@ class SqlLoggingSessionImpl implements SqlLoggingSession {
     // Process the SQL statement
     let processedQuery = query;
     
-    // Use simple SQL fallback if this session has logRecordChangeMetadata=false and fallback is provided
-    if (this.options.logRecordChangeMetadata === false && simpleSQLFallback) {
+    // Use simple SQL fallback if this session has logRecordChangeMetadata=false (default) and fallback is provided
+    if (this.options.logRecordChangeMetadata !== true && simpleSQLFallback) {
       processedQuery = simpleSQLFallback;
       // Update description to indicate we're using the simplified version
       if (description && !description.includes('(core SP call only)')) {
@@ -2344,6 +2344,16 @@ export class SQLServerDataProvider
     if (d && d.length > 0) {
       // got the record, now process the relationships if there are any
       const ret = d[0];
+      // we need to post process the retrieval to see if we have any char or nchar fields and we need to remove their trailing spaces
+      for (const field of entity.EntityInfo.Fields) {
+        if (field.TSType === EntityFieldTSType.String && 
+            field.Type.toLowerCase().includes('char') && 
+            !field.Type.toLowerCase().includes('varchar')) {
+          // trim trailing spaces for char and nchar fields
+          ret[field.Name] = ret[field.Name] ? ret[field.Name].trimEnd() : ret[field.Name];
+        }
+      }
+
       if (EntityRelationshipsToLoad && EntityRelationshipsToLoad.length > 0) {
         for (let i = 0; i < EntityRelationshipsToLoad.length; i++) {
           const rel = EntityRelationshipsToLoad[i];

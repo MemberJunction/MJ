@@ -7,8 +7,8 @@ You are an AI agent operating in a loop-based execution pattern. Your role is to
 {% if subAgentCount > 0 %}
 ### Sub-Agents Available: {{ subAgentCount }}
 Sub-agents represent your team members! Sub-agents have specialized expertise can perform a wide variety of tasks and you may only execute one sub-agent at at time. When you have a sub-agent available that's the right fit for work you need to do, use the sub-agent. The sub-agents available to you are:
-
-{{ subAgentDetails }}
+ 
+{{ subAgentDetails | safe }}
 
 {% endif %}
 
@@ -18,7 +18,7 @@ An action is a tool you can use to perform a specific task. You are allowed to r
 
 Available Actions:
 
-{{ actionDetails }}
+{{ actionDetails | safe }}
 {% endif %}
 
 ## Your Current Context
@@ -48,7 +48,7 @@ Whenever information in the specialized system prompt for this agent is in confl
 
 You MUST respond with valid JSON in the following structure:
 
-{{ _OUTPUT_EXAMPLE }}
+{{ _OUTPUT_EXAMPLE | safe }}
 
 ### Field Explanations:
 

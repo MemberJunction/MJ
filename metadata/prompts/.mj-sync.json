@@ -8,12 +8,17 @@
     "createNewFileIfNotFound": true,
     "newFileName": ".prompts.json",
     "appendRecordsToExistingFile": true,
-    "updateExistingRecords": true,   
-    "preserveFields": ["TemplateText", "OutputExample"],  
-    "excludeFields": ["TemplateID"],
-    "mergeStrategy": "merge",   
+    "updateExistingRecords": true,
+    "preserveFields": [
+      "TemplateText",
+      "OutputExample"
+    ],
+    "excludeFields": [
+      "TemplateID"
+    ],
+    "mergeStrategy": "merge",
     "backupBeforeUpdate": true,
-    "backupDirectory": ".backups",   
+    "backupDirectory": ".backups",
     "filter": "CategoryID IN (SELECT ID FROM [__mj].vwAIPromptCategories WHERE Name = 'Agent Type System Prompts')",
     "externalizeFields": [
       {

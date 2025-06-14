@@ -1,19 +1,17 @@
 {
   "entity": "MJ: AI Agent Types",
   "filePattern": ".*.json",
-  "defaults": {
-  },
+  "defaults": {},
   "pull": {
     "createNewFileIfNotFound": true,
     "newFileName": ".prompts.json",
     "appendRecordsToExistingFile": true,
-    "updateExistingRecords": true,   
-    "mergeStrategy": "merge",   
+    "updateExistingRecords": true,
+    "mergeStrategy": "merge",
     "backupBeforeUpdate": true,
-    "backupDirectory": ".backups",   
+    "backupDirectory": ".backups",
     "filter": "",
-    "externalizeFields": [
-    ],
+    "externalizeFields": [],
     "lookupFields": {
       "TypeID": {
         "entity": "MJ: AI Agent Types",
