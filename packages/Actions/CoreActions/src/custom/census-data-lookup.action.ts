@@ -101,10 +101,10 @@ export class CensusDataLookupAction extends BaseAction {
      */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const zipParam = params.Params.find(p => p.Name === 'ZipCode');
-            const cityParam = params.Params.find(p => p.Name === 'City');
-            const stateParam = params.Params.find(p => p.Name === 'State');
-            const dataSetParam = params.Params.find(p => p.Name === 'DataSet');
+            const zipParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'zipcode');
+            const cityParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'city');
+            const stateParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'state');
+            const dataSetParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'dataset');
 
             if (!zipParam?.Value && (!cityParam?.Value || !stateParam?.Value)) {
                 return {

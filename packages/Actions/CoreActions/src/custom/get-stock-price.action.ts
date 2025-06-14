@@ -44,7 +44,7 @@ export class GetStockPriceAction extends BaseAction {
      */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const tickerParam = params.Params.find(p => p.Name === 'Ticker');
+            const tickerParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'ticker');
 
             if (!tickerParam || !tickerParam.Value) {
                 return {

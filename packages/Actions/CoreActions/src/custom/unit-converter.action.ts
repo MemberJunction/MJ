@@ -125,9 +125,9 @@ export class UnitConverterAction extends BaseAction {
      */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const valueParam = params.Params.find(p => p.Name === 'Value');
-            const fromUnitParam = params.Params.find(p => p.Name === 'FromUnit');
-            const toUnitParam = params.Params.find(p => p.Name === 'ToUnit');
+            const valueParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'value');
+            const fromUnitParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'fromunit');
+            const toUnitParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'tounit');
 
             if (!valueParam || valueParam.Value === undefined || valueParam.Value === null) {
                 return {

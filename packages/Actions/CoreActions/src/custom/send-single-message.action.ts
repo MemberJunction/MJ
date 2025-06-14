@@ -19,14 +19,14 @@ import { Message } from "@memberjunction/communication-types";
 @RegisterClass(BaseAction, "__SendSingleMessage")
 export class SendSingleMessageAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        const subject = params.Params.find(p => p.Name === 'Subject');
-        const body = params.Params.find(p => p.Name === 'Body');
-        const to = params.Params.find(p => p.Name === 'To');
-        const from = params.Params.find(p => p.Name === 'From');
-        const provider = params.Params.find(p => p.Name === 'Provider');
+        const subject = params.Params.find(p => p.Name.trim().toLowerCase() === 'subject');
+        const body = params.Params.find(p => p.Name.trim().toLowerCase() === 'body');
+        const to = params.Params.find(p => p.Name.trim().toLowerCase() === 'to');
+        const from = params.Params.find(p => p.Name.trim().toLowerCase() === 'from');
+        const provider = params.Params.find(p => p.Name.trim().toLowerCase() === 'provider');
         await CommunicationEngine.Instance.Config(false, params.ContextUser);
         const p = CommunicationEngine.Instance.Providers.find(p => p.Name === provider.Value)
-        const messageType = params.Params.find(p => p.Name === 'MessageType');
+        const messageType = params.Params.find(p => p.Name.trim().toLowerCase() === 'messagetype');
         const mt = p.MessageTypes.find(mt => mt.Name === messageType.Value);
 
         if (!p)
@@ -54,6 +54,6 @@ export class SendSingleMessageAction extends BaseAction {
     }
 }
 
-function LoadSendSingleMessageAction(){
+export function LoadSendSingleMessageAction(){
     // this function is a stub that is used to force the bundler to include the above class in the final bundle and not tree shake them out
 }

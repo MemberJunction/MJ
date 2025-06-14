@@ -60,7 +60,7 @@ export class ColorConverterAction extends BaseAction {
      */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const colorParam = params.Params.find(p => p.Name === 'Color');
+            const colorParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'color');
 
             if (!colorParam || !colorParam.Value) {
                 return {

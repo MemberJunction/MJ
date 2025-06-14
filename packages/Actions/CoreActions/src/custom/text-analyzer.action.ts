@@ -43,8 +43,8 @@ export class TextAnalyzerAction extends BaseAction {
      */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const textParam = params.Params.find(p => p.Name === 'Text');
-            const includeFreqParam = params.Params.find(p => p.Name === 'IncludeWordFrequency');
+            const textParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'text');
+            const includeFreqParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'includewordfrequency');
 
             if (!textParam || !textParam.Value) {
                 return {

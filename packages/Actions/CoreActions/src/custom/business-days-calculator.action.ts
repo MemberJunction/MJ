@@ -68,12 +68,12 @@ export class BusinessDaysCalculatorAction extends BaseAction {
      */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const operationParam = params.Params.find(p => p.Name === 'Operation');
-            const startDateParam = params.Params.find(p => p.Name === 'StartDate');
-            const endDateParam = params.Params.find(p => p.Name === 'EndDate');
-            const daysParam = params.Params.find(p => p.Name === 'Days');
-            const excludeHolidaysParam = params.Params.find(p => p.Name === 'ExcludeHolidays');
-            const countryParam = params.Params.find(p => p.Name === 'Country');
+            const operationParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'operation');
+            const startDateParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'startdate');
+            const endDateParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'enddate');
+            const daysParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'days');
+            const excludeHolidaysParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'excludeholidays');
+            const countryParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'country');
 
             if (!operationParam || !operationParam.Value) {
                 return {

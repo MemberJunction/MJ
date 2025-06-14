@@ -13,7 +13,7 @@ import { RegisterClass } from "@memberjunction/global";
 @RegisterClass(BaseAction, "__RunExternalChangeDetection")
 export class ExternalChangeDetectionAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        const entityListParam = params.Params.find(p => p.Name === 'EntityList');
+        const entityListParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'entitylist');
 
         await ExternalChangeDetectorEngine.Instance.Config(false, params.ContextUser);
 
@@ -55,6 +55,6 @@ export class ExternalChangeDetectionAction extends BaseAction {
     }
 }
 
-function LoadExternalChangeDetectionAction(){
+export function LoadExternalChangeDetectionAction(){
     // this function is a stub that is used to force the bundler to include the above class in the final bundle and not tree shake them out
 }

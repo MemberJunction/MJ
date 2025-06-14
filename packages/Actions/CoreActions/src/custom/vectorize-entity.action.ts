@@ -50,7 +50,7 @@ export class VectorizeEntityAction extends BaseAction {
      */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
 
-        const entityNamesParam: ActionParam | undefined = params.Params.find(p => p.Name === 'EntityNames');
+        const entityNamesParam: ActionParam | undefined = params.Params.find(p => p.Name.trim().toLowerCase() === 'entitynames');
         let entityNames: string[] = [];
         if(entityNamesParam && entityNamesParam.Value){
             if(Array.isArray(entityNamesParam.Value)){

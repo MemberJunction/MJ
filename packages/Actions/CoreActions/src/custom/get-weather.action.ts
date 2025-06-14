@@ -18,6 +18,15 @@ import axios from "axios";
  *   }]
  * });
  * 
+ * // Get weather by US city with state abbreviation
+ * await runAction({
+ *   ActionName: 'Get Weather',
+ *   Params: [{
+ *     Name: 'Location',
+ *     Value: 'New Orleans, LA'
+ *   }]
+ * });
+ * 
  * // Get weather by coordinates
  * await runAction({
  *   ActionName: 'Get Weather',
@@ -48,9 +57,9 @@ export class GetWeatherAction extends BaseAction {
      */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const locationParam = params.Params.find(p => p.Name === 'Location');
-            const latitudeParam = params.Params.find(p => p.Name === 'Latitude');
-            const longitudeParam = params.Params.find(p => p.Name === 'Longitude');
+            const locationParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'location');
+            const latitudeParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'latitude');
+            const longitudeParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'longitude');
 
             let latitude: number;
             let longitude: number;
@@ -58,21 +67,112 @@ export class GetWeatherAction extends BaseAction {
 
             // If location name is provided, geocode it first
             if (locationParam && locationParam.Value) {
-                const geocodeUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(locationParam.Value)}&count=1&language=en&format=json`;
-                const geocodeResponse = await axios.get(geocodeUrl);
+                let searchQuery = locationParam.Value.trim();
                 
-                if (!geocodeResponse.data.results || geocodeResponse.data.results.length === 0) {
-                    return {
-                        Success: false,
-                        Message: `Location '${locationParam.Value}' not found`,
-                        ResultCode: "LOCATION_NOT_FOUND"
+                // Check if the location follows the "City, ST" pattern for US locations
+                const usStatePattern = /^(.+),\s*([A-Z]{2})$/i;
+                const match = searchQuery.match(usStatePattern);
+                
+                if (match) {
+                    // Extract city and state
+                    const city = match[1].trim();
+                    const stateAbbr = match[2].toUpperCase();
+                    
+                    // Map of US state abbreviations to full names
+                    const stateMap: Record<string, string> = {
+                        'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas',
+                        'CA': 'California', 'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware',
+                        'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho',
+                        'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas',
+                        'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
+                        'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi',
+                        'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada',
+                        'NH': 'New Hampshire', 'NJ': 'New Jersey', 'NM': 'New Mexico', 'NY': 'New York',
+                        'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma',
+                        'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
+                        'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah',
+                        'VT': 'Vermont', 'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia',
+                        'WI': 'Wisconsin', 'WY': 'Wyoming', 'DC': 'District of Columbia'
                     };
-                }
+                    
+                    // For US locations, search with city name and use country code
+                    if (stateMap[stateAbbr]) {
+                        // Try searching with just the city name and filter by US
+                        searchQuery = city;
+                        const geocodeUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(searchQuery)}&count=10&language=en&format=json`;
+                        const geocodeResponse = await axios.get(geocodeUrl);
+                        
+                        if (geocodeResponse.data.results && geocodeResponse.data.results.length > 0) {
+                            // Filter results for US locations and try to match the state
+                            const usResults = geocodeResponse.data.results.filter((r: any) => 
+                                r.country_code === 'US' || r.country === 'United States'
+                            );
+                            
+                            // Try to find exact state match
+                            let location = usResults.find((r: any) => 
+                                r.admin1 && (r.admin1.toUpperCase() === stateMap[stateAbbr].toUpperCase() || 
+                                            r.admin1_code === `US-${stateAbbr}`)
+                            );
+                            
+                            // If no exact state match, take the first US result
+                            if (!location && usResults.length > 0) {
+                                location = usResults[0];
+                            }
+                            
+                            if (location) {
+                                latitude = location.latitude;
+                                longitude = location.longitude;
+                                locationName = `${location.name}, ${stateAbbr}`;
+                            } else {
+                                return {
+                                    Success: false,
+                                    Message: `Location '${locationParam.Value}' not found in the United States`,
+                                    ResultCode: "LOCATION_NOT_FOUND"
+                                };
+                            }
+                        } else {
+                            return {
+                                Success: false,
+                                Message: `Location '${locationParam.Value}' not found`,
+                                ResultCode: "LOCATION_NOT_FOUND"
+                            };
+                        }
+                    } else {
+                        // Not a valid US state abbreviation, try the original search
+                        const geocodeUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(searchQuery)}&count=1&language=en&format=json`;
+                        const geocodeResponse = await axios.get(geocodeUrl);
+                        
+                        if (!geocodeResponse.data.results || geocodeResponse.data.results.length === 0) {
+                            return {
+                                Success: false,
+                                Message: `Location '${locationParam.Value}' not found`,
+                                ResultCode: "LOCATION_NOT_FOUND"
+                            };
+                        }
 
-                const location = geocodeResponse.data.results[0];
-                latitude = location.latitude;
-                longitude = location.longitude;
-                locationName = `${location.name}, ${location.admin1 || ''} ${location.country || ''}`.trim();
+                        const location = geocodeResponse.data.results[0];
+                        latitude = location.latitude;
+                        longitude = location.longitude;
+                        locationName = `${location.name}, ${location.admin1 || ''} ${location.country || ''}`.trim();
+                    }
+                } else {
+                    // Not in "City, ST" format, use original search
+                    const geocodeUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(searchQuery)}&count=1&language=en&format=json`;
+                    const geocodeResponse = await axios.get(geocodeUrl);
+                    
+                    if (!geocodeResponse.data.results || geocodeResponse.data.results.length === 0) {
+                        return {
+                            Success: false,
+                            Message: `Location '${locationParam.Value}' not found`,
+                            ResultCode: "LOCATION_NOT_FOUND"
+                        };
+                    }
+
+                    const location = geocodeResponse.data.results[0];
+                    latitude = location.latitude;
+                    longitude = location.longitude;
+                    locationName = `${location.name}, ${location.admin1 || ''} ${location.country || ''}`.trim();
+                }
             } 
             // If coordinates are provided, use them directly
             else if (latitudeParam && longitudeParam) {

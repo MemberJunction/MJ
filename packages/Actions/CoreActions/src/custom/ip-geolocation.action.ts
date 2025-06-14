@@ -37,7 +37,7 @@ export class IPGeolocationAction extends BaseAction {
      */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const ipParam = params.Params.find(p => p.Name === 'IPAddress');
+            const ipParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'ipaddress');
             let ipAddress = ipParam?.Value || '';
 
             // Validate IP address format if provided

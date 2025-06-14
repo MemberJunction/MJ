@@ -43,7 +43,7 @@ export class CalculateExpressionAction extends BaseAction {
      */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const expressionParam = params.Params.find(p => p.Name === 'Expression');
+            const expressionParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'expression');
 
             if (!expressionParam || !expressionParam.Value) {
                 return {
