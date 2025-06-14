@@ -1,5 +1,25 @@
 # @memberjunction/ng-dashboards
 
+## 2.49.0
+
+### Minor Changes
+
+- b5d9fbd: Actions system improvements/metadata
+- 62cf1b6: Removed TypeORM which resulted in changes to nearly every package
+
+### Patch Changes
+
+- Updated dependencies [2f974e2]
+- Updated dependencies [cc52ced]
+- Updated dependencies [ca3365f]
+- Updated dependencies [db17ed7]
+- Updated dependencies [62cf1b6]
+  - @memberjunction/core-entities@2.49.0
+  - @memberjunction/core@2.49.0
+  - @memberjunction/ng-container-directives@2.49.0
+  - @memberjunction/ng-notifications@2.49.0
+  - @memberjunction/templates-base-types@2.49.0
+
 ## 2.48.0
 
 ### Patch Changes

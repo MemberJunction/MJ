@@ -1,5 +1,26 @@
 # Change Log - @memberjunction/ng-base-forms
 
+## 2.49.0
+
+### Minor Changes
+
+- 62cf1b6: Removed TypeORM which resulted in changes to nearly every package
+
+### Patch Changes
+
+- Updated dependencies [cc52ced]
+- Updated dependencies [db17ed7]
+- Updated dependencies [62cf1b6]
+  - @memberjunction/core@2.49.0
+  - @memberjunction/global@2.49.0
+  - @memberjunction/ng-link-directives@2.49.0
+  - @memberjunction/ng-record-changes@2.49.0
+  - @memberjunction/ng-shared@2.49.0
+  - @memberjunction/ng-base-types@2.49.0
+  - @memberjunction/ng-code-editor@2.49.0
+  - @memberjunction/ng-container-directives@2.49.0
+  - @memberjunction/ng-tabstrip@2.49.0
+
 ## 2.48.0
 
 ### Patch Changes

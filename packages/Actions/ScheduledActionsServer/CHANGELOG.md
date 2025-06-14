@@ -1,5 +1,30 @@
 # Change Log - @memberjunction/scheduled-actions-server
 
+## 2.49.0
+
+### Minor Changes
+
+- 62cf1b6: Removed TypeORM which resulted in changes to nearly every package
+
+### Patch Changes
+
+- Updated dependencies [2f974e2]
+- Updated dependencies [cc52ced]
+- Updated dependencies [ca3365f]
+- Updated dependencies [b5d9fbd]
+- Updated dependencies [db17ed7]
+- Updated dependencies [62cf1b6]
+  - @memberjunction/core-entities@2.49.0
+  - @memberjunction/core@2.49.0
+  - @memberjunction/actions@2.49.0
+  - @memberjunction/ai@2.49.0
+  - @memberjunction/ai-mistral@2.49.0
+  - @memberjunction/ai-openai@2.49.0
+  - @memberjunction/ai-vectors-pinecone@2.49.0
+  - @memberjunction/ai-vector-sync@2.49.0
+  - @memberjunction/actions-content-autotag@2.49.0
+  - @memberjunction/scheduled-actions@2.49.0
+
 ## 2.48.0
 
 ### Patch Changes

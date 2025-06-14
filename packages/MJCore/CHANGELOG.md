@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/core
 
+## 2.49.0
+
+### Minor Changes
+
+- cc52ced: Significant changes all around
+- db17ed7: Further Updates
+- 62cf1b6: Removed TypeORM which resulted in changes to nearly every package
+
+### Patch Changes
+
+- Updated dependencies [cc52ced]
+- Updated dependencies [62cf1b6]
+  - @memberjunction/global@2.49.0
+
 ## 2.48.0
 
 ### Minor Changes

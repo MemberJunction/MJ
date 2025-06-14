@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/data-context-server
 
+## 2.49.0
+
+### Minor Changes
+
+- 62cf1b6: Removed TypeORM which resulted in changes to nearly every package
+
+### Patch Changes
+
+- Updated dependencies [cc52ced]
+- Updated dependencies [62cf1b6]
+  - @memberjunction/global@2.49.0
+  - @memberjunction/data-context@2.49.0
+
 ## 2.48.0
 
 ### Patch Changes
