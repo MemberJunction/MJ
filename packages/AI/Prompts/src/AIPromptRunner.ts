@@ -39,12 +39,12 @@ export { TemplateMessageRole, AIPromptParams } from './types';
 
 
 /**
- * Advanced AI Prompt execution engine with comprehensive template support, hierarchical prompt execution,
+ * Advanced AI Prompt execution engine with comprehensive template support, hierarchical template composition,
  * sophisticated model selection, parallelization, output validation, and execution tracking.
  *
  * ## Core Features
  * - **Template-based prompt generation** using MJ Templates system
- * - **Hierarchical prompt execution** with depth-first traversal and parallel execution at each level
+ * - **Hierarchical template composition** with depth-first rendering and parallel template processing
  * - **Advanced model selection** strategies (Default, Specific, ByPower)
  * - **Parallel execution** with multiple models and execution groups
  * - **Structured output validation** and type conversion with retry logic
@@ -52,21 +52,21 @@ export { TemplateMessageRole, AIPromptParams } from './types';
  * - **Configuration-driven behavior** with caching and performance optimization
  * - **Real-time progress updates** and streaming response support
  * 
- * ## Hierarchical Prompt Execution
+ * ## Hierarchical Template Composition
  * When `childPrompts` array is provided in {@link AIPromptParams}:
- * 1. Executes child prompts in depth-first manner (children before parents)
- * 2. At each level, executes sibling prompts in parallel for optimal performance
- * 3. Recursively handles grandchild prompts (unlimited nesting depth)
- * 4. Collects all child results and replaces corresponding placeholders in parent template
- * 5. Executes parent prompt with all child results embedded in data context
+ * 1. Renders child prompt templates in depth-first manner (children before parents)
+ * 2. At each level, renders sibling templates in parallel for optimal performance
+ * 3. Recursively handles grandchild templates (unlimited nesting depth)
+ * 4. Substitutes rendered child templates into corresponding placeholders in parent template
+ * 5. Executes the final composed prompt as a single operation
  * 
- * This enables complex multi-step reasoning decomposed into manageable hierarchical units
- * where each child can specify its own models, validation rules, and execution parameters.
+ * This enables complex prompt composition patterns where templates can be built from reusable
+ * sub-templates, creating sophisticated prompts through hierarchical template inheritance.
  * 
  * ## Agent Integration
  * - Links executions to agent runs via `agentRunId` parameter
  * - Supports agent decision-making workflows with structured JSON responses
- * - Enables hierarchical reasoning patterns in AI agents
+ * - Enables hierarchical template patterns in AI agents
  * 
  * @example Basic Usage
  * ```typescript
@@ -77,18 +77,19 @@ export { TemplateMessageRole, AIPromptParams } from './types';
  * const result = await runner.ExecutePrompt(params);
  * ```
  * 
- * @example Hierarchical Prompt Execution
+ * @example Hierarchical Template Composition
  * ```typescript
  * const params = new AIPromptParams();
  * params.prompt = parentPrompt;
  * params.childPrompts = [
  *   new ChildPromptParam(analysisPrompt, 'analysis'),
  *   new ChildPromptParam(summaryPrompt, 'summary'),
- *   new ChildPromptParam(complexChild, 'complex') // This can have its own children
+ *   new ChildPromptParam(complexChild, 'complex') // This can have its own child templates
  * ];
  * params.data = { userInput: 'complex data to process' };
  * const result = await runner.ExecutePrompt(params);
- * // All children execute first in parallel, then parent uses {{ analysis }}, {{ summary }}, {{ complex }}
+ * // Child templates render first, then parent template uses {{ analysis }}, {{ summary }}, {{ complex }}
+ * // Final composed prompt is executed once
  * ```
  */
 export class AIPromptRunner {
@@ -195,12 +196,12 @@ export class AIPromptRunner {
       // For hierarchical prompts, we need to create the parent prompt run first to get its ID
       let parentPromptRun: AIPromptRunEntity | undefined;
       let selectedModel: AIModelEntityExtended | undefined;
-      let childExecutionResult: { results: Record<string, string>; totalPromptTokens: number; totalCompletionTokens: number; totalCost?: number; hasCost: boolean } | undefined;
+      let childTemplateRenderingResult: { renderedTemplates: Record<string, string> } | undefined;
 
       // Handle different prompt execution modes
       if (params.childPrompts && params.childPrompts.length > 0) {
-        // New child prompt execution mode - create parent run first, then execute children
-        LogStatus(`🌳 Executing prompt with ${params.childPrompts.length} child prompts in hierarchical mode`);
+        // Hierarchical template composition mode - render child templates first, then compose
+        LogStatus(`🌳 Composing prompt with ${params.childPrompts.length} child templates in hierarchical mode`);
         
         // Select model for parent prompt execution
         selectedModel = await this.selectModel(prompt, params.modelId, params.contextUser, params.configurationId, params.vendorId);
@@ -208,17 +209,17 @@ export class AIPromptRunner {
           throw new Error(`No suitable model found for prompt ${prompt.Name}`);
         }
 
-        // Create parent prompt run to establish the hierarchy
+        // Create parent prompt run for the final composed prompt execution
         parentPromptRun = await this.createPromptRun(prompt, selectedModel, params, startTime, params.vendorId);
-        LogStatus(`📝 Created parent prompt run ${parentPromptRun.ID} for hierarchical execution`);
+        LogStatus(`📝 Created prompt run ${parentPromptRun.ID} for hierarchical template composition`);
         
-        // Execute all child prompts recursively with parent ID
-        childExecutionResult = await this.executeChildPrompts(params.childPrompts, params.cancellationToken, parentPromptRun.ID);
+        // Render all child prompt templates recursively
+        childTemplateRenderingResult = await this.renderChildPromptTemplates(params.childPrompts, params, params.cancellationToken);
         
-        // Render the parent prompt with child results embedded
-        renderedPromptText = await this.renderPromptWithChildResults(prompt, params, childExecutionResult.results);
+        // Render the parent prompt with child templates embedded
+        renderedPromptText = await this.renderPromptWithChildTemplates(prompt, params, childTemplateRenderingResult.renderedTemplates);
         
-        LogStatus(`✅ Hierarchical prompt execution completed with ${Object.keys(childExecutionResult.results).length} child results embedded`);
+        LogStatus(`✅ Hierarchical template composition completed with ${Object.keys(childTemplateRenderingResult.renderedTemplates).length} child templates embedded`);
         
       } else if (prompt.TemplateID && (!params.conversationMessages || params.templateMessageRole !== 'none')) {
         // Regular template rendering mode
@@ -257,34 +258,8 @@ export class AIPromptRunner {
         result = await this.executeSinglePrompt<T>(prompt, renderedPromptText, params, startTime, parentPromptRun, selectedModel);
       }
 
-      // Add rollup information if we have child executions
-      if (childExecutionResult && result.promptRun) {
-        // Calculate rollup values: parent's own usage + all children's usage
-        const rollupPromptTokens = (result.promptTokens || 0) + childExecutionResult.totalPromptTokens;
-        const rollupCompletionTokens = (result.completionTokens || 0) + childExecutionResult.totalCompletionTokens;
-        const rollupCost = childExecutionResult.hasCost ? 
-          ((result.cost || 0) + (childExecutionResult.totalCost || 0)) : 
-          undefined;
-
-        // Update the prompt run with rollup values
-        result.promptRun.TokensPromptRollup = rollupPromptTokens;
-        result.promptRun.TokensCompletionRollup = rollupCompletionTokens;
-        result.promptRun.TokensUsedRollup = rollupPromptTokens + rollupCompletionTokens;
-        if (rollupCost !== undefined) {
-          result.promptRun.TotalCost = rollupCost;
-        }
-
-        // Save the updated rollup values
-        const saveResult = await result.promptRun.Save();
-        if (!saveResult) {
-          LogError(`Failed to save rollup values to AIPromptRun: ${result.promptRun.LatestResult?.Message || 'Unknown error'}`);
-        }
-
-        // Update the result object with combined values
-        result.combinedPromptTokens = rollupPromptTokens;
-        result.combinedCompletionTokens = rollupCompletionTokens;
-        result.combinedCost = rollupCost;
-      }
+      // Note: With template composition, we only execute once so no rollup calculations needed
+      // The final composed prompt is executed as a single operation
 
       return result;
     } catch (error) {
@@ -535,8 +510,7 @@ export class AIPromptRunner {
       });
     }
 
-    // For parallel execution without children, set rollup fields to match totals
-    // These will be overwritten later if this prompt has children
+    // For parallel execution, set rollup fields to match totals (no child execution to roll up)
     consolidatedPromptRun.TokensPromptRollup = totalPromptTokens;
     consolidatedPromptRun.TokensCompletionRollup = totalCompletionTokens;
     consolidatedPromptRun.TokensUsedRollup = totalPromptTokens + totalCompletionTokens;
@@ -644,31 +618,23 @@ export class AIPromptRunner {
 
 
   /**
-   * Executes child prompts in a depth-first manner with parallel execution at each level.
+   * Renders child prompt templates in a depth-first manner, composing them into a final template.
    * 
-   * @param childPrompts - Array of child prompts to execute
-   * @param cancellationToken - Cancellation token for aborting execution
-   * @param parentPromptRunId - ID of the parent prompt run for hierarchical tracking
-   * @returns Promise with both results map and aggregated token/cost information
+   * @param childPrompts - Array of child prompts to render templates for
+   * @param params - Original execution parameters for context
+   * @param cancellationToken - Cancellation token for aborting rendering
+   * @returns Promise with rendered templates map
    */
-  private async executeChildPrompts(
+  private async renderChildPromptTemplates(
     childPrompts: ChildPromptParam[],
-    cancellationToken?: AbortSignal,
-    parentPromptRunId?: string
+    params: AIPromptParams,
+    cancellationToken?: AbortSignal
   ): Promise<{
-    results: Record<string, string>;
-    totalPromptTokens: number;
-    totalCompletionTokens: number;
-    totalCost?: number;
-    hasCost: boolean;
+    renderedTemplates: Record<string, string>;
   }> {
     if (!childPrompts || childPrompts.length === 0) {
       return {
-        results: {},
-        totalPromptTokens: 0,
-        totalCompletionTokens: 0,
-        totalCost: undefined,
-        hasCost: false
+        renderedTemplates: {}
       };
     }
 
@@ -677,122 +643,124 @@ export class AIPromptRunner {
       throw new Error('Child prompt execution was cancelled');
     }
 
-    LogStatus(`🔄 Executing ${childPrompts.length} child prompts in parallel`);
+    LogStatus(`🔄 Rendering ${childPrompts.length} child prompt templates in parallel`);
 
-    // Execute all child prompts in parallel at this level
-    const childExecutionPromises = childPrompts.map(async (childParam) => {
+    // Render all child prompt templates in parallel at this level
+    const childRenderingPromises = childPrompts.map(async (childParam) => {
       try {
-        // Check for cancellation before each child execution
+        // Check for cancellation before each child rendering
         if (cancellationToken?.aborted) {
-          throw new Error('Child prompt execution was cancelled');
+          throw new Error('Child prompt template rendering was cancelled');
         }
 
-        // First, recursively execute any grandchild prompts
+        // First, recursively render any grandchild prompt templates
         let childData = { ...childParam.childPrompt.data };
         if (childParam.childPrompt.childPrompts && childParam.childPrompt.childPrompts.length > 0) {
-          const grandchildResults = await this.executeChildPrompts(
+          const grandchildResults = await this.renderChildPromptTemplates(
             childParam.childPrompt.childPrompts,
-            cancellationToken,
-            parentPromptRunId  // Pass parent ID down the hierarchy
+            params,
+            cancellationToken
           );
           
-          // Merge grandchild results into the child's data context
-          childData = { ...childData, ...grandchildResults.results };
+          // Merge grandchild rendered templates into the child's data context
+          childData = { ...childData, ...grandchildResults.renderedTemplates };
         }
 
-        // Create a new AIPromptParams for the child execution with merged data
-        const childExecutionParams = new AIPromptParams();
-        Object.assign(childExecutionParams, childParam.childPrompt);
-        childExecutionParams.data = childData;
-        childExecutionParams.cancellationToken = cancellationToken;
-        childExecutionParams.parentPromptRunId = parentPromptRunId;  // Set parent ID for hierarchical tracking
+        // Render the child prompt template with merged data
+        LogStatus(`  🔹 Rendering child prompt template: ${childParam.childPrompt.prompt.Name} -> ${childParam.parentPlaceholder}`);
+        
+        const childPrompt = childParam.childPrompt.prompt;
+        let renderedChildTemplate = '';
+        
+        if (childPrompt.TemplateID) {
+          // Initialize template engine if not already done
+          await this._templateEngine.Config(false, params.contextUser);
+          
+          // Load the template for the child prompt
+          const template = await this.loadTemplate(childPrompt.TemplateID, params.contextUser);
+          if (!template) {
+            throw new Error(`Template with ID ${childPrompt.TemplateID} not found for child prompt ${childPrompt.Name}`);
+          }
 
-        // Execute the child prompt
-        LogStatus(`  🔹 Executing child prompt: ${childParam.childPrompt.prompt.Name} -> ${childParam.parentPlaceholder}`);
-        const childResult = await this.ExecutePrompt(childExecutionParams);
+          // Merge child data with original params context
+          const mergedChildData = {
+            ...params.data,           // Original context
+            ...childData,             // Child-specific data with grandchildren
+            ...childParam.childPrompt.templateData  // Child template data
+          };
 
-        if (!childResult.success) {
-          throw new Error(`Child prompt execution failed: ${childResult.errorMessage}`);
+          // Render the child template
+          const childRenderResult = await this.renderPromptTemplate(template, {
+            ...params,
+            data: mergedChildData,
+            templateData: childParam.childPrompt.templateData
+          });
+          
+          if (!childRenderResult.Success) {
+            throw new Error(`Failed to render child template for prompt ${childPrompt.Name}: ${childRenderResult.Message}`);
+          }
+          
+          renderedChildTemplate = childRenderResult.Output;
+        } else {
+          // If no template, use empty string (child might be using conversation messages)
+          renderedChildTemplate = '';
         }
 
-        // Return the placeholder name, result, and token/cost information
+        // Return the placeholder name and rendered template
         return {
           placeholder: childParam.parentPlaceholder,
-          result: childResult.rawResult || JSON.stringify(childResult.result),
-          success: true,
-          promptTokens: childResult.combinedPromptTokens || childResult.promptTokens || 0,
-          completionTokens: childResult.combinedCompletionTokens || childResult.completionTokens || 0,
-          cost: childResult.combinedCost || childResult.cost,
-          hasCost: (childResult.combinedCost !== undefined) || (childResult.cost !== undefined)
+          renderedTemplate: renderedChildTemplate,
+          success: true
         };
 
       } catch (error) {
-        LogError(`Error executing child prompt for placeholder ${childParam.parentPlaceholder}: ${error.message}`);
+        LogError(`Error rendering child prompt template for placeholder ${childParam.parentPlaceholder}: ${error.message}`);
         
         // Return error result but allow other children to continue
         return {
           placeholder: childParam.parentPlaceholder,
-          result: `ERROR: ${error.message}`,
-          success: false,
-          promptTokens: 0,
-          completionTokens: 0,
-          cost: undefined,
-          hasCost: false
+          renderedTemplate: `ERROR: ${error.message}`,
+          success: false
         };
       }
     });
 
-    // Wait for all child prompts to complete
-    const childResults = await Promise.all(childExecutionPromises);
+    // Wait for all child template rendering to complete
+    const childResults = await Promise.all(childRenderingPromises);
 
     // Check if any critical errors occurred
     const failedChildren = childResults.filter(r => !r.success);
     if (failedChildren.length > 0) {
-      LogError(`${failedChildren.length} out of ${childResults.length} child prompts failed`);
+      LogError(`${failedChildren.length} out of ${childResults.length} child prompt templates failed to render`);
       // Continue with available results rather than failing completely
     }
 
-    // Build result map and aggregate token/cost information
-    const resultMap: Record<string, string> = {};
-    let totalPromptTokens = 0;
-    let totalCompletionTokens = 0;
-    let totalCost = 0;
-    let hasCost = false;
+    // Build rendered templates map
+    const renderedTemplatesMap: Record<string, string> = {};
     
     for (const childResult of childResults) {
-      resultMap[childResult.placeholder] = childResult.result;
-      totalPromptTokens += childResult.promptTokens;
-      totalCompletionTokens += childResult.completionTokens;
-      
-      if (childResult.hasCost && childResult.cost !== undefined) {
-        totalCost += childResult.cost;
-        hasCost = true;
-      }
+      renderedTemplatesMap[childResult.placeholder] = childResult.renderedTemplate;
     }
 
-    LogStatus(`✅ Completed execution of ${childResults.length} child prompts (${totalPromptTokens} prompt tokens, ${totalCompletionTokens} completion tokens)`);
+    LogStatus(`✅ Completed rendering of ${childResults.length} child prompt templates`);
     
     return {
-      results: resultMap,
-      totalPromptTokens,
-      totalCompletionTokens,
-      totalCost: hasCost ? totalCost : undefined,
-      hasCost
+      renderedTemplates: renderedTemplatesMap
     };
   }
 
   /**
-   * Renders a prompt template with child prompt results merged into the data context.
+   * Renders a prompt template with child prompt templates merged into the data context.
    * 
    * @param prompt - The AI prompt to render
    * @param params - Original execution parameters
-   * @param childResults - Map of placeholder names to child prompt results
-   * @returns Promise<string> - The rendered prompt text with child results embedded
+   * @param childTemplates - Map of placeholder names to rendered child prompt templates
+   * @returns Promise<string> - The rendered prompt text with child templates embedded
    */
-  private async renderPromptWithChildResults(
+  private async renderPromptWithChildTemplates(
     prompt: AIPromptEntity,
     params: AIPromptParams,
-    childResults: Record<string, string>
+    childTemplates: Record<string, string>
   ): Promise<string> {
     if (!prompt.TemplateID) {
       // If no template, return empty string (will be handled by conversation messages)
@@ -816,16 +784,16 @@ export class AIPromptRunner {
       const mergedData = {
         ...systemPlaceholders,    // System placeholders (lowest priority)
         ...params.data,           // Original data context
-        ...childResults,          // Child prompt results with placeholder names as keys
+        ...childTemplates,        // Child prompt templates with placeholder names as keys
         ...params.templateData    // Additional template data (highest priority)
       };
 
-      LogStatus(`🔧 Rendering prompt template with ${Object.keys(childResults).length} child results and ${Object.keys(systemPlaceholders).length} system placeholders`);
+      LogStatus(`🔧 Rendering prompt template with ${Object.keys(childTemplates).length} child templates and ${Object.keys(systemPlaceholders).length} system placeholders`);
       
       // Log placeholder replacement for debugging
-      for (const [placeholder, result] of Object.entries(childResults)) {
-        const truncatedResult = result.length > 100 ? result.substring(0, 100) + '...' : result;
-        LogStatus(`  📝 ${placeholder} -> ${truncatedResult}`);
+      for (const [placeholder, template] of Object.entries(childTemplates)) {
+        const truncatedTemplate = template.length > 100 ? template.substring(0, 100) + '...' : template;
+        LogStatus(`  📝 ${placeholder} -> ${truncatedTemplate}`);
       }
 
       // Render the template with the full params context
@@ -843,7 +811,7 @@ export class AIPromptRunner {
       return renderedPrompt.Output;
 
     } catch (error) {
-      LogError(`Error rendering prompt with child results: ${error.message}`);
+      LogError(`Error rendering prompt with child templates: ${error.message}`);
       throw error;
     }
   }
@@ -1619,100 +1587,6 @@ export class AIPromptRunner {
     return validationErrors;
   }
 
-  /**
-   * Parses and validates the AI model result based on prompt configuration
-   */
-  private async parseAndValidateResult(
-    modelResult: ChatResult,
-    prompt: AIPromptEntity,
-    skipValidation: boolean = false,
-  ): Promise<{ result: unknown; validationResult?: ValidationResult }> {
-    try {
-      if (!modelResult.success) {
-        throw new Error(`Model execution failed: ${modelResult.errorMessage}`);
-      }
-
-      const rawOutput = modelResult.data?.choices?.[0]?.message?.content;
-      if (!rawOutput) {
-        throw new Error('No output received from model');
-      }
-
-      // Parse based on output type
-      let parsedResult: unknown = rawOutput;
-
-      switch (prompt.OutputType) {
-        case 'string':
-          parsedResult = rawOutput.toString();
-          break;
-
-        case 'number': {
-          const numberResult = parseFloat(rawOutput);
-          if (isNaN(numberResult)) {
-            throw new Error(`Expected number output but got: ${rawOutput}`);
-          }
-          parsedResult = numberResult;
-          break;
-        }
-
-        case 'boolean': {
-          const lowerOutput = rawOutput.toLowerCase().trim();
-          if (['true', 'yes', '1'].includes(lowerOutput)) {
-            parsedResult = true;
-          } else if (['false', 'no', '0'].includes(lowerOutput)) {
-            parsedResult = false;
-          } else {
-            throw new Error(`Expected boolean output but got: ${rawOutput}`);
-          }
-          break;
-        }
-
-        case 'date': {
-          const dateResult = new Date(rawOutput);
-          if (isNaN(dateResult.getTime())) {
-            throw new Error(`Expected date output but got: ${rawOutput}`);
-          }
-          parsedResult = dateResult;
-          break;
-        }
-
-        case 'object':
-          try {
-            parsedResult = JSON.parse(rawOutput);
-          } catch (jsonError) {
-            throw new Error(`Expected JSON object but got invalid JSON: ${rawOutput}`);
-          }
-          break;
-
-        default:
-          parsedResult = rawOutput;
-      }
-
-      // Validate against example if provided and validation is enabled
-      const validationResult = new ValidationResult();
-      validationResult.Success = true;
-
-      if (!skipValidation && prompt.OutputExample && prompt.OutputType === 'object') {
-        // TODO: Implement JSON schema validation against OutputExample
-        // This would validate the structure of the parsed object against the example
-      }
-
-      return { result: parsedResult, validationResult };
-    } catch (error) {
-      LogError(`Error parsing/validating result: ${error.message}`);
-
-      // Handle validation behavior
-      switch (prompt.ValidationBehavior) {
-        case 'Strict':
-          throw error;
-        case 'Warn':
-          LogError(`Validation warning for prompt ${prompt.Name}: ${error.message}`);
-          return { result: modelResult.data?.choices?.[0]?.message?.content };
-        case 'None':
-        default:
-          return { result: modelResult.data?.choices?.[0]?.message?.content };
-      }
-    }
-  }
 
   /**
    * Updates the AIPromptRun entity with execution results
@@ -1784,8 +1658,7 @@ export class AIPromptRunner {
       // Set Success flag based on validation result
       promptRun.Success = modelResult.success && (parsedResult.validationResult?.Success !== false);
 
-      // For leaf nodes (no children), rollup fields equal the regular fields
-      // This ensures the hierarchical pattern works correctly
+      // With template composition, we only execute once so rollup equals regular fields
       promptRun.TokensPromptRollup = promptRun.TokensPrompt;
       promptRun.TokensCompletionRollup = promptRun.TokensCompletion;
       promptRun.TokensUsedRollup = promptRun.TokensUsed;
