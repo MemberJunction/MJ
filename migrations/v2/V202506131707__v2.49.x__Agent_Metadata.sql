@@ -21,6 +21,13 @@ EXEC __mj.spCreateAIPromptCategory
       @Name = 'Agent Type System Prompts',
       @ParentID = NULL,
       @Description = 'System Prompts for Agent Types';    
+
+EXEC __mj.spCreateAIPromptCategory
+      @ID = '5897C65A-269C-4457-A632-87CB12750DBF',
+      @Name = 'Demo',
+      @ParentID = NULL,
+      @Description = 'Demo Prompts';
+
 /** END MANUAL PATCH **/
 /************************************************************************************/
 
