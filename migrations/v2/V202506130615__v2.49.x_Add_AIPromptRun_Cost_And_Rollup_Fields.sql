@@ -1,7 +1,7 @@
 -- Migration: Add cost tracking and hierarchical rollup fields to AIPromptRun and AIAgentRun tables
 -- Date: 2025-06-13
 -- Description: Adds fields to track execution costs and hierarchical token/cost rollups
---              for parent-child prompt executions and agent runs. This enables efficient 
+--              for parent-child prompt executions and agent runs. This enables efficient
 --              analysis of total resource usage across entire prompt execution trees and
 --              detailed token tracking for agent executions.
 
@@ -25,7 +25,7 @@ ADD [TotalPromptTokensUsed] INT NULL,
 -- Add extended property descriptions
 
 -- Cost field
-EXEC sp_addextendedproperty 
+EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'The cost of this specific prompt execution as reported by the AI provider. This does not include costs from child executions. The currency is specified in CostCurrency field.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
@@ -33,7 +33,7 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = 'Cost';
 
 -- CostCurrency field
-EXEC sp_addextendedproperty 
+EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'ISO 4217 currency code for the Cost field (e.g., USD, EUR, GBP). Different AI providers may use different currencies.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
@@ -41,7 +41,7 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = 'CostCurrency';
 
 -- TokensUsedRollup field
-EXEC sp_addextendedproperty 
+EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'Total tokens used including this execution and all child/grandchild executions. This provides a complete view of token usage for hierarchical prompt trees. Calculated as TokensPromptRollup + TokensCompletionRollup.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
@@ -49,7 +49,7 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = 'TokensUsedRollup';
 
 -- TokensPromptRollup field
-EXEC sp_addextendedproperty 
+EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'Total prompt/input tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensPrompt. For parent nodes, this includes the sum of all descendant prompt tokens.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
@@ -57,7 +57,7 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = 'TokensPromptRollup';
 
 -- TokensCompletionRollup field
-EXEC sp_addextendedproperty 
+EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'Total completion/output tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensCompletion. For parent nodes, this includes the sum of all descendant completion tokens.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
@@ -66,13 +66,13 @@ EXEC sp_addextendedproperty
 
 -- TotalCost field (updated description for rollup pattern)
 -- drop the old description first to avoid conflicts
-EXEC sp_dropextendedproperty 
+EXEC sp_dropextendedproperty
     @name = N'MS_Description',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = 'AIPromptRun',
     @level2type = N'COLUMN', @level2name = 'TotalCost';
 
-EXEC sp_addextendedproperty 
+EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'Total cost including this execution and all child/grandchild executions. For leaf nodes (no children), this equals Cost. For parent nodes, this includes the sum of all descendant costs. Note: This assumes all costs are in the same currency for accurate rollup. Currency conversions should be handled at the application layer if needed.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
@@ -82,7 +82,7 @@ EXEC sp_addextendedproperty
 -- AIAgentRun field descriptions
 
 -- TotalPromptTokensUsed field
-EXEC sp_addextendedproperty 
+EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'Total number of prompt/input tokens used across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
@@ -90,7 +90,7 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = 'TotalPromptTokensUsed';
 
 -- TotalCompletionTokensUsed field
-EXEC sp_addextendedproperty 
+EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'Total number of completion/output tokens generated across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
@@ -98,7 +98,7 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = 'TotalCompletionTokensUsed';
 
 -- TotalTokensUsedRollup field
-EXEC sp_addextendedproperty 
+EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'Total tokens used including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalTokensUsed. For parent agents, this includes the sum of all descendant agent tokens. Calculated as TotalPromptTokensUsedRollup + TotalCompletionTokensUsedRollup.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
@@ -106,7 +106,7 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = 'TotalTokensUsedRollup';
 
 -- TotalPromptTokensUsedRollup field
-EXEC sp_addextendedproperty 
+EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'Total prompt/input tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalPromptTokensUsed. For parent agents, this includes the sum of all descendant agent prompt tokens.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
@@ -114,7 +114,7 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = 'TotalPromptTokensUsedRollup';
 
 -- TotalCompletionTokensUsedRollup field
-EXEC sp_addextendedproperty 
+EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'Total completion/output tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCompletionTokensUsed. For parent agents, this includes the sum of all descendant agent completion tokens.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
@@ -122,7 +122,7 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = 'TotalCompletionTokensUsedRollup';
 
 -- TotalCostRollup field for AIAgentRun
-EXEC sp_addextendedproperty 
+EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'Total cost including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCost. For parent agents, this includes the sum of all descendant agent costs. Note: This assumes all costs are in the same currency for accurate rollup.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
@@ -161,14 +161,14 @@ This pattern allows efficient queries like:
 - "What was the cost of just this prompt?" (check non-rollup fields)
 
 Example Query:
-SELECT 
+SELECT
     ID,
     Name,
     TokensUsed as DirectTokens,
     TokensUsedRollup as TotalTokens,
     Cost as DirectCost,
     TotalCostRollup as TotalCost,
-    CASE 
+    CASE
         WHEN ParentID IS NULL THEN 'Root'
         WHEN EXISTS(SELECT 1 FROM AIPromptRun child WHERE child.ParentID = pr.ID) THEN 'Parent'
         ELSE 'Leaf'
@@ -232,8 +232,8 @@ This allows for analysis like:
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '69b7eb99-3409-4b84-b979-877e992964dc'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '69b7eb99-3409-4b84-b979-877e992964dc'  OR
                (EntityID = '5190AF93-4C39-4429-BDAA-0AEB492A0256' AND Name = 'TotalPromptTokensUsed')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -269,7 +269,7 @@ This allows for analysis like:
          (
             '69b7eb99-3409-4b84-b979-877e992964dc',
             '5190AF93-4C39-4429-BDAA-0AEB492A0256', -- Entity: MJ: AI Agent Runs
-            17,
+            100017,
             'TotalPromptTokensUsed',
             'Total Prompt Tokens Used',
             'Total number of prompt/input tokens used across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.',
@@ -297,8 +297,8 @@ This allows for analysis like:
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '4be28d8a-2e06-460d-bdd7-34e5beb5dbb0'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '4be28d8a-2e06-460d-bdd7-34e5beb5dbb0'  OR
                (EntityID = '5190AF93-4C39-4429-BDAA-0AEB492A0256' AND Name = 'TotalCompletionTokensUsed')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -334,7 +334,7 @@ This allows for analysis like:
          (
             '4be28d8a-2e06-460d-bdd7-34e5beb5dbb0',
             '5190AF93-4C39-4429-BDAA-0AEB492A0256', -- Entity: MJ: AI Agent Runs
-            18,
+            100018,
             'TotalCompletionTokensUsed',
             'Total Completion Tokens Used',
             'Total number of completion/output tokens generated across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.',
@@ -362,8 +362,8 @@ This allows for analysis like:
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'a60033a0-d13c-4954-8ef3-6bb8a5618126'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = 'a60033a0-d13c-4954-8ef3-6bb8a5618126'  OR
                (EntityID = '5190AF93-4C39-4429-BDAA-0AEB492A0256' AND Name = 'TotalTokensUsedRollup')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -399,7 +399,7 @@ This allows for analysis like:
          (
             'a60033a0-d13c-4954-8ef3-6bb8a5618126',
             '5190AF93-4C39-4429-BDAA-0AEB492A0256', -- Entity: MJ: AI Agent Runs
-            19,
+            100019,
             'TotalTokensUsedRollup',
             'Total Tokens Used Rollup',
             'Total tokens used including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalTokensUsed. For parent agents, this includes the sum of all descendant agent tokens. Calculated as TotalPromptTokensUsedRollup + TotalCompletionTokensUsedRollup.',
@@ -427,8 +427,8 @@ This allows for analysis like:
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'fcd5864b-65bb-4e9f-a3fe-2c09d3461364'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = 'fcd5864b-65bb-4e9f-a3fe-2c09d3461364'  OR
                (EntityID = '5190AF93-4C39-4429-BDAA-0AEB492A0256' AND Name = 'TotalPromptTokensUsedRollup')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -464,7 +464,7 @@ This allows for analysis like:
          (
             'fcd5864b-65bb-4e9f-a3fe-2c09d3461364',
             '5190AF93-4C39-4429-BDAA-0AEB492A0256', -- Entity: MJ: AI Agent Runs
-            20,
+            100020,
             'TotalPromptTokensUsedRollup',
             'Total Prompt Tokens Used Rollup',
             'Total prompt/input tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalPromptTokensUsed. For parent agents, this includes the sum of all descendant agent prompt tokens.',
@@ -492,8 +492,8 @@ This allows for analysis like:
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'b1401167-0c3b-4d14-9633-6a3a1dc429a9'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = 'b1401167-0c3b-4d14-9633-6a3a1dc429a9'  OR
                (EntityID = '5190AF93-4C39-4429-BDAA-0AEB492A0256' AND Name = 'TotalCompletionTokensUsedRollup')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -529,7 +529,7 @@ This allows for analysis like:
          (
             'b1401167-0c3b-4d14-9633-6a3a1dc429a9',
             '5190AF93-4C39-4429-BDAA-0AEB492A0256', -- Entity: MJ: AI Agent Runs
-            21,
+            100021,
             'TotalCompletionTokensUsedRollup',
             'Total Completion Tokens Used Rollup',
             'Total completion/output tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCompletionTokensUsed. For parent agents, this includes the sum of all descendant agent completion tokens.',
@@ -557,8 +557,8 @@ This allows for analysis like:
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'f9928463-5f2b-46c0-8da3-6eef2fa816ef'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = 'f9928463-5f2b-46c0-8da3-6eef2fa816ef'  OR
                (EntityID = '5190AF93-4C39-4429-BDAA-0AEB492A0256' AND Name = 'TotalCostRollup')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -594,7 +594,7 @@ This allows for analysis like:
          (
             'f9928463-5f2b-46c0-8da3-6eef2fa816ef',
             '5190AF93-4C39-4429-BDAA-0AEB492A0256', -- Entity: MJ: AI Agent Runs
-            22,
+            100022,
             'TotalCostRollup',
             'Total Cost Rollup',
             'Total cost including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCost. For parent agents, this includes the sum of all descendant agent costs. Note: This assumes all costs are in the same currency for accurate rollup.',
@@ -622,8 +622,8 @@ This allows for analysis like:
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'adcd9c84-0fb1-45f4-9a9f-b42bd51a2503'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = 'adcd9c84-0fb1-45f4-9a9f-b42bd51a2503'  OR
                (EntityID = '7C1C98D0-3978-4CE8-8E3F-C90301E59767' AND Name = 'Cost')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -659,7 +659,7 @@ This allows for analysis like:
          (
             'adcd9c84-0fb1-45f4-9a9f-b42bd51a2503',
             '7C1C98D0-3978-4CE8-8E3F-C90301E59767', -- Entity: MJ: AI Prompt Runs
-            24,
+            100024,
             'Cost',
             'Cost',
             'The cost of this specific prompt execution as reported by the AI provider. This does not include costs from child executions. The currency is specified in CostCurrency field.',
@@ -687,8 +687,8 @@ This allows for analysis like:
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '2a925f19-e0ea-41af-8323-4542f310a09e'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '2a925f19-e0ea-41af-8323-4542f310a09e'  OR
                (EntityID = '7C1C98D0-3978-4CE8-8E3F-C90301E59767' AND Name = 'CostCurrency')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -724,7 +724,7 @@ This allows for analysis like:
          (
             '2a925f19-e0ea-41af-8323-4542f310a09e',
             '7C1C98D0-3978-4CE8-8E3F-C90301E59767', -- Entity: MJ: AI Prompt Runs
-            25,
+            100025,
             'CostCurrency',
             'Cost Currency',
             'ISO 4217 currency code for the Cost field (e.g., USD, EUR, GBP). Different AI providers may use different currencies.',
@@ -752,8 +752,8 @@ This allows for analysis like:
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '16b3dcd4-e1a3-456b-ac93-ff72b2507b19'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '16b3dcd4-e1a3-456b-ac93-ff72b2507b19'  OR
                (EntityID = '7C1C98D0-3978-4CE8-8E3F-C90301E59767' AND Name = 'TokensUsedRollup')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -789,7 +789,7 @@ This allows for analysis like:
          (
             '16b3dcd4-e1a3-456b-ac93-ff72b2507b19',
             '7C1C98D0-3978-4CE8-8E3F-C90301E59767', -- Entity: MJ: AI Prompt Runs
-            26,
+            100026,
             'TokensUsedRollup',
             'Tokens Used Rollup',
             'Total tokens used including this execution and all child/grandchild executions. This provides a complete view of token usage for hierarchical prompt trees. Calculated as TokensPromptRollup + TokensCompletionRollup.',
@@ -817,8 +817,8 @@ This allows for analysis like:
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '05f66d0a-9e5b-4a31-9b03-f26df3fa70b1'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '05f66d0a-9e5b-4a31-9b03-f26df3fa70b1'  OR
                (EntityID = '7C1C98D0-3978-4CE8-8E3F-C90301E59767' AND Name = 'TokensPromptRollup')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -854,7 +854,7 @@ This allows for analysis like:
          (
             '05f66d0a-9e5b-4a31-9b03-f26df3fa70b1',
             '7C1C98D0-3978-4CE8-8E3F-C90301E59767', -- Entity: MJ: AI Prompt Runs
-            27,
+            100027,
             'TokensPromptRollup',
             'Tokens Prompt Rollup',
             'Total prompt/input tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensPrompt. For parent nodes, this includes the sum of all descendant prompt tokens.',
@@ -882,8 +882,8 @@ This allows for analysis like:
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'bf642024-62c7-41e2-86aa-fce253463de1'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = 'bf642024-62c7-41e2-86aa-fce253463de1'  OR
                (EntityID = '7C1C98D0-3978-4CE8-8E3F-C90301E59767' AND Name = 'TokensCompletionRollup')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -919,7 +919,7 @@ This allows for analysis like:
          (
             'bf642024-62c7-41e2-86aa-fce253463de1',
             '7C1C98D0-3978-4CE8-8E3F-C90301E59767', -- Entity: MJ: AI Prompt Runs
-            28,
+            100028,
             'TokensCompletionRollup',
             'Tokens Completion Rollup',
             'Total completion/output tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensCompletion. For parent nodes, this includes the sum of all descendant completion tokens.',
@@ -957,7 +957,7 @@ This allows for analysis like:
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgentRun_AgentID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgentRun_AgentID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgentRun]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgentRun_AgentID ON [${flyway:defaultSchema}].[AIAgentRun] ([AgentID]);
@@ -966,7 +966,7 @@ CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgentRun_AgentID ON [${flyway:defaultSchema}].[A
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgentRun_ParentRunID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgentRun_ParentRunID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgentRun]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgentRun_ParentRunID ON [${flyway:defaultSchema}].[AIAgentRun] ([ParentRunID]);
@@ -975,7 +975,7 @@ CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgentRun_ParentRunID ON [${flyway:defaultSchema}
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgentRun_ConversationID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgentRun_ConversationID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgentRun]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgentRun_ConversationID ON [${flyway:defaultSchema}].[AIAgentRun] ([ConversationID]);
@@ -984,7 +984,7 @@ CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgentRun_ConversationID ON [${flyway:defaultSche
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgentRun_UserID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgentRun_UserID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgentRun]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgentRun_UserID ON [${flyway:defaultSchema}].[AIAgentRun] ([UserID]);
@@ -1031,7 +1031,7 @@ LEFT OUTER JOIN
     [a].[UserID] = User_UserID.[ID]
 GO
 GRANT SELECT ON [${flyway:defaultSchema}].[vwAIAgentRuns] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
-    
+
 
 /* Base View Permissions SQL for MJ: AI Agent Runs */
 -----------------------------------------------------------------
@@ -1136,7 +1136,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIAgentRun] TO [cdp_Developer], [cdp_Integration]
-    
+
 
 /* spCreate Permissions for MJ: AI Agent Runs */
 
@@ -1216,7 +1216,7 @@ BEGIN
                                         [${flyway:defaultSchema}].[vwAIAgentRuns]
                                     WHERE
                                         [ID] = @ID
-                                    
+
 END
 GO
 
@@ -1245,7 +1245,7 @@ BEGIN
         _organicTable.[ID] = I.[ID];
 END;
 GO
-        
+
 
 /* spUpdate Permissions for MJ: AI Agent Runs */
 
@@ -1285,7 +1285,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentRun] TO [cdp_Integration]
-    
+
 
 /* spDelete Permissions for MJ: AI Agent Runs */
 
@@ -1306,7 +1306,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentRun] TO [cdp_Integrat
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_AIPromptRun_PromptID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIPromptRun_PromptID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIPromptRun]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_AIPromptRun_PromptID ON [${flyway:defaultSchema}].[AIPromptRun] ([PromptID]);
@@ -1315,7 +1315,7 @@ CREATE INDEX IDX_AUTO_MJ_FKEY_AIPromptRun_PromptID ON [${flyway:defaultSchema}].
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_AIPromptRun_ModelID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIPromptRun_ModelID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIPromptRun]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_AIPromptRun_ModelID ON [${flyway:defaultSchema}].[AIPromptRun] ([ModelID]);
@@ -1324,7 +1324,7 @@ CREATE INDEX IDX_AUTO_MJ_FKEY_AIPromptRun_ModelID ON [${flyway:defaultSchema}].[
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_AIPromptRun_VendorID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIPromptRun_VendorID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIPromptRun]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_AIPromptRun_VendorID ON [${flyway:defaultSchema}].[AIPromptRun] ([VendorID]);
@@ -1333,7 +1333,7 @@ CREATE INDEX IDX_AUTO_MJ_FKEY_AIPromptRun_VendorID ON [${flyway:defaultSchema}].
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_AIPromptRun_AgentID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIPromptRun_AgentID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIPromptRun]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_AIPromptRun_AgentID ON [${flyway:defaultSchema}].[AIPromptRun] ([AgentID]);
@@ -1342,7 +1342,7 @@ CREATE INDEX IDX_AUTO_MJ_FKEY_AIPromptRun_AgentID ON [${flyway:defaultSchema}].[
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_AIPromptRun_ConfigurationID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIPromptRun_ConfigurationID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIPromptRun]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_AIPromptRun_ConfigurationID ON [${flyway:defaultSchema}].[AIPromptRun] ([ConfigurationID]);
@@ -1351,7 +1351,7 @@ CREATE INDEX IDX_AUTO_MJ_FKEY_AIPromptRun_ConfigurationID ON [${flyway:defaultSc
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_AIPromptRun_ParentID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIPromptRun_ParentID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIPromptRun]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_AIPromptRun_ParentID ON [${flyway:defaultSchema}].[AIPromptRun] ([ParentID]);
@@ -1360,7 +1360,7 @@ CREATE INDEX IDX_AUTO_MJ_FKEY_AIPromptRun_ParentID ON [${flyway:defaultSchema}].
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_AIPromptRun_AgentRunID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIPromptRun_AgentRunID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIPromptRun]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_AIPromptRun_AgentRunID ON [${flyway:defaultSchema}].[AIPromptRun] ([AgentRunID]);
@@ -1417,7 +1417,7 @@ LEFT OUTER JOIN
     [a].[ConfigurationID] = AIConfiguration_ConfigurationID.[ID]
 GO
 GRANT SELECT ON [${flyway:defaultSchema}].[vwAIPromptRuns] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
-    
+
 
 /* Base View Permissions SQL for MJ: AI Prompt Runs */
 -----------------------------------------------------------------
@@ -1540,7 +1540,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIPromptRun] TO [cdp_Developer], [cdp_Integration]
-    
+
 
 /* spCreate Permissions for MJ: AI Prompt Runs */
 
@@ -1632,7 +1632,7 @@ BEGIN
                                         [${flyway:defaultSchema}].[vwAIPromptRuns]
                                     WHERE
                                         [ID] = @ID
-                                    
+
 END
 GO
 
@@ -1661,7 +1661,7 @@ BEGIN
         _organicTable.[ID] = I.[ID];
 END;
 GO
-        
+
 
 /* spUpdate Permissions for MJ: AI Prompt Runs */
 
@@ -1701,7 +1701,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPromptRun] TO [cdp_Developer], [cdp_Integration]
-    
+
 
 /* spDelete Permissions for MJ: AI Prompt Runs */
 

@@ -7,7 +7,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Action]
 ADD [DriverClass] NVARCHAR(255) NULL;
 
 -- Add extended property description for the new column
-EXEC sp_addextendedproperty 
+EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'For actions where Type=''Custom'', this specifies the fully qualified class name of the BaseAction sub-class that should be instantiated to handle the action execution. This provides a more reliable mechanism than relying on the Name field for class instantiation.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
@@ -23,8 +23,8 @@ EXEC sp_addextendedproperty
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'b2052c67-0781-4721-a119-3d75007ecac6'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = 'b2052c67-0781-4721-a119-3d75007ecac6'  OR
                (EntityID = '38248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'DriverClass')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -60,7 +60,7 @@ EXEC sp_addextendedproperty
          (
             'b2052c67-0781-4721-a119-3d75007ecac6',
             '38248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Actions
-            20,
+            100020,
             'DriverClass',
             'Driver Class',
             'For actions where Type=''Custom'', this specifies the fully qualified class name of the BaseAction sub-class that should be instantiated to handle the action execution. This provides a more reliable mechanism than relying on the Name field for class instantiation.',
@@ -98,7 +98,7 @@ EXEC sp_addextendedproperty
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_Action_CategoryID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Action_CategoryID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Action]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_Action_CategoryID ON [${flyway:defaultSchema}].[Action] ([CategoryID]);
@@ -107,7 +107,7 @@ CREATE INDEX IDX_AUTO_MJ_FKEY_Action_CategoryID ON [${flyway:defaultSchema}].[Ac
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_Action_CodeApprovedByUserID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Action_CodeApprovedByUserID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Action]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_Action_CodeApprovedByUserID ON [${flyway:defaultSchema}].[Action] ([CodeApprovedByUserID]);
@@ -149,7 +149,7 @@ LEFT OUTER JOIN
     [a].[CodeApprovedByUserID] = User_CodeApprovedByUserID.[ID]
 GO
 GRANT SELECT ON [${flyway:defaultSchema}].[vwActions] TO [cdp_UI], [cdp_Integration], [cdp_Developer]
-    
+
 
 /* Base View Permissions SQL for Actions */
 -----------------------------------------------------------------
@@ -202,7 +202,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    
+
     IF @ID IS NOT NULL
     BEGIN
         -- User provided a value, use it
@@ -308,7 +308,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAction] TO [cdp_Integration], [cdp_Developer]
-    
+
 
 /* spCreate Permissions for Actions */
 
@@ -384,7 +384,7 @@ BEGIN
                                         [${flyway:defaultSchema}].[vwActions]
                                     WHERE
                                         [ID] = @ID
-                                    
+
 END
 GO
 
@@ -413,7 +413,7 @@ BEGIN
         _organicTable.[ID] = I.[ID];
 END;
 GO
-        
+
 
 /* spUpdate Permissions for Actions */
 
@@ -453,7 +453,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAction] TO [cdp_Integration]
-    
+
 
 /* spDelete Permissions for Actions */
 

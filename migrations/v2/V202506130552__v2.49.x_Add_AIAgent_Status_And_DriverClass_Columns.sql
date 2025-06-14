@@ -1,6 +1,6 @@
 -- Migration: Add Status column to AIAgent and DriverClass columns to AIAgent and AIAgentType tables
 -- Date: 2025-01-06
--- Description: Adds Status field for agent lifecycle management and DriverClass fields for 
+-- Description: Adds Status field for agent lifecycle management and DriverClass fields for
 --              dynamic class instantiation via MemberJunction's class factory pattern
 
 -- Add Status and DriverClass columns to AIAgent table
@@ -8,26 +8,26 @@ ALTER TABLE [__mj].[AIAgent]
 ADD [Status] NVARCHAR(20) NULL,
     [DriverClass] NVARCHAR(255) NULL;
 
--- Add DriverClass column to AIAgentType table  
+-- Add DriverClass column to AIAgentType table
 ALTER TABLE [__mj].[AIAgentType]
 ADD [DriverClass] NVARCHAR(255) NULL;
 
 -- Add extended property descriptions
-EXEC sp_addextendedproperty 
+EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'Current status of the AI agent. Active agents can be executed, Disabled agents are inactive, and Pending agents are awaiting configuration or approval. Allowed values: Active, Disabled, Pending.',
     @level0type = N'SCHEMA', @level0name = '__mj',
     @level1type = N'TABLE', @level1name = 'AIAgent',
     @level2type = N'COLUMN', @level2name = 'Status';
 
-EXEC sp_addextendedproperty 
+EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'Optional override for the class name used by the MemberJunction class factory to instantiate this specific agent. If specified, this overrides the agent type''s DriverClass. Useful for specialized agent implementations.',
     @level0type = N'SCHEMA', @level0name = '__mj',
     @level1type = N'TABLE', @level1name = 'AIAgent',
     @level2type = N'COLUMN', @level2name = 'DriverClass';
 
-EXEC sp_addextendedproperty 
+EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'The class name used by the MemberJunction class factory to instantiate the specific agent type implementation. For example, "LoopAgentType" for a looping agent pattern. If not specified, defaults to using the agent type Name for the DriverClass lookup key.',
     @level0type = N'SCHEMA', @level0name = '__mj',
@@ -45,8 +45,8 @@ EXEC sp_addextendedproperty
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'bc44595e-6fca-42a9-aaf8-4a730088be46'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = 'bc44595e-6fca-42a9-aaf8-4a730088be46'  OR
                (EntityID = 'CDB135CC-6D3C-480B-90AE-25B7805F82C1' AND Name = 'Status')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -82,7 +82,7 @@ EXEC sp_addextendedproperty
          (
             'bc44595e-6fca-42a9-aaf8-4a730088be46',
             'CDB135CC-6D3C-480B-90AE-25B7805F82C1', -- Entity: AI Agents
-            16,
+            100016,
             'Status',
             'Status',
             'Current status of the AI agent. Active agents can be executed, Disabled agents are inactive, and Pending agents are awaiting configuration or approval. Allowed values: Active, Disabled, Pending.',
@@ -110,8 +110,8 @@ EXEC sp_addextendedproperty
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'bb9ad9cb-40c0-41f1-b54b-750c844fd41b'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = 'bb9ad9cb-40c0-41f1-b54b-750c844fd41b'  OR
                (EntityID = 'CDB135CC-6D3C-480B-90AE-25B7805F82C1' AND Name = 'DriverClass')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -147,7 +147,7 @@ EXEC sp_addextendedproperty
          (
             'bb9ad9cb-40c0-41f1-b54b-750c844fd41b',
             'CDB135CC-6D3C-480B-90AE-25B7805F82C1', -- Entity: AI Agents
-            17,
+            100017,
             'DriverClass',
             'Driver Class',
             'Optional override for the class name used by the MemberJunction class factory to instantiate this specific agent. If specified, this overrides the agent type''s DriverClass. Useful for specialized agent implementations.',
@@ -175,8 +175,8 @@ EXEC sp_addextendedproperty
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'db83502e-f00c-4cf8-ad0e-ffe9bf3c8904'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = 'db83502e-f00c-4cf8-ad0e-ffe9bf3c8904'  OR
                (EntityID = '65CDC348-C4A6-4D00-A57B-2D489C56F128' AND Name = 'DriverClass')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -212,7 +212,7 @@ EXEC sp_addextendedproperty
          (
             'db83502e-f00c-4cf8-ad0e-ffe9bf3c8904',
             '65CDC348-C4A6-4D00-A57B-2D489C56F128', -- Entity: MJ: AI Agent Types
-            9,
+            100009,
             'DriverClass',
             'Driver Class',
             'The class name used by the MemberJunction class factory to instantiate the specific agent type implementation. For example, "LoopAgentType" for a looping agent pattern. If not specified, defaults to using the agent type Name for the DriverClass lookup key.',
@@ -250,7 +250,7 @@ EXEC sp_addextendedproperty
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_ParentID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_ParentID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgent]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_ParentID ON [${flyway:defaultSchema}].[AIAgent] ([ParentID]);
@@ -259,7 +259,7 @@ CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_ParentID ON [${flyway:defaultSchema}].[AIA
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_ContextCompressionPromptID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_ContextCompressionPromptID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgent]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_ContextCompressionPromptID ON [${flyway:defaultSchema}].[AIAgent] ([ContextCompressionPromptID]);
@@ -268,7 +268,7 @@ CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_ContextCompressionPromptID ON [${flyway:de
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_TypeID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_TypeID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgent]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_TypeID ON [${flyway:defaultSchema}].[AIAgent] ([TypeID]);
@@ -315,7 +315,7 @@ LEFT OUTER JOIN
     [a].[TypeID] = AIAgentType_TypeID.[ID]
 GO
 GRANT SELECT ON [${flyway:defaultSchema}].[vwAIAgents] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
-    
+
 
 /* Base View Permissions SQL for AI Agents */
 -----------------------------------------------------------------
@@ -405,7 +405,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIAgent] TO [cdp_Developer], [cdp_Integration]
-    
+
 
 /* spCreate Permissions for AI Agents */
 
@@ -475,7 +475,7 @@ BEGIN
                                         [${flyway:defaultSchema}].[vwAIAgents]
                                     WHERE
                                         [ID] = @ID
-                                    
+
 END
 GO
 
@@ -504,7 +504,7 @@ BEGIN
         _organicTable.[ID] = I.[ID];
 END;
 GO
-        
+
 
 /* spUpdate Permissions for AI Agents */
 
@@ -544,7 +544,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Integration]
-    
+
 
 /* spDelete Permissions for AI Agents */
 
@@ -565,7 +565,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Integration
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgentType_SystemPromptID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgentType_SystemPromptID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgentType]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgentType_SystemPromptID ON [${flyway:defaultSchema}].[AIAgentType] ([SystemPromptID]);
@@ -602,7 +602,7 @@ LEFT OUTER JOIN
     [a].[SystemPromptID] = AIPrompt_SystemPromptID.[ID]
 GO
 GRANT SELECT ON [${flyway:defaultSchema}].[vwAIAgentTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
-    
+
 
 /* Base View Permissions SQL for MJ: AI Agent Types */
 -----------------------------------------------------------------
@@ -668,7 +668,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIAgentType] TO [cdp_Developer], [cdp_Integration]
-    
+
 
 /* spCreate Permissions for MJ: AI Agent Types */
 
@@ -722,7 +722,7 @@ BEGIN
                                         [${flyway:defaultSchema}].[vwAIAgentTypes]
                                     WHERE
                                         [ID] = @ID
-                                    
+
 END
 GO
 
@@ -751,7 +751,7 @@ BEGIN
         _organicTable.[ID] = I.[ID];
 END;
 GO
-        
+
 
 /* spUpdate Permissions for MJ: AI Agent Types */
 
@@ -791,7 +791,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentType] TO [cdp_Integration]
-    
+
 
 /* spDelete Permissions for MJ: AI Agent Types */
 

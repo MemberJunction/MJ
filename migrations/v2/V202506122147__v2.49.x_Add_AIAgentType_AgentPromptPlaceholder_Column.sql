@@ -63,7 +63,7 @@ EXEC sp_addextendedproperty
          (
             '47fcbe6a-43ea-47fa-912b-acb82a311471',
             '65CDC348-C4A6-4D00-A57B-2D489C56F128', -- Entity: MJ: AI Agent Types
-            8,
+            100008,
             'AgentPromptPlaceholder',
             'Agent Prompt Placeholder',
             'The placeholder name used in the system prompt template where the agent prompt result should be injected. For example, if the system prompt contains "{{ agentPrompt }}", this field should contain "agentPrompt". This enables proper hierarchical prompt execution where the agent type''s system prompt acts as the parent and the agent''s specific prompt acts as the child.',
