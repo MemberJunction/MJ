@@ -14,6 +14,13 @@ EXEC [${flyway:defaultSchema}].spCreateTemplateCategory
     @Description = 'Root category for AI Prompts (Auto-Created by AI Prompts Entity)',
     @ParentID = NULL,
     @UserID = 'ecafccec-6a37-ef11-86d4-000d3a4e707e';
+
+
+EXEC __mj.spCreateAIPromptCategory
+      @ID = 'a19d433e-f36b-1410-8db1-00021f8b792e',
+      @Name = 'Agent Type System Prompts',
+      @ParentID = NULL,
+      @Description = 'System Prompts for Agent Types';    
 /** END MANUAL PATCH **/
 /************************************************************************************/
 
