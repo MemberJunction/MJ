@@ -336,12 +336,12 @@ export class ManageMetadataBase {
                              EntityID NOT IN (SELECT ID FROM ${mj_core_schema()}.Entity WHERE SchemaName IN (${excludeSchemas.map(s => `'${s}'`).join(',')}))
                        ORDER BY RelatedEntityID`;
          const entityFieldsResult = await pool.request().query(sSQL);
-      const entityFields = entityFieldsResult.recordset;
+         const entityFields = entityFieldsResult.recordset;
 
          // Get the relationship counts for each entity
          const sSQLRelationshipCount = `SELECT EntityID, COUNT(*) AS Count FROM ${mj_core_schema()}.EntityRelationship GROUP BY EntityID`;
          const relationshipCountsResult = await pool.request().query(sSQLRelationshipCount);
-      const relationshipCounts = relationshipCountsResult.recordset;
+         const relationshipCounts = relationshipCountsResult.recordset;
 
          const relationshipCountMap = new Map<number, number>();
          for (const rc of relationshipCounts) {
@@ -351,7 +351,7 @@ export class ManageMetadataBase {
          // get all relationships in one query for performance improvement
          const sSQLRelationship = `SELECT * FROM ${mj_core_schema()}.EntityRelationship`;
          const allRelationshipsResult = await pool.request().query(sSQLRelationship);
-      const allRelationships = allRelationshipsResult.recordset;
+         const allRelationships = allRelationshipsResult.recordset;
 
 
          // Function to process a batch of entity fields
@@ -517,19 +517,25 @@ export class ManageMetadataBase {
       }
       logStatus(`      Deleted unneeded entity fields in ${(new Date().getTime() - step1StartTime.getTime()) / 1000} seconds`);
 
+      // AN: 14-June-2025 - See note below about the new order of these steps, this must
+      // happen before we update existing entity fields from schema.
       const step2StartTime: Date = new Date();
-      if (! await this.updateExistingEntityFieldsFromSchema(pool, excludeSchemas)) {
-         logError ('Error updating existing entity fields from schema')
-         bSuccess = false;
-      }
-      logStatus(`      Updated existing entity fields from schema in ${(new Date().getTime() - step2StartTime.getTime()) / 1000} seconds`);
-
-      const step3StartTime: Date = new Date();
       if (! await this.createNewEntityFieldsFromSchema(pool)) { // has its own internal filtering for exclude schema/table so don't pass in
          logError ('Error creating new entity fields from schema')
          bSuccess = false;
       }
-      logStatus(`      Created new entity fields from schema in ${(new Date().getTime() - step3StartTime.getTime()) / 1000} seconds`);
+      logStatus(`      Created new entity fields from schema in ${(new Date().getTime() - step2StartTime.getTime()) / 1000} seconds`);
+
+      // AN: 14-June-2025 - we are now running this AFTER we create new entity fields from schema
+      // which results in the same pattern of behavior as migrations where we first create new fields
+      // with VERY HIGH sequence numbers (e.g. 100,000 above what they will be approx) and then
+      // we align them properly in sequential order from 1+ via this method below.
+      const step3StartTime: Date = new Date();
+      if (! await this.updateExistingEntityFieldsFromSchema(pool, excludeSchemas)) {
+         logError ('Error updating existing entity fields from schema')
+         bSuccess = false;
+      }
+      logStatus(`      Updated existing entity fields from schema in ${(new Date().getTime() - step3StartTime.getTime()) / 1000} seconds`);
 
       const step4StartTime: Date = new Date();
       if (! await this.setDefaultColumnWidthWhereNeeded(pool, excludeSchemas)) {
@@ -888,19 +894,25 @@ export class ManageMetadataBase {
       }
       catch (e) {
          logError(e as string);
-         return false;
+         return false;  
       }
    }
 
    /**
     * Creates a SQL statement to retrieve all of the pending entity fields that need to be created in the metadata. This method looks for fields that exist in the underlying
     * database but are NOT in the metadata.
+    * 
+    * IMPORTANT: The sequence shown below has a 100,000 added to it to ensure that there is no collision with existing sequences. The spUpdateExistingEntityFieldsFromSchema
+    * stored procedure runs AFTER this method and will correct the sequences to ensure they are in the correct order. In a migration, the spUpdateExistingEntityFieldsFromSchema
+    * runs afterwards as well so this behavior ensures CodeGen works consistently.
+    * 
+    * @returns {string} - The SQL statement to retrieve pending entity fields.
     */
    protected getPendingEntityFieldsSELECTSQL(): string {
       const sSQL = `WITH NumberedRows AS (
    SELECT
       sf.EntityID,
-      sf.Sequence,
+      sf.Sequence + 100000 Sequence, -- add a large number to the sequence to ensure no collision with existing sequences - spUpdateExistingEntityFieldsFromSchema runs AFTER this and will correct them.
       sf.FieldName,
       sf.Description,
       sf.Type,
@@ -1116,7 +1128,7 @@ export class ManageMetadataBase {
       try   {
          const sSQL = this.getPendingEntityFieldsSELECTSQL();
          const newEntityFieldsResult = await pool.request().query(sSQL);
-      const newEntityFields = newEntityFieldsResult.recordset;
+         const newEntityFields = newEntityFieldsResult.recordset;
          const transaction = new sql.Transaction(pool);
          await transaction.begin();
          try {
