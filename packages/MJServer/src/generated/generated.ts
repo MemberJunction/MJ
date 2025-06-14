@@ -19,7 +19,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIAgentRunEntity, AIVendorEntity, AIConfigurationEntity, AIAgentEntity, AIPromptModelEntity, AIAgentTypeEntity, AIAgentNoteEntity, AIAgentActionEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, AIModelVendorEntity, AIVendorTypeDefinitionEntity, ReportUserStateEntity, QueryEntityEntity, DashboardUserStateEntity, ArtifactTypeEntity, AIVendorTypeEntity, ConversationArtifactEntity, AIAgentPromptEntity, DashboardUserPreferenceEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, AIPromptRunEntity, AIAgentRunStepEntity, ConversationArtifactPermissionEntity, AIAgentLearningCycleEntity, ReportVersionEntity, AIConfigurationParamEntity } from '@memberjunction/core-entities';
+import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIAgentRunEntity, AIVendorEntity, AIConfigurationEntity, AIAgentEntity, AIModelCostEntity, AIPromptModelEntity, AIAgentTypeEntity, AIAgentNoteEntity, AIAgentActionEntity, AIModelPriceTypeEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, AIModelVendorEntity, AIVendorTypeDefinitionEntity, ReportUserStateEntity, QueryEntityEntity, DashboardUserStateEntity, ArtifactTypeEntity, AIVendorTypeEntity, ConversationArtifactEntity, AIAgentPromptEntity, DashboardUserPreferenceEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, AIPromptRunEntity, AIAgentRunStepEntity, ConversationArtifactPermissionEntity, AIModelPriceUnitTypeEntity, AIAgentLearningCycleEntity, ReportVersionEntity, AIConfigurationParamEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -1595,6 +1595,9 @@ export class AIVendor_ {
     @Field(() => [AIResultCache_])
     AIResultCache_VendorIDArray: AIResultCache_[]; // Link to AIResultCache
     
+    @Field(() => [AIModelCost_])
+    MJ_AIModelCosts_VendorIDArray: AIModelCost_[]; // Link to MJ_AIModelCosts
+    
     @Field(() => [AIModelVendor_])
     MJ_AIModelVendors_VendorIDArray: AIModelVendor_[]; // Link to MJ_AIModelVendors
     
@@ -1714,6 +1717,16 @@ export class AIVendorResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [VendorID]='${aivendor_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
         const result = this.ArrayMapFieldNamesToCodeNames('AI Result Cache', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [AIModelCost_])
+    async MJ_AIModelCosts_VendorIDArray(@Root() aivendor_: AIVendor_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Model Costs', userPayload);
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelCosts] WHERE [VendorID]='${aivendor_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Model Costs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Model Costs', rows);
         return result;
     }
         
@@ -2433,6 +2446,266 @@ export class AIAgentResolver extends ResolverBase {
         const connPool = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('AI Agents', key, options, connPool, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: AI Model Costs
+//****************************************************************************
+@ObjectType()
+export class AIModelCost_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(16)
+    ModelID: string;
+        
+    @Field() 
+    @MaxLength(16)
+    VendorID: string;
+        
+    @Field({nullable: true, description: `Date and time with timezone when this pricing became effective. NULL disables temporal tracking. Defaults to current UTC time when record is created`}) 
+    @MaxLength(10)
+    StartedAt?: Date;
+        
+    @Field({nullable: true, description: `Date and time with timezone when this pricing expired or will expire. NULL indicates currently active pricing`}) 
+    @MaxLength(10)
+    EndedAt?: Date;
+        
+    @Field({description: `Current status of this pricing record. Active=currently in use, Pending=scheduled for future, Expired=no longer valid, Invalid=data error`}) 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field({description: `ISO 4217 three-letter currency code (e.g., USD, EUR, GBP) in uppercase`}) 
+    @MaxLength(6)
+    Currency: string;
+        
+    @Field() 
+    @MaxLength(16)
+    PriceTypeID: string;
+        
+    @Field(() => Float, {description: `Price per unit for input tokens/requests. Must be non-negative. Precision allows for micro-pricing scenarios`}) 
+    InputPricePerUnit: number;
+        
+    @Field(() => Float, {description: `Price per unit for output tokens/responses. Must be non-negative. Often higher than input pricing`}) 
+    OutputPricePerUnit: number;
+        
+    @Field() 
+    @MaxLength(16)
+    UnitTypeID: string;
+        
+    @Field({description: `Processing method that affects pricing. Realtime=immediate response, Batch=delayed processing often with discounts`}) 
+    @MaxLength(40)
+    ProcessingType: string;
+        
+    @Field({nullable: true, description: `Optional notes about pricing context, source, special conditions, or vendor-specific details`}) 
+    Comments?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(100)
+    Model: string;
+        
+    @Field() 
+    @MaxLength(100)
+    Vendor: string;
+        
+    @Field() 
+    @MaxLength(200)
+    PriceType: string;
+        
+    @Field() 
+    @MaxLength(200)
+    UnitType: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Model Costs
+//****************************************************************************
+@InputType()
+export class CreateAIModelCostInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ModelID?: string;
+
+    @Field({ nullable: true })
+    VendorID?: string;
+
+    @Field({ nullable: true })
+    StartedAt?: Date | null;
+
+    @Field({ nullable: true })
+    EndedAt: Date | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    Currency?: string;
+
+    @Field({ nullable: true })
+    PriceTypeID?: string;
+
+    @Field(() => Float, { nullable: true })
+    InputPricePerUnit?: number;
+
+    @Field(() => Float, { nullable: true })
+    OutputPricePerUnit?: number;
+
+    @Field({ nullable: true })
+    UnitTypeID?: string;
+
+    @Field({ nullable: true })
+    ProcessingType?: string;
+
+    @Field({ nullable: true })
+    Comments: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Model Costs
+//****************************************************************************
+@InputType()
+export class UpdateAIModelCostInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ModelID?: string;
+
+    @Field({ nullable: true })
+    VendorID?: string;
+
+    @Field({ nullable: true })
+    StartedAt?: Date | null;
+
+    @Field({ nullable: true })
+    EndedAt?: Date | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    Currency?: string;
+
+    @Field({ nullable: true })
+    PriceTypeID?: string;
+
+    @Field(() => Float, { nullable: true })
+    InputPricePerUnit?: number;
+
+    @Field(() => Float, { nullable: true })
+    OutputPricePerUnit?: number;
+
+    @Field({ nullable: true })
+    UnitTypeID?: string;
+
+    @Field({ nullable: true })
+    ProcessingType?: string;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: AI Model Costs
+//****************************************************************************
+@ObjectType()
+export class RunAIModelCostViewResult {
+    @Field(() => [AIModelCost_])
+    Results: AIModelCost_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(AIModelCost_)
+export class AIModelCostResolver extends ResolverBase {
+    @Query(() => RunAIModelCostViewResult)
+    async RunAIModelCostViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, connPool, userPayload, pubSub);
+    }
+
+    @Query(() => RunAIModelCostViewResult)
+    async RunAIModelCostViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, connPool, userPayload, pubSub);
+    }
+
+    @Query(() => RunAIModelCostViewResult)
+    async RunAIModelCostDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: AI Model Costs';
+        return super.RunDynamicViewGeneric(input, connPool, userPayload, pubSub);
+    }
+    @Query(() => AIModelCost_, { nullable: true })
+    async AIModelCost(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModelCost_ | null> {
+        this.CheckUserReadPermissions('MJ: AI Model Costs', userPayload);
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelCosts] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Model Costs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const result = this.MapFieldNamesToCodeNames('MJ: AI Model Costs', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @Mutation(() => AIModelCost_)
+    async CreateAIModelCost(
+        @Arg('input', () => CreateAIModelCostInput) input: CreateAIModelCostInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('MJ: AI Model Costs', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => AIModelCost_)
+    async UpdateAIModelCost(
+        @Arg('input', () => UpdateAIModelCostInput) input: UpdateAIModelCostInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('MJ: AI Model Costs', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => AIModelCost_)
+    async DeleteAIModelCost(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: AI Model Costs', key, options, connPool, userPayload, pubSub);
     }
     
 }
@@ -3237,6 +3510,165 @@ export class AIAgentActionResolver extends ResolverBase {
         const connPool = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('AI Agent Actions', key, options, connPool, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: AI Model Price Types
+//****************************************************************************
+@ObjectType()
+export class AIModelPriceType_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Short, descriptive name for the price type (e.g., "Tokens", "Minutes", "Characters")`}) 
+    @MaxLength(200)
+    Name: string;
+        
+    @Field({nullable: true, description: `Detailed description of what this price type represents and how it is measured`}) 
+    Description?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [AIModelCost_])
+    MJ_AIModelCosts_PriceTypeIDArray: AIModelCost_[]; // Link to MJ_AIModelCosts
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Model Price Types
+//****************************************************************************
+@InputType()
+export class CreateAIModelPriceTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Model Price Types
+//****************************************************************************
+@InputType()
+export class UpdateAIModelPriceTypeInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: AI Model Price Types
+//****************************************************************************
+@ObjectType()
+export class RunAIModelPriceTypeViewResult {
+    @Field(() => [AIModelPriceType_])
+    Results: AIModelPriceType_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(AIModelPriceType_)
+export class AIModelPriceTypeResolver extends ResolverBase {
+    @Query(() => RunAIModelPriceTypeViewResult)
+    async RunAIModelPriceTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, connPool, userPayload, pubSub);
+    }
+
+    @Query(() => RunAIModelPriceTypeViewResult)
+    async RunAIModelPriceTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, connPool, userPayload, pubSub);
+    }
+
+    @Query(() => RunAIModelPriceTypeViewResult)
+    async RunAIModelPriceTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: AI Model Price Types';
+        return super.RunDynamicViewGeneric(input, connPool, userPayload, pubSub);
+    }
+    @Query(() => AIModelPriceType_, { nullable: true })
+    async AIModelPriceType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModelPriceType_ | null> {
+        this.CheckUserReadPermissions('MJ: AI Model Price Types', userPayload);
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelPriceTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Model Price Types', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const result = this.MapFieldNamesToCodeNames('MJ: AI Model Price Types', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @FieldResolver(() => [AIModelCost_])
+    async MJ_AIModelCosts_PriceTypeIDArray(@Root() aimodelpricetype_: AIModelPriceType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Model Costs', userPayload);
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelCosts] WHERE [PriceTypeID]='${aimodelpricetype_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Model Costs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Model Costs', rows);
+        return result;
+    }
+        
+    @Mutation(() => AIModelPriceType_)
+    async CreateAIModelPriceType(
+        @Arg('input', () => CreateAIModelPriceTypeInput) input: CreateAIModelPriceTypeInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('MJ: AI Model Price Types', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => AIModelPriceType_)
+    async UpdateAIModelPriceType(
+        @Arg('input', () => UpdateAIModelPriceTypeInput) input: UpdateAIModelPriceTypeInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('MJ: AI Model Price Types', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => AIModelPriceType_)
+    async DeleteAIModelPriceType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: AI Model Price Types', key, options, connPool, userPayload, pubSub);
     }
     
 }
@@ -14354,6 +14786,9 @@ export class AIModel_ {
     @Field(() => [AIAgentModel_])
     AIAgentModels_ModelIDArray: AIAgentModel_[]; // Link to AIAgentModels
     
+    @Field(() => [AIModelCost_])
+    MJ_AIModelCosts_ModelIDArray: AIModelCost_[]; // Link to MJ_AIModelCosts
+    
     @Field(() => [GeneratedCode_])
     GeneratedCodes_GeneratedByModelIDArray: GeneratedCode_[]; // Link to GeneratedCodes
     
@@ -14589,6 +15024,16 @@ export class AIModelResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentModels] WHERE [ModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Models', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Models', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [AIModelCost_])
+    async MJ_AIModelCosts_ModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Model Costs', userPayload);
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelCosts] WHERE [ModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Model Costs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Model Costs', rows);
         return result;
     }
         
@@ -37694,6 +38139,175 @@ export class ConversationArtifactPermissionResolver extends ResolverBase {
         const connPool = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Conversation Artifact Permissions', key, options, connPool, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: AI Model Price Unit Types
+//****************************************************************************
+@ObjectType()
+export class AIModelPriceUnitType_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Display name for the pricing unit (e.g., "Per 1M Tokens", "Per 1K Tokens", "Per Minute")`}) 
+    @MaxLength(200)
+    Name: string;
+        
+    @Field({nullable: true, description: `Detailed explanation of the unit scale and any special considerations for this pricing unit`}) 
+    Description?: string;
+        
+    @Field({description: `Fully qualified class name that handles cost calculations and unit normalization for this pricing unit (e.g., "TokenPer1M", "TokenPer1K")`}) 
+    @MaxLength(510)
+    DriverClass: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [AIModelCost_])
+    MJ_AIModelCosts_UnitTypeIDArray: AIModelCost_[]; // Link to MJ_AIModelCosts
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Model Price Unit Types
+//****************************************************************************
+@InputType()
+export class CreateAIModelPriceUnitTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Model Price Unit Types
+//****************************************************************************
+@InputType()
+export class UpdateAIModelPriceUnitTypeInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: AI Model Price Unit Types
+//****************************************************************************
+@ObjectType()
+export class RunAIModelPriceUnitTypeViewResult {
+    @Field(() => [AIModelPriceUnitType_])
+    Results: AIModelPriceUnitType_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(AIModelPriceUnitType_)
+export class AIModelPriceUnitTypeResolver extends ResolverBase {
+    @Query(() => RunAIModelPriceUnitTypeViewResult)
+    async RunAIModelPriceUnitTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, connPool, userPayload, pubSub);
+    }
+
+    @Query(() => RunAIModelPriceUnitTypeViewResult)
+    async RunAIModelPriceUnitTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, connPool, userPayload, pubSub);
+    }
+
+    @Query(() => RunAIModelPriceUnitTypeViewResult)
+    async RunAIModelPriceUnitTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: AI Model Price Unit Types';
+        return super.RunDynamicViewGeneric(input, connPool, userPayload, pubSub);
+    }
+    @Query(() => AIModelPriceUnitType_, { nullable: true })
+    async AIModelPriceUnitType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModelPriceUnitType_ | null> {
+        this.CheckUserReadPermissions('MJ: AI Model Price Unit Types', userPayload);
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelPriceUnitTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Model Price Unit Types', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const result = this.MapFieldNamesToCodeNames('MJ: AI Model Price Unit Types', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @FieldResolver(() => [AIModelCost_])
+    async MJ_AIModelCosts_UnitTypeIDArray(@Root() aimodelpriceunittype_: AIModelPriceUnitType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Model Costs', userPayload);
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelCosts] WHERE [UnitTypeID]='${aimodelpriceunittype_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Model Costs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Model Costs', rows);
+        return result;
+    }
+        
+    @Mutation(() => AIModelPriceUnitType_)
+    async CreateAIModelPriceUnitType(
+        @Arg('input', () => CreateAIModelPriceUnitTypeInput) input: CreateAIModelPriceUnitTypeInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('MJ: AI Model Price Unit Types', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => AIModelPriceUnitType_)
+    async UpdateAIModelPriceUnitType(
+        @Arg('input', () => UpdateAIModelPriceUnitTypeInput) input: UpdateAIModelPriceUnitTypeInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('MJ: AI Model Price Unit Types', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => AIModelPriceUnitType_)
+    async DeleteAIModelPriceUnitType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: AI Model Price Unit Types', key, options, connPool, userPayload, pubSub);
     }
     
 }

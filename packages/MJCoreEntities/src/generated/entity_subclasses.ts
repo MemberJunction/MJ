@@ -7545,6 +7545,187 @@ export const AIConfigurationSchema = z.object({
 export type AIConfigurationEntityType = z.infer<typeof AIConfigurationSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Model Costs
+ */
+export const AIModelCostSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ModelID: z.string().describe(`
+        * * Field Name: ModelID
+        * * Display Name: Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)`),
+    VendorID: z.string().describe(`
+        * * Field Name: VendorID
+        * * Display Name: Vendor ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)`),
+    StartedAt: z.date().nullable().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+    * * Description: Date and time with timezone when this pricing became effective. NULL disables temporal tracking. Defaults to current UTC time when record is created`),
+    EndedAt: z.date().nullable().describe(`
+        * * Field Name: EndedAt
+        * * Display Name: Ended At
+        * * SQL Data Type: datetimeoffset
+    * * Description: Date and time with timezone when this pricing expired or will expire. NULL indicates currently active pricing`),
+    Status: z.union([z.literal('Active'), z.literal('Pending'), z.literal('Expired'), z.literal('Invalid')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Expired
+    *   * Invalid
+    * * Description: Current status of this pricing record. Active=currently in use, Pending=scheduled for future, Expired=no longer valid, Invalid=data error`),
+    Currency: z.string().describe(`
+        * * Field Name: Currency
+        * * Display Name: Currency
+        * * SQL Data Type: nchar(3)
+    * * Description: ISO 4217 three-letter currency code (e.g., USD, EUR, GBP) in uppercase`),
+    PriceTypeID: z.string().describe(`
+        * * Field Name: PriceTypeID
+        * * Display Name: Price Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Model Price Types (vwAIModelPriceTypes.ID)`),
+    InputPricePerUnit: z.number().describe(`
+        * * Field Name: InputPricePerUnit
+        * * Display Name: Input Price Per Unit
+        * * SQL Data Type: decimal(18, 8)
+    * * Description: Price per unit for input tokens/requests. Must be non-negative. Precision allows for micro-pricing scenarios`),
+    OutputPricePerUnit: z.number().describe(`
+        * * Field Name: OutputPricePerUnit
+        * * Display Name: Output Price Per Unit
+        * * SQL Data Type: decimal(18, 8)
+    * * Description: Price per unit for output tokens/responses. Must be non-negative. Often higher than input pricing`),
+    UnitTypeID: z.string().describe(`
+        * * Field Name: UnitTypeID
+        * * Display Name: Unit Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Model Price Unit Types (vwAIModelPriceUnitTypes.ID)`),
+    ProcessingType: z.union([z.literal('Realtime'), z.literal('Batch')]).describe(`
+        * * Field Name: ProcessingType
+        * * Display Name: Processing Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Realtime
+    *   * Batch
+    * * Description: Processing method that affects pricing. Realtime=immediate response, Batch=delayed processing often with discounts`),
+    Comments: z.string().nullable().describe(`
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional notes about pricing context, source, special conditions, or vendor-specific details`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Model: z.string().describe(`
+        * * Field Name: Model
+        * * Display Name: Model
+        * * SQL Data Type: nvarchar(50)`),
+    Vendor: z.string().describe(`
+        * * Field Name: Vendor
+        * * Display Name: Vendor
+        * * SQL Data Type: nvarchar(50)`),
+    PriceType: z.string().describe(`
+        * * Field Name: PriceType
+        * * Display Name: Price Type
+        * * SQL Data Type: nvarchar(100)`),
+    UnitType: z.string().describe(`
+        * * Field Name: UnitType
+        * * Display Name: Unit Type
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type AIModelCostEntityType = z.infer<typeof AIModelCostSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Model Price Types
+ */
+export const AIModelPriceTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+    * * Description: Short, descriptive name for the price type (e.g., "Tokens", "Minutes", "Characters")`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of what this price type represents and how it is measured`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type AIModelPriceTypeEntityType = z.infer<typeof AIModelPriceTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Model Price Unit Types
+ */
+export const AIModelPriceUnitTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+    * * Description: Display name for the pricing unit (e.g., "Per 1M Tokens", "Per 1K Tokens", "Per Minute")`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed explanation of the unit scale and any special considerations for this pricing unit`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+    * * Description: Fully qualified class name that handles cost calculations and unit normalization for this pricing unit (e.g., "TokenPer1M", "TokenPer1K")`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type AIModelPriceUnitTypeEntityType = z.infer<typeof AIModelPriceUnitTypeSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Model Vendors
  */
 export const AIModelVendorSchema = z.object({
@@ -31843,6 +32024,602 @@ export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType>
     */
     get DefaultPromptForContextSummarization(): string | null {
         return this.Get('DefaultPromptForContextSummarization');
+    }
+}
+
+
+/**
+ * MJ: AI Model Costs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIModelCost
+ * * Base View: vwAIModelCosts
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Model Costs')
+export class AIModelCostEntity extends BaseEntity<AIModelCostEntityType> {
+    /**
+    * Loads the MJ: AI Model Costs record from the database
+    * @param ID: string - primary key value to load the MJ: AI Model Costs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIModelCostEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Model Costs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Currency: This rule ensures that the currency code consists of exactly three uppercase letters. For example, 'USD', 'EUR', or 'JPY' are valid, but anything with lowercase letters or a different length is not allowed.
+    * * InputPricePerUnit: This rule ensures that the input price per unit cannot be negative. It must be zero or greater.
+    * * OutputPricePerUnit: This rule ensures that the output price per unit cannot be negative. It must be zero or greater.
+    * * Table-Level: This rule ensures that the end date must be after the start date if both are specified. If either the start date or end date is missing, any value is allowed.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateCurrencyIsThreeUppercaseLetters(result);
+        this.ValidateInputPricePerUnitNonNegative(result);
+        this.ValidateOutputPricePerUnitNonNegative(result);
+        this.ValidateEndedAtAfterStartedAt(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the currency code consists of exactly three uppercase letters. For example, 'USD', 'EUR', or 'JPY' are valid, but anything with lowercase letters or a different length is not allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCurrencyIsThreeUppercaseLetters(result: ValidationResult) {
+    	if (typeof this.Currency !== "string" || this.Currency.length !== 3 || this.Currency !== this.Currency.toUpperCase()) {
+    		result.Errors.push(new ValidationErrorInfo("Currency", "Currency code must be exactly three uppercase letters (e.g., 'USD').", this.Currency, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the input price per unit cannot be negative. It must be zero or greater.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateInputPricePerUnitNonNegative(result: ValidationResult) {
+    	if (this.InputPricePerUnit < 0) {
+    		result.Errors.push(new ValidationErrorInfo("InputPricePerUnit", "Input price per unit cannot be negative.", this.InputPricePerUnit, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the output price per unit cannot be negative. It must be zero or greater.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateOutputPricePerUnitNonNegative(result: ValidationResult) {
+    	if (this.OutputPricePerUnit < 0) {
+    		result.Errors.push(new ValidationErrorInfo("OutputPricePerUnit", "Output price per unit must be zero or a positive value.", this.OutputPricePerUnit, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the end date must be after the start date if both are specified. If either the start date or end date is missing, any value is allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEndedAtAfterStartedAt(result: ValidationResult) {
+    	if (this.EndedAt !== null && this.StartedAt !== null) {
+    		if (this.EndedAt <= this.StartedAt) {
+    			result.Errors.push(new ValidationErrorInfo("EndedAt", "The end date must be after the start date when both are specified.", this.EndedAt, ValidationErrorType.Failure));
+    		}
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ModelID
+    * * Display Name: Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    */
+    get ModelID(): string {
+        return this.Get('ModelID');
+    }
+    set ModelID(value: string) {
+        this.Set('ModelID', value);
+    }
+
+    /**
+    * * Field Name: VendorID
+    * * Display Name: Vendor ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
+    */
+    get VendorID(): string {
+        return this.Get('VendorID');
+    }
+    set VendorID(value: string) {
+        this.Set('VendorID', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: Date and time with timezone when this pricing became effective. NULL disables temporal tracking. Defaults to current UTC time when record is created
+    */
+    get StartedAt(): Date | null {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date | null) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: EndedAt
+    * * Display Name: Ended At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Date and time with timezone when this pricing expired or will expire. NULL indicates currently active pricing
+    */
+    get EndedAt(): Date | null {
+        return this.Get('EndedAt');
+    }
+    set EndedAt(value: Date | null) {
+        this.Set('EndedAt', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Expired
+    *   * Invalid
+    * * Description: Current status of this pricing record. Active=currently in use, Pending=scheduled for future, Expired=no longer valid, Invalid=data error
+    */
+    get Status(): 'Active' | 'Pending' | 'Expired' | 'Invalid' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Pending' | 'Expired' | 'Invalid') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Currency
+    * * Display Name: Currency
+    * * SQL Data Type: nchar(3)
+    * * Description: ISO 4217 three-letter currency code (e.g., USD, EUR, GBP) in uppercase
+    */
+    get Currency(): string {
+        return this.Get('Currency');
+    }
+    set Currency(value: string) {
+        this.Set('Currency', value);
+    }
+
+    /**
+    * * Field Name: PriceTypeID
+    * * Display Name: Price Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Model Price Types (vwAIModelPriceTypes.ID)
+    */
+    get PriceTypeID(): string {
+        return this.Get('PriceTypeID');
+    }
+    set PriceTypeID(value: string) {
+        this.Set('PriceTypeID', value);
+    }
+
+    /**
+    * * Field Name: InputPricePerUnit
+    * * Display Name: Input Price Per Unit
+    * * SQL Data Type: decimal(18, 8)
+    * * Description: Price per unit for input tokens/requests. Must be non-negative. Precision allows for micro-pricing scenarios
+    */
+    get InputPricePerUnit(): number {
+        return this.Get('InputPricePerUnit');
+    }
+    set InputPricePerUnit(value: number) {
+        this.Set('InputPricePerUnit', value);
+    }
+
+    /**
+    * * Field Name: OutputPricePerUnit
+    * * Display Name: Output Price Per Unit
+    * * SQL Data Type: decimal(18, 8)
+    * * Description: Price per unit for output tokens/responses. Must be non-negative. Often higher than input pricing
+    */
+    get OutputPricePerUnit(): number {
+        return this.Get('OutputPricePerUnit');
+    }
+    set OutputPricePerUnit(value: number) {
+        this.Set('OutputPricePerUnit', value);
+    }
+
+    /**
+    * * Field Name: UnitTypeID
+    * * Display Name: Unit Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Model Price Unit Types (vwAIModelPriceUnitTypes.ID)
+    */
+    get UnitTypeID(): string {
+        return this.Get('UnitTypeID');
+    }
+    set UnitTypeID(value: string) {
+        this.Set('UnitTypeID', value);
+    }
+
+    /**
+    * * Field Name: ProcessingType
+    * * Display Name: Processing Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Realtime
+    *   * Batch
+    * * Description: Processing method that affects pricing. Realtime=immediate response, Batch=delayed processing often with discounts
+    */
+    get ProcessingType(): 'Realtime' | 'Batch' {
+        return this.Get('ProcessingType');
+    }
+    set ProcessingType(value: 'Realtime' | 'Batch') {
+        this.Set('ProcessingType', value);
+    }
+
+    /**
+    * * Field Name: Comments
+    * * Display Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional notes about pricing context, source, special conditions, or vendor-specific details
+    */
+    get Comments(): string | null {
+        return this.Get('Comments');
+    }
+    set Comments(value: string | null) {
+        this.Set('Comments', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Model
+    * * Display Name: Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Model(): string {
+        return this.Get('Model');
+    }
+
+    /**
+    * * Field Name: Vendor
+    * * Display Name: Vendor
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Vendor(): string {
+        return this.Get('Vendor');
+    }
+
+    /**
+    * * Field Name: PriceType
+    * * Display Name: Price Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get PriceType(): string {
+        return this.Get('PriceType');
+    }
+
+    /**
+    * * Field Name: UnitType
+    * * Display Name: Unit Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get UnitType(): string {
+        return this.Get('UnitType');
+    }
+}
+
+
+/**
+ * MJ: AI Model Price Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIModelPriceType
+ * * Base View: vwAIModelPriceTypes
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Model Price Types')
+export class AIModelPriceTypeEntity extends BaseEntity<AIModelPriceTypeEntityType> {
+    /**
+    * Loads the MJ: AI Model Price Types record from the database
+    * @param ID: string - primary key value to load the MJ: AI Model Price Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIModelPriceTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Model Price Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Name: This rule ensures that the Name field cannot be empty or consist only of spaces; it must contain at least one non-space character.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateNameNotEmptyOrWhitespace(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the Name field cannot be empty or consist only of spaces; it must contain at least one non-space character.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateNameNotEmptyOrWhitespace(result: ValidationResult) {
+    	if (!this.Name || this.Name.trim().length === 0) {
+    		result.Errors.push(new ValidationErrorInfo("Name", "The Name field cannot be empty or just spaces.", this.Name, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Short, descriptive name for the price type (e.g., "Tokens", "Minutes", "Characters")
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of what this price type represents and how it is measured
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: AI Model Price Unit Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIModelPriceUnitType
+ * * Base View: vwAIModelPriceUnitTypes
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Model Price Unit Types')
+export class AIModelPriceUnitTypeEntity extends BaseEntity<AIModelPriceUnitTypeEntityType> {
+    /**
+    * Loads the MJ: AI Model Price Unit Types record from the database
+    * @param ID: string - primary key value to load the MJ: AI Model Price Unit Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIModelPriceUnitTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Model Price Unit Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Name: This rule ensures that the Name field cannot be empty or contain only spaces; it must have at least one non-space character.
+    * * DriverClass: This rule ensures that the DriverClass field cannot be empty or consist only of spaces. The value must contain at least one character when leading and trailing spaces are ignored.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateNameNotEmptyOrWhitespace(result);
+        this.ValidateDriverClassNotEmpty(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the Name field cannot be empty or contain only spaces; it must have at least one non-space character.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateNameNotEmptyOrWhitespace(result: ValidationResult) {
+    	if (!this.Name || this.Name.trim().length === 0) {
+    		result.Errors.push(new ValidationErrorInfo("Name", "The Name field must not be empty or contain only spaces.", this.Name, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the DriverClass field cannot be empty or consist only of spaces. The value must contain at least one character when leading and trailing spaces are ignored.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDriverClassNotEmpty(result: ValidationResult) {
+    	if (this.DriverClass === null || this.DriverClass.trim().length === 0) {
+    		result.Errors.push(new ValidationErrorInfo("DriverClass", "DriverClass must not be empty or only spaces.", this.DriverClass, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Display name for the pricing unit (e.g., "Per 1M Tokens", "Per 1K Tokens", "Per Minute")
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed explanation of the unit scale and any special considerations for this pricing unit
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Fully qualified class name that handles cost calculations and unit normalization for this pricing unit (e.g., "TokenPer1M", "TokenPer1K")
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 
