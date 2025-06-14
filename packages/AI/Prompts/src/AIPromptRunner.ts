@@ -937,8 +937,8 @@ export class AIPromptRunner {
     startTime: Date,
     vendorId?: string,
   ): Promise<AIPromptRunEntity> {
+    const promptRun = await this._metadata.GetEntityObject<AIPromptRunEntity>('MJ: AI Prompt Runs', params.contextUser);
     try {
-      const promptRun = await this._metadata.GetEntityObject<AIPromptRunEntity>('MJ: AI Prompt Runs', params.contextUser);
       promptRun.NewRecord();
 
       promptRun.PromptID = prompt.ID;
@@ -983,8 +983,9 @@ export class AIPromptRunner {
       }
       return promptRun;
     } catch (error) {
-      LogError(`Error creating prompt run record: ${error.message}`);
-      throw error;
+      const msg = `Error creating prompt run record: ${error.message} - ${promptRun?.LatestResult?.Message} - ${promptRun?.LatestResult?.Errors[0]?.Message}`;
+      LogError(msg);
+      throw new Error(msg);
     }
   }
 
