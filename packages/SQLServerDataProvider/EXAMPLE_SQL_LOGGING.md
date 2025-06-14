@@ -98,6 +98,78 @@ export class MetadataSync {
 
 ## Advanced Features
 
+### Record Change Metadata Filtering
+
+```typescript
+// Log only core stored procedure calls, filtering out record change metadata wrapper
+const session = await provider.createSqlLogger('./logs/core-operations.sql', {
+  logRecordChangeMetadata: false // Default is false
+});
+
+// Create another session that logs everything
+const fullSession = await provider.createSqlLogger('./logs/full-operations.sql', {
+  logRecordChangeMetadata: true // Log complete SQL with metadata
+});
+
+// When an entity has TrackRecordChanges=true, the full SQL includes wrapper transactions
+// Each logger independently decides what to log based on its settings
+try {
+  // session logs: EXEC [myschema].[spCreateCustomer] @Name='John', @Email='john@example.com'
+  // fullSession logs: Full SQL with DECLARE @ResultTable, INSERT INTO @ResultTable, etc.
+  await customer.Save();
+  
+  // Delete operations are also filtered per logger
+  await customer.Delete(); 
+  // session logs: EXEC [myschema].[spDeleteCustomer] @ID='123'
+  // fullSession logs: Full SQL with record change tracking
+} finally {
+  await session.dispose();
+  await fullSession.dispose();
+}
+```
+
+### Empty File Handling
+
+```typescript
+// By default, empty log files are automatically deleted
+const session = await provider.createSqlLogger('./logs/operations.sql', {
+  statementTypes: 'mutations' // Only log data changes
+});
+
+// If no mutations occur, the file will be deleted on dispose
+await session.dispose(); // File deleted if no statements were logged
+
+// To retain empty log files, set retainEmptyLogFiles to true
+const persistentSession = await provider.createSqlLogger('./logs/audit.sql', {
+  retainEmptyLogFiles: true // Keep file even if empty
+});
+```
+
+### Transaction Group Logging
+
+```typescript
+// Transaction groups are automatically logged
+const session = await provider.createSqlLogger('./logs/transaction-group.sql', {
+  logRecordChangeMetadata: false
+});
+
+// Create a transaction group
+const transactionGroup = new SQLServerTransactionGroup();
+
+// Add entities to the transaction group
+entity1.TransactionGroup = transactionGroup;
+entity2.TransactionGroup = transactionGroup;
+
+// Save entities - they'll be executed as part of the transaction
+await entity1.Save();
+await entity2.Save();
+
+// Commit the transaction - SQL is logged for each operation
+await transactionGroup.Submit();
+// Log shows: Save Entity1 (Transaction Group) (core SP call only)
+// Log shows: Save Entity2 (Transaction Group) (core SP call only)
+```
+
 ### Multiple Concurrent Sessions
 
 ```typescript
@@ -184,6 +256,56 @@ INSERT INTO [${flyway:defaultSchema}].[EntityField] (EntityID, Name, Type) VALUE
 -- Total Statements: 2
 ```
 
+### Record Change Metadata Filtering Example
+
+When `logRecordChangeMetadata: false` (default), complex Save and Delete operations are simplified:
+
+**Full SQL (logRecordChangeMetadata: true):**
+```sql
+-- Creating customer record (full transaction wrapper)
+DECLARE @ResultTable TABLE (
+    ID uniqueidentifier,
+    Name nvarchar(100),
+    Email nvarchar(255),
+    CreatedAt datetime2
+);
+
+INSERT INTO @ResultTable
+EXEC [myschema].[spCreateCustomer] @Name='John Doe', @Email='john@example.com';
+
+DECLARE @ID NVARCHAR(MAX);
+SELECT @ID = ID FROM @ResultTable;
+
+IF @ID IS NOT NULL
+BEGIN
+    DECLARE @ResultChangesTable TABLE (
+        ID uniqueidentifier,
+        Entity nvarchar(255),
+        RecordID nvarchar(max),
+        -- ... more fields
+    );
+    
+    INSERT INTO @ResultChangesTable
+    -- Record change tracking SQL...
+END;
+
+SELECT * FROM @ResultTable;
+```
+
+**Filtered SQL (logRecordChangeMetadata: false):**
+```sql
+-- Creating customer record (core SP call only)
+EXEC [myschema].[spCreateCustomer] @Name='John Doe', @Email='john@example.com';
+
+-- Deleting customer record (core SP call only)
+EXEC [myschema].[spDeleteCustomer] @ID='123-456-789';
+```
+
+The filtering is handled transparently per logger:
+- The full SQL always executes normally for record change tracking
+- Each active logging session independently decides what to log based on its `logRecordChangeMetadata` setting
+- Multiple loggers can be active simultaneously with different settings
+
 ## Performance Characteristics
 
 - **Parallel Execution**: SQL logging runs in parallel with database execution - no performance impact
@@ -191,6 +313,9 @@ INSERT INTO [${flyway:defaultSchema}].[EntityField] (EntityID, Name, Type) VALUE
 - **Memory Efficient**: Uses file streams, not in-memory buffering
 - **Multiple Sessions**: Supports multiple concurrent logging sessions without interference
 - **Automatic Cleanup**: Session disposal automatically closes files and cleans up resources
+- **Accurate Counts**: `session.statementCount` reflects actual emitted statements after filtering
+- **Empty File Cleanup**: Empty log files are automatically deleted unless `retainEmptyLogFiles: true`
+- **Transaction Group Support**: SQL executed within transaction groups is automatically logged
 
 ## Error Handling
 

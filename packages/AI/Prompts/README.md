@@ -1,23 +1,64 @@
 # @memberjunction/ai-prompts
 
-Advanced AI prompt execution engine with hierarchical prompt composition, intelligent model selection, parallel execution, output validation, and comprehensive execution tracking.
+Advanced AI prompt execution engine with hierarchical template composition, intelligent model selection, parallel execution, output validation, and comprehensive execution tracking.
 
 [![npm version](https://badge.fury.io/js/%40memberjunction%2Fai-prompts.svg)](https://www.npmjs.com/package/@memberjunction/ai-prompts)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
 
 ## Key Features
 
-### 🎯 Hierarchical Prompt Execution
-Execute complex multi-step prompts where child prompts run first and their results are embedded into parent templates. This enables sophisticated reasoning patterns and modular prompt design.
+### 🎯 Dynamic Hierarchical Template Composition
+
+#### Why Dynamic Template Composition?
+
+While MemberJunction's template system already supports static template composition (where Template A always includes Templates B and C), the AI Prompts system adds **dynamic template composition** - the ability to inject ANY prompt template into ANY other prompt template at runtime.
+
+**Static Composition (MJ Templates):** Perfect for fixed relationships like email headers/footers
+```liquid
+<!-- Email template always includes same header -->
+{% include 'email-header' %}
+{{ content }}
+{% include 'email-footer' %}
+```
+
+**Dynamic Composition (AI Prompts):** Essential for flexible runtime relationships
+```typescript
+// Inject ANY child prompt into ANY parent prompt at runtime
+const params = new AIPromptParams();
+params.prompt = systemPrompt;        // e.g., Agent Type's control flow prompt
+params.childPrompts = [
+  new ChildPromptParam(agentPrompt, 'agentInstructions')  // Specific agent's prompt
+];
+// System prompt can use {{ agentInstructions }} to embed the agent's specific logic
+```
+
+#### The Agent System Use Case
+
+This dynamic composition is crucial for AI Agents:
+- **Agent Types** have **System Prompts** that control execution flow and response format
+- **Individual Agents** have their own **specific prompts** with domain logic
+- At runtime, any agent's prompt is dynamically injected into its type's system prompt
+- This creates a complete prompt combining the control wrapper with agent-specific instructions
 
 ```typescript
-const params = new AIPromptParams();
-params.prompt = parentPrompt;
+// Agent Type System Prompt (controls flow)
+const systemPrompt = {
+  templateText: `You are an AI agent. Follow these instructions:
+  
+  {{ agentInstructions }}  <!-- Dynamically injected at runtime -->
+  
+  Respond in JSON format with: { decision: ..., reasoning: ... }`
+};
+
+// Individual Agent Prompt (domain logic)
+const dataGatherAgent = {
+  templateText: `Your role is to gather data from: {{ dataSources }}`
+};
+
+// At runtime, compose them dynamically
 params.childPrompts = [
-  new ChildPromptParam(analysisPrompt, 'analysisResult'),
-  new ChildPromptParam(summaryPrompt, 'summaryResult')
+  new ChildPromptParam(dataGatherAgent, 'agentInstructions')
 ];
-// Parent template can use {{ analysisResult }} and {{ summaryResult }}
 ```
 
 ### 🔄 System Placeholders
@@ -131,7 +172,7 @@ placeholders.push({
 
 When rendering templates, data is merged in this priority order (highest to lowest):
 1. Template-specific data (`templateData` parameter)
-2. Child prompt results (for hierarchical prompts)
+2. Child template renders (for hierarchical template composition)
 3. User-provided data (`data` parameter)
 4. System placeholders (lowest priority)
 
@@ -177,6 +218,25 @@ npm install @memberjunction/ai-prompts
 - [@memberjunction/templates](../../Templates/README.md) for template rendering
 
 ## Core Architecture
+
+### Dynamic vs Static Template Composition
+
+The AI Prompts system introduces **dynamic template composition** that extends beyond MemberJunction's built-in static template features:
+
+#### Static Template Composition (MJ Templates)
+MemberJunction's template system supports embedding templates within templates through `{% include %}` directives. This is perfect for fixed relationships:
+- Email templates with standard headers/footers
+- Report templates with consistent formatting sections
+- Any scenario where Template A always includes Templates B and C
+
+#### Dynamic Template Composition (AI Prompts)
+The AI Prompts system adds runtime template composition where relationships are determined dynamically:
+- **Runtime Flexibility**: Inject ANY prompt template into ANY other prompt template
+- **Context-Aware**: Choose which child templates to inject based on runtime conditions
+- **Agent Architecture**: Combine system prompts (control flow) with agent prompts (domain logic)
+- **Modular Design**: Build complex prompts from reusable components selected at runtime
+
+**Key Difference**: While MJ Templates handle "Template A always includes B", AI Prompts handle "Template A includes X, where X is determined at runtime"
 
 ### AIPromptRunner Class
 
@@ -296,7 +356,56 @@ if (result.promptRun?.Messages) {
 }
 ```
 
-### 4. Complete Example with All New Features
+### 4. Dynamic Template Composition for AI Agents
+
+This example demonstrates the primary use case for dynamic template composition - the AI Agent system:
+
+```typescript
+import { AIPromptRunner, ChildPromptParam } from '@memberjunction/ai-prompts';
+
+// Agent Type System Prompt - Controls execution flow and response format
+const agentTypeSystemPrompt = {
+    Name: "Data Analysis Agent Type System Prompt",
+    TemplateID: "system-prompt-template-id",
+    // Template contains: "You are an AI agent. {{ agentInstructions }} Respond with JSON..."
+};
+
+// Individual Agent Prompt - Contains domain-specific logic
+const specificAgentPrompt = {
+    Name: "Customer Churn Analysis Agent",
+    TemplateID: "churn-agent-template-id",
+    // Template contains: "Analyze customer data for churn risk factors..."
+};
+
+// At runtime, dynamically compose the prompts
+const runner = new AIPromptRunner();
+const result = await runner.ExecutePrompt({
+    prompt: agentTypeSystemPrompt,  // Parent template
+    childPrompts: [
+        // Dynamically inject the specific agent's instructions
+        new ChildPromptParam(specificAgentPrompt, 'agentInstructions')
+    ],
+    data: { 
+        customerData: analysisData,
+        thresholds: { churnRisk: 0.7 }
+    },
+    contextUser: currentUser
+});
+
+// The system executed ONE prompt that combined:
+// 1. System prompt wrapper (control flow)
+// 2. Specific agent instructions (domain logic)
+// 3. Runtime data
+console.log("Agent decision:", result.result);
+```
+
+**Why This Matters:**
+- Different agents can use the SAME system prompt template
+- System prompt enforces consistent response format across all agents
+- Agent-specific logic is cleanly separated and reusable
+- Runtime composition allows flexible agent architectures
+
+### 5. Complete Example with All New Features
 
 ```typescript
 import { AIPromptRunner } from '@memberjunction/ai-prompts';

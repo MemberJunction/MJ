@@ -1,0 +1,156 @@
+<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
+    <form *ngIf="record" class="record-form" #form="ngForm" mjFillContainer>
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+        <!-- Main Content Area -->
+        <div class="agent-main-area" style="display: flex; flex-direction: column; height: 100%; overflow-y: auto;">
+            
+            <!-- Header Section -->
+            <div class="agent-header" style="flex-shrink: 0; padding: 20px; background: #f8f9fa; border-bottom: 2px solid #e9ecef;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
+                    
+                    <!-- Left: Agent Info -->
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                            <i class="fa-solid fa-robot" style="color: #17a2b8; font-size: 1.4em;"></i>
+                            @if (EditMode) {
+                                <kendo-textbox [(ngModel)]="record.Name" 
+                                              name="agentName"
+                                              placeholder="Enter agent name..."
+                                              style="font-size: 1.2em; font-weight: 600; min-width: 300px; flex: 1;">
+                                </kendo-textbox>
+                            } @else {
+                                <h4 style="margin: 0; color: #495057; font-weight: 600; flex: 1;">{{ record.Name || 'Untitled AI Agent' }}</h4>
+                                <span class="status-badge" [style.background-color]="getStatusBadgeColor()" 
+                                      style="color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.75em; font-weight: 500;">
+                                    {{ record.Status }}
+                                </span>
+                            }
+                        </div>
+                        
+                        <!-- Status Editor when in edit mode -->
+                        @if (EditMode) {
+                            <div style="display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap;">
+                                <div>
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #495057; font-size: 0.9em;">Status</label>
+                                    <kendo-dropdownlist [(ngModel)]="record.Status"
+                                                       name="agentStatus"
+                                                       [data]="[{text: 'Active', value: 'Active'}, {text: 'Pending', value: 'Pending'}, {text: 'Disabled', value: 'Disabled'}]"
+                                                       textField="text"
+                                                       valueField="value"
+                                                       [valuePrimitive]="true"
+                                                       style="width: 150px;">
+                                    </kendo-dropdownlist>
+                                </div>
+                            </div>
+                        }
+                        
+                        <!-- Description -->
+                        @if (record.Description) {
+                            <p style="margin: 8px 0 0 0; color: #6c757d; line-height: 1.4; max-width: 600px;">
+                                {{ record.Description }}
+                            </p>
+                        }
+                    </div>
+                    
+                    <!-- Right: Action Buttons -->
+                    <div class="action-buttons" style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
+                        <div style="display: flex; gap: 8px;">
+                            @if (record.ID && canExecute) {
+                                <kendo-button themeColor="info" size="large"
+                                            (click)="executeAIAgent()"
+                                            title="Execute this AI agent">
+                                    <i class="fa-solid fa-play"></i> Execute Agent
+                                </kendo-button>
+                            } @else if (record.ID && !canExecute) {
+                                <kendo-button themeColor="info" size="large" [disabled]="true"
+                                            title="Agent must be Active to execute">
+                                    <i class="fa-solid fa-exclamation-triangle"></i> Cannot Execute
+                                </kendo-button>
+                            }
+                            
+                            @if (record.ID) {
+                                <kendo-button fillMode="outline" themeColor="info"
+                                            title="View execution history">
+                                    <i class="fa-solid fa-history"></i> History
+                                </kendo-button>
+                            }
+                        </div>
+                        
+                        @if (!canExecute && record.ID) {
+                            <div style="font-size: 0.75em; color: #dc3545; text-align: right; max-width: 200px;">
+                                @if (record.Status !== 'Active') {
+                                    • Agent must be Active<br>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Form Content -->
+            <div class="form-content" style="flex: 1; padding: 20px;">
+                <!-- Use the generated form's default content -->
+                <ng-content></ng-content>
+                
+                <!-- Generated form fields will be inserted here by the base component -->
+                <div class="generated-fields">
+                    <!-- The base component will render all the standard fields here -->
+                </div>
+                
+                @if (record.IsSaved) {
+                    <!-- Agent Execution History -->
+                    <kendo-expansionpanel [expanded]="false" style="margin-top: 20px;">
+                        <ng-template kendoExpansionPanelTitleDirective>
+                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                <i class="fa-solid fa-history" style="color: #6c757d;"></i>
+                                Execution History
+                            </span>
+                        </ng-template>
+                        
+                        <div style="padding: 16px 0;">
+                            <mj-user-view-grid 
+                                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Runs','AgentID')"  
+                                [NewRecordValues]="NewRecordValues('MJ: AI Agent Runs')"
+                                [AllowLoad]="true"
+                                [EditMode]="GridEditMode()"  
+                                [BottomMargin]="0"
+                                style="height: 300px;">
+                            </mj-user-view-grid>
+                        </div>
+                    </kendo-expansionpanel>
+                    
+                    <!-- Agent Prompts -->
+                    <kendo-expansionpanel [expanded]="false" style="margin-top: 20px;">
+                        <ng-template kendoExpansionPanelTitleDirective>
+                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                <i class="fa-solid fa-comments" style="color: #6c757d;"></i>
+                                Agent Prompts
+                            </span>
+                        </ng-template>
+                        
+                        <div style="padding: 16px 0;">
+                            <mj-user-view-grid 
+                                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Prompts','AgentID')"  
+                                [NewRecordValues]="NewRecordValues('MJ: AI Agent Prompts')"
+                                [AllowLoad]="true"
+                                [EditMode]="GridEditMode()"  
+                                [BottomMargin]="0"
+                                style="height: 300px;">
+                            </mj-user-view-grid>
+                        </div>
+                    </kendo-expansionpanel>
+                }
+            </div>
+        </div>
+    </form>
+
+    <!-- AI Agent Execution Dialog -->
+    @if (showExecutionDialog) {
+        <mj-ai-agent-execution-dialog 
+            [aiAgent]="record"
+            [isVisible]="showExecutionDialog"
+            (visibilityChange)="onExecutionDialogClosed()">
+        </mj-ai-agent-execution-dialog>
+    }
+</div>

@@ -29,6 +29,7 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   @Input() agentId: string | null = null;
   @Output() close = new EventEmitter<void>();
   @Output() openAgent = new EventEmitter<string>();
+  @Output() openEntityRecord = new EventEmitter<{entityName: string, recordId: string}>();
 
   @ViewChild('hierarchyChart', { static: false }) hierarchyChartRef!: ElementRef;
 
@@ -529,5 +530,11 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
   public getChildCount(): number {
     return this.selectedNode?.children?.length || 0;
+  }
+
+  public openCurrentAgentRecord(): void {
+    if (this.currentAgent) {
+      this.openEntityRecord.emit({ entityName: 'AI Agents', recordId: this.currentAgent.ID });
+    }
   }
 }

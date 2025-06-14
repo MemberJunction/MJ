@@ -1,8 +1,10 @@
 {
   "version": "1.0.0",
   "directoryOrder": [
+    "actions",
     "prompts",
-    "agent-types"
+    "agent-types",
+    "agents"
   ],
   "sqlLogging": {
     "enabled": true,

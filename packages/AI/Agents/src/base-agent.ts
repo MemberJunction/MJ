@@ -195,9 +195,7 @@ export class BaseAgent {
             // Check if this specific agent has its own DriverClass override
             let agentTypeInstance: BaseAgentType | null;
             try {
-                agentTypeInstance = params.agent.DriverClass 
-                    ? await this.getAgentInstanceWithDriverClass(params.agent.DriverClass)
-                    : await this.getAgentTypeInstance(agentType);
+                agentTypeInstance = await this.getAgentTypeInstance(agentType);
             } catch (error) {
                 return {
                     nextStep: 'failed',
@@ -257,9 +255,20 @@ export class BaseAgent {
                 agentName: agent.Name,
                 agentDescription: agent.Description,
                 subAgentCount: subAgents.length,
-                subAgentDetails: JSON.stringify(subAgents),
+                subAgentDetails: JSON.stringify(subAgents.map(sa => {
+                    return { 
+                        ID: sa.ID,
+                        Name: sa.Name, 
+                        Description: sa.Description 
+                    }}), null, 2),
                 actionCount: actions.length,
-                actionDetails: JSON.stringify(activeActions)
+                actionDetails: JSON.stringify(activeActions.map(action => {
+                    return {
+                        ID: action.ID,
+                        Name: action.Name,
+                        Description: action.Description, 
+                    };
+                }),null, 2),
             };
 
             return contextData;
