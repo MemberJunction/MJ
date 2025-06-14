@@ -133,6 +133,19 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="MJ: AI Model Costs" [Visible]="record.IsSaved"> 
+                        MJ: AI Model Costs
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Model Costs','ModelID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: AI Model Costs')"
+                            [AllowLoad]="IsCurrentTab('MJ: AI Model Costs')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="Generated Codes" [Visible]="record.IsSaved"> 
                         Generated Codes
                     </mj-tab>

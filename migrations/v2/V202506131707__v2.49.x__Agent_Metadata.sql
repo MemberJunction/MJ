@@ -8,7 +8,7 @@
 /************************************************************************************/
 /***** MANUAL PATCH - INSERT PREVIOUSLY CREATED TEMPLATE CATEGORY THAT WOULD HAVE BEEN 
        LOGGED BY SQL LOGGER IF IT EXISTED THEN - THIS ISSUE WILL NOT RECUR *****/
-EXEC __mj.spCreateTemplateCategory
+EXEC [${flyway:defaultSchema}].spCreateTemplateCategory
     @ID = 'b09d433e-f36b-1410-8db1-00021f8b792e',
     @Name = 'AI Prompts',
     @Description = 'Root category for AI Prompts (Auto-Created by AI Prompts Entity)',
