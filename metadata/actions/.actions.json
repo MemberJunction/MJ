@@ -22,6 +22,10 @@
           },
           "primaryKey": {
             "ID": "B2A953B5-9C76-EF11-9C36-000D3A9EBD44"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:13.858Z",
+            "checksum": "db00984c37eacfb0f6dd20a8d029e29c63b78136d3feddb7a870c6ecc160e018"
           }
         },
         {
@@ -37,6 +41,10 @@
           },
           "primaryKey": {
             "ID": "0E7EF5C0-9C76-EF11-9C36-000D3A9EBD44"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:13.860Z",
+            "checksum": "3e3f8afadb2e385eaea11f4b2e4f3578e3806f25a7855c9c6a47706ae2f5f76a"
           }
         },
         {
@@ -52,6 +60,10 @@
           },
           "primaryKey": {
             "ID": "3A8EC430-A076-EF11-9C36-000D3A9EBD44"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:13.862Z",
+            "checksum": "032c4aaf7193ff81d6d4463a1194a07f1fc2df014f803e45ee904cce2fd9cd6b"
           }
         }
       ],
@@ -65,6 +77,10 @@
           },
           "primaryKey": {
             "ID": "B057906D-FB4A-4026-B18A-CB11DDD86E6E"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:13.864Z",
+            "checksum": "38fef9fe1c84cabf3cabc411719444568fe62a403b9ead7b17fc98e745e405e8"
           }
         },
         {
@@ -76,6 +92,10 @@
           },
           "primaryKey": {
             "ID": "1BBE2F60-5A02-4A33-9534-72DEA51A4C3E"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:13.865Z",
+            "checksum": "0a5071fe69480e231ceac850ded2f5c362ff566cc54b222778b73f94a1087099"
           }
         }
       ]
@@ -84,7 +104,7 @@
       "ID": "D8781B41-9C76-EF11-9C36-000D3A9EBD44"
     },
     "sync": {
-      "lastModified": "2025-06-14T02:33:59.424Z",
+      "lastModified": "2025-06-14T03:41:13.865Z",
       "checksum": "c5d4cd835eecd85937b8221772f9bbd4be4565d84c98b8aaf11302767dd0374d"
     }
   },
@@ -107,6 +127,13 @@
             "IsArray": true,
             "Description": "Names of entities to vectorize. Can be a single entity name, comma-separated list, or array of entity names",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "14D98181-76EE-4732-ABDD-F675F095236A"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:13.902Z",
+            "checksum": "9d94d018e9779977cd16d8d7b59f174fb12313baa76671fe1668fa37f066656e"
           }
         }
       ],
@@ -117,6 +144,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "All entities were successfully vectorized"
+          },
+          "primaryKey": {
+            "ID": "A9BFC76A-FBE1-4992-B66A-FFECE62B9A83"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:13.916Z",
+            "checksum": "e5abb46d0f3557b34ea9291538b99f8dc941b7ed7788477e9dfa02fe7243f7b4"
           }
         },
         {
@@ -125,9 +159,23 @@
             "ResultCode": "FAILED",
             "IsSuccess": false,
             "Description": "One or more entities failed to vectorize"
+          },
+          "primaryKey": {
+            "ID": "0F48681D-D656-45FC-B81D-F4FCC53E2F65"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:13.928Z",
+            "checksum": "b241fb7f3ee82f701a0807bee26f68005e81af7a7fd85cde43e39b1ba1581311"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "1D4A644B-7356-403F-B726-77A1D4DA8EDB"
+    },
+    "sync": {
+      "lastModified": "2025-06-14T03:41:13.928Z",
+      "checksum": "66571b24c262239bb71bba2ac4180b2a52b64e448c5901835036bdfca5bab52e"
     }
   },
   {
@@ -149,6 +197,13 @@
             "IsArray": false,
             "Description": "A comma separated list of entity names to detect changes for. If not provided, all eligible entities will be processed",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "06449BC6-23A7-40E5-B4F5-87D744975A32"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:13.953Z",
+            "checksum": "0acad0723f4fbb8a3eae1e287134dc4808814432290adcd8c63dcb7e677bed3f"
           }
         }
       ],
@@ -159,6 +214,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Changes detected and replayed successfully"
+          },
+          "primaryKey": {
+            "ID": "98443794-73C3-4D51-9E91-0DAAF987B472"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:13.965Z",
+            "checksum": "520671de901f74be4fb1b9d72888352a0a0847df4f093355a4a5966676c2c0fc"
           }
         },
         {
@@ -167,9 +229,23 @@
             "ResultCode": "FAILED",
             "IsSuccess": false,
             "Description": "Failed to detect changes or failed to replay changes"
+          },
+          "primaryKey": {
+            "ID": "A950D6AF-4906-4163-BF62-D07C69DA6B9A"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:13.977Z",
+            "checksum": "8c2d10d7d4b5a7b3e1fc1605202346062ffa332fd8a7367eac5812f6557e55b9"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "E9ED9885-8A46-4EA2-8EAD-69087B9F1E20"
+    },
+    "sync": {
+      "lastModified": "2025-06-14T03:41:13.977Z",
+      "checksum": "962a6ea2549af8a324ddec1eed98873a6cf60f686cb6ebd55c6e54313fe856ca"
     }
   },
   {
@@ -192,6 +268,13 @@
             "IsArray": false,
             "Description": "The subject of the message",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2D23517C-3057-4DB0-8BE7-7A546E8A2956"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.011Z",
+            "checksum": "390bc389aff596a78d3cfdddefc4df7acef4f554e39e2ec1a7ed1792ecd2e73e"
           }
         },
         {
@@ -203,6 +286,13 @@
             "IsArray": false,
             "Description": "The body of the message",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "81B9DA22-3E63-4E50-8BC2-3F6218872B45"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.022Z",
+            "checksum": "5513fd3e09e78a0136aab1b10adc03f1e5b83142f1d691bfe4a0881b5c2ee064"
           }
         },
         {
@@ -214,6 +304,13 @@
             "IsArray": false,
             "Description": "The recipient of the message",
             "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "B540CF4F-2F70-49AD-9C6B-BACE7B8F49E6"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.033Z",
+            "checksum": "384e966b759853f3060b982bafbf5db7428a5b21a4faf62dc73c9e12f01103f1"
           }
         },
         {
@@ -225,6 +322,13 @@
             "IsArray": false,
             "Description": "The sender of the message",
             "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "BD056F50-DEB8-44F1-AE73-6B39F418EF10"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.043Z",
+            "checksum": "0bc83ff15ca20e0e4364029febad243de76d8b66ea9213d63df08b3f6e8bfc3e"
           }
         },
         {
@@ -236,6 +340,13 @@
             "IsArray": false,
             "Description": "The name of the Communication Provider to use to send the message",
             "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "5560E691-EDE3-4090-960F-FC3D2A97F58E"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.052Z",
+            "checksum": "db7a8179f67b2c83b2b611e7be0f2d5f0a1cf5829c955fbd3e0dc596a8fa98ed"
           }
         },
         {
@@ -247,6 +358,13 @@
             "IsArray": false,
             "Description": "The name of the Message Type (within the provider) to use to send the message",
             "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "E338FA62-5310-4E4E-869A-EA1EA5AF3C8E"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.061Z",
+            "checksum": "a96b1bde110d5c5b444e1b97d40f58c28ab5bbcd1d134fd6e211707edddaf75b"
           }
         }
       ],
@@ -257,6 +375,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Message sent successfully via the communication provider"
+          },
+          "primaryKey": {
+            "ID": "3A81CEC9-2319-4E60-B747-1D21052E89AF"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.072Z",
+            "checksum": "995ae3a07beb0e521fab13202bf30891a9bb0411fd31d4697ae6732d9de40a09"
           }
         },
         {
@@ -265,9 +390,23 @@
             "ResultCode": "FAILED",
             "IsSuccess": false,
             "Description": "Failed to send message - check provider configuration and message parameters"
+          },
+          "primaryKey": {
+            "ID": "C1342E48-9D87-4854-AF29-5C70FDFB046B"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.083Z",
+            "checksum": "9dd108504df1aff147709ab0ad6d2ec37dd61e8300fbba98b4153e160cc65c29"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "DC4C7E64-2D93-43E4-9F02-F5D7E702784A"
+    },
+    "sync": {
+      "lastModified": "2025-06-14T03:41:14.083Z",
+      "checksum": "e910c2fdcc39cfb49372e349d03c73e8207c4487a863070c8394341928868de7"
     }
   },
   {
@@ -290,6 +429,13 @@
             "IsArray": false,
             "Description": "City name or location to get weather for (e.g., 'New York', 'London'). Either this or Latitude/Longitude must be provided",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8F49FD17-4832-4E55-B880-01336A37D894"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.119Z",
+            "checksum": "dc07fe809819139f60cfead46219a1a090d6137a33a8f8a6202ffa009863c881"
           }
         },
         {
@@ -301,6 +447,13 @@
             "IsArray": false,
             "Description": "Latitude coordinate for weather lookup. Must be used with Longitude parameter",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "97291346-9DA1-46B9-9970-ACCAF7731800"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.129Z",
+            "checksum": "63e9cd77cae22e1f49da55b8de0f822147960664b511d205b4ecfc3f335310ef"
           }
         },
         {
@@ -312,6 +465,13 @@
             "IsArray": false,
             "Description": "Longitude coordinate for weather lookup. Must be used with Latitude parameter",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "499AD8DE-7AFB-4295-B6AD-584C0EAF4535"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.140Z",
+            "checksum": "923cb00ced6fa92e0d8ad35005e902768a042cb940580d1c6cb3d41c6add7366"
           }
         }
       ],
@@ -322,6 +482,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Weather data retrieved successfully"
+          },
+          "primaryKey": {
+            "ID": "2C5B774C-9FC8-4CB7-BA60-BF75CAAFBABE"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.151Z",
+            "checksum": "24a631440f8da219f1c8dc9a73f90453761fa0911351d0339991431978e9f08a"
           }
         },
         {
@@ -330,6 +497,13 @@
             "ResultCode": "LOCATION_NOT_FOUND",
             "IsSuccess": false,
             "Description": "The specified location could not be found"
+          },
+          "primaryKey": {
+            "ID": "3252CD3F-6586-4F32-AC7B-314FE14FB61B"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.161Z",
+            "checksum": "1b10e10c6171c430410141f5f603adfd69ae5fd59c786c836b979b20c6980d56"
           }
         },
         {
@@ -338,6 +512,13 @@
             "ResultCode": "MISSING_PARAMETERS",
             "IsSuccess": false,
             "Description": "Either Location or both Latitude and Longitude parameters are required"
+          },
+          "primaryKey": {
+            "ID": "EA1D6A43-8B87-40D7-AD67-C1E54E06E431"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.171Z",
+            "checksum": "d034efcd90924da1725b50ddab3d01991812c31e8ebb9feb28c7155ce5761d3d"
           }
         },
         {
@@ -346,9 +527,23 @@
             "ResultCode": "FAILED",
             "IsSuccess": false,
             "Description": "Failed to retrieve weather data due to API error"
+          },
+          "primaryKey": {
+            "ID": "6535FC83-B445-42FF-A665-8F2BB54473DA"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.181Z",
+            "checksum": "b7b5a836e1a1ad887c60d4f45cf4c6948c33ed91eb62b487978a1e6a377aead0"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "6C88FED2-679A-4FDD-A31A-7F38D0457F22"
+    },
+    "sync": {
+      "lastModified": "2025-06-14T03:41:14.181Z",
+      "checksum": "71e7bb49fc3e484d6e0a32074720107b0b60e9029780c5fc2cde986ba936eb9f"
     }
   },
   {
@@ -371,6 +566,13 @@
             "IsArray": false,
             "Description": "Stock ticker symbol (e.g., AAPL, MSFT, GOOGL)",
             "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "54386D66-2889-4E17-8F3B-3917E3BE8489"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.206Z",
+            "checksum": "0022b1fafbede28a7ca1323c1f88e787a19ca19ed596b8578cb2fe10965df58d"
           }
         }
       ],
@@ -381,6 +583,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Stock data retrieved successfully"
+          },
+          "primaryKey": {
+            "ID": "C6898274-D90B-4F72-9833-CCB73CCFBF25"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.216Z",
+            "checksum": "6c82fb233eb065d7d267531151a60936f36cb59b336524f5a2f94a62edaa9b66"
           }
         },
         {
@@ -389,6 +598,13 @@
             "ResultCode": "INVALID_TICKER",
             "IsSuccess": false,
             "Description": "The specified ticker symbol is invalid or not found"
+          },
+          "primaryKey": {
+            "ID": "AB646A05-B293-45FC-8100-D6AFB06C2037"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.226Z",
+            "checksum": "4edb8694c3bf668f0278ea4220e9c165c979477c7d9864c01ff964f6de7bcc43"
           }
         },
         {
@@ -397,6 +613,13 @@
             "ResultCode": "MISSING_PARAMETERS",
             "IsSuccess": false,
             "Description": "Ticker parameter is required"
+          },
+          "primaryKey": {
+            "ID": "438BE10E-C383-4A01-B4A6-8A2D21F49ACE"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.242Z",
+            "checksum": "d052042ec364cf5c97de656019291e063ad05ef861977adeceb7926a3541b688"
           }
         },
         {
@@ -405,9 +628,23 @@
             "ResultCode": "FAILED",
             "IsSuccess": false,
             "Description": "Failed to retrieve stock data due to API error"
+          },
+          "primaryKey": {
+            "ID": "DFE1BC2A-92E0-477E-8687-105D8251B911"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.251Z",
+            "checksum": "729da7f8f4be3f10fbfcc510c97128afad71ddc5f4a19b318a9decbb774bea6c"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "296E03AE-6EDC-4C5E-9506-BC98ACCDA2E1"
+    },
+    "sync": {
+      "lastModified": "2025-06-14T03:41:14.251Z",
+      "checksum": "7b99e1d9df58eaf82ca8fc4526abfa4b5221e55d471f42b801a31f6d4fa73770"
     }
   },
   {
@@ -430,6 +667,13 @@
             "IsArray": false,
             "Description": "Mathematical expression to evaluate (e.g., '(2*3)+4/15', 'sqrt(16)+pow(2,3)')",
             "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "E1E038D7-46F5-4FBB-98B5-120A0DE67FDD"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.282Z",
+            "checksum": "7bfa18fb12724f4231395ada8d63316a700153e6609107b436d6f9d78f0a5ba2"
           }
         }
       ],
@@ -440,6 +684,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Expression calculated successfully"
+          },
+          "primaryKey": {
+            "ID": "ACDD9E1A-D086-492C-80E7-94EE3B8A3D61"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.298Z",
+            "checksum": "266a21fd94cd2d9333d512b3db626330d63aa9e26653abac2f9de060cab17249"
           }
         },
         {
@@ -448,6 +699,13 @@
             "ResultCode": "INVALID_EXPRESSION",
             "IsSuccess": false,
             "Description": "The expression is invalid or contains unsafe code"
+          },
+          "primaryKey": {
+            "ID": "6E9CF039-1D13-4049-8031-C8E80867E1A4"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.313Z",
+            "checksum": "ce890677ca986f7ea18f149e879f43ff45e13db5eb4b24529332e49a706c163f"
           }
         },
         {
@@ -456,9 +714,23 @@
             "ResultCode": "MISSING_PARAMETERS",
             "IsSuccess": false,
             "Description": "Expression parameter is required"
+          },
+          "primaryKey": {
+            "ID": "B28822DC-D6AF-404E-BE7F-B3CB408D435A"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.325Z",
+            "checksum": "0f7f1690e3f6fd77d47da1e3850cdfa28d894c8e99c843213006dc3e739f9ef9"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "22F9505E-3BEB-400E-A49F-A74D135C5A93"
+    },
+    "sync": {
+      "lastModified": "2025-06-14T03:41:14.325Z",
+      "checksum": "b0078b8a8b94e4c069536494070af4950119a07a74ca75700b3132f7b861b1c9"
     }
   },
   {
@@ -481,6 +753,13 @@
             "IsArray": false,
             "Description": "Color in HEX (#RGB or #RRGGBB), RGB (rgb(r,g,b)), HSL (hsl(h,s%,l%)), or color name format",
             "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "89CDBAFC-E486-4042-9E9C-B34EF75E62A1"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.349Z",
+            "checksum": "d44e0ffc64454fc7c3320899d1c8c4ba9cf0f2d1bd58ea49e5944af8e7e9166e"
           }
         }
       ],
@@ -491,6 +770,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Color converted successfully"
+          },
+          "primaryKey": {
+            "ID": "986CA3DC-7AA9-475D-B433-F5ECCAEAC996"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.360Z",
+            "checksum": "918fa65c0ad0dcbce69ef0b782751519c1f121a357ae5af6730ff3c6a8919406"
           }
         },
         {
@@ -499,6 +785,13 @@
             "ResultCode": "INVALID_FORMAT",
             "IsSuccess": false,
             "Description": "The color format is not recognized or invalid"
+          },
+          "primaryKey": {
+            "ID": "FDB6EFC6-5951-4064-878C-6A6252F122F6"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.371Z",
+            "checksum": "4f2b707547e8efa7384c4b468f949acb4eaf6bf486bfa4c000bc9119fc5ae2e4"
           }
         },
         {
@@ -507,6 +800,13 @@
             "ResultCode": "INVALID_VALUES",
             "IsSuccess": false,
             "Description": "Color values are out of valid range"
+          },
+          "primaryKey": {
+            "ID": "D12F3D74-8256-483D-A745-E7C7120F3880"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.381Z",
+            "checksum": "5b6c06e41e83b9421d803005c3d1ff277a1e110f10f96788294e520ca2bfc2cd"
           }
         },
         {
@@ -515,6 +815,13 @@
             "ResultCode": "MISSING_PARAMETERS",
             "IsSuccess": false,
             "Description": "Color parameter is required"
+          },
+          "primaryKey": {
+            "ID": "60E2D82F-5D56-4DCD-AF76-E3E6ACE34AB7"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.391Z",
+            "checksum": "18f9799b8151ec8833f5c7cfbbeefb4e58107faae2f27a1629ea31461fe4f194"
           }
         },
         {
@@ -523,9 +830,23 @@
             "ResultCode": "FAILED",
             "IsSuccess": false,
             "Description": "Failed to convert color"
+          },
+          "primaryKey": {
+            "ID": "5D859B18-5D53-4BC4-B4C3-071947671F31"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.401Z",
+            "checksum": "3e6b7b81ee436463259d283bcc0041bf0d5a1a4363625eaead9e806fdbe22bb0"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "D402FFD6-C7D1-48AD-A3AC-CF8BEE0A3127"
+    },
+    "sync": {
+      "lastModified": "2025-06-14T03:41:14.401Z",
+      "checksum": "fe3534298e770799244279ae324d417b495707865bb5c47404566fa959d3243d"
     }
   },
   {
@@ -548,6 +869,13 @@
             "IsArray": false,
             "Description": "The text content to analyze",
             "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "BCBC6D66-9C57-45FD-9909-8EDFA88478FA"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.425Z",
+            "checksum": "2af3e563ff7893ac72494bf14c03398dba60346b89aaf4d468229f8b77cb86ff"
           }
         },
         {
@@ -560,6 +888,13 @@
             "Description": "Boolean flag to include word frequency analysis in results",
             "IsRequired": false,
             "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "C83B1A2C-3F19-419A-AD09-42DDD77A2E5C"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.435Z",
+            "checksum": "396be979ed4218b2245ba642a906fe2da8cd75d4964083a7af727dec035e7e2e"
           }
         }
       ],
@@ -570,6 +905,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Text analyzed successfully"
+          },
+          "primaryKey": {
+            "ID": "53E918D0-E57A-4A74-90A1-F497F6B5E7D9"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.445Z",
+            "checksum": "f4a11452d5c0d844578cb9a5c42b7e6ade0bf9dc90511b1e8de68c80bbaddd03"
           }
         },
         {
@@ -578,6 +920,13 @@
             "ResultCode": "MISSING_PARAMETERS",
             "IsSuccess": false,
             "Description": "Text parameter is required"
+          },
+          "primaryKey": {
+            "ID": "CEA55B31-7309-439E-87BE-A498BC6C9FCD"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.456Z",
+            "checksum": "202e4b9c6be2f9f5c407fc95c9e460c68d5209d723514d85a36c4d4af5d39680"
           }
         },
         {
@@ -586,9 +935,23 @@
             "ResultCode": "FAILED",
             "IsSuccess": false,
             "Description": "Failed to analyze text"
+          },
+          "primaryKey": {
+            "ID": "331BA4D8-E4BD-481B-8990-30DB5B130553"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.465Z",
+            "checksum": "8d7f54cae8091cdde863b098c6f54fb4f9bcba065750171e5a569cf737ed8a63"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "154255C2-76D4-492C-88D9-C80614EDD703"
+    },
+    "sync": {
+      "lastModified": "2025-06-14T03:41:14.465Z",
+      "checksum": "3305e3ce17be6b610578ebeadb8d1e121f56fc610a81613daa9a056d6beadf3b"
     }
   },
   {
@@ -611,6 +974,13 @@
             "IsArray": false,
             "Description": "The numeric value to convert",
             "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "24DD4FAB-F10D-4BC0-AEF4-0A9F11CCCB2F"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.499Z",
+            "checksum": "64fbf02a99aafe27eea76da196678bb90cf6e7022885fcaca7fb6a4089298cb9"
           }
         },
         {
@@ -622,6 +992,13 @@
             "IsArray": false,
             "Description": "The unit to convert from (e.g., 'miles', 'kg', 'celsius')",
             "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "22DBB284-3125-4B4B-B655-A6EBA01D2B5F"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.509Z",
+            "checksum": "cbee2485042e7918b023e8538e7ab86a2a1f3976967add49e2979a2612e42436"
           }
         },
         {
@@ -633,6 +1010,13 @@
             "IsArray": false,
             "Description": "The unit to convert to (e.g., 'kilometers', 'pounds', 'fahrenheit')",
             "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "0C7EE9FE-0401-482B-B19B-65A3569753BC"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.519Z",
+            "checksum": "333fcca485e52f17c15b8c9f22bc317aac26f8f872fddc841ea01ae23e57bf0a"
           }
         }
       ],
@@ -643,6 +1027,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Unit conversion completed successfully"
+          },
+          "primaryKey": {
+            "ID": "CC3F0408-CC99-4EF4-9A06-1E18728D76E1"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.532Z",
+            "checksum": "0733445d76d2ac70196465304d6f33820a0a4473493d2a7e3d8f5868497837f0"
           }
         },
         {
@@ -651,6 +1042,13 @@
             "ResultCode": "MISSING_PARAMETERS",
             "IsSuccess": false,
             "Description": "Value, FromUnit, and ToUnit parameters are required"
+          },
+          "primaryKey": {
+            "ID": "D03185EC-F249-4471-BA35-5E2F0654ED45"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.542Z",
+            "checksum": "0c62ca365888c415ebb967e944b8add6458b8ad100e51a342fc1268f22541c31"
           }
         },
         {
@@ -659,6 +1057,13 @@
             "ResultCode": "INVALID_VALUE",
             "IsSuccess": false,
             "Description": "Value must be a valid number"
+          },
+          "primaryKey": {
+            "ID": "C9612C31-12A9-49AD-B7CD-6E39234DD87D"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.552Z",
+            "checksum": "5427239ea9b5966f443a2fb5effeeba7ce60ebb2e4aa0e02a7ec1517ff5e0a47"
           }
         },
         {
@@ -667,6 +1072,13 @@
             "ResultCode": "UNKNOWN_UNIT",
             "IsSuccess": false,
             "Description": "One or more units are not recognized"
+          },
+          "primaryKey": {
+            "ID": "C97C04C3-F2BE-4DAA-B55F-380FD7A6A3B1"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.563Z",
+            "checksum": "ba98781bf8730bf4cf0d78f3e254ff851d66436b50fdad8a2622931659ad7d6b"
           }
         },
         {
@@ -675,6 +1087,13 @@
             "ResultCode": "INCOMPATIBLE_UNITS",
             "IsSuccess": false,
             "Description": "Cannot convert between different unit categories"
+          },
+          "primaryKey": {
+            "ID": "0E837288-A99C-40F2-9080-6F28A7F5CD68"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.577Z",
+            "checksum": "22056daf86e504a50a0e85568605eac33bed2c40ccf9926b433d876e86917307"
           }
         },
         {
@@ -683,9 +1102,23 @@
             "ResultCode": "FAILED",
             "IsSuccess": false,
             "Description": "Failed to convert units"
+          },
+          "primaryKey": {
+            "ID": "240CCC40-6553-47CD-AA1B-9D36061F835A"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.593Z",
+            "checksum": "a38f59f286bc74f2823337b92e4618c2b3915d9970da154d7cb8fe8fe56cac7a"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "F1D24791-38AA-4389-8103-3D04AADC6BED"
+    },
+    "sync": {
+      "lastModified": "2025-06-14T03:41:14.593Z",
+      "checksum": "36c22593fe15f4a4f794187cbbcbaaa1afd011e410875fd8d870adc15047f019"
     }
   },
   {
@@ -708,6 +1141,13 @@
             "IsArray": false,
             "Description": "Operation to perform: 'DaysBetween', 'AddDays', or 'SubtractDays'",
             "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "733BD929-FE86-4A3E-A66A-C3B136FEFD1A"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.633Z",
+            "checksum": "d77092e97089313e6817f247b67bc5f5825abc20f897760e905cf4856f2bcd95"
           }
         },
         {
@@ -719,6 +1159,13 @@
             "IsArray": false,
             "Description": "Starting date (YYYY-MM-DD format)",
             "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "7C0C6B47-4F8D-461F-AE69-AD0A2ED3B3F2"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.644Z",
+            "checksum": "3ef09df62205f871fa84a00e971e8f174b369eb67d969efb8ea65660bdcea1f8"
           }
         },
         {
@@ -730,6 +1177,13 @@
             "IsArray": false,
             "Description": "Ending date (for DaysBetween operation, YYYY-MM-DD format)",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9C0102C1-5054-4478-A8C7-FC271D2E3934"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.654Z",
+            "checksum": "3a7dfdd4939ec33b8d5a6114184c90fb630e3194ceed3e999356c6d794d7e0ee"
           }
         },
         {
@@ -741,6 +1195,13 @@
             "IsArray": false,
             "Description": "Number of business days to add/subtract (for AddDays/SubtractDays operations)",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B70271CD-06C7-4021-B639-444ED6F955A3"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.666Z",
+            "checksum": "782a3a3f3cfeb86016bcc156ea0c748284d7a3817507b47fae330975dfb00de0"
           }
         },
         {
@@ -753,6 +1214,13 @@
             "Description": "Boolean to exclude holidays (default: true)",
             "IsRequired": false,
             "DefaultValue": "true"
+          },
+          "primaryKey": {
+            "ID": "039F3CCA-E1DA-4496-B4CC-A14BFD53AC11"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.678Z",
+            "checksum": "0112dea6228aa2acbd7cb87adc4626c08b8d98b65ded2f27cbf17371accf2cba"
           }
         },
         {
@@ -765,6 +1233,13 @@
             "Description": "Country code for holiday calendar (default: 'US')",
             "IsRequired": false,
             "DefaultValue": "US"
+          },
+          "primaryKey": {
+            "ID": "1CB6E806-1C54-428B-A32E-23596FAC7884"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.689Z",
+            "checksum": "b0ad24f2f57fe2c6f855b2306d4a43a1363a16128e80015cbfe21c89ffe21fc8"
           }
         }
       ],
@@ -775,6 +1250,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Business days calculated successfully"
+          },
+          "primaryKey": {
+            "ID": "D902431D-3863-4486-A603-912764F7AF3E"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.701Z",
+            "checksum": "1cbeddd45ab76ac1dc450b2e8b3c1178a4f994ee2d4269848cac3afff3f52d88"
           }
         },
         {
@@ -783,6 +1265,13 @@
             "ResultCode": "MISSING_PARAMETERS",
             "IsSuccess": false,
             "Description": "Required parameters are missing"
+          },
+          "primaryKey": {
+            "ID": "9AF72508-AA48-41D0-81EF-E4392A35A66A"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.712Z",
+            "checksum": "bec878432ea1111e2d0772570160acfaad17e1a7eb001f8cefdf19e30c54b37f"
           }
         },
         {
@@ -791,6 +1280,13 @@
             "ResultCode": "INVALID_DATE",
             "IsSuccess": false,
             "Description": "Invalid date format provided"
+          },
+          "primaryKey": {
+            "ID": "BA8995BD-68B9-44D7-926D-F1E26E632A54"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.723Z",
+            "checksum": "d16d0dbb3391c339c87412ebe7b4b10eb811923dc049b00b09a026799a54ace2"
           }
         },
         {
@@ -799,6 +1295,13 @@
             "ResultCode": "INVALID_VALUE",
             "IsSuccess": false,
             "Description": "Invalid value provided for Days parameter"
+          },
+          "primaryKey": {
+            "ID": "1C9C0BC1-EDB4-4B15-8D7C-B70B7B52E8BA"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.733Z",
+            "checksum": "a14df019e1906ca22e69d14d4e3b09d73150e6f49205161fd62570805e4e86a0"
           }
         },
         {
@@ -807,6 +1310,13 @@
             "ResultCode": "INVALID_OPERATION",
             "IsSuccess": false,
             "Description": "Invalid operation specified"
+          },
+          "primaryKey": {
+            "ID": "80ECC6D2-E180-4F01-8505-7A5847C14616"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.744Z",
+            "checksum": "9bdb273201e46cec9ff52bf19311314a5e9de4e59a2a77a02de8e6f15850ba49"
           }
         },
         {
@@ -815,9 +1325,23 @@
             "ResultCode": "FAILED",
             "IsSuccess": false,
             "Description": "Failed to calculate business days"
+          },
+          "primaryKey": {
+            "ID": "6F24716B-E07A-49D7-BA26-35E5D5BD5FDF"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.756Z",
+            "checksum": "ba5418035b2097e701421531d10eb4a21a128c19003a9e1d5cfc63a77f6296b5"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "25A3DA96-66C7-43CE-B39B-DE0D4DD5FFBA"
+    },
+    "sync": {
+      "lastModified": "2025-06-14T03:41:14.756Z",
+      "checksum": "d683c452da34faf27fbbe011ed67c3da84d67e541ea3de20bc669a97db360511"
     }
   },
   {
@@ -840,6 +1364,13 @@
             "IsArray": false,
             "Description": "The IP address to lookup (optional - uses caller's IP if not provided)",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B00CD0AF-F3AE-4757-9588-774529E5326E"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.781Z",
+            "checksum": "d711f553da58ad568df5b5c040e298f4f02999c85d23a6b9960f41b088316b58"
           }
         }
       ],
@@ -850,6 +1381,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Geolocation data retrieved successfully"
+          },
+          "primaryKey": {
+            "ID": "31036675-95A5-4990-A9E1-79603028A17C"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.792Z",
+            "checksum": "4ecf3ebc0e5c664aabe0e050152674f0f5d5579e5c9fa58b0b28a9655d7243f6"
           }
         },
         {
@@ -858,6 +1396,13 @@
             "ResultCode": "INVALID_IP",
             "IsSuccess": false,
             "Description": "Invalid IP address format"
+          },
+          "primaryKey": {
+            "ID": "1F62DF83-8F99-4034-B010-5DE00888D54B"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.801Z",
+            "checksum": "33e55db143ecbbbe4f9ff1c8aed589c775b1206a1af703be1fe3a2da8c3e466e"
           }
         },
         {
@@ -866,6 +1411,13 @@
             "ResultCode": "LOOKUP_FAILED",
             "IsSuccess": false,
             "Description": "Failed to retrieve geolocation data"
+          },
+          "primaryKey": {
+            "ID": "A54F0E36-55E8-48E5-B1E2-AC3FFBD1E800"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.811Z",
+            "checksum": "3f8b20a7d164039bcb138ee6648c14726f38e711eedace0311a09af889971b2d"
           }
         },
         {
@@ -874,9 +1426,23 @@
             "ResultCode": "FAILED",
             "IsSuccess": false,
             "Description": "Failed to get IP geolocation"
+          },
+          "primaryKey": {
+            "ID": "7A000961-60B4-4764-B0E0-139D9B04EB6A"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.822Z",
+            "checksum": "c9f9f62d6b62b7018cbc4b9995404c151305aae9d9c223f0a670c5ca141f6c1c"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "F138FA8A-79A2-4989-8B99-2544B6091D79"
+    },
+    "sync": {
+      "lastModified": "2025-06-14T03:41:14.822Z",
+      "checksum": "6339501227dce16a3eb2780b4577791d27e622fd7b5692bad75e34739f730349"
     }
   },
   {
@@ -899,6 +1465,13 @@
             "IsArray": false,
             "Description": "ZIP code to lookup (either this or City/State required)",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "86513815-94CF-4BDF-BD43-A54602B52FE1"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.849Z",
+            "checksum": "2114b67d02c4cae43915d24e0e6ba250af632fbcbd519ad1bee07c193420be39"
           }
         },
         {
@@ -910,6 +1483,13 @@
             "IsArray": false,
             "Description": "City name (must be used with State)",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2AF35A1D-D4B7-4C8F-A05F-DD56A8FF62C8"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.868Z",
+            "checksum": "e0ac840c6412e246a6d5cce25aac9d00bcace31699f12fdbf98a8c13a4dc8a07"
           }
         },
         {
@@ -921,6 +1501,13 @@
             "IsArray": false,
             "Description": "State name or abbreviation (must be used with City)",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2CFDAA13-15CF-4907-9FD8-DB4505558B33"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.884Z",
+            "checksum": "737a88651d8da17be418d8a2d01303fa7a2bb898ece3584bab8b0daed8af2dbe"
           }
         },
         {
@@ -933,6 +1520,13 @@
             "Description": "Type of data to retrieve (default: 'summary')",
             "IsRequired": false,
             "DefaultValue": "summary"
+          },
+          "primaryKey": {
+            "ID": "C86463AB-C8A3-491E-9FD2-D9DFE78CBC36"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.896Z",
+            "checksum": "2d7c1b9c5ce83fd78438ba5233cbc44a080eec920eeed5f048bcb288eeac1c42"
           }
         }
       ],
@@ -943,6 +1537,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Census data retrieved successfully"
+          },
+          "primaryKey": {
+            "ID": "982816D7-24B7-40C0-B448-1A8265890A0D"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.908Z",
+            "checksum": "cf0320a55a3bf9f10b2ef7ba2034c1f18bbeecc39db3fe426bf5beb2c16aaabe"
           }
         },
         {
@@ -951,6 +1552,13 @@
             "ResultCode": "MISSING_PARAMETERS",
             "IsSuccess": false,
             "Description": "Either ZipCode or both City and State parameters are required"
+          },
+          "primaryKey": {
+            "ID": "9E86F66B-BB37-496A-94CA-F2294DA8DBBF"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.918Z",
+            "checksum": "8829d4a21942356ce46307afce3b86251a14024203fe67c93347e1851c9c63af"
           }
         },
         {
@@ -959,6 +1567,13 @@
             "ResultCode": "INVALID_ZIP",
             "IsSuccess": false,
             "Description": "Invalid ZIP code format. Must be 5 digits"
+          },
+          "primaryKey": {
+            "ID": "9FA11D22-2278-4627-8B94-FD5CA71995BA"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.929Z",
+            "checksum": "3dedeb9079e6e94c7295c98778a3e92faf399f9eb4274e010ef93ce8383b857a"
           }
         },
         {
@@ -967,6 +1582,13 @@
             "ResultCode": "INVALID_STATE",
             "IsSuccess": false,
             "Description": "Invalid state name or abbreviation"
+          },
+          "primaryKey": {
+            "ID": "4A5C3B8F-68D4-4FB0-A07E-932D622F7F22"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.940Z",
+            "checksum": "265cd8a8156d1cd00b8bf3eee85c06b20ee4f04ea622fdb28da2aae3dc19b0e3"
           }
         },
         {
@@ -975,6 +1597,13 @@
             "ResultCode": "NOT_FOUND",
             "IsSuccess": false,
             "Description": "Location not found or no data available"
+          },
+          "primaryKey": {
+            "ID": "D71316F4-3F25-4273-86EC-FD7D0934FB3C"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.949Z",
+            "checksum": "9ebd1f369d6f6c28dd309fecb94c05eaa89cb36c3e6c5eda31e4c54dbd6c8fe1"
           }
         },
         {
@@ -983,9 +1612,23 @@
             "ResultCode": "FAILED",
             "IsSuccess": false,
             "Description": "Failed to retrieve census data"
+          },
+          "primaryKey": {
+            "ID": "AF2D1BA2-C6E8-43AC-8ED0-582E78F21145"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T03:41:14.959Z",
+            "checksum": "462afbe54299bdb71ca2103590f96a777e10973e8e05827a0d02fc33eb4de285"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "08E0742A-5DB9-4A5F-BA47-ED39374EE213"
+    },
+    "sync": {
+      "lastModified": "2025-06-14T03:41:14.959Z",
+      "checksum": "e4b89c4512450ec8609dbabb5f380b5cd5f365962e743f179e0082d724536021"
     }
   }
 ]

@@ -8,6 +8,13 @@
       "SystemPromptID": "@lookup:AI Prompts.Name=Loop Agent Type: System Prompt",
       "IsActive": true
     },
-    "relatedEntities": {}
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "F7926101-5099-4FA5-836A-479D9707C818"
+    },
+    "sync": {
+      "lastModified": "2025-06-14T03:41:15.091Z",
+      "checksum": "1fdf686c688c48843bfb8ed8a6991a8d9e0ebd7c41b7aea3361398c8a01b6674"
+    }
   }
 ]
