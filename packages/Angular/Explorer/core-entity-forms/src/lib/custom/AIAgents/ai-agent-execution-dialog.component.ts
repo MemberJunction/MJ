@@ -49,13 +49,14 @@ export class AIAgentExecutionDialogComponent implements OnInit {
     public isExecuting = false;
     public executionResult: AIAgentRunResult | null = null;
 
-    // Conversation messages
-    public conversationMessages: string = JSON.stringify([
-        {
-            role: 'user',
-            content: 'Hello, please help me with my task.'
-        }
-    ], null, 2);
+    // User message input
+    public userMessage: string = 'Hello, please help me with my task.';
+    
+    // Conversation messages (built from userMessage)
+    public conversationMessages: string = '';
+    
+    // Show advanced conversation editor
+    public showAdvancedConversation = false;
 
     // Data context variables
     public dataContextVariables: DataContextVariable[] = [];
@@ -78,14 +79,11 @@ export class AIAgentExecutionDialogComponent implements OnInit {
         this.showAdvancedOptions = false;
         this.showDataContext = false;
         this.showTemplateData = false;
+        this.showAdvancedConversation = false;
         
-        // Reset to default conversation
-        this.conversationMessages = JSON.stringify([
-            {
-                role: 'user',
-                content: 'Hello, please help me with my task.'
-            }
-        ], null, 2);
+        // Reset to default message
+        this.userMessage = 'Hello, please help me with my task.';
+        this.updateConversationFromMessage();
         
         this.dataContextVariables = [];
         this.templateDataVariables = [];
@@ -120,6 +118,24 @@ export class AIAgentExecutionDialogComponent implements OnInit {
         this.templateDataVariables.splice(index, 1);
     }
 
+    public updateConversationFromMessage() {
+        const conversation = [
+            {
+                role: 'user',
+                content: this.userMessage
+            }
+        ];
+        this.conversationMessages = JSON.stringify(conversation, null, 2);
+    }
+
+    public toggleAdvancedConversation() {
+        this.showAdvancedConversation = !this.showAdvancedConversation;
+        if (!this.showAdvancedConversation) {
+            // When switching back to simple mode, update the conversation from the user message
+            this.updateConversationFromMessage();
+        }
+    }
+
     public async executeAgent() {
         if (!this.aiAgent) {
             MJNotificationService.Instance.CreateSimpleNotification(
@@ -130,16 +146,35 @@ export class AIAgentExecutionDialogComponent implements OnInit {
             return;
         }
 
-        // Validate conversation messages JSON
+        // Prepare conversation messages
         let parsedMessages: ChatMessage[];
         try {
-            parsedMessages = JSON.parse(this.conversationMessages);
-            if (!Array.isArray(parsedMessages)) {
-                throw new Error('Messages must be an array');
+            if (this.showAdvancedConversation) {
+                // Use the raw JSON conversation
+                parsedMessages = JSON.parse(this.conversationMessages);
+                if (!Array.isArray(parsedMessages)) {
+                    throw new Error('Messages must be an array');
+                }
+            } else {
+                // Use the simple user message
+                if (!this.userMessage.trim()) {
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        'Please enter a message to send to the agent',
+                        'warning',
+                        4000
+                    );
+                    return;
+                }
+                parsedMessages = [
+                    {
+                        role: 'user',
+                        content: this.userMessage.trim()
+                    }
+                ];
             }
         } catch (error) {
             MJNotificationService.Instance.CreateSimpleNotification(
-                'Invalid conversation messages JSON: ' + (error as Error).message,
+                'Invalid conversation messages: ' + (error as Error).message,
                 'error',
                 5000
             );

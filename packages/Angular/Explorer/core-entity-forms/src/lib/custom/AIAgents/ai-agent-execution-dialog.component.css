@@ -111,6 +111,37 @@ kendo-expansionpanel {
     flex-shrink: 1;
 }
 
+/* Toggle button styling */
+.toggle-advanced-btn {
+    transition: all 0.2s ease;
+}
+
+.toggle-advanced-btn:hover {
+    background-color: #f8f9fa !important;
+    border-color: #adb5bd !important;
+    color: #495057 !important;
+}
+
+/* Conversation section styling */
+.conversation-section {
+    background: #ffffff;
+    padding: 0;
+}
+
+.conversation-section label {
+    font-size: 0.95em;
+}
+
+.conversation-section kendo-textarea {
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+}
+
+.conversation-section kendo-textarea:focus-within {
+    border-color: #6f42c1;
+    box-shadow: 0 0 0 0.2rem rgba(111, 66, 193, 0.25);
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .variable-row {

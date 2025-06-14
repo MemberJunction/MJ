@@ -26,20 +26,47 @@
         <!-- Main Content Area -->
         <div class="main-content" style="flex: 1; display: flex; flex-direction: column; gap: 16px; overflow-y: auto;">
             
-            <!-- Conversation Messages -->
+            <!-- User Message Section -->
             <div class="conversation-section">
-                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #495057;">
-                    <i class="fa-solid fa-comments" style="margin-right: 6px; color: #6f42c1;"></i>
-                    Conversation Messages <span style="color: #dc3545;">*</span>
-                </label>
-                <p style="margin: 0 0 8px 0; color: #6c757d; font-size: 0.85em;">
-                    JSON array of conversation messages to provide as context to the agent.
-                </p>
-                <kendo-textarea [(ngModel)]="conversationMessages"
-                               [rows]="6"
-                               style="width: 100%; font-family: 'Courier New', monospace; font-size: 0.9em;"
-                               placeholder='[{"role": "user", "content": "Your message here"}]'>
-                </kendo-textarea>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <label style="font-weight: 600; color: #495057;">
+                        <i class="fa-solid fa-comment" style="margin-right: 6px; color: #6f42c1;"></i>
+                        Message to Agent <span style="color: #dc3545;">*</span>
+                    </label>
+                    <button type="button" 
+                            class="toggle-advanced-btn"
+                            (click)="toggleAdvancedConversation()"
+                            style="background: none; border: 1px solid #dee2e6; border-radius: 4px; padding: 4px 8px; font-size: 0.8em; color: #6c757d; cursor: pointer;">
+                        @if (showAdvancedConversation) {
+                            <i class="fa-solid fa-chevron-up"></i> Simple
+                        } @else {
+                            <i class="fa-solid fa-chevron-down"></i> Advanced
+                        }
+                    </button>
+                </div>
+                
+                @if (!showAdvancedConversation) {
+                    <!-- Simple Message Input -->
+                    <p style="margin: 0 0 8px 0; color: #6c757d; font-size: 0.85em;">
+                        Enter your message to send to the agent.
+                    </p>
+                    <kendo-textarea [(ngModel)]="userMessage"
+                                   (ngModelChange)="updateConversationFromMessage()"
+                                   [rows]="4"
+                                   style="width: 100%;"
+                                   placeholder="Type your message to the agent here...">
+                    </kendo-textarea>
+                } @else {
+                    <!-- Advanced JSON Editor -->
+                    <p style="margin: 0 0 8px 0; color: #6c757d; font-size: 0.85em;">
+                        JSON array of conversation messages to provide as context to the agent.
+                    </p>
+                    <kendo-textarea [(ngModel)]="conversationMessages"
+                                   [rows]="6"
+                                   style="width: 100%; font-family: 'Courier New', monospace; font-size: 0.9em;"
+                                   placeholder='[{"role": "user", "content": "Your message here"}]'>
+                    </kendo-textarea>
+                }
             </div>
 
             <!-- Advanced Options Expandable Panel -->
