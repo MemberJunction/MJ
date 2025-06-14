@@ -37,6 +37,12 @@ import { TreeViewModule } from '@progress/kendo-angular-treeview';
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { ModelPromptPriorityMatrixComponent } from './AI/components/prompts/model-prompt-priority-matrix.component';
 import { PromptVersionControlComponent } from './AI/components/prompts/prompt-version-control.component';
+// AI Instrumentation Components
+import { KPICardComponent } from './AI/components/widgets/kpi-card.component';
+import { LiveExecutionWidgetComponent } from './AI/components/widgets/live-execution-widget.component';
+import { TimeSeriesChartComponent } from './AI/components/charts/time-series-chart.component';
+import { PerformanceHeatmapComponent } from './AI/components/charts/performance-heatmap.component';
+import { AIInstrumentationService } from './AI/services/ai-instrumentation.service';
 @NgModule({
   declarations: [
     EntityAdminDashboardComponent,
@@ -65,7 +71,12 @@ import { PromptVersionControlComponent } from './AI/components/prompts/prompt-ve
     ExecutionsListViewComponent,
     CategoriesListViewComponent,
     ModelPromptPriorityMatrixComponent,
-    PromptVersionControlComponent
+    PromptVersionControlComponent,
+    // AI Instrumentation Components
+    KPICardComponent,
+    LiveExecutionWidgetComponent,
+    TimeSeriesChartComponent,
+    PerformanceHeatmapComponent
   ],
   imports: [
     CommonModule,
@@ -79,6 +90,9 @@ import { PromptVersionControlComponent } from './AI/components/prompts/prompt-ve
     CodeEditorModule,
     TreeViewModule,
     ButtonsModule
+  ],
+  providers: [
+    AIInstrumentationService
   ],
   exports: [
     EntityAdminDashboardComponent,

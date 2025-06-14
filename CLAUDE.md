@@ -2,6 +2,7 @@
 
 ## IMPORTANT
 - Before starting a new line of work always check the local branch we're on and see if it is (a) separate from the default branch in the remote repo - we always want to work in local feature branches and (b) if we aren't in such a feature branch that is named for the work being requested and empty, cut a new one but ask first and then switch to it
+- **NEVER commit changes without explicit user request** - Always stage changes and show what would be committed, but wait for user approval before running git commit
 
 ## Build Commands
 - Build all packages: `npm run build`
@@ -10,6 +11,12 @@
 - Watch mode: `npm run watch`
 - Start API server: `npm run start:api`
 - Start Explorer UI: `npm run start:explorer`
+
+## Database Migrations
+- **CRITICAL**: Migration files must use the format `VYYYYMMDDHHMM__v[VERSION].x_[DESCRIPTION].sql`
+- Always use `date +"%Y%m%d%H%M"` to get the current timestamp in 24-hour format
+- Example: `V202506130552__v2.49.x_Add_AIAgent_Status_And_DriverClass_Columns.sql`
+- This ensures Flyway executes migrations in the correct order
 
 ## Development Workflow
 - **CRITICAL**: After making code changes, always compile the affected package by running `npm run build` in that package's directory to check for TypeScript errors

@@ -1,36 +1,37 @@
-import { DataSourceOptions } from 'typeorm';
+import sql from 'mssql';
 import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate } from './config.js';
 
-const orm = (entities: Array<string>): DataSourceOptions => {
-  const ormConfig = {
-    type: 'mssql' as const,
-    entities,
-    logging: false,
-    host: dbHost,
+const createMSSQLConfig = (): sql.config => {
+  const mssqlConfig: sql.config = {
+    server: dbHost,
     port: dbPort,
-    username: dbUsername,
+    user: dbUsername,
     password: dbPassword,
     database: dbDatabase,
-    synchronize: false,
     requestTimeout: configInfo.databaseSettings.requestTimeout,
     connectionTimeout: configInfo.databaseSettings.connectionTimeout,
-    options: {},
+    options: {
+      encrypt: true, // Use encryption
+      enableArithAbort: true,
+    },
   };
+  
   if (dbInstanceName !== null && dbInstanceName !== undefined && dbInstanceName.trim().length > 0) {
-    ormConfig.options = {
-      ...ormConfig.options,
+    mssqlConfig.options = {
+      ...mssqlConfig.options,
       instanceName: dbInstanceName,
     };
   }
+  
   if (dbTrustServerCertificate !== null && dbTrustServerCertificate !== undefined) {
-    ormConfig.options = {
-      ...ormConfig.options,
+    mssqlConfig.options = {
+      ...mssqlConfig.options,
       trustServerCertificate: dbTrustServerCertificate === 'Y',
     };
   }
 
-  //console.log({ ormConfig: { ...ormConfig, password: '***' } });
-  return ormConfig;
+  //console.log({ mssqlConfig: { ...mssqlConfig, password: '***' } });
+  return mssqlConfig;
 };
 
-export default orm;
+export default createMSSQLConfig;

@@ -54,6 +54,7 @@
     "@memberjunction/core": "2.48.0",
     "@memberjunction/core-entities": "2.48.0",
     "@memberjunction/core-entities-server": "2.48.0",
+    "@memberjunction/global": "2.48.0",
     "@memberjunction/sqlserver-dataprovider": "2.48.0",
     "@memberjunction/graphql-dataprovider": "2.48.0",
     "@oclif/core": "^3",
@@ -69,7 +70,7 @@
     "zod": "^3.23.4",
     "crypto": "^1.0.1",
     "axios": "^1.6.8",
-    "typeorm": "^0.3.20"
+    "mssql": "^11.0.1"
   },
   "devDependencies": {
     "@oclif/prettier-config": "^0.2.1",

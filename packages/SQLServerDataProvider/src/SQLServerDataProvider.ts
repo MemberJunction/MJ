@@ -1,3 +1,16 @@
+/**
+ * @fileoverview SQL Server Data Provider for MemberJunction
+ * 
+ * This module provides a comprehensive SQL Server implementation of the MemberJunction data provider interfaces.
+ * It handles all database operations including CRUD operations, metadata management, view execution, and 
+ * advanced features like SQL logging, transaction management, and record change tracking.
+ * 
+ * @module @memberjunction/sqlserver-dataprovider
+ * @author MemberJunction Team
+ * @version 2.0
+ * @since 1.0
+ */
+
 /**************************************************************************************************************
  * The SQLServerDataProvider provides a data provider for the entities framework that uses SQL Server directly
  * In practice - this FILE will NOT exist in the entities library, we need to move to its own separate project
@@ -74,7 +87,7 @@ import {
 import { AIEngine, EntityAIActionParams } from '@memberjunction/aiengine';
 import { QueueManager } from '@memberjunction/queue';
 
-import { DataSource, QueryRunner } from 'typeorm';
+import * as sql from 'mssql';
 import { SQLServerTransactionGroup } from './SQLServerTransactionGroup';
 
 import { UserCache } from './UserCache';
@@ -82,14 +95,58 @@ import { RunQueryParams } from '@memberjunction/core/dist/generic/runQuery';
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 import { EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult } from '@memberjunction/actions-base';
+import { v4 as uuidv4 } from 'uuid';
+import { format as formatSql } from 'sql-formatter';
+import * as fs from 'fs';
+import * as path from 'path';
 
+/**
+ * Configuration options for SQL execution with logging support
+ */
+export interface ExecuteSQLOptions {
+  /** Optional description for this SQL operation */
+  description?: string;
+  /** If true, this statement will not be logged to any logging session */
+  ignoreLogging?: boolean;
+  /** Whether this is a data mutation operation (INSERT/UPDATE/DELETE) */
+  isMutation?: boolean;
+  /** Simple SQL fallback for loggers with logRecordChangeMetadata=false (only for Save/Delete operations) */
+  simpleSQLFallback?: string;
+}
+
+/**
+ * Configuration options for batch SQL execution
+ */
+export interface ExecuteSQLBatchOptions {
+  /** Optional description for this batch operation */
+  description?: string;
+  /** If true, this batch will not be logged to any logging session */
+  ignoreLogging?: boolean;
+  /** Whether this batch contains data mutation operations */
+  isMutation?: boolean;
+}
+
+/**
+ * Configuration data specific to SQL Server provider
+ */
 export class SQLServerProviderConfigData extends ProviderConfigDataBase {
+  /**
+   * Gets the SQL Server data source configuration
+   */
   get DataSource(): any {
     return this.Data.DataSource;
   }
+  
+  /**
+   * Gets the current user's email address
+   */
   get CurrentUserEmail(): string {
     return this.Data.CurrentUserEmail;
   }
+  
+  /**
+   * Gets the interval in seconds for checking metadata refresh
+   */
   get CheckRefreshIntervalSeconds(): number {
     return this.Data.CheckRefreshIntervalSeconds;
   }
@@ -100,7 +157,7 @@ export class SQLServerProviderConfigData extends ProviderConfigDataBase {
     MJCoreSchemaName?: string,
     checkRefreshIntervalSeconds: number = 0 /*default to disabling auto refresh */,
     includeSchemas?: string[],
-    excludeSchemas?: string[]
+    excludeSchemas?: string[],
   ) {
     super(
       {
@@ -110,32 +167,349 @@ export class SQLServerProviderConfigData extends ProviderConfigDataBase {
       },
       MJCoreSchemaName,
       includeSchemas,
-      excludeSchemas
+      excludeSchemas,
     );
   }
 }
 
-// Implements both the IEntityDataProvider and IMetadataProvider interfaces.
+/**
+ * Configuration options for SQL logging sessions
+ */
+export interface SqlLoggingOptions {
+  /** Whether to format output as a migration file with schema placeholders */
+  formatAsMigration?: boolean;
+  /** Optional description to include as a comment at the start of the log */
+  description?: string;
+  /** Which types of statements to log: 'queries' (all), 'mutations' (only data changes), 'both' (default) */
+  statementTypes?: 'queries' | 'mutations' | 'both';
+  /** Optional batch separator to emit after each statement (e.g., "GO" for SQL Server) */
+  batchSeparator?: string;
+  /** Whether to pretty print SQL statements with proper formatting */
+  prettyPrint?: boolean;
+  /** Whether to log record change metadata wrapper SQL (default: false). When false, only core spCreate/spUpdate/spDelete calls are logged */
+  logRecordChangeMetadata?: boolean;
+  /** Whether to retain log files that contain no SQL statements (default: false). When false, empty log files are automatically deleted on dispose */
+  retainEmptyLogFiles?: boolean;
+}
+
+/**
+ * Interface for SQL logging session with disposable pattern
+ */
+export interface SqlLoggingSession {
+  /** Unique session ID */
+  readonly id: string;
+  /** File path where SQL is being logged */
+  readonly filePath: string;
+  /** Session start time */
+  readonly startTime: Date;
+  /** Number of statements logged so far */
+  readonly statementCount: number;
+  /** Configuration options for this session */
+  readonly options: SqlLoggingOptions;
+  /** Dispose method to stop logging and clean up resources */
+  dispose(): Promise<void>;
+}
+
+/**
+ * Internal implementation of SqlLoggingSession that handles SQL statement logging to files.
+ * This class manages file I/O, SQL formatting, and filtering based on session options.
+ * 
+ * @internal
+ */
+class SqlLoggingSessionImpl implements SqlLoggingSession {
+  public readonly id: string;
+  public readonly filePath: string;
+  public readonly startTime: Date;
+  public readonly options: SqlLoggingOptions;
+  private _statementCount: number = 0;
+  private _emittedStatementCount: number = 0; // Track actually emitted statements
+  private _fileHandle: fs.promises.FileHandle | null = null;
+  private _disposed: boolean = false;
+
+  constructor(id: string, filePath: string, options: SqlLoggingOptions = {}) {
+    this.id = id;
+    this.filePath = filePath;
+    this.startTime = new Date();
+    this.options = options;
+  }
+
+  /**
+   * Gets the count of SQL statements actually written to the log file
+   * @returns The number of emitted statements (after filtering)
+   */
+  public get statementCount(): number {
+    return this._emittedStatementCount; // Return actually emitted statements
+  }
+
+  /**
+   * Initializes the logging session by creating the log file and writing the header
+   * @throws Error if file creation fails
+   */
+  public async initialize(): Promise<void> {
+    // Ensure directory exists
+    const dir = path.dirname(this.filePath);
+    await fs.promises.mkdir(dir, { recursive: true });
+
+    // Open file for writing
+    this._fileHandle = await fs.promises.open(this.filePath, 'w');
+
+    // Write header comment
+    const header = this._generateHeader();
+    await this._fileHandle.writeFile(header);
+  }
+
+  /**
+   * Logs a SQL statement to the file, applying filtering and formatting based on session options
+   * 
+   * @param query - The SQL query to log
+   * @param parameters - Optional parameters for the query
+   * @param description - Optional description for this operation
+   * @param isMutation - Whether this is a data mutation operation
+   * @param simpleSQLFallback - Optional simple SQL to use if logRecordChangeMetadata=false
+   */
+  public async logSqlStatement(query: string, parameters?: any, description?: string, isMutation: boolean = false, simpleSQLFallback?: string): Promise<void> {
+    if (this._disposed || !this._fileHandle) {
+      return;
+    }
+
+    // Filter statements based on statementTypes option
+    const statementTypes = this.options.statementTypes || 'both';
+    if (statementTypes === 'mutations' && !isMutation) {
+      return; // Skip logging non-mutation statements
+    }
+    if (statementTypes === 'queries' && isMutation) {
+      return; // Skip logging mutation statements
+    }
+
+    let logEntry = '';
+
+    // Add description comment if provided
+    if (description) {
+      logEntry += `-- ${description}\n`;
+    }
+
+    // Process the SQL statement
+    let processedQuery = query;
+    
+    // Use simple SQL fallback if this session has logRecordChangeMetadata=false (default) and fallback is provided
+    if (this.options.logRecordChangeMetadata !== true && simpleSQLFallback) {
+      processedQuery = simpleSQLFallback;
+      // Update description to indicate we're using the simplified version
+      if (description && !description.includes('(core SP call only)')) {
+        logEntry = logEntry.replace(`-- ${description}\n`, `-- ${description} (core SP call only)\n`);
+      }
+    }
+
+    // Replace schema names with Flyway placeholders if migration format
+    if (this.options.formatAsMigration) {
+      processedQuery = processedQuery.replace(/\[(\w+)\]\./g, '[${flyway:defaultSchema}].');
+    }
+
+    // Apply pretty printing if enabled
+    if (this.options.prettyPrint) {
+      processedQuery = this._prettyPrintSql(processedQuery);
+    }
+
+    // Add the SQL statement
+    logEntry += `${processedQuery};\n`;
+
+    // Add parameter comment if parameters exist
+    if (parameters) {
+      if (Array.isArray(parameters)) {
+        if (parameters.length > 0) {
+          logEntry += `-- Parameters: ${parameters.map((p, i) => `@p${i}='${p}'`).join(', ')}\n`;
+        }
+      } else if (typeof parameters === 'object') {
+        const paramStr = Object.entries(parameters)
+          .map(([key, value]) => `@${key}='${value}'`)
+          .join(', ');
+        if (paramStr) {
+          logEntry += `-- Parameters: ${paramStr}\n`;
+        }
+      }
+    }
+
+    // Add batch separator if specified
+    if (this.options.batchSeparator) {
+      logEntry += `\n${this.options.batchSeparator}\n`;
+    }
+
+    logEntry += '\n'; // Add blank line between statements
+
+    await this._fileHandle.writeFile(logEntry);
+    this._statementCount++;
+    this._emittedStatementCount++; // Track actually emitted statements
+  }
+
+  /**
+   * Disposes of the logging session, writes the footer, closes the file, and optionally deletes empty files
+   */
+  public async dispose(): Promise<void> {
+    if (this._disposed) {
+      return;
+    }
+
+    this._disposed = true;
+
+    if (this._fileHandle) {
+      // Write footer comment
+      const footer = this._generateFooter();
+      await this._fileHandle.writeFile(footer);
+
+      await this._fileHandle.close();
+      this._fileHandle = null;
+
+      // Check if we should delete empty log files
+      if (this._emittedStatementCount === 0 && !this.options.retainEmptyLogFiles) {
+        try {
+          await fs.promises.unlink(this.filePath);
+          // Log that we deleted the empty file (optional)
+          console.log(`Deleted empty SQL log file: ${this.filePath}`);
+        } catch (error) {
+          // Ignore errors during deletion (file might already be deleted, etc.)
+          console.error(`Failed to delete empty SQL log file: ${this.filePath}`, error);
+        }
+      }
+    }
+  }
+
+  private _generateHeader(): string {
+    let header = `-- SQL Logging Session\n`;
+    header += `-- Session ID: ${this.id}\n`;
+    header += `-- Started: ${this.startTime.toISOString()}\n`;
+
+    if (this.options.description) {
+      header += `-- Description: ${this.options.description}\n`;
+    }
+
+    if (this.options.formatAsMigration) {
+      header += `-- Format: Migration-ready with Flyway schema placeholders\n`;
+    }
+
+    header += `-- Generated by MemberJunction SQLServerDataProvider\n`;
+    header += `\n`;
+
+    return header;
+  }
+
+  private _generateFooter(): string {
+    const endTime = new Date();
+    const duration = endTime.getTime() - this.startTime.getTime();
+
+    let footer = `\n-- End of SQL Logging Session\n`;
+    footer += `-- Session ID: ${this.id}\n`;
+    footer += `-- Completed: ${endTime.toISOString()}\n`;
+    footer += `-- Duration: ${duration}ms\n`;
+    footer += `-- Total Statements: ${this._emittedStatementCount}\n`;
+
+    return footer;
+  }
+
+  /**
+   * Format SQL using sql-formatter library with SQL Server dialect
+   */
+  private _prettyPrintSql(sql: string): string {
+    if (!sql) return sql;
+
+    try {
+      let formatted = formatSql(sql, {
+        language: 'tsql', // SQL Server Transact-SQL dialect
+        tabWidth: 2,
+        keywordCase: 'upper',
+        functionCase: 'upper',
+        dataTypeCase: 'upper',
+        linesBetweenQueries: 1,
+      });
+
+      // Post-process to fix BEGIN/END formatting
+      formatted = this._postProcessBeginEnd(formatted);
+
+      return formatted;
+    } catch (error) {
+      // If formatting fails, return original SQL
+      console.warn('SQL formatting failed, returning original:', error);
+      return sql;
+    }
+  }
+
+  /**
+   * Post-process SQL to ensure BEGIN, END, and EXEC keywords are on their own lines
+   */
+  private _postProcessBeginEnd(sql: string): string {
+    if (!sql) return sql;
+
+    // Fix BEGIN keyword - ensure it's on its own line
+    // Match: any non-whitespace followed by space(s) followed by BEGIN (word boundary)
+    sql = sql.replace(/(\S)\s+(BEGIN\b)/g, '$1\n$2');
+
+    // Fix BEGIN followed by other keywords - ensure what follows BEGIN is on a new line
+    // Match: BEGIN followed by space(s) followed by non-whitespace
+    sql = sql.replace(/(BEGIN\b)\s+(\S)/g, '$1\n$2');
+
+    // Fix END keyword - ensure it's on its own line
+    // Match: any non-whitespace followed by space(s) followed by END (word boundary)
+    sql = sql.replace(/(\S)\s+(END\b)/g, '$1\n$2');
+
+    // Fix EXEC keyword - ensure it's on its own line
+    // Match: any non-whitespace followed by space(s) followed by EXEC (word boundary)
+    sql = sql.replace(/(\S)\s+(EXEC\b)/g, '$1\n$2');
+
+    return sql;
+  }
+
+}
+
+/**
+ * SQL Server implementation of the MemberJunction data provider interfaces.
+ * 
+ * This class provides comprehensive database functionality including:
+ * - CRUD operations for entities
+ * - Metadata management and caching
+ * - View and query execution
+ * - Transaction support
+ * - SQL logging capabilities
+ * - Record change tracking
+ * - AI integration hooks
+ * 
+ * @example
+ * ```typescript
+ * const config = new SQLServerProviderConfigData(dataSource, userEmail);
+ * const provider = new SQLServerDataProvider(config);
+ * await provider.Config();
+ * ```
+ */
 export class SQLServerDataProvider
   extends ProviderBase
   implements IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider
 {
-  private _dataSource: DataSource;
-  private _queryRunner: QueryRunner;
+  private _pool: sql.ConnectionPool;
+  private _poolConfig: any; // Store the connection config for later use
+  private _transaction: sql.Transaction;
+  private _transactionRequest: sql.Request;
   private _currentUserEmail: string;
   private _localStorageProvider: ILocalStorageProvider;
   private _bAllowRefresh: boolean = true;
   private _recordDupeDetector: DuplicateRecordDetector;
   private _needsDatetimeOffsetAdjustment: boolean = false;
   private _datetimeOffsetTestComplete: boolean = false;
+  private _sqlLoggingSessions: Map<string, SqlLoggingSessionImpl> = new Map();
 
+  /**
+   * Gets the current configuration data for this provider instance
+   */
   public get ConfigData(): SQLServerProviderConfigData {
     return <SQLServerProviderConfigData>super.ConfigData;
   }
 
+  /**
+   * Configures the SQL Server data provider with connection settings and initializes the connection pool
+   * 
+   * @param configData - Configuration data including connection string and options
+   * @returns Promise<boolean> - True if configuration succeeded
+   */
   public async Config(configData: SQLServerProviderConfigData): Promise<boolean> {
     try {
-      this._dataSource = configData.DataSource;
+      this._pool = configData.DataSource; // Now expects a ConnectionPool instead of DataSource
       this._currentUserEmail = configData.CurrentUserEmail;
 
       return super.Config(configData); // now parent class can do it's config
@@ -146,36 +520,192 @@ export class SQLServerDataProvider
   }
 
   /**
-   * SQL Server Data Provider implementation of this getter returns a TypeORM DataSource object
+   * Gets the underlying SQL Server connection pool
+   * @returns The mssql ConnectionPool object
    */
   public get DatabaseConnection(): any {
-    return this._dataSource;
+    return this._pool;
   }
 
   /**
    * For the SQLServerDataProvider the unique instance connection string which is used to identify, uniquely, a given connection is the following format:
-   * type://host:port/instanceName?/database
+   * mssql://host:port/instanceName?/database
    * instanceName is only inserted if it is provided in the options
    */
   public get InstanceConnectionString(): string {
-    const dbOptions: any = this._dataSource.options;
+    // For mssql, we need to access the pool's internal connection options
+    // Since mssql v11 doesn't expose config directly, we'll construct from what we know
+    const pool = this._pool as any;
     const options = {
-      type: dbOptions.type || '',
-      host: dbOptions.host || '',
-      port: dbOptions.port || '',
-      instanceName: dbOptions.instanceName ? '/' + dbOptions.instanceName : '',
-      database: dbOptions.database || '',
+      type: 'mssql',
+      host: pool._config?.server || 'localhost',
+      port: pool._config?.port || 1433,
+      instanceName: pool._config?.options?.instanceName ? '/' + pool._config.options.instanceName : '',
+      database: pool._config?.database || '',
     };
     return options.type + '://' + options.host + ':' + options.port + options.instanceName + '/' + options.database;
   }
 
+  /**
+   * Gets whether metadata refresh is currently allowed
+   * @internal
+   */
   protected get AllowRefresh(): boolean {
     return this._bAllowRefresh;
   }
 
+  /**
+   * Gets the MemberJunction core schema name (defaults to __mj if not configured)
+   */
   public get MJCoreSchemaName(): string {
     return this.ConfigData.MJCoreSchemaName;
   }
+
+  /**************************************************************************/
+  // START ---- SQL Logging Methods
+  /**************************************************************************/
+
+  /**
+   * Creates a new SQL logging session that will capture all SQL operations to a file.
+   * Returns a disposable session object that must be disposed to stop logging.
+   *
+   * @param filePath - Full path to the file where SQL statements will be logged
+   * @param options - Optional configuration for the logging session
+   * @returns Promise<SqlLoggingSession> - Disposable session object
+   *
+   * @example
+   * ```typescript
+   * // Basic usage
+   * const session = await provider.createSqlLogger('./logs/metadata-sync.sql');
+   * try {
+   *   // Perform operations that will be logged
+   *   await provider.ExecuteSQL('INSERT INTO ...');
+   * } finally {
+   *   await session.dispose(); // Stop logging
+   * }
+   *
+   * // With migration formatting
+   * const session = await provider.createSqlLogger('./migrations/changes.sql', {
+   *   formatAsMigration: true,
+   *   description: 'MetadataSync push operation'
+   * });
+   * ```
+   */
+  public async createSqlLogger(filePath: string, options?: SqlLoggingOptions): Promise<SqlLoggingSession> {
+    const sessionId = uuidv4();
+    const session = new SqlLoggingSessionImpl(sessionId, filePath, options);
+
+    // Initialize the session (create file, write header)
+    await session.initialize();
+
+    // Store in active sessions map
+    this._sqlLoggingSessions.set(sessionId, session);
+
+    // Return a proxy that handles cleanup on dispose
+    return {
+      id: session.id,
+      filePath: session.filePath,
+      startTime: session.startTime,
+      get statementCount() {
+        return session.statementCount;
+      },
+      options: session.options,
+      dispose: async () => {
+        await session.dispose();
+        this._sqlLoggingSessions.delete(sessionId);
+      },
+    };
+  }
+
+  /**
+   * Gets information about all active SQL logging sessions.
+   * Useful for monitoring and debugging.
+   *
+   * @returns Array of session information objects
+   */
+  public getActiveSqlLoggingSessions(): Array<{
+    id: string;
+    filePath: string;
+    startTime: Date;
+    statementCount: number;
+    options: SqlLoggingOptions;
+  }> {
+    return Array.from(this._sqlLoggingSessions.values()).map((session) => ({
+      id: session.id,
+      filePath: session.filePath,
+      startTime: session.startTime,
+      statementCount: session.statementCount,
+      options: session.options,
+    }));
+  }
+
+  /**
+   * Disposes all active SQL logging sessions.
+   * Useful for cleanup on provider shutdown.
+   */
+  public async disposeAllSqlLoggingSessions(): Promise<void> {
+    const disposePromises = Array.from(this._sqlLoggingSessions.values()).map((session) => session.dispose());
+    await Promise.all(disposePromises);
+    this._sqlLoggingSessions.clear();
+  }
+
+  /**
+   * Internal method to log SQL statement to all active logging sessions.
+   * This is called automatically by ExecuteSQL methods.
+   *
+   * @param query - The SQL query being executed
+   * @param parameters - Parameters for the query
+   * @param description - Optional description for this operation
+   * @param ignoreLogging - If true, this statement will not be logged
+   * @param isMutation - Whether this is a data mutation operation
+   * @param simpleSQLFallback - Optional simple SQL to use for loggers with logRecordChangeMetadata=false
+   */
+  private async _logSqlStatement(
+    query: string,
+    parameters?: any,
+    description?: string,
+    ignoreLogging: boolean = false,
+    isMutation: boolean = false,
+    simpleSQLFallback?: string,
+  ): Promise<void> {
+    if (ignoreLogging || this._sqlLoggingSessions.size === 0) {
+      return;
+    }
+
+    // Log to all active sessions in parallel
+    const logPromises = Array.from(this._sqlLoggingSessions.values()).map((session) => 
+      session.logSqlStatement(query, parameters, description, isMutation, simpleSQLFallback)
+    );
+
+    await Promise.all(logPromises);
+  }
+
+  /**
+   * Static method to log SQL statements from external sources like transaction groups
+   * 
+   * @param query - The SQL query being executed
+   * @param parameters - Parameters for the query
+   * @param description - Optional description for this operation
+   * @param isMutation - Whether this is a data mutation operation
+   * @param simpleSQLFallback - Optional simple SQL to use for loggers with logRecordChangeMetadata=false
+   */
+  public static async LogSQLStatement(
+    query: string,
+    parameters?: any,
+    description?: string,
+    isMutation: boolean = false,
+    simpleSQLFallback?: string,
+  ): Promise<void> {
+    // Get the current provider instance
+    const provider = Metadata.Provider as SQLServerDataProvider;
+    if (provider && provider._sqlLoggingSessions.size > 0) {
+      await provider._logSqlStatement(query, parameters, description, false, isMutation, simpleSQLFallback);
+    }
+  }
+
+  /**************************************************************************/
+  // END ---- SQL Logging Methods
+  /**************************************************************************/
 
   /**************************************************************************/
   // START ---- IRunReportProvider
@@ -193,7 +723,7 @@ export class SQLServerDataProvider
       if (result)
         return {
           Success: true,
-          ReportID: ReportID,
+          ReportID,
           Results: result,
           RowCount: result.length,
           ExecutionTime: end - start,
@@ -202,13 +732,13 @@ export class SQLServerDataProvider
       else
         return {
           Success: false,
-          ReportID: ReportID,
+          ReportID,
           Results: [],
           RowCount: 0,
           ExecutionTime: end - start,
           ErrorMessage: 'Error running report SQL',
         };
-    } else return { Success: false, ReportID: ReportID, Results: [], RowCount: 0, ExecutionTime: 0, ErrorMessage: 'Report not found' };
+    } else return { Success: false, ReportID, Results: [], RowCount: 0, ExecutionTime: 0, ErrorMessage: 'Report not found' };
   }
   /**************************************************************************/
   // END ---- IRunReportProvider
@@ -246,23 +776,20 @@ export class SQLServerDataProvider
             ExecutionTime: end - start,
             ErrorMessage: '',
           };
-        else
-          throw new Error('Error running query SQL');
-      } 
-      else {
+        else throw new Error('Error running query SQL');
+      } else {
         throw new Error('Query not found');
       }
-    } 
-    catch (e) {
+    } catch (e) {
       LogError(e);
-      return { 
-        Success: false, 
+      return {
+        Success: false,
         QueryID: params.QueryID,
         QueryName: params.QueryName,
-        Results: [], 
-        RowCount: 0, 
-        ExecutionTime: 0, 
-        ErrorMessage: e.message 
+        Results: [],
+        RowCount: 0,
+        ExecutionTime: 0,
+        ErrorMessage: e.message,
       };
     }
   }
@@ -341,13 +868,11 @@ export class SQLServerDataProvider
           entityInfo: EntityInfo = null;
         if (params.ViewEntity) viewEntity = params.ViewEntity;
         else if (params.ViewID && params.ViewID.length > 0) viewEntity = await ViewInfo.GetViewEntity(params.ViewID, contextUser);
-        else if (params.ViewName && params.ViewName.length > 0)
-          viewEntity = await ViewInfo.GetViewEntityByName(params.ViewName, contextUser);
+        else if (params.ViewName && params.ViewName.length > 0) viewEntity = await ViewInfo.GetViewEntityByName(params.ViewName, contextUser);
 
         if (!viewEntity) {
           // if we don't have viewEntity, that means it is a dynamic view, so we need EntityName at a minimum
-          if (!params.EntityName || params.EntityName.length === 0)
-            throw new Error(`EntityName is required when ViewID or ViewName is not provided`);
+          if (!params.EntityName || params.EntityName.length === 0) throw new Error(`EntityName is required when ViewID or ViewName is not provided`);
 
           entityInfo = this.Entities.find((e) => e.Name === params.EntityName);
           if (!entityInfo) throw new Error(`Entity ${params.EntityName} not found in metadata`);
@@ -381,8 +906,7 @@ export class SQLServerDataProvider
         const fields: string = this.getRunTimeViewFieldString(params, viewEntity);
 
         let viewSQL: string = `SELECT ${topSQL} ${fields} FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}`;
-        let countSQL =
-          topSQL && topSQL.length > 0 ? `SELECT COUNT(*) AS TotalRowCount FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}` : null;
+        let countSQL = topSQL && topSQL.length > 0 ? `SELECT COUNT(*) AS TotalRowCount FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}` : null;
         let whereSQL: string = '';
         let bHasWhere: boolean = false;
         let userViewRunID: string = '';
@@ -476,13 +1000,7 @@ export class SQLServerDataProvider
 
         // if we're saving the view results, we need to wrap the entire SQL statement
         if (viewEntity?.ID && viewEntity?.ID.length > 0 && saveViewResults && user) {
-          const { executeViewSQL, runID } = await this.executeSQLForUserViewRunLogging(
-            viewEntity.ID,
-            viewEntity.EntityBaseView,
-            whereSQL,
-            orderBy,
-            user
-          );
+          const { executeViewSQL, runID } = await this.executeSQLForUserViewRunLogging(viewEntity.ID, viewEntity.EntityBaseView, whereSQL, orderBy, user);
           viewSQL = executeViewSQL;
           userViewRunID = runID;
         } else if (orderBy && orderBy.length > 0) {
@@ -490,8 +1008,7 @@ export class SQLServerDataProvider
           // add the order by to its SELECT query that pulls from the list of records that were returned
           // there is no point in ordering the rows as they are saved into an audit list anyway so no order-by above
           // just here for final step before we execute it.
-          if (!this.validateUserProvidedSQLClause(orderBy))
-            throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
+          if (!this.validateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
 
           viewSQL += ` ORDER BY ${orderBy}`;
         }
@@ -502,14 +1019,14 @@ export class SQLServerDataProvider
         }
 
         // now we can run the viewSQL, but only do this if the ResultType !== 'count_only', otherwise we don't need to run the viewSQL
-        const retData = params.ResultType === 'count_only' ? [] : await this._dataSource.query(viewSQL);
+        const retData = params.ResultType === 'count_only' ? [] : await this.ExecuteSQL(viewSQL);
 
         // finally, if we have a countSQL, we need to run that to get the row count
         // but only do that if the # of rows returned is equal to the max rows, otherwise we know we have all the rows
         // OR do that if we are doing a count_only
         let rowCount = null;
         if (countSQL && (params.ResultType === 'count_only' || retData.length === entityInfo.UserViewMaxRows)) {
-          const countResult = await this._dataSource.query(countSQL);
+          const countResult = await this.ExecuteSQL(countSQL);
           if (countResult && countResult.length > 0) {
             rowCount = countResult[0].TotalRowCount;
           }
@@ -518,9 +1035,7 @@ export class SQLServerDataProvider
 
         if (
           params.ForceAuditLog ||
-          (viewEntity?.ID &&
-            (extraFilter === undefined || extraFilter === null || extraFilter?.trim().length === 0) &&
-            entityInfo.AuditViewRuns)
+          (viewEntity?.ID && (extraFilter === undefined || extraFilter === null || extraFilter?.trim().length === 0) && entityInfo.AuditViewRuns)
         ) {
           // ONLY LOG TOP LEVEL VIEW EXECUTION - this would be for views with an ID, and don't have ExtraFilter as ExtraFilter
           // is only used in the system on a tab or just for ad hoc view execution
@@ -540,7 +1055,7 @@ export class SQLServerDataProvider
             }),
             entityInfo.ID,
             null,
-            params.AuditLogDescription
+            params.AuditLogDescription,
           );
         }
 
@@ -573,7 +1088,7 @@ export class SQLServerDataProvider
   }
 
   public async RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
-    const promises = params.map(p => this.RunView<T>(p, contextUser));
+    const promises = params.map((p) => this.RunView<T>(p, contextUser));
     return Promise.all(promises);
   }
 
@@ -657,7 +1172,7 @@ export class SQLServerDataProvider
                 fieldList.push(c.EntityField);
               } else {
                 LogError(
-                  `View Field ${c.Name} doesn't match an Entity Field in entity ${entityInfo.Name}. This can happen if the view was saved with a field that no longer exists in the entity. It is best to update the view to remove this field.`
+                  `View Field ${c.Name} doesn't match an Entity Field in entity ${entityInfo.Name}. This can happen if the view was saved with a field that no longer exists in the entity. It is best to update the view to remove this field.`,
                 );
               }
             }
@@ -680,7 +1195,7 @@ export class SQLServerDataProvider
     entityBaseView: string,
     whereSQL: string,
     orderBySQL: string,
-    user: UserInfo
+    user: UserInfo,
   ): Promise<{ executeViewSQL: string; runID: string }> {
     const entityInfo = this.Entities.find((e) => e.BaseView.trim().toLowerCase() === entityBaseView.trim().toLowerCase());
     const sSQL = `
@@ -688,12 +1203,12 @@ export class SQLServerDataProvider
             INSERT INTO @ViewIDList (ID) (SELECT ${entityInfo.FirstPrimaryKey.Name} FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE (${whereSQL}))
             EXEC [${this.MJCoreSchemaName}].spCreateUserViewRunWithDetail(${viewId},${user.Email}, @ViewIDLIst)
             `;
-    const runIDResult = await this._dataSource.query(sSQL);
+    const runIDResult = await this.ExecuteSQL(sSQL);
     const runID: string = runIDResult[0].UserViewRunID;
     const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE ${entityInfo.FirstPrimaryKey.Name} IN
                                     (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE UserViewRunID=${runID})
                                  ${orderBySQL && orderBySQL.length > 0 ? ' ORDER BY ' + orderBySQL : ''}`;
-    return { executeViewSQL: sRetSQL, runID: runID };
+    return { executeViewSQL: sRetSQL, runID };
   }
 
   protected createViewUserSearchSQL(entityInfo: EntityInfo, userSearchString: string) {
@@ -763,15 +1278,13 @@ export class SQLServerDataProvider
     details: string | null,
     entityId: string,
     recordId: any | null,
-    auditLogDescription: string | null
+    auditLogDescription: string | null,
   ): Promise<AuditLogEntity> {
     try {
       const authorization = authorizationName
         ? this.Authorizations.find((a) => a?.Name?.trim().toLowerCase() === authorizationName.trim().toLowerCase())
         : null;
-      const auditLogType = auditLogTypeName
-        ? this.AuditLogTypes.find((a) => a?.Name?.trim().toLowerCase() === auditLogTypeName.trim().toLowerCase())
-        : null;
+      const auditLogType = auditLogTypeName ? this.AuditLogTypes.find((a) => a?.Name?.trim().toLowerCase() === auditLogTypeName.trim().toLowerCase()) : null;
 
       if (!user) throw new Error(`User is a required parameter`);
       if (!auditLogType) throw new Error(`Audit Log Type ${auditLogTypeName} not found in metadata`);
@@ -844,7 +1357,7 @@ export class SQLServerDataProvider
     entityName: string,
     CompositeKey: CompositeKey,
     isFavorite: boolean,
-    contextUser: UserInfo
+    contextUser: UserInfo,
   ): Promise<void> {
     try {
       const currentFavoriteId = await this.GetRecordFavoriteID(userId, entityName, CompositeKey);
@@ -929,9 +1442,7 @@ export class SQLServerDataProvider
     for (const entityDependency of entityDependencies) {
       const entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.EntityName?.trim().toLowerCase());
       const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : '';
-      const relatedEntityInfo = this.Entities.find(
-        (e) => e.Name.trim().toLowerCase() === entityDependency.RelatedEntityName?.trim().toLowerCase()
-      );
+      const relatedEntityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.RelatedEntityName?.trim().toLowerCase());
       const primaryKeySelectString = `CONCAT(${entityInfo.PrimaryKeys.map((pk) => `'${pk.Name}|', CAST(${pk.Name} AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
       if (sSQL.length > 0) sSQL += ' UNION ALL ';
@@ -968,8 +1479,7 @@ export class SQLServerDataProvider
       }
 
       // now, we have to construct a query that will return the dependencies for this record, both hard and soft links
-      const sSQL: string =
-        this.GetHardLinkDependencySQL(entityDependencies, compositeKey) + '\n' + this.GetSoftLinkDependencySQL(entityName, compositeKey);
+      const sSQL: string = this.GetHardLinkDependencySQL(entityDependencies, compositeKey) + '\n' + this.GetSoftLinkDependencySQL(entityName, compositeKey);
 
       // now, execute the query
       const result = await this.ExecuteSQL(sSQL);
@@ -979,9 +1489,7 @@ export class SQLServerDataProvider
 
       // now we go through the results and create the RecordDependency objects
       for (const r of result) {
-        const entityInfo: EntityInfo | undefined = this.Entities.find(
-          (e) => e.Name.trim().toLowerCase() === r.EntityName?.trim().toLowerCase()
-        );
+        const entityInfo: EntityInfo | undefined = this.Entities.find((e) => e.Name.trim().toLowerCase() === r.EntityName?.trim().toLowerCase());
         if (!entityInfo) {
           throw new Error(`Entity ${r.EntityName} not found in metadata`);
         }
@@ -992,7 +1500,7 @@ export class SQLServerDataProvider
         //     pkeyValues.push({FieldName: pk.Name, Value: r[pk.Name]}) // add all of the primary keys, which often is as simple as just "ID", but this is generic way to do it
         // })
 
-        let compositeKey: CompositeKey = new CompositeKey();
+        const compositeKey: CompositeKey = new CompositeKey();
         // the row r will have a PrimaryKeyValue field that is a string that is a concatenation of the primary key field names and values
         // we need to parse that out so that we can then pass it to the CompositeKey object
         const pkeys = {};
@@ -1020,12 +1528,7 @@ export class SQLServerDataProvider
     }
   }
 
-  protected GetRecordDependencyLinkSQL(
-    dep: EntityDependency,
-    entity: EntityInfo,
-    relatedEntity: EntityInfo,
-    CompositeKey: CompositeKey
-  ): string {
+  protected GetRecordDependencyLinkSQL(dep: EntityDependency, entity: EntityInfo, relatedEntity: EntityInfo, CompositeKey: CompositeKey): string {
     const f = relatedEntity.Fields.find((f) => f.Name.trim().toLowerCase() === dep.FieldName?.trim().toLowerCase());
     const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
     if (!f) {
@@ -1050,12 +1553,12 @@ export class SQLServerDataProvider
 
     const listEntity: ListEntity = await this.GetEntityObject<ListEntity>('Lists');
     listEntity.ContextCurrentUser = contextUser;
-    let success = await listEntity.Load(params.ListID);
+    const success = await listEntity.Load(params.ListID);
     if (!success) {
       throw new Error(`List with ID ${params.ListID} not found.`);
     }
 
-    let duplicateRun: DuplicateRunEntity = await this.GetEntityObject<DuplicateRunEntity>('Duplicate Runs');
+    const duplicateRun: DuplicateRunEntity = await this.GetEntityObject<DuplicateRunEntity>('Duplicate Runs');
     duplicateRun.NewRecord();
     duplicateRun.EntityID = params.EntityID;
     duplicateRun.StartedByUserID = contextUser.ID;
@@ -1070,7 +1573,7 @@ export class SQLServerDataProvider
       throw new Error(`Failed to save Duplicate Run Entity`);
     }
 
-    let response: PotentialDuplicateResponse = {
+    const response: PotentialDuplicateResponse = {
       Status: 'Inprogress',
       PotentialDuplicateResult: [],
     };
@@ -1081,9 +1584,7 @@ export class SQLServerDataProvider
   public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo): Promise<RecordMergeResult> {
     const e = this.Entities.find((e) => e.Name.trim().toLowerCase() === request.EntityName.trim().toLowerCase());
     if (!e || !e.AllowRecordMerge)
-      throw new Error(
-        `Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`
-      );
+      throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
 
     const result: RecordMergeResult = {
       Success: false,
@@ -1176,11 +1677,7 @@ export class SQLServerDataProvider
     }
   }
 
-  protected async StartMergeLogging(
-    request: RecordMergeRequest,
-    result: RecordMergeResult,
-    contextUser: UserInfo
-  ): Promise<RecordMergeLogEntity> {
+  protected async StartMergeLogging(request: RecordMergeRequest, result: RecordMergeResult, contextUser: UserInfo): Promise<RecordMergeLogEntity> {
     try {
       // create records in the Record Merge Logs entity and Record Merge Deletion Logs entity
       const recordMergeLog = <RecordMergeLogEntity>await this.GetEntityObject('Record Merge Logs', contextUser);
@@ -1219,9 +1716,7 @@ export class SQLServerDataProvider
       if (await recordMergeLog.Save()) {
         // top level saved, now let's create the deletion detail records for each of the records that were merged
         for (const d of result.RecordStatus) {
-          const recordMergeDeletionLog = <RecordMergeDeletionLogEntity>(
-            await this.GetEntityObject('Record Merge Deletion Logs', contextUser)
-          );
+          const recordMergeDeletionLog = <RecordMergeDeletionLogEntity>await this.GetEntityObject('Record Merge Deletion Logs', contextUser);
           recordMergeDeletionLog.NewRecord();
           recordMergeDeletionLog.RecordMergeLogID = recordMergeLog.ID;
           recordMergeDeletionLog.DeletedRecordID = d.CompositeKey.Values(); // this would join together all of the primary key values, which is fine as the primary key is a string
@@ -1242,6 +1737,15 @@ export class SQLServerDataProvider
    * it is also used by the SQLServerTransactionGroup to regenerate Save SQL if any values were changed by the transaction group due to transaction variables being set into the object.
    */
   public GetSaveSQL(entity: BaseEntity, bNewRecord: boolean, spName: string, user: UserInfo): string {
+    const result = this.GetSaveSQLWithDetails(entity, bNewRecord, spName, user);
+    return result.fullSQL;
+  }
+
+  /**
+   * This function generates both the full SQL (with record change metadata) and the simple stored procedure call
+   * @returns Object with fullSQL and simpleSQL properties
+   */
+  private GetSaveSQLWithDetails(entity: BaseEntity, bNewRecord: boolean, spName: string, user: UserInfo): { fullSQL: string; simpleSQL: string } {
     const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${this.generateSPParams(entity, !bNewRecord)}`;
     const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'Record Changes');
     let sSQL: string = '';
@@ -1257,43 +1761,58 @@ export class SQLServerDataProvider
       sSQL = `
                     DECLARE @ResultTable TABLE (
                         ${this.getAllEntityColumnsSQL(entity.EntityInfo)}
-                    )
+                    );
 
                     INSERT INTO @ResultTable
-                    ${sSimpleSQL}
+                    ${sSimpleSQL};
 
-                    DECLARE @ID NVARCHAR(MAX)
-                    SELECT @ID = ${concatPKIDString} FROM @ResultTable
+                    DECLARE @ID NVARCHAR(MAX);
+                    
+                    SELECT @ID = ${concatPKIDString} FROM @ResultTable;
+                    
                     IF @ID IS NOT NULL
                     BEGIN
                         DECLARE @ResultChangesTable TABLE (
                             ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
-                        )
+                        );
 
                         INSERT INTO @ResultChangesTable
-                        ${this.GetLogRecordChangeSQL(entity.GetAll(false), oldData, entity.EntityInfo.Name, '@ID', entity.EntityInfo, bNewRecord ? 'Create' : 'Update', user, false)}
-                    END
+                        ${this.GetLogRecordChangeSQL(entity.GetAll(false), oldData, entity.EntityInfo.Name, '@ID', entity.EntityInfo, bNewRecord ? 'Create' : 'Update', user, false)};
+                    END;
 
-                    SELECT * FROM @ResultTable`; // NOTE - in the above, we call the T-SQL variable @ID for simplicity just as a variable name, even though for each entity the pkey could be something else. Entity pkeys are not always a field called ID could be something else including composite keys.
+                    SELECT * FROM @ResultTable;`; // NOTE - in the above, we call the T-SQL variable @ID for simplicity just as a variable name, even though for each entity the pkey could be something else. Entity pkeys are not always a field called ID could be something else including composite keys.
     } else {
       // not doing track changes for this entity, keep it simple
       sSQL = sSimpleSQL;
     }
-    return sSQL;
+    return { fullSQL: sSQL, simpleSQL: sSimpleSQL };
   }
 
+  /**
+   * Gets AI actions configured for an entity based on trigger timing
+   * 
+   * @param entityInfo - The entity to get AI actions for
+   * @param before - True to get before-save actions, false for after-save
+   * @returns Array of AI action entities
+   * @internal
+   */
   protected GetEntityAIActions(entityInfo: EntityInfo, before: boolean): EntityAIActionEntity[] {
     return AIEngine.Instance.EntityAIActions.filter(
-      (a) => a.EntityID === entityInfo.ID && a.TriggerEvent.toLowerCase().trim() === (before ? 'before save' : 'after save')
+      (a) => a.EntityID === entityInfo.ID && a.TriggerEvent.toLowerCase().trim() === (before ? 'before save' : 'after save'),
     );
   }
 
-  protected async HandleEntityActions(
-    entity: BaseEntity,
-    baseType: 'save' | 'delete' | 'validate',
-    before: boolean,
-    user: UserInfo
-  ): Promise<ActionResult[]> {
+  /**
+   * Handles entity actions (non-AI) for save, delete, or validate operations
+   * 
+   * @param entity - The entity being operated on
+   * @param baseType - The type of operation
+   * @param before - Whether this is before or after the operation
+   * @param user - The user performing the operation
+   * @returns Array of action results
+   * @internal
+   */
+  protected async HandleEntityActions(entity: BaseEntity, baseType: 'save' | 'delete' | 'validate', before: boolean, user: UserInfo): Promise<ActionResult[]> {
     // use the EntityActionEngine for this
     try {
       const engine = EntityActionEngineServer.Instance;
@@ -1385,12 +1904,10 @@ export class SQLServerDataProvider
       if (!bReplay && !bNewRecord && !entity.EntityInfo.AllowUpdateAPI) {
         // existing record and not allowed to update
         throw new Error(`UPDATE not allowed for entity ${entity.EntityInfo.Name}`);
-      } 
-      else if (!bReplay && bNewRecord && !entity.EntityInfo.AllowCreateAPI) {
+      } else if (!bReplay && bNewRecord && !entity.EntityInfo.AllowCreateAPI) {
         // new record and not allowed to create
         throw new Error(`CREATE not allowed for entity ${entity.EntityInfo.Name}`);
-      } 
-      else {
+      } else {
         // getting here means we are good to save, now check to see if we're dirty and need to save
         // REMEMBER - this is the provider and the BaseEntity/subclasses handle user-level permission checking already, we just make sure API was turned on for the operation
         if (entity.Dirty || options.IgnoreDirtyState || options.ReplayOnly) {
@@ -1434,7 +1951,8 @@ export class SQLServerDataProvider
             await this.HandleEntityAIActions(entity, 'save', true, user);
           }
 
-          const sSQL = this.GetSaveSQL(entity, bNewRecord, spName, user);
+          const sqlDetails = this.GetSaveSQLWithDetails(entity, bNewRecord, spName, user);
+          const sSQL = sqlDetails.fullSQL;
 
           if (entity.TransactionGroup && !bReplay /*we never participate in a transaction if we're in replay mode*/) {
             // we have a transaction group, need to play nice and be part of it
@@ -1443,48 +1961,61 @@ export class SQLServerDataProvider
             // and when the transaction is committed, we will send all the queries at once
             this._bAllowRefresh = false; // stop refreshes of metadata while we're doing work
             entity.TransactionGroup.AddTransaction(
-              new TransactionItem(entity, entityResult.Type === 'create' ? 'Create' : 'Update', sSQL, null, { dataSource: this._dataSource }, (transactionResult: Record<string, any>, success: boolean) => {
-                // we get here whenever the transaction group does gets around to committing
-                // our query.
-                this._bAllowRefresh = true; // allow refreshes again
-                entityResult.EndedAt = new Date();
-                if (success && transactionResult) {
-                  // process any Entity AI actions that are set to trigger AFTER the save
-                  // these are fired off but are NOT part of the transaction group, so if they fail,
-                  // the transaction group will still commit, but the AI action will not be executed
-                  if (options.SkipEntityAIActions !== true /*options set, but not set to skip entity AI actions*/) {
-                    this.HandleEntityAIActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
-                  }
+              new TransactionItem(
+                entity,
+                entityResult.Type === 'create' ? 'Create' : 'Update',
+                sSQL,
+                null,
+                { 
+                  dataSource: this._pool,
+                  simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined,
+                  entityName: entity.EntityInfo.Name
+                },
+                (transactionResult: Record<string, any>, success: boolean) => {
+                  // we get here whenever the transaction group does gets around to committing
+                  // our query.
+                  this._bAllowRefresh = true; // allow refreshes again
+                  entityResult.EndedAt = new Date();
+                  if (success && transactionResult) {
+                    // process any Entity AI actions that are set to trigger AFTER the save
+                    // these are fired off but are NOT part of the transaction group, so if they fail,
+                    // the transaction group will still commit, but the AI action will not be executed
+                    if (options.SkipEntityAIActions !== true /*options set, but not set to skip entity AI actions*/) {
+                      this.HandleEntityAIActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
+                    }
 
-                  // Same approach to Entity Actions as Entity AI Actions
-                  if (options.SkipEntityActions !== true) {
-                    this.HandleEntityActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
-                  }
+                    // Same approach to Entity Actions as Entity AI Actions
+                    if (options.SkipEntityActions !== true) {
+                      this.HandleEntityActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
+                    }
 
-                  entityResult.Success = true;
-                  entityResult.NewValues = this.MapTransactionResultToNewValues(transactionResult);
-                } 
-                else {
-                  // the transaction failed, nothing to update, but we need to call Reject so the
-                  // promise resolves with a rejection so our outer caller knows
-                  entityResult.Success = false;
-                  entityResult.Message = 'Transaction Failed';
-                }
-              })
+                    entityResult.Success = true;
+                    entityResult.NewValues = this.MapTransactionResultToNewValues(transactionResult);
+                  } else {
+                    // the transaction failed, nothing to update, but we need to call Reject so the
+                    // promise resolves with a rejection so our outer caller knows
+                    entityResult.Success = false;
+                    entityResult.Message = 'Transaction Failed';
+                  }
+                },
+              ),
             );
 
             return true; // we're part of a transaction group, so we're done here
-          } 
-          else {
+          } else {
             // no transaction group, just execute this immediately...
             this._bAllowRefresh = false; // stop refreshes of metadata while we're doing work
 
             let result;
             if (bReplay) {
               result = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
-            }
-            else {
-              const rawResult = await this.ExecuteSQL(sSQL);
+            } else {
+              // Execute SQL with optional simple SQL fallback for loggers
+              const rawResult = await this.ExecuteSQL(sSQL, null, { 
+                isMutation: true, 
+                description: `Save ${entity.EntityInfo.Name}`,
+                simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined
+              });
               result = await this.ProcessEntityRows(rawResult, entity.EntityInfo);
             }
 
@@ -1501,13 +2032,11 @@ export class SQLServerDataProvider
 
               entityResult.Success = true;
               return result[0];
-            } 
-            else {
+            } else {
               throw new Error(`SQL Error: No result row returned from SQL: ` + sSQL);
             }
           }
-        } 
-        else {
+        } else {
           return entity; // nothing to save, just return the entity
         }
       }
@@ -1520,31 +2049,31 @@ export class SQLServerDataProvider
     }
   }
 
-  protected MapTransactionResultToNewValues(transactionResult: Record<string, any>): {FieldName: string, Value: any}[] {  
-    return Object.keys(transactionResult).map(k => { 
+  protected MapTransactionResultToNewValues(transactionResult: Record<string, any>): { FieldName: string; Value: any }[] {
+    return Object.keys(transactionResult).map((k) => {
       return {
-        FieldName: k, 
-        Value: transactionResult[k] 
-      }
+        FieldName: k,
+        Value: transactionResult[k],
+      };
     }); // transform the result into a list of field/value pairs
   }
 
   /**
    * Returns the stored procedure name to use for the given entity based on if it is a new record or an existing record.
-   * @param entity 
-   * @param bNewRecord 
-   * @returns 
+   * @param entity
+   * @param bNewRecord
+   * @returns
    */
   public GetCreateUpdateSPName(entity: BaseEntity, bNewRecord: boolean): string {
     const spName = bNewRecord
-    ? entity.EntityInfo.spCreate?.length > 0
-      ? entity.EntityInfo.spCreate
-      : 'spCreate' + entity.EntityInfo.ClassName
-    : entity.EntityInfo.spUpdate?.length > 0
-      ? entity.EntityInfo.spUpdate
-      : 'spUpdate' + entity.EntityInfo.ClassName;
+      ? entity.EntityInfo.spCreate?.length > 0
+        ? entity.EntityInfo.spCreate
+        : 'spCreate' + entity.EntityInfo.ClassName
+      : entity.EntityInfo.spUpdate?.length > 0
+        ? entity.EntityInfo.spUpdate
+        : 'spUpdate' + entity.EntityInfo.ClassName;
     return spName;
-  } 
+  }
 
   private getAllEntityColumnsSQL(entityInfo: EntityInfo): string {
     let sRet: string = '',
@@ -1552,7 +2081,7 @@ export class SQLServerDataProvider
     for (let i = 0; i < entityInfo.Fields.length; i++) {
       const f = entityInfo.Fields[i];
       if (outputCount !== 0) sRet += ',\n';
-      sRet += '[' + f.Name + '] ' + f.SQLFullType + ' ' + (f.AllowsNull || f.IsVirtual? 'NULL' : 'NOT NULL');
+      sRet += '[' + f.Name + '] ' + f.SQLFullType + ' ' + (f.AllowsNull || f.IsVirtual ? 'NULL' : 'NOT NULL');
       outputCount++;
     }
     return sRet;
@@ -1563,21 +2092,26 @@ export class SQLServerDataProvider
       bFirst: boolean = true;
     for (let i = 0; i < entity.EntityInfo.Fields.length; i++) {
       const f = entity.EntityInfo.Fields[i];
-      if (f.AllowUpdateAPI) {
-        if (!f.SkipValidation) {
+      // For CREATE operations, include primary keys that are not auto-increment and have actual values
+      const includePrimaryKeyForCreate = !isUpdate && f.IsPrimaryKey && !f.AutoIncrement && entity.Get(f.Name) !== null && entity.Get(f.Name) !== undefined;
+
+      if (f.AllowUpdateAPI || includePrimaryKeyForCreate) {
+        if (!f.SkipValidation || includePrimaryKeyForCreate) {
           // DO NOT INCLUDE any fields where we skip validation, these are fields that are not editable by the user/object
           // model/api because they're special fields like ID, CreatedAt, etc. or they're virtual or auto-increment, etc.
+          // EXCEPTION: Include primary keys for CREATE when they have values and are not auto-increment
           let value = entity.Get(f.Name);
           if (value && f.Type.trim().toLowerCase() === 'datetimeoffset') {
             // for non-null datetimeoffset fields, we need to convert the value to ISO format
             value = new Date(value).toISOString();
-          } else if (!isUpdate && f.Type.trim().toLowerCase() === 'uniqueidentifier') {
+          } else if (!isUpdate && f.Type.trim().toLowerCase() === 'uniqueidentifier' && !includePrimaryKeyForCreate) {
             // in the case of unique identifiers, for CREATE procs only,
             // we need to check to see if the value we have in the entity object is a function like newid() or newsquentialid()
             // in those cases we should just skip the parameter entirely because that means there is a default value that should be used
             // and that will be handled by the database not by us
             // instead of just checking for specific functions like newid(), we can instead check for any string that includes ()
             // this way we can handle any function that the database might support in the future
+            // EXCEPTION: Don't skip if we're including a primary key for create
             if (typeof value === 'string' && value.includes('()')) {
               continue; // skip this field entirely by going to the next iteration of the loop
             }
@@ -1591,7 +2125,7 @@ export class SQLServerDataProvider
     }
     if (isUpdate && bFirst === false) {
       // this is an update and we have other fields, so we need to add all of the pkeys to the end of the SP call
-      for (let pkey of entity.PrimaryKey.KeyValuePairs) {
+      for (const pkey of entity.PrimaryKey.KeyValuePairs) {
         const f = entity.EntityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === pkey.FieldName.trim().toLowerCase());
         const pkeyQuotes = f.NeedsQuotes ? "'" : '';
         sRet += `, @${f.CodeName} = ` + pkeyQuotes + pkey.Value + pkeyQuotes; // add pkey to update SP at end, but only if other fields included
@@ -1660,7 +2194,7 @@ export class SQLServerDataProvider
     entityInfo: EntityInfo,
     type: 'Create' | 'Update' | 'Delete',
     user: UserInfo,
-    wrapRecordIdInQuotes: boolean
+    wrapRecordIdInQuotes: boolean,
   ) {
     const fullRecordJSON: string = JSON.stringify(this.escapeQuotesInProperties(newData ? newData : oldData, "'")); // stringify old data if we don't have new - means we are DELETING A RECORD
     const changes: any = this.DiffObjects(oldData, newData, entityInfo, "'");
@@ -1687,7 +2221,7 @@ export class SQLServerDataProvider
     recordID: any,
     entityInfo: EntityInfo,
     type: 'Create' | 'Update' | 'Delete',
-    user: UserInfo
+    user: UserInfo,
   ) {
     const sSQL = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true);
     if (sSQL) {
@@ -1705,7 +2239,7 @@ export class SQLServerDataProvider
    */
   public CreateUserDescriptionOfChanges(changesObject: any, maxValueLength: number = 200, cutOffText: string = '...'): string {
     let sRet = '';
-    let keys = Object.keys(changesObject);
+    const keys = Object.keys(changesObject);
     for (let i = 0; i < keys.length; i++) {
       const change = changesObject[keys[i]];
       if (sRet.length > 0) {
@@ -1781,10 +2315,8 @@ export class SQLServerDataProvider
         if (bDiff) {
           // make sure we escape things properly
           const r = new RegExp(quoteToEscape, 'g');
-          const o =
-            oldData[key] && typeof oldData[key] === 'string' ? oldData[key].replace(r, quoteToEscape + quoteToEscape) : oldData[key];
-          const n =
-            newData[key] && typeof newData[key] === 'string' ? newData[key].replace(r, quoteToEscape + quoteToEscape) : newData[key];
+          const o = oldData[key] && typeof oldData[key] === 'string' ? oldData[key].replace(r, quoteToEscape + quoteToEscape) : oldData[key];
+          const n = newData[key] && typeof newData[key] === 'string' ? newData[key].replace(r, quoteToEscape + quoteToEscape) : newData[key];
 
           changes[key] = {
             field: key,
@@ -1798,12 +2330,7 @@ export class SQLServerDataProvider
     }
   }
 
-  public async Load(
-    entity: BaseEntity,
-    CompositeKey: CompositeKey,
-    EntityRelationshipsToLoad: string[] = null,
-    user: UserInfo
-  ): Promise<{}> {
+  public async Load(entity: BaseEntity, CompositeKey: CompositeKey, EntityRelationshipsToLoad: string[] = null, user: UserInfo): Promise<{}> {
     const where = CompositeKey.KeyValuePairs.map((val) => {
       const pk = entity.EntityInfo.PrimaryKeys.find((pk) => pk.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());
       if (!pk) throw new Error(`Primary key ${val.FieldName} not found in entity ${entity.EntityInfo.Name}`);
@@ -1817,15 +2344,23 @@ export class SQLServerDataProvider
     if (d && d.length > 0) {
       // got the record, now process the relationships if there are any
       const ret = d[0];
+      // we need to post process the retrieval to see if we have any char or nchar fields and we need to remove their trailing spaces
+      for (const field of entity.EntityInfo.Fields) {
+        if (field.TSType === EntityFieldTSType.String && 
+            field.Type.toLowerCase().includes('char') && 
+            !field.Type.toLowerCase().includes('varchar')) {
+          // trim trailing spaces for char and nchar fields
+          ret[field.Name] = ret[field.Name] ? ret[field.Name].trimEnd() : ret[field.Name];
+        }
+      }
+
       if (EntityRelationshipsToLoad && EntityRelationshipsToLoad.length > 0) {
         for (let i = 0; i < EntityRelationshipsToLoad.length; i++) {
           const rel = EntityRelationshipsToLoad[i];
           const relInfo = entity.EntityInfo.RelatedEntities.find((r) => r.RelatedEntity == rel);
           if (relInfo) {
             let relSql: string = '';
-            const relEntitySchemaName = this.Entities.find(
-              (e) => e.Name.trim().toLowerCase() === relInfo.RelatedEntity.trim().toLowerCase()
-            )?.SchemaName;
+            const relEntitySchemaName = this.Entities.find((e) => e.Name.trim().toLowerCase() === relInfo.RelatedEntity.trim().toLowerCase())?.SchemaName;
             const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
             if (relInfo.Type.trim().toLowerCase() === 'one to many')
               // one to many - simple query
@@ -1850,9 +2385,7 @@ export class SQLServerDataProvider
             const rawRelData = await this.ExecuteSQL(relSql);
             if (rawRelData && rawRelData.length > 0) {
               // Find the related entity info to process datetime fields correctly
-              const relEntityInfo = this.Entities.find(
-                e => e.Name.trim().toLowerCase() === relInfo.RelatedEntity.trim().toLowerCase()
-              );
+              const relEntityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === relInfo.RelatedEntity.trim().toLowerCase());
               if (relEntityInfo) {
                 ret[rel] = await this.ProcessEntityRows(rawRelData, relEntityInfo);
               } else {
@@ -1869,7 +2402,24 @@ export class SQLServerDataProvider
     return null;
   }
 
+  /**
+   * Generates the SQL statement for deleting an entity record
+   * 
+   * @param entity - The entity to delete
+   * @param user - The user performing the delete
+   * @returns The full SQL statement for deletion
+   * @internal
+   */
   protected GetDeleteSQL(entity: BaseEntity, user: UserInfo): string {
+    const result = this.GetDeleteSQLWithDetails(entity, user);
+    return result.fullSQL;
+  }
+
+  /**
+   * This function generates both the full SQL (with record change metadata) and the simple stored procedure call for delete
+   * @returns Object with fullSQL and simpleSQL properties
+   */
+  private GetDeleteSQLWithDetails(entity: BaseEntity, user: UserInfo): { fullSQL: string; simpleSQL: string } {
     let sSQL: string = '';
     const spName: string = entity.EntityInfo.spDelete ? entity.EntityInfo.spDelete : `spDelete${entity.EntityInfo.ClassName}`;
     const sParams = entity.PrimaryKey.KeyValuePairs.map((kv) => {
@@ -1928,7 +2478,7 @@ export class SQLServerDataProvider
       // just delete the record
       sSQL = sSimpleSQL;
     }
-    return sSQL;
+    return { fullSQL: sSQL, simpleSQL: sSimpleSQL };
   }
 
   public async Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo): Promise<boolean> {
@@ -1957,7 +2507,8 @@ export class SQLServerDataProvider
       // REMEMBER - this is the provider and the BaseEntity/subclasses handle user-level permission checking already, we just make sure API was turned on for the operation
       // if we get here we can delete, so build the SQL and then handle appropriately either as part of TransGroup or directly...
 
-      const sSQL = this.GetDeleteSQL(entity, user);
+      const sqlDetails = this.GetDeleteSQLWithDetails(entity, user);
+      const sSQL = sqlDetails.fullSQL;
 
       // Handle Entity and Entity AI Actions here w/ before and after handling
       if (false === options?.SkipEntityActions) await this.HandleEntityActions(entity, 'delete', true, user);
@@ -1969,7 +2520,17 @@ export class SQLServerDataProvider
         // we are part of a transaction group, so just add our query to the list
         // and when the transaction is committed, we will send all the queries at once
         entity.TransactionGroup.AddTransaction(
-          new TransactionItem(entity, 'Delete', sSQL, null, { dataSource: this._dataSource }, (transactionResult: Record<string, any>, success: boolean) => {
+          new TransactionItem(
+            entity, 
+            'Delete', 
+            sSQL, 
+            null, 
+            { 
+              dataSource: this._pool,
+              simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined,
+              entityName: entity.EntityInfo.Name
+            }, 
+            (transactionResult: Record<string, any>, success: boolean) => {
             // we get here whenever the transaction group does gets around to committing
             // our query.
             result.EndedAt = new Date();
@@ -1983,7 +2544,7 @@ export class SQLServerDataProvider
               }
 
               // Make sure the return value matches up as that is how we know the SP was succesfully internally
-              for (let key of entity.PrimaryKeys) {
+              for (const key of entity.PrimaryKeys) {
                 if (key.Value !== transactionResult[key.Name]) {
                   result.Success = false;
                   result.Message = 'Transaction failed to commit';
@@ -1991,30 +2552,32 @@ export class SQLServerDataProvider
               }
               result.NewValues = this.MapTransactionResultToNewValues(transactionResult);
               result.Success = true;
-            }
-            else {
+            } else {
               // the transaction failed, nothing to update, but we need to call Reject so the
               // promise resolves with a rejection so our outer caller knows
               result.Success = false;
               result.Message = 'Transaction failed to commit';
             }
-          })
+          }),
         );
 
         return true; // we're part of a transaction group, so we're done here
-      } 
-      else {
+      } else {
         let d;
         if (bReplay) {
           d = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
-        }
-        else {
-          d = await this.ExecuteSQL(sSQL);
+        } else {
+          // Execute SQL with optional simple SQL fallback for loggers
+          d = await this.ExecuteSQL(sSQL, null, { 
+            isMutation: true, 
+            description: `Delete ${entity.EntityInfo.Name}`,
+            simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined
+          });
         }
 
         if (d && d[0]) {
           // SP executed, now make sure the return value matches up as that is how we know the SP was succesfully internally
-          for (let key of entity.PrimaryKeys) {
+          for (const key of entity.PrimaryKeys) {
             if (key.Value !== d[0][key.Name]) {
               return false;
             }
@@ -2026,15 +2589,13 @@ export class SQLServerDataProvider
 
           result.EndedAt = new Date();
           return true;
-        } 
-        else {
+        } else {
           result.Message = 'No result returned from SQL';
           result.EndedAt = new Date();
           return false;
         }
       }
-    } 
-    catch (e) {
+    } catch (e) {
       result.Message = e.message;
       result.Success = false;
       result.EndedAt = new Date();
@@ -2068,19 +2629,82 @@ export class SQLServerDataProvider
                     ON
                         di.EntityID = e.ID
                     WHERE
-                        d.Name = @0`;
+                        d.Name = @p0`;
 
     const items = await this.ExecuteSQL(sSQL, [datasetName]);
     // now we have the dataset and the items, we need to get the update date from the items underlying entities
 
     if (items && items.length > 0) {
-      // fire off all of the item queries in parallel
-      const promises = items.map((item) => {
-        return this.GetDatasetItem(item, itemFilters, datasetName); // no await as Promise.All used below
-      });
+      // Optimization: Use batch SQL execution for multiple items
+      // Build SQL queries for all items
+      const queries: string[] = [];
+      const itemsWithSQL: any[] = [];
 
-      // execute all promises in parallel
-      const results = await Promise.all(promises);
+      for (const item of items) {
+        const itemSQL = this.GetDatasetItemSQL(item, itemFilters, datasetName);
+        if (itemSQL) {
+          queries.push(itemSQL);
+          itemsWithSQL.push(item);
+        } else {
+          // Handle invalid SQL case - add to results with error
+          itemsWithSQL.push({ ...item, hasError: true });
+        }
+      }
+
+      // Execute all queries in a single batch
+      const batchResults = await this.ExecuteSQLBatch(queries);
+
+      // Process results for each item
+      const results: DatasetItemResultType[] = [];
+      let queryIndex = 0;
+
+      for (const item of itemsWithSQL) {
+        if (item.hasError) {
+          // Handle error case for invalid columns
+          results.push({
+            EntityID: item.EntityID,
+            EntityName: item.Entity,
+            Code: item.Code,
+            Results: null,
+            LatestUpdateDate: null,
+            Status: 'Invalid columns specified for dataset item',
+            Success: false,
+          });
+        } else {
+          // Process successful query result
+          const itemData = batchResults[queryIndex] || [];
+
+          const itemUpdatedAt = new Date(item.DatasetItemUpdatedAt);
+          const datasetUpdatedAt = new Date(item.DatasetUpdatedAt);
+          const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime()));
+
+          // get the latest update date
+          let latestUpdateDate = new Date(1900, 1, 1);
+          if (itemData && itemData.length > 0) {
+            itemData.forEach((data) => {
+              if (data[item.DateFieldToCheck] && new Date(data[item.DateFieldToCheck]) > latestUpdateDate) {
+                latestUpdateDate = new Date(data[item.DateFieldToCheck]);
+              }
+            });
+          }
+
+          // finally, compare the latestUpdatedDate to the dataset max date, and use the latter if it is more recent
+          if (datasetMaxUpdatedAt > latestUpdateDate) {
+            latestUpdateDate = datasetMaxUpdatedAt;
+          }
+
+          results.push({
+            EntityID: item.EntityID,
+            EntityName: item.Entity,
+            Code: item.Code,
+            Results: itemData,
+            LatestUpdateDate: latestUpdateDate,
+            Success: itemData !== null && itemData !== undefined,
+          });
+
+          queryIndex++;
+        }
+      }
 
       // determine overall success
       const bSuccess = results.every((result) => result.Success);
@@ -2096,7 +2720,7 @@ export class SQLServerDataProvider
           }
           return acc;
         },
-        new Date(0)  // Unix epoch - lowest possible date to start with
+        new Date(0), // Unix epoch - lowest possible date to start with
       );
 
       return {
@@ -2119,19 +2743,35 @@ export class SQLServerDataProvider
     }
   }
 
-  protected async GetDatasetItem(item: any, itemFilters, datasetName): Promise<DatasetItemResultType> {
+  /**
+   * Constructs the SQL query for a dataset item.
+   * @param item - The dataset item metadata
+   * @param itemFilters - Optional filters to apply
+   * @param datasetName - Name of the dataset (for error logging)
+   * @returns The SQL query string, or null if columns are invalid
+   */
+  protected GetDatasetItemSQL(item: any, itemFilters: any, datasetName: string): string | null {
     let filterSQL = '';
     if (itemFilters && itemFilters.length > 0) {
       const filter = itemFilters.find((f) => f.ItemCode === item.Code);
       if (filter) filterSQL = (item.WhereClause ? ' AND ' : ' WHERE ') + '(' + filter.Filter + ')';
     }
 
+    const columns = this.GetColumnsForDatasetItem(item, datasetName);
+    if (!columns) {
+      return null; // Invalid columns
+    }
+
+    return `SELECT ${columns} FROM [${item.EntitySchemaName}].[${item.EntityBaseView}] ${item.WhereClause ? 'WHERE ' + item.WhereClause : ''}${filterSQL}`;
+  }
+
+  protected async GetDatasetItem(item: any, itemFilters, datasetName): Promise<DatasetItemResultType> {
     const itemUpdatedAt = new Date(item.DatasetItemUpdatedAt);
     const datasetUpdatedAt = new Date(item.DatasetUpdatedAt);
     const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime()));
 
-    const columns = this.GetColumnsForDatasetItem(item, datasetName);
-    if (!columns) {
+    const itemSQL = this.GetDatasetItemSQL(item, itemFilters, datasetName);
+    if (!itemSQL) {
       // failure condition within columns, return a failed result
       return {
         EntityID: item.EntityID,
@@ -2143,7 +2783,7 @@ export class SQLServerDataProvider
         Success: false,
       };
     }
-    const itemSQL = `SELECT ${columns} FROM [${item.EntitySchemaName}].[${item.EntityBaseView}] ${item.WhereClause ? 'WHERE ' + item.WhereClause : ''}${filterSQL}`;
+
     const itemData = await this.ExecuteSQL(itemSQL);
 
     // get the latest update date
@@ -2239,7 +2879,7 @@ export class SQLServerDataProvider
             ON
                 di.EntityID = e.ID
             WHERE
-                d.Name = @0`;
+                d.Name = @p0`;
 
     const items = await this.ExecuteSQL(sSQL, [datasetName]);
 
@@ -2332,7 +2972,7 @@ export class SQLServerDataProvider
         new ApplicationInfo(this, {
           ...apps[i],
           ApplicationEntities: appEntities.filter((ae) => ae.ApplicationName.trim().toLowerCase() === apps[i].Name.trim().toLowerCase()),
-        })
+        }),
       );
     }
     return ret;
@@ -2357,7 +2997,7 @@ export class SQLServerDataProvider
         new UserInfo(this, {
           ...users[i],
           UserRoles: userRoles.filter((ur) => ur.UserID === users[i].ID),
-        })
+        }),
       );
     }
     return ret;
@@ -2372,7 +3012,7 @@ export class SQLServerDataProvider
         new AuthorizationInfo(this, {
           ...auths[i],
           AuthorizationRoles: authRoles.filter((ar) => ar.AuthorizationName.trim().toLowerCase() === auths[i].Name.trim().toLowerCase()),
-        })
+        }),
       );
     }
     return ret;
@@ -2382,8 +3022,7 @@ export class SQLServerDataProvider
     if (this.CurrentUser) return this.CurrentUser;
     else if (this._currentUserEmail && this._currentUserEmail.length > 0) {
       // attempt to lookup current user from email since this.CurrentUser is null for some reason (unexpected)
-      if (UserCache && UserCache.Users)
-        return UserCache.Users.find((u) => u.Email.trim().toLowerCase() === this._currentUserEmail.trim().toLowerCase());
+      if (UserCache && UserCache.Users) return UserCache.Users.find((u) => u.Email.trim().toLowerCase() === this._currentUserEmail.trim().toLowerCase());
     }
     // if we get here we can't get the current user
     return null;
@@ -2434,7 +3073,7 @@ export class SQLServerDataProvider
    * Processes entity rows returned from SQL Server to handle timezone conversions for datetime fields.
    * This method specifically handles the conversion of datetime2 fields (which SQL Server returns without timezone info)
    * to proper UTC dates, preventing JavaScript from incorrectly interpreting them as local time.
-   * 
+   *
    * @param rows The raw result rows from SQL Server
    * @param entityInfo The entity metadata to determine field types
    * @returns The processed rows with corrected datetime values
@@ -2445,9 +3084,7 @@ export class SQLServerDataProvider
     }
 
     // Find all datetime fields in the entity
-    const datetimeFields = entityInfo.Fields.filter(
-      field => field.TSType === EntityFieldTSType.Date
-    );
+    const datetimeFields = entityInfo.Fields.filter((field) => field.TSType === EntityFieldTSType.Date);
 
     // If there are no datetime fields, return the rows as-is
     if (datetimeFields.length === 0) {
@@ -2458,12 +3095,12 @@ export class SQLServerDataProvider
     const needsAdjustment = await this.NeedsDatetimeOffsetAdjustment();
 
     // Process each row
-    return rows.map(row => {
+    return rows.map((row) => {
       const processedRow = { ...row };
-      
+
       for (const field of datetimeFields) {
         const fieldValue = processedRow[field.Name];
-        
+
         // Skip null/undefined values
         if (fieldValue === null || fieldValue === undefined) {
           continue;
@@ -2480,9 +3117,9 @@ export class SQLServerDataProvider
               processedRow[field.Name] = new Date(fieldValue);
             }
           } else if (fieldValue instanceof Date) {
-            // TypeORM has already converted to a Date object using local timezone
+            // DB driver has already converted to a Date object using local timezone
             // We need to adjust it back to UTC
-            // SQL Server stores datetime2 as UTC, but TypeORM interprets it as local
+            // SQL Server stores datetime2 as UTC, but DB Driver interprets it as local
             const localDate = fieldValue;
             const timezoneOffsetMs = localDate.getTimezoneOffset() * 60 * 1000;
             const utcDate = new Date(localDate.getTime() + timezoneOffsetMs);
@@ -2495,7 +3132,7 @@ export class SQLServerDataProvider
             processedRow[field.Name] = new Date(fieldValue);
           } else if (fieldValue instanceof Date && needsAdjustment) {
             // The database driver has incorrectly converted to a Date object using local timezone
-            // For datetimeoffset, SQL Server provides the value with timezone info, but the driver 
+            // For datetimeoffset, SQL Server provides the value with timezone info, but the driver
             // creates the Date as if it were in local time, ignoring the offset
             // We need to adjust it back to the correct UTC time
             const localDate = fieldValue;
@@ -2515,7 +3152,7 @@ export class SQLServerDataProvider
         }
         // For other types (date, time), leave as-is
       }
-      
+
       return processedRow;
     });
   }
@@ -2527,15 +3164,52 @@ export class SQLServerDataProvider
    * @param parameters
    * @returns
    */
-  public async ExecuteSQL(query: string, parameters: any = null): Promise<any> {
+  public async ExecuteSQL(
+    query: string,
+    parameters: any = null,
+    options?: ExecuteSQLOptions,
+  ): Promise<any> {
     try {
-      if (this._queryRunner) {
-        const data = await this._queryRunner.query(query, parameters);
-        return data;
+      let request: sql.Request;
+
+      if (this._transaction && this._transactionRequest) {
+        // Use transaction request if in a transaction
+        request = this._transactionRequest;
+      } else if (this._transaction) {
+        // Create a new request for this transaction if we don't have one
+        request = new sql.Request(this._transaction);
       } else {
-        const data = await this._dataSource.query(query, parameters);
-        return data;
+        // Use pool request for non-transactional queries
+        request = new sql.Request(this._pool);
       }
+
+      // Add parameters if provided
+      if (parameters) {
+        if (Array.isArray(parameters)) {
+          // Handle positional parameters (legacy TypeORM style)
+          // Convert to named parameters for mssql
+          parameters.forEach((value, index) => {
+            request.input(`p${index}`, value);
+          });
+          // Replace ? with @p0, @p1, etc. in the query
+          let paramIndex = 0;
+          query = query.replace(/\?/g, () => `@p${paramIndex++}`);
+        } else if (typeof parameters === 'object') {
+          // Handle named parameters
+          for (const [key, value] of Object.entries(parameters)) {
+            request.input(key, value);
+          }
+        }
+      }
+
+      // Log SQL statement to all active logging sessions (runs in parallel with execution)
+      const loggingPromise = this._logSqlStatement(query, parameters, options?.description, options?.ignoreLogging, options?.isMutation, options?.simpleSQLFallback);
+
+      // Execute SQL and logging in parallel, but wait for both to complete
+      const [result] = await Promise.all([request.query(query), loggingPromise]);
+      // Return recordset for consistency with TypeORM behavior
+      // If multiple recordsets, return recordsets array
+      return result.recordsets && Array.isArray(result.recordsets) && result.recordsets.length > 1 ? result.recordsets : result.recordset;
     } catch (e) {
       LogError(e);
       throw e; // force caller to handle
@@ -2543,12 +3217,180 @@ export class SQLServerDataProvider
   }
 
   /**
+   * Static helper method for executing SQL queries on an external connection pool.
+   * This method is designed to be used by generated code where a connection pool
+   * is passed in from the context. It returns results as arrays for consistency
+   * with the expected behavior in generated resolvers.
+   *
+   * @param pool - The mssql ConnectionPool to execute the query on
+   * @param query - The SQL query to execute
+   * @param parameters - Optional parameters for the query
+   * @returns Promise<any[]> - Array of results (empty array if no results)
+   */
+  public static async ExecuteSQLWithPool(pool: sql.ConnectionPool, query: string, parameters?: any): Promise<any[]> {
+    try {
+      const request = new sql.Request(pool);
+
+      // Add parameters if provided
+      if (parameters) {
+        if (Array.isArray(parameters)) {
+          // Handle positional parameters
+          parameters.forEach((value, index) => {
+            request.input(`p${index}`, value);
+          });
+          // Replace ? with @p0, @p1, etc. in the query
+          let paramIndex = 0;
+          query = query.replace(/\?/g, () => `@p${paramIndex++}`);
+        } else if (typeof parameters === 'object') {
+          // Handle named parameters
+          for (const [key, value] of Object.entries(parameters)) {
+            request.input(key, value);
+          }
+        }
+      }
+
+      const result = await request.query(query);
+      // Always return array for consistency
+      return result.recordset || [];
+    } catch (e) {
+      LogError(e);
+      throw e;
+    }
+  }
+
+  /**
+   * Static method to execute a batch of SQL queries using a provided connection source.
+   * This allows the batch logic to be reused from external contexts like TransactionGroup.
+   * All queries are combined into a single SQL statement and executed together within
+   * the same connection/transaction context for optimal performance.
+   *
+   * @param connectionSource - Either a sql.ConnectionPool, sql.Transaction, or sql.Request to use for execution
+   * @param queries - Array of SQL queries to execute
+   * @param parameters - Optional array of parameter arrays, one for each query
+   * @returns Promise<any[][]> - Array of result arrays, one for each query
+   */
+  public static async ExecuteSQLBatchStatic(
+    connectionSource: sql.ConnectionPool | sql.Transaction | sql.Request,
+    queries: string[],
+    parameters?: any[][],
+  ): Promise<any[][]> {
+    try {
+      let request: sql.Request;
+
+      // Determine the request to use based on connection source type
+      if (connectionSource instanceof sql.Request) {
+        request = connectionSource;
+      } else if (connectionSource instanceof sql.Transaction) {
+        request = new sql.Request(connectionSource);
+      } else {
+        // Assume it's a ConnectionPool
+        request = new sql.Request(connectionSource);
+      }
+
+      // Build combined batch SQL
+      let batchSQL = '';
+      let paramIndex = 0;
+
+      queries.forEach((query, queryIndex) => {
+        // Add parameters for this query if provided
+        if (parameters && parameters[queryIndex]) {
+          const queryParams = parameters[queryIndex];
+          if (Array.isArray(queryParams)) {
+            // Handle positional parameters
+            queryParams.forEach((value) => {
+              request.input(`p${paramIndex}`, value);
+              paramIndex++;
+            });
+            // Replace @p0, @p1, etc. with actual parameter names
+            let localParamIndex = paramIndex - queryParams.length;
+            query = query.replace(/@p(\d+)/g, () => `@p${localParamIndex++}`);
+          } else if (typeof queryParams === 'object') {
+            // Handle named parameters - prefix with query index to avoid conflicts
+            for (const [key, value] of Object.entries(queryParams)) {
+              const paramName = `q${queryIndex}_${key}`;
+              request.input(paramName, value);
+              // Replace parameter references in query
+              query = query.replace(new RegExp(`@${key}\\b`, 'g'), `@${paramName}`);
+            }
+          }
+        }
+
+        batchSQL += query;
+        if (queryIndex < queries.length - 1) {
+          batchSQL += ';\n';
+        }
+      });
+
+      // Execute the batch SQL
+      const result = await request.query(batchSQL);
+
+      // Return array of recordsets - one for each query
+      // Handle both single and multiple recordsets
+      if (result.recordsets && Array.isArray(result.recordsets)) {
+        return result.recordsets;
+      } else if (result.recordset) {
+        return [result.recordset];
+      } else {
+        return [];
+      }
+    } catch (e) {
+      LogError(e);
+      throw e;
+    }
+  }
+
+  /**
+   * Executes multiple SQL queries in a single batch for optimal performance.
+   * All queries are combined into a single SQL statement and executed together.
+   * This is particularly useful for bulk operations where you need to execute
+   * many similar queries and want to minimize round trips to the database.
+   *
+   * @param queries - Array of SQL queries to execute
+   * @param parameters - Optional array of parameter arrays, one for each query
+   * @param options - Optional execution options for logging and description
+   * @returns Promise<any[][]> - Array of result arrays, one for each query
+   */
+  public async ExecuteSQLBatch(
+    queries: string[],
+    parameters?: any[][],
+    options?: ExecuteSQLBatchOptions,
+  ): Promise<any[][]> {
+    try {
+      let connectionSource: sql.ConnectionPool | sql.Transaction | sql.Request;
+
+      if (this._transaction && this._transactionRequest) {
+        // Use transaction request if in a transaction
+        connectionSource = this._transactionRequest;
+      } else if (this._transaction) {
+        // Use transaction if we have one
+        connectionSource = this._transaction;
+      } else {
+        // Use pool request for non-transactional queries
+        connectionSource = this._pool;
+      }
+
+      // Log batch SQL statement to all active logging sessions
+      const description = options?.description ? `${options.description} (Batch: ${queries.length} queries)` : `Batch execution: ${queries.length} queries`;
+      const batchSQL = queries.join(';\n');
+      const loggingPromise = this._logSqlStatement(batchSQL, parameters, description, options?.ignoreLogging, options?.isMutation);
+
+      // Execute SQL and logging in parallel, but wait for both to complete
+      const [result] = await Promise.all([SQLServerDataProvider.ExecuteSQLBatchStatic(connectionSource, queries, parameters), loggingPromise]);
+
+      return result;
+    } catch (e) {
+      LogError(e);
+      throw e;
+    }
+  }
+
+  /**
    * Determines whether the database driver requires adjustment for datetimeoffset fields.
-   * This method performs an empirical test on first use to detect if the driver (e.g., TypeORM)
+   * This method performs an empirical test on first use to detect if the driver (e.g., mssql)
    * incorrectly handles timezone information in datetimeoffset columns.
-   * 
+   *
    * @returns {Promise<boolean>} True if datetimeoffset values need timezone adjustment, false otherwise
-   * 
+   *
    * @example
    * ```typescript
    * const provider = new SQLServerDataProvider();
@@ -2556,7 +3398,7 @@ export class SQLServerDataProvider
    *   console.log('Driver requires datetimeoffset adjustment');
    * }
    * ```
-   * 
+   *
    * @remarks
    * Some database drivers (notably TypeORM) incorrectly interpret SQL Server's datetimeoffset
    * values as local time instead of respecting the timezone offset. This method detects
@@ -2593,21 +3435,23 @@ export class SQLServerDataProvider
         SELECT TestDateTime FROM @TestTable;
       `;
 
-      const result = await this.ExecuteSQL(testQuery);
+      const result = await this.ExecuteSQL(testQuery, null, { description: 'DatetimeOffset handling test' });
       if (result && result.length > 0) {
         const testDate = result[0].TestDateTime;
-        
+
         // Expected: January 1, 1900 at 11:00 AM UTC
         const expectedUTCHours = 11;
-        
+
         if (testDate instanceof Date) {
           // Get the UTC hours from the returned date
           const actualUTCHours = testDate.getUTCHours();
-          
+
           // If the UTC hours don't match, the driver is incorrectly handling timezone
           if (actualUTCHours !== expectedUTCHours) {
             this._needsDatetimeOffsetAdjustment = true;
-            console.warn(`SQLServerDataProvider: Detected incorrect datetimeoffset handling. Expected UTC hour: ${expectedUTCHours}, got: ${actualUTCHours}. Enabling automatic adjustment.`);
+            console.warn(
+              `SQLServerDataProvider: Detected incorrect datetimeoffset handling. Expected UTC hour: ${expectedUTCHours}, got: ${actualUTCHours}. Enabling automatic adjustment.`,
+            );
           } else {
             this._needsDatetimeOffsetAdjustment = false;
           }
@@ -2616,7 +3460,7 @@ export class SQLServerDataProvider
           console.log('SQLServerDataProvider: Unexpected datetimeoffset test result type:', typeof testDate, testDate);
         }
       }
-      
+
       // Mark the test as complete
       this._datetimeOffsetTestComplete = true;
     } catch (e) {
@@ -2630,9 +3474,12 @@ export class SQLServerDataProvider
 
   protected async BeginTransaction() {
     try {
-      if (!this._queryRunner) this._queryRunner = this._dataSource.createQueryRunner();
+      // Create a new transaction from the pool
+      this._transaction = new sql.Transaction(this._pool);
+      await this._transaction.begin();
 
-      await this._queryRunner.startTransaction();
+      // Create a request for this transaction that can be reused
+      this._transactionRequest = new sql.Request(this._transaction);
     } catch (e) {
       LogError(e);
       throw e; // force caller to handle
@@ -2641,7 +3488,11 @@ export class SQLServerDataProvider
 
   protected async CommitTransaction() {
     try {
-      await this._queryRunner.commitTransaction();
+      if (this._transaction) {
+        await this._transaction.commit();
+        this._transaction = null;
+        this._transactionRequest = null;
+      }
     } catch (e) {
       LogError(e);
       throw e; // force caller to handle
@@ -2650,7 +3501,11 @@ export class SQLServerDataProvider
 
   protected async RollbackTransaction() {
     try {
-      await this._queryRunner.rollbackTransaction();
+      if (this._transaction) {
+        await this._transaction.rollback();
+        this._transaction = null;
+        this._transactionRequest = null;
+      }
     } catch (e) {
       LogError(e);
       throw e; // force caller to handle
@@ -2707,9 +3562,9 @@ export class SQLServerDataProvider
         return null;
       } else {
         // got our field, create a SQL Query
-        let sql: string = `SELECT [${f.Name}] FROM [${e.SchemaName}].[${e.BaseView}] WHERE `;
+        const sql: string = `SELECT [${f.Name}] FROM [${e.SchemaName}].[${e.BaseView}] WHERE `;
         let where: string = '';
-        for (let pkv of CompositeKey.KeyValuePairs) {
+        for (const pkv of CompositeKey.KeyValuePairs) {
           const pk = e.PrimaryKeys.find((pk) => pk.Name === pkv.FieldName);
           const quotes = pk.NeedsQuotes ? "'" : '';
           if (where.length > 0) where += ' AND ';

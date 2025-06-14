@@ -7,19 +7,47 @@ import { EntityDocumentEntity } from "@memberjunction/core-entities";
 import { LogStatus } from "@memberjunction/core";
 
 /**
- * This class provides a simple wrapper of the most basic feature in the MJ Communication Framework, sending a single message. 
- * This class takes in a set of parameters and uses the MJ Communication Framework to send a single message to a single recipient.
+ * Action that vectorizes entities by creating and storing vector embeddings for entity documents.
+ * This action processes one or more entities and their associated documents to generate
+ * searchable vector representations for AI-powered semantic search and retrieval.
  * 
- * Params:
- *  * Subject: The subject of the message.
- *  * Body: The body of the message.
- *  * To: The recipient of the message.
- *  * From: The sender of the message.
- *  * Provider: The name of the Communication Provider to use to send the message.
- *  * MessageType: The name of the Message Type (within the provider) to use to send the message.
+ * @example
+ * ```typescript
+ * // Vectorize a single entity
+ * await runAction({
+ *   ActionName: 'Vectorize Entity',
+ *   Params: [{
+ *     Name: 'EntityNames',
+ *     Value: 'Customers'
+ *   }]
+ * });
+ * 
+ * // Vectorize multiple entities
+ * await runAction({
+ *   ActionName: 'Vectorize Entity',
+ *   Params: [{
+ *     Name: 'EntityNames',
+ *     Value: ['Customers', 'Orders', 'Products']
+ *   }]
+ * });
+ * ```
  */
-@RegisterClass(BaseAction, "Vectorize Entity")
+@RegisterClass(BaseAction, "__VectorizeEntity")
 export class VectorizeEntityAction extends BaseAction {
+    /**
+     * Executes the vectorization process for specified entities.
+     * 
+     * @param params - The action parameters containing:
+     *   - EntityNames: A string, comma-separated string, or array of entity names to vectorize
+     *   - ContextUser: The user context for permissions and logging
+     * 
+     * @returns A promise resolving to an ActionResultSimple with:
+     *   - Success: true if all entities were vectorized successfully
+     *   - Message: Combined messages from all vectorization operations
+     *   - ResultCode: "SUCCESS" if all succeeded, "FAILED" if any failed
+     * 
+     * @throws Never throws directly - all errors are caught and returned in the result
+     */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
 
         const entityNamesParam: ActionParam | undefined = params.Params.find(p => p.Name === 'EntityNames');
@@ -72,6 +100,14 @@ export class VectorizeEntityAction extends BaseAction {
     }
 }
 
+/**
+ * Loader function to ensure the VectorizeEntityAction class is included in the bundle.
+ * This prevents tree-shaking from removing the class during the build process.
+ * 
+ * @remarks
+ * This function should be called during application initialization to ensure
+ * the action is properly registered with the MemberJunction class factory.
+ */
 export function LoadVectorizeEntityAction(){
     // this function is a stub that is used to force the bundler to include the above class in the final bundle and not tree shake them out
 }

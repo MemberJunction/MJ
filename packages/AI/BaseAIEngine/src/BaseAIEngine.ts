@@ -164,8 +164,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get AgentPrompts(): AIAgentPromptEntity[] {
-        AIEngineBase.checkMetadataLoaded();
-        return AIEngineBase.Instance._agentPrompts;
+        return this._agentPrompts;
     }
 
 

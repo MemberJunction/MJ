@@ -7,7 +7,7 @@ import { logError, logStatus } from './status_logging';
 import { ValidatorResult, ManageMetadataBase } from '../Database/manage-metadata';
 import { mj_core_schema } from '../Config/config';
 import { SQLLogging } from './sql_logging';
-import { DataSource } from 'typeorm';
+import * as sql from 'mssql';
 
 /**
  * Base class for generating entity sub-classes, you can sub-class this class to modify/extend your own entity sub-class generator logic
@@ -15,20 +15,20 @@ import { DataSource } from 'typeorm';
 export class EntitySubClassGeneratorBase {
   /**
    * 
-   * @param ds 
+   * @param pool 
    * @param entities 
    * @param directory 
    * @param skipDBUpdate - when set to true, no updates are written back to the database - which happens after code generation when newly generated code from AI has been generated, but in the case where this flag is true, we don't ever write back to the DB because the assumption is we are only emitting code to the file that was already in the DB.
    * @returns 
    */
-  public async generateAllEntitySubClasses(ds: DataSource, entities: EntityInfo[], directory: string, skipDBUpdate: boolean): Promise<boolean> {
+  public async generateAllEntitySubClasses(pool: sql.ConnectionPool, entities: EntityInfo[], directory: string, skipDBUpdate: boolean): Promise<boolean> {
     try {
       const sortedEntities = entities.sort((a, b) => a.Name.localeCompare(b.Name));
 
       const zodContent: string = sortedEntities.map((entity: EntityInfo) => this.GenerateSchemaAndType(entity)).join('');
       let sContent: string = "";
       for (const e of sortedEntities) {
-        sContent += await this.generateEntitySubClass(ds, e, false, skipDBUpdate);
+        sContent += await this.generateEntitySubClass(pool, e, false, skipDBUpdate);
       }
       const allContent = `${this.generateEntitySubClassFileHeader()} \n ${zodContent} \n ${sContent}`;
 
@@ -59,7 +59,7 @@ export const loadModule = () => {
    * @param entity
    * @param includeFileHeader
    */
-  public async generateEntitySubClass(ds: DataSource, entity: EntityInfo, includeFileHeader: boolean = false, skipDBUpdate: boolean = false): Promise<string> {
+  public async generateEntitySubClass(pool: sql.ConnectionPool, entity: EntityInfo, includeFileHeader: boolean = false, skipDBUpdate: boolean = false): Promise<string> {
     if (entity.PrimaryKeys.length === 0) {
       console.warn(`Entity ${entity.Name} has no primary keys.  Skipping.`);
       return '';
@@ -99,7 +99,9 @@ export const loadModule = () => {
     get ${e.CodeName}(): ${typeString} {
         return this.Get('${e.Name}');
     }`;
-        if (!e.ReadOnly) {
+        if (!e.ReadOnly || (e.IsPrimaryKey && !e.AutoIncrement)) {
+          // Generate setter for non-readonly fields OR for primary keys that are not auto-increment
+          // This allows manual override of non-auto-increment primary keys (like UUIDs)
           sRet += `
     set ${e.CodeName}(value: ${typeString}) {
         this.Set('${e.Name}', value);
@@ -160,7 +162,7 @@ export const loadModule = () => {
         throw new Error('Save is not allowed for ${entity.Name}, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
     }`;
 
-    const validateFunction: string | null = await this.LogAndGenerateValidateFunction(ds, entity, skipDBUpdate);
+    const validateFunction: string | null = await this.LogAndGenerateValidateFunction(pool, entity, skipDBUpdate);
 
     const status = entity.Status.trim().toLowerCase();
     const deprecatedFlag: string = status === 'deprecated' || status === 'disabled' ? 
@@ -191,7 +193,7 @@ ${fields}
     }
   }
 
-  public async LogAndGenerateValidateFunction(ds: DataSource, entity: EntityInfo, skipDBUpdate: boolean): Promise<string | null> {
+  public async LogAndGenerateValidateFunction(pool: sql.ConnectionPool, entity: EntityInfo, skipDBUpdate: boolean): Promise<string | null> {
     // first generate the validate function
     const ret = this.GenerateValidateFunction(entity);
     if (ret && ret.code) {
@@ -238,7 +240,7 @@ ${fields}
         }
   
         // now Log and Execute the SQL
-        await SQLLogging.LogSQLAndExecute(ds, sSQL);  
+        await SQLLogging.LogSQLAndExecute(pool, sSQL);  
       }
 
       return ret.code;

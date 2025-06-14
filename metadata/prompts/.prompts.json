@@ -1,0 +1,98 @@
+[
+  {
+    "fields": {
+      "Name": "Loop Agent Type: System Prompt",
+      "Description": "Basic control structure for the Loop Agent Type.",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/loop-agent-type-system-prompt.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "@file:output/loop-agent-type-system-prompt-output.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Agent Type System Prompts?create&Description=System Prompts for Agent Types"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 4.1",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "0F7988B5-668A-4B53-A071-DFD0CEF7B762"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T04:10:40.566Z",
+            "checksum": "6b6154f0c49d785c4e5b90e56012aa3cd00ff1a13d77a526dd3f5945ac7e29fd"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "FF7D441F-36E1-458A-B548-0FC2208923BE"
+    },
+    "sync": {
+      "lastModified": "2025-06-14T04:10:40.566Z",
+      "checksum": "caeded9a46eae371be8fdb9e9a69a1772cc14ea598c432a1f39d3136586c48f9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Demo Loop Agent - Main Prompt",
+      "Description": "Demo for the main prompt for the agent.",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/demo-loop-agent.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "@file:output/demo-loop-agent.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Demo?create&Description=Demo Prompts for Demo Agents"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 4.1",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "15157529-4E12-4FE1-A313-979D236EF8FD"
+          },
+          "sync": {
+            "lastModified": "2025-06-14T04:10:40.575Z",
+            "checksum": "6b6154f0c49d785c4e5b90e56012aa3cd00ff1a13d77a526dd3f5945ac7e29fd"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B4053E4F-165C-4AED-8E14-3A0A25A28EFE"
+    },
+    "sync": {
+      "lastModified": "2025-06-14T04:10:40.575Z",
+      "checksum": "6db8baccfd7c998333ed11ad3286059762c526cb1cc815e8acc3e1097be538d9"
+    }
+  }
+]

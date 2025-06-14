@@ -1,3 +1,9 @@
+/**
+ * Database schema JSON output generator for MemberJunction CodeGen.
+ * Generates comprehensive JSON representations of database schemas including
+ * entities, fields, and relationships in both full and simplified formats.
+ */
+
 import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
 import { logStatus } from '../Misc/status_logging';
 import fs from 'fs';
@@ -7,9 +13,27 @@ import { RegisterClass } from '@memberjunction/global';
 
 
 /**
- * Base class for generating a database schema JSON output, you can sub-class this class to create your own schema generator logic
+ * Base class for generating database schema JSON output files.
+ * Creates comprehensive JSON documentation of database schemas including:
+ * - Full entity definitions with all field details
+ * - Simplified versions for lighter consumption
+ * - Schema-specific and bundled outputs
+ * - Minified versions for production use
+ * 
+ * You can sub-class this class to create custom schema generation logic.
  */
 export class DBSchemaGeneratorBase { 
+    /**
+     * Main entry point for generating database schema JSON files.
+     * Creates multiple output formats for different consumption needs:
+     * - Individual schema files (full and simple)
+     * - Combined all-schemas files
+     * - Configured bundle files
+     * - Minified versions of all outputs
+     * @param entities Array of entities to process
+     * @param outputDir Directory to write the JSON files to
+     * @returns True if generation was successful, false otherwise
+     */
     public generateDBSchemaJSONOutput(entities: EntityInfo[], outputDir: string): boolean {
         if (!fs.existsSync(outputDir))
             fs.mkdirSync(outputDir, { recursive: true }); // create the directory if it doesn't exist
@@ -94,6 +118,14 @@ export class DBSchemaGeneratorBase {
         return true;
     }
     
+    /**
+     * Generates JSON representation for a specific database schema
+     * @param entities Array of entities in this schema
+     * @param excludeEntities Array of entity names to exclude from output
+     * @param schemaName Name of the schema being processed
+     * @param simpleVersion Whether to generate simplified output (field names only)
+     * @returns JSON string representing the schema
+     */
     public generateDBSchemaJSON(entities: EntityInfo[], excludeEntities: string[], schemaName: string, simpleVersion: boolean): string {
         let sOutput: string = `{
         "schemaName": "${schemaName}", 
@@ -117,6 +149,12 @@ export class DBSchemaGeneratorBase {
         return sOutput;
     }
     
+    /**
+     * Generates JSON representation for a single entity
+     * @param entity The entity to generate JSON for
+     * @param simpleVersion Whether to generate simplified output
+     * @returns JSON string representing the entity
+     */
     protected generateEntityJSON(entity: EntityInfo, simpleVersion: boolean) : string {
         const jsonEscapedDescription = entity.Description ? entity.Description.replace(/"/g, '\\"') : '';
         let sOutput: string = `
@@ -145,6 +183,12 @@ export class DBSchemaGeneratorBase {
     }
      
     
+    /**
+     * Generates JSON representation for a single entity field
+     * @param field The field to generate JSON for
+     * @param simpleVersion Whether to generate simplified output (currently unused for fields)
+     * @returns JSON string representing the field with type, relationships, and constraints
+     */
     protected generateFieldJSON(field: EntityFieldInfo, simpleVersion: boolean) : string {
         const relEntity = field.RelatedEntity && field.RelatedEntity.length > 0 ? `\n                "RelatedEntity": "${field.RelatedEntity}",` : ''
         const relField = relEntity && field.RelatedEntityFieldName && field.RelatedEntityFieldName.length > 0 ? `\n                "RelatedEntityFieldName": "${field.RelatedEntityFieldName}",` : ''

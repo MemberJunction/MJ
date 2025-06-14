@@ -11,6 +11,8 @@ import { BaseEntity } from '@memberjunction/core';
 import { cleanupProvider } from '../../lib/provider-utils';
 import { configManager } from '../../lib/config-manager';
 import { getSyncEngine, resetSyncEngine } from '../../lib/singleton-manager';
+import type { SqlLoggingSession } from '@memberjunction/sqlserver-dataprovider';
+import { uuidv4 } from '@memberjunction/global';
 
 export default class Push extends Command {
   static description = 'Push local file changes to the database';
@@ -32,6 +34,7 @@ export default class Push extends Command {
   async run(): Promise<void> {
     const { flags } = await this.parse(Push);
     const spinner = ora();
+    let sqlLogger: SqlLoggingSession | null = null;
     
     try {
       // Load configurations
@@ -41,7 +44,9 @@ export default class Push extends Command {
         this.error('No mj.config.cjs found in current directory or parent directories');
       }
       
-      const syncConfig = await loadSyncConfig(configManager.getOriginalCwd());
+      // Load sync config from target directory if --dir is specified, otherwise from current directory
+      const syncConfigDir = flags.dir ? path.resolve(configManager.getOriginalCwd(), flags.dir) : configManager.getOriginalCwd();
+      const syncConfig = await loadSyncConfig(syncConfigDir);
       
       // Stop spinner before provider initialization (which logs to console)
       spinner.stop();
@@ -55,8 +60,52 @@ export default class Push extends Command {
       // Show success after all initialization is complete
       spinner.succeed('Configuration and metadata loaded');
       
+      // Initialize SQL logging AFTER provider setup is complete
+      if (syncConfig?.sqlLogging?.enabled) {
+        const outputDir = syncConfig.sqlLogging.outputDirectory || './sql_logging';
+        const formatAsMigration = syncConfig.sqlLogging.formatAsMigration || false;
+        
+        // Ensure output directory exists
+        const fullOutputDir = path.resolve(outputDir);
+        await fs.ensureDir(fullOutputDir);
+        
+        // Generate filename with timestamp and directory name
+        const now = new Date();
+        const humanReadableTimestamp = now.toISOString()
+          .replace('T', '_')
+          .replace(/:/g, '-')
+          .slice(0, -5); // Remove milliseconds and Z
+        
+        // Get directory name for filename
+        const targetDir = flags.dir ? path.resolve(configManager.getOriginalCwd(), flags.dir) : configManager.getOriginalCwd();
+        const dirName = path.basename(targetDir);
+        
+        const filename = formatAsMigration 
+          ? `V${now.toISOString().replace(/[:.T-]/g, '').slice(0, -5)}__MetadataSync_Push.sql`
+          : `metadata-sync-push_${dirName}_${humanReadableTimestamp}.sql`;
+        const logFilePath = path.join(fullOutputDir, filename);
+        
+        // Import and access the data provider from the provider utils
+        const { getDataProvider } = await import('../../lib/provider-utils');
+        const dataProvider = getDataProvider();
+        
+        if (dataProvider && typeof dataProvider.createSqlLogger === 'function') {
+          sqlLogger = await dataProvider.createSqlLogger(logFilePath, {
+            formatAsMigration,
+            description: 'MetadataSync Push Operation',
+            statementTypes: 'mutations', // Only log mutations (data changes)
+            batchSeparator: 'GO', // Add GO statements for SQL Server batch processing
+            prettyPrint: true     // Enable pretty printing for readable output
+          });
+          
+          this.log(`📝 SQL logging enabled: ${path.relative(process.cwd(), logFilePath)}`);
+        } else {
+          this.warn('SQL logging requested but data provider does not support createSqlLogger');
+        }
+      }
+      
       // Find entity directories to process
-      const entityDirs = findEntityDirectories(configManager.getOriginalCwd(), flags.dir);
+      const entityDirs = findEntityDirectories(configManager.getOriginalCwd(), flags.dir, syncConfig?.directoryOrder);
       
       if (entityDirs.length === 0) {
         this.error('No entity directories found');
@@ -103,8 +152,47 @@ export default class Push extends Command {
       
     } catch (error) {
       spinner.fail('Push failed');
+      
+      // Enhanced error logging for debugging
+      this.log('\n=== Push Error Details ===');
+      this.log(`Error type: ${error?.constructor?.name || 'Unknown'}`);
+      this.log(`Error message: ${error instanceof Error ? error.message : String(error)}`);
+      
+      if (error instanceof Error && error.stack) {
+        this.log(`\nStack trace:`);
+        this.log(error.stack);
+      }
+      
+      // Log context information
+      this.log(`\nContext:`);
+      this.log(`- Working directory: ${configManager.getOriginalCwd()}`);
+      this.log(`- Flags: ${JSON.stringify(flags, null, 2)}`);
+      
+      // Check if error is related to common issues
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('entity directories')) {
+        this.log(`\nHint: This appears to be an entity directory configuration issue.`);
+        this.log(`Make sure each entity directory has a .mj-sync.json file.`);
+      } else if (errorMessage.includes('database') || errorMessage.includes('connection')) {
+        this.log(`\nHint: This appears to be a database connectivity issue.`);
+        this.log(`Check your mj.config.cjs configuration and database connectivity.`);
+      } else if (errorMessage.includes('config') || errorMessage.includes('mj.config.cjs')) {
+        this.log(`\nHint: This appears to be a configuration file issue.`);
+        this.log(`Make sure mj.config.cjs exists and is properly configured.`);
+      }
+      
       this.error(error as Error);
     } finally {
+      // Dispose SQL logging session if active
+      if (sqlLogger) {
+        try {
+          await sqlLogger.dispose();
+          this.log('✅ SQL logging session closed');
+        } catch (error) {
+          this.warn(`Failed to close SQL logging session: ${error}`);
+        }
+      }
+      
       // Reset sync engine singleton
       resetSyncEngine();
       // Clean up database connection
@@ -284,6 +372,33 @@ export default class Push extends Command {
       entity = await syncEngine.createEntityObject(entityName);
       entity.NewRecord();
       isNew = true;
+      
+      // Handle primary keys for new records
+      const entityInfo = syncEngine.getEntityInfo(entityName);
+      if (entityInfo) {
+        for (const pk of entityInfo.PrimaryKeys) {
+          if (!pk.AutoIncrement) {
+            // Check if we have a value in primaryKey object
+            if (recordData.primaryKey?.[pk.Name]) {
+              // User specified a primary key for new record, set it on entity directly
+              // Don't add to fields as it will be in primaryKey section
+              (entity as any)[pk.Name] = recordData.primaryKey[pk.Name];
+              if (verbose) {
+                this.log(`  Using specified primary key ${pk.Name}: ${recordData.primaryKey[pk.Name]}`);
+              }
+            } else if (pk.Type.toLowerCase() === 'uniqueidentifier' && !recordData.fields[pk.Name]) {
+              // Generate UUID for this primary key and set it on entity directly
+              const uuid = uuidv4();
+              // Don't add to fields as it will be in primaryKey section after save
+              if (verbose) {
+                this.log(`  Generated UUID for primary key ${pk.Name}: ${uuid}`);
+              }
+              // Set the generated UUID on the entity
+              (entity as any)[pk.Name] = uuid;
+            }
+          }
+        }
+      }
     }
     
     // Apply defaults first
@@ -318,7 +433,14 @@ export default class Push extends Command {
     // Save the record
     const saved = await entity.Save();
     if (!saved) {
-      const errors = entity.LatestResult?.Errors?.join(', ') || 'Unknown error';
+      const message = entity.LatestResult?.Message;
+      if (message) {
+        throw new Error(`Failed to save record: ${message}`);
+      }
+      
+      const errors = entity.LatestResult?.Errors?.map(err => 
+        typeof err === 'string' ? err : (err?.message || JSON.stringify(err))
+      )?.join(', ') || 'Unknown error';
       throw new Error(`Failed to save record: ${errors}`);
     }
     
@@ -391,6 +513,32 @@ export default class Push extends Command {
             entity = await syncEngine.createEntityObject(entityName);
             entity.NewRecord();
             isNew = true;
+            
+            // Handle primary keys for new related entity records
+            const entityInfo = syncEngine.getEntityInfo(entityName);
+            if (entityInfo) {
+              for (const pk of entityInfo.PrimaryKeys) {
+                if (!pk.AutoIncrement) {
+                  // Check if we have a value in primaryKey object
+                  if (relatedRecord.primaryKey?.[pk.Name]) {
+                    // User specified a primary key for new record, set it on entity directly
+                    // Don't add to fields as it will be in primaryKey section
+                    (entity as any)[pk.Name] = relatedRecord.primaryKey[pk.Name];
+                    if (verbose) {
+                      this.log(`${indent}  Using specified primary key ${pk.Name}: ${relatedRecord.primaryKey[pk.Name]}`);
+                    }
+                  } else if (pk.Type.toLowerCase() === 'uniqueidentifier' && !relatedRecord.fields[pk.Name]) {
+                    // Generate UUID for this primary key and set it on entity directly
+                    const uuid = uuidv4();
+                    // Don't add to fields as it will be in primaryKey section after save
+                    (entity as any)[pk.Name] = uuid;
+                    if (verbose) {
+                      this.log(`${indent}  Generated UUID for primary key ${pk.Name}: ${uuid}`);
+                    }
+                  }
+                }
+              }
+            }
           }
           
           // Apply fields with parent/root context
@@ -418,7 +566,14 @@ export default class Push extends Command {
           // Save the related entity
           const saved = await entity.Save();
           if (!saved) {
-            const errors = entity.LatestResult?.Errors?.join(', ') || 'Unknown error';
+            const message = entity.LatestResult?.Message;
+            if (message) {
+              throw new Error(`Failed to save related ${entityName}: ${message}`);
+            }
+            
+            const errors = entity.LatestResult?.Errors?.map(err => 
+              typeof err === 'string' ? err : (err?.message || JSON.stringify(err))
+            )?.join(', ') || 'Unknown error';
             throw new Error(`Failed to save related ${entityName}: ${errors}`);
           }
           

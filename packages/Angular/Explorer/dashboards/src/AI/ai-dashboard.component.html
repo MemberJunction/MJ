@@ -40,7 +40,9 @@
         
         @if (activeTab === 'monitoring') {
           <app-execution-monitoring
+            [initialState]="executionMonitoringState"
             (openEntityRecord)="onOpenEntityRecord($event)"
+            (stateChange)="onExecutionMonitoringStateChange($event)"
             mjFillContainer>
           </app-execution-monitoring>
         }

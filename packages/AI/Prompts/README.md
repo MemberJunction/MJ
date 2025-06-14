@@ -1,26 +1,206 @@
 # @memberjunction/ai-prompts
 
-The MemberJunction AI Prompts package provides sophisticated prompt management, execution, and optimization capabilities within the MemberJunction ecosystem. This package handles advanced prompt features including template rendering, parallel execution, intelligent caching, and result selection strategies.
+Advanced AI prompt execution engine with hierarchical template composition, intelligent model selection, parallel execution, output validation, and comprehensive execution tracking.
 
 [![npm version](https://badge.fury.io/js/%40memberjunction%2Fai-prompts.svg)](https://www.npmjs.com/package/@memberjunction/ai-prompts)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
 
-## Features
+## Key Features
 
-- **📝 Advanced Prompt System**: Sophisticated prompt management with template rendering and validation
-- **🤖 System Prompt Embedding**: Agent architecture support with {% PromptEmbed %} syntax for deterministic response formats
-- **⚡ Parallel Processing**: Multi-model execution with result selection strategies
-- **💾 Intelligent Caching**: Vector similarity matching and TTL-based result caching
-- **🔄 Template Integration**: Dynamic prompt generation with MemberJunction template system
-- **📊 Execution Analytics**: Comprehensive metrics, token usage tracking, and performance monitoring
-- **🎯 Result Selection**: AI-powered selection of best results from parallel executions
-- **🔧 Enhanced Output Validation**: JSON schema validation against OutputExample with intelligent retry logic
-- **⚙️ Configuration-Driven**: Metadata-driven prompt configuration and execution
-- **🗃️ Hierarchical Logging**: Parent-child relationship tracking for parallel executions
-- **🚫 Cancellation Support**: AbortSignal integration for graceful execution cancellation
-- **📈 Progress Updates**: Real-time progress callbacks and streaming response support
-- **🔄 Streaming Integration**: Compatible with BaseLLM streaming capabilities
-- **🔗 Agent Integration**: Full agent run linking for comprehensive execution tracking
+### 🎯 Dynamic Hierarchical Template Composition
+
+#### Why Dynamic Template Composition?
+
+While MemberJunction's template system already supports static template composition (where Template A always includes Templates B and C), the AI Prompts system adds **dynamic template composition** - the ability to inject ANY prompt template into ANY other prompt template at runtime.
+
+**Static Composition (MJ Templates):** Perfect for fixed relationships like email headers/footers
+```liquid
+<!-- Email template always includes same header -->
+{% include 'email-header' %}
+{{ content }}
+{% include 'email-footer' %}
+```
+
+**Dynamic Composition (AI Prompts):** Essential for flexible runtime relationships
+```typescript
+// Inject ANY child prompt into ANY parent prompt at runtime
+const params = new AIPromptParams();
+params.prompt = systemPrompt;        // e.g., Agent Type's control flow prompt
+params.childPrompts = [
+  new ChildPromptParam(agentPrompt, 'agentInstructions')  // Specific agent's prompt
+];
+// System prompt can use {{ agentInstructions }} to embed the agent's specific logic
+```
+
+#### The Agent System Use Case
+
+This dynamic composition is crucial for AI Agents:
+- **Agent Types** have **System Prompts** that control execution flow and response format
+- **Individual Agents** have their own **specific prompts** with domain logic
+- At runtime, any agent's prompt is dynamically injected into its type's system prompt
+- This creates a complete prompt combining the control wrapper with agent-specific instructions
+
+```typescript
+// Agent Type System Prompt (controls flow)
+const systemPrompt = {
+  templateText: `You are an AI agent. Follow these instructions:
+  
+  {{ agentInstructions }}  <!-- Dynamically injected at runtime -->
+  
+  Respond in JSON format with: { decision: ..., reasoning: ... }`
+};
+
+// Individual Agent Prompt (domain logic)
+const dataGatherAgent = {
+  templateText: `Your role is to gather data from: {{ dataSources }}`
+};
+
+// At runtime, compose them dynamically
+params.childPrompts = [
+  new ChildPromptParam(dataGatherAgent, 'agentInstructions')
+];
+```
+
+### 🔄 System Placeholders
+Automatically inject common values into all templates without manual data passing. Includes date/time, user context, prompt metadata, and more.
+
+```liquid
+Current user: {{ _USER_NAME }}
+Date: {{ _CURRENT_DATE }}
+Expected output: {{ _OUTPUT_EXAMPLE }}
+```
+
+## System Placeholders Reference
+
+System placeholders are automatically available in all AI prompt templates, providing dynamic values like current date/time, prompt metadata, and user context without requiring manual data passing.
+
+### Available System Placeholders
+
+#### Date/Time Placeholders
+- `{{ _CURRENT_DATE }}` - Current date in YYYY-MM-DD format
+- `{{ _CURRENT_TIME }}` - Current time in HH:MM AM/PM format with timezone
+- `{{ _CURRENT_DATE_AND_TIME }}` - Full timestamp with date and time
+- `{{ _CURRENT_DAY_OF_WEEK }}` - Current day name (e.g., Monday, Tuesday)
+- `{{ _CURRENT_TIMEZONE }}` - Current timezone identifier
+- `{{ _CURRENT_TIMESTAMP_UTC }}` - Current UTC timestamp in ISO format
+
+#### Prompt Metadata Placeholders
+- `{{ _OUTPUT_EXAMPLE }}` - The expected output example from the prompt configuration
+- `{{ _PROMPT_NAME }}` - The name of the current prompt
+- `{{ _PROMPT_DESCRIPTION }}` - The description of the current prompt
+- `{{ _EXPECTED_OUTPUT_TYPE }}` - The expected output type (string, object, number, etc.)
+- `{{ _RESPONSE_FORMAT }}` - The expected response format from the prompt
+
+#### User Context Placeholders
+- `{{ _USER_NAME }}` - Current user's full name
+- `{{ _USER_EMAIL }}` - Current user's email address
+- `{{ _USER_ID }}` - Current user's unique identifier
+
+#### Environment Placeholders
+- `{{ _ENVIRONMENT }}` - Current environment (development, staging, production)
+- `{{ _API_VERSION }}` - Current API version
+
+### System Placeholder Usage Examples
+
+#### Example 1: Time-Aware Agent Prompt
+```liquid
+You are an AI assistant helping {{ _USER_NAME }} on {{ _CURRENT_DAY_OF_WEEK }}, {{ _CURRENT_DATE }} at {{ _CURRENT_TIME }}.
+
+User's request: {{ userRequest }}
+
+Please provide a helpful response considering the current time and day.
+```
+
+#### Example 2: Agent Type System Prompt with Metadata
+```liquid
+# Agent Type: Loop Decision Maker
+
+Current execution context:
+- Date/Time: {{ _CURRENT_DATE_AND_TIME }}
+- User: {{ _USER_NAME }} ({{ _USER_EMAIL }})
+- Environment: {{ _ENVIRONMENT }}
+
+## Expected Output Format
+{{ _OUTPUT_EXAMPLE }}
+
+## Agent Specific Instructions
+{{ agentResponse }}
+
+Based on the above agent response and the expected output format ({{ _EXPECTED_OUTPUT_TYPE }}), determine the next step.
+```
+
+#### Example 3: Debug-Friendly Prompt
+```liquid
+[Debug Info]
+- Prompt: {{ _PROMPT_NAME }}
+- Description: {{ _PROMPT_DESCRIPTION }}
+- Expected Output: {{ _EXPECTED_OUTPUT_TYPE }}
+- User ID: {{ _USER_ID }}
+- Timestamp: {{ _CURRENT_TIMESTAMP_UTC }}
+
+[Task]
+{{ taskDescription }}
+```
+
+### Adding Custom System Placeholders
+
+You can add custom system placeholders programmatically:
+
+```typescript
+import { SystemPlaceholderManager } from '@memberjunction/ai-prompts';
+
+// Add a custom placeholder
+SystemPlaceholderManager.addPlaceholder({
+  name: '_ORGANIZATION_NAME',
+  description: 'Current organization name',
+  getValue: async (params) => {
+    // Custom logic to get organization name
+    return params.contextUser?.OrganizationName || 'Default Organization';
+  }
+});
+
+// Or add directly to the array
+const placeholders = SystemPlaceholderManager.getPlaceholders();
+placeholders.push({
+  name: '_CUSTOM_VALUE',
+  description: 'My custom value',
+  getValue: async (params) => 'custom result'
+});
+```
+
+### Data Merge Priority Order
+
+When rendering templates, data is merged in this priority order (highest to lowest):
+1. Template-specific data (`templateData` parameter)
+2. Child template renders (for hierarchical template composition)
+3. User-provided data (`data` parameter)
+4. System placeholders (lowest priority)
+
+This means users can override system placeholders by providing their own values with the same names.
+
+### ⚡ Parallel Processing
+Multi-model execution with intelligent result selection strategies and AI judge ranking for optimal results.
+
+### ✅ Output Validation
+JSON schema validation against OutputExample with intelligent retry logic and configurable validation behaviors.
+
+### 🚫 Cancellation Support
+AbortSignal integration for graceful execution cancellation with proper cleanup and partial result preservation.
+
+### 📈 Progress & Streaming
+Real-time progress callbacks and streaming response support for responsive user interfaces.
+
+### 📊 Comprehensive Tracking
+Hierarchical execution logging with the AIPromptRun entity, including token usage, timing, and validation attempts.
+
+### 🤖 Agent Integration
+Seamless integration with AI Agents through hierarchical prompts and execution tracking.
+
+### 💾 Intelligent Caching
+Vector similarity matching and TTL-based result caching for performance optimization.
+
+### 🔧 Template Integration
+Dynamic prompt generation with MemberJunction template system supporting conditionals, loops, and data injection.
 
 ## Installation
 
@@ -38,6 +218,25 @@ npm install @memberjunction/ai-prompts
 - [@memberjunction/templates](../../Templates/README.md) for template rendering
 
 ## Core Architecture
+
+### Dynamic vs Static Template Composition
+
+The AI Prompts system introduces **dynamic template composition** that extends beyond MemberJunction's built-in static template features:
+
+#### Static Template Composition (MJ Templates)
+MemberJunction's template system supports embedding templates within templates through `{% include %}` directives. This is perfect for fixed relationships:
+- Email templates with standard headers/footers
+- Report templates with consistent formatting sections
+- Any scenario where Template A always includes Templates B and C
+
+#### Dynamic Template Composition (AI Prompts)
+The AI Prompts system adds runtime template composition where relationships are determined dynamically:
+- **Runtime Flexibility**: Inject ANY prompt template into ANY other prompt template
+- **Context-Aware**: Choose which child templates to inject based on runtime conditions
+- **Agent Architecture**: Combine system prompts (control flow) with agent prompts (domain logic)
+- **Modular Design**: Build complex prompts from reusable components selected at runtime
+
+**Key Difference**: While MJ Templates handle "Template A always includes B", AI Prompts handle "Template A includes X, where X is determined at runtime"
 
 ### AIPromptRunner Class
 
@@ -66,9 +265,14 @@ const result = await runner.ExecutePrompt(params);
 if (result.success) {
     console.log("Summary:", result.result);
     console.log(`Execution time: ${result.executionTimeMS}ms`);
-    console.log(`Tokens used: ${result.totalTokensUsed}`);
+    console.log(`Prompt tokens: ${result.promptTokens}`);
+    console.log(`Completion tokens: ${result.completionTokens}`);
+    console.log(`Total tokens: ${result.tokensUsed}`);
+    if (result.cost) {
+        console.log(`Cost: ${result.cost} ${result.costCurrency || 'USD'}`);
+    }
 } else {
-    console.error("Error:", result.error);
+    console.error("Error:", result.errorMessage);
 }
 ```
 
@@ -152,7 +356,56 @@ if (result.promptRun?.Messages) {
 }
 ```
 
-### 4. Complete Example with All New Features
+### 4. Dynamic Template Composition for AI Agents
+
+This example demonstrates the primary use case for dynamic template composition - the AI Agent system:
+
+```typescript
+import { AIPromptRunner, ChildPromptParam } from '@memberjunction/ai-prompts';
+
+// Agent Type System Prompt - Controls execution flow and response format
+const agentTypeSystemPrompt = {
+    Name: "Data Analysis Agent Type System Prompt",
+    TemplateID: "system-prompt-template-id",
+    // Template contains: "You are an AI agent. {{ agentInstructions }} Respond with JSON..."
+};
+
+// Individual Agent Prompt - Contains domain-specific logic
+const specificAgentPrompt = {
+    Name: "Customer Churn Analysis Agent",
+    TemplateID: "churn-agent-template-id",
+    // Template contains: "Analyze customer data for churn risk factors..."
+};
+
+// At runtime, dynamically compose the prompts
+const runner = new AIPromptRunner();
+const result = await runner.ExecutePrompt({
+    prompt: agentTypeSystemPrompt,  // Parent template
+    childPrompts: [
+        // Dynamically inject the specific agent's instructions
+        new ChildPromptParam(specificAgentPrompt, 'agentInstructions')
+    ],
+    data: { 
+        customerData: analysisData,
+        thresholds: { churnRisk: 0.7 }
+    },
+    contextUser: currentUser
+});
+
+// The system executed ONE prompt that combined:
+// 1. System prompt wrapper (control flow)
+// 2. Specific agent instructions (domain logic)
+// 3. Runtime data
+console.log("Agent decision:", result.result);
+```
+
+**Why This Matters:**
+- Different agents can use the SAME system prompt template
+- System prompt enforces consistent response format across all agents
+- Agent-specific logic is cleanly separated and reusable
+- Runtime composition allows flexible agent architectures
+
+### 5. Complete Example with All New Features
 
 ```typescript
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
@@ -608,9 +861,85 @@ TokensUsed      int               -- Total tokens consumed
 TokensPrompt    int               -- Prompt tokens used
 TokensCompletion int              -- Completion tokens generated
 
+-- Cost tracking
+Cost            decimal(19,8)     -- Cost of this specific execution
+CostCurrency    nvarchar(10)      -- ISO 4217 currency code (USD, EUR, etc.)
+
+-- Hierarchical rollup fields (NEW)
+TokensUsedRollup        int       -- Total tokens including all children
+TokensPromptRollup      int       -- Total prompt tokens including all children
+TokensCompletionRollup  int       -- Total completion tokens including all children
+-- Note: TotalCost (existing field) serves as the cost rollup
+
 -- Context and configuration
 Messages        nvarchar(max)     -- JSON with input data and metadata
 ConfigurationID uniqueidentifier  -- Environment configuration used
+AgentRunID      uniqueidentifier  -- Links to parent AIAgentRun if applicable
+```
+
+### Hierarchical Token and Cost Tracking
+
+The AI Prompts system implements a sophisticated rollup pattern for tracking token usage and costs across hierarchical prompt executions:
+
+#### Prompt Execution Rollup Pattern
+
+For hierarchical prompt executions (parent prompts with child prompts), each node in the tree contains:
+- **Direct fields** (`TokensPrompt`, `TokensCompletion`, `Cost`): Usage for just that execution
+- **Rollup fields** (`TokensPromptRollup`, `TokensCompletionRollup`, `TotalCost`): Total including all descendants
+
+**Example:**
+```
+Parent Prompt (100 prompt, 200 completion tokens, $0.05)
+├── Child A (50 prompt, 100 completion, $0.02)
+└── Child B (75 prompt, 150 completion, $0.03)
+
+Database records:
+- Parent: TokensPrompt=100, TokensPromptRollup=225 (100+50+75)
+         TokensCompletion=200, TokensCompletionRollup=450 (200+100+150)
+         Cost=0.05, TotalCost=0.10 (0.05+0.02+0.03)
+- Child A: TokensPrompt=50, TokensPromptRollup=50 (leaf node)
+          Cost=0.02, TotalCost=0.02 (leaf node)
+- Child B: TokensPrompt=75, TokensPromptRollup=75 (leaf node)
+          Cost=0.03, TotalCost=0.03 (leaf node)
+```
+
+This enables efficient queries like:
+- "What was the total cost of this hierarchical prompt?" → Check root's `TotalCost`
+- "How many tokens did this sub-prompt and its children use?" → Check that node's rollup fields
+- No complex SQL joins or recursive CTEs needed!
+
+#### Agent Run Token Tracking
+
+The `AIAgentRun` entity tracks aggregate token usage across all prompt executions during an agent's lifecycle:
+
+```sql
+-- New fields in AIAgentRun
+TotalTokensUsed              int  -- Total tokens (existing)
+TotalPromptTokensUsed        int  -- Breakdown: prompt tokens (NEW)
+TotalCompletionTokensUsed    int  -- Breakdown: completion tokens (NEW)
+TotalCost                    decimal  -- Total cost (existing)
+
+-- Hierarchical agent rollup fields (NEW)
+TotalTokensUsedRollup              int  -- Including sub-agent runs
+TotalPromptTokensUsedRollup        int  -- Including sub-agent runs
+TotalCompletionTokensUsedRollup    int  -- Including sub-agent runs
+TotalCostRollup                    decimal  -- Including sub-agent runs
+```
+
+**Agent Hierarchy Example:**
+```
+Parent Agent (A)
+├── Own prompts: 200 prompt, 400 completion tokens
+├── Sub-Agent (B)
+│   └── Own prompts: 100 prompt, 200 completion tokens
+└── Sub-Agent (C)
+    └── Own prompts: 150 prompt, 300 completion tokens
+
+Rollup values:
+- Agent A: TotalPromptTokensUsedRollup = 450 (200+100+150)
+          TotalCompletionTokensUsedRollup = 900 (400+200+300)
+- Agent B: TotalPromptTokensUsedRollup = 100 (leaf agent)
+- Agent C: TotalPromptTokensUsedRollup = 150 (leaf agent)
 ```
 
 ### Querying Hierarchical Log Data
@@ -1188,19 +1517,35 @@ class AIPromptCategoryEntityExtended extends AIPromptCategoryEntity {
 ### Key Interfaces and Types
 
 ```typescript
-interface AIPromptRunResult {
+interface AIPromptRunResult<T = unknown> {
     success: boolean;                       // Whether the execution was successful
     status?: ExecutionStatus;               // Current execution status
     cancelled?: boolean;                    // Whether the execution was cancelled
     cancellationReason?: CancellationReason; // Reason for cancellation if applicable
     rawResult?: string;                     // The raw result from the AI model
-    result?: any;                          // The parsed/validated result based on OutputType
+    result?: T;                            // The parsed/validated result based on OutputType
     errorMessage?: string;                  // Error message if execution failed
     promptRun?: AIPromptRunEntity;          // The AIPromptRun entity that was created for tracking
     executionTimeMS?: number;              // Total execution time in milliseconds
-    tokensUsed?: number;                   // Tokens used in the execution
+    
+    // Token tracking (follows ModelUsage convention)
+    promptTokens?: number;                 // Prompt/input tokens for this execution
+    completionTokens?: number;             // Completion/output tokens for this execution
+    tokensUsed?: number;                   // Total tokens (calculated getter)
+    
+    // Hierarchical token tracking
+    combinedPromptTokens?: number;         // Total prompt tokens including all children
+    combinedCompletionTokens?: number;     // Total completion tokens including all children
+    combinedTokensUsed?: number;           // Total tokens including all children (calculated)
+    
+    // Cost tracking
+    cost?: number;                         // Cost of this execution
+    costCurrency?: string;                 // ISO 4217 currency code (USD, EUR, etc.)
+    combinedCost?: number;                 // Total cost including all children
+    
     validationResult?: ValidationResult;    // Validation result if output validation was performed
-    additionalResults?: AIPromptRunResult[]; // Additional results from parallel execution, ranked by judge
+    validationAttempts?: ValidationAttempt[]; // Detailed validation attempts
+    additionalResults?: AIPromptRunResult<T>[]; // Additional results from parallel execution, ranked by judge
     ranking?: number;                       // Ranking assigned by judge (1 = best, 2 = second best, etc.)
     judgeRationale?: string;               // Judge's rationale for this ranking
     modelInfo?: ModelInfo;                 // Model information for this result

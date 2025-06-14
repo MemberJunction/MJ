@@ -1,5 +1,5 @@
 import { Metadata, TransactionGroupBase, TransactionResult } from "@memberjunction/core";
-import { DataSource } from "typeorm";
+import * as sql from 'mssql';
 import { SQLServerDataProvider } from "./SQLServerDataProvider";
 
 /**
@@ -11,13 +11,17 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
         const items = this.PendingTransactions;
         const sqlProvider = <SQLServerDataProvider>Metadata.Provider;
         if (items.length > 0) {
-            const dataSource: DataSource = items[0].ExtraData.dataSource;
-            // start a transaction, if anything fails TypeORM will handle the rollback
-            await dataSource.transaction(async (transaction) => {
+            const pool: sql.ConnectionPool = items[0].ExtraData.dataSource; // Now expects a ConnectionPool
+            // start a transaction, if anything fails we'll handle the rollback
+            const transaction = new sql.Transaction(pool);
+            
+            try {
+                await transaction.begin();
+                
                 if (this.Variables.length > 0) {
                     // need to execute in order since there are dependencies between the transaction items for the given variables
                     for (const item of items) {
-                        // exeute the individual query
+                        // execute the individual query
                         let result, bSuccess: boolean = false;
                         try {
                             const numValueSet = this.SetEntityValuesFromVariables(item.BaseEntity); // set the variables that this item needs
@@ -28,10 +32,36 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                                 const newInstruction = sqlProvider.GetSaveSQL(item.BaseEntity, bCreate, spName, item.BaseEntity.ContextCurrentUser);
                                 item.Instruction = newInstruction; // update the instruction with the new values    
                             }
-                            const rawResult = await transaction.query(item.Instruction, item.Vars);
+                            
+                            // Create a request for this transaction
+                            const request = new sql.Request(transaction);
+                            
+                            // Add parameters if any
+                            if (item.Vars && Array.isArray(item.Vars)) {
+                                item.Vars.forEach((value, index) => {
+                                    request.input(`p${index}`, value);
+                                });
+                                // Replace ? with @p0, @p1, etc. in the query
+                                let paramIndex = 0;
+                                item.Instruction = item.Instruction.replace(/\?/g, () => `@p${paramIndex++}`);
+                            }
+                            
+                            // Log the SQL statement before execution
+                            const description = `${item.OperationType} ${item.ExtraData?.entityName || 'entity'} (Transaction Group)`;
+                            await SQLServerDataProvider.LogSQLStatement(
+                                item.Instruction,
+                                item.Vars,
+                                description,
+                                true, // isMutation
+                                item.ExtraData?.simpleSQLFallback
+                            );
+                            
+                            const queryResult = await request.query(item.Instruction);
+                            const rawResult = queryResult.recordset;
+                            
                             if (rawResult && rawResult.length > 0) {
                                 // Process the result to handle timezone conversions
-                                result = sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo);
+                                result = await sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo);
                                 this.SetVariableValuesFromEntity(item.BaseEntity, result[0]); // set the variables that this item defines after the save is done
                             }
                             bSuccess = (result && result.length > 0); // success if we have a result and it has rows 
@@ -44,24 +74,75 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                     }    
                 }
                 else {
-                    // can execute in parallel since there are no dependencies between the transaction items
-                    const promises = [];
+                    // execute individually since there are no variable dependencies, but we want to avoid 
+                    // variable conflicts between different stored procedure calls that might use same variable names
                     for (const item of items) {
-                        promises.push(transaction.query(item.Instruction, item.Vars)); // no await, run in parallel
-                    }
-                    const rawResults = await Promise.all(promises);
-                    for (let i = 0; i < items.length; i++) {
-                        const item = items[i];
-                        let result = null;
-                        if (rawResults[0] && rawResults[i].length > 0) {
-                            // Process the result to handle timezone conversions
-                            const processedResults = sqlProvider.ProcessEntityRows(rawResults[i], item.BaseEntity.EntityInfo);
-                            result = processedResults[0]; // get the first row of the processed result
+                        let result: any = null, bSuccess: boolean = false;
+                        try {
+                            // Create a request for this transaction
+                            const request = new sql.Request(transaction);
+                            
+                            // Add parameters if any
+                            if (item.Vars && Array.isArray(item.Vars)) {
+                                item.Vars.forEach((value, index) => {
+                                    request.input(`p${index}`, value);
+                                });
+                                // Replace ? with @p0, @p1, etc. in the query
+                                let paramIndex = 0;
+                                const modifiedInstruction = item.Instruction.replace(/\?/g, () => `@p${paramIndex++}`);
+                                
+                                // Log the SQL statement before execution
+                                const description = `${item.OperationType} ${item.ExtraData?.entityName || 'entity'} (Transaction Group)`;
+                                await SQLServerDataProvider.LogSQLStatement(
+                                    modifiedInstruction,
+                                    item.Vars,
+                                    description,
+                                    true, // isMutation
+                                    item.ExtraData?.simpleSQLFallback
+                                );
+                                
+                                const queryResult = await request.query(modifiedInstruction);
+                                const rawResult = queryResult.recordset;
+                                
+                                if (rawResult && rawResult.length > 0) {
+                                    // Process the result to handle timezone conversions
+                                    result = await sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo);
+                                }
+                            } else {
+                                // Log the SQL statement before execution
+                                const description = `${item.OperationType} ${item.ExtraData?.entityName || 'entity'} (Transaction Group)`;
+                                await SQLServerDataProvider.LogSQLStatement(
+                                    item.Instruction,
+                                    item.Vars,
+                                    description,
+                                    true, // isMutation
+                                    item.ExtraData?.simpleSQLFallback
+                                );
+                                
+                                const queryResult = await request.query(item.Instruction);
+                                const rawResult = queryResult.recordset;
+                                
+                                if (rawResult && rawResult.length > 0) {
+                                    // Process the result to handle timezone conversions
+                                    result = await sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo);
+                                }
+                            }
+                            bSuccess = (result && result.length > 0); // success if we have a result and it has rows 
                         }
-                        returnResults.push(new TransactionResult(item, result, result !== null));
+                        catch (e) {
+                            result = e; // push the exception to the result
+                        }
+                        // save the results
+                        returnResults.push(new TransactionResult(item, result && result.length > 0 ? result[0] : result, bSuccess));
                     }
                 }
-            });
+                
+                await transaction.commit();
+            } catch (error) {
+                // Rollback on any error
+                await transaction.rollback();
+                throw error;
+            }
         }
         return returnResults;
     }

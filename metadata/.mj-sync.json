@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "directoryOrder": [
+    "actions",
+    "prompts",
+    "agent-types",
+    "agents"
+  ],
+  "sqlLogging": {
+    "enabled": true,
+    "outputDirectory": "./sql_logging",
+    "formatAsMigration": false
+  }
+}

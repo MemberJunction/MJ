@@ -13,6 +13,7 @@ import fs from 'fs-extra';
 import crypto from 'crypto';
 import axios from 'axios';
 import { EntityInfo, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
+import { uuidv4 } from '@memberjunction/global';
 import { EntityConfig, FolderConfig } from '../config';
 
 /**
@@ -264,6 +265,17 @@ export class SyncEngine {
       
       newEntity.NewRecord();
       
+      // Handle explicit ID setting for new records
+      if (entityInfo.PrimaryKeys.length > 0) {
+        for (const pk of entityInfo.PrimaryKeys) {
+          if (!pk.AutoIncrement && pk.Type.toLowerCase() === 'uniqueidentifier') {
+            // Generate UUID for this primary key and set it explicitly
+            const uuid = uuidv4();
+            (newEntity as any)[pk.Name] = uuid;
+          }
+        }
+      }
+      
       // Set the lookup field
       if (fieldName in newEntity) {
         (newEntity as any)[fieldName] = fieldValue;
@@ -279,7 +291,14 @@ export class SyncEngine {
       // Save the new record
       const saved = await newEntity.Save();
       if (!saved) {
-        const errors = newEntity.LatestResult?.Errors?.join(', ') || 'Unknown error';
+        const message = newEntity.LatestResult?.Message;
+        if (message) {
+          throw new Error(`Failed to auto-create ${entityName}: ${message}`);
+        }
+        
+        const errors = newEntity.LatestResult?.Errors?.map(err => 
+          typeof err === 'string' ? err : (err?.message || JSON.stringify(err))
+        )?.join(', ') || 'Unknown error';
         throw new Error(`Failed to auto-create ${entityName}: ${errors}`);
       }
       
@@ -640,4 +659,5 @@ export class SyncEngine {
     
     return result;
   }
+  
 }

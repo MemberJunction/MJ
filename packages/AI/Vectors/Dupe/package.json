@@ -24,8 +24,7 @@
     "@memberjunction/core": "2.48.0",
     "@memberjunction/global": "2.48.0",
     "@memberjunction/core-entities": "2.48.0",
-    "dotenv": "^16.4.1",
-    "typeorm": "^0.3.20"
+    "dotenv": "^16.4.1"
   },
   "devDependencies": {
     "@types/mssql": "^9.1.5",

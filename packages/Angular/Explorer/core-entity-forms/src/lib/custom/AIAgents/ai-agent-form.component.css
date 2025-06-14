@@ -1,0 +1,59 @@
+/* AI Agent Form Styles */
+.agent-main-area {
+    background: #ffffff;
+}
+
+.agent-header {
+    border-radius: 8px 8px 0 0;
+}
+
+.status-badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.025em;
+    text-transform: uppercase;
+}
+
+.action-buttons kendo-button {
+    min-width: 140px;
+}
+
+.action-buttons i {
+    margin-right: 6px;
+}
+
+/* Form content styling */
+.form-content {
+    background: #ffffff;
+}
+
+.generated-fields {
+    margin-bottom: 20px;
+}
+
+/* Expansion panel styling */
+kendo-expansionpanel {
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Grid styling */
+mj-user-view-grid {
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+}
+
+/* Status-specific styling */
+.status-active {
+    background-color: #28a745;
+}
+
+.status-pending {
+    background-color: #ffc107;
+}
+
+.status-disabled {
+    background-color: #6c757d;
+}

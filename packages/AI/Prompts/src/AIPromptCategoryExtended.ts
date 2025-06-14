@@ -1,6 +1,6 @@
+import { BaseEntity } from '@memberjunction/core';
 import { AIPromptCategoryEntity, AIPromptEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseEntity } from 'typeorm';
 
 @RegisterClass(BaseEntity, 'AI Prompt Categories')
 export class AIPromptCategoryEntityExtended extends AIPromptCategoryEntity {

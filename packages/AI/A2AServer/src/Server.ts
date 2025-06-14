@@ -1,9 +1,8 @@
 import { EntityInfo, LogError, Metadata, UserInfo } from "@memberjunction/core";
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@memberjunction/sqlserver-dataprovider";
 import express from 'express';
-import { DataSource } from "typeorm";
+import * as sql from 'mssql';
 import { z } from "zod";
-import { DataSourceOptions } from 'typeorm';
 import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate, a2aServerSettings } from './config.js';
 import { EntityOperations, OperationResult } from './EntityOperations.js';
 
@@ -11,33 +10,23 @@ import { EntityOperations, OperationResult } from './EntityOperations.js';
 const a2aServerPort = a2aServerSettings?.port || 3200;
 
 // Database Configuration
-const ormConfig = {
-    type: 'mssql' as const,
-    entities: [],
-    logging: false,
-    host: dbHost,
+const poolConfig: sql.config = {
+    server: dbHost,
     port: dbPort,
-    username: dbUsername,
+    user: dbUsername,
     password: dbPassword,
     database: dbDatabase,
-    synchronize: false,
     requestTimeout: configInfo.databaseSettings.requestTimeout,
     connectionTimeout: configInfo.databaseSettings.connectionTimeout,
-    options: {},
+    options: {
+        encrypt: true,
+        enableArithAbort: true,
+        trustServerCertificate: dbTrustServerCertificate === 'Y'
+    },
 };
 
 if (dbInstanceName !== null && dbInstanceName !== undefined && dbInstanceName.trim().length > 0) {
-    ormConfig.options = {
-        ...ormConfig.options,
-        instanceName: dbInstanceName,
-    };
-}
-
-if (dbTrustServerCertificate !== null && dbTrustServerCertificate !== undefined) {
-    ormConfig.options = {
-        ...ormConfig.options,
-        trustServerCertificate: dbTrustServerCertificate === 'Y',
-    };
+    poolConfig.options!.instanceName = dbInstanceName;
 }
 
 // A2A Server Classes and Types
@@ -115,11 +104,11 @@ export async function initializeA2AServer() {
         }
 
         // Initialize database connection
-        const dataSource = new DataSource(ormConfig);
-        await dataSource.initialize();
+        const pool = new sql.ConnectionPool(poolConfig);
+        await pool.connect();
         
         // Setup SQL Server client
-        const config = new SQLServerProviderConfigData(dataSource, '', configInfo.mjCoreSchema);
+        const config = new SQLServerProviderConfigData(pool, '', configInfo.mjCoreSchema);
         await setupSQLServerClient(config);
         console.log("Database connection setup completed.");
 

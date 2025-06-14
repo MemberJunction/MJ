@@ -1,0 +1,27 @@
+{
+  "entity": "Actions",
+  "filePattern": ".*.json",
+  "defaults": {
+    "CategoryID": "@lookup:Action Categories.Name=System?create&Description=MJ System Actions"
+  },
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": "actions.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "CategoryID IN (SELECT ID FROM [__mj].vwActions WHERE Name = 'System')",
+    "externalizeFields": [],
+    "lookupFields": {
+      "CategoryID": {
+        "entity": "Action Categories",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {}
+  }
+}

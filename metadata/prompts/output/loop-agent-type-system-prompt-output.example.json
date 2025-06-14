@@ -1,0 +1,9 @@
+{
+  "action": "continue",
+  "subAgent": "",
+  "subAgentInstructions": "",
+  "actionInstructions": "",
+  "continueInstructions": "The user is asking for help with product recommendations. I should gather more information about their preferences and budget before making specific suggestions.",
+  "reasoning": "The conversation is still in the information gathering phase. The user has expressed interest in products but hasn't provided enough details for me to make accurate recommendations yet.",
+  "confidence": 0.95
+}

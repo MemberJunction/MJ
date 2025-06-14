@@ -14,9 +14,9 @@ The MemberJunction AI Framework offers a provider-agnostic abstraction layer tha
 
 - **[@memberjunction/aiengine](./Engine)** - The main AI orchestration engine that manages model selection, execution, and integration with MemberJunction's metadata system. Provides high-level APIs for common AI operations.
 
-- **[@memberjunction/ai-prompts](./Prompts)** - Advanced prompt execution system with support for parallel execution, template rendering, and model-specific optimizations. Includes prompt planning and result aggregation.
+- **[@memberjunction/ai-prompts](./Prompts)** - Advanced prompt execution engine with hierarchical template composition, system placeholders, parallel execution, and intelligent output validation. Features include child-parent template composition patterns, automatic template variable injection, comprehensive execution tracking, and seamless AI agent integration.
 
-- **[@memberjunction/ai-agents](./Agents)** - Framework for building AI agents (currently in early development). Will provide base classes and patterns for creating autonomous AI agents that can perform complex multi-step tasks.
+- **[@memberjunction/ai-agents](./Agents)** - AI agent framework with hierarchical template composition and metadata-driven agent types. Provides BaseAgent class for agent execution using system prompt templates as composition wrappers for agent prompt templates. Supports dynamic agent type instantiation, sub-agent delegation, and action integration.
 
 ### Provider Packages
 
@@ -76,12 +76,16 @@ Located in the [Recommendations](./Recommendations) subdirectory:
 - **Classification** - Text categorization and labeling
 
 ### Advanced Features
+- **Hierarchical Template Composition** - Build complex prompts through template composition with child-parent template relationships
+- **System Placeholders** - Automatic injection of common values (date/time, user context, etc.) into all templates
 - **Streaming** - Real-time response streaming for better UX
 - **Caching** - Intelligent caching to reduce costs and latency
 - **Parallel Execution** - Run multiple AI operations concurrently
 - **Token Management** - Track and optimize token usage
 - **Response Formats** - Support for JSON, Markdown, and custom formats
 - **Multimodal Support** - Handle text, images, audio, and video inputs
+- **Validation & Retry** - Automatic output validation with configurable retry strategies
+- **Cancellation Support** - Graceful cancellation of long-running operations
 
 ### Vector Operations
 - **Semantic Search** - Find similar content using embeddings

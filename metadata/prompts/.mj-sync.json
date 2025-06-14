@@ -1,0 +1,61 @@
+{
+  "entity": "AI Prompts",
+  "filePattern": ".*.json",
+  "defaults": {
+    "CategoryID": "@lookup:AI Prompt Categories.Name=Agent Type System Prompts?create&Description=System Prompts for Agent Types"
+  },
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".prompts.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [
+      "TemplateText",
+      "OutputExample"
+    ],
+    "excludeFields": [
+      "TemplateID"
+    ],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "CategoryID IN (SELECT ID FROM [__mj].vwAIPromptCategories WHERE Name = 'Agent Type System Prompts')",
+    "externalizeFields": [
+      {
+        "field": "TemplateText",
+        "pattern": "@file:templates/{Name}.template.md"
+      },
+      {
+        "field": "OutputExample",
+        "pattern": "@file:output/{Name}.example.json"
+      }
+    ],
+    "lookupFields": {
+      "CategoryID": {
+        "entity": "AI Prompt Categories",
+        "field": "Name"
+      },
+      "TypeID": {
+        "entity": "AI Prompt Types",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": {
+        "entity": "MJ: AI Prompt Models",
+        "foreignKey": "PromptID",
+        "filter": "Status = 'Active'",
+        "lookupFields": {
+          "ModelID": {
+            "entity": "AI Models",
+            "field": "Name"
+          },
+          "VendorID": {
+            "entity": "MJ: AI Vendors",
+            "field": "Name"
+          }
+        }
+      }
+    }
+  }
+}

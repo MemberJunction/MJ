@@ -1,5 +1,5 @@
 import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, IRunViewProvider, RunView, TransactionGroupBase } from "@memberjunction/core";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, uuidv4 } from "@memberjunction/global";
 import { TemplateCategoryEntity, TemplateContentEntity, TemplateContentTypeEntity, TemplateEntity, AIPromptEntityExtended } from "@memberjunction/core-entities";
 
 /**
@@ -246,6 +246,7 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
         // we have no linked template, but we have template text, so create a new template and template contents
         const t = await md.GetEntityObject<TemplateEntity>("Templates", this.ContextCurrentUser);
         t.NewRecord();
+        t.ID = uuidv4(); // generate a new ID - we want to do this explicitly so that we can control the ID that goes into the SQL script so this can be part of a migration file
         t.Name = this.Name; // propagate the name
         t.Description = "Template for AI Prompt: " + this.Name;
         t.UserID = this.ContextCurrentUser.ID;
@@ -255,6 +256,7 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
             // now create the template contents
             const tc = await md.GetEntityObject<TemplateContentEntity>("Template Contents", this.ContextCurrentUser);
             tc.NewRecord();
+            tc.ID = uuidv4(); // generate a new ID for the Template Content - do here as well for same reason as above with Template.ID
             tc.TemplateID = t.ID;
             tc.TypeID = await this.getTemplateContentTypeID();
             tc.TemplateText = this.TemplateText;
