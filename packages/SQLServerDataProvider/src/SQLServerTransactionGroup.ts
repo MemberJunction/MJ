@@ -46,6 +46,16 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                                 item.Instruction = item.Instruction.replace(/\?/g, () => `@p${paramIndex++}`);
                             }
                             
+                            // Log the SQL statement before execution
+                            const description = `${item.OperationType} ${item.ExtraData?.entityName || 'entity'} (Transaction Group)`;
+                            await SQLServerDataProvider.LogSQLStatement(
+                                item.Instruction,
+                                item.Vars,
+                                description,
+                                true, // isMutation
+                                item.ExtraData?.simpleSQLFallback
+                            );
+                            
                             const queryResult = await request.query(item.Instruction);
                             const rawResult = queryResult.recordset;
                             
@@ -80,6 +90,17 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                                 // Replace ? with @p0, @p1, etc. in the query
                                 let paramIndex = 0;
                                 const modifiedInstruction = item.Instruction.replace(/\?/g, () => `@p${paramIndex++}`);
+                                
+                                // Log the SQL statement before execution
+                                const description = `${item.OperationType} ${item.ExtraData?.entityName || 'entity'} (Transaction Group)`;
+                                await SQLServerDataProvider.LogSQLStatement(
+                                    modifiedInstruction,
+                                    item.Vars,
+                                    description,
+                                    true, // isMutation
+                                    item.ExtraData?.simpleSQLFallback
+                                );
+                                
                                 const queryResult = await request.query(modifiedInstruction);
                                 const rawResult = queryResult.recordset;
                                 
@@ -88,6 +109,16 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                                     result = await sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo);
                                 }
                             } else {
+                                // Log the SQL statement before execution
+                                const description = `${item.OperationType} ${item.ExtraData?.entityName || 'entity'} (Transaction Group)`;
+                                await SQLServerDataProvider.LogSQLStatement(
+                                    item.Instruction,
+                                    item.Vars,
+                                    description,
+                                    true, // isMutation
+                                    item.ExtraData?.simpleSQLFallback
+                                );
+                                
                                 const queryResult = await request.query(item.Instruction);
                                 const rawResult = queryResult.recordset;
                                 

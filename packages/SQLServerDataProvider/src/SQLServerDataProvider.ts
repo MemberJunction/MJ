@@ -680,6 +680,29 @@ export class SQLServerDataProvider
     await Promise.all(logPromises);
   }
 
+  /**
+   * Static method to log SQL statements from external sources like transaction groups
+   * 
+   * @param query - The SQL query being executed
+   * @param parameters - Parameters for the query
+   * @param description - Optional description for this operation
+   * @param isMutation - Whether this is a data mutation operation
+   * @param simpleSQLFallback - Optional simple SQL to use for loggers with logRecordChangeMetadata=false
+   */
+  public static async LogSQLStatement(
+    query: string,
+    parameters?: any,
+    description?: string,
+    isMutation: boolean = false,
+    simpleSQLFallback?: string,
+  ): Promise<void> {
+    // Get the current provider instance
+    const provider = Metadata.Provider as SQLServerDataProvider;
+    if (provider && provider._sqlLoggingSessions.size > 0) {
+      await provider._logSqlStatement(query, parameters, description, false, isMutation, simpleSQLFallback);
+    }
+  }
+
   /**************************************************************************/
   // END ---- SQL Logging Methods
   /**************************************************************************/
@@ -1943,7 +1966,11 @@ export class SQLServerDataProvider
                 entityResult.Type === 'create' ? 'Create' : 'Update',
                 sSQL,
                 null,
-                { dataSource: this._pool },
+                { 
+                  dataSource: this._pool,
+                  simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined,
+                  entityName: entity.EntityInfo.Name
+                },
                 (transactionResult: Record<string, any>, success: boolean) => {
                   // we get here whenever the transaction group does gets around to committing
                   // our query.
@@ -2483,7 +2510,17 @@ export class SQLServerDataProvider
         // we are part of a transaction group, so just add our query to the list
         // and when the transaction is committed, we will send all the queries at once
         entity.TransactionGroup.AddTransaction(
-          new TransactionItem(entity, 'Delete', sSQL, null, { dataSource: this._pool }, (transactionResult: Record<string, any>, success: boolean) => {
+          new TransactionItem(
+            entity, 
+            'Delete', 
+            sSQL, 
+            null, 
+            { 
+              dataSource: this._pool,
+              simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined,
+              entityName: entity.EntityInfo.Name
+            }, 
+            (transactionResult: Record<string, any>, success: boolean) => {
             // we get here whenever the transaction group does gets around to committing
             // our query.
             result.EndedAt = new Date();

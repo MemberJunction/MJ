@@ -145,6 +145,31 @@ const persistentSession = await provider.createSqlLogger('./logs/audit.sql', {
 });
 ```
 
+### Transaction Group Logging
+
+```typescript
+// Transaction groups are automatically logged
+const session = await provider.createSqlLogger('./logs/transaction-group.sql', {
+  logRecordChangeMetadata: false
+});
+
+// Create a transaction group
+const transactionGroup = new SQLServerTransactionGroup();
+
+// Add entities to the transaction group
+entity1.TransactionGroup = transactionGroup;
+entity2.TransactionGroup = transactionGroup;
+
+// Save entities - they'll be executed as part of the transaction
+await entity1.Save();
+await entity2.Save();
+
+// Commit the transaction - SQL is logged for each operation
+await transactionGroup.Submit();
+// Log shows: Save Entity1 (Transaction Group) (core SP call only)
+// Log shows: Save Entity2 (Transaction Group) (core SP call only)
+```
+
 ### Multiple Concurrent Sessions
 
 ```typescript
@@ -290,6 +315,7 @@ The filtering is handled transparently per logger:
 - **Automatic Cleanup**: Session disposal automatically closes files and cleans up resources
 - **Accurate Counts**: `session.statementCount` reflects actual emitted statements after filtering
 - **Empty File Cleanup**: Empty log files are automatically deleted unless `retainEmptyLogFiles: true`
+- **Transaction Group Support**: SQL executed within transaction groups is automatically logged
 
 ## Error Handling
 
