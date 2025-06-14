@@ -19,6 +19,9 @@
             "IsArray": false,
             "Description": "A bit, to indicate if we autotag or not. 1 indicates we should autotag, 0 we should not",
             "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "B2A953B5-9C76-EF11-9C36-000D3A9EBD44"
           }
         },
         {
@@ -31,6 +34,9 @@
             "IsArray": false,
             "Description": "A bit to indicate if we vectorize the content items or not. 1 indicates we should vectorize, 0 we should not",
             "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "0E7EF5C0-9C76-EF11-9C36-000D3A9EBD44"
           }
         },
         {
@@ -43,6 +49,9 @@
             "IsArray": true,
             "Description": "Name of the entity to vectorize",
             "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "3A8EC430-A076-EF11-9C36-000D3A9EBD44"
           }
         }
       ],
@@ -53,6 +62,9 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Content items successfully autotagged and vectorized"
+          },
+          "primaryKey": {
+            "ID": "B057906D-FB4A-4026-B18A-CB11DDD86E6E"
           }
         },
         {
@@ -61,6 +73,9 @@
             "ResultCode": "FAILED",
             "IsSuccess": false,
             "Description": "Failed to autotag or vectorize content items"
+          },
+          "primaryKey": {
+            "ID": "1BBE2F60-5A02-4A33-9534-72DEA51A4C3E"
           }
         }
       ]
