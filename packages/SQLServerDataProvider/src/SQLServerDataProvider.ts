@@ -190,6 +190,10 @@ export interface SqlLoggingOptions {
   logRecordChangeMetadata?: boolean;
   /** Whether to retain log files that contain no SQL statements (default: false). When false, empty log files are automatically deleted on dispose */
   retainEmptyLogFiles?: boolean;
+  /** Optional user ID to filter SQL logging - only log SQL executed by this user */
+  filterByUserId?: string;
+  /** Optional friendly name for this logging session (for UI display) */
+  sessionName?: string;
 }
 
 /**
@@ -672,10 +676,19 @@ export class SQLServerDataProvider
       return;
     }
 
-    // Log to all active sessions in parallel
-    const logPromises = Array.from(this._sqlLoggingSessions.values()).map((session) => 
-      session.logSqlStatement(query, parameters, description, isMutation, simpleSQLFallback)
-    );
+    // Log to all active sessions in parallel, filtering by user if specified
+    const logPromises = Array.from(this._sqlLoggingSessions.values())
+      .filter((session) => {
+        // If session has user filter, only log if current user matches
+        if (session.options.filterByUserId) {
+          return session.options.filterByUserId === this._currentUserEmail;
+        }
+        // No filter means log for all users
+        return true;
+      })
+      .map((session) => 
+        session.logSqlStatement(query, parameters, description, isMutation, simpleSQLFallback)
+      );
 
     await Promise.all(logPromises);
   }
