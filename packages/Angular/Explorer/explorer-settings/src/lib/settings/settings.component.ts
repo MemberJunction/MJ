@@ -1,4 +1,5 @@
 import { Component, OnInit, OnDestroy, EventEmitter, Output } from '@angular/core';
+import { RegisterClass } from '@memberjunction/global'
 import { CommonModule } from '@angular/common';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
@@ -8,6 +9,7 @@ import { UserManagementComponent } from '../user-management/user-management.comp
 import { RoleManagementComponent } from '../role-management/role-management.component';
 import { ApplicationManagementComponent } from '../application-management/application-management.component';
 import { EntityPermissionsComponent } from '../entity-permissions/entity-permissions.component';
+import { BaseNavigationComponent } from '@memberjunction/ng-shared'
 
 export interface SettingsTab {
   id: string;
@@ -39,7 +41,8 @@ export interface SettingsComponentState {
   templateUrl: './settings.component.html',
   styleUrls: ['./settings.component.scss']
 })
-export class SettingsComponent implements OnInit, OnDestroy {
+@RegisterClass(BaseNavigationComponent, "Settings")
+export class SettingsComponent extends BaseNavigationComponent implements OnInit, OnDestroy {
   @Output() stateChange = new EventEmitter<SettingsComponentState>();
 
   // State management
@@ -100,6 +103,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
   constructor() {
     // Listen for window resize
+    super();
     window.addEventListener('resize', this.handleResize.bind(this));
   }
 

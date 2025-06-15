@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewChecked, SecurityContext } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, ElementRef, AfterViewChecked, SecurityContext } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 import { AIAgentEntity, AIAgentRunEntity, AIAgentRunStepEntity, AIPromptEntity } from '@memberjunction/core-entities';
@@ -147,7 +147,7 @@ export interface SavedConversation {
     templateUrl: './ai-test-harness.component.html',
     styleUrls: ['./ai-test-harness.component.css']
 })
-export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewChecked {
+export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, AfterViewChecked {
     /**
      * Creates a new AI Test Harness component instance.
      * @param sanitizer - Angular DomSanitizer for safe HTML rendering of formatted content
@@ -203,6 +203,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
     
     /** Reference to the message input textarea */
     @ViewChild('messageInput') private messageInput!: TextAreaComponent;
+    
+    /** Reference to the save dialog input */
+    @ViewChild('saveDialogInput') private saveDialogInput?: ElementRef;
 
     // === Conversation State ===
     /** Complete array of all messages in the current conversation session */
@@ -259,6 +262,21 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
     /** Current JSON content to display in the dialog */
     public currentJsonContent: string = '';
     
+    /** Whether to show the save conversation dialog */
+    public showSaveDialog: boolean = false;
+    
+    /** Name for the new conversation being saved */
+    public newConversationName: string = '';
+    
+    /** Temporary name for the dialog input to avoid binding conflicts */
+    public tempConversationName: string = '';
+    
+    /** Whether to show the load confirmation dialog */
+    public showLoadConfirmDialog: boolean = false;
+    
+    /** Conversation pending to be loaded */
+    private pendingLoadConversation: SavedConversation | null = null;
+    
     /** Reference to the current message for JSON display */
     private currentJsonMessage: ConversationMessage | null = null;
     
@@ -277,6 +295,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
     
     /** MemberJunction metadata instance for entity operations */
     private _metadata = new Metadata();
+    
+    /** Track if input has been focused to prevent repeated focusing */
+    private _hasFocused = false;
 
     /**
      * Component initialization. Loads saved conversations, sets up event subscriptions,
@@ -293,11 +314,36 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
         this.loadSavedConversations();
         this.subscribeToEvents();
         this.resetHarness();
-        this.setupGlobalJsonToggle();
         
         // Load models if in prompt mode
         if (this.mode === 'prompt') {
             this.loadAvailableModels();
+        }
+    }
+
+    /**
+     * Responds to input property changes, particularly when entity is set/changed
+     */
+    ngOnChanges(changes: SimpleChanges) {
+        if (changes['entity']) {
+            if (changes['entity'].currentValue) {
+                this.loadSavedConversations();
+            }
+        }
+        
+        if (changes['aiAgent']) {
+            if (!this.entity && this.aiAgent) {
+                this.entity = this.aiAgent;
+                this.mode = 'agent';
+                this.loadSavedConversations();
+            }
+        }
+        
+        if (changes['isVisible']) {
+            if (changes['isVisible'].currentValue) {
+                // Reset focus flag when dialog becomes visible
+                this._hasFocused = false;
+            }
         }
     }
 
@@ -324,6 +370,14 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
         if (this.scrollNeeded) {
             this.scrollToBottom();
             this.scrollNeeded = false;
+        }
+        
+        // Auto-focus message input when dialog first becomes visible
+        if (this.isVisible && !this._hasFocused && this.messageInput) {
+            this._hasFocused = true;
+            setTimeout(() => {
+                this.messageInput?.focus();
+            }, 100);
         }
     }
 
@@ -399,6 +453,26 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
         this.showSidebar = true;
         // Set default tab based on mode
         this.activeTab = this.mode === 'agent' ? 'dataContext' : 'templateVariables';
+    }
+    
+    /**
+     * Starts a new conversation
+     */
+    public newConversation() {
+        if (this.conversationMessages.length > 0 && !this.currentConversationId) {
+            // Unsaved conversation exists - use our custom dialog
+            if (confirm('You have an unsaved conversation. Would you like to save it first?')) {
+                this.saveConversation();
+                return;
+            }
+        }
+        
+        this.resetHarness();
+        MJNotificationService.Instance.CreateSimpleNotification(
+            'Started new conversation',
+            'info',
+            2000
+        );
     }
 
     /**
@@ -911,14 +985,15 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
     }
 
     // Saved conversations functionality
-    private async loadSavedConversations() {
+    private loadSavedConversations() {
         try {
             const storageKey = this.getStorageKey();
-            const localStorageProvider = this._metadata.LocalStorageProvider;
-            const saved = await localStorageProvider.GetItem(storageKey);
+            const saved = localStorage.getItem(storageKey);
             
             if (saved) {
-                this.savedConversations = JSON.parse(saved);
+                const parsedData = JSON.parse(saved);
+                this.savedConversations = parsedData || [];
+                
                 // Convert date strings back to Date objects
                 this.savedConversations.forEach(conv => {
                     conv.createdAt = new Date(conv.createdAt);
@@ -927,6 +1002,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
                         msg.timestamp = new Date(msg.timestamp);
                     });
                 });
+            } else {
+                this.savedConversations = [];
             }
         } catch (error) {
             console.error('Error loading saved conversations:', error);
@@ -938,7 +1015,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
      * Gets the storage key for saved conversations based on entity type and ID
      */
     private getStorageKey(): string {
-        if (!this.entity) return '';
+        if (!this.entity) {
+            return '';
+        }
         
         const entityType = this.mode === 'agent' ? 'agent' : 'prompt';
         const entityId = this.entity.ID || 'unknown';
@@ -956,7 +1035,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
      * this.saveConversation(); // Prompts for name and saves
      * ```
      */
-    public async saveConversation() {
+    public saveConversation() {
         if (this.conversationMessages.length === 0) {
             MJNotificationService.Instance.CreateSimpleNotification(
                 'No messages to save',
@@ -966,12 +1045,47 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
             return;
         }
 
-        const name = prompt('Enter a name for this conversation:');
-        if (!name) return;
+        // If updating existing conversation, pre-fill the name
+        if (this.currentConversationId) {
+            const currentConv = this.savedConversations.find(c => c.id === this.currentConversationId);
+            this.tempConversationName = currentConv ? currentConv.name : '';
+        } else {
+            this.tempConversationName = '';
+        }
+        
+        this.showSaveDialog = true;
+        // Focus on input after dialog renders
+        setTimeout(() => {
+            if (this.saveDialogInput && this.saveDialogInput.nativeElement) {
+                const input = this.saveDialogInput.nativeElement;
+                input.focus();
+                input.select();
+            }
+        }, 100);
+    }
+    
 
+    public updateTempConversation() {
+        this.tempConversationName = this.saveDialogInput?.nativeElement.value.trim() || '';        
+    }
+
+    /**
+     * Handles the save dialog confirmation
+     */
+    public confirmSaveConversation() {
+        // Use the temp name from the input
+        const convoName = this.saveDialogInput?.nativeElement.value;
+        const trimmedName = convoName?.trim() || '';
+        
+        if (!trimmedName) {
+            return;
+        }
+        
+        this.newConversationName = trimmedName;
+        
         const conversation: SavedConversation = {
             id: this.generateMessageId(),
-            name: name,
+            name: this.newConversationName.trim(),
             agentId: this.entity?.ID || '',
             agentName: this.getEntityName() || '',
             messages: [...this.conversationMessages],
@@ -988,7 +1102,12 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
             if (index >= 0) {
                 conversation.id = this.currentConversationId;
                 conversation.createdAt = this.savedConversations[index].createdAt;
+                conversation.name = this.newConversationName.trim(); // Use the edited name
                 this.savedConversations[index] = conversation;
+            } else {
+                // Current ID not found, treat as new
+                this.savedConversations.unshift(conversation);
+                this.currentConversationId = conversation.id;
             }
         } else {
             // Add new conversation
@@ -1001,31 +1120,45 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
             this.savedConversations = this.savedConversations.slice(0, 50);
         }
 
-        // Save to IndexedDB
-        await this.saveConversationsToStorage();
+        // Save to localStorage
+        this.saveConversationsToStorage();
         
         MJNotificationService.Instance.CreateSimpleNotification(
             'Conversation saved successfully',
             'success',
             3000
         );
+        
+        this.showSaveDialog = false;
+        this.newConversationName = '';
+        this.tempConversationName = '';
     }
     
     /**
-     * Saves conversations to IndexedDB storage
+     * Cancels the save dialog
      */
-    private async saveConversationsToStorage() {
+    public cancelSaveDialog() {
+        this.showSaveDialog = false;
+        this.newConversationName = '';
+        this.tempConversationName = '';
+    }
+    
+    // Removed debug methods - no longer needed with ngModel binding
+    
+    /**
+     * Saves conversations to localStorage
+     */
+    private saveConversationsToStorage() {
         try {
             const storageKey = this.getStorageKey();
-            const localStorageProvider = this._metadata.LocalStorageProvider;
-            await localStorageProvider.SetItem(storageKey, JSON.stringify(this.savedConversations));
+            localStorage.setItem(storageKey, JSON.stringify(this.savedConversations));
         } catch (error) {
             console.error('Error saving conversations:', error);
             throw error;
         }
     }
 
-    private async autoSaveConversation() {
+    private autoSaveConversation() {
         if (this.currentConversationId && this.conversationMessages.length > 0) {
             const index = this.savedConversations.findIndex(c => c.id === this.currentConversationId);
             if (index >= 0) {
@@ -1038,21 +1171,49 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
                 }
                 this.savedConversations[index].updatedAt = new Date();
                 
-                // Save to IndexedDB asynchronously without blocking
-                this.saveConversationsToStorage().catch(error => {
+                // Save to localStorage
+                try {
+                    this.saveConversationsToStorage();
+                } catch (error) {
                     console.error('Error auto-saving conversation:', error);
-                });
+                }
             }
         }
     }
 
     public loadConversation(conversation: SavedConversation) {
         if (this.conversationMessages.length > 0) {
-            if (!confirm('Loading this conversation will replace the current one. Continue?')) {
-                return;
-            }
+            this.pendingLoadConversation = conversation;
+            this.showLoadConfirmDialog = true;
+            return;
         }
 
+        this.doLoadConversation(conversation);
+    }
+    
+    /**
+     * Confirms loading a conversation after dialog confirmation
+     */
+    public confirmLoadConversation() {
+        if (this.pendingLoadConversation) {
+            this.doLoadConversation(this.pendingLoadConversation);
+            this.showLoadConfirmDialog = false;
+            this.pendingLoadConversation = null;
+        }
+    }
+    
+    /**
+     * Cancels loading a conversation
+     */
+    public cancelLoadConversation() {
+        this.showLoadConfirmDialog = false;
+        this.pendingLoadConversation = null;
+    }
+    
+    /**
+     * Actually loads the conversation
+     */
+    private doLoadConversation(conversation: SavedConversation) {
         this.conversationMessages = [...conversation.messages];
         this.currentConversationId = conversation.id;
         
@@ -1110,8 +1271,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
             if (index >= 0) {
                 this.savedConversations.splice(index, 1);
                 
-                // Save to IndexedDB
-                await this.saveConversationsToStorage();
+                // Save to localStorage
+                this.saveConversationsToStorage();
                 
                 if (this.currentConversationId === conversation.id) {
                     this.currentConversationId = null;
@@ -1328,11 +1489,21 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
     }
 
     /**
-     * Toggles between showing processed content and raw AI model output for a message.
-     * @param message - The message to toggle the raw view for
+     * Shows the raw JSON dialog for a specific message
+     * @param message - The message to show raw JSON for
      */
-    public toggleRawView(message: ConversationMessage) {
-        message.showRaw = !message.showRaw;
+    public showRawJsonDialog(message: ConversationMessage) {
+        if (message.rawContent) {
+            try {
+                // Try to parse and format the JSON
+                const parsed = JSON.parse(message.rawContent);
+                this.currentJsonContent = JSON.stringify(parsed, null, 2);
+            } catch {
+                // If not valid JSON, show as-is
+                this.currentJsonContent = message.rawContent;
+            }
+            this.showJsonDialog = true;
+        }
     }
     
     /**
@@ -1492,33 +1663,22 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
     }
 
     public getFormattedContent(message: ConversationMessage): SafeHtml {
-        const content = message.showRaw && message.rawContent ? message.rawContent : message.content;
+        const content = message.content;
         const contentStr = typeof content === 'string' ? content : String(content);
         const contentType = this.detectContentType(contentStr);
         
-        if (contentType === 'json' && !message.showRaw) {
+        if (contentType === 'json') {
             // Try to extract human-readable content from JSON
             const extractedContent = this.extractHumanReadableContent(contentStr);
             if (extractedContent) {
-                // Render with collapsible JSON section
-                return this.renderJsonWithCollapsibleRaw(extractedContent, contentStr, message);
+                // Just render the extracted content
+                return this.renderMarkdown(extractedContent);
             } else {
-                // Fallback to formatted JSON if no human-readable content found
-                const formattedJson = this.formatJson(contentStr);
-                const markdownJson = `\`\`\`json\n${formattedJson}\n\`\`\``;
-                return this.renderMarkdown(markdownJson);
+                // Fallback to inline code editor for JSON display
+                return this.renderJsonWithCodeEditor(contentStr);
             }
-        } else if (contentType === 'json' && message.showRaw) {
-            // Show raw JSON when raw view is enabled
-            const formattedJson = this.formatJson(contentStr);
-            const markdownJson = `\`\`\`json\n${formattedJson}\n\`\`\``;
-            return this.renderMarkdown(markdownJson);
-        } else if (contentType === 'markdown' && !message.showRaw) {
+        } else if (contentType === 'markdown') {
             return this.renderMarkdown(contentStr);
-        } else if (message.showRaw && message.rawContent) {
-            // Format raw content as markdown code block
-            const markdownRaw = `\`\`\`\n${contentStr}\n\`\`\``;
-            return this.renderMarkdown(markdownRaw);
         } else {
             // Convert plain text to markdown for consistent formatting
             return this.renderMarkdown(contentStr);
@@ -1526,59 +1686,51 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
     }
 
     /**
+     * Renders JSON content using an inline code editor component
+     */
+    private renderJsonWithCodeEditor(jsonStr: string): SafeHtml {
+        try {
+            // Format the JSON for display
+            const formattedJson = this.formatJson(jsonStr);
+            
+            // Generate a unique ID for this editor instance
+            const editorId = `json-editor-${this.generateMessageId()}`;
+            
+            // Create the HTML with a placeholder div that we'll replace with the code editor
+            const html = `
+                <div class="inline-json-editor" data-editor-id="${editorId}" data-json-content="${this.escapeHtmlAttribute(formattedJson)}">
+                    <div class="json-editor-container" style="height: 300px; width: 100%; border: 1px solid #e0e0e0; border-radius: 4px; overflow: hidden;">
+                        <pre style="margin: 0; padding: 12px; font-family: 'Fira Code', 'Consolas', monospace; font-size: 13px; overflow: auto; height: 100%;">${this.escapeHtml(formattedJson)}</pre>
+                    </div>
+                </div>
+            `;
+            
+            // Note: In a real implementation, we would need to dynamically create the code editor component
+            // For now, we'll use a styled pre tag as a fallback
+            return this.sanitizer.bypassSecurityTrustHtml(html);
+        } catch {
+            // If JSON parsing fails, show as plain text
+            const html = `<pre style="margin: 0; padding: 12px; font-family: 'Fira Code', 'Consolas', monospace; font-size: 13px; overflow: auto; background: #f8f9fa; border-radius: 4px;">${this.escapeHtml(jsonStr)}</pre>`;
+            return this.sanitizer.bypassSecurityTrustHtml(html);
+        }
+    }
+    
+    /**
+     * Escapes HTML content for use in attributes
+     */
+    private escapeHtmlAttribute(text: string): string {
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
+    /**
      * Renders JSON content with human-readable content prominently displayed
      * and raw JSON in a collapsible section below with proper text wrapping.
      */
-    private renderJsonWithCollapsibleRaw(extractedContent: string, rawJson: string, message: ConversationMessage): SafeHtml {
-        const messageId = message.id;
-        
-        const html = `
-            <div class="json-content-wrapper">
-                <div class="json-main-content">
-                    ${this.sanitizer.sanitize(SecurityContext.HTML, this.renderMarkdown(extractedContent)) || ''}
-                </div>
-                <div class="json-raw-section">
-                    <button class="json-toggle-button" onclick="window.mjToggleJsonRaw && window.mjToggleJsonRaw('${messageId}')" title="View raw JSON">
-                        <i class="fa-solid fa-code"></i> View Raw JSON
-                    </button>
-                </div>
-            </div>
-        `;
-        
-        return this.sanitizer.bypassSecurityTrustHtml(html);
-    }
-
-    /**
-     * Sets up global function for JSON toggle functionality
-     */
-    private setupGlobalJsonToggle() {
-        (window as any).mjToggleJsonRaw = (messageId: string) => {
-            const message = this.conversationMessages.find(m => m.id === messageId);
-            if (message) {
-                this.toggleJsonRaw(message);
-            }
-        };
-    }
-
-    /**
-     * Opens the JSON dialog to display raw JSON content
-     */
-    public toggleJsonRaw(message: ConversationMessage) {
-        const content = message.rawContent || message.content;
-        const jsonStr = typeof content === 'string' ? content : JSON.stringify(content);
-        
-        try {
-            // Try to parse and format the JSON
-            const parsed = JSON.parse(jsonStr);
-            this.currentJsonContent = JSON.stringify(parsed, null, 2);
-        } catch {
-            // If parsing fails, show as-is
-            this.currentJsonContent = jsonStr;
-        }
-        
-        this.currentJsonMessage = message;
-        this.showJsonDialog = true;
-    }
     
     /**
      * Closes the JSON dialog

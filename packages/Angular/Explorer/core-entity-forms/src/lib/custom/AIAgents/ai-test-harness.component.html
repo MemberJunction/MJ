@@ -94,12 +94,12 @@
                                     <span class="execution-time">{{ formatExecutionTime(message.executionTime) }}</span>
                                 }
                                 @if (showRawToggle(message)) {
-                                    <button class="raw-toggle" (click)="toggleRawView(message)" title="Toggle raw/formatted view">
-                                        <i class="fa-solid" [class.fa-code]="!message.showRaw" [class.fa-eye]="message.showRaw"></i>
+                                    <button class="raw-toggle" (click)="showRawJsonDialog(message)" title="View raw JSON response">
+                                        <i class="fa-solid fa-code"></i>
                                     </button>
                                 }
                             </div>
-                            <div class="message-content" [class.raw-view]="message.showRaw">
+                            <div class="message-content">
                                 <button class="copy-button-in-bubble" (click)="copyMessage(message)" title="Copy message">
                                     <i class="fa-solid fa-copy"></i>
                                 </button>
@@ -430,6 +430,12 @@
                                 <div class="tab-header">
                                     <h4>Saved Conversations</h4>
                                     <p>Previously saved test sessions</p>
+                                    @if (currentConversationId) {
+                                        <button class="custom-button small primary" (click)="newConversation()" title="Start a new conversation">
+                                            <i class="fa-solid fa-plus"></i>
+                                            New
+                                        </button>
+                                    }
                                 </div>
                                 
                                 <div class="saved-list">
@@ -466,15 +472,70 @@
         </div>
     </div>
 
+    <!-- Save Conversation Dialog -->
+    @if (showSaveDialog) {
+        <kendo-dialog 
+            [title]="'Save Conversation'" 
+            [width]="400"
+            (close)="cancelSaveDialog()"
+            class="save-dialog">
+            <div class="dialog-content">
+                <p>Enter a name for this conversation:</p>
+                <input 
+                    #saveDialogInput
+                    type="text"
+                    (keyup)="updateTempConversation()"
+                    placeholder="Conversation name"
+                    class="k-textbox k-input k-input-md k-rounded-md k-input-solid full-width"  />
+            </div>
+            <kendo-dialog-actions>
+                <button kendoButton (click)="cancelSaveDialog()">Cancel</button>
+                <button kendoButton 
+                        [primary]="true" 
+                        (click)="confirmSaveConversation()"
+                        [disabled]="tempConversationName === ''">
+                    Save
+                </button>
+            </kendo-dialog-actions>
+        </kendo-dialog>
+    }
+    
+    <!-- Load Confirmation Dialog -->
+    @if (showLoadConfirmDialog) {
+        <kendo-dialog 
+            [title]="'Replace Current Conversation?'" 
+            [width]="400"
+            (close)="cancelLoadConversation()"
+            class="confirm-dialog">
+            <div class="dialog-content">
+                <p>Loading this conversation will replace the current one. Any unsaved changes will be lost.</p>
+                <p>Do you want to continue?</p>
+            </div>
+            <kendo-dialog-actions>
+                <button kendoButton (click)="cancelLoadConversation()">Cancel</button>
+                <button kendoButton 
+                        [primary]="true" 
+                        (click)="confirmLoadConversation()">
+                    Load Conversation
+                </button>
+            </kendo-dialog-actions>
+        </kendo-dialog>
+    }
+
     <!-- JSON Display Dialog -->
     @if (showJsonDialog) {
-        <kendo-dialog 
+        <kendo-window 
             [title]="'Raw JSON Response'" 
             [width]="900" 
             [height]="700"
             [minWidth]="600"
             [minHeight]="400"
-            (close)="closeJsonDialog()">
+            [resizable]="true"
+            [draggable]="true"
+            [state]="'default'"
+            [keepContent]="true"
+            (close)="closeJsonDialog()"
+            class="json-dialog-window">
             <div class="json-dialog-content">
                 <div class="json-dialog-header">
                     <button class="custom-button icon-only" (click)="copyJsonContent()" title="Copy JSON">
@@ -486,9 +547,10 @@
                         [(ngModel)]="currentJsonContent"
                         [readonly]="true"
                         [language]="'json'"
+                        [lineWrapping]="true"
                         style="height: 100%; width: 100%;">
                     </mj-code-editor>
                 </div>
             </div>
-        </kendo-dialog>
+        </kendo-window>
     }

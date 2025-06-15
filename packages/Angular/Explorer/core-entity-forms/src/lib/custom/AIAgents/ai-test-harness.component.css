@@ -443,12 +443,77 @@
     color: #dc3545;
 }
 
+/* Dialog styles */
+.save-dialog,
+.confirm-dialog {
+    .dialog-content {
+        padding: 20px;
+        
+        p {
+            margin: 0 0 16px 0;
+            color: #333;
+            font-size: 14px;
+            line-height: 1.5;
+            
+            &:last-child {
+                margin-bottom: 0;
+            }
+        }
+        
+        .full-width {
+            width: 100%;
+        }
+        
+        input.k-textbox {
+            padding: 8px 12px;
+            font-size: 14px;
+            line-height: 1.5;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            
+            &:focus {
+                outline: none;
+                border-color: #ff6358;
+                box-shadow: 0 0 0 0.25rem rgba(255, 99, 88, 0.25);
+            }
+        }
+    }
+}
+
 /* Enhanced content formatting styles */
 .markdown-content {
     line-height: 1.6;
     word-wrap: break-word;
     overflow-wrap: break-word;
     max-width: 100%;
+}
+
+/* Inline JSON editor styles */
+.inline-json-editor {
+    margin: 8px 0;
+    
+    .json-editor-container {
+        background: #f8f9fa;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        overflow: hidden;
+        position: relative;
+        max-height: 400px;
+        
+        pre {
+            margin: 0;
+            padding: 12px;
+            font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            overflow: auto;
+            height: 100%;
+            background: transparent;
+            color: #333;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+    }
 }
 
 .markdown-paragraph {
@@ -717,6 +782,9 @@
 
 .tab-header {
     margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .tab-header h4 {
@@ -730,6 +798,16 @@
     margin: 0;
     font-size: 13px;
     color: #6c757d;
+}
+
+.tab-header .custom-button.small {
+    align-self: flex-start;
+    padding: 6px 12px;
+    font-size: 13px;
+}
+
+.tab-header .custom-button.small i {
+    margin-right: 4px;
 }
 
 /* Variables */
@@ -900,11 +978,58 @@
 }
 
 /* JSON Dialog Styles */
+.json-dialog-window {
+    /* Center the dialog on screen */
+    ::ng-deep .k-window {
+        position: fixed !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        margin: 0 !important;
+    }
+    
+    ::ng-deep .k-window-content {
+        padding: 0 !important;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    
+    ::ng-deep .k-window-titlebar {
+        .k-window-title {
+            font-size: 16px;
+            font-weight: 500;
+        }
+        
+        .k-window-actions {
+            button {
+                background: transparent;
+                border: none;
+                color: #666;
+                padding: 8px 12px;
+                cursor: pointer;
+                border-radius: 4px;
+                transition: all 0.2s;
+                
+                &:hover {
+                    background: rgba(0, 0, 0, 0.08);
+                    color: #333;
+                }
+                
+                i {
+                    font-size: 14px;
+                }
+            }
+        }
+    }
+}
+
 .json-dialog-content {
     display: flex;
     flex-direction: column;
     height: 100%;
     background: white;
+    overflow: hidden;
 }
 
 .json-dialog-header {
@@ -914,11 +1039,27 @@
     display: flex;
     justify-content: flex-end;
     align-items: center;
+    flex-shrink: 0;
 }
 
 .json-dialog-body {
     flex: 1;
-    overflow: hidden;
+    overflow: auto;
     padding: 0;
     position: relative;
+    min-height: 0;
+    
+    mj-code-editor {
+        display: block;
+        height: 100%;
+        
+        ::ng-deep .cm-editor {
+            height: 100%;
+            
+            .cm-scroller {
+                overflow: auto !important;
+                font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
+            }
+        }
+    }
 }
