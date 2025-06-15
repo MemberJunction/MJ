@@ -1142,6 +1142,34 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
     public toggleRawView(message: ConversationMessage) {
         message.showRaw = !message.showRaw;
     }
+    
+    /**
+     * Copies the message content to clipboard.
+     * @param message - The message to copy
+     */
+    public async copyMessage(message: ConversationMessage) {
+        try {
+            // Convert content to string if needed
+            const content = typeof message.content === 'string' 
+                ? message.content 
+                : JSON.stringify(message.content);
+            
+            await navigator.clipboard.writeText(content);
+            
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Message copied to clipboard',
+                'success',
+                2000
+            );
+        } catch (error) {
+            console.error('Failed to copy message:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Failed to copy message',
+                'error',
+                3000
+            );
+        }
+    }
 
     /**
      * Determines if the provided content is valid JSON.

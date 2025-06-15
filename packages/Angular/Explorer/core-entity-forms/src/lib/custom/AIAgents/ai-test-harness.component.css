@@ -6,6 +6,150 @@
     background: #f8f9fa;
 }
 
+/* Custom Button Styles */
+.custom-button {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 13px;
+    color: #495057;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: inherit;
+}
+
+.custom-button:hover:not(:disabled) {
+    background: #f8f9fa;
+    border-color: #adb5bd;
+    color: #212529;
+}
+
+.custom-button:active:not(:disabled) {
+    background: #e9ecef;
+    border-color: #adb5bd;
+}
+
+.custom-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.custom-button.icon-only {
+    padding: 6px 8px;
+}
+
+.custom-button i {
+    font-size: 14px;
+}
+
+/* Send Button - Primary Style */
+.send-button {
+    background: #0d6efd;
+    border: 1px solid #0d6efd;
+    color: white;
+    border-radius: 4px;
+    padding: 8px 16px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    font-family: inherit;
+}
+
+.send-button:hover:not(:disabled) {
+    background: #0b5ed7;
+    border-color: #0a58ca;
+}
+
+.send-button:active:not(:disabled) {
+    background: #0a58ca;
+    border-color: #0a58ca;
+}
+
+.send-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.send-button i {
+    font-size: 16px;
+}
+
+/* Add Button */
+.add-button {
+    background: white;
+    border: 1px solid #0d6efd;
+    color: #0d6efd;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: inherit;
+}
+
+.add-button:hover {
+    background: #0d6efd;
+    color: white;
+}
+
+/* Remove/Delete Buttons */
+.remove-button,
+.delete-button {
+    background: transparent;
+    border: none;
+    color: #dc3545;
+    padding: 4px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.remove-button:hover,
+.delete-button:hover {
+    background: rgba(220, 53, 69, 0.1);
+    color: #bd2130;
+}
+
+/* Copy Button */
+.copy-button {
+    background: transparent;
+    border: none;
+    padding: 4px 8px;
+    font-size: 12px;
+    color: #6c757d;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-left: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+}
+
+.copy-button:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: #495057;
+}
+
+.copy-button i {
+    font-size: 12px;
+}
+
 /* Model Settings Styles (Prompt Mode) */
 .model-settings {
     padding: 16px;

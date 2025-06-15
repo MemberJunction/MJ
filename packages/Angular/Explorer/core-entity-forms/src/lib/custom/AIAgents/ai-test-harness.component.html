@@ -22,54 +22,49 @@
                         </div>
                     </div>
                     <div class="header-actions">
-                        <kendo-button 
-                            fillMode="outline"
-                            size="small"
+                        <button 
+                            class="custom-button"
                             (click)="clearConversation()"
                             [disabled]="isExecuting || conversationMessages.length === 0"
                             title="Clear conversation">
                             <i class="fa-solid fa-broom"></i>
                             Clear
-                        </kendo-button>
-                        <kendo-button 
-                            fillMode="outline"
-                            size="small"
+                        </button>
+                        <button 
+                            class="custom-button"
                             (click)="saveConversation()"
                             [disabled]="conversationMessages.length === 0"
                             title="Save conversation">
                             <i class="fa-solid fa-save"></i>
                             Save
-                        </kendo-button>
-                        <kendo-button 
-                            fillMode="outline"
-                            size="small"
+                        </button>
+                        <button 
+                            class="custom-button"
                             (click)="exportConversation()"
                             [disabled]="conversationMessages.length === 0"
                             title="Export conversation">
                             <i class="fa-solid fa-download"></i>
                             Export
-                        </kendo-button>
-                        <kendo-button 
-                            fillMode="outline"
-                            size="small"
+                        </button>
+                        <button 
+                            class="custom-button"
                             (click)="importConversation()"
                             title="Import conversation">
                             <i class="fa-solid fa-upload"></i>
                             Import
-                        </kendo-button>
+                        </button>
                         <input 
                             #fileInput
                             type="file"
                             accept=".json"
                             style="display: none"
                             (change)="onFileSelected($event)">
-                        <kendo-button 
-                            fillMode="outline"
-                            size="small"
+                        <button 
+                            class="custom-button icon-only"
                             (click)="toggleSidebar()"
                             title="Toggle sidebar">
                             <i class="fa-solid" [class.fa-chevron-right]="!showSidebar" [class.fa-chevron-left]="showSidebar"></i>
-                        </kendo-button>
+                        </button>
                     </div>
                 </div>
             }
@@ -107,6 +102,9 @@
                                 } @else if (message.executionTime) {
                                     <span class="execution-time">{{ formatExecutionTime(message.executionTime) }}</span>
                                 }
+                                <button class="copy-button" (click)="copyMessage(message)" title="Copy message">
+                                    <i class="fa-solid fa-copy"></i>
+                                </button>
                                 @if (showRawToggle(message)) {
                                     <button class="raw-toggle" (click)="toggleRawView(message)" title="Toggle raw/formatted view">
                                         <i class="fa-solid" [class.fa-code]="!message.showRaw" [class.fa-eye]="message.showRaw"></i>
@@ -143,17 +141,17 @@
                             [disabled]="isExecuting"
                             class="message-input">
                         </kendo-textarea>
-                        <kendo-button
-                            themeColor="primary"
+                        <button
+                            class="send-button"
                             (click)="sendMessage()"
                             [disabled]="isExecuting || !currentUserMessage.trim()"
-                            class="send-button">
+                            title="Send message">
                             @if (isExecuting) {
                                 <i class="fa-solid fa-spinner fa-spin"></i>
                             } @else {
                                 <i class="fa-solid fa-paper-plane"></i>
                             }
-                        </kendo-button>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -245,27 +243,21 @@
                                                 class="variable-value">
                                             </kendo-textbox>
                                             
-                                            <kendo-button 
-                                                fillMode="flat" 
-                                                themeColor="error" 
-                                                size="small"
+                                            <button 
+                                                class="remove-button"
                                                 (click)="removeDataVariable($index)"
-                                                title="Remove variable"
-                                                class="remove-button">
+                                                title="Remove variable">
                                                 <i class="fa-solid fa-times"></i>
-                                            </kendo-button>
+                                            </button>
                                         </div>
                                     }
                                 </div>
                                 
-                                <kendo-button 
-                                    fillMode="outline" 
-                                    themeColor="primary" 
-                                    size="small"
-                                    (click)="addDataVariable()"
-                                    class="add-variable-button">
+                                <button 
+                                    class="add-button"
+                                    (click)="addDataVariable()">
                                     <i class="fa-solid fa-plus"></i> Add Variable
-                                </kendo-button>
+                                </button>
                             </div>
                         }
 
@@ -312,27 +304,21 @@
                                                 class="variable-value">
                                             </kendo-textbox>
                                             
-                                            <kendo-button 
-                                                fillMode="flat" 
-                                                themeColor="error" 
-                                                size="small"
+                                            <button 
+                                                class="remove-button"
                                                 (click)="removeTemplateVariable($index)"
-                                                title="Remove variable"
-                                                class="remove-button">
+                                                title="Remove variable">
                                                 <i class="fa-solid fa-times"></i>
-                                            </kendo-button>
+                                            </button>
                                         </div>
                                     }
                                 </div>
                                 
-                                <kendo-button 
-                                    fillMode="outline" 
-                                    themeColor="primary" 
-                                    size="small"
-                                    (click)="addTemplateVariable()"
-                                    class="add-variable-button">
+                                <button 
+                                    class="add-button"
+                                    (click)="addTemplateVariable()">
                                     <i class="fa-solid fa-plus"></i> Add Variable
-                                </kendo-button>
+                                </button>
                             </div>
                         }
 
@@ -373,27 +359,22 @@
                                                 class="variable-value">
                                             </kendo-textbox>
                                             
-                                            <kendo-button 
-                                                fillMode="flat" 
-                                                themeColor="error" 
-                                                size="small"
+                                            <button 
+                                                class="remove-button"
                                                 (click)="removeTemplateVariable($index)"
-                                                title="Remove variable"
-                                                class="remove-button">
+                                                title="Remove variable">
                                                 <i class="fa-solid fa-times"></i>
-                                            </kendo-button>
+                                            </button>
                                         </div>
                                     }
                                 </div>
                                 
-                                <kendo-button 
-                                    fillMode="outline" 
-                                    size="small"
-                                    (click)="addTemplateVariable()"
-                                    class="add-button">
+                                <button 
+                                    class="add-button"
+                                    (click)="addTemplateVariable()">
                                     <i class="fa-solid fa-plus"></i>
                                     Add Variable
-                                </kendo-button>
+                                </button>
                             </div>
                         }
 
@@ -476,14 +457,12 @@
                                                 <p>{{ conv.messages.length }} messages</p>
                                                 <span class="saved-date">{{ conv.updatedAt | date:'short' }}</span>
                                             </div>
-                                            <kendo-button 
-                                                fillMode="flat" 
-                                                themeColor="error" 
-                                                size="small"
+                                            <button 
+                                                class="delete-button"
                                                 (click)="deleteConversation(conv, $event)"
                                                 title="Delete conversation">
                                                 <i class="fa-solid fa-trash"></i>
-                                            </kendo-button>
+                                            </button>
                                         </div>
                                     }
                                 </div>
