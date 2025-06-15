@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewChecked, SecurityContext } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { AIAgentEntity, AIAgentRunEntity, AIAgentRunStepEntity, AIPromptEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
@@ -1307,7 +1307,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
         const html = `
             <div class="json-content-wrapper">
                 <div class="json-main-content">
-                    ${this.renderMarkdown(extractedContent).toString().replace(/<div class="markdown-content">|<\/div>/g, '')}
+                    ${this.sanitizer.sanitize(SecurityContext.HTML, this.renderMarkdown(extractedContent)) || ''}
                 </div>
                 <div class="json-raw-section">
                     <button class="json-toggle-button" onclick="window.mjToggleJsonRaw && window.mjToggleJsonRaw('${messageId}')">
