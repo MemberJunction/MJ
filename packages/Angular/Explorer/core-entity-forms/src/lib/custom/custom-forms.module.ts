@@ -6,7 +6,7 @@ import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { ButtonsModule, ButtonModule, SplitButtonModule } from '@progress/kendo-angular-buttons';
 import { DropDownsModule, ComboBoxModule } from '@progress/kendo-angular-dropdowns';
 import { LayoutModule, ExpansionPanelModule, TabStripModule } from '@progress/kendo-angular-layout';
-import { DialogsModule } from '@progress/kendo-angular-dialog';
+import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { FormToolbarModule } from '@memberjunction/ng-form-toolbar';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
@@ -22,16 +22,13 @@ import { TemplateEditorComponent } from "../shared/components/template-editor.co
 import { AIPromptExecutionDialogComponent } from "./AIPrompts/ai-prompt-execution-dialog.component";
 import { AIPromptFormComponentExtended, LoadAIPromptFormComponentExtended } from "./AIPrompts/ai-prompt-form.component";
 import { AIAgentFormComponentExtended, LoadAIAgentFormComponentExtended } from "./AIAgents/ai-agent-form.component";
-import { AIAgentTestHarnessComponent } from "./AIAgents/ai-agent-test-harness-old.component";
-import { AIPromptTestHarnessComponent } from "./AIPrompts/ai-prompt-test-harness-old.component";
-import { AIAgentTestHarnessComponent as AIAgentTestHarnessComponentNew } from "./AIAgents/ai-agent-test-harness.component";
-import { AIPromptTestHarnessComponent as AIPromptTestHarnessComponentNew } from "./AIPrompts/ai-prompt-test-harness.component";
-import { AIAgentTestHarnessDialogComponent } from "./AIAgents/ai-agent-test-harness-dialog-old.component";
-import { AIPromptTestHarnessDialogComponent } from "./AIPrompts/ai-prompt-test-harness-dialog-old.component";
+import { AITestHarnessComponent } from "./AIAgents/ai-test-harness.component";
+import { AITestHarnessDialogComponent } from "./AIAgents/ai-test-harness-dialog.component";
 import { TestHarnessDialogService } from "./test-harness-dialog.service";
 import { JoinGridModule } from "@memberjunction/ng-join-grid";
 import { CodeEditorModule } from "@memberjunction/ng-code-editor";
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
+import { EntitySelectorDialogComponent } from "./shared/entity-selector-dialog.component";
 
 @NgModule({
     declarations: [
@@ -44,12 +41,9 @@ import { TreeViewModule } from '@progress/kendo-angular-treeview';
         AIPromptExecutionDialogComponent,
         AIPromptFormComponentExtended,
         AIAgentFormComponentExtended,
-        AIAgentTestHarnessComponent,
-        AIPromptTestHarnessComponent,
-        AIAgentTestHarnessComponentNew,
-        AIPromptTestHarnessComponentNew,
-        AIAgentTestHarnessDialogComponent,
-        AIPromptTestHarnessDialogComponent
+        AITestHarnessComponent,
+        EntitySelectorDialogComponent,
+        AITestHarnessDialogComponent
     ],
     imports: [
         CommonModule,
@@ -58,6 +52,7 @@ import { TreeViewModule } from '@progress/kendo-angular-treeview';
         ExpansionPanelModule,
         TabStripModule,
         DialogsModule,
+        WindowModule,
         InputsModule,
         TextBoxModule,
         TextAreaModule,
@@ -87,12 +82,8 @@ import { TreeViewModule } from '@progress/kendo-angular-treeview';
         TemplateEditorComponent,
         AIPromptFormComponentExtended,
         AIAgentFormComponentExtended,
-        AIAgentTestHarnessComponent,
-        AIPromptTestHarnessComponent,
-        AIAgentTestHarnessComponentNew,
-        AIPromptTestHarnessComponentNew,
-        AIAgentTestHarnessDialogComponent,
-        AIPromptTestHarnessDialogComponent
+        AITestHarnessComponent,
+        AITestHarnessDialogComponent
     ],
     providers: [
         TestHarnessDialogService

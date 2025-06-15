@@ -16,7 +16,7 @@
 .agent-header {
     background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
     border-bottom: 1px solid #e0e6ed;
-    padding: 20px;
+    padding: 12px 20px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.04);
 }
 
@@ -228,9 +228,10 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
     background: #f5f7fa;
-    padding: 20px;
+    padding: 12px;
 }
 
 /* Kendo PanelBar Styling */
@@ -242,7 +243,7 @@
 ::ng-deep .k-panelbar > .k-panelbar-item {
     border: none;
     border-radius: 12px;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.06);
     background: white;
     overflow: hidden;
@@ -251,7 +252,7 @@
 ::ng-deep .k-panelbar > .k-panelbar-item > .k-header {
     background: white;
     border: none;
-    padding: 20px 24px;
+    padding: 16px 20px;
     border-radius: 12px 12px 0 0;
     color: #2c3e50;
     font-weight: 600;
@@ -309,7 +310,7 @@
 
 /* Panel Content */
 .panel-content {
-    padding: 24px;
+    padding: 16px;
     background: white;
 }
 
@@ -669,10 +670,16 @@
     transition: opacity 0.2s ease;
     color: #6c757d;
     font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .entity-item:hover .item-actions {
     opacity: 1;
+}
+
+.entity-item:hover .item-actions > i {
     color: #2196f3;
 }
 

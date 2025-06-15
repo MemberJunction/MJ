@@ -733,12 +733,28 @@
     
     <!-- AI Prompt Test Harness -->
     @if (showTestHarness) {
-        <mj-ai-prompt-test-harness
-            [aiPrompt]="record"
-            [template]="template"
-            [templateContent]="templateContent"
-            [isVisible]="showTestHarness"
-            (visibilityChange)="onTestHarnessVisibilityChanged($event)">
-        </mj-ai-prompt-test-harness>
+        <kendo-window 
+            [width]="1200" 
+            [height]="800" 
+            [minWidth]="800"
+            [minHeight]="600"
+            [draggable]="true"
+            [resizable]="true"
+            [state]="'default'"
+            (close)="onTestHarnessVisibilityChanged(false)"
+            title="Test AI Prompt - {{ record?.Name || 'Untitled' }}">
+            <!-- TODO: AI Prompt test harness to be implemented
+            <mj-ai-prompt-test-harness
+                [aiPrompt]="record"
+                [template]="template"
+                [templateContent]="templateContent"
+                [isVisible]="showTestHarness"
+                (visibilityChange)="onTestHarnessVisibilityChanged($event)">
+            </mj-ai-prompt-test-harness>
+            -->
+            <div style="padding: 20px; text-align: center;">
+                <p>AI Prompt test harness coming soon...</p>
+            </div>
+        </kendo-window>
     }
 </div>

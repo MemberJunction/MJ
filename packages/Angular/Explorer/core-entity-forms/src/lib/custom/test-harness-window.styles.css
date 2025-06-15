@@ -1,0 +1,20 @@
+/* Test Harness Window Styles */
+.k-window-content mj-ai-agent-test-harness,
+.k-window-content mj-ai-prompt-test-harness {
+    display: block;
+    height: 100%;
+    width: 100%;
+}
+
+.k-window-content .test-harness-container {
+    height: 100%;
+}
+
+/* Ensure the window appears centered and above other content */
+.k-window {
+    z-index: 10002 !important;
+}
+
+.k-overlay {
+    z-index: 10001 !important;
+}

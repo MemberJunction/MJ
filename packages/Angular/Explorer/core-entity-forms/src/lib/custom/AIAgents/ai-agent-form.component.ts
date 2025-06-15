@@ -1,10 +1,14 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ViewContainerRef, ElementRef, ChangeDetectorRef } from '@angular/core';
+import { Router, ActivatedRoute } from '@angular/router';
 import { ActionEntity, AIAgentActionEntity, AIAgentEntity, AIAgentLearningCycleEntity, AIAgentNoteEntity, AIAgentPromptEntity, AIAgentRunEntity, AIPromptEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIAgentFormComponent } from '../../generated/Entities/AIAgent/aiagent.form.component';
+import { DialogService } from '@progress/kendo-angular-dialog';
+import { SharedService } from '@memberjunction/ng-shared';
+import { EntitySelectorDialogComponent, EntitySelectorConfig } from '../shared/entity-selector-dialog.component';
 
 /**
  * Enhanced AI Agent form component that extends the auto-generated base form
@@ -88,6 +92,18 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     
     /** Array of recent execution records for history display */
     public recentExecutions: AIAgentRunEntity[] = [];
+
+    constructor(
+        elementRef: ElementRef,
+        protected override sharedService: SharedService,
+        router: Router,
+        route: ActivatedRoute,
+        cdr: ChangeDetectorRef,
+        private dialogService: DialogService,
+        private viewContainerRef: ViewContainerRef
+    ) {
+        super(elementRef, sharedService, router, route, cdr);
+    }
 
     /**
      * Component initialization. Calls parent initialization and loads related entity data
@@ -280,29 +296,64 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * Adds a new prompt to the agent
      */
     public async addPrompt() {
-        // Open a new AI Agent Prompt form with AgentID pre-populated
-        MJNotificationService.Instance.CreateSimpleNotification(
-            'Opening new prompt form...',
-            'info',
-            2000
-        );
-        
-        // For now, we'll just show a notification
-        // In a full implementation, this would emit an event to open a new form
-        // with AgentID pre-populated to this.record.ID
+        const config: EntitySelectorConfig = {
+            entityName: 'AI Prompts',
+            title: 'Select AI Prompt',
+            displayField: 'Name',
+            descriptionField: 'Description',
+            statusField: 'Status',
+            filters: `Status='Active'`,
+            orderBy: 'Name ASC',
+            icon: 'fa-solid fa-comment-dots'
+        };
+
+        const dialogRef = this.dialogService.open({
+            content: EntitySelectorDialogComponent
+        });
+
+        const componentInstance = dialogRef.content.instance as EntitySelectorDialogComponent;
+        componentInstance.config = config;
+
+        const result = await dialogRef.result;
+        if (result && (result as any).entity) {
+            // User selected an existing prompt
+            await this.linkPromptToAgent((result as any).entity);
+        } else if (result && (result as any).createNew) {
+            // User wants to create a new prompt
+            await this.createNewPrompt();
+        }
     }
 
     /**
      * Opens the action configuration dialog
      */
-    public configureActions() {
-        // For now, just show a notification
-        // In the future, this could open a specialized action configuration dialog
-        MJNotificationService.Instance.CreateSimpleNotification(
-            'Action configuration dialog coming soon',
-            'info',
-            3000
-        );
+    public async configureActions() {
+        const config: EntitySelectorConfig = {
+            entityName: 'Actions',
+            title: 'Select Action',
+            displayField: 'Name',
+            descriptionField: 'Description',
+            statusField: 'Status',
+            filters: `Status='Active'`,
+            orderBy: 'Name ASC',
+            icon: 'fa-solid fa-bolt'
+        };
+
+        const dialogRef = this.dialogService.open({
+            content: EntitySelectorDialogComponent
+        });
+
+        const componentInstance = dialogRef.content.instance as EntitySelectorDialogComponent;
+        componentInstance.config = config;
+
+        const result = await dialogRef.result;
+        if (result && (result as any).entity) {
+            // User selected an existing action
+            await this.linkActionToAgent((result as any).entity);
+        } else if (result && (result as any).createNew) {
+            // User wants to create a new action
+            await this.createNewAction();
+        }
     }
 
     /**
@@ -423,6 +474,215 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         
         // In a full implementation, this would open a new AI Agent Note form
         // with AgentID pre-populated to this.record.ID
+    }
+
+    /**
+     * Links an existing prompt to the agent
+     */
+    private async linkPromptToAgent(prompt: AIPromptEntity) {
+        try {
+            const md = new Metadata();
+            const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('AI Agent Prompts');
+            
+            agentPrompt.AgentID = this.record.ID;
+            agentPrompt.PromptID = prompt.ID;
+            agentPrompt.Status = 'Active'; // Default value
+            agentPrompt.ExecutionOrder = 1; // Default execution order
+            
+            const result = await agentPrompt.Save();
+            if (result) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Prompt "${prompt.Name}" added successfully`,
+                    'success',
+                    3000
+                );
+                await this.loadRelatedCounts();
+            } else {
+                throw new Error('Failed to save AI Agent Prompt');
+            }
+        } catch (error) {
+            console.error('Error linking prompt to agent:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Failed to add prompt',
+                'error',
+                3000
+            );
+        }
+    }
+
+    /**
+     * Creates a new prompt and links it to the agent
+     */
+    private async createNewPrompt() {
+        // TODO: Open new AI Prompt form
+        // await this.sharedService.CreateNewRecord('AI Prompts', undefined, [
+        //     { FieldName: 'Status', Value: 'Active' }
+        // ]);
+        MJNotificationService.Instance.CreateSimpleNotification(
+            'Creating new prompt - functionality to be implemented',
+            'info',
+            3000
+        );
+    }
+
+    /**
+     * Links an existing action to the agent
+     */
+    private async linkActionToAgent(action: ActionEntity) {
+        try {
+            const md = new Metadata();
+            const agentAction = await md.GetEntityObject<AIAgentActionEntity>('AI Agent Actions');
+            
+            agentAction.AgentID = this.record.ID;
+            agentAction.ActionID = action.ID;
+            agentAction.Status = 'Active'; // Default status
+            
+            const result = await agentAction.Save();
+            if (result) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Action "${action.Name}" added successfully`,
+                    'success',
+                    3000
+                );
+                await this.loadRelatedCounts();
+            } else {
+                throw new Error('Failed to save AI Agent Action');
+            }
+        } catch (error) {
+            console.error('Error linking action to agent:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Failed to add action',
+                'error',
+                3000
+            );
+        }
+    }
+
+    /**
+     * Creates a new action and links it to the agent
+     */
+    private async createNewAction() {
+        // TODO: Open new Action form
+        // await this.sharedService.CreateNewRecord('Actions', undefined, [
+        //     { FieldName: 'Status', Value: 'Active' }
+        // ]);
+        MJNotificationService.Instance.CreateSimpleNotification(
+            'Creating new action - functionality to be implemented',
+            'info',
+            3000
+        );
+    }
+
+    /**
+     * Removes a prompt from the agent
+     */
+    public async removePrompt(prompt: AIPromptEntityExtended, event: Event) {
+        event.stopPropagation(); // Prevent navigation
+        
+        const confirmDialog = this.dialogService.open({
+            title: 'Remove Prompt',
+            content: `Are you sure you want to remove the prompt "${prompt.Name}" from this agent?`,
+            actions: [
+                { text: 'Cancel' },
+                { text: 'Remove', themeColor: 'error' }
+            ],
+            width: 450,
+            height: 200
+        });
+
+        const result = await confirmDialog.result;
+        if (result && (result as any).text === 'Remove') {
+            try {
+                // Find the AI Agent Prompt link record
+                const rv = new RunView();
+                const linkResult = await rv.RunView<AIAgentPromptEntity>({
+                    EntityName: 'AI Agent Prompts',
+                    ExtraFilter: `AgentID='${this.record.ID}' AND PromptID='${prompt.ID}'`,
+                    ResultType: 'entity_object'
+                });
+
+                if (linkResult.Results && linkResult.Results.length > 0) {
+                    const agentPrompt = linkResult.Results[0];
+                    const deleteResult = await agentPrompt.Delete();
+                    
+                    if (deleteResult) {
+                        MJNotificationService.Instance.CreateSimpleNotification(
+                            `Prompt "${prompt.Name}" removed successfully`,
+                            'success',
+                            3000
+                        );
+                        await this.loadRelatedCounts();
+                    } else {
+                        throw new Error('Failed to delete AI Agent Prompt link');
+                    }
+                } else {
+                    throw new Error('AI Agent Prompt link not found');
+                }
+            } catch (error) {
+                console.error('Error removing prompt from agent:', error);
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Failed to remove prompt',
+                    'error',
+                    3000
+                );
+            }
+        }
+    }
+
+    /**
+     * Removes an action from the agent
+     */
+    public async removeAction(action: ActionEntity, event: Event) {
+        event.stopPropagation(); // Prevent navigation
+        
+        const confirmDialog = this.dialogService.open({
+            title: 'Remove Action',
+            content: `Are you sure you want to remove the action "${action.Name}" from this agent?`,
+            actions: [
+                { text: 'Cancel' },
+                { text: 'Remove', themeColor: 'error' }
+            ],
+            width: 450,
+            height: 200
+        });
+
+        const result = await confirmDialog.result;
+        if (result && (result as any).text === 'Remove') {
+            try {
+                // Find the AI Agent Action link record
+                const rv = new RunView();
+                const linkResult = await rv.RunView<AIAgentActionEntity>({
+                    EntityName: 'AI Agent Actions',
+                    ExtraFilter: `AgentID='${this.record.ID}' AND ActionID='${action.ID}'`,
+                    ResultType: 'entity_object'
+                });
+
+                if (linkResult.Results && linkResult.Results.length > 0) {
+                    const agentAction = linkResult.Results[0];
+                    const deleteResult = await agentAction.Delete();
+                    
+                    if (deleteResult) {
+                        MJNotificationService.Instance.CreateSimpleNotification(
+                            `Action "${action.Name}" removed successfully`,
+                            'success',
+                            3000
+                        );
+                        await this.loadRelatedCounts();
+                    } else {
+                        throw new Error('Failed to delete AI Agent Action link');
+                    }
+                } else {
+                    throw new Error('AI Agent Action link not found');
+                }
+            } catch (error) {
+                console.error('Error removing action from agent:', error);
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Failed to remove action',
+                    'error',
+                    3000
+                );
+            }
+        }
     }
 }
 

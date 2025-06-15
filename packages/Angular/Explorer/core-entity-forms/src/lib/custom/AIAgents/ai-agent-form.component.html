@@ -63,23 +63,6 @@
         <!-- Single Pane Layout with Expander Panels -->
         <div class="form-content">
             <kendo-panelbar>
-                
-                <!-- Core Configuration (Always Expanded) -->
-                <kendo-panelbar-item [expanded]="true" title="Core Configuration">
-                    <ng-template kendoPanelBarItemTitle>
-                        <i class="fa-solid fa-cog"></i> Core Configuration
-                    </ng-template>
-                    <ng-template kendoPanelBarContent>
-                        <div class="panel-content">
-                            <div class="section-description">
-                                Essential agent settings, behavior configuration, and technical details.
-                            </div>
-                            <div class="form-fields-grid">
-                                <ng-content></ng-content>
-                            </div>
-                        </div>
-                    </ng-template>
-                </kendo-panelbar-item>
 
                 <!-- Prompts (High Priority - Expanded by default for existing agents) -->
                 @if (record.ID) {
@@ -129,6 +112,16 @@
                                                     </div>
                                                 </div>
                                                 <div class="item-actions">
+                                                    @if (EditMode) {
+                                                        <kendo-button 
+                                                            fillMode="flat" 
+                                                            themeColor="error" 
+                                                            size="small"
+                                                            (click)="removePrompt(prompt, $event)"
+                                                            title="Remove prompt">
+                                                            <i class="fa-solid fa-trash"></i>
+                                                        </kendo-button>
+                                                    }
                                                     <i class="fa-solid fa-external-link"></i>
                                                 </div>
                                             </div>
@@ -197,6 +190,16 @@
                                                     </div>
                                                 </div>
                                                 <div class="item-actions">
+                                                    @if (EditMode) {
+                                                        <kendo-button 
+                                                            fillMode="flat" 
+                                                            themeColor="error" 
+                                                            size="small"
+                                                            (click)="removeAction(action, $event)"
+                                                            title="Remove action">
+                                                            <i class="fa-solid fa-trash"></i>
+                                                        </kendo-button>
+                                                    }
                                                     <i class="fa-solid fa-external-link"></i>
                                                 </div>
                                             </div>
@@ -475,16 +478,41 @@
                     </kendo-panelbar-item>
                 }
 
+                <!-- Details (Core Configuration - Last Panel) -->
+                <kendo-panelbar-item [expanded]="false" title="Details">
+                    <ng-template kendoPanelBarItemTitle>
+                        <i class="fa-solid fa-info-circle"></i> Details
+                    </ng-template>
+                    <ng-template kendoPanelBarContent>
+                        <div class="panel-content">
+                            <div class="form-fields-grid">
+                                <ng-content></ng-content>
+                            </div>
+                        </div>
+                    </ng-template>
+                </kendo-panelbar-item>
+
             </kendo-panelbar>
         </div>
     </form>
 
     <!-- AI Agent Test Harness -->
     @if (showTestHarness) {
-        <mj-ai-agent-test-harness
-            [aiAgent]="record"
-            [isVisible]="showTestHarness"
-            (visibilityChange)="onTestHarnessVisibilityChanged($event)">
-        </mj-ai-agent-test-harness>
+        <kendo-window 
+            [width]="1200" 
+            [height]="800" 
+            [minWidth]="800"
+            [minHeight]="600"
+            [draggable]="true"
+            [resizable]="true"
+            [state]="'default'"
+            (close)="onTestHarnessVisibilityChanged(false)"
+            title="Test AI Agent - {{ record?.Name || 'Untitled' }}">
+            <mj-ai-test-harness
+                [aiAgent]="record"
+                [isVisible]="showTestHarness"
+                (visibilityChange)="onTestHarnessVisibilityChanged($event)">
+            </mj-ai-test-harness>
+        </kendo-window>
     }
 </div>

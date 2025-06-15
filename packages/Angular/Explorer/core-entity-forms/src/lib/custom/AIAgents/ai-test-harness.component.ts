@@ -1,71 +1,160 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { AIPromptEntity, TemplateEntity, TemplateContentEntity } from '@memberjunction/core-entities';
+import { AIAgentEntity, AIAgentRunEntity, AIAgentRunStepEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { ChatMessage } from '@memberjunction/ai';
+// import { MJGlobal } from '@memberjunction/global';
 import { Subject, takeUntil } from 'rxjs';
 
-export interface AIPromptRunResult {
+/**
+ * Result interface for AI agent execution operations.
+ * Contains comprehensive information about the execution outcome, timing, and data.
+ */
+export interface AIAgentRunResult {
+    /** Whether the agent execution completed successfully */
     success: boolean;
+    /** Raw output from the agent execution */
     output?: string;
+    /** Parsed/processed result content optimized for display */
     parsedResult?: string;
+    /** Error message if execution failed */
     error?: string;
+    /** Total execution time in milliseconds */
     executionTimeMs?: number;
-    promptRunId?: string;
+    /** Unique identifier for this agent run instance */
+    agentRunId?: string;
+    /** Unprocessed raw result from the underlying AI model */
     rawResult?: string;
-    renderedPrompt?: string;
+    /** Information about the next step in multi-step agent workflows */
+    nextStep?: string;
 }
 
-export interface TemplateVariable {
+/**
+ * Represents a variable in the data context or template data for agent execution.
+ * Used to pass dynamic data to agents during testing and execution.
+ */
+export interface DataContextVariable {
+    /** Variable name used in agent prompts and templates */
     name: string;
+    /** String representation of the variable value */
     value: string;
-    type: 'string' | 'number' | 'boolean' | 'object' | 'array';
-    description?: string;
+    /** Data type for proper conversion during execution */
+    type: 'string' | 'number' | 'boolean' | 'object';
 }
 
-export interface ConversationMessage {
+/**
+ * Enhanced chat message interface extending the base ChatMessage from @memberjunction/ai.
+ * Includes additional properties for streaming, timing, error handling, and content management.
+ */
+export interface ConversationMessage extends ChatMessage {
+    /** Unique identifier for this message */
     id: string;
-    role: 'user' | 'assistant' | 'system';
-    content: string;
+    /** Timestamp when the message was created */
     timestamp: Date;
+    /** Whether this message is currently being streamed */
     isStreaming?: boolean;
+    /** Accumulated content during streaming (temporary) */
     streamingContent?: string;
+    /** Total execution time for AI-generated messages */
     executionTime?: number;
-    promptRunId?: string;
+    /** Associated agent run ID for tracking */
+    agentRunId?: string;
+    /** Error message if processing failed */
     error?: string;
-    renderedPrompt?: string;
+    /** Original unprocessed content from the AI model */
     rawContent?: string;
+    /** Whether to display raw content instead of processed content */
     showRaw?: boolean;
+    /** Timestamp when streaming started (for elapsed time calculation) */
     streamingStartTime?: number;
+    /** Current elapsed time during streaming */
     elapsedTime?: number;
     /** Whether JSON raw section is expanded in collapsible view */
     showJsonRaw?: boolean;
 }
 
-export interface SavedPromptConversation {
+/**
+ * Represents a saved conversation session with complete state information.
+ * Includes all messages, context data, and metadata for restoration.
+ */
+export interface SavedConversation {
+    /** Unique identifier for the saved conversation */
     id: string;
+    /** User-provided name for the conversation */
     name: string;
-    promptId: string;
-    promptName: string;
+    /** ID of the agent used in this conversation */
+    agentId: string;
+    /** Name of the agent for display purposes */
+    agentName: string;
+    /** Complete message history */
     messages: ConversationMessage[];
-    templateVariables: TemplateVariable[];
+    /** Data context variables used during the conversation */
+    dataContext: Record<string, any>;
+    /** Template data variables used during the conversation */
+    templateData: Record<string, any>;
+    /** When the conversation was first created */
     createdAt: Date;
+    /** When the conversation was last modified */
     updatedAt: Date;
 }
 
+/**
+ * Comprehensive test harness component for AI Agent development and testing.
+ * Provides a full-featured chat interface with conversation management, data context configuration,
+ * template data management, streaming responses, conversation persistence, and import/export capabilities.
+ * 
+ * ## Key Features:
+ * - **Interactive Chat**: Real-time conversation with AI agents
+ * - **Streaming Support**: Live streaming of agent responses with elapsed time tracking
+ * - **Data Context Management**: Configure variables passed to agent during execution
+ * - **Template Data Management**: Manage template variables for agent prompts
+ * - **Conversation Persistence**: Save/load conversations with full state restoration
+ * - **Import/Export**: JSON-based conversation backup and sharing
+ * - **Content Formatting**: Automatic detection and rendering of Markdown, JSON, and plain text
+ * - **Raw Content Toggle**: View both processed and raw AI responses
+ * - **Error Handling**: Comprehensive error display and user feedback
+ * 
+ * ## Usage:
+ * ```html
+ * <mj-ai-agent-test-harness 
+ *   [aiAgent]="myAgent"
+ *   [isVisible]="true"
+ *   (visibilityChange)="onVisibilityChanged($event)">
+ * </mj-ai-agent-test-harness>
+ * ```
+ * 
+ * @example
+ * ```typescript
+ * // Using with agent entity
+ * const agent = await metadata.GetEntityObject<AIAgentEntity>('AI Agents');
+ * await agent.Load('agent-id');
+ * this.testHarness.aiAgent = agent;
+ * this.testHarness.isVisible = true;
+ * ```
+ */
 @Component({
-    selector: 'mj-ai-prompt-test-harness-old',
-    templateUrl: './ai-prompt-test-harness-old.component.html',
-    styleUrls: ['./ai-prompt-test-harness-old.component.css']
+    selector: 'mj-ai-test-harness',
+    templateUrl: './ai-test-harness.component.html',
+    styleUrls: ['./ai-test-harness.component.css']
 })
-export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterViewChecked {
+export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewChecked {
+    /**
+     * Creates a new AI Agent Test Harness component instance.
+     * @param sanitizer - Angular DomSanitizer for safe HTML rendering of formatted content
+     */
     constructor(private sanitizer: DomSanitizer) {}
-    @Input() aiPrompt: AIPromptEntity | null = null;
-    @Input() template: TemplateEntity | null = null;
-    @Input() templateContent: TemplateContentEntity | null = null;
     
-    public _isVisible: boolean = false;
+    /** The AI agent entity to test. Can be set programmatically or passed via dialog data. */
+    @Input() aiAgent: AIAgentEntity | null = null;
+    
+    private _isVisible: boolean = false;
+    
+    /**
+     * Controls the visibility of the test harness. When set to true, automatically resets the harness state.
+     * This property is typically controlled by parent components or dialog wrappers.
+     */
     @Input() 
     get isVisible(): boolean {
         return this._isVisible;
@@ -75,53 +164,82 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
         this._isVisible = value;
         if (value && !wasVisible) {
             this.resetHarness();
-            this.initializeVariables();
         }
     }
 
+    /** Event emitted when the visibility state changes, allowing parent components to react */
     @Output() visibilityChange = new EventEmitter<boolean>();
+    
+    /** Reference to the scrollable messages container for auto-scrolling functionality */
     @ViewChild('messagesContainer') private messagesContainer!: ElementRef;
+    
+    /** Reference to the hidden file input element for conversation import functionality */
     @ViewChild('fileInput') private fileInput!: ElementRef;
 
-    // Conversation state
+    // === Conversation State ===
+    /** Complete array of all messages in the current conversation session */
     public conversationMessages: ConversationMessage[] = [];
+    
+    /** Current text input by the user (bound to textarea) */
     public currentUserMessage: string = '';
+    
+    /** Whether an agent execution is currently in progress */
     public isExecuting = false;
+    
+    /** ID of the message currently being streamed, if any */
     public currentStreamingMessageId: string | null = null;
     
-    // Template variables management
-    public templateVariables: TemplateVariable[] = [];
-    public showVariablesPanel = true;
+    // === Data Context Management ===
+    /** Variables passed to the agent as data context during execution */
+    public dataContextVariables: DataContextVariable[] = [];
     
-    // UI state
-    public activeTab: 'variables' | 'savedConversations' | 'settings' = 'variables';
-    public savedConversations: SavedPromptConversation[] = [];
+    /** Variables used for template rendering in agent prompts */
+    public templateDataVariables: DataContextVariable[] = [];
+    
+    // === UI State Management ===
+    /** Whether the configuration sidebar is currently visible */
+    public showSidebar = true;
+    
+    /** Currently active tab in the sidebar */
+    public activeTab: 'dataContext' | 'templateData' | 'savedConversations' = 'dataContext';
+    
+    /** Array of saved conversation sessions loaded from localStorage */
+    public savedConversations: SavedConversation[] = [];
+    
+    /** ID of the currently active/loaded conversation, if any */
     public currentConversationId: string | null = null;
     
-    // Rendered prompt preview
-    public showRenderedPrompt = false;
-    public renderedPromptContent = '';
-    
-    // Streaming and events
+    // === Private State & Intervals ===
+    /** Subject for component destruction cleanup */
     private destroy$ = new Subject<void>();
+    
+    /** Flag indicating that auto-scroll is needed on next view check */
     private scrollNeeded = false;
+    
+    /** Interval handle for streaming text animation */
     private streamingInterval: any;
+    
+    /** Interval handle for elapsed time counter during streaming */
     private elapsedTimeInterval: any;
     
-    // Selected model for prompt execution
-    public selectedModelId: string = '';
-    public availableModels: any[] = [];
-    
+    /** MemberJunction metadata instance for entity operations */
     private _metadata = new Metadata();
 
+    /**
+     * Component initialization. Loads saved conversations, sets up event subscriptions,
+     * and initializes the harness to a clean state.
+     */
     ngOnInit() {
         this.loadSavedConversations();
-        this.loadAvailableModels();
+        this.subscribeToAgentEvents();
         this.resetHarness();
-        this.initializeVariables();
         this.setupGlobalJsonToggle();
     }
 
+    /**
+     * Component cleanup. Destroys subscriptions and clears any active intervals
+     * to prevent memory leaks.
+     */
     ngOnDestroy() {
         this.destroy$.next();
         this.destroy$.complete();
@@ -133,6 +251,10 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
         }
     }
 
+    /**
+     * Post-view check hook that handles auto-scrolling to the bottom of the message container
+     * when new content is added.
+     */
     ngAfterViewChecked() {
         if (this.scrollNeeded) {
             this.scrollToBottom();
@@ -140,87 +262,88 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
         }
     }
 
-    private async loadAvailableModels() {
-        try {
-            const rv = new RunView();
-            const result = await rv.RunView({
-                EntityName: 'AI Models',
-                ExtraFilter: 'IsActive = 1',
-                OrderBy: 'Name',
-                MaxRows: 1000
-            });
-            
-            this.availableModels = result.Results || [];
-            if (this.availableModels.length > 0 && !this.selectedModelId) {
-                this.selectedModelId = this.availableModels[0].ID;
-            }
-        } catch (error) {
-            console.error('Error loading AI models:', error);
+    private subscribeToAgentEvents() {
+        // TODO: Subscribe to agent execution events when GraphQL subscriptions are available
+        // For now, we'll use polling or simulated streaming
+        
+        // Future implementation:
+        // - Subscribe to GraphQL subscription for agent execution updates
+        // - Handle streaming responses in real-time
+        // - Update conversation messages as data arrives
+    }
+
+    private handleStreamingUpdate(data: any) {
+        const message = this.conversationMessages.find(m => m.agentRunId === data.agentRunId);
+        if (message && message.isStreaming) {
+            message.streamingContent = (message.streamingContent || '') + data.content;
+            this.scrollNeeded = true;
         }
     }
 
-    private initializeVariables() {
-        if (!this.templateContent) {
-            this.templateVariables = [];
-            return;
-        }
-        
-        // Parse template to extract variables
-        const templateText = this.templateContent.TemplateText || '';
-        const variableMatches = templateText.match(/\{\{\s*(\w+)\s*\}\}/g) || [];
-        
-        const uniqueVariables = new Set<string>();
-        variableMatches.forEach(match => {
-            const varName = match.replace(/\{\{\s*|\s*\}\}/g, '');
-            uniqueVariables.add(varName);
-        });
-        
-        // Create template variables array
-        this.templateVariables = Array.from(uniqueVariables).map(varName => ({
-            name: varName,
-            value: '',
-            type: 'string' as const,
-            description: ''
-        }));
-        
-        // Add some common variables if they don't exist
-        if (!this.templateVariables.find(v => v.name === 'context')) {
-            this.templateVariables.push({
-                name: 'context',
-                value: '',
-                type: 'string',
-                description: 'Additional context for the prompt'
-            });
+    private handleStreamingComplete(data: any) {
+        const message = this.conversationMessages.find(m => m.agentRunId === data.agentRunId);
+        if (message) {
+            message.isStreaming = false;
+            message.content = message.streamingContent || message.content;
+            message.executionTime = data.executionTimeMs;
+            delete message.streamingContent;
         }
     }
 
+    /**
+     * Resets the test harness to its initial state, clearing all conversations,
+     * variables, and UI state. Called automatically when the harness becomes visible.
+     */
     public resetHarness() {
         this.conversationMessages = [];
         this.currentUserMessage = '';
         this.isExecuting = false;
         this.currentStreamingMessageId = null;
+        this.dataContextVariables = [{ name: '', value: '', type: 'string' }];
+        this.templateDataVariables = [];
         this.currentConversationId = null;
-        this.showVariablesPanel = true;
-        this.activeTab = 'variables';
-        this.showRenderedPrompt = false;
-        this.renderedPromptContent = '';
+        this.showSidebar = true;
+        this.activeTab = 'dataContext';
     }
 
+    /**
+     * Closes the test harness by setting visibility to false and emitting the change event.
+     * Used by dialog implementations and close buttons.
+     */
     public close() {
         this._isVisible = false;
         this.visibilityChange.emit(false);
     }
 
-    public toggleVariablesPanel() {
-        this.showVariablesPanel = !this.showVariablesPanel;
+    /**
+     * Toggles the visibility of the configuration sidebar.
+     * Allows users to show/hide the data context and conversation management panels.
+     */
+    public toggleSidebar() {
+        this.showSidebar = !this.showSidebar;
     }
 
-    public selectTab(tab: 'variables' | 'savedConversations' | 'settings') {
+    /**
+     * Switches to the specified tab in the configuration sidebar.
+     * @param tab - The tab to activate ('dataContext', 'templateData', or 'savedConversations')
+     */
+    public selectTab(tab: 'dataContext' | 'templateData' | 'savedConversations') {
         this.activeTab = tab;
     }
 
+    /**
+     * Sends the current user message to the AI agent and initiates execution.
+     * Handles message validation, conversation updates, UI state management, and agent execution.
+     * Automatically clears the input field and triggers auto-scroll after sending.
+     * 
+     * @example
+     * ```typescript
+     * // Called when user presses Enter or clicks Send button
+     * await this.sendMessage();
+     * ```
+     */
     public async sendMessage() {
-        if (!this.currentUserMessage.trim() || !this.aiPrompt) {
+        if (!this.currentUserMessage.trim() || !this.aiAgent) {
             return;
         }
 
@@ -240,48 +363,12 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
         // Scroll to bottom
         this.scrollNeeded = true;
 
-        // Execute prompt
-        await this.executePrompt(messageToSend);
+        // Execute agent
+        await this.executeAgent(messageToSend);
     }
 
-    public async previewRenderedPrompt() {
-        if (!this.templateContent) {
-            MJNotificationService.Instance.CreateSimpleNotification(
-                'No template content available',
-                'warning',
-                3000
-            );
-            return;
-        }
-        
-        try {
-            // Build template data from variables
-            const templateData = this.buildTemplateData();
-            
-            // For now, do a simple variable replacement
-            // TODO: Use proper template engine when available
-            let rendered = this.templateContent.TemplateText || '';
-            
-            // Replace variables in the template
-            for (const [key, value] of Object.entries(templateData)) {
-                const regex = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'g');
-                rendered = rendered.replace(regex, String(value));
-            }
-            
-            this.renderedPromptContent = rendered;
-            this.showRenderedPrompt = true;
-        } catch (error) {
-            console.error('Error rendering template:', error);
-            MJNotificationService.Instance.CreateSimpleNotification(
-                'Failed to render template: ' + (error as Error).message,
-                'error',
-                5000
-            );
-        }
-    }
-
-    private async executePrompt(userMessage: string) {
-        if (!this.aiPrompt || !this.selectedModelId) return;
+    private async executeAgent(userMessage: string) {
+        if (!this.aiAgent) return;
 
         this.isExecuting = true;
 
@@ -293,7 +380,7 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
             timestamp: new Date(),
             isStreaming: true,
             streamingContent: '',
-            promptRunId: '',
+            agentRunId: '',
             streamingStartTime: Date.now(),
             elapsedTime: 0
         };
@@ -307,40 +394,48 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
             // Get GraphQL data provider
             const dataProvider = Metadata.Provider as GraphQLDataProvider;
 
-            // Build template data
-            const templateData = this.buildTemplateData();
-            templateData['userMessage'] = userMessage;
-            templateData['conversationHistory'] = this.buildConversationHistory();
+            // Build conversation history for context
+            const messages = this.conversationMessages
+                .filter(m => !m.isStreaming)
+                .map(m => ({
+                    role: m.role,
+                    content: m.content
+                }));
 
-            // Execute the prompt
+            // Build data context
+            const dataContext = this.buildDataContext();
+            const templateData = this.buildTemplateData();
+
+            // Execute the agent
             const query = `
-                mutation RunAIPrompt($promptId: String!, $modelId: String!, $templateData: String) {
-                    RunAIPrompt(promptId: $promptId, modelId: $modelId, templateData: $templateData) {
+                mutation RunAIAgent($agentId: String!, $messages: String!, $data: String, $templateData: String) {
+                    RunAIAgent(agentId: $agentId, messages: $messages, data: $data, templateData: $templateData) {
                         success
                         output
                         parsedResult
                         error
                         executionTimeMs
-                        promptRunId
+                        agentRunId
                         rawResult
-                        renderedPrompt
+                        nextStep
                     }
                 }
             `;
 
             const variables = {
-                promptId: this.aiPrompt.ID,
-                modelId: this.selectedModelId,
-                templateData: JSON.stringify(templateData)
+                agentId: this.aiAgent.ID,
+                messages: JSON.stringify(messages),
+                data: Object.keys(dataContext).length > 0 ? JSON.stringify(dataContext) : null,
+                templateData: Object.keys(templateData).length > 0 ? JSON.stringify(templateData) : null
             };
 
             // Set up streaming simulation (will be replaced with real streaming)
-            assistantMessage.promptRunId = this.generateMessageId(); // Temporary until we get real ID
-            this.currentStreamingMessageId = assistantMessage.promptRunId;
+            assistantMessage.agentRunId = this.generateMessageId(); // Temporary until we get real ID
+            this.currentStreamingMessageId = assistantMessage.agentRunId;
             this.simulateStreaming(assistantMessage);
 
             const result = await dataProvider.ExecuteGQL(query, variables);
-            const executionResult: AIPromptRunResult = result?.RunAIPrompt;
+            const executionResult: AIAgentRunResult = result?.RunAIAgent;
 
             // Stop streaming simulation and elapsed time counter
             if (this.streamingInterval) {
@@ -354,8 +449,7 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
 
             // Update assistant message with result
             assistantMessage.isStreaming = false;
-            assistantMessage.promptRunId = executionResult?.promptRunId || assistantMessage.promptRunId;
-            assistantMessage.renderedPrompt = executionResult?.renderedPrompt;
+            assistantMessage.agentRunId = executionResult?.agentRunId || assistantMessage.agentRunId;
             
             if (executionResult?.success) {
                 // Store both raw and parsed content
@@ -385,7 +479,7 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
             }
             
             MJNotificationService.Instance.CreateSimpleNotification(
-                'Failed to execute prompt: ' + (error as Error).message,
+                'Failed to execute agent: ' + (error as Error).message,
                 'error',
                 6000
             );
@@ -406,7 +500,7 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
     private simulateStreaming(message: ConversationMessage) {
         // Simulate streaming for demo purposes
         // This will be replaced with real GraphQL subscription streaming
-        const sampleText = "I'm processing your prompt and will provide a response shortly...";
+        const sampleText = "I'm processing your request and will provide a response shortly...";
         let index = 0;
         
         this.streamingInterval = setInterval(() => {
@@ -421,23 +515,28 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
         }, 50);
     }
 
+    private buildDataContext(): Record<string, any> {
+        const context: Record<string, any> = {};
+        
+        for (const variable of this.dataContextVariables) {
+            if (variable.name.trim()) {
+                context[variable.name] = this.convertVariableValue(variable.value, variable.type);
+            }
+        }
+        
+        return context;
+    }
+
     private buildTemplateData(): Record<string, any> {
         const data: Record<string, any> = {};
         
-        for (const variable of this.templateVariables) {
+        for (const variable of this.templateDataVariables) {
             if (variable.name.trim()) {
                 data[variable.name] = this.convertVariableValue(variable.value, variable.type);
             }
         }
         
         return data;
-    }
-
-    private buildConversationHistory(): string {
-        return this.conversationMessages
-            .filter(m => !m.isStreaming)
-            .map(m => `${m.role}: ${m.content}`)
-            .join('\n');
     }
 
     private convertVariableValue(value: string, type: string): any {
@@ -447,7 +546,6 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
             case 'boolean':
                 return value.toLowerCase() === 'true';
             case 'object':
-            case 'array':
                 try {
                     return JSON.parse(value);
                 } catch {
@@ -458,32 +556,56 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
         }
     }
 
-    public addVariable() {
-        this.templateVariables.push({
+    /**
+     * Adds a new empty data context variable to the collection.
+     * Data context variables are passed to the agent during execution for dynamic content.
+     */
+    public addDataVariable() {
+        this.dataContextVariables.push({
             name: '',
             value: '',
-            type: 'string',
-            description: ''
+            type: 'string'
         });
     }
 
-    public removeVariable(index: number) {
-        this.templateVariables.splice(index, 1);
+    /**
+     * Removes a data context variable at the specified index.
+     * @param index - Zero-based index of the variable to remove
+     */
+    public removeDataVariable(index: number) {
+        this.dataContextVariables.splice(index, 1);
     }
 
+    /**
+     * Adds a new empty template data variable to the collection.
+     * Template data variables are used for prompt template rendering.
+     */
+    public addTemplateVariable() {
+        this.templateDataVariables.push({
+            name: '',
+            value: '',
+            type: 'string'
+        });
+    }
+
+    /**
+     * Removes a template data variable at the specified index.
+     * @param index - Zero-based index of the variable to remove
+     */
+    public removeTemplateVariable(index: number) {
+        this.templateDataVariables.splice(index, 1);
+    }
+
+    /**
+     * Clears the current conversation after user confirmation.
+     * Resets both the message history and the current conversation ID.
+     */
     public clearConversation() {
         if (this.conversationMessages.length > 0) {
             if (confirm('Are you sure you want to clear the conversation?')) {
                 this.conversationMessages = [];
                 this.currentConversationId = null;
             }
-        }
-    }
-
-    public showRenderedPromptInMessage(message: ConversationMessage) {
-        if (message.renderedPrompt) {
-            this.renderedPromptContent = message.renderedPrompt;
-            this.showRenderedPrompt = true;
         }
     }
 
@@ -503,7 +625,7 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
 
     // Saved conversations functionality
     private loadSavedConversations() {
-        const saved = localStorage.getItem('mj_prompt_conversations');
+        const saved = localStorage.getItem('mj_agent_conversations');
         if (saved) {
             try {
                 this.savedConversations = JSON.parse(saved);
@@ -522,6 +644,17 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
         }
     }
 
+    /**
+     * Saves the current conversation to localStorage with user-provided name.
+     * Handles both creating new conversations and updating existing ones.
+     * Automatically limits storage to 50 conversations to prevent excessive memory usage.
+     * 
+     * @example
+     * ```typescript
+     * // User clicks save button
+     * this.saveConversation(); // Prompts for name and saves
+     * ```
+     */
     public saveConversation() {
         if (this.conversationMessages.length === 0) {
             MJNotificationService.Instance.CreateSimpleNotification(
@@ -535,13 +668,14 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
         const name = prompt('Enter a name for this conversation:');
         if (!name) return;
 
-        const conversation: SavedPromptConversation = {
+        const conversation: SavedConversation = {
             id: this.generateMessageId(),
             name: name,
-            promptId: this.aiPrompt?.ID || '',
-            promptName: this.aiPrompt?.Name || '',
+            agentId: this.aiAgent?.ID || '',
+            agentName: this.aiAgent?.Name || '',
             messages: [...this.conversationMessages],
-            templateVariables: [...this.templateVariables],
+            dataContext: this.buildDataContext(),
+            templateData: this.buildTemplateData(),
             createdAt: new Date(),
             updatedAt: new Date()
         };
@@ -565,7 +699,7 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
             this.savedConversations = this.savedConversations.slice(0, 50);
         }
 
-        localStorage.setItem('mj_prompt_conversations', JSON.stringify(this.savedConversations));
+        localStorage.setItem('mj_agent_conversations', JSON.stringify(this.savedConversations));
         
         MJNotificationService.Instance.CreateSimpleNotification(
             'Conversation saved successfully',
@@ -579,14 +713,15 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
             const index = this.savedConversations.findIndex(c => c.id === this.currentConversationId);
             if (index >= 0) {
                 this.savedConversations[index].messages = [...this.conversationMessages];
-                this.savedConversations[index].templateVariables = [...this.templateVariables];
+                this.savedConversations[index].dataContext = this.buildDataContext();
+                this.savedConversations[index].templateData = this.buildTemplateData();
                 this.savedConversations[index].updatedAt = new Date();
-                localStorage.setItem('mj_prompt_conversations', JSON.stringify(this.savedConversations));
+                localStorage.setItem('mj_agent_conversations', JSON.stringify(this.savedConversations));
             }
         }
     }
 
-    public loadConversation(conversation: SavedPromptConversation) {
+    public loadConversation(conversation: SavedConversation) {
         if (this.conversationMessages.length > 0) {
             if (!confirm('Loading this conversation will replace the current one. Continue?')) {
                 return;
@@ -595,8 +730,31 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
 
         this.conversationMessages = [...conversation.messages];
         this.currentConversationId = conversation.id;
-        this.templateVariables = [...conversation.templateVariables];
         
+        // Restore data context
+        this.dataContextVariables = [];
+        for (const [key, value] of Object.entries(conversation.dataContext)) {
+            this.dataContextVariables.push({
+                name: key,
+                value: typeof value === 'object' ? JSON.stringify(value) : String(value),
+                type: typeof value === 'boolean' ? 'boolean' : 
+                      typeof value === 'number' ? 'number' :
+                      typeof value === 'object' ? 'object' : 'string'
+            });
+        }
+        
+        // Restore template data
+        this.templateDataVariables = [];
+        for (const [key, value] of Object.entries(conversation.templateData)) {
+            this.templateDataVariables.push({
+                name: key,
+                value: typeof value === 'object' ? JSON.stringify(value) : String(value),
+                type: typeof value === 'boolean' ? 'boolean' : 
+                      typeof value === 'number' ? 'number' :
+                      typeof value === 'object' ? 'object' : 'string'
+            });
+        }
+
         this.scrollNeeded = true;
         
         MJNotificationService.Instance.CreateSimpleNotification(
@@ -606,14 +764,14 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
         );
     }
 
-    public deleteConversation(conversation: SavedPromptConversation, event: Event) {
+    public deleteConversation(conversation: SavedConversation, event: Event) {
         event.stopPropagation();
         
         if (confirm(`Delete conversation "${conversation.name}"?`)) {
             const index = this.savedConversations.findIndex(c => c.id === conversation.id);
             if (index >= 0) {
                 this.savedConversations.splice(index, 1);
-                localStorage.setItem('mj_prompt_conversations', JSON.stringify(this.savedConversations));
+                localStorage.setItem('mj_agent_conversations', JSON.stringify(this.savedConversations));
                 
                 if (this.currentConversationId === conversation.id) {
                     this.currentConversationId = null;
@@ -639,18 +797,14 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
         }
 
         const exportData = {
-            prompt: {
-                id: this.aiPrompt?.ID,
-                name: this.aiPrompt?.Name,
-                description: this.aiPrompt?.Description
-            },
-            template: {
-                id: this.template?.ID,
-                name: this.template?.Name,
-                content: this.templateContent?.TemplateText
+            agent: {
+                id: this.aiAgent?.ID,
+                name: this.aiAgent?.Name,
+                description: this.aiAgent?.Description
             },
             messages: this.conversationMessages,
-            templateVariables: this.templateVariables,
+            dataContext: this.buildDataContext(),
+            templateData: this.buildTemplateData(),
             exportedAt: new Date().toISOString()
         };
 
@@ -658,7 +812,7 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `prompt-conversation-${this.aiPrompt?.Name?.replace(/[^a-zA-Z0-9]/g, '-')}-${new Date().toISOString().slice(0, 10)}.json`;
+        link.download = `agent-conversation-${this.aiAgent?.Name?.replace(/[^a-zA-Z0-9]/g, '-')}-${new Date().toISOString().slice(0, 10)}.json`;
         link.click();
         window.URL.revokeObjectURL(url);
     }
@@ -690,9 +844,32 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
                             timestamp: new Date(msg.timestamp)
                         }));
                         
-                        // Import template variables
-                        if (data.templateVariables) {
-                            this.templateVariables = data.templateVariables;
+                        // Import data context
+                        if (data.dataContext) {
+                            this.dataContextVariables = [];
+                            for (const [key, value] of Object.entries(data.dataContext)) {
+                                this.dataContextVariables.push({
+                                    name: key,
+                                    value: typeof value === 'object' ? JSON.stringify(value) : String(value),
+                                    type: typeof value === 'boolean' ? 'boolean' : 
+                                          typeof value === 'number' ? 'number' :
+                                          typeof value === 'object' ? 'object' : 'string'
+                                });
+                            }
+                        }
+                        
+                        // Import template data
+                        if (data.templateData) {
+                            this.templateDataVariables = [];
+                            for (const [key, value] of Object.entries(data.templateData)) {
+                                this.templateDataVariables.push({
+                                    name: key,
+                                    value: typeof value === 'object' ? JSON.stringify(value) : String(value),
+                                    type: typeof value === 'boolean' ? 'boolean' : 
+                                          typeof value === 'number' ? 'number' :
+                                          typeof value === 'object' ? 'object' : 'string'
+                                });
+                            }
                         }
                         
                         this.currentConversationId = null;
@@ -722,6 +899,11 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
         }
     }
 
+    /**
+     * Handles keyboard input in the message textarea.
+     * Sends message on Enter (without Shift) and allows multi-line input with Shift+Enter.
+     * @param event - Keyboard event from the textarea
+     */
     public handleKeyPress(event: KeyboardEvent) {
         if (event.key === 'Enter' && !event.shiftKey) {
             event.preventDefault();
@@ -729,10 +911,20 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
         }
     }
 
+    /**
+     * Generates CSS class names for message display based on message properties.
+     * @param message - The conversation message to generate classes for
+     * @returns Space-separated CSS class string for styling
+     */
     public getMessageClass(message: ConversationMessage): string {
         return `message message-${message.role}${message.isStreaming ? ' streaming' : ''}${message.error ? ' error' : ''}`;
     }
 
+    /**
+     * Formats a Date object into a user-friendly time string.
+     * @param date - Date object to format
+     * @returns Formatted time string in HH:MM format
+     */
     public formatTimestamp(date: Date): string {
         return date.toLocaleTimeString('en-US', { 
             hour: '2-digit', 
@@ -740,16 +932,12 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
         });
     }
 
-    public getModelName(modelId: string): string {
-        const model = this.availableModels.find(m => m.ID === modelId);
-        return model ? model.Name : 'Unknown Model';
-    }
-
-    public closeRenderedPromptDialog() {
-        this.showRenderedPrompt = false;
-        this.renderedPromptContent = '';
-    }
-
+    /**
+     * Formats execution time from milliseconds into a human-readable string.
+     * Automatically selects appropriate units (minutes, seconds, or milliseconds).
+     * @param milliseconds - Execution time in milliseconds
+     * @returns Formatted time string (e.g., "2m 30.5s", "1.23s", "500ms")
+     */
     public formatExecutionTime(milliseconds: number): string {
         if (milliseconds >= 60000) {
             const minutes = Math.floor(milliseconds / 60000);
@@ -787,10 +975,19 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
         }, 100); // Update every 100ms for smooth counter
     }
 
+    /**
+     * Toggles between showing processed content and raw AI model output for a message.
+     * @param message - The message to toggle the raw view for
+     */
     public toggleRawView(message: ConversationMessage) {
         message.showRaw = !message.showRaw;
     }
 
+    /**
+     * Determines if the provided content is valid JSON.
+     * @param content - String content to test
+     * @returns True if content can be parsed as JSON, false otherwise
+     */
     public isJsonContent(content: string): boolean {
         if (!content) return false;
         try {
@@ -801,6 +998,11 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
         }
     }
 
+    /**
+     * Formats JSON content with proper indentation for display.
+     * @param content - JSON string to format
+     * @returns Formatted JSON string or original content if parsing fails
+     */
     public formatJson(content: string): string {
         try {
             return JSON.stringify(JSON.parse(content), null, 2);
@@ -809,6 +1011,12 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
         }
     }
 
+    /**
+     * Automatically detects the content type of a message for appropriate rendering.
+     * Uses pattern matching to identify JSON, Markdown, or plain text content.
+     * @param content - Content string to analyze
+     * @returns Detected content type ('markdown', 'json', or 'text')
+     */
     public detectContentType(content: string): 'markdown' | 'json' | 'text' {
         if (!content) return 'text';
         
@@ -942,7 +1150,7 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
                     ${this.renderMarkdown(extractedContent).toString().replace(/<div class="markdown-content">|<\/div>/g, '')}
                 </div>
                 <div class="json-raw-section">
-                    <button class="json-toggle-button" onclick="window.mjToggleJsonRawPrompt && window.mjToggleJsonRawPrompt('${messageId}')">
+                    <button class="json-toggle-button" onclick="window.mjToggleJsonRaw && window.mjToggleJsonRaw('${messageId}')">
                         <i class="fa-solid ${showRawSection ? 'fa-chevron-up' : 'fa-chevron-down'}"></i>
                         ${showRawSection ? 'Hide' : 'Show'} raw JSON
                     </button>
@@ -958,7 +1166,7 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
      * Sets up global function for JSON toggle functionality
      */
     private setupGlobalJsonToggle() {
-        (window as any).mjToggleJsonRawPrompt = (messageId: string) => {
+        (window as any).mjToggleJsonRaw = (messageId: string) => {
             const message = this.conversationMessages.find(m => m.id === messageId);
             if (message) {
                 this.toggleJsonRaw(message);

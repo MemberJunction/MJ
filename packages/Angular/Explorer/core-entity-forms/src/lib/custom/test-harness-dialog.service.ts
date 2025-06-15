@@ -1,8 +1,9 @@
 import { Injectable } from '@angular/core';
 import { DialogService, DialogRef, DialogSettings } from '@progress/kendo-angular-dialog';
 import { AIAgentEntity, AIPromptEntity } from '@memberjunction/core-entities';
-import { AIAgentTestHarnessDialogComponent, AIAgentTestHarnessDialogData } from './AIAgents/ai-agent-test-harness-dialog-old.component';
-import { AIPromptTestHarnessDialogComponent, AIPromptTestHarnessDialogData } from './AIPrompts/ai-prompt-test-harness-dialog-old.component';
+import { AITestHarnessDialogComponent, AITestHarnessDialogData } from './AIAgents/ai-test-harness-dialog.component';
+// TODO: Prompt test harness will be added later
+// import { AIPromptTestHarnessDialogComponent, AIPromptTestHarnessDialogData } from './AIPrompts/ai-prompt-test-harness-dialog.component';
 
 /**
  * Service for managing test harness dialogs for AI Agents and AI Prompts.
@@ -81,7 +82,7 @@ export class TestHarnessDialogService {
         initialTemplateData?: Record<string, any>;
         preventClose?: boolean;
     }): DialogRef {
-        const data: AIAgentTestHarnessDialogData = {
+        const data: AITestHarnessDialogData = {
             agentId: options.agentId,
             agent: options.agent,
             title: options.title,
@@ -93,7 +94,7 @@ export class TestHarnessDialogService {
         
         const dialogSettings: DialogSettings = {
             title: '',
-            content: AIAgentTestHarnessDialogComponent,
+            content: AITestHarnessDialogComponent,
             width: this.convertToNumber(data.width) || 1200,
             height: this.convertToNumber(data.height) || 800,
             minWidth: 800,
@@ -105,7 +106,7 @@ export class TestHarnessDialogService {
         const dialogRef = this.dialogService.open(dialogSettings);
         
         // Pass data to the component instance
-        const componentInstance = dialogRef.content.instance as AIAgentTestHarnessDialogComponent;
+        const componentInstance = dialogRef.content.instance as AITestHarnessDialogComponent;
         componentInstance.data = data;
         componentInstance.closeDialog.subscribe(() => {
             dialogRef.close();
@@ -114,84 +115,49 @@ export class TestHarnessDialogService {
         return dialogRef;
     }
     
-    /**
-     * Opens the AI Prompt Test Harness in a dialog with comprehensive configuration options.
-     * Supports both loading by prompt ID or passing an existing prompt entity.
-     * Automatically loads related template and template content for prompt testing.
-     * 
-     * @param options - Configuration options for the dialog
-     * @param options.promptId - ID of the AI prompt to load (alternative to prompt parameter)
-     * @param options.prompt - Pre-loaded AI prompt entity (alternative to promptId parameter)
-     * @param options.title - Custom title for the dialog (defaults to prompt name)
-     * @param options.width - Dialog width (CSS units or viewport percentage, defaults to '90vw')
-     * @param options.height - Dialog height (CSS units or viewport percentage, defaults to '90vh')
-     * @param options.initialTemplateVariables - Initial template variables for prompt rendering
-     * @param options.selectedModelId - Pre-selected AI model ID for prompt execution
-     * @param options.preventClose - Whether to prevent dialog closure (currently unused)
-     * @returns Reference to the opened dialog for further control
-     * 
-     * @example
-     * ```typescript
-     * // Load prompt by ID with template variables
-     * const dialogRef = this.openPromptTestHarness({
-     *   promptId: 'prompt-123',
-     *   selectedModelId: 'gpt-4',
-     *   initialTemplateVariables: { 
-     *     userName: 'John Doe',
-     *     context: 'Customer support inquiry',
-     *     priority: 'high'
-     *   }
-     * });
-     * 
-     * // Use existing prompt entity
-     * const dialogRef = this.openPromptTestHarness({
-     *   prompt: myPromptEntity,
-     *   title: 'Test Marketing Prompt'
-     * });
-     * ```
-     */
-    openPromptTestHarness(options: {
-        promptId?: string;
-        prompt?: AIPromptEntity;
-        title?: string;
-        width?: string | number;
-        height?: string | number;
-        initialTemplateVariables?: Record<string, any>;
-        selectedModelId?: string;
-        preventClose?: boolean;
-    }): DialogRef {
-        const data: AIPromptTestHarnessDialogData = {
-            promptId: options.promptId,
-            prompt: options.prompt,
-            title: options.title,
-            width: options.width || '90vw',
-            height: options.height || '90vh',
-            initialTemplateVariables: options.initialTemplateVariables,
-            selectedModelId: options.selectedModelId
-        };
-        
-        const dialogSettings: DialogSettings = {
-            title: '',
-            content: AIPromptTestHarnessDialogComponent,
-            width: this.convertToNumber(data.width) || 1200,
-            height: this.convertToNumber(data.height) || 800,
-            minWidth: 800,
-            minHeight: 600,
-            autoFocusedElement: 'none',
-            cssClass: 'test-harness-dialog-wrapper'
-        };
-        
-        const dialogRef = this.dialogService.open(dialogSettings);
-        
-        // Pass data to the component instance
-        const componentInstance = dialogRef.content.instance as AIPromptTestHarnessDialogComponent;
-        componentInstance.data = data;
-        componentInstance.closeDialog.subscribe(() => {
-            dialogRef.close();
-        });
-        
-        return dialogRef;
-    }
+    // TODO: Prompt test harness will be added later
+    // openPromptTestHarness(options: {
+    //     promptId?: string;
+    //     prompt?: AIPromptEntity;
+    //     title?: string;
+    //     width?: string | number;
+    //     height?: string | number;
+    //     initialTemplateVariables?: Record<string, any>;
+    //     selectedModelId?: string;
+    //     preventClose?: boolean;
+    // }): DialogRef {
+    //     const data: AIPromptTestHarnessDialogData = {
+    //         promptId: options.promptId,
+    //         prompt: options.prompt,
+    //         title: options.title,
+    //         width: options.width || '90vw',
+    //         height: options.height || '90vh',
+    //         initialTemplateVariables: options.initialTemplateVariables,
+    //         selectedModelId: options.selectedModelId
+    //     };
+    //     
+    //     const dialogSettings: DialogSettings = {
+    //         title: '',
+    //         content: AIPromptTestHarnessDialogComponent,
+    //         width: this.convertToNumber(data.width) || 1200,
+    //         height: this.convertToNumber(data.height) || 800,
+    //         minWidth: 800,
+    //         minHeight: 600,
+    //         autoFocusedElement: 'none',
+    //         cssClass: 'test-harness-dialog-wrapper'
+    //     };
+    //     
+    //     const dialogRef = this.dialogService.open(dialogSettings);
+    //     
+    //     // Pass data to the component instance
+    //     const componentInstance = dialogRef.content.instance as AIPromptTestHarnessDialogComponent;
+    //     componentInstance.data = data;
+    //     componentInstance.closeDialog.subscribe(() => {
+    //         dialogRef.close();
+    //     });
+    //     
+    //     return dialogRef;
+    // }
     
     /**
      * Convenience method to open an AI Agent Test Harness dialog using only the agent ID.
@@ -209,21 +175,10 @@ export class TestHarnessDialogService {
         return this.openAgentTestHarness({ agentId });
     }
     
-    /**
-     * Convenience method to open an AI Prompt Test Harness dialog using only the prompt ID.
-     * Uses default dialog dimensions and no initial template variables.
-     * 
-     * @param promptId - ID of the AI prompt to test
-     * @returns Promise resolving to the dialog reference
-     * 
-     * @example
-     * ```typescript
-     * const dialogRef = await this.testHarnessService.openPromptById('prompt-456');
-     * ```
-     */
-    async openPromptById(promptId: string): Promise<DialogRef> {
-        return this.openPromptTestHarness({ promptId });
-    }
+    // TODO: Prompt test harness will be added later
+    // async openPromptById(promptId: string): Promise<DialogRef> {
+    //     return this.openPromptTestHarness({ promptId });
+    // }
     
     /**
      * Helper method to convert string dimensions (including viewport units) to pixel numbers.

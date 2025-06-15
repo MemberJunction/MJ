@@ -1,14 +1,14 @@
 import { Component, Input, Output, EventEmitter, OnInit, ViewChild } from '@angular/core';
 import { AIAgentEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
-import { AIAgentTestHarnessComponent } from './ai-agent-test-harness.component';
+import { AITestHarnessComponent } from './ai-test-harness.component';
 
 /**
  * Configuration data interface for the AI Agent Test Harness Dialog.
  * Provides all necessary options for initializing the dialog with appropriate
  * agent data, dimensions, and initial variable configurations.
  */
-export interface AIAgentTestHarnessDialogData {
+export interface AITestHarnessDialogData {
     /** ID of the AI agent to load (alternative to providing agent entity) */
     agentId?: string;
     /** Pre-loaded AI agent entity (alternative to providing agentId) */
@@ -47,7 +47,7 @@ export interface AIAgentTestHarnessDialogData {
  * ```
  */
 @Component({
-    selector: 'mj-ai-agent-test-harness-dialog-old',
+    selector: 'mj-ai-test-harness-dialog',
     template: `
         <div class="test-harness-dialog">
             <div class="dialog-header">
@@ -57,11 +57,11 @@ export interface AIAgentTestHarnessDialogData {
                 </button>
             </div>
             <div class="dialog-content">
-                <mj-ai-agent-test-harness 
+                <mj-ai-test-harness 
                     #testHarness
                     [aiAgent]="agent"
                     [isVisible]="true">
-                </mj-ai-agent-test-harness>
+                </mj-ai-test-harness>
             </div>
         </div>
     `,
@@ -117,9 +117,9 @@ export interface AIAgentTestHarnessDialogData {
         }
     `]
 })
-export class AIAgentTestHarnessDialogComponent implements OnInit {
+export class AITestHarnessDialogComponent implements OnInit {
     /** Reference to the embedded test harness component */
-    @ViewChild('testHarness', { static: false }) testHarness!: AIAgentTestHarnessComponent;
+    @ViewChild('testHarness', { static: false }) testHarness!: AITestHarnessComponent;
     
     /** The loaded AI agent entity for testing */
     agent: AIAgentEntity | null = null;
@@ -128,7 +128,7 @@ export class AIAgentTestHarnessDialogComponent implements OnInit {
     title: string = 'AI Agent Test Harness';
     
     /** Configuration data passed from the dialog service */
-    @Input() data: AIAgentTestHarnessDialogData = {};
+    @Input() data: AITestHarnessDialogData = {};
     
     /** Event emitted when the dialog should be closed */
     @Output() closeDialog = new EventEmitter<void>();
