@@ -4,6 +4,10 @@ import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { SharedSettingsModule } from '../shared/shared-settings.module';
 import { SqlLoggingComponent } from '../sql-logging/sql-logging.component';
+import { UserManagementComponent } from '../user-management/user-management.component';
+import { RoleManagementComponent } from '../role-management/role-management.component';
+import { ApplicationManagementComponent } from '../application-management/application-management.component';
+import { EntityPermissionsComponent } from '../entity-permissions/entity-permissions.component';
 
 export interface SettingsTab {
   id: string;
@@ -26,7 +30,11 @@ export interface SettingsComponentState {
   imports: [
     CommonModule,
     SharedSettingsModule,
-    SqlLoggingComponent
+    SqlLoggingComponent,
+    UserManagementComponent,
+    RoleManagementComponent,
+    ApplicationManagementComponent,
+    EntityPermissionsComponent
   ],
   templateUrl: './settings.component.html',
   styleUrls: ['./settings.component.scss']

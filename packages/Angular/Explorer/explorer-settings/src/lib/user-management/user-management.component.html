@@ -1,34 +1,22 @@
 <div class="user-management-container">
-  <!-- Header Section -->
-  <div class="management-header">
-    <div class="header-content">
-      <div class="header-info">
-        <h2 class="header-title">
-          <i class="fa-solid fa-users"></i>
-          User Management
-        </h2>
-        <p class="header-description">Manage user accounts, roles, and permissions</p>
-      </div>
-      
-      <div class="header-actions">
-        <button class="btn-secondary" (click)="refreshData()" [disabled]="isLoading">
-          <i class="fa-solid fa-refresh" [class.fa-spin]="isLoading"></i>
-          Refresh
-        </button>
-        <button class="btn-secondary" (click)="exportUsers()">
-          <i class="fa-solid fa-download"></i>
-          Export
-        </button>
-        <button class="btn-primary" (click)="createNewUser()">
-          <i class="fa-solid fa-plus"></i>
-          Add User
-        </button>
-      </div>
-    </div>
+  <!-- Action Buttons -->
+  <div class="action-buttons">
+    <button class="btn-secondary" (click)="refreshData()" [disabled]="isLoading">
+      <i class="fa-solid fa-refresh" [class.fa-spin]="isLoading"></i>
+      Refresh
+    </button>
+    <button class="btn-secondary" (click)="exportUsers()">
+      <i class="fa-solid fa-download"></i>
+      Export
+    </button>
+    <button class="btn-primary" (click)="createNewUser()">
+      <i class="fa-solid fa-plus"></i>
+      Add User
+    </button>
   </div>
 
   <!-- Stats Cards -->
-  <div class="stats-grid">
+  <div class="stats-grid" style="display: flex">
     <div class="stat-card">
       <div class="stat-icon stat-icon-total">
         <i class="fa-solid fa-users"></i>
@@ -65,7 +53,7 @@
       </div>
       <div class="stat-content">
         <div class="stat-value">{{ stats.adminUsers }}</div>
-        <div class="stat-label">Administrators</div>
+        <div class="stat-label">Owners</div>
       </div>
     </div>
   </div>
@@ -188,7 +176,7 @@
                 <th>Email</th>
                 <th>Type</th>
                 <th>Status</th>
-                <th>Last Login</th>
+                <th>Last Updated</th>
                 <th class="th-actions">Actions</th>
               </tr>
             </thead>
@@ -226,7 +214,7 @@
                   </td>
                   <td>
                     <span class="last-login">
-                      {{ user.LastLogin ? (user.LastLogin | date:'short') : 'Never' }}
+                      {{ user.__mj_UpdatedAt ? (user.__mj_UpdatedAt | date:'short') : 'Never' }}
                     </span>
                   </td>
                   <td class="td-actions" (click)="$event.stopPropagation()">
@@ -300,7 +288,7 @@
                 <div class="card-footer">
                   <div class="last-login">
                     <i class="fa-solid fa-clock"></i>
-                    Last login: {{ user.LastLogin ? (user.LastLogin | date:'short') : 'Never' }}
+                    Last updated: {{ user.__mj_UpdatedAt ? (user.__mj_UpdatedAt | date:'short') : 'Never' }}
                   </div>
                 </div>
               </div>
@@ -346,4 +334,4 @@
       </div>
     </div>
   }
-}
+</div>

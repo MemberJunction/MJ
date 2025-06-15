@@ -3,15 +3,11 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject, interval } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { DialogsModule } from '@progress/kendo-angular-dialog';
-import { InputsModule, CheckBoxModule } from '@progress/kendo-angular-inputs';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { LabelModule } from '@progress/kendo-angular-label';
 import { Metadata } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { SharedSettingsModule } from '../shared/shared-settings.module';
 
 /**
  * Angular component for managing SQL logging sessions in MemberJunction.
@@ -38,12 +34,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
   imports: [
     CommonModule,
     FormsModule,
-    ButtonsModule,
-    DialogsModule,
-    InputsModule,
-    DropDownsModule,
-    LabelModule,
-    CheckBoxModule
+    SharedSettingsModule
   ],
   templateUrl: './sql-logging.component.html',
   styleUrls: ['./sql-logging.component.scss']
@@ -624,6 +615,15 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
   getFileName(filePath: string): string {
     if (!filePath) return 'unknown';
     return filePath.split(/[\\\/]/).pop() || 'unknown';
+  }
+
+  /**
+   * Calculates the total number of SQL statements across all active sessions.
+   * 
+   * @returns Total statement count
+   */
+  getTotalStatementCount(): number {
+    return this.activeSessions.reduce((sum, session) => sum + (session.statementCount || 0), 0);
   }
 
   /**

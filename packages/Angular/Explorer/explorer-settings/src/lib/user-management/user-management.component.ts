@@ -6,7 +6,6 @@ import { takeUntil, debounceTime, distinctUntilChanged, switchMap, map } from 'r
 import { RunView } from '@memberjunction/core';
 import { UserEntity, RoleEntity } from '@memberjunction/core-entities';
 import { SharedSettingsModule } from '../shared/shared-settings.module';
-import { UserViewGridComponent } from '@memberjunction/ng-user-view-grid';
 
 interface UserStats {
   totalUsers: number;
@@ -27,14 +26,12 @@ interface FilterOptions {
   imports: [
     CommonModule,
     FormsModule,
-    SharedSettingsModule,
-    UserViewGridComponent
+    SharedSettingsModule
   ],
   templateUrl: './user-management.component.html',
   styleUrls: ['./user-management.component.scss']
 })
 export class UserManagementComponent implements OnInit, OnDestroy {
-  @ViewChild('userGrid') userGrid?: UserViewGridComponent;
   
   // State management
   public users: UserEntity[] = [];
@@ -49,7 +46,7 @@ export class UserManagementComponent implements OnInit, OnDestroy {
     totalUsers: 0,
     activeUsers: 0,
     inactiveUsers: 0,
-    adminUsers: 0
+    adminUsers: 0  // This will be based on roles, not Type
   };
   
   // Filters
@@ -86,7 +83,7 @@ export class UserManagementComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
   
-  private async loadInitialData(): Promise<void> {
+  public async loadInitialData(): Promise<void> {
     try {
       this.isLoading = true;
       this.error = null;
@@ -179,7 +176,7 @@ export class UserManagementComponent implements OnInit, OnDestroy {
       totalUsers: this.users.length,
       activeUsers: this.users.filter(u => u.IsActive).length,
       inactiveUsers: this.users.filter(u => !u.IsActive).length,
-      adminUsers: this.users.filter(u => u.Type === 'Administrator').length
+      adminUsers: this.users.filter(u => u.Type === 'Owner').length  // Using Owner as admin type
     };
   }
   
@@ -271,7 +268,7 @@ export class UserManagementComponent implements OnInit, OnDestroy {
   
   public getUserTypeIcon(user: UserEntity): string {
     switch (user.Type) {
-      case 'Administrator':
+      case 'Owner':
         return 'fa-shield-halved';
       case 'User':
         return 'fa-user';
