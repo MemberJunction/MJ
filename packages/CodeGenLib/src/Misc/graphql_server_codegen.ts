@@ -116,7 +116,7 @@ import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver
             AppContext, KeyValuePairInput, DeleteOptionsInput, GraphQLTimestamp as Timestamp,
             GetReadOnlyDataSource, GetReadWriteDataSource } from '@memberjunction/server';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
-import { Metadata, EntityPermissionType, CompositeKey } from '@memberjunction/core'
+import { Metadata, EntityPermissionType, CompositeKey, UserInfo } from '@memberjunction/core'
 
 import { MaxLength } from 'class-validator';
 ${
@@ -338,7 +338,7 @@ export class ${entity.BaseTableCodeName}Resolver${entity.CustomResolverAPI ? 'Ba
         this.CheckUserReadPermissions('${entity.Name}', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = \`SELECT * FROM [${this.schemaName(entity)}].[${entity.BaseView}] WHERE ${whereClause} \` + this.getRowLevelSecurityWhereClause('${entity.Name}', userPayload, EntityPermissionType.Read, 'AND');${auditAccessCode}
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('${entity.Name}', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -351,7 +351,7 @@ export class ${entity.BaseTableCodeName}Resolver${entity.CustomResolverAPI ? 'Ba
         this.CheckUserReadPermissions('${entity.Name}', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = \`SELECT * FROM [${this.schemaName(entity)}].[${entity.BaseView}]\` + this.getRowLevelSecurityWhereClause('${entity.Name}', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('${entity.Name}', rows);
         return result;
     }
@@ -564,7 +564,7 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
         this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = \`SELECT * FROM [${this.schemaName(re)}].[${r.RelatedEntityBaseView}]\ WHERE [${r.RelatedEntityJoinField}]=${quotes}\${${instanceName}.${filterFieldName}}${quotes} \` + this.getRowLevelSecurityWhereClause('${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('${r.RelatedEntity}', rows);
         return result;
     }
@@ -612,7 +612,7 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
         this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = \`SELECT * FROM [${this.schemaName(re)}].[${r.RelatedEntityBaseView}]\ WHERE [${re.FirstPrimaryKey.Name}] IN (SELECT [${r.JoinEntityInverseJoinField}] FROM [${this.schemaName(re)}].[${r.JoinView}] WHERE [${r.JoinEntityJoinField}]=${quotes}\${${instanceName}.${filterFieldName}}${quotes}) \` + this.getRowLevelSecurityWhereClause('${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('${r.RelatedEntity}', rows);
         return result;
     }

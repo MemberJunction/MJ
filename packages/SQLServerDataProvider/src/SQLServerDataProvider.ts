@@ -344,7 +344,7 @@ export class SQLServerDataProvider
             console.log(`Session ${session.id}: Has user filter but no contextUser provided - SKIPPING`);
             return false; // Don't log if filtering requested but no user context provided
           }
-          const matches = session.options.filterByUserId === contextUser.Email;
+          const matches = session.options.filterByUserId === contextUser.ID;
           console.log(`Session ${session.id} filter check:`, {
             filterByUserId: session.options.filterByUserId,
             contextUserEmail: contextUser.Email,
@@ -382,11 +382,12 @@ export class SQLServerDataProvider
     description?: string,
     isMutation: boolean = false,
     simpleSQLFallback?: string,
+    contextUser?: UserInfo,
   ): Promise<void> {
     // Get the current provider instance
     const provider = Metadata.Provider as SQLServerDataProvider;
     if (provider && provider._sqlLoggingSessions.size > 0) {
-      await provider._logSqlStatement(query, parameters, description, false, isMutation, simpleSQLFallback);
+      await provider._logSqlStatement(query, parameters, description, false, isMutation, simpleSQLFallback, contextUser);
     }
   }
 
@@ -401,11 +402,11 @@ export class SQLServerDataProvider
     const ReportID = params.ReportID;
     // run the sql and return the data
     const sqlReport = `SELECT ReportSQL FROM [${this.MJCoreSchemaName}].vwReports WHERE ID =${ReportID}`;
-    const reportInfo = await this.ExecuteSQL(sqlReport);
+    const reportInfo = await this.ExecuteSQL(sqlReport, undefined, undefined, contextUser);
     if (reportInfo && reportInfo.length > 0) {
       const start = new Date().getTime();
       const sql = reportInfo[0].ReportSQL;
-      const result = await this.ExecuteSQL(sql);
+      const result = await this.ExecuteSQL(sql, undefined, undefined, contextUser);
       const end = new Date().getTime();
       if (result)
         return {
@@ -447,11 +448,11 @@ export class SQLServerDataProvider
       }
 
       const sqlQuery = `SELECT ID, Name, SQL FROM [${this.MJCoreSchemaName}].vwQueries WHERE ${filter}`;
-      const queryInfo = await this.ExecuteSQL(sqlQuery);
+      const queryInfo = await this.ExecuteSQL(sqlQuery, undefined, undefined, contextUser);
       if (queryInfo && queryInfo.length > 0) {
         const start = new Date().getTime();
         const sql = queryInfo[0].SQL;
-        const result = await this.ExecuteSQL(sql);
+        const result = await this.ExecuteSQL(sql, undefined, undefined, contextUser);
         const end = new Date().getTime();
         if (result)
           return {
@@ -706,14 +707,14 @@ export class SQLServerDataProvider
         }
 
         // now we can run the viewSQL, but only do this if the ResultType !== 'count_only', otherwise we don't need to run the viewSQL
-        const retData = params.ResultType === 'count_only' ? [] : await this.ExecuteSQL(viewSQL);
+        const retData = params.ResultType === 'count_only' ? [] : await this.ExecuteSQL(viewSQL, undefined, undefined, contextUser);
 
         // finally, if we have a countSQL, we need to run that to get the row count
         // but only do that if the # of rows returned is equal to the max rows, otherwise we know we have all the rows
         // OR do that if we are doing a count_only
         let rowCount = null;
         if (countSQL && (params.ResultType === 'count_only' || retData.length === entityInfo.UserViewMaxRows)) {
-          const countResult = await this.ExecuteSQL(countSQL);
+          const countResult = await this.ExecuteSQL(countSQL, undefined, undefined, contextUser);
           if (countResult && countResult.length > 0) {
             rowCount = countResult[0].TotalRowCount;
           }
@@ -890,7 +891,7 @@ export class SQLServerDataProvider
             INSERT INTO @ViewIDList (ID) (SELECT ${entityInfo.FirstPrimaryKey.Name} FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE (${whereSQL}))
             EXEC [${this.MJCoreSchemaName}].spCreateUserViewRunWithDetail(${viewId},${user.Email}, @ViewIDLIst)
             `;
-    const runIDResult = await this.ExecuteSQL(sSQL);
+    const runIDResult = await this.ExecuteSQL(sSQL, undefined, undefined, user);
     const runID: string = runIDResult[0].UserViewRunID;
     const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE ${entityInfo.FirstPrimaryKey.Name} IN
                                     (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE UserViewRunID=${runID})
@@ -1073,10 +1074,10 @@ export class SQLServerDataProvider
     }
   }
 
-  public async GetRecordChanges(entityName: string, compositeKey: CompositeKey): Promise<RecordChange[]> {
+  public async GetRecordChanges(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): Promise<RecordChange[]> {
     try {
       const sSQL = `SELECT * FROM [${this.MJCoreSchemaName}].vwRecordChanges WHERE Entity='${entityName}' AND RecordID='${compositeKey.ToConcatenatedString()}' ORDER BY ChangedAt DESC`;
-      return this.ExecuteSQL(sSQL);
+      return this.ExecuteSQL(sSQL, undefined, undefined, contextUser);
     } catch (e) {
       LogError(e);
       throw e;
@@ -1702,7 +1703,7 @@ export class SQLServerDataProvider
                 isMutation: true, 
                 description: `Save ${entity.EntityInfo.Name}`,
                 simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined
-              });
+              }, user);
               result = await this.ProcessEntityRows(rawResult, entity.EntityInfo);
             }
 
@@ -1912,7 +1913,7 @@ export class SQLServerDataProvider
   ) {
     const sSQL = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true);
     if (sSQL) {
-      const result = await this.ExecuteSQL(sSQL);
+      const result = await this.ExecuteSQL(sSQL, undefined, undefined, user);
       return result;
     }
   }
@@ -2026,7 +2027,7 @@ export class SQLServerDataProvider
     }).join(' AND ');
 
     const sql = `SELECT * FROM [${entity.EntityInfo.SchemaName}].${entity.EntityInfo.BaseView} WHERE ${where}`;
-    const rawData = await this.ExecuteSQL(sql);
+    const rawData = await this.ExecuteSQL(sql, undefined, undefined, user);
     const d = await this.ProcessEntityRows(rawData, entity.EntityInfo);
     if (d && d.length > 0) {
       // got the record, now process the relationships if there are any
@@ -2069,7 +2070,7 @@ export class SQLServerDataProvider
                                         WHERE
                                             _jv.${relInfo.JoinEntityJoinField} = ${quotes}${ret[entity.FirstPrimaryKey.Name]}${quotes}`; // don't yet support composite foreign keys
 
-            const rawRelData = await this.ExecuteSQL(relSql);
+            const rawRelData = await this.ExecuteSQL(relSql, undefined, undefined, user);
             if (rawRelData && rawRelData.length > 0) {
               // Find the related entity info to process datetime fields correctly
               const relEntityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === relInfo.RelatedEntity.trim().toLowerCase());
@@ -2259,7 +2260,7 @@ export class SQLServerDataProvider
             isMutation: true, 
             description: `Delete ${entity.EntityInfo.Name}`,
             simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined
-          });
+          }, user);
         }
 
         if (d && d[0]) {
@@ -2318,7 +2319,7 @@ export class SQLServerDataProvider
                     WHERE
                         d.Name = @p0`;
 
-    const items = await this.ExecuteSQL(sSQL, [datasetName]);
+    const items = await this.ExecuteSQL(sSQL, [datasetName], undefined, contextUser);
     // now we have the dataset and the items, we need to get the update date from the items underlying entities
 
     if (items && items.length > 0) {
@@ -2452,7 +2453,7 @@ export class SQLServerDataProvider
     return `SELECT ${columns} FROM [${item.EntitySchemaName}].[${item.EntityBaseView}] ${item.WhereClause ? 'WHERE ' + item.WhereClause : ''}${filterSQL}`;
   }
 
-  protected async GetDatasetItem(item: any, itemFilters, datasetName): Promise<DatasetItemResultType> {
+  protected async GetDatasetItem(item: any, itemFilters, datasetName, contextUser: UserInfo): Promise<DatasetItemResultType> {
     const itemUpdatedAt = new Date(item.DatasetItemUpdatedAt);
     const datasetUpdatedAt = new Date(item.DatasetUpdatedAt);
     const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime()));
@@ -2471,7 +2472,7 @@ export class SQLServerDataProvider
       };
     }
 
-    const itemData = await this.ExecuteSQL(itemSQL);
+    const itemData = await this.ExecuteSQL(itemSQL, undefined, undefined, contextUser);
 
     // get the latest update date
     let latestUpdateDate = new Date(1900, 1, 1);
@@ -2650,9 +2651,9 @@ export class SQLServerDataProvider
     }
   }
 
-  protected async GetApplicationMetadata(): Promise<ApplicationInfo[]> {
-    const apps = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwApplications`, null);
-    const appEntities = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwApplicationEntities ORDER BY ApplicationName`);
+  protected async GetApplicationMetadata(contextUser: UserInfo): Promise<ApplicationInfo[]> {
+    const apps = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwApplications`, null, undefined, contextUser);
+    const appEntities = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwApplicationEntities ORDER BY ApplicationName`, undefined, undefined, contextUser);
     const ret: ApplicationInfo[] = [];
     for (let i = 0; i < apps.length; i++) {
       ret.push(
@@ -2665,8 +2666,8 @@ export class SQLServerDataProvider
     return ret;
   }
 
-  protected async GetAuditLogTypeMetadata(): Promise<AuditLogTypeInfo[]> {
-    const alts = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwAuditLogTypes`, null);
+  protected async GetAuditLogTypeMetadata(contextUser: UserInfo): Promise<AuditLogTypeInfo[]> {
+    const alts = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwAuditLogTypes`, null, undefined, contextUser);
     const ret: AuditLogTypeInfo[] = [];
     for (let i = 0; i < alts.length; i++) {
       const alt = new AuditLogTypeInfo(alts[i]);
@@ -2675,9 +2676,9 @@ export class SQLServerDataProvider
     return ret;
   }
 
-  protected async GetUserMetadata(): Promise<UserInfo[]> {
-    const users = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwUsers`, null);
-    const userRoles = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwUserRoles ORDER BY UserID`);
+  protected async GetUserMetadata(contextUser: UserInfo): Promise<UserInfo[]> {
+    const users = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwUsers`, null, undefined, contextUser);
+    const userRoles = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwUserRoles ORDER BY UserID`, undefined, undefined, contextUser);
     const ret: UserInfo[] = [];
     for (let i = 0; i < users.length; i++) {
       ret.push(
@@ -2690,9 +2691,9 @@ export class SQLServerDataProvider
     return ret;
   }
 
-  protected async GetAuthorizationMetadata(): Promise<AuthorizationInfo[]> {
-    const auths = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwAuthorizations`, null);
-    const authRoles = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwAuthorizationRoles ORDER BY AuthorizationName`);
+  protected async GetAuthorizationMetadata(contextUser: UserInfo): Promise<AuthorizationInfo[]> {
+    const auths = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwAuthorizations`, null, undefined, contextUser);
+    const authRoles = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwAuthorizationRoles ORDER BY AuthorizationName`, undefined, undefined, contextUser);
     const ret: AuthorizationInfo[] = [];
     for (let i = 0; i < auths.length; i++) {
       ret.push(
@@ -2864,7 +2865,7 @@ export class SQLServerDataProvider
    * @param parameters - Optional parameters for the query
    * @returns Promise<any[]> - Array of results (empty array if no results)
    */
-  public static async ExecuteSQLWithPool(pool: sql.ConnectionPool, query: string, parameters?: any): Promise<any[]> {
+  public static async ExecuteSQLWithPool(pool: sql.ConnectionPool, query: string, parameters?: any, contextUser?: UserInfo): Promise<any[]> {
     try {
       const request = new sql.Request(pool);
 
@@ -2886,9 +2887,14 @@ export class SQLServerDataProvider
         }
       }
 
-      const result = await request.query(query);
+      const logPromise = this.LogSQLStatement(query, parameters, undefined, false, undefined, contextUser);
+      const resultPromise = request.query(query);
+
+      // await the completion of both the SQL execution and logging
+      const results = await Promise.all([resultPromise, logPromise]);
+
       // Always return array for consistency
-      return result.recordset || [];
+      return results[0].recordset || [];
     } catch (e) {
       LogError(e);
       throw e;
@@ -2910,6 +2916,7 @@ export class SQLServerDataProvider
     connectionSource: sql.ConnectionPool | sql.Transaction | sql.Request,
     queries: string[],
     parameters?: any[][],
+    contextUser?: UserInfo,
   ): Promise<any[][]> {
     try {
       let request: sql.Request;
@@ -2959,8 +2966,13 @@ export class SQLServerDataProvider
       });
 
       // Execute the batch SQL
-      const result = await request.query(batchSQL);
+      const logPromise = SQLServerDataProvider.LogSQLStatement(batchSQL, undefined, undefined, false, undefined, contextUser);
+      const resultPromise = request.query(batchSQL);
 
+      // Wait for both execution and logging to complete
+      const results = await Promise.all([resultPromise, logPromise]);
+      const result = results[0];
+      
       // Return array of recordsets - one for each query
       // Handle both single and multiple recordsets
       if (result.recordsets && Array.isArray(result.recordsets)) {

@@ -8,17 +8,17 @@ import { UserViewEntity, UserViewEntityExtended } from '@memberjunction/core-ent
 @Resolver(UserView_)
 export class UserViewResolver extends UserViewResolverBase {
   @Query(() => [UserView_])
-  async UserViewsByUserID(@Arg('UserID', () => Int) UserID: number, @Ctx() { dataSource }: AppContext) {
-    return await this.findBy(dataSource, 'User Views', { UserID });
+  async UserViewsByUserID(@Arg('UserID', () => Int) UserID: number, @Ctx() { dataSource, userPayload }: AppContext) {
+    return await this.findBy(dataSource, 'User Views', { UserID }, userPayload.userRecord);
   }
 
   @Query(() => [UserView_])
   async DefaultViewByUserAndEntity(
     @Arg('UserID', () => Int) UserID: number,
     @Arg('EntityID', () => Int) EntityID: number,
-    @Ctx() { dataSource }: AppContext
+    @Ctx() { dataSource, userPayload }: AppContext
   ) {
-    return await this.findBy(dataSource, 'User Views', { UserID, EntityID, IsDefault: true });
+    return await this.findBy(dataSource, 'User Views', { UserID, EntityID, IsDefault: true }, userPayload.userRecord);
   }
 
   @Query(() => [UserView_])
@@ -27,7 +27,7 @@ export class UserViewResolver extends UserViewResolverBase {
       UserID: await this.getCurrentUserID(context),
       EntityID,
       IsDefault: true,
-    });
+    }, context.userPayload.userRecord);
   }
 
   protected async getCurrentUserID(context: AppContext): Promise<number> {
@@ -38,7 +38,7 @@ export class UserViewResolver extends UserViewResolverBase {
 
   @Query(() => [UserView_])
   async CurrentUserUserViewsByEntityID(@Arg('EntityID', () => Int) EntityID: number, @Ctx() context: AppContext) {
-    return this.findBy(context.dataSource, 'User Views', { UserID: await this.getCurrentUserID(context), EntityID });
+    return this.findBy(context.dataSource, 'User Views', { UserID: await this.getCurrentUserID(context), EntityID}, context.userPayload.userRecord);
   }
 
   @Query(() => [UserView_])

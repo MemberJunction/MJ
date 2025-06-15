@@ -69,17 +69,17 @@ export class UserFavoriteResult {
 @Resolver(UserFavorite_)
 export class UserFavoriteResolver extends UserFavoriteResolverBase {
   @Query(() => [UserFavorite_])
-  async UserFavoritesByUserID(@Arg('UserID', () => Int) UserID: number, @Ctx() { dataSource }: AppContext) {
-    return await this.findBy(dataSource, 'User Favorites', { UserID });
+  async UserFavoritesByUserID(@Arg('UserID', () => Int) UserID: number, @Ctx() { dataSource, userPayload }: AppContext) {
+    return await this.findBy(dataSource, 'User Favorites', { UserID }, userPayload.userRecord);
   }
 
   @Query(() => [UserFavorite_])
-  async UserFavoriteSearchByParams(@Arg('params', () => Int) params: UserFavoriteSearchParams, @Ctx() { dataSource }: AppContext) {
-    return await this.findBy(dataSource, 'User Favorites', params);
+  async UserFavoriteSearchByParams(@Arg('params', () => Int) params: UserFavoriteSearchParams, @Ctx() { dataSource, userPayload }: AppContext) {
+    return await this.findBy(dataSource, 'User Favorites', params, userPayload.userRecord);
   }
 
   @Query(() => UserFavoriteResult)
-  async GetRecordFavoriteStatus(@Arg('params', () => UserFavoriteSearchParams) params: UserFavoriteSearchParams, @Ctx() {}: AppContext) {
+  async GetRecordFavoriteStatus(@Arg('params', () => UserFavoriteSearchParams) params: UserFavoriteSearchParams, @Ctx() {userPayload}: AppContext) {
     const md = new Metadata();
     const pk = new CompositeKey(params.CompositeKey.KeyValuePairs);
 
@@ -89,7 +89,7 @@ export class UserFavoriteResolver extends UserFavoriteResolverBase {
         EntityID: params.EntityID,
         UserID: params.UserID,
         CompositeKey: pk,
-        IsFavorite: await md.GetRecordFavoriteStatus(params.UserID, e.Name, pk),
+        IsFavorite: await md.GetRecordFavoriteStatus(params.UserID, e.Name, pk, userPayload.userRecord),
         Success: true,
       };
     else throw new Error(`Entity ID:${params.EntityID} not found`);

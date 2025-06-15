@@ -57,7 +57,7 @@ export class FileResolver extends FileResolverBase {
     fileEntity.CheckPermissions(EntityPermissionType.Create, true);
 
     // Check to see if there's already an object with that name
-    const [sameName] = await this.findBy(context.dataSource, 'Files', { Name: input.Name, ProviderID: input.ProviderID });
+    const [sameName] = await this.findBy(context.dataSource, 'Files', { Name: input.Name, ProviderID: input.ProviderID }, context.userPayload.userRecord);
     const NameExists = Boolean(sameName);
 
     const fileRecord = (await super.CreateFile({ ...input, Status: 'Pending' }, context, pubSub)) as File_;

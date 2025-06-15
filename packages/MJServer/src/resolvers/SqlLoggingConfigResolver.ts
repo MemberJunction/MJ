@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { loadConfig } from '../config.js';
+import { ResolverBase } from '../generic/ResolverBase.js';
 
 /**
  * Configuration options for SQL logging sessions.
@@ -196,7 +197,7 @@ export class SqlLoggingConfig {
  * ```
  */
 @Resolver()
-export class SqlLoggingConfigResolver {
+export class SqlLoggingConfigResolver extends ResolverBase {
   /** Default prefix for auto-generated SQL log filenames */
   private static readonly LOG_FILE_PREFIX = 'sql-log-';
   
@@ -419,11 +420,12 @@ export class SqlLoggingConfigResolver {
 
     // Merge options with defaults
     const defaultOptions = config.sqlLogging.defaultOptions || {};
+    const userInfo = input.filterToCurrentUser ? this.GetUserFromPayload(context.userPayload) : undefined;
     const sessionOptions = {
       ...defaultOptions,
       ...input.options,
       sessionName: input.options?.sessionName || `Session started by ${context.userPayload.email}`,
-      filterByUserId: input.filterToCurrentUser ? context.userPayload.email : input.options?.filterByUserId
+      filterByUserId: input.filterToCurrentUser ? userInfo?.ID : input.options?.filterByUserId
     };
 
     // Create the logging session
