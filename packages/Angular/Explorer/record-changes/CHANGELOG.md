@@ -1,5 +1,32 @@
 # Change Log - @memberjunction/ng-record-changes
 
+## 2.50.0
+
+### Patch Changes
+
+- @memberjunction/ng-compare-records@2.50.0
+- @memberjunction/ng-container-directives@2.50.0
+- @memberjunction/ng-notifications@2.50.0
+- @memberjunction/core@2.50.0
+- @memberjunction/global@2.50.0
+
+## 2.49.0
+
+### Minor Changes
+
+- 62cf1b6: Removed TypeORM which resulted in changes to nearly every package
+
+### Patch Changes
+
+- Updated dependencies [cc52ced]
+- Updated dependencies [db17ed7]
+- Updated dependencies [62cf1b6]
+  - @memberjunction/core@2.49.0
+  - @memberjunction/global@2.49.0
+  - @memberjunction/ng-compare-records@2.49.0
+  - @memberjunction/ng-container-directives@2.49.0
+  - @memberjunction/ng-notifications@2.49.0
+
 ## 2.48.0
 
 ### Patch Changes

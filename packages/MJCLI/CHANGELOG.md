@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/cli
 
+## 2.50.0
+
+### Patch Changes
+
+- @memberjunction/codegen-lib@2.50.0
+
+## 2.49.0
+
+### Minor Changes
+
+- 62cf1b6: Removed TypeORM which resulted in changes to nearly every package
+
+### Patch Changes
+
+- Updated dependencies [72cbb2c]
+- Updated dependencies [62cf1b6]
+  - @memberjunction/codegen-lib@2.49.0
+
 ## 2.48.0
 
 ### Patch Changes
