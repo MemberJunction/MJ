@@ -95,252 +95,6 @@
   },
   {
     "fields": {
-      "Name": "Copywriter Agent",
-      "Description": "Creative wordsmith specializing in crafting compelling initial drafts of marketing content with persuasive messaging.",
-      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
-      "Status": "Active",
-      "ExecutionOrder": 1,
-      "ExposeAsAction": false
-    },
-    "relatedEntities": {
-      "MJ: AI Agent Prompts": [
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "PromptID": "@lookup:AI Prompts.Name=Copywriter Agent - Main Prompt",
-            "ExecutionOrder": 0,
-            "Status": "Active"
-          }
-        }
-      ],
-      "AI Agent Actions": [
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Web Search",
-            "Status": "Active"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Web Page Content",
-            "Status": "Active"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Census Data Lookup",
-            "Status": "Active"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Get Weather",
-            "Status": "Active"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Get Stock Price",
-            "Status": "Active"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Text Analyzer",
-            "Status": "Active"
-          }
-        }
-      ]
-    }
-  },
-  {
-    "fields": {
-      "Name": "SEO AIEO Specialist Agent",
-      "Description": "Expert in optimizing content for both traditional search engines and AI-powered discovery platforms.",
-      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
-      "Status": "Active",
-      "ExecutionOrder": 1,
-      "ExposeAsAction": false
-    },
-    "relatedEntities": {
-      "MJ: AI Agent Prompts": [
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "PromptID": "@lookup:AI Prompts.Name=SEO AIEO Specialist Agent - Main Prompt",
-            "ExecutionOrder": 0,
-            "Status": "Active"
-          }
-        }
-      ],
-      "AI Agent Actions": [
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=URL Metadata Extractor",
-            "Status": "Active"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Web Search",
-            "Status": "Active"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Text Analyzer",
-            "Status": "Active"
-          }
-        }
-      ]
-    }
-  },
-  {
-    "fields": {
-      "Name": "Editor Agent",
-      "Description": "Meticulous content professional ensuring quality, accuracy, and effectiveness of all marketing materials.",
-      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
-      "Status": "Active",
-      "ExecutionOrder": 1,
-      "ExposeAsAction": false
-    },
-    "relatedEntities": {
-      "MJ: AI Agent Prompts": [
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "PromptID": "@lookup:AI Prompts.Name=Editor Agent - Main Prompt",
-            "ExecutionOrder": 0,
-            "Status": "Active"
-          }
-        }
-      ],
-      "AI Agent Actions": [
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Text Analyzer",
-            "Status": "Active"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=URL Link Validator",
-            "Status": "Active"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Web Search",
-            "Status": "Active"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=URL Metadata Extractor",
-            "Status": "Active"
-          }
-        }
-      ]
-    }
-  },
-  {
-    "fields": {
-      "Name": "Brand Guardian Agent",
-      "Description": "Final checkpoint ensuring all marketing content aligns with brand values, voice, and visual identity.",
-      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
-      "Status": "Active",
-      "ExecutionOrder": 1,
-      "ExposeAsAction": false
-    },
-    "relatedEntities": {
-      "MJ: AI Agent Prompts": [
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "PromptID": "@lookup:AI Prompts.Name=Brand Guardian Agent - Main Prompt",
-            "ExecutionOrder": 0,
-            "Status": "Active"
-          }
-        }
-      ],
-      "AI Agent Actions": [
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Text Analyzer",
-            "Status": "Active"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Color Converter",
-            "Status": "Active"
-          }
-        }
-      ]
-    }
-  },
-  {
-    "fields": {
-      "Name": "Publisher Agent",
-      "Description": "Handles final content distribution with platform-specific optimization (publishing tools under development).",
-      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
-      "Status": "Active",
-      "ExecutionOrder": 1,
-      "ExposeAsAction": false
-    },
-    "relatedEntities": {
-      "MJ: AI Agent Prompts": [
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "PromptID": "@lookup:AI Prompts.Name=Publisher Agent - Main Prompt",
-            "ExecutionOrder": 0,
-            "Status": "Active"
-          }
-        }
-      ],
-      "AI Agent Actions": [
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Send Single Message",
-            "Status": "Active"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=QR Code",
-            "Status": "Active"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Autotag and Vectorize Content",
-            "Status": "Active"
-          }
-        }
-      ]
-    }
-  },
-  {
-    "fields": {
       "Name": "Marketing Agent",
       "Description": "Strategic orchestrator for marketing content creation workflows, managing sub-agents to deliver high-quality marketing materials.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
@@ -392,37 +146,248 @@
       "AI Agents": [
         {
           "fields": {
-            "ParentID": "@parent:ID",
-            "AgentID": "@lookup:AI Agents.Name=Copywriter Agent",
-            "Status": "Active"
+            "Name": "Copywriter Agent",
+            "Description": "Creative wordsmith specializing in crafting compelling initial drafts of marketing content with persuasive messaging.",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExecutionOrder": 1,
+            "ExposeAsAction": false
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:AI Prompts.Name=Copywriter Agent - Main Prompt",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                }
+              }
+            ],
+            "AI Agent Actions": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Web Search",
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Web Page Content",
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Census Data Lookup",
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Get Weather",
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Get Stock Price",
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Text Analyzer",
+                  "Status": "Active"
+                }
+              }
+            ]
           }
         },
         {
           "fields": {
-            "ParentID": "@parent:ID",
-            "AgentID": "@lookup:AI Agents.Name=SEO AIEO Specialist Agent",
-            "Status": "Active"
+            "Name": "SEO AIEO Specialist Agent",
+            "Description": "Expert in optimizing content for both traditional search engines and AI-powered discovery platforms.",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExecutionOrder": 1,
+            "ExposeAsAction": false
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:AI Prompts.Name=SEO AIEO Specialist Agent - Main Prompt",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                }
+              }
+            ],
+            "AI Agent Actions": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=URL Metadata Extractor",
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Web Search",
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Text Analyzer",
+                  "Status": "Active"
+                }
+              }
+            ]
           }
         },
         {
           "fields": {
-            "ParentID": "@parent:ID",
-            "AgentID": "@lookup:AI Agents.Name=Editor Agent",
-            "Status": "Active"
+            "Name": "Editor Agent",
+            "Description": "Meticulous content professional ensuring quality, accuracy, and effectiveness of all marketing materials.",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExecutionOrder": 1,
+            "ExposeAsAction": false
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:AI Prompts.Name=Editor Agent - Main Prompt",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                }
+              }
+            ],
+            "AI Agent Actions": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Text Analyzer",
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=URL Link Validator",
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Web Search",
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=URL Metadata Extractor",
+                  "Status": "Active"
+                }
+              }
+            ]
           }
         },
         {
           "fields": {
-            "ParentID": "@parent:ID",
-            "AgentID": "@lookup:AI Agents.Name=Brand Guardian Agent",
-            "Status": "Active"
+            "Name": "Brand Guardian Agent",
+            "Description": "Final checkpoint ensuring all marketing content aligns with brand values, voice, and visual identity.",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExecutionOrder": 1,
+            "ExposeAsAction": false
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:AI Prompts.Name=Brand Guardian Agent - Main Prompt",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                }
+              }
+            ],
+            "AI Agent Actions": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Text Analyzer",
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Color Converter",
+                  "Status": "Active"
+                }
+              }
+            ]
           }
         },
         {
           "fields": {
-            "ParentID": "@parent:ID",
-            "AgentID": "@lookup:AI Agents.Name=Publisher Agent",
-            "Status": "Active"
+            "Name": "Publisher Agent",
+            "Description": "Handles final content distribution with platform-specific optimization (publishing tools under development).",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExecutionOrder": 1,
+            "ExposeAsAction": false
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:AI Prompts.Name=Publisher Agent - Main Prompt",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                }
+              }
+            ],
+            "AI Agent Actions": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Send Single Message",
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=QR Code",
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Autotag and Vectorize Content",
+                  "Status": "Active"
+                }
+              }
+            ]
           }
         }
       ]
