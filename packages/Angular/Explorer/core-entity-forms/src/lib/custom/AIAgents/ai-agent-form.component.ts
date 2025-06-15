@@ -1,8 +1,8 @@
 import { Component, OnInit } from '@angular/core';
-import { AIAgentEntity } from '@memberjunction/core-entities';
+import { ActionEntity, AIAgentActionEntity, AIAgentEntity, AIAgentLearningCycleEntity, AIAgentNoteEntity, AIAgentPromptEntity, AIAgentRunEntity, AIPromptEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { Metadata, RunView } from '@memberjunction/core';
+import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIAgentFormComponent } from '../../generated/Entities/AIAgent/aiagent.form.component';
 
@@ -71,26 +71,23 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     
     // === Related Entity Data for Display ===
     /** Array of sub-agent entities for card display */
-    public subAgents: any[] = [];
+    public subAgents: AIAgentEntity[] = [];
     
     /** Array of agent prompt entities for card display */
-    public agentPrompts: any[] = [];
+    public agentPrompts: AIPromptEntityExtended[] = [];
     
     /** Array of agent action entities for card display */
-    public agentActions: any[] = [];
+    public agentActions: ActionEntity[] = [];
     
     
     /** Array of learning cycle entities for display */
-    public learningCycles: any[] = [];
+    public learningCycles: AIAgentLearningCycleEntity[] = [];
     
     /** Array of agent note entities for display */
-    public agentNotes: any[] = [];
+    public agentNotes: AIAgentNoteEntity[] = [];
     
     /** Array of recent execution records for history display */
-    public recentExecutions: any[] = [];
-    
-    /** MemberJunction metadata instance for entity operations */
-    private _metadata = new Metadata();
+    public recentExecutions: AIAgentRunEntity[] = [];
 
     /**
      * Component initialization. Calls parent initialization and loads related entity data
@@ -117,8 +114,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             const rv = new RunView();
             
             // Load sub-agents with data
-            console.log('📊 Loading sub-agents...');
-            const subAgentResult = await rv.RunView<any>({
+            const subAgentResult = await rv.RunView<AIAgentEntity>({
                 EntityName: 'AI Agents',
                 ExtraFilter: `ParentID='${this.record.ID}'`,
                 OrderBy: 'Name ASC',
@@ -126,146 +122,29 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             });
             this.subAgents = subAgentResult.Results || [];
             this.subAgentCount = subAgentResult.TotalRowCount || 0;
-            console.log('📊 Sub-agents loaded:', this.subAgentCount, 'items');
-            
-            // Load prompts with data - try both possible entity names
-            console.log('💬 Loading prompts with entity name: "MJ: AI Agent Prompts"');
-            const promptResult = await rv.RunView<any>({
-                EntityName: 'MJ: AI Agent Prompts',
-                ExtraFilter: `AgentID='${this.record.ID}'`,
-                ResultType: 'entity_object'
-            });
-            console.log('💬 Prompt query result:', {
-                TotalRowCount: promptResult.TotalRowCount,
-                ResultsLength: promptResult.Results?.length,
-                Results: promptResult.Results
+
+            const promptResult = await rv.RunView<AIPromptEntityExtended>({
+                EntityName: 'AI Prompts',
+                ExtraFilter: `ID IN (SELECT PromptID FROM __mj.vwAIAgentPrompts WHERE AgentID='${this.record.ID}')` 
             });
             
             this.agentPrompts = promptResult.Results || [];
             this.promptCount = promptResult.TotalRowCount || 0;
-            
-            // If no results, try alternative entity name
-            if (this.promptCount === 0) {
-                console.log('💬 Trying alternative entity name: "AI Agent Prompts"');
-                const promptResult2 = await rv.RunView<any>({
-                    EntityName: 'MJ: AI Agent Prompts',
-                    ExtraFilter: `AgentID='${this.record.ID}'`,
-                    ResultType: 'entity_object'
-                });
-                console.log('💬 Alternative prompt query result:', {
-                    TotalRowCount: promptResult2.TotalRowCount,
-                    ResultsLength: promptResult2.Results?.length,
-                    Results: promptResult2.Results
-                });
-                
-                if (promptResult2.TotalRowCount > 0) {
-                    this.agentPrompts = promptResult2.Results || [];
-                    this.promptCount = promptResult2.TotalRowCount || 0;
-                }
-            }
-            
-            console.log('💬 Final prompts count:', this.promptCount);
-            
-            // Load actions with data - try different entity names
-            console.log('⚡ Loading actions with entity name: "AI Agent Actions"...');
-            let actionResult = await rv.RunView<any>({
-                EntityName: 'AI Agent Actions',
-                ExtraFilter: `AgentID='${this.record.ID}'`,
+ 
+            const actionResult = await rv.RunView<ActionEntity>({
+                EntityName: 'Actions',
+                ExtraFilter: `ID IN (SELECT ActionID FROM __mj.vwAIAgentActions WHERE AgentID='${this.record.ID}')`,
                 OrderBy: 'Name ASC',
                 ResultType: 'entity_object'
-            });
-            console.log('⚡ Action query result:', {
-                EntityName: 'AI Agent Actions',
-                TotalRowCount: actionResult.TotalRowCount,
-                ResultsLength: actionResult.Results?.length,
-                Results: actionResult.Results
             });
             
             this.agentActions = actionResult.Results || [];
             this.actionCount = actionResult.TotalRowCount || 0;
             
-            // If no results, try alternative entity names
-            if (this.actionCount === 0) {
-                console.log('⚡ Trying alternative entity name: "AIAgentActions"...');
-                try {
-                    actionResult = await rv.RunView<any>({
-                        EntityName: 'AIAgentActions',
-                        ExtraFilter: `AgentID='${this.record.ID}'`,
-                        OrderBy: 'Name ASC',
-                        ResultType: 'entity_object'
-                    });
-                    console.log('⚡ Alternative action query result:', {
-                        EntityName: 'AIAgentActions',
-                        TotalRowCount: actionResult.TotalRowCount,
-                        ResultsLength: actionResult.Results?.length
-                    });
-                    
-                    if (actionResult.TotalRowCount > 0) {
-                        this.agentActions = actionResult.Results || [];
-                        this.actionCount = actionResult.TotalRowCount || 0;
-                    }
-                } catch (e) {
-                    console.log('⚡ EntityName "AIAgentActions" not found, trying "Agent Actions"...');
-                    try {
-                        actionResult = await rv.RunView<any>({
-                            EntityName: 'Agent Actions',
-                            ExtraFilter: `AgentID='${this.record.ID}'`,
-                            OrderBy: 'Name ASC',
-                            ResultType: 'entity_object'
-                        });
-                        console.log('⚡ Agent Actions query result:', {
-                            EntityName: 'Agent Actions',
-                            TotalRowCount: actionResult.TotalRowCount,
-                            ResultsLength: actionResult.Results?.length
-                        });
-                        
-                        if (actionResult.TotalRowCount > 0) {
-                            this.agentActions = actionResult.Results || [];
-                            this.actionCount = actionResult.TotalRowCount || 0;
-                        }
-                    } catch (e2) {
-                        console.log('⚡ All action entity names failed, checking available entities...');
-                        // Let's try to get a list of all available entities
-                        try {
-                            const entityListResult = await rv.RunView<any>({
-                                EntityName: 'Entities',
-                                ExtraFilter: `Name LIKE '%Action%'`,
-                                ResultType: 'entity_object'
-                            });
-                            console.log('📋 Available Action-related entities:', entityListResult.Results?.map(e => e.Name));
-                            
-                            // Try one more common pattern
-                            if (entityListResult.Results && entityListResult.Results.length > 0) {
-                                const firstActionEntity = entityListResult.Results[0];
-                                console.log('🔍 Trying first Action entity:', firstActionEntity.Name);
-                                try {
-                                    const testResult = await rv.RunView<any>({
-                                        EntityName: firstActionEntity.Name,
-                                        ExtraFilter: `AgentID='${this.record.ID}'`,
-                                        OrderBy: 'Name ASC',
-                                        ResultType: 'entity_object'
-                                    });
-                                    if (testResult.TotalRowCount > 0) {
-                                        this.agentActions = testResult.Results || [];
-                                        this.actionCount = testResult.TotalRowCount || 0;
-                                        console.log('✅ Successfully loaded actions using entity:', firstActionEntity.Name);
-                                    }
-                                } catch (e4) {
-                                    console.log('❌ Failed to query using entity:', firstActionEntity.Name);
-                                }
-                            }
-                        } catch (e3) {
-                            console.log('❌ Could not query available entities');
-                        }
-                    }
-                }
-            }
-            
             console.log('⚡ Final actions count:', this.actionCount, 'items');
             
-            
             // Load learning cycles with data
-            const learningResult = await rv.RunView<any>({
+            const learningResult = await rv.RunView<AIAgentLearningCycleEntity>({
                 EntityName: 'AI Agent Learning Cycles',
                 ExtraFilter: `AgentID='${this.record.ID}'`,
                 OrderBy: 'StartedAt DESC',
@@ -275,7 +154,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             this.learningCycleCount = learningResult.TotalRowCount || 0;
             
             // Load notes with data
-            const noteResult = await rv.RunView<any>({
+            const noteResult = await rv.RunView<AIAgentNoteEntity>({
                 EntityName: 'AI Agent Notes',
                 ExtraFilter: `AgentID='${this.record.ID}'`,
                 ResultType: 'entity_object'
@@ -284,7 +163,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             this.noteCount = noteResult.TotalRowCount || 0;
             
             // Load recent execution history
-            const historyResult = await rv.RunView<any>({
+            const historyResult = await rv.RunView<AIAgentRunEntity>({
                 EntityName: 'MJ: AI Agent Runs',
                 ExtraFilter: `AgentID='${this.record.ID}'`,
                 OrderBy: '__mj_CreatedAt DESC',
@@ -468,6 +347,13 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         }
     }
 
+    public formatExecutionTimeFromDates(startDate: Date, endDate: Date): string {
+        if (!startDate || !endDate) return 'N/A';
+        
+        const milliseconds = endDate.getTime() - startDate.getTime();
+        return this.formatExecutionTime(milliseconds);
+    }
+
     /**
      * Formats execution time
      */
@@ -507,13 +393,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * Navigates to a related entity
      */
     public navigateToEntity(entityName: string, recordId: string) {
-        // This would emit an event to navigate to the entity
-        // For now, just show a notification
-        MJNotificationService.Instance.CreateSimpleNotification(
-            `Opening ${entityName} record...`,
-            'info',
-            2000
-        );
+        this.sharedService.OpenEntityRecord(entityName, CompositeKey.FromID(recordId));
     }
 
     /**

@@ -115,20 +115,7 @@
                                 <kendo-button themeColor="primary" size="large"
                                             (click)="openTestHarness()"
                                             title="Open AI Prompt Test Harness">
-                                    <i class="fa-solid fa-flask"></i> Test Harness
-                                </kendo-button>
-                            }
-                            
-                            @if (record.ID && canExecute) {
-                                <kendo-button themeColor="info" size="large"
-                                            (click)="executeAIPrompt()"
-                                            title="Execute this AI prompt (legacy)">
-                                    <i class="fa-solid fa-play"></i> Execute
-                                </kendo-button>
-                            } @else if (record.ID && !canExecute) {
-                                <kendo-button themeColor="info" size="large" [disabled]="true"
-                                            title="Prompt must be Active and have a Template to execute">
-                                    <i class="fa-solid fa-exclamation-triangle"></i> Cannot Execute
+                                    <i class="fa-solid fa-flask"></i> Test
                                 </kendo-button>
                             }
                         </div>

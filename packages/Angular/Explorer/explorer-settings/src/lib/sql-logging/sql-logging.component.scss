@@ -1,681 +1,458 @@
-// =====================================================
-// SQL Logging Component - Professional Dashboard Design
-// Inspired by AI Dashboard - Modern, Clean, Powerful
-// Scoped for ViewEncapsulation.None
-// =====================================================
-
-@import '../shared/styles/shared-settings';
-
-// Scope all styles to the component with ViewEncapsulation.None
-mj-sql-logging {
+// Basic styles for SQL Logging Component
+:host {
   display: block;
   width: 100%;
   height: 100%;
+  padding: 20px;
+  background-color: #f8f9fa;
+  box-sizing: border-box;
+}
 
-  .sql-logging-container {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    gap: $space-lg;
-    overflow: hidden;
-  }
+.sql-logging-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
 
-  // =====================================================
-  // DASHBOARD HEADER - Hero section with status
-  // =====================================================
+// Header section
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e0e0e0;
+  background-color: #ffffff;
 
-  .dashboard-header {
-    @include dashboard-header;
-    margin-bottom: $space-md;
-    
-    .header-info {
-      h2 {
-        color: $text-primary;
-        font-size: $font-size-xxl;
-        font-weight: $font-weight-semibold;
-        margin: 0;
-      }
-      
-      .info-badge {
-        @include badge-info;
-        font-size: $font-size-xs;
-        font-weight: $font-weight-semibold;
-        animation: pulse 2s infinite;
-      }
-    }
-    
-    .header-controls {
-      gap: $space-sm;
-    }
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
-  }
-
-  // =====================================================
-  // STATUS BAR - Live system status
-  // =====================================================
-
-  .status-bar {
-    @include status-bar;
-    
-    .status-item {
-      .status-label {
-        color: $text-secondary;
-        font-weight: $font-weight-medium;
-      }
-      
-      .status-value {
-        color: $text-primary;
-        font-weight: $font-weight-semibold;
-        
-        &.text-success {
-          color: $success-green;
-        }
-        
-        &.text-danger {
-          color: $error-red;
-        }
-      }
-    }
-  }
-
-  // =====================================================
-  // DASHBOARD CONTENT - Main container
-  // =====================================================
-
-  .dashboard-content {
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-  }
-
-  // =====================================================
-  // EMPTY STATES - Professional messaging
-  // =====================================================
-
-  .empty-state {
-    @include flex-center;
-    flex-direction: column;
-    gap: $space-lg;
-    padding: $space-xxl;
-    text-align: center;
-    flex: 1;
-    
-    i {
-      font-size: 64px;
-      color: $text-muted;
-      margin-bottom: $space-md;
-    }
-    
-    h3 {
+  .header-info {
+    h2 {
       margin: 0;
-      font-size: $font-size-xl;
-      font-weight: $font-weight-medium;
-      color: $text-primary;
+      font-size: 24px;
+      font-weight: 600;
+      color: #333;
     }
-    
-    p {
-      margin: 0;
-      font-size: $font-size-md;
-      color: $text-secondary;
-      max-width: 500px;
-      line-height: $line-height-relaxed;
-    }
-    
-    .info-box {
-      @include card-elevated;
-      padding: $space-lg;
-      margin-top: $space-lg;
-      max-width: 600px;
-      text-align: left;
-      background: rgba($warning-amber, 0.05);
-      border: 1px solid rgba($warning-amber, 0.2);
-      
-      h4 {
-        margin: 0 0 $space-sm 0;
-        font-size: $font-size-md;
-        font-weight: $font-weight-semibold;
-        color: darken($warning-amber, 30%);
-      }
-      
-      ol {
-        margin: $space-sm 0 0 0;
-        padding-left: $space-lg;
-        color: darken($warning-amber, 20%);
-        
-        li {
-          margin-bottom: $space-xs;
-          font-size: $font-size-sm;
-        }
-      }
-      
-      code {
-        background: rgba($warning-amber, 0.1);
-        padding: 2px 6px;
-        border-radius: $radius-sm;
-        font-family: $font-family-mono;
-        font-size: $font-size-xs;
-        color: darken($warning-amber, 40%);
-      }
+
+    .info-badge {
+      display: inline-block;
+      margin-left: 10px;
+      padding: 4px 8px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #666;
+      background-color: #f0f0f0;
+      border-radius: 4px;
     }
   }
 
-  // =====================================================
-  // SESSIONS LAYOUT - Split panel design
-  // =====================================================
-
-  .sessions-layout {
+  .header-controls {
     display: flex;
-    flex: 1;
-    height: 100%;
-    min-height: 0;
-    gap: $space-lg;
-    overflow: hidden;
-  }
+    gap: 10px;
 
-  // =====================================================
-  // SESSIONS PANEL - Modern card-based session list
-  // =====================================================
+    button {
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      color: white;
+      background-color: #2c5aa0;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
 
-  .sessions-panel {
-    width: 380px;
-    min-width: 380px;
-    max-width: 380px;
-    @include card-elevated;
-    @include card-content-sm;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    
-    .panel-header {
-      @include section-header;
-      margin-bottom: $space-md;
-      
-      h3 {
-        font-size: $font-size-lg;
-        font-weight: $font-weight-semibold;
-        color: $text-primary;
+      &:hover {
+        background-color: #1e3d6f;
       }
-    }
-    
-    .sessions-list {
-      flex: 1;
-      overflow-y: auto;
-      margin: 0 (-$card-padding-sm);
-      padding: 0 $card-padding-sm;
-      
-      &::-webkit-scrollbar {
-        width: 6px;
-      }
-      
-      &::-webkit-scrollbar-track {
-        background: $background-light;
-        border-radius: $radius-sm;
-      }
-      
-      &::-webkit-scrollbar-thumb {
-        background: $border-medium;
-        border-radius: $radius-sm;
-        
+
+      &.test-button {
+        background-color: #6c757d;
+
         &:hover {
-          background: $border-dark;
+          background-color: #5a6268;
         }
-      }
-    }
-  }
-
-  // =====================================================
-  // SESSION CARD - Premium card design
-  // =====================================================
-
-  .session-card {
-    @include card-base;
-    @include card-content-sm;
-    margin-bottom: $space-md;
-    cursor: pointer;
-    transition: $transition-normal;
-    border: 2px solid transparent;
-    
-    &:hover {
-      border-color: $primary-blue-border;
-      box-shadow: $shadow-hover;
-      transform: translateY(-2px);
-    }
-    
-    &.selected {
-      border-color: $primary-blue;
-      background: $primary-blue-subtle;
-      box-shadow: $shadow-hover-strong;
-      
-      .session-title {
-        color: $primary-blue-dark;
-        font-weight: $font-weight-semibold;
-      }
-    }
-    
-    .session-header {
-      @include flex-between;
-      margin-bottom: $space-md;
-      
-      .session-title {
-        flex: 1;
-        font-size: $font-size-sm;
-        font-weight: $font-weight-medium;
-        color: $text-primary;
-        line-height: $line-height-tight;
-        @include truncate;
-      }
-    }
-    
-    .session-details {
-      margin-bottom: $space-md;
-      
-      .detail-row {
-        display: flex;
-        align-items: center;
-        gap: $space-xs;
-        margin-bottom: $space-xs;
-        font-size: $font-size-xs;
-        
-        i {
-          color: $text-muted;
-          font-size: $font-size-xs;
-          width: 14px;
-          text-align: center;
-        }
-        
-        .detail-label {
-          color: $text-secondary;
-          font-weight: $font-weight-medium;
-          min-width: 70px;
-        }
-        
-        .detail-value {
-          color: $text-primary;
-          font-weight: $font-weight-semibold;
-          flex: 1;
-        }
-      }
-    }
-    
-    .session-options {
-      display: flex;
-      gap: $space-xs;
-      flex-wrap: wrap;
-      align-items: center;
-      
-      .status-badge {
-        @include badge-neutral;
-        font-size: 10px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        
-        &.status-active {
-          @include badge-success;
-        }
-        
-        &.status-migration {
-          @include badge-info;
-        }
-      }
-    }
-  }
-
-  // =====================================================
-  // LOG VIEWER PANEL - Professional code display
-  // =====================================================
-
-  .log-viewer-panel {
-    flex: 1;
-    @include card-elevated;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    
-    .panel-header {
-      @include section-header;
-      padding: $space-lg $space-lg $space-md $space-lg;
-      margin: 0;
-      
-      h3 {
-        font-size: $font-size-lg;
-        font-weight: $font-weight-semibold;
-        color: $text-primary;
-      }
-      
-      .panel-actions {
-        display: flex;
-        align-items: center;
-        gap: $space-md;
-        
-        .auto-refresh-toggle {
-          display: flex;
-          align-items: center;
-          gap: $space-xs;
-          font-size: $font-size-sm;
-          color: $text-secondary;
-          cursor: pointer;
-          transition: $transition-fast;
-          
-          &:hover {
-            color: $primary-blue;
-          }
-          
-          input[type="checkbox"] {
-            margin: 0;
-            transform: scale(0.9);
-            cursor: pointer;
-          }
-        }
-      }
-    }
-    
-    .log-content {
-      flex: 1;
-      overflow: hidden;
-      background: #1e1e1e;
-      border-radius: 0 0 $radius-lg $radius-lg;
-      
-      .log-viewer {
-        width: 100%;
-        height: 100%;
-        background: #1e1e1e;
-        color: #d4d4d4;
-        font-family: $font-family-mono;
-        font-size: $font-size-sm;
-        line-height: $line-height-relaxed;
-        padding: $space-lg;
-        margin: 0;
-        overflow: auto;
-        white-space: pre-wrap;
-        word-wrap: break-word;
-        border: none;
-        resize: none;
-        outline: none;
-        
-        &::-webkit-scrollbar {
-          width: 8px;
-          height: 8px;
-        }
-        
-        &::-webkit-scrollbar-track {
-          background: #2d2d2d;
-        }
-        
-        &::-webkit-scrollbar-thumb {
-          background: #404040;
-          border-radius: $radius-sm;
-          
-          &:hover {
-            background: #505050;
-          }
-        }
-      }
-    }
-  }
-
-  // =====================================================
-  // LOADING STATES - Elegant spinners
-  // =====================================================
-
-  .loading-container {
-    @include flex-center;
-    flex-direction: column;
-    gap: $space-lg;
-    padding: $space-xxl;
-    flex: 1;
-    
-    .loading-content {
-      @include flex-center;
-      flex-direction: column;
-      gap: $space-lg;
-    }
-    
-    .loading-spinner {
-      position: relative;
-      width: 60px;
-      height: 60px;
-    }
-    
-    .spinner-ring {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      border: 3px solid transparent;
-      border-radius: $radius-round;
-      animation: spin 1.5s linear infinite;
-      
-      &:nth-child(1) {
-        border-top-color: $primary-blue;
-        animation-delay: 0s;
-      }
-      
-      &:nth-child(2) {
-        border-top-color: $secondary-purple;
-        animation-delay: 0.3s;
-        transform: scale(0.8);
-      }
-      
-      &:nth-child(3) {
-        border-top-color: $accent-orange;
-        animation-delay: 0.6s;
-        transform: scale(0.6);
-      }
-    }
-    
-    .loading-text {
-      font-size: $font-size-md;
-      color: $text-secondary;
-      font-weight: $font-weight-medium;
-      text-align: center;
-    }
-  }
-
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-
-  // =====================================================
-  // DIALOG STYLES - Modern form design
-  // =====================================================
-
-  .dialog-content {
-    padding: $space-lg;
-    
-    .form-field {
-      @include form-field;
-      
-      &.checkbox-field {
-        margin-bottom: $space-md;
-        
-        label {
-          display: flex;
-          align-items: center;
-          gap: $space-sm;
-          font-size: $font-size-sm;
-          color: $text-primary;
-          cursor: pointer;
-          margin: 0;
-          font-weight: $font-weight-normal;
-        }
-      }
-      
-      .field-label {
-        display: block;
-        margin-bottom: $space-xs;
-        font-size: $font-size-sm;
-        font-weight: $font-weight-medium;
-        color: $text-primary;
-      }
-      
-      .field-hint {
-        margin-top: $space-xs;
-        font-size: $font-size-xs;
-        color: $text-muted;
-        line-height: $line-height-normal;
-      }
-      
-      input, textarea, select {
-        @include input-base;
-      }
-    }
-    
-    .form-row {
-      display: flex;
-      gap: $space-md;
-      
-      .form-field {
-        flex: 1;
-      }
-    }
-  }
-
-  // =====================================================
-  // RESPONSIVE DESIGN
-  // =====================================================
-
-  @media (max-width: $breakpoint-lg) {
-    .sessions-layout {
-      flex-direction: column;
-      gap: $space-md;
-    }
-    
-    .sessions-panel {
-      width: 100%;
-      max-width: none;
-      max-height: 300px;
-      
-      .sessions-list {
-        display: flex;
-        gap: $space-sm;
-        overflow-x: auto;
-        overflow-y: hidden;
-        
-        .session-card {
-          min-width: 280px;
-          margin-bottom: 0;
-        }
-      }
-    }
-    
-    .log-viewer-panel {
-      .log-content {
-        .log-viewer {
-          font-size: $font-size-xs;
-          padding: $space-md;
-        }
-      }
-    }
-  }
-
-  @media (max-width: $breakpoint-md) {
-    .sql-logging-container {
-      gap: $space-md;
-    }
-    
-    .dashboard-header {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: $space-md;
-      
-      .header-controls {
-        width: 100%;
-        justify-content: flex-start;
-      }
-    }
-    
-    .dialog-content {
-      padding: $space-md;
-      
-      .form-row {
-        flex-direction: column;
       }
     }
   }
 }
 
-// =====================================================
-// KENDO UI CUSTOMIZATIONS - Global ::ng-deep styles
-// =====================================================
+// Status bar
+.status-bar {
+  display: flex;
+  gap: 30px;
+  padding: 15px 20px;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #e0e0e0;
 
-::ng-deep {
-  .sql-logging-container {
-    .k-dialog {
-      border-radius: $radius-lg;
-      border: none;
-      box-shadow: $shadow-4;
-      
-      .k-dialog-titlebar {
-        background: $white;
-        border-bottom: 1px solid $border-light;
-        border-radius: $radius-lg $radius-lg 0 0;
-        padding: $space-lg $space-lg $space-md $space-lg;
-        
-        .k-dialog-title {
-          font-size: $font-size-lg;
-          font-weight: $font-weight-semibold;
-          color: $text-primary;
-        }
-        
-        .k-dialog-close {
-          color: $text-muted;
-          
-          &:hover {
-            color: $text-primary;
-          }
+  .status-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    .status-label {
+      font-size: 14px;
+      color: #666;
+    }
+
+    .status-value {
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+
+      &.text-success {
+        color: #28a745;
+      }
+
+      &.text-danger {
+        color: #dc3545;
+      }
+    }
+  }
+}
+
+// Main content area
+.dashboard-content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+// Empty state
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  padding: 40px;
+
+  i {
+    font-size: 48px;
+    color: #ccc;
+    margin-bottom: 20px;
+  }
+
+  h3 {
+    margin: 0 0 10px 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: #333;
+  }
+
+  p {
+    margin: 0 0 30px 0;
+    font-size: 16px;
+    color: #666;
+    max-width: 500px;
+  }
+
+  button {
+    padding: 10px 20px;
+    font-size: 16px;
+    font-weight: 500;
+    color: white;
+    background-color: #2c5aa0;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+
+    &:hover {
+      background-color: #1e3d6f;
+    }
+  }
+}
+
+// Sessions layout (when sessions are active)
+.sessions-layout {
+  display: flex;
+  height: 100%;
+  gap: 20px;
+}
+
+// Sessions panel (left side)
+.sessions-panel {
+  width: 350px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 20px;
+  overflow-y: auto;
+
+  .panel-header {
+    margin-bottom: 20px;
+
+    h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+    }
+  }
+
+  .sessions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .session-card {
+    padding: 15px;
+    background: #f8f9fa;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &:hover {
+      background: #e9ecef;
+      border-color: #2c5aa0;
+    }
+
+    &.selected {
+      background: #e7f1ff;
+      border-color: #2c5aa0;
+      border-width: 2px;
+    }
+
+    .session-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .session-details {
+      font-size: 12px;
+      color: #666;
+
+      .detail-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 4px;
+      }
+    }
+  }
+}
+
+// Log viewer panel (right side)
+.log-viewer-panel {
+  flex: 1;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  .panel-header {
+    padding: 20px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .panel-actions {
+      display: flex;
+      gap: 15px;
+      align-items: center;
+
+      .auto-refresh-toggle {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 14px;
+        color: #666;
+
+        input[type="checkbox"] {
+          cursor: pointer;
         }
       }
-      
-      .k-dialog-content {
-        padding: 0;
-      }
-      
-      .k-dialog-actions {
-        background: $background-light;
-        border-top: 1px solid $border-light;
-        border-radius: 0 0 $radius-lg $radius-lg;
-        padding: $space-lg;
-        gap: $space-sm;
-        
-        .k-button {
-          font-size: $font-size-sm;
-          font-weight: $font-weight-medium;
-          padding: $space-sm $space-lg;
-          border-radius: $radius-md;
-          
-          &.k-button-solid-primary {
-            background: $primary-blue;
-            border-color: $primary-blue;
-            
-            &:hover:not(:disabled) {
-              background: $primary-blue-dark;
-              border-color: $primary-blue-dark;
-            }
-          }
+
+      button {
+        padding: 6px 12px;
+        font-size: 14px;
+        color: #666;
+        background: transparent;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        cursor: pointer;
+
+        &:hover {
+          background: #f8f9fa;
         }
       }
     }
-    
-    .k-textbox,
-    .k-textarea,
-    .k-dropdown {
-      @include input-base;
-      font-size: $font-size-sm;
-    }
-    
-    .k-dropdown {
+  }
+
+  .log-content {
+    flex: 1;
+    padding: 20px;
+    background: #1e1e1e;
+
+    .log-viewer {
       width: 100%;
+      height: 100%;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 14px;
+      line-height: 1.6;
+      padding: 15px;
+      border: none;
+      outline: none;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
     }
-    
-    .k-checkbox {
-      margin-right: $space-xs;
-      transform: scale(0.9);
+  }
+}
+
+// Loading state
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+
+  .loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #2c5aa0;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 20px;
+  }
+
+  .loading-text {
+    font-size: 16px;
+    color: #666;
+  }
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+// Dialog styles
+.dialog-content {
+  padding: 20px;
+
+  .form-field {
+    margin-bottom: 20px;
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #333;
+    }
+
+    input,
+    textarea,
+    select {
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: white;
+
+      &:focus {
+        outline: none;
+        border-color: #2c5aa0;
+      }
+    }
+
+    textarea {
+      min-height: 60px;
+      resize: vertical;
+    }
+
+    &.checkbox-field {
+      label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+
+        input[type="checkbox"] {
+          width: auto;
+          margin: 0;
+        }
+      }
+    }
+
+    .field-hint {
+      margin-top: 5px;
+      font-size: 12px;
+      color: #666;
+    }
+  }
+
+  .form-row {
+    display: flex;
+    gap: 15px;
+
+    .form-field {
+      flex: 1;
+    }
+  }
+}
+
+// Kendo customizations
+::ng-deep {
+  .k-dialog {
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+
+    .k-dialog-titlebar {
+      background: white;
+      border-bottom: 1px solid #e0e0e0;
+      padding: 20px;
+
+      .k-dialog-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #333;
+      }
+    }
+
+    .k-dialog-actions {
+      background: #f8f9fa;
+      border-top: 1px solid #e0e0e0;
+      padding: 15px 20px;
+      gap: 10px;
+
+      .k-button {
+        padding: 8px 16px;
+        font-size: 14px;
+        border-radius: 4px;
+
+        &.k-button-solid-primary {
+          background: #2c5aa0;
+          border-color: #2c5aa0;
+          color: white;
+
+          &:hover {
+            background: #1e3d6f;
+            border-color: #1e3d6f;
+          }
+        }
+      }
     }
   }
 }

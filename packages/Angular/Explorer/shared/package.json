@@ -24,6 +24,7 @@
   "peerDependencies": {
     "@angular/common": "18.0.2",
     "@angular/core": "18.0.2",
+    "@angular/router": "18.0.2",
     "rxjs": "^7.8.1"
   },
   "dependencies": {

@@ -1,8 +1,8 @@
 import { Injectable } from '@angular/core';
 import { DialogService, DialogRef, DialogSettings } from '@progress/kendo-angular-dialog';
 import { AIAgentEntity, AIPromptEntity } from '@memberjunction/core-entities';
-import { AIAgentTestHarnessDialogComponent, AIAgentTestHarnessDialogData } from './AIAgents/ai-agent-test-harness-dialog.component';
-import { AIPromptTestHarnessDialogComponent, AIPromptTestHarnessDialogData } from './AIPrompts/ai-prompt-test-harness-dialog.component';
+import { AIAgentTestHarnessDialogComponent, AIAgentTestHarnessDialogData } from './AIAgents/ai-agent-test-harness-dialog-old.component';
+import { AIPromptTestHarnessDialogComponent, AIPromptTestHarnessDialogData } from './AIPrompts/ai-prompt-test-harness-dialog-old.component';
 
 /**
  * Service for managing test harness dialogs for AI Agents and AI Prompts.

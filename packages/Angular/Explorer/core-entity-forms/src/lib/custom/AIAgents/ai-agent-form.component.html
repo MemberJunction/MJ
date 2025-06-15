@@ -45,12 +45,12 @@
                 <!-- Action Buttons -->
                 <div class="agent-actions">
                     @if (record.ID) {
-                        <kendo-button class="action-button primary"
+                        <kendo-button themeColor="primary" size="large"
                                     (click)="openTestHarness()"
                                     [disabled]="record.Status !== 'Active'"
                                     title="Test this AI agent">
                             <i class="fa-solid fa-flask"></i>
-                            Test Agent
+                            Test
                         </kendo-button>
                     }
                     <kendo-button fillMode="outline" size="small" (click)="refreshRelatedData()" title="Refresh all data">
@@ -113,23 +113,18 @@
                                 } @else {
                                     <div class="entity-list">
                                         @for (prompt of agentPrompts; track prompt.ID) {
-                                            <div class="entity-item prompt-item" (click)="navigateToEntity('AI Agent Prompts', prompt.ID)">
+                                            <div class="entity-item prompt-item" (click)="navigateToEntity('AI Prompts', prompt.ID)">
                                                 <div class="item-icon">
                                                     <i class="fa-solid fa-comment-dots"></i>
                                                 </div>
                                                 <div class="item-content">
-                                                    <div class="item-title">{{ prompt.PromptType || 'System Prompt' }}</div>
-                                                    @if (prompt.PromptText) {
-                                                        <div class="item-preview">{{ prompt.PromptText.substring(0, 120) }}{{ prompt.PromptText.length > 120 ? '...' : '' }}</div>
+                                                    <div class="item-title">{{ prompt.Type || 'System Prompt' }}</div>
+                                                    @if (prompt.TemplateText) {
+                                                        <div class="item-preview">{{ prompt.TemplateText.substring(0, 120) }}{{ prompt.TemplateText.length > 120 ? '...' : '' }}</div>
                                                     }
                                                     <div class="item-meta">
                                                         @if (prompt.PromptRole) {
                                                             <span class="meta-tag">{{ prompt.PromptRole }}</span>
-                                                        }
-                                                        @if (prompt.Priority) {
-                                                            <span class="priority-tag" [style.background-color]="getPriorityBadgeColor(prompt.Priority)">
-                                                                Priority: {{ getPriorityLabel(prompt.Priority) }}
-                                                            </span>
                                                         }
                                                     </div>
                                                 </div>
@@ -139,7 +134,7 @@
                                             </div>
                                         }
                                         @if (promptCount > agentPrompts.length) {
-                                            <div class="view-more-item" (click)="navigateToEntity('AI Agent Prompts', '')">
+                                            <div class="view-more-item" (click)="navigateToEntity('AI Prompts', '')">
                                                 <span>View all {{ promptCount }} prompts...</span>
                                             </div>
                                         }
@@ -182,7 +177,7 @@
                                 } @else {
                                     <div class="entity-list">
                                         @for (action of agentActions; track action.ID) {
-                                            <div class="entity-item action-item" (click)="navigateToEntity('AI Agent Actions', action.ID)">
+                                            <div class="entity-item action-item" (click)="navigateToEntity('Actions', action.ID)">
                                                 <div class="item-icon">
                                                     <i class="fa-solid fa-bolt"></i>
                                                 </div>
@@ -192,12 +187,12 @@
                                                         <div class="item-preview">{{ action.Description }}</div>
                                                     }
                                                     <div class="item-meta">
-                                                        @if (action.ActionType) {
-                                                            <span class="meta-tag">{{ action.ActionType }}</span>
+                                                        @if (action.Type) {
+                                                            <span class="meta-tag">{{ action.Type }}</span>
                                                         }
-                                                        <span class="status-tag" [class.active]="action.IsActive" [class.inactive]="!action.IsActive">
-                                                            <i class="fa-solid" [class.fa-check-circle]="action.IsActive" [class.fa-times-circle]="!action.IsActive"></i>
-                                                            {{ action.IsActive ? 'Active' : 'Inactive' }}
+                                                        <span class="status-tag" [class.active]="action.Status==='Active'" [class.inactive]="action.Status!=='Active'">
+                                                            <i class="fa-solid" [class.fa-check-circle]="action.Status==='Active'" [class.fa-times-circle]="action.Status!=='Active'"></i>
+                                                            {{ action.Status }}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -389,7 +384,7 @@
                                                     <i class="fa-solid fa-sticky-note"></i>
                                                 </div>
                                                 <div class="item-content">
-                                                    <div class="item-title">{{ note.NoteType || 'Note' }}</div>
+                                                    <div class="item-title">{{ note.Type || 'Note' }}</div>
                                                     @if (note.Note) {
                                                         <div class="item-preview">{{ note.Note.substring(0, 100) }}{{ note.Note.length > 100 ? '...' : '' }}</div>
                                                     }
@@ -455,15 +450,15 @@
                                                         <span class="status-badge" [style.background-color]="getExecutionStatusColor(execution.Status)">
                                                             {{ execution.Status || 'Unknown' }}
                                                         </span>
-                                                        @if (execution.ExecutionTimeMS) {
+                                                        @if (execution.CompletedAt) {
                                                             <span class="execution-time">
                                                                 <i class="fa-solid fa-stopwatch"></i>
-                                                                {{ formatExecutionTime(execution.ExecutionTimeMS) }}
+                                                                {{ formatExecutionTimeFromDates(execution.StartedAt, execution.CompletedAt) }}
                                                             </span>
                                                         }
                                                     </div>
-                                                    @if (execution.ResultSummary) {
-                                                        <div class="timeline-preview">{{ execution.ResultSummary.substring(0, 120) }}{{ execution.ResultSummary.length > 120 ? '...' : '' }}</div>
+                                                    @if (execution.Result) {
+                                                        <div class="timeline-preview">{{ execution.Result.substring(0, 120) }}{{ execution.Result.length > 120 ? '...' : '' }}</div>
                                                     }
                                                 </div>
                                             </div>

@@ -4,18 +4,6 @@
 
                 <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer (ResizeContainer)="InvokeManualResize()">
                     
-                    <mj-tab Name="Overview">
-                        Overview
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-form-section 
-                            Entity="AI Agents" 
-                            Section="overview" 
-                            [record]="record" 
-                            [EditMode]="this.EditMode">
-                        </mj-form-section>
-                    </mj-tab-body>
-                    
                     <mj-tab Name="Details">
                         Details
                     </mj-tab>

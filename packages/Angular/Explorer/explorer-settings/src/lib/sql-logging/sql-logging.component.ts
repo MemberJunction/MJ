@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewEncapsulation } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject, interval } from 'rxjs';
@@ -46,8 +46,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
     CheckBoxModule
   ],
   templateUrl: './sql-logging.component.html',
-  styleUrls: ['./sql-logging.component.scss'],
-  encapsulation: ViewEncapsulation.None
+  styleUrls: ['./sql-logging.component.scss']
 })
 export class SqlLoggingComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();

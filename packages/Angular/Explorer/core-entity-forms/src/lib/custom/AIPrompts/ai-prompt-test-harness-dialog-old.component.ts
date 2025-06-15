@@ -14,7 +14,7 @@ export interface AIPromptTestHarnessDialogData {
 }
 
 @Component({
-    selector: 'mj-ai-prompt-test-harness-dialog',
+    selector: 'mj-ai-prompt-test-harness-dialog-old',
     template: `
         <div class="test-harness-dialog">
             <div class="dialog-header">
@@ -139,9 +139,8 @@ export class AIPromptTestHarnessDialogComponent implements OnInit {
                     this.testHarness.templateVariables = variables;
                 }
                 
-                if (this.data.selectedModelId) {
-                    this.testHarness.selectedModelId = this.data.selectedModelId;
-                }
+                // Note: selectedModelId is not used in the new test harness component
+                // as model selection is handled differently
             }
         }, 100);
     }

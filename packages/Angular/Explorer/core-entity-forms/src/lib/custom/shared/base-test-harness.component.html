@@ -1,45 +1,11 @@
+<!-- Shared Test Harness Template -->
 <div class="test-harness-container">
     <!-- Header Section -->
     <div class="test-harness-header">
-        <div class="harness-header">
-            <div class="header-content">
-                <div class="header-main">
-                    <div class="prompt-info">
-                        <div class="prompt-icon">
-                            <i class="fa-solid fa-message"></i>
-                        </div>
-                        <div class="prompt-details">
-                            <h3 class="prompt-name">{{ aiPrompt?.Name || 'AI Prompt' }}</h3>
-                            <p class="prompt-description">{{ aiPrompt?.Description || 'Test and refine this AI prompt' }}</p>
-                        </div>
-                    </div>
-                    <div class="prompt-meta">
-                        @if (aiPrompt?.Status) {
-                            <span class="status-badge" [style.background-color]="getStatusBadgeColor()">
-                                {{ aiPrompt?.Status }}
-                            </span>
-                        }
-                        @if (template?.Name) {
-                            <span class="template-badge">
-                                <i class="fa-solid fa-file-code"></i>
-                                {{ template?.Name }}
-                            </span>
-                        }
-                    </div>
-                </div>
-                <div class="header-actions">
-                    <button class="btn-secondary" (click)="resetHarness()">
-                        <i class="fa-solid fa-refresh"></i> Reset
-                    </button>
-                    <button class="btn-secondary" (click)="isVisible = false">
-                        <i class="fa-solid fa-times"></i> Close
-                    </button>
-                </div>
-            </div>
-        </div>
+        <ng-content select="[slot=header]"></ng-content>
     </div>
 
-    <!-- Main Content using base template -->
+    <!-- Main Content Area -->
     <div class="test-harness-main">
         <!-- Sidebar -->
         <div class="test-harness-sidebar">
@@ -64,27 +30,27 @@
 
             <!-- Tab Content -->
             <div class="tab-content">
-                <!-- Template Variables Tab -->
+                <!-- Variables Tab -->
                 @if (activeTab === 'variables') {
                     <div class="variables-panel">
                         <div class="panel-header">
-                            <h4><i class="fa-solid fa-code"></i> Template Variables</h4>
+                            <h4><i class="fa-solid fa-code"></i> Variables</h4>
                             <button class="add-variable-btn" (click)="addVariable()" title="Add Variable">
                                 <i class="fa-solid fa-plus"></i>
                             </button>
                         </div>
                         
                         <div class="variables-list">
-                            @if (templateVariables.length === 0) {
+                            @if (variables.length === 0) {
                                 <div class="empty-state">
                                     <i class="fa-solid fa-code"></i>
-                                    <p>No template variables</p>
+                                    <p>No variables defined</p>
                                     <button class="btn-secondary" (click)="addVariable()">
                                         <i class="fa-solid fa-plus"></i> Add Variable
                                     </button>
                                 </div>
                             } @else {
-                                @for (variable of templateVariables; track $index) {
+                                @for (variable of variables; track $index) {
                                     <div class="variable-item">
                                         <div class="variable-header">
                                             <input type="text" 
@@ -124,10 +90,12 @@
                                                    class="variable-value-input">
                                         }
                                         
-                                        <input type="text" 
-                                               [(ngModel)]="variable.description" 
-                                               placeholder="Description (optional)"
-                                               class="variable-description-input">
+                                        @if (variable.description !== undefined) {
+                                            <input type="text" 
+                                                   [(ngModel)]="variable.description" 
+                                                   placeholder="Description (optional)"
+                                                   class="variable-description-input">
+                                        }
                                     </div>
                                 }
                             }
@@ -168,7 +136,10 @@
                                             </div>
                                         </div>
                                         <div class="conversation-meta">
-                                            <small><i class="fa-solid fa-message"></i> {{ getPromptName(conversation) }}</small>
+                                            <ng-content select="[slot=conversation-meta]" 
+                                                        [ngTemplateOutlet]="conversationMetaTemplate"
+                                                        [ngTemplateOutletContext]="{ $implicit: conversation }">
+                                            </ng-content>
                                             <small>{{ conversation.messages.length }} messages</small>
                                             <small>{{ conversation.updatedAt | date:'short' }}</small>
                                         </div>
@@ -186,18 +157,7 @@
                             <h4><i class="fa-solid fa-cog"></i> Settings</h4>
                         </div>
                         
-                        <div class="settings-content">
-                            <div class="setting-item">
-                                <label>
-                                    <input type="checkbox" [(ngModel)]="showVariablesPanel">
-                                    Show variables panel
-                                </label>
-                            </div>
-                            <div class="setting-item">
-                                <label>Show rendered prompt</label>
-                                <p class="setting-description">Display the final rendered prompt in messages</p>
-                            </div>
-                        </div>
+                        <ng-content select="[slot=settings]"></ng-content>
                     </div>
                 }
             </div>
@@ -209,12 +169,7 @@
             <div class="messages-container" #messagesContainer>
                 @if (conversationMessages.length === 0) {
                     <div class="empty-conversation">
-                        <div class="empty-state">
-                            <i class="fa-solid fa-message" style="font-size: 3rem; color: #2196f3; margin-bottom: 1rem;"></i>
-                            <h3>Ready to Test</h3>
-                            <p>Test {{ aiPrompt?.Name || 'the AI prompt' }} with different inputs.</p>
-                            <p class="text-muted">Type your message below and press Send to test the prompt.</p>
-                        </div>
+                        <ng-content select="[slot=empty-state]"></ng-content>
                     </div>
                 } @else {
                     @for (message of conversationMessages; track message.id) {
@@ -225,7 +180,7 @@
                                         @if (message.role === 'user') {
                                             <i class="fa-solid fa-user"></i> You
                                         } @else if (message.role === 'assistant') {
-                                            <i class="fa-solid fa-message"></i> {{ aiPrompt?.Name || 'Prompt' }}
+                                            <i class="fa-solid fa-robot"></i> Assistant
                                         } @else {
                                             <i class="fa-solid fa-cog"></i> System
                                         }
@@ -270,13 +225,6 @@
                                             {{ message.showRaw ? 'Hide' : 'Show' }} Raw
                                         </button>
                                         
-                                        @if (hasRenderedPrompt(message)) {
-                                            <button class="btn-text" (click)="toggleRenderedPrompt(message)">
-                                                <i class="fa-solid fa-file-code"></i>
-                                                {{ showRenderedPrompt(message) ? 'Hide' : 'Show' }} Prompt
-                                            </button>
-                                        }
-                                        
                                         @if (isJsonString(message.rawContent || message.content)) {
                                             <button class="btn-text" (click)="toggleJsonRaw(message)">
                                                 <i class="fa-solid fa-code"></i>
@@ -287,13 +235,6 @@
 
                                     @if (message.showRaw) {
                                         <div class="raw-content" [innerHTML]="getFormattedRawContent(message)"></div>
-                                    }
-
-                                    @if (showRenderedPrompt(message) && hasRenderedPrompt(message)) {
-                                        <div class="rendered-prompt">
-                                            <h5>Rendered Prompt:</h5>
-                                            <pre><code>{{ getRenderedPrompt(message) }}</code></pre>
-                                        </div>
                                     }
 
                                     @if (message.showJsonRaw && isJsonString(message.rawContent || message.content)) {
@@ -312,7 +253,7 @@
             <div class="input-area">
                 <div class="input-container">
                     <textarea [(ngModel)]="currentUserMessage" 
-                              placeholder="Type your test input..."
+                              placeholder="Type your message..."
                               class="message-input"
                               rows="3"
                               [disabled]="isExecuting"
@@ -340,7 +281,7 @@
                                 @if (isExecuting) {
                                     <i class="fa-solid fa-spinner fa-spin"></i> Processing...
                                 } @else {
-                                    <i class="fa-solid fa-paper-plane"></i> Test
+                                    <i class="fa-solid fa-paper-plane"></i> Send
                                 }
                             </button>
                         </div>
@@ -350,3 +291,10 @@
         </div>
     </div>
 </div>
+
+<!-- Hidden file input for import/export -->
+<input type="file" 
+       #fileInput 
+       accept=".json" 
+       style="display: none;"
+       (change)="onFileSelected($event)">

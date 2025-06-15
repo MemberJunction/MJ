@@ -1,0 +1,625 @@
+import { Component, Input, Output, EventEmitter, ViewContainerRef } from '@angular/core';
+import { DomSanitizer } from '@angular/platform-browser';
+import { DialogService } from '@progress/kendo-angular-dialog';
+import { AIPromptEntity, TemplateEntity, TemplateContentEntity } from '@memberjunction/core-entities';
+import { Metadata, RunView } from '@memberjunction/core';
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { 
+    BaseTestHarnessComponent, 
+    BaseConversationMessage, 
+    BaseVariable, 
+    BaseSavedConversation 
+} from '../shared/base-test-harness.component';
+
+/**
+ * AI Prompt specific interfaces extending base types
+ */
+export interface AIPromptRunResult {
+    success: boolean;
+    output?: string;
+    parsedResult?: string;
+    error?: string;
+    executionTimeMs?: number;
+    promptRunId?: string;
+    rawResult?: string;
+    renderedPrompt?: string;
+}
+
+export interface TemplateVariable extends BaseVariable {
+    description?: string;
+}
+
+export interface ConversationMessage extends BaseConversationMessage {
+    promptRunId?: string;
+    renderedPrompt?: string;
+}
+
+export interface SavedPromptConversation extends BaseSavedConversation {
+    promptId: string;
+    promptName: string;
+    templateVariables: TemplateVariable[];
+}
+
+/**
+ * AI Prompt Test Harness Component - extends shared base functionality
+ * with prompt-specific execution logic and template variable management.
+ */
+@Component({
+    selector: 'mj-ai-prompt-test-harness-v2',
+    templateUrl: './ai-prompt-test-harness-v2.component.html',
+            <div class="test-harness-header" slot="header">
+                <div class="harness-header">
+                    <div class="header-content">
+                        <div class="header-main">
+                            <div class="prompt-info">
+                                <div class="prompt-icon">
+                                    <i class="fa-solid fa-message"></i>
+                                </div>
+                                <div class="prompt-details">
+                                    <h3 class="prompt-name">{{ aiPrompt?.Name || 'AI Prompt' }}</h3>
+                                    <p class="prompt-description">{{ aiPrompt?.Description || 'Test and refine this AI prompt' }}</p>
+                                </div>
+                            </div>
+                            <div class="prompt-meta">
+                                @if (aiPrompt?.Status) {
+                                    <span class="status-badge" [style.background-color]="getStatusBadgeColor()">
+                                        {{ aiPrompt.Status }}
+                                    </span>
+                                }
+                                @if (template?.Name) {
+                                    <span class="template-badge">
+                                        <i class="fa-solid fa-file-code"></i>
+                                        {{ template.Name }}
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                        <div class="header-actions">
+                            <button class="btn-secondary" (click)="resetHarness()">
+                                <i class="fa-solid fa-refresh"></i> Reset
+                            </button>
+                            <button class="btn-secondary" (click)="isVisible = false">
+                                <i class="fa-solid fa-times"></i> Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content using base template -->
+            <div class="test-harness-main">
+                <!-- Sidebar -->
+                <div class="test-harness-sidebar">
+                    <!-- Tab Navigation -->
+                    <div class="sidebar-tabs">
+                        <button class="tab-button" 
+                                [class.active]="activeTab === 'variables'"
+                                (click)="activeTab = 'variables'">
+                            <i class="fa-solid fa-code"></i> Variables
+                        </button>
+                        <button class="tab-button" 
+                                [class.active]="activeTab === 'savedConversations'"
+                                (click)="activeTab = 'savedConversations'">
+                            <i class="fa-solid fa-bookmark"></i> Saved
+                        </button>
+                        <button class="tab-button" 
+                                [class.active]="activeTab === 'settings'"
+                                (click)="activeTab = 'settings'">
+                            <i class="fa-solid fa-cog"></i> Settings
+                        </button>
+                    </div>
+
+                    <!-- Tab Content -->
+                    <div class="tab-content">
+                        <!-- Template Variables Tab -->
+                        @if (activeTab === 'variables') {
+                            <div class="variables-panel">
+                                <div class="panel-header">
+                                    <h4><i class="fa-solid fa-code"></i> Template Variables</h4>
+                                    <button class="add-variable-btn" (click)="addVariable()" title="Add Variable">
+                                        <i class="fa-solid fa-plus"></i>
+                                    </button>
+                                </div>
+                                
+                                <div class="variables-list">
+                                    @if (templateVariables.length === 0) {
+                                        <div class="empty-state">
+                                            <i class="fa-solid fa-code"></i>
+                                            <p>No template variables</p>
+                                            <button class="btn-secondary" (click)="addVariable()">
+                                                <i class="fa-solid fa-plus"></i> Add Variable
+                                            </button>
+                                        </div>
+                                    } @else {
+                                        @for (variable of templateVariables; track $index) {
+                                            <div class="variable-item">
+                                                <div class="variable-header">
+                                                    <input type="text" 
+                                                           [(ngModel)]="variable.name" 
+                                                           placeholder="Variable name"
+                                                           class="variable-name-input">
+                                                    <select [(ngModel)]="variable.type" 
+                                                            (change)="onVariableTypeChange(variable)"
+                                                            class="variable-type-select">
+                                                        <option value="string">String</option>
+                                                        <option value="number">Number</option>
+                                                        <option value="boolean">Boolean</option>
+                                                        <option value="object">Object</option>
+                                                        <option value="array">Array</option>
+                                                    </select>
+                                                    <button class="remove-variable-btn" 
+                                                            (click)="removeVariable($index)"
+                                                            title="Remove Variable">
+                                                        <i class="fa-solid fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                                
+                                                @if (variable.type === 'boolean') {
+                                                    <select [(ngModel)]="variable.value" class="variable-value-input">
+                                                        <option value="true">true</option>
+                                                        <option value="false">false</option>
+                                                    </select>
+                                                } @else if (variable.type === 'object' || variable.type === 'array') {
+                                                    <textarea [(ngModel)]="variable.value" 
+                                                              placeholder="JSON value"
+                                                              class="variable-value-textarea"
+                                                              rows="3"></textarea>
+                                                } @else {
+                                                    <input type="text" 
+                                                           [(ngModel)]="variable.value" 
+                                                           placeholder="Variable value"
+                                                           class="variable-value-input">
+                                                }
+                                                
+                                                <input type="text" 
+                                                       [(ngModel)]="variable.description" 
+                                                       placeholder="Description (optional)"
+                                                       class="variable-description-input">
+                                            </div>
+                                        }
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Saved Conversations Tab -->
+                        @if (activeTab === 'savedConversations') {
+                            <div class="saved-conversations-panel">
+                                <div class="panel-header">
+                                    <h4><i class="fa-solid fa-bookmark"></i> Saved Conversations</h4>
+                                </div>
+                                
+                                @if (savedConversations.length === 0) {
+                                    <div class="empty-state">
+                                        <i class="fa-solid fa-bookmark"></i>
+                                        <p>No saved conversations</p>
+                                    </div>
+                                } @else {
+                                    <div class="conversations-list">
+                                        @for (conversation of savedConversations; track conversation.id) {
+                                            <div class="conversation-item" 
+                                                 [class.current]="currentConversationId === conversation.id">
+                                                <div class="conversation-header">
+                                                    <h5>{{ conversation.name }}</h5>
+                                                    <div class="conversation-actions">
+                                                        <button class="btn-small" 
+                                                                (click)="loadConversation(conversation)"
+                                                                title="Load Conversation">
+                                                            <i class="fa-solid fa-folder-open"></i>
+                                                        </button>
+                                                        <button class="btn-small btn-danger" 
+                                                                (click)="deleteConversation(conversation)"
+                                                                title="Delete Conversation">
+                                                            <i class="fa-solid fa-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div class="conversation-meta">
+                                                    <small><i class="fa-solid fa-message"></i> {{ (conversation as SavedPromptConversation).promptName }}</small>
+                                                    <small>{{ conversation.messages.length }} messages</small>
+                                                    <small>{{ conversation.updatedAt | date:'short' }}</small>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        <!-- Settings Tab -->
+                        @if (activeTab === 'settings') {
+                            <div class="settings-panel">
+                                <div class="panel-header">
+                                    <h4><i class="fa-solid fa-cog"></i> Settings</h4>
+                                </div>
+                                
+                                <div class="settings-content">
+                                    <div class="setting-item">
+                                        <label>
+                                            <input type="checkbox" [(ngModel)]="showVariablesPanel">
+                                            Show variables panel
+                                        </label>
+                                    </div>
+                                    <div class="setting-item">
+                                        <label>Show rendered prompt</label>
+                                        <p class="setting-description">Display the final rendered prompt in messages</p>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Main Chat Area -->
+                <div class="test-harness-chat">
+                    <!-- Chat Messages -->
+                    <div class="messages-container" #messagesContainer>
+                        @if (conversationMessages.length === 0) {
+                            <div class="empty-conversation">
+                                <div class="empty-state">
+                                    <i class="fa-solid fa-message" style="font-size: 3rem; color: #2196f3; margin-bottom: 1rem;"></i>
+                                    <h3>Ready to Test</h3>
+                                    <p>Test {{ aiPrompt?.Name || 'the AI prompt' }} with different inputs.</p>
+                                    <p class="text-muted">Type your message below and press Send to test the prompt.</p>
+                                </div>
+                            </div>
+                        } @else {
+                            @for (message of conversationMessages; track message.id) {
+                                <div class="message-wrapper" [class]="message.role">
+                                    <div class="message-content">
+                                        <div class="message-header">
+                                            <span class="message-role">
+                                                @if (message.role === 'user') {
+                                                    <i class="fa-solid fa-user"></i> You
+                                                } @else if (message.role === 'assistant') {
+                                                    <i class="fa-solid fa-message"></i> {{ aiPrompt?.Name || 'Prompt' }}
+                                                } @else {
+                                                    <i class="fa-solid fa-cog"></i> System
+                                                }
+                                            </span>
+                                            <span class="message-time">{{ message.timestamp | date:'short' }}</span>
+                                            
+                                            @if (message.role === 'assistant' && message.executionTime) {
+                                                <span class="execution-time">
+                                                    <i class="fa-solid fa-clock"></i> 
+                                                    {{ formatExecutionTime(message.executionTime) }}
+                                                </span>
+                                            }
+                                        </div>
+
+                                        <div class="message-body">
+                                            @if (message.isStreaming) {
+                                                <div class="streaming-content">
+                                                    <span [innerHTML]="formatMessageContent(message)"></span>
+                                                    @if (message.elapsedTime) {
+                                                        <span class="elapsed-time">
+                                                            {{ formatElapsedTime(message.elapsedTime) }}
+                                                        </span>
+                                                    }
+                                                </div>
+                                            } @else {
+                                                <div class="final-content" [innerHTML]="formatMessageContent(message)"></div>
+                                            }
+
+                                            @if (message.error) {
+                                                <div class="message-error">
+                                                    <i class="fa-solid fa-exclamation-triangle"></i>
+                                                    {{ message.error }}
+                                                </div>
+                                            }
+                                        </div>
+
+                                        <!-- Raw Content Toggle -->
+                                        @if (message.role === 'assistant' && !message.isStreaming && (message.rawContent || message.content)) {
+                                            <div class="message-actions">
+                                                <button class="btn-text" (click)="toggleRawContent(message)">
+                                                    <i class="fa-solid" [class.fa-eye]="!message.showRaw" [class.fa-eye-slash]="message.showRaw"></i>
+                                                    {{ message.showRaw ? 'Hide' : 'Show' }} Raw
+                                                </button>
+                                                
+                                                @if ((message as ConversationMessage).renderedPrompt) {
+                                                    <button class="btn-text" (click)="toggleRenderedPrompt(message)">
+                                                        <i class="fa-solid fa-file-code"></i>
+                                                        {{ (message as any).showRendered ? 'Hide' : 'Show' }} Prompt
+                                                    </button>
+                                                }
+                                                
+                                                @if (isJsonString(message.rawContent || message.content)) {
+                                                    <button class="btn-text" (click)="toggleJsonRaw(message)">
+                                                        <i class="fa-solid fa-code"></i>
+                                                        {{ message.showJsonRaw ? 'Hide' : 'Show' }} JSON
+                                                    </button>
+                                                }
+                                            </div>
+
+                                            @if (message.showRaw) {
+                                                <div class="raw-content" [innerHTML]="getFormattedRawContent(message)"></div>
+                                            }
+
+                                            @if ((message as any).showRendered && (message as ConversationMessage).renderedPrompt) {
+                                                <div class="rendered-prompt">
+                                                    <h5>Rendered Prompt:</h5>
+                                                    <pre><code>{{ (message as ConversationMessage).renderedPrompt }}</code></pre>
+                                                </div>
+                                            }
+
+                                            @if (message.showJsonRaw && isJsonString(message.rawContent || message.content)) {
+                                                <div class="json-content">
+                                                    <pre><code>{{ getFormattedJsonContent(message) }}</code></pre>
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+
+                    <!-- Input Area -->
+                    <div class="input-area">
+                        <div class="input-container">
+                            <textarea [(ngModel)]="currentUserMessage" 
+                                      placeholder="Type your test input..."
+                                      class="message-input"
+                                      rows="3"
+                                      [disabled]="isExecuting"
+                                      (keydown.ctrl.enter)="sendMessage()"
+                                      (keydown.meta.enter)="sendMessage()"></textarea>
+                            
+                            <div class="input-actions">
+                                <div class="input-actions-left">
+                                    <button class="btn-secondary" 
+                                            (click)="clearConversation()"
+                                            [disabled]="conversationMessages.length === 0">
+                                        <i class="fa-solid fa-trash"></i> Clear
+                                    </button>
+                                    <button class="btn-secondary" 
+                                            (click)="saveConversation()"
+                                            [disabled]="conversationMessages.length === 0">
+                                        <i class="fa-solid fa-save"></i> Save
+                                    </button>
+                                </div>
+                                
+                                <div class="input-actions-right">
+                                    <button class="btn-primary" 
+                                            (click)="sendMessage()"
+                                            [disabled]="!currentUserMessage.trim() || isExecuting">
+                                        @if (isExecuting) {
+                                            <i class="fa-solid fa-spinner fa-spin"></i> Processing...
+                                        } @else {
+                                            <i class="fa-solid fa-paper-plane"></i> Test
+                                        }
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+    styleUrls: ['../shared/base-test-harness.component.css', './ai-prompt-test-harness.component.css']
+})
+export class AIPromptTestHarnessComponentV2 extends BaseTestHarnessComponent {
+    
+    @Input() aiPrompt: AIPromptEntity | null = null;
+    @Input() template: TemplateEntity | null = null;
+    @Input() templateContent: TemplateContentEntity | null = null;
+    
+    public _isVisible: boolean = false;
+    @Input() 
+    get isVisible(): boolean {
+        return this._isVisible;
+    }
+    set isVisible(value: boolean) {
+        const wasVisible = this._isVisible;
+        this._isVisible = value;
+        if (value && !wasVisible) {
+            this.resetHarness();
+            this.initializeVariables();
+        }
+        this.visibilityChange.emit(value);
+    }
+
+    @Output() visibilityChange = new EventEmitter<boolean>();
+
+    // Prompt-specific variables
+    public templateVariables: TemplateVariable[] = [];
+
+    // Implement base class abstract property
+    public get variables(): BaseVariable[] {
+        return this.templateVariables;
+    }
+
+    constructor(
+        sanitizer: DomSanitizer,
+        dialogService: DialogService,
+        viewContainerRef: ViewContainerRef
+    ) {
+        super(sanitizer, dialogService, viewContainerRef);
+    }
+
+    // === Implementation of abstract methods ===
+
+    protected async executeTest(): Promise<void> {
+        if (!this.aiPrompt?.ID) {
+            throw new Error('No prompt selected for testing');
+        }
+
+        // Get the last assistant message to update
+        const assistantMessage = this.conversationMessages[this.conversationMessages.length - 1] as ConversationMessage;
+        
+        try {
+            const dataProvider = new GraphQLDataProvider();
+            
+            // Build template data
+            const templateData = this.buildTemplateData();
+
+            // Execute the prompt
+            const query = `
+                mutation RunAIPrompt($promptId: String!, $userInput: String!, $data: String) {
+                    RunAIPrompt(promptId: $promptId, userInput: $userInput, data: $data) {
+                        success
+                        output
+                        parsedResult
+                        error
+                        executionTimeMs
+                        promptRunId
+                        rawResult
+                        renderedPrompt
+                    }
+                }
+            `;
+
+            const variables = {
+                promptId: this.aiPrompt.ID,
+                userInput: this.currentUserMessage,
+                data: Object.keys(templateData).length > 0 ? JSON.stringify(templateData) : null
+            };
+
+            // Set up streaming simulation
+            assistantMessage.promptRunId = this.generateMessageId();
+            this.currentStreamingMessageId = assistantMessage.promptRunId;
+            this.simulateStreaming(assistantMessage);
+
+            const result = await dataProvider.ExecuteGQL(query, variables);
+            const executionResult: AIPromptRunResult = result?.RunAIPrompt;
+
+            // Update assistant message with result
+            assistantMessage.isStreaming = false;
+            assistantMessage.promptRunId = executionResult?.promptRunId || assistantMessage.promptRunId;
+            
+            if (executionResult?.success) {
+                assistantMessage.rawContent = executionResult.rawResult || executionResult.output || '';
+                assistantMessage.content = executionResult.parsedResult || executionResult.output || 'No response generated';
+                assistantMessage.executionTime = executionResult.executionTimeMs;
+                assistantMessage.renderedPrompt = executionResult.renderedPrompt;
+            } else {
+                assistantMessage.content = 'I encountered an error processing your request.';
+                assistantMessage.error = executionResult?.error || 'Unknown error occurred';
+            }
+
+            delete assistantMessage.streamingContent;
+            this.currentStreamingMessageId = null;
+            this.scrollNeeded = true;
+
+        } catch (error) {
+            assistantMessage.isStreaming = false;
+            assistantMessage.content = 'I encountered an error processing your request.';
+            assistantMessage.error = (error as Error).message;
+            delete assistantMessage.streamingContent;
+            throw error;
+        }
+    }
+
+    protected getStorageKey(): string {
+        return 'mj_prompt_conversations';
+    }
+
+    public resetHarness(): void {
+        this.conversationMessages = [];
+        this.currentUserMessage = '';
+        this.isExecuting = false;
+        this.currentStreamingMessageId = null;
+        this.currentConversationId = null;
+        this.clearIntervals();
+    }
+
+    // === Prompt-specific methods ===
+
+    public async initializeVariables(): Promise<void> {
+        // Auto-detect template variables from template content
+        if (this.templateContent?.TemplateText && this.templateVariables.length === 0) {
+            const detectedVariables = this.detectTemplateVariables(this.templateContent.TemplateText);
+            this.templateVariables = detectedVariables;
+        }
+    }
+
+    private detectTemplateVariables(content: string): TemplateVariable[] {
+        const variables: TemplateVariable[] = [];
+        const variablePattern = /\{\{([^}]+)\}\}/g;
+        const found = new Set<string>();
+        
+        let match;
+        while ((match = variablePattern.exec(content)) !== null) {
+            const variableName = match[1].trim();
+            if (!found.has(variableName)) {
+                found.add(variableName);
+                variables.push({
+                    name: variableName,
+                    value: '',
+                    type: 'string',
+                    description: `Auto-detected from template`
+                });
+            }
+        }
+        
+        return variables;
+    }
+
+    public buildTemplateData(): Record<string, any> {
+        const templateData: Record<string, any> = {};
+        
+        for (const variable of this.templateVariables) {
+            if (variable.name && variable.value) {
+                try {
+                    switch (variable.type) {
+                        case 'number':
+                            templateData[variable.name] = parseFloat(variable.value);
+                            break;
+                        case 'boolean':
+                            templateData[variable.name] = variable.value === 'true';
+                            break;
+                        case 'object':
+                        case 'array':
+                            templateData[variable.name] = JSON.parse(variable.value);
+                            break;
+                        default:
+                            templateData[variable.name] = variable.value;
+                    }
+                } catch (e) {
+                    console.warn(`Invalid JSON for template variable ${variable.name}:`, variable.value);
+                    templateData[variable.name] = variable.value;
+                }
+            }
+        }
+        
+        return templateData;
+    }
+
+    public getStatusBadgeColor(): string {
+        switch (this.aiPrompt?.Status) {
+            case 'Active': return '#28a745';
+            case 'Pending': return '#ffc107';
+            case 'Disabled': return '#6c757d';
+            default: return '#6c757d';
+        }
+    }
+
+    public toggleRenderedPrompt(message: BaseConversationMessage): void {
+        (message as any).showRendered = !(message as any).showRendered;
+    }
+
+    // === Base class implementation ===
+
+    protected createSavedConversation(name: string): BaseSavedConversation {
+        const conversation: SavedPromptConversation = {
+            id: this.generateMessageId(),
+            name: name,
+            promptId: this.aiPrompt?.ID || '',
+            promptName: this.aiPrompt?.Name || '',
+            messages: [...this.conversationMessages],
+            templateVariables: [...this.templateVariables],
+            createdAt: new Date(),
+            updatedAt: new Date()
+        };
+        return conversation;
+    }
+
+    protected loadConversationVariables(conversation: BaseSavedConversation): void {
+        const promptConversation = conversation as SavedPromptConversation;
+        this.templateVariables = [...promptConversation.templateVariables];
+    }
+
+    protected updateSavedConversationVariables(conversation: BaseSavedConversation): void {
+        const promptConversation = conversation as SavedPromptConversation;
+        promptConversation.templateVariables = [...this.templateVariables];
+    }
+}

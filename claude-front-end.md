@@ -112,6 +112,13 @@ this.testHarnessService.openPromptById(promptId);
 
 ## Current Status
 
+### ✅ Recent Accomplishments:
+- **Refactored Test Harnesses with Shared Base Component**
+  - Created `BaseTestHarnessComponent` with ~70% shared code
+  - New V2 versions of both agent and prompt test harnesses
+  - External templates for better maintainability
+  - Ready for testing before removing old versions
+
 ### ✅ Working Features:
 - AI Agent test harness with multi-turn conversations
 - AI Prompt test harness with variable management
@@ -195,6 +202,7 @@ AI Agent Form:
    - **Streaming integration** with real GraphQL subscriptions
    - **Copy conversation to clipboard**
    - **Conversation search/filtering**
+   - **Move conversation storage from localStorage to database** - Currently conversations are saved in browser localStorage, need to create proper database entities for conversation persistence, sharing, and cross-device access
 
 2. **Enhance AI Agent Form**
    - **Add quick actions** for creating new prompts/actions/sub-agents

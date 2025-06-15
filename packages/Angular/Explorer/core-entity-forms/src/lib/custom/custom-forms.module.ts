@@ -22,10 +22,12 @@ import { TemplateEditorComponent } from "../shared/components/template-editor.co
 import { AIPromptExecutionDialogComponent } from "./AIPrompts/ai-prompt-execution-dialog.component";
 import { AIPromptFormComponentExtended, LoadAIPromptFormComponentExtended } from "./AIPrompts/ai-prompt-form.component";
 import { AIAgentFormComponentExtended, LoadAIAgentFormComponentExtended } from "./AIAgents/ai-agent-form.component";
-import { AIAgentTestHarnessComponent } from "./AIAgents/ai-agent-test-harness.component";
-import { AIPromptTestHarnessComponent } from "./AIPrompts/ai-prompt-test-harness.component";
-import { AIAgentTestHarnessDialogComponent } from "./AIAgents/ai-agent-test-harness-dialog.component";
-import { AIPromptTestHarnessDialogComponent } from "./AIPrompts/ai-prompt-test-harness-dialog.component";
+import { AIAgentTestHarnessComponent } from "./AIAgents/ai-agent-test-harness-old.component";
+import { AIPromptTestHarnessComponent } from "./AIPrompts/ai-prompt-test-harness-old.component";
+import { AIAgentTestHarnessComponent as AIAgentTestHarnessComponentNew } from "./AIAgents/ai-agent-test-harness.component";
+import { AIPromptTestHarnessComponent as AIPromptTestHarnessComponentNew } from "./AIPrompts/ai-prompt-test-harness.component";
+import { AIAgentTestHarnessDialogComponent } from "./AIAgents/ai-agent-test-harness-dialog-old.component";
+import { AIPromptTestHarnessDialogComponent } from "./AIPrompts/ai-prompt-test-harness-dialog-old.component";
 import { TestHarnessDialogService } from "./test-harness-dialog.service";
 import { JoinGridModule } from "@memberjunction/ng-join-grid";
 import { CodeEditorModule } from "@memberjunction/ng-code-editor";
@@ -44,6 +46,8 @@ import { TreeViewModule } from '@progress/kendo-angular-treeview';
         AIAgentFormComponentExtended,
         AIAgentTestHarnessComponent,
         AIPromptTestHarnessComponent,
+        AIAgentTestHarnessComponentNew,
+        AIPromptTestHarnessComponentNew,
         AIAgentTestHarnessDialogComponent,
         AIPromptTestHarnessDialogComponent
     ],
@@ -85,6 +89,8 @@ import { TreeViewModule } from '@progress/kendo-angular-treeview';
         AIAgentFormComponentExtended,
         AIAgentTestHarnessComponent,
         AIPromptTestHarnessComponent,
+        AIAgentTestHarnessComponentNew,
+        AIPromptTestHarnessComponentNew,
         AIAgentTestHarnessDialogComponent,
         AIPromptTestHarnessDialogComponent
     ],
