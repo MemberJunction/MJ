@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewChecked, SecurityContext } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 import { AIAgentEntity, AIAgentRunEntity, AIAgentRunStepEntity, AIPromptEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -195,6 +196,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
     
     /** Reference to the hidden file input element for conversation import functionality */
     @ViewChild('fileInput') private fileInput!: ElementRef;
+    
+    /** Reference to the message input textarea */
+    @ViewChild('messageInput') private messageInput!: TextAreaComponent;
 
     // === Conversation State ===
     /** Complete array of all messages in the current conversation session */
@@ -576,6 +580,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
                 clearInterval(this.elapsedTimeInterval);
                 this.elapsedTimeInterval = null;
             }
+            
+            // Focus back on the input
+            this.focusMessageInput();
         }
     }
 
@@ -642,6 +649,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
                 clearInterval(this.elapsedTimeInterval);
                 this.elapsedTimeInterval = null;
             }
+            
+            // Focus back on the input
+            this.focusMessageInput();
         }
     }
 
@@ -1171,6 +1181,17 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
         }
     }
     
+
+    /**
+     * Focuses the message input textarea.
+     */
+    private focusMessageInput(): void {
+        if (this.messageInput) {
+            setTimeout(() => {
+                this.messageInput.focus();
+            }, 100);
+        }
+    }
 
     /**
      * Determines if the provided content is valid JSON.
