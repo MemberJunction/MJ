@@ -1,5 +1,5 @@
 ---
-"@memberjunction/server": patch
+"@memberjunction/server": minor
 ---
 
-Add missing dependency
+Add missing dependency and add migration to filter constraint
