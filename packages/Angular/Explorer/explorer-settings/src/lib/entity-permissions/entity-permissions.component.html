@@ -1,0 +1,323 @@
+<div class="entity-permissions-container">
+  <!-- Action Buttons -->
+  <div class="action-buttons">
+    <div class="view-toggle">
+      <button 
+        class="view-btn"
+        [class.active]="viewMode === 'list'"
+        (click)="setViewMode('list')"
+        title="List View"
+      >
+        <i class="fa-solid fa-list"></i>
+      </button>
+      <button 
+        class="view-btn"
+        [class.active]="viewMode === 'grid'"
+        (click)="setViewMode('grid')"
+        title="Grid View"
+      >
+        <i class="fa-solid fa-th"></i>
+      </button>
+    </div>
+    <button class="btn-secondary" (click)="refreshData()" [disabled]="isLoading">
+      <i class="fa-solid fa-refresh" [class.fa-spin]="isLoading"></i>
+      Refresh
+    </button>
+  </div>
+
+  <!-- Stats Cards -->
+  <div class="stats-grid" style="display: flex">
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-total">
+        <i class="fa-solid fa-database"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-value">{{ stats.totalEntities }}</div>
+        <div class="stat-label">Total Entities</div>
+      </div>
+    </div>
+    
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-public">
+        <i class="fa-solid fa-globe"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-value">{{ stats.publicEntities }}</div>
+        <div class="stat-label">Public Entities</div>
+      </div>
+    </div>
+    
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-restricted">
+        <i class="fa-solid fa-lock"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-value">{{ stats.restrictedEntities }}</div>
+        <div class="stat-label">Restricted Entities</div>
+      </div>
+    </div>
+    
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-permissions">
+        <i class="fa-solid fa-key"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-value">{{ stats.totalPermissions }}</div>
+        <div class="stat-label">Total Permissions</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters Section -->
+  <div class="filters-section">
+    <div class="filters-row">
+      <!-- Entity Search -->
+      <div class="search-container">
+        <i class="fa-solid fa-search search-icon"></i>
+        <input 
+          type="text" 
+          class="search-input" 
+          placeholder="Search entities by name or description..."
+          (input)="onSearchChange($event)"
+          [value]="filters$.value.entitySearch"
+        />
+      </div>
+      
+      <!-- Access Level Filter -->
+      <div class="filter-group">
+        <label class="filter-label">Access Level</label>
+        <div class="filter-buttons">
+          <button 
+            class="filter-btn"
+            [class.active]="filters$.value.accessLevel === 'all'"
+            (click)="onAccessLevelChange('all')"
+          >
+            All
+          </button>
+          <button 
+            class="filter-btn"
+            [class.active]="filters$.value.accessLevel === 'public'"
+            (click)="onAccessLevelChange('public')"
+          >
+            Public
+          </button>
+          <button 
+            class="filter-btn"
+            [class.active]="filters$.value.accessLevel === 'restricted'"
+            (click)="onAccessLevelChange('restricted')"
+          >
+            Restricted
+          </button>
+          <button 
+            class="filter-btn"
+            [class.active]="filters$.value.accessLevel === 'custom'"
+            (click)="onAccessLevelChange('custom')"
+          >
+            Custom
+          </button>
+        </div>
+      </div>
+      
+      <!-- Role Filter -->
+      <div class="filter-group">
+        <label class="filter-label">Filter by Role</label>
+        <select class="filter-select" (change)="onRoleFilterChange($event)">
+          <option value="">All Roles</option>
+          @for (role of roles; track role.ID) {
+            <option [value]="role.ID">{{ role.Name }}</option>
+          }
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  @if (isLoading) {
+    <div class="loading-container">
+      <div class="loading-spinner">
+        <div class="spinner-ring"></div>
+        <div class="spinner-ring"></div>
+        <div class="spinner-ring"></div>
+      </div>
+      <div class="loading-text">Loading entity permissions...</div>
+    </div>
+  }
+
+  <!-- Error State -->
+  @if (error && !isLoading) {
+    <div class="error-container">
+      <div class="error-content">
+        <i class="fa-solid fa-exclamation-triangle error-icon"></i>
+        <p class="error-message">{{ error }}</p>
+        <button class="retry-button" (click)="loadInitialData()">
+          <i class="fa-solid fa-refresh"></i>
+          Try Again
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- Content Area -->
+  @if (!isLoading && !error) {
+    <div class="content-area">
+      @if (viewMode === 'list') {
+        <!-- List View -->
+        <div class="entities-list">
+          @for (ea of filteredEntityAccess; track ea.entity.ID) {
+            <div class="entity-card" [class.expanded]="isEntityExpanded(ea.entity.ID)">
+              <div class="entity-header" (click)="toggleEntityExpansion(ea.entity.ID)">
+                <div class="entity-info">
+                  <div class="entity-icon-wrapper">
+                    <i class="fa-solid fa-table"></i>
+                  </div>
+                  <div class="entity-details">
+                    <h3 class="entity-name">{{ ea.entity.Name }}</h3>
+                    <p class="entity-description">{{ ea.entity.Description || 'No description available' }}</p>
+                  </div>
+                </div>
+                
+                <div class="entity-meta">
+                  <span class="access-badge" [class]="getAccessLevelClass(ea)">
+                    <i [class]="getAccessLevelClass(ea) === 'access-public' ? 'fa-solid fa-globe' : 
+                               getAccessLevelClass(ea) === 'access-restricted' ? 'fa-solid fa-lock' : 
+                               'fa-solid fa-key'"></i>
+                    {{ getAccessLevelLabel(ea) }}
+                  </span>
+                  <button class="action-btn" (click)="editEntityPermissions(ea); $event.stopPropagation()" title="Edit Permissions">
+                    <i class="fa-solid fa-edit"></i>
+                  </button>
+                  <button class="expand-btn">
+                    <i class="fa-solid fa-chevron-down"></i>
+                  </button>
+                </div>
+              </div>
+              
+              @if (isEntityExpanded(ea.entity.ID)) {
+                <div class="entity-content">
+                  @if (ea.permissions.length > 0) {
+                    <div class="permissions-grid">
+                      <div class="permissions-header">
+                        <span class="role-header">Role</span>
+                        <span class="permission-header">Create</span>
+                        <span class="permission-header">Read</span>
+                        <span class="permission-header">Update</span>
+                        <span class="permission-header">Delete</span>
+                      </div>
+                      @for (roleId of ea.rolePermissions.keys(); track roleId) {
+                        <div class="permission-row">
+                          <span class="role-name">{{ getRoleName(roleId) }}</span>
+                          <span class="permission-cell">
+                            <i [class]="hasPermission(ea, roleId, 'canCreate') ? 
+                                       'fa-solid fa-check text-success' : 
+                                       'fa-solid fa-times text-muted'"></i>
+                          </span>
+                          <span class="permission-cell">
+                            <i [class]="hasPermission(ea, roleId, 'canRead') ? 
+                                       'fa-solid fa-check text-success' : 
+                                       'fa-solid fa-times text-muted'"></i>
+                          </span>
+                          <span class="permission-cell">
+                            <i [class]="hasPermission(ea, roleId, 'canUpdate') ? 
+                                       'fa-solid fa-check text-success' : 
+                                       'fa-solid fa-times text-muted'"></i>
+                          </span>
+                          <span class="permission-cell">
+                            <i [class]="hasPermission(ea, roleId, 'canDelete') ? 
+                                       'fa-solid fa-check text-success' : 
+                                       'fa-solid fa-times text-muted'"></i>
+                          </span>
+                        </div>
+                      }
+                    </div>
+                  } @else {
+                    <p class="no-permissions">
+                      @if (ea.isPublic) {
+                        This entity is publicly accessible by all users.
+                      } @else {
+                        No specific role permissions configured. Access is restricted to system administrators.
+                      }
+                    </p>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+      } @else {
+        <!-- Grid View -->
+        <div class="entities-grid">
+          @for (ea of filteredEntityAccess; track ea.entity.ID) {
+            <div class="entity-grid-card" [class]="getAccessLevelClass(ea)">
+              <div class="grid-card-header">
+                <i class="fa-solid fa-table"></i>
+                <button class="edit-btn" (click)="editEntityPermissions(ea)" title="Edit Permissions">
+                  <i class="fa-solid fa-edit"></i>
+                </button>
+              </div>
+              <h4 class="grid-card-title">{{ ea.entity.Name }}</h4>
+              <p class="grid-card-description">{{ ea.entity.Description || 'No description' }}</p>
+              <div class="grid-card-footer">
+                <span class="access-label">
+                  <i [class]="getAccessLevelClass(ea) === 'access-public' ? 'fa-solid fa-globe' : 
+                             getAccessLevelClass(ea) === 'access-restricted' ? 'fa-solid fa-lock' : 
+                             'fa-solid fa-key'"></i>
+                  {{ getAccessLevelLabel(ea) }}
+                </span>
+                @if (ea.permissions.length > 0) {
+                  <span class="permission-count">
+                    {{ ea.permissions.length }} permission{{ ea.permissions.length === 1 ? '' : 's' }}
+                  </span>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      }
+      
+      @if (filteredEntityAccess.length === 0) {
+        <div class="empty-state">
+          <i class="fa-solid fa-key empty-icon"></i>
+          <p class="empty-text">No entities found</p>
+          <p class="empty-subtext">Try adjusting your filters to see more results</p>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Permission Edit Dialog -->
+  @if (showPermissionDialog && selectedEntity) {
+    <div class="modal-backdrop" (click)="showPermissionDialog = false">
+      <div class="modal-dialog modal-large" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3 class="modal-title">
+            <i class="fa-solid fa-key"></i>
+            Edit Permissions - {{ selectedEntity.entity.Name }}
+          </h3>
+          <button class="modal-close" (click)="showPermissionDialog = false">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-description">
+            Configure role-based permissions for this entity. Changes will affect all users with the selected roles.
+          </p>
+          
+          <!-- Permission editing UI would go here -->
+          <div class="permission-editor">
+            <p class="coming-soon">
+              <i class="fa-solid fa-info-circle"></i>
+              Permission editing interface coming soon...
+            </p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="showPermissionDialog = false">Cancel</button>
+          <button class="btn-primary" (click)="savePermissions()">
+            <i class="fa-solid fa-save"></i>
+            Save Permissions
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

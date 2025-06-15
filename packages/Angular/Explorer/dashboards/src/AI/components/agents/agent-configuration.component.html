@@ -1,18 +1,11 @@
 <div class="agent-configuration-container" mjFillContainer [rightMargin]="8" [bottomMargin]="8">
-  
-  <!-- Agent Editor Modal -->
-  @if (showEditor && selectedAgentId) {
-    <mj-agent-editor
-      [agentId]="selectedAgentId"
-      (close)="closeAgentEditor()"
-      (openAgent)="onOpenAgentFromEditor($event)"
-      (openEntityRecord)="onOpenRecord($event.entityName, $event.recordId)"
-      mjFillContainer>
-    </mj-agent-editor>
-  } @else {
   <!-- Header -->
   <div class="dashboard-header">
     <div class="header-info">
+      <h2 class="dashboard-title">
+        <i class="fa-solid fa-robot"></i>
+        Agent Configuration
+      </h2>
       <button 
         type="button" 
         class="filter-toggle-btn"
@@ -25,13 +18,33 @@
           Show Filters
         }
       </button>
-      <span class="agent-count">{{ filteredAgents.length }} agents</span>
+      <span class="item-count">{{ filteredAgents.length }} agents</span>
     </div>
     
     <div class="header-controls">
+      <div class="view-toggle">
+        <button 
+          type="button" 
+          class="view-btn"
+          [class.active]="viewMode === 'grid'"
+          (click)="setViewMode('grid')"
+          title="Grid View">
+          <i class="fa-solid fa-grip"></i>
+        </button>
+        <button 
+          type="button" 
+          class="view-btn"
+          [class.active]="viewMode === 'list'"
+          (click)="setViewMode('list')"
+          title="List View">
+          <i class="fa-solid fa-list"></i>
+        </button>
+      </div>
+      
       <button 
         type="button" 
-        class="control-btn"
+        class="control-btn primary"
+        (click)="createNewAgent()"
         title="Create New Agent">
         <i class="fa-solid fa-plus"></i>
         New Agent
@@ -84,82 +97,189 @@
             </div>
           }
 
-          <!-- Agents List -->
+          <!-- Agents Display -->
           @if (!isLoading) {
             @if (filteredAgents.length === 0) {
               <div class="empty-state">
                 <i class="fa-solid fa-robot"></i>
                 <h3>No agents found</h3>
                 <p>No agents match your current filters. Try adjusting your search criteria or create a new agent.</p>
+                <button 
+                  type="button" 
+                  class="empty-state-btn"
+                  (click)="createNewAgent()">
+                  <i class="fa-solid fa-plus"></i>
+                  Create New Agent
+                </button>
               </div>
             } @else {
-              <div class="agents-grid">
-                @for (agent of filteredAgents; track agent.ID) {
-                  <div class="agent-card" (click)="openAgentEditor(agent.ID)">
-                    <!-- Card Header -->
-                    <div class="card-header">
-                      <div class="agent-info">
-                        <div class="agent-icon">
-                          <i [class]="getExecutionModeIcon(agent.ExecutionMode)"></i>
-                        </div>
-                        <div class="agent-details">
-                          <h4 class="agent-name">{{ agent.Name }}</h4>
-                          <div class="agent-meta">
-                            <span class="agent-type">{{ agent.ExecutionMode }}</span>
-                            @if (agent.ExposeAsAction) {
-                              <span class="agent-category">• Exposed as Action</span>
-                            }
+              <!-- Grid View -->
+              @if (viewMode === 'grid') {
+                <div class="agents-grid">
+                  @for (agent of filteredAgents; track agent.ID) {
+                    <div class="agent-card" [class.expanded]="expandedAgentId === agent.ID">
+                      <!-- Card Header -->
+                      <div class="card-header" (click)="toggleAgentExpansion(agent.ID)">
+                        <div class="agent-info">
+                          <div class="agent-icon" [style.background-color]="getAgentIconColor(agent)">
+                            <i [class]="getExecutionModeIcon(agent.ExecutionMode)"></i>
+                          </div>
+                          <div class="agent-details">
+                            <h4 class="agent-name">{{ agent.Name }}</h4>
+                            <div class="agent-meta">
+                              <span class="meta-item">
+                                <i class="fa-solid fa-microchip"></i>
+                                {{ agent.ExecutionMode }}
+                              </span>
+                              @if (agent.Status) {
+                                <span class="meta-item" [class]="'status-' + agent.Status.toLowerCase()">
+                                  <i class="fa-solid fa-circle" style="font-size: 8px;"></i>
+                                  {{ agent.Status }}
+                                </span>
+                              }
+                              @if (agent.ExposeAsAction) {
+                                <span class="meta-item">
+                                  <i class="fa-solid fa-bolt"></i>
+                                  Exposed
+                                </span>
+                              }
+                            </div>
                           </div>
                         </div>
+                        
+                        <i class="fa-solid fa-chevron-down expand-icon" 
+                           [class.rotated]="expandedAgentId === agent.ID"></i>
                       </div>
-                      
-                      <div class="status-badge execution-mode-{{ agent.ExecutionMode.toLowerCase() }}">
-                        {{ agent.ExecutionMode }}
+
+                      <!-- Card Body -->
+                      <div class="card-body">
+                        @if (agent.Description) {
+                          <p class="agent-description">{{ agent.Description }}</p>
+                        } @else {
+                          <p class="agent-description text-muted">No description provided</p>
+                        }
+                        
+                        <!-- Expandable Content -->
+                        @if (expandedAgentId === agent.ID) {
+                          <div class="expanded-content">
+                            <div class="agent-stats">
+                              @if (agent.Parent) {
+                                <div class="stat-item">
+                                  <span class="stat-label">Parent</span>
+                                  <span class="stat-value">{{ agent.Parent }}</span>
+                                </div>
+                              }
+                              <div class="stat-item">
+                                <span class="stat-label">Context Compression</span>
+                                <span class="stat-value">
+                                  @if (agent.EnableContextCompression) {
+                                    <i class="fa-solid fa-check" style="color: #28a745;"></i> Enabled
+                                  } @else {
+                                    <i class="fa-solid fa-times" style="color: #dc3545;"></i> Disabled
+                                  }
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        }
+                      </div>
+
+                      <!-- Card Actions -->
+                      <div class="card-actions">
+                        <button 
+                          type="button" 
+                          class="action-btn"
+                          (click)="openAgentRecord(agent.ID)"
+                          title="Open Agent">
+                          <i class="fa-solid fa-external-link-alt"></i>
+                          Open
+                        </button>
+                        
+                        @if (agent.Status === 'Active') {
+                          <button 
+                            type="button" 
+                            class="action-btn action-btn-primary"
+                            (click)="runAgent(agent)"
+                            title="Run Agent">
+                            <i class="fa-solid fa-play"></i>
+                            Run
+                          </button>
+                        }
                       </div>
                     </div>
-
-                    <!-- Card Body -->
-                    <div class="card-body">
-                      @if (agent.Description) {
-                        <p class="agent-description">{{ agent.Description }}</p>
-                      } @else {
-                        <p class="agent-description text-muted">No description provided</p>
+                  }
+                </div>
+              }
+              
+              <!-- List View -->
+              @if (viewMode === 'list') {
+                <div class="agents-list">
+                  <table class="agents-table">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Status</th>
+                        <th>Execution Mode</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (agent of filteredAgents; track agent.ID) {
+                        <tr>
+                          <td>
+                            <div class="agent-name-cell">
+                              <div class="agent-icon-small" [style.background-color]="getAgentIconColor(agent)">
+                                <i [class]="getExecutionModeIcon(agent.ExecutionMode)"></i>
+                              </div>
+                              <div>
+                                <div class="agent-name">{{ agent.Name }}</div>
+                                @if (agent.Description) {
+                                  <div class="agent-description-small">{{ agent.Description }}</div>
+                                }
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <span class="status-badge" [class]="'status-' + (agent.Status || 'unknown').toLowerCase()">
+                              {{ agent.Status || 'Unknown' }}
+                            </span>
+                          </td>
+                          <td>
+                            <span class="execution-mode">
+                              <i [class]="getExecutionModeIcon(agent.ExecutionMode)"></i>
+                              {{ agent.ExecutionMode }}
+                            </span>
+                          </td>
+                          <td>
+                            <div class="table-actions">
+                              <button 
+                                type="button" 
+                                class="action-btn-small"
+                                (click)="openAgentRecord(agent.ID)"
+                                title="Open Agent">
+                                <i class="fa-solid fa-external-link-alt"></i>
+                              </button>
+                              @if (agent.Status === 'Active') {
+                                <button 
+                                  type="button" 
+                                  class="action-btn-small primary"
+                                  (click)="runAgent(agent)"
+                                  title="Run Agent">
+                                  <i class="fa-solid fa-play"></i>
+                                </button>
+                              }
+                            </div>
+                          </td>
+                        </tr>
                       }
-                      
-                      @if (agent.Parent) {
-                        <div class="agent-parent">
-                          <span class="fa-solid fa-link"></span>
-                          Parent: {{ agent.Parent }}
-                        </div>
-                      }
-                    </div>
-
-                    <!-- Card Actions -->
-                    <div class="card-actions" (click)="$event.stopPropagation()">
-                      <button 
-                        type="button" 
-                        class="action-btn"
-                        (click)="openAgentEditor(agent.ID)">
-                        <i class="fa-solid fa-eye"></i>
-                        View
-                      </button>
-                      
-                      <button 
-                        type="button" 
-                        class="action-btn action-btn-primary"
-                        (click)="openAgentEditor(agent.ID)">
-                        <i class="fa-solid fa-edit"></i>
-                        Configure
-                      </button>
-                    </div>
-                  </div>
-                }
-              </div>
+                    </tbody>
+                  </table>
+                </div>
+              }
             }
           }
         </div>
       </kendo-splitter-pane>
     </kendo-splitter>
   </div>
-  }
 </div>

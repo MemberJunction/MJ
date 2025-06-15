@@ -17,8 +17,10 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 export class AIPromptFormComponentExtended extends AIPromptFormComponent implements OnInit {
     public record!: AIPromptEntity;
     public template: TemplateEntity | null = null;
+    public templateContent: TemplateContentEntity | null = null;
     public isLoadingTemplate = false;
     public showExecutionDialog = false;
+    public showTestHarness = false;
     
     // Model management
     public promptModels: AIPromptModelEntity[] = [];
@@ -114,6 +116,9 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             if (!this.template.IsSaved) {
                 this.template = null;
                 console.warn(`Template with ID ${this.record.TemplateID} not found`);
+            } else {
+                // Load template content
+                await this.loadTemplateContent();
             }
 
         } catch (error) {
@@ -205,6 +210,32 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     }
 
     /**
+     * Loads template content for the current template
+     */
+    private async loadTemplateContent() {
+        if (!this.template?.ID) {
+            this.templateContent = null;
+            return;
+        }
+
+        try {
+            const rv = new RunView();
+            const results = await rv.RunView<TemplateContentEntity>({
+                EntityName: 'Template Contents',
+                ExtraFilter: `TemplateID = '${this.template.ID}'`,
+                OrderBy: 'Priority ASC',
+                ResultType: 'entity_object'
+            });
+            
+            // Get the first content (highest priority)
+            this.templateContent = results.Results?.[0] || null;
+        } catch (error) {
+            console.error('Error loading template content:', error);
+            this.templateContent = null;
+        }
+    }
+
+    /**
      * Opens the AI prompt execution dialog
      */
     public executeAIPrompt() {
@@ -227,6 +258,29 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         }
 
         this.showExecutionDialog = true;
+    }
+
+    /**
+     * Opens the test harness
+     */
+    public openTestHarness() {
+        if (!this.record?.ID) {
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Please save the AI prompt before testing',
+                'warning',
+                4000
+            );
+            return;
+        }
+
+        this.showTestHarness = true;
+    }
+
+    /**
+     * Handles when test harness is closed
+     */
+    public onTestHarnessVisibilityChanged(isVisible: boolean) {
+        this.showTestHarness = isVisible;
     }
 
     /**

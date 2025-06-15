@@ -1,12 +1,12 @@
 import { NgModule } from "@angular/core";
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { InputsModule, TextBoxModule, TextAreaModule, NumericTextBoxModule } from '@progress/kendo-angular-inputs';
+import { InputsModule, TextBoxModule, TextAreaModule, NumericTextBoxModule, SwitchModule } from '@progress/kendo-angular-inputs';
 import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
-import { ButtonsModule, ButtonModule } from '@progress/kendo-angular-buttons';
+import { ButtonsModule, ButtonModule, SplitButtonModule } from '@progress/kendo-angular-buttons';
 import { DropDownsModule, ComboBoxModule } from '@progress/kendo-angular-dropdowns';
-import { LayoutModule, ExpansionPanelModule } from '@progress/kendo-angular-layout';
-import { DialogsModule } from '@progress/kendo-angular-dialog';
+import { LayoutModule, ExpansionPanelModule, TabStripModule } from '@progress/kendo-angular-layout';
+import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { FormToolbarModule } from '@memberjunction/ng-form-toolbar';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
@@ -21,10 +21,14 @@ import { TemplateParamDialogComponent } from "./Templates/template-param-dialog.
 import { TemplateEditorComponent } from "../shared/components/template-editor.component";
 import { AIPromptExecutionDialogComponent } from "./AIPrompts/ai-prompt-execution-dialog.component";
 import { AIPromptFormComponentExtended, LoadAIPromptFormComponentExtended } from "./AIPrompts/ai-prompt-form.component";
-import { AIAgentExecutionDialogComponent } from "./AIAgents/ai-agent-execution-dialog.component";
 import { AIAgentFormComponentExtended, LoadAIAgentFormComponentExtended } from "./AIAgents/ai-agent-form.component";
+import { AITestHarnessComponent } from "./AIAgents/ai-test-harness.component";
+import { AITestHarnessDialogComponent } from "./AIAgents/ai-test-harness-dialog.component";
+import { TestHarnessDialogService } from "./test-harness-dialog.service";
 import { JoinGridModule } from "@memberjunction/ng-join-grid";
 import { CodeEditorModule } from "@memberjunction/ng-code-editor";
+import { TreeViewModule } from '@progress/kendo-angular-treeview';
+import { EntitySelectorDialogComponent } from "./shared/entity-selector-dialog.component";
 
 @NgModule({
     declarations: [
@@ -36,23 +40,29 @@ import { CodeEditorModule } from "@memberjunction/ng-code-editor";
         TemplateEditorComponent,
         AIPromptExecutionDialogComponent,
         AIPromptFormComponentExtended,
-        AIAgentExecutionDialogComponent,
-        AIAgentFormComponentExtended
+        AIAgentFormComponentExtended,
+        AITestHarnessComponent,
+        EntitySelectorDialogComponent,
+        AITestHarnessDialogComponent
     ],
     imports: [
         CommonModule,
         FormsModule,
         LayoutModule,
         ExpansionPanelModule,
+        TabStripModule,
         DialogsModule,
+        WindowModule,
         InputsModule,
         TextBoxModule,
         TextAreaModule,
         NumericTextBoxModule,
+        SwitchModule,
         DropDownsModule,
         ComboBoxModule,
         ButtonsModule,
         ButtonModule,
+        SplitButtonModule,
         DateInputsModule,
         UserViewGridModule,
         LinkDirectivesModule,
@@ -61,7 +71,8 @@ import { CodeEditorModule } from "@memberjunction/ng-code-editor";
         FormToolbarModule,
         MJTabStripModule,
         ContainerDirectivesModule,
-        CodeEditorModule
+        CodeEditorModule,
+        TreeViewModule
     ],
     exports: [
         EntityFormExtendedComponent,
@@ -70,7 +81,12 @@ import { CodeEditorModule } from "@memberjunction/ng-code-editor";
         TemplatesFormExtendedComponent,
         TemplateEditorComponent,
         AIPromptFormComponentExtended,
-        AIAgentFormComponentExtended
+        AIAgentFormComponentExtended,
+        AITestHarnessComponent,
+        AITestHarnessDialogComponent
+    ],
+    providers: [
+        TestHarnessDialogService
     ]
 })
 export class MemberJunctionCoreEntityFormsModule { }

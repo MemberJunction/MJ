@@ -89,6 +89,14 @@ import { QueueManager } from '@memberjunction/queue';
 
 import * as sql from 'mssql';
 import { SQLServerTransactionGroup } from './SQLServerTransactionGroup';
+import { SqlLoggingSessionImpl } from './SqlLogger.js';
+import { 
+  ExecuteSQLOptions, 
+  ExecuteSQLBatchOptions, 
+  SQLServerProviderConfigData, 
+  SqlLoggingOptions, 
+  SqlLoggingSession 
+} from './types.js';
 
 import { UserCache } from './UserCache';
 import { RunQueryParams } from '@memberjunction/core/dist/generic/runQuery';
@@ -96,368 +104,9 @@ import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 import { EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult } from '@memberjunction/actions-base';
 import { v4 as uuidv4 } from 'uuid';
-import { format as formatSql } from 'sql-formatter';
 import * as fs from 'fs';
 import * as path from 'path';
 
-/**
- * Configuration options for SQL execution with logging support
- */
-export interface ExecuteSQLOptions {
-  /** Optional description for this SQL operation */
-  description?: string;
-  /** If true, this statement will not be logged to any logging session */
-  ignoreLogging?: boolean;
-  /** Whether this is a data mutation operation (INSERT/UPDATE/DELETE) */
-  isMutation?: boolean;
-  /** Simple SQL fallback for loggers with logRecordChangeMetadata=false (only for Save/Delete operations) */
-  simpleSQLFallback?: string;
-}
-
-/**
- * Configuration options for batch SQL execution
- */
-export interface ExecuteSQLBatchOptions {
-  /** Optional description for this batch operation */
-  description?: string;
-  /** If true, this batch will not be logged to any logging session */
-  ignoreLogging?: boolean;
-  /** Whether this batch contains data mutation operations */
-  isMutation?: boolean;
-}
-
-/**
- * Configuration data specific to SQL Server provider
- */
-export class SQLServerProviderConfigData extends ProviderConfigDataBase {
-  /**
-   * Gets the SQL Server data source configuration
-   */
-  get DataSource(): any {
-    return this.Data.DataSource;
-  }
-  
-  /**
-   * Gets the current user's email address
-   */
-  get CurrentUserEmail(): string {
-    return this.Data.CurrentUserEmail;
-  }
-  
-  /**
-   * Gets the interval in seconds for checking metadata refresh
-   */
-  get CheckRefreshIntervalSeconds(): number {
-    return this.Data.CheckRefreshIntervalSeconds;
-  }
-
-  constructor(
-    dataSource: any,
-    currentUserEmail: string,
-    MJCoreSchemaName?: string,
-    checkRefreshIntervalSeconds: number = 0 /*default to disabling auto refresh */,
-    includeSchemas?: string[],
-    excludeSchemas?: string[],
-  ) {
-    super(
-      {
-        DataSource: dataSource,
-        CurrentUserEmail: currentUserEmail,
-        CheckRefreshIntervalSeconds: checkRefreshIntervalSeconds,
-      },
-      MJCoreSchemaName,
-      includeSchemas,
-      excludeSchemas,
-    );
-  }
-}
-
-/**
- * Configuration options for SQL logging sessions
- */
-export interface SqlLoggingOptions {
-  /** Whether to format output as a migration file with schema placeholders */
-  formatAsMigration?: boolean;
-  /** Optional description to include as a comment at the start of the log */
-  description?: string;
-  /** Which types of statements to log: 'queries' (all), 'mutations' (only data changes), 'both' (default) */
-  statementTypes?: 'queries' | 'mutations' | 'both';
-  /** Optional batch separator to emit after each statement (e.g., "GO" for SQL Server) */
-  batchSeparator?: string;
-  /** Whether to pretty print SQL statements with proper formatting */
-  prettyPrint?: boolean;
-  /** Whether to log record change metadata wrapper SQL (default: false). When false, only core spCreate/spUpdate/spDelete calls are logged */
-  logRecordChangeMetadata?: boolean;
-  /** Whether to retain log files that contain no SQL statements (default: false). When false, empty log files are automatically deleted on dispose */
-  retainEmptyLogFiles?: boolean;
-}
-
-/**
- * Interface for SQL logging session with disposable pattern
- */
-export interface SqlLoggingSession {
-  /** Unique session ID */
-  readonly id: string;
-  /** File path where SQL is being logged */
-  readonly filePath: string;
-  /** Session start time */
-  readonly startTime: Date;
-  /** Number of statements logged so far */
-  readonly statementCount: number;
-  /** Configuration options for this session */
-  readonly options: SqlLoggingOptions;
-  /** Dispose method to stop logging and clean up resources */
-  dispose(): Promise<void>;
-}
-
-/**
- * Internal implementation of SqlLoggingSession that handles SQL statement logging to files.
- * This class manages file I/O, SQL formatting, and filtering based on session options.
- * 
- * @internal
- */
-class SqlLoggingSessionImpl implements SqlLoggingSession {
-  public readonly id: string;
-  public readonly filePath: string;
-  public readonly startTime: Date;
-  public readonly options: SqlLoggingOptions;
-  private _statementCount: number = 0;
-  private _emittedStatementCount: number = 0; // Track actually emitted statements
-  private _fileHandle: fs.promises.FileHandle | null = null;
-  private _disposed: boolean = false;
-
-  constructor(id: string, filePath: string, options: SqlLoggingOptions = {}) {
-    this.id = id;
-    this.filePath = filePath;
-    this.startTime = new Date();
-    this.options = options;
-  }
-
-  /**
-   * Gets the count of SQL statements actually written to the log file
-   * @returns The number of emitted statements (after filtering)
-   */
-  public get statementCount(): number {
-    return this._emittedStatementCount; // Return actually emitted statements
-  }
-
-  /**
-   * Initializes the logging session by creating the log file and writing the header
-   * @throws Error if file creation fails
-   */
-  public async initialize(): Promise<void> {
-    // Ensure directory exists
-    const dir = path.dirname(this.filePath);
-    await fs.promises.mkdir(dir, { recursive: true });
-
-    // Open file for writing
-    this._fileHandle = await fs.promises.open(this.filePath, 'w');
-
-    // Write header comment
-    const header = this._generateHeader();
-    await this._fileHandle.writeFile(header);
-  }
-
-  /**
-   * Logs a SQL statement to the file, applying filtering and formatting based on session options
-   * 
-   * @param query - The SQL query to log
-   * @param parameters - Optional parameters for the query
-   * @param description - Optional description for this operation
-   * @param isMutation - Whether this is a data mutation operation
-   * @param simpleSQLFallback - Optional simple SQL to use if logRecordChangeMetadata=false
-   */
-  public async logSqlStatement(query: string, parameters?: any, description?: string, isMutation: boolean = false, simpleSQLFallback?: string): Promise<void> {
-    if (this._disposed || !this._fileHandle) {
-      return;
-    }
-
-    // Filter statements based on statementTypes option
-    const statementTypes = this.options.statementTypes || 'both';
-    if (statementTypes === 'mutations' && !isMutation) {
-      return; // Skip logging non-mutation statements
-    }
-    if (statementTypes === 'queries' && isMutation) {
-      return; // Skip logging mutation statements
-    }
-
-    let logEntry = '';
-
-    // Add description comment if provided
-    if (description) {
-      logEntry += `-- ${description}\n`;
-    }
-
-    // Process the SQL statement
-    let processedQuery = query;
-    
-    // Use simple SQL fallback if this session has logRecordChangeMetadata=false (default) and fallback is provided
-    if (this.options.logRecordChangeMetadata !== true && simpleSQLFallback) {
-      processedQuery = simpleSQLFallback;
-      // Update description to indicate we're using the simplified version
-      if (description && !description.includes('(core SP call only)')) {
-        logEntry = logEntry.replace(`-- ${description}\n`, `-- ${description} (core SP call only)\n`);
-      }
-    }
-
-    // Replace schema names with Flyway placeholders if migration format
-    if (this.options.formatAsMigration) {
-      processedQuery = processedQuery.replace(/\[(\w+)\]\./g, '[${flyway:defaultSchema}].');
-    }
-
-    // Apply pretty printing if enabled
-    if (this.options.prettyPrint) {
-      processedQuery = this._prettyPrintSql(processedQuery);
-    }
-
-    // Add the SQL statement
-    logEntry += `${processedQuery};\n`;
-
-    // Add parameter comment if parameters exist
-    if (parameters) {
-      if (Array.isArray(parameters)) {
-        if (parameters.length > 0) {
-          logEntry += `-- Parameters: ${parameters.map((p, i) => `@p${i}='${p}'`).join(', ')}\n`;
-        }
-      } else if (typeof parameters === 'object') {
-        const paramStr = Object.entries(parameters)
-          .map(([key, value]) => `@${key}='${value}'`)
-          .join(', ');
-        if (paramStr) {
-          logEntry += `-- Parameters: ${paramStr}\n`;
-        }
-      }
-    }
-
-    // Add batch separator if specified
-    if (this.options.batchSeparator) {
-      logEntry += `\n${this.options.batchSeparator}\n`;
-    }
-
-    logEntry += '\n'; // Add blank line between statements
-
-    await this._fileHandle.writeFile(logEntry);
-    this._statementCount++;
-    this._emittedStatementCount++; // Track actually emitted statements
-  }
-
-  /**
-   * Disposes of the logging session, writes the footer, closes the file, and optionally deletes empty files
-   */
-  public async dispose(): Promise<void> {
-    if (this._disposed) {
-      return;
-    }
-
-    this._disposed = true;
-
-    if (this._fileHandle) {
-      // Write footer comment
-      const footer = this._generateFooter();
-      await this._fileHandle.writeFile(footer);
-
-      await this._fileHandle.close();
-      this._fileHandle = null;
-
-      // Check if we should delete empty log files
-      if (this._emittedStatementCount === 0 && !this.options.retainEmptyLogFiles) {
-        try {
-          await fs.promises.unlink(this.filePath);
-          // Log that we deleted the empty file (optional)
-          console.log(`Deleted empty SQL log file: ${this.filePath}`);
-        } catch (error) {
-          // Ignore errors during deletion (file might already be deleted, etc.)
-          console.error(`Failed to delete empty SQL log file: ${this.filePath}`, error);
-        }
-      }
-    }
-  }
-
-  private _generateHeader(): string {
-    let header = `-- SQL Logging Session\n`;
-    header += `-- Session ID: ${this.id}\n`;
-    header += `-- Started: ${this.startTime.toISOString()}\n`;
-
-    if (this.options.description) {
-      header += `-- Description: ${this.options.description}\n`;
-    }
-
-    if (this.options.formatAsMigration) {
-      header += `-- Format: Migration-ready with Flyway schema placeholders\n`;
-    }
-
-    header += `-- Generated by MemberJunction SQLServerDataProvider\n`;
-    header += `\n`;
-
-    return header;
-  }
-
-  private _generateFooter(): string {
-    const endTime = new Date();
-    const duration = endTime.getTime() - this.startTime.getTime();
-
-    let footer = `\n-- End of SQL Logging Session\n`;
-    footer += `-- Session ID: ${this.id}\n`;
-    footer += `-- Completed: ${endTime.toISOString()}\n`;
-    footer += `-- Duration: ${duration}ms\n`;
-    footer += `-- Total Statements: ${this._emittedStatementCount}\n`;
-
-    return footer;
-  }
-
-  /**
-   * Format SQL using sql-formatter library with SQL Server dialect
-   */
-  private _prettyPrintSql(sql: string): string {
-    if (!sql) return sql;
-
-    try {
-      let formatted = formatSql(sql, {
-        language: 'tsql', // SQL Server Transact-SQL dialect
-        tabWidth: 2,
-        keywordCase: 'upper',
-        functionCase: 'upper',
-        dataTypeCase: 'upper',
-        linesBetweenQueries: 1,
-      });
-
-      // Post-process to fix BEGIN/END formatting
-      formatted = this._postProcessBeginEnd(formatted);
-
-      return formatted;
-    } catch (error) {
-      // If formatting fails, return original SQL
-      console.warn('SQL formatting failed, returning original:', error);
-      return sql;
-    }
-  }
-
-  /**
-   * Post-process SQL to ensure BEGIN, END, and EXEC keywords are on their own lines
-   */
-  private _postProcessBeginEnd(sql: string): string {
-    if (!sql) return sql;
-
-    // Fix BEGIN keyword - ensure it's on its own line
-    // Match: any non-whitespace followed by space(s) followed by BEGIN (word boundary)
-    sql = sql.replace(/(\S)\s+(BEGIN\b)/g, '$1\n$2');
-
-    // Fix BEGIN followed by other keywords - ensure what follows BEGIN is on a new line
-    // Match: BEGIN followed by space(s) followed by non-whitespace
-    sql = sql.replace(/(BEGIN\b)\s+(\S)/g, '$1\n$2');
-
-    // Fix END keyword - ensure it's on its own line
-    // Match: any non-whitespace followed by space(s) followed by END (word boundary)
-    sql = sql.replace(/(\S)\s+(END\b)/g, '$1\n$2');
-
-    // Fix EXEC keyword - ensure it's on its own line
-    // Match: any non-whitespace followed by space(s) followed by EXEC (word boundary)
-    sql = sql.replace(/(\S)\s+(EXEC\b)/g, '$1\n$2');
-
-    return sql;
-  }
-
-}
 
 /**
  * SQL Server implementation of the MemberJunction data provider interfaces.
@@ -473,7 +122,7 @@ class SqlLoggingSessionImpl implements SqlLoggingSession {
  * 
  * @example
  * ```typescript
- * const config = new SQLServerProviderConfigData(dataSource, userEmail);
+ * const config = new SQLServerProviderConfigData(dataSource);
  * const provider = new SQLServerDataProvider(config);
  * await provider.Config();
  * ```
@@ -486,7 +135,6 @@ export class SQLServerDataProvider
   private _poolConfig: any; // Store the connection config for later use
   private _transaction: sql.Transaction;
   private _transactionRequest: sql.Request;
-  private _currentUserEmail: string;
   private _localStorageProvider: ILocalStorageProvider;
   private _bAllowRefresh: boolean = true;
   private _recordDupeDetector: DuplicateRecordDetector;
@@ -510,7 +158,6 @@ export class SQLServerDataProvider
   public async Config(configData: SQLServerProviderConfigData): Promise<boolean> {
     try {
       this._pool = configData.DataSource; // Now expects a ConnectionPool instead of DataSource
-      this._currentUserEmail = configData.CurrentUserEmail;
 
       return super.Config(configData); // now parent class can do it's config
     } catch (e) {
@@ -576,7 +223,7 @@ export class SQLServerDataProvider
    * @example
    * ```typescript
    * // Basic usage
-   * const session = await provider.createSqlLogger('./logs/metadata-sync.sql');
+   * const session = await provider.CreateSqlLogger('./logs/metadata-sync.sql');
    * try {
    *   // Perform operations that will be logged
    *   await provider.ExecuteSQL('INSERT INTO ...');
@@ -585,13 +232,13 @@ export class SQLServerDataProvider
    * }
    *
    * // With migration formatting
-   * const session = await provider.createSqlLogger('./migrations/changes.sql', {
+   * const session = await provider.CreateSqlLogger('./migrations/changes.sql', {
    *   formatAsMigration: true,
    *   description: 'MetadataSync push operation'
    * });
    * ```
    */
-  public async createSqlLogger(filePath: string, options?: SqlLoggingOptions): Promise<SqlLoggingSession> {
+  public async CreateSqlLogger(filePath: string, options?: SqlLoggingOptions): Promise<SqlLoggingSession> {
     const sessionId = uuidv4();
     const session = new SqlLoggingSessionImpl(sessionId, filePath, options);
 
@@ -617,13 +264,17 @@ export class SQLServerDataProvider
     };
   }
 
+  public async GetCurrentUser(): Promise<UserInfo> {
+    return this.CurrentUser;
+  }
+
   /**
    * Gets information about all active SQL logging sessions.
    * Useful for monitoring and debugging.
    *
    * @returns Array of session information objects
    */
-  public getActiveSqlLoggingSessions(): Array<{
+  public GetActiveSqlLoggingSessions(): Array<{
     id: string;
     filePath: string;
     startTime: Date;
@@ -643,7 +294,7 @@ export class SQLServerDataProvider
    * Disposes all active SQL logging sessions.
    * Useful for cleanup on provider shutdown.
    */
-  public async disposeAllSqlLoggingSessions(): Promise<void> {
+  public async DisposeAllSqlLoggingSessions(): Promise<void> {
     const disposePromises = Array.from(this._sqlLoggingSessions.values()).map((session) => session.dispose());
     await Promise.all(disposePromises);
     this._sqlLoggingSessions.clear();
@@ -667,17 +318,68 @@ export class SQLServerDataProvider
     ignoreLogging: boolean = false,
     isMutation: boolean = false,
     simpleSQLFallback?: string,
+    contextUser?: UserInfo,
   ): Promise<void> {
     if (ignoreLogging || this._sqlLoggingSessions.size === 0) {
       return;
     }
 
-    // Log to all active sessions in parallel
-    const logPromises = Array.from(this._sqlLoggingSessions.values()).map((session) => 
-      session.logSqlStatement(query, parameters, description, isMutation, simpleSQLFallback)
-    );
+    // Check if any session has verbose output enabled for debug logging
+    const allSessions = Array.from(this._sqlLoggingSessions.values());
+    const hasVerboseSession = allSessions.some(s => s.options.verboseOutput === true);
+    
+    if (hasVerboseSession) {
+      console.log('=== SQL LOGGING DEBUG ===');
+      console.log(`Query to log: ${query.substring(0, 100)}...`);
+      console.log(`Context user email: ${contextUser?.Email || 'NOT_PROVIDED'}`);
+      console.log(`Active sessions count: ${this._sqlLoggingSessions.size}`);
+      
+      console.log(`All sessions:`, allSessions.map(s => ({
+        id: s.id,
+        filterByUserId: s.options.filterByUserId,
+        sessionName: s.options.sessionName
+      })));
+    }
+    
+    const filteredSessions = allSessions.filter((session) => {
+        // If session has user filter, only log if contextUser matches AND contextUser is provided
+        if (session.options.filterByUserId) {
+          if (!contextUser?.Email) {
+            if (hasVerboseSession) {
+              console.log(`Session ${session.id}: Has user filter but no contextUser provided - SKIPPING`);
+            }
+            return false; // Don't log if filtering requested but no user context provided
+          }
+          const matches = session.options.filterByUserId === contextUser.ID;
+          if (hasVerboseSession) {
+            console.log(`Session ${session.id} filter check:`, {
+              filterByUserId: session.options.filterByUserId,
+              contextUserEmail: contextUser.Email,
+              matches: matches
+            });
+          }
+          return matches;
+        }
+        // No filter means log for all users (regardless of contextUser)
+        if (hasVerboseSession) {
+          console.log(`Session ${session.id} has no filter - including`);
+        }
+        return true;
+      });
+    
+    if (hasVerboseSession) {
+      console.log(`Sessions after filtering: ${filteredSessions.length}`);
+    }
+    
+    const logPromises = filteredSessions.map((session) => 
+        session.logSqlStatement(query, parameters, description, isMutation, simpleSQLFallback)
+      );
 
     await Promise.all(logPromises);
+    
+    if (hasVerboseSession) {
+      console.log('=== SQL LOGGING DEBUG END ===');
+    }
   }
 
   /**
@@ -695,11 +397,12 @@ export class SQLServerDataProvider
     description?: string,
     isMutation: boolean = false,
     simpleSQLFallback?: string,
+    contextUser?: UserInfo,
   ): Promise<void> {
     // Get the current provider instance
     const provider = Metadata.Provider as SQLServerDataProvider;
     if (provider && provider._sqlLoggingSessions.size > 0) {
-      await provider._logSqlStatement(query, parameters, description, false, isMutation, simpleSQLFallback);
+      await provider._logSqlStatement(query, parameters, description, false, isMutation, simpleSQLFallback, contextUser);
     }
   }
 
@@ -714,11 +417,11 @@ export class SQLServerDataProvider
     const ReportID = params.ReportID;
     // run the sql and return the data
     const sqlReport = `SELECT ReportSQL FROM [${this.MJCoreSchemaName}].vwReports WHERE ID =${ReportID}`;
-    const reportInfo = await this.ExecuteSQL(sqlReport);
+    const reportInfo = await this.ExecuteSQL(sqlReport, undefined, undefined, contextUser);
     if (reportInfo && reportInfo.length > 0) {
       const start = new Date().getTime();
       const sql = reportInfo[0].ReportSQL;
-      const result = await this.ExecuteSQL(sql);
+      const result = await this.ExecuteSQL(sql, undefined, undefined, contextUser);
       const end = new Date().getTime();
       if (result)
         return {
@@ -760,11 +463,11 @@ export class SQLServerDataProvider
       }
 
       const sqlQuery = `SELECT ID, Name, SQL FROM [${this.MJCoreSchemaName}].vwQueries WHERE ${filter}`;
-      const queryInfo = await this.ExecuteSQL(sqlQuery);
+      const queryInfo = await this.ExecuteSQL(sqlQuery, undefined, undefined, contextUser);
       if (queryInfo && queryInfo.length > 0) {
         const start = new Date().getTime();
         const sql = queryInfo[0].SQL;
-        const result = await this.ExecuteSQL(sql);
+        const result = await this.ExecuteSQL(sql, undefined, undefined, contextUser);
         const end = new Date().getTime();
         if (result)
           return {
@@ -862,7 +565,7 @@ export class SQLServerDataProvider
     try {
       if (params) {
         const user = contextUser ? contextUser : this.CurrentUser;
-        if (!user) throw new Error(`User ${this._currentUserEmail} not found in metadata and no contextUser provided to RunView()`);
+        if (!user) throw new Error(`User not found in metadata and no contextUser provided to RunView()`);
 
         let viewEntity: any = null,
           entityInfo: EntityInfo = null;
@@ -1019,14 +722,14 @@ export class SQLServerDataProvider
         }
 
         // now we can run the viewSQL, but only do this if the ResultType !== 'count_only', otherwise we don't need to run the viewSQL
-        const retData = params.ResultType === 'count_only' ? [] : await this.ExecuteSQL(viewSQL);
+        const retData = params.ResultType === 'count_only' ? [] : await this.ExecuteSQL(viewSQL, undefined, undefined, contextUser);
 
         // finally, if we have a countSQL, we need to run that to get the row count
         // but only do that if the # of rows returned is equal to the max rows, otherwise we know we have all the rows
         // OR do that if we are doing a count_only
         let rowCount = null;
         if (countSQL && (params.ResultType === 'count_only' || retData.length === entityInfo.UserViewMaxRows)) {
-          const countResult = await this.ExecuteSQL(countSQL);
+          const countResult = await this.ExecuteSQL(countSQL, undefined, undefined, contextUser);
           if (countResult && countResult.length > 0) {
             rowCount = countResult[0].TotalRowCount;
           }
@@ -1041,7 +744,7 @@ export class SQLServerDataProvider
           // is only used in the system on a tab or just for ad hoc view execution
 
           // we do NOT want to wait for this, so no await,
-          this.createAuditLogRecord(
+          this.CreateAuditLogRecord(
             user,
             'Run View',
             'Run View',
@@ -1203,7 +906,7 @@ export class SQLServerDataProvider
             INSERT INTO @ViewIDList (ID) (SELECT ${entityInfo.FirstPrimaryKey.Name} FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE (${whereSQL}))
             EXEC [${this.MJCoreSchemaName}].spCreateUserViewRunWithDetail(${viewId},${user.Email}, @ViewIDLIst)
             `;
-    const runIDResult = await this.ExecuteSQL(sSQL);
+    const runIDResult = await this.ExecuteSQL(sSQL, undefined, undefined, user);
     const runID: string = runIDResult[0].UserViewRunID;
     const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE ${entityInfo.FirstPrimaryKey.Name} IN
                                     (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE UserViewRunID=${runID})
@@ -1270,7 +973,7 @@ export class SQLServerDataProvider
     return sUserSearchSQL;
   }
 
-  public async createAuditLogRecord(
+  public async CreateAuditLogRecord(
     user: UserInfo,
     authorizationName: string | null,
     auditLogTypeName: string,
@@ -1335,15 +1038,15 @@ export class SQLServerDataProvider
     return ProviderType.Database;
   }
 
-  public async GetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey): Promise<boolean> {
-    const id = await this.GetRecordFavoriteID(userId, entityName, CompositeKey);
+  public async GetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo): Promise<boolean> {
+    const id = await this.GetRecordFavoriteID(userId, entityName, CompositeKey, contextUser);
     return id !== null;
   }
 
-  public async GetRecordFavoriteID(userId: string, entityName: string, CompositeKey: CompositeKey): Promise<string | null> {
+  public async GetRecordFavoriteID(userId: string, entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo): Promise<string | null> {
     try {
       const sSQL = `SELECT ID FROM [${this.MJCoreSchemaName}].vwUserFavorites WHERE UserID='${userId}' AND Entity='${entityName}' AND RecordID='${CompositeKey.Values()}'`;
-      const result = await this.ExecuteSQL(sSQL);
+      const result = await this.ExecuteSQL(sSQL, null, undefined, contextUser);
       if (result && result.length > 0) return result[0].ID;
       else return null;
     } catch (e) {
@@ -1386,10 +1089,10 @@ export class SQLServerDataProvider
     }
   }
 
-  public async GetRecordChanges(entityName: string, compositeKey: CompositeKey): Promise<RecordChange[]> {
+  public async GetRecordChanges(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): Promise<RecordChange[]> {
     try {
       const sSQL = `SELECT * FROM [${this.MJCoreSchemaName}].vwRecordChanges WHERE Entity='${entityName}' AND RecordID='${compositeKey.ToConcatenatedString()}' ORDER BY ChangedAt DESC`;
-      return this.ExecuteSQL(sSQL);
+      return this.ExecuteSQL(sSQL, undefined, undefined, contextUser);
     } catch (e) {
       LogError(e);
       throw e;
@@ -1467,7 +1170,7 @@ export class SQLServerDataProvider
    * @param entityName the name of the entity to check
    * @param KeyValuePairs the primary key(s) to check - only send multiple if you have an entity with a composite primary key
    */
-  public async GetRecordDependencies(entityName: string, compositeKey: CompositeKey): Promise<RecordDependency[]> {
+  public async GetRecordDependencies(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): Promise<RecordDependency[]> {
     try {
       const recordDependencies: RecordDependency[] = [];
 
@@ -1482,7 +1185,7 @@ export class SQLServerDataProvider
       const sSQL: string = this.GetHardLinkDependencySQL(entityDependencies, compositeKey) + '\n' + this.GetSoftLinkDependencySQL(entityName, compositeKey);
 
       // now, execute the query
-      const result = await this.ExecuteSQL(sSQL);
+      const result = await this.ExecuteSQL(sSQL, null, undefined, contextUser);
       if (!result || result.length === 0) {
         return recordDependencies;
       }
@@ -2015,7 +1718,7 @@ export class SQLServerDataProvider
                 isMutation: true, 
                 description: `Save ${entity.EntityInfo.Name}`,
                 simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined
-              });
+              }, user);
               result = await this.ProcessEntityRows(rawResult, entity.EntityInfo);
             }
 
@@ -2225,7 +1928,7 @@ export class SQLServerDataProvider
   ) {
     const sSQL = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true);
     if (sSQL) {
-      const result = await this.ExecuteSQL(sSQL);
+      const result = await this.ExecuteSQL(sSQL, undefined, undefined, user);
       return result;
     }
   }
@@ -2339,7 +2042,7 @@ export class SQLServerDataProvider
     }).join(' AND ');
 
     const sql = `SELECT * FROM [${entity.EntityInfo.SchemaName}].${entity.EntityInfo.BaseView} WHERE ${where}`;
-    const rawData = await this.ExecuteSQL(sql);
+    const rawData = await this.ExecuteSQL(sql, undefined, undefined, user);
     const d = await this.ProcessEntityRows(rawData, entity.EntityInfo);
     if (d && d.length > 0) {
       // got the record, now process the relationships if there are any
@@ -2382,7 +2085,7 @@ export class SQLServerDataProvider
                                         WHERE
                                             _jv.${relInfo.JoinEntityJoinField} = ${quotes}${ret[entity.FirstPrimaryKey.Name]}${quotes}`; // don't yet support composite foreign keys
 
-            const rawRelData = await this.ExecuteSQL(relSql);
+            const rawRelData = await this.ExecuteSQL(relSql, undefined, undefined, user);
             if (rawRelData && rawRelData.length > 0) {
               // Find the related entity info to process datetime fields correctly
               const relEntityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === relInfo.RelatedEntity.trim().toLowerCase());
@@ -2572,7 +2275,7 @@ export class SQLServerDataProvider
             isMutation: true, 
             description: `Delete ${entity.EntityInfo.Name}`,
             simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined
-          });
+          }, user);
         }
 
         if (d && d[0]) {
@@ -2611,7 +2314,7 @@ export class SQLServerDataProvider
   // START ---- IMetadataProvider
   /**************************************************************************/
 
-  public async GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetResultType> {
+  public async GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetResultType> {
     const sSQL = `SELECT
                         di.*,
                         e.BaseView EntityBaseView,
@@ -2631,7 +2334,7 @@ export class SQLServerDataProvider
                     WHERE
                         d.Name = @p0`;
 
-    const items = await this.ExecuteSQL(sSQL, [datasetName]);
+    const items = await this.ExecuteSQL(sSQL, [datasetName], undefined, contextUser);
     // now we have the dataset and the items, we need to get the update date from the items underlying entities
 
     if (items && items.length > 0) {
@@ -2652,7 +2355,7 @@ export class SQLServerDataProvider
       }
 
       // Execute all queries in a single batch
-      const batchResults = await this.ExecuteSQLBatch(queries);
+      const batchResults = await this.ExecuteSQLBatch(queries, undefined, undefined, contextUser);
 
       // Process results for each item
       const results: DatasetItemResultType[] = [];
@@ -2765,7 +2468,7 @@ export class SQLServerDataProvider
     return `SELECT ${columns} FROM [${item.EntitySchemaName}].[${item.EntityBaseView}] ${item.WhereClause ? 'WHERE ' + item.WhereClause : ''}${filterSQL}`;
   }
 
-  protected async GetDatasetItem(item: any, itemFilters, datasetName): Promise<DatasetItemResultType> {
+  protected async GetDatasetItem(item: any, itemFilters, datasetName, contextUser: UserInfo): Promise<DatasetItemResultType> {
     const itemUpdatedAt = new Date(item.DatasetItemUpdatedAt);
     const datasetUpdatedAt = new Date(item.DatasetUpdatedAt);
     const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime()));
@@ -2784,7 +2487,7 @@ export class SQLServerDataProvider
       };
     }
 
-    const itemData = await this.ExecuteSQL(itemSQL);
+    const itemData = await this.ExecuteSQL(itemSQL, undefined, undefined, contextUser);
 
     // get the latest update date
     let latestUpdateDate = new Date(1900, 1, 1);
@@ -2860,7 +2563,7 @@ export class SQLServerDataProvider
     return specifiedColumns.length > 0 ? specifiedColumns.map((colName) => `[${colName.trim()}]`).join(',') : '*';
   }
 
-  public async GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetStatusResultType> {
+  public async GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetStatusResultType> {
     const sSQL = `
             SELECT
                 di.*,
@@ -2881,7 +2584,7 @@ export class SQLServerDataProvider
             WHERE
                 d.Name = @p0`;
 
-    const items = await this.ExecuteSQL(sSQL, [datasetName]);
+    const items = await this.ExecuteSQL(sSQL, [datasetName], undefined, contextUser);
 
     // now we have the dataset and the items, we need to get the update date from the items underlying entities
     if (items && items.length > 0) {
@@ -2914,7 +2617,7 @@ export class SQLServerDataProvider
           combinedSQL += ' UNION ALL ';
         }
       });
-      const itemUpdateDates = await this.ExecuteSQL(combinedSQL);
+      const itemUpdateDates = await this.ExecuteSQL(combinedSQL, null, undefined, contextUser);
 
       if (itemUpdateDates && itemUpdateDates.length > 0) {
         let latestUpdateDate = new Date(1900, 1, 1);
@@ -2963,9 +2666,9 @@ export class SQLServerDataProvider
     }
   }
 
-  protected async GetApplicationMetadata(): Promise<ApplicationInfo[]> {
-    const apps = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwApplications`, null);
-    const appEntities = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwApplicationEntities ORDER BY ApplicationName`);
+  protected async GetApplicationMetadata(contextUser: UserInfo): Promise<ApplicationInfo[]> {
+    const apps = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwApplications`, null, undefined, contextUser);
+    const appEntities = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwApplicationEntities ORDER BY ApplicationName`, undefined, undefined, contextUser);
     const ret: ApplicationInfo[] = [];
     for (let i = 0; i < apps.length; i++) {
       ret.push(
@@ -2978,8 +2681,8 @@ export class SQLServerDataProvider
     return ret;
   }
 
-  protected async GetAuditLogTypeMetadata(): Promise<AuditLogTypeInfo[]> {
-    const alts = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwAuditLogTypes`, null);
+  protected async GetAuditLogTypeMetadata(contextUser: UserInfo): Promise<AuditLogTypeInfo[]> {
+    const alts = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwAuditLogTypes`, null, undefined, contextUser);
     const ret: AuditLogTypeInfo[] = [];
     for (let i = 0; i < alts.length; i++) {
       const alt = new AuditLogTypeInfo(alts[i]);
@@ -2988,9 +2691,9 @@ export class SQLServerDataProvider
     return ret;
   }
 
-  protected async GetUserMetadata(): Promise<UserInfo[]> {
-    const users = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwUsers`, null);
-    const userRoles = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwUserRoles ORDER BY UserID`);
+  protected async GetUserMetadata(contextUser: UserInfo): Promise<UserInfo[]> {
+    const users = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwUsers`, null, undefined, contextUser);
+    const userRoles = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwUserRoles ORDER BY UserID`, undefined, undefined, contextUser);
     const ret: UserInfo[] = [];
     for (let i = 0; i < users.length; i++) {
       ret.push(
@@ -3003,9 +2706,9 @@ export class SQLServerDataProvider
     return ret;
   }
 
-  protected async GetAuthorizationMetadata(): Promise<AuthorizationInfo[]> {
-    const auths = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwAuthorizations`, null);
-    const authRoles = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwAuthorizationRoles ORDER BY AuthorizationName`);
+  protected async GetAuthorizationMetadata(contextUser: UserInfo): Promise<AuthorizationInfo[]> {
+    const auths = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwAuthorizations`, null, undefined, contextUser);
+    const authRoles = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwAuthorizationRoles ORDER BY AuthorizationName`, undefined, undefined, contextUser);
     const ret: AuthorizationInfo[] = [];
     for (let i = 0; i < auths.length; i++) {
       ret.push(
@@ -3017,58 +2720,7 @@ export class SQLServerDataProvider
     }
     return ret;
   }
-
-  protected async GetCurrentUser(): Promise<UserInfo> {
-    if (this.CurrentUser) return this.CurrentUser;
-    else if (this._currentUserEmail && this._currentUserEmail.length > 0) {
-      // attempt to lookup current user from email since this.CurrentUser is null for some reason (unexpected)
-      if (UserCache && UserCache.Users) return UserCache.Users.find((u) => u.Email.trim().toLowerCase() === this._currentUserEmail.trim().toLowerCase());
-    }
-    // if we get here we can't get the current user
-    return null;
-  }
-
-  protected async GetCurrentUserMetadata(): Promise<UserInfo> {
-    const user = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwUsers WHERE Email='${this._currentUserEmail}'`);
-    if (user && user.length === 1) {
-      const userRoles = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwUserRoles WHERE UserID='${user[0].ID}'`);
-      return new UserInfo(this, {
-        ...user[0],
-        UserRoles: userRoles ? userRoles : [],
-      });
-    } else return null;
-  }
-
-  protected async GetRoleMetadata(): Promise<RoleInfo[]> {
-    const roles = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwRoles`, null);
-    const ret: RoleInfo[] = [];
-    for (let i = 0; i < roles.length; i++) {
-      const ri = new RoleInfo(roles[i]);
-      ret.push(ri);
-    }
-    return ret;
-  }
-
-  protected async GetUserRoleMetadata(): Promise<UserRoleInfo[]> {
-    const userRoles = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwUserRoles`, null);
-    const ret: UserRoleInfo[] = [];
-    for (let i = 0; i < userRoles.length; i++) {
-      const uri = new UserRoleInfo(userRoles[i]);
-      ret.push(uri);
-    }
-    return ret;
-  }
-
-  protected async GetRowLevelSecurityFilterMetadata(): Promise<RowLevelSecurityFilterInfo[]> {
-    const filters = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwRowLevelSecurityFilters`, null);
-    const ret: RowLevelSecurityFilterInfo[] = [];
-    for (let i = 0; i < filters.length; i++) {
-      const rlsfi = new RowLevelSecurityFilterInfo(filters[i]);
-      ret.push(rlsfi);
-    }
-    return ret;
-  }
-
+   
   /**
    * Processes entity rows returned from SQL Server to handle timezone conversions for datetime fields.
    * This method specifically handles the conversion of datetime2 fields (which SQL Server returns without timezone info)
@@ -3168,6 +2820,7 @@ export class SQLServerDataProvider
     query: string,
     parameters: any = null,
     options?: ExecuteSQLOptions,
+    contextUser?: UserInfo,
   ): Promise<any> {
     try {
       let request: sql.Request;
@@ -3203,7 +2856,7 @@ export class SQLServerDataProvider
       }
 
       // Log SQL statement to all active logging sessions (runs in parallel with execution)
-      const loggingPromise = this._logSqlStatement(query, parameters, options?.description, options?.ignoreLogging, options?.isMutation, options?.simpleSQLFallback);
+      const loggingPromise = this._logSqlStatement(query, parameters, options?.description, options?.ignoreLogging, options?.isMutation, options?.simpleSQLFallback, contextUser);
 
       // Execute SQL and logging in parallel, but wait for both to complete
       const [result] = await Promise.all([request.query(query), loggingPromise]);
@@ -3227,7 +2880,7 @@ export class SQLServerDataProvider
    * @param parameters - Optional parameters for the query
    * @returns Promise<any[]> - Array of results (empty array if no results)
    */
-  public static async ExecuteSQLWithPool(pool: sql.ConnectionPool, query: string, parameters?: any): Promise<any[]> {
+  public static async ExecuteSQLWithPool(pool: sql.ConnectionPool, query: string, parameters?: any, contextUser?: UserInfo): Promise<any[]> {
     try {
       const request = new sql.Request(pool);
 
@@ -3249,9 +2902,14 @@ export class SQLServerDataProvider
         }
       }
 
-      const result = await request.query(query);
+      const logPromise = this.LogSQLStatement(query, parameters, undefined, false, undefined, contextUser);
+      const resultPromise = request.query(query);
+
+      // await the completion of both the SQL execution and logging
+      const results = await Promise.all([resultPromise, logPromise]);
+
       // Always return array for consistency
-      return result.recordset || [];
+      return results[0].recordset || [];
     } catch (e) {
       LogError(e);
       throw e;
@@ -3273,6 +2931,7 @@ export class SQLServerDataProvider
     connectionSource: sql.ConnectionPool | sql.Transaction | sql.Request,
     queries: string[],
     parameters?: any[][],
+    contextUser?: UserInfo,
   ): Promise<any[][]> {
     try {
       let request: sql.Request;
@@ -3322,8 +2981,13 @@ export class SQLServerDataProvider
       });
 
       // Execute the batch SQL
-      const result = await request.query(batchSQL);
+      const logPromise = SQLServerDataProvider.LogSQLStatement(batchSQL, undefined, undefined, false, undefined, contextUser);
+      const resultPromise = request.query(batchSQL);
 
+      // Wait for both execution and logging to complete
+      const results = await Promise.all([resultPromise, logPromise]);
+      const result = results[0];
+      
       // Return array of recordsets - one for each query
       // Handle both single and multiple recordsets
       if (result.recordsets && Array.isArray(result.recordsets)) {
@@ -3354,6 +3018,7 @@ export class SQLServerDataProvider
     queries: string[],
     parameters?: any[][],
     options?: ExecuteSQLBatchOptions,
+    contextUser?: UserInfo,
   ): Promise<any[][]> {
     try {
       let connectionSource: sql.ConnectionPool | sql.Transaction | sql.Request;
@@ -3372,7 +3037,7 @@ export class SQLServerDataProvider
       // Log batch SQL statement to all active logging sessions
       const description = options?.description ? `${options.description} (Batch: ${queries.length} queries)` : `Batch execution: ${queries.length} queries`;
       const batchSQL = queries.join(';\n');
-      const loggingPromise = this._logSqlStatement(batchSQL, parameters, description, options?.ignoreLogging, options?.isMutation);
+      const loggingPromise = this._logSqlStatement(batchSQL, parameters, description, options?.ignoreLogging, options?.isMutation, undefined, contextUser);
 
       // Execute SQL and logging in parallel, but wait for both to complete
       const [result] = await Promise.all([SQLServerDataProvider.ExecuteSQLBatchStatic(connectionSource, queries, parameters), loggingPromise]);
@@ -3518,9 +3183,9 @@ export class SQLServerDataProvider
     return this._localStorageProvider;
   }
 
-  public async GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]> {
+  public async GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]> {
     const promises = info.map(async (item) => {
-      const r = await this.GetEntityRecordName(item.EntityName, item.CompositeKey);
+      const r = await this.GetEntityRecordName(item.EntityName, item.CompositeKey, contextUser);
       return {
         EntityName: item.EntityName,
         CompositeKey: item.CompositeKey,
@@ -3532,11 +3197,11 @@ export class SQLServerDataProvider
     return Promise.all(promises);
   }
 
-  public async GetEntityRecordName(entityName: string, CompositeKey: CompositeKey): Promise<string> {
+  public async GetEntityRecordName(entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo): Promise<string> {
     try {
       const sql = this.GetEntityRecordNameSQL(entityName, CompositeKey);
       if (sql) {
-        const data = await this.ExecuteSQL(sql);
+        const data = await this.ExecuteSQL(sql, null, undefined, contextUser);
         if (data && data.length === 1) {
           const fields = Object.keys(data[0]);
           return data[0][fields[0]]; // return first field
@@ -3591,21 +3256,21 @@ export class SQLServerDataProvider
 class NodeLocalStorageProvider implements ILocalStorageProvider {
   private _localStorage: any = {};
 
-  public async getItem(key: string): Promise<string | null> {
+  public async GetItem(key: string): Promise<string | null> {
     return new Promise((resolve) => {
       if (this._localStorage.hasOwnProperty(key)) resolve(this._localStorage[key]);
       else resolve(null);
     });
   }
 
-  public async setItem(key: string, value: string): Promise<void> {
+  public async SetItem(key: string, value: string): Promise<void> {
     return new Promise((resolve) => {
       this._localStorage[key] = value;
       resolve();
     });
   }
 
-  public async remove(key: string): Promise<void> {
+  public async Remove(key: string): Promise<void> {
     return new Promise((resolve) => {
       if (this._localStorage.hasOwnProperty(key)) delete this._localStorage[key];
       resolve();

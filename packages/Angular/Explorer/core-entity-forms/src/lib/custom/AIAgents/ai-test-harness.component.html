@@ -1,0 +1,556 @@
+<div class="harness-container" *ngIf="isVisible">
+        <!-- Header -->
+        <div class="harness-header">
+            @if (entity) {
+                <div class="agent-info">
+                    <div class="agent-details">
+                        <i class="fa-solid" [class.fa-robot]="mode === 'agent'" [class.fa-comment-dots]="mode === 'prompt'"></i>
+                        <div>
+                            <h3>{{ getEntityName() }}</h3>
+                            @if (entity.Description) {
+                                <p>{{ entity.Description }}</p>
+                            }
+                        </div>
+                    </div>
+                    <div class="header-actions">
+                        <button 
+                            class="custom-button"
+                            (click)="clearConversation()"
+                            [disabled]="isExecuting || conversationMessages.length === 0"
+                            title="Clear conversation">
+                            <i class="fa-solid fa-broom"></i>
+                            Clear
+                        </button>
+                        <button 
+                            class="custom-button"
+                            (click)="saveConversation()"
+                            [disabled]="conversationMessages.length === 0"
+                            title="Save conversation">
+                            <i class="fa-solid fa-save"></i>
+                            Save
+                        </button>
+                        <button 
+                            class="custom-button"
+                            (click)="exportConversation()"
+                            [disabled]="conversationMessages.length === 0"
+                            title="Export conversation">
+                            <i class="fa-solid fa-download"></i>
+                            Export
+                        </button>
+                        <button 
+                            class="custom-button"
+                            (click)="importConversation()"
+                            title="Import conversation">
+                            <i class="fa-solid fa-upload"></i>
+                            Import
+                        </button>
+                        <input 
+                            #fileInput
+                            type="file"
+                            accept=".json"
+                            style="display: none"
+                            (change)="onFileSelected($event)">
+                        <button 
+                            class="custom-button icon-only"
+                            (click)="toggleSidebar()"
+                            title="Toggle sidebar">
+                            <i class="fa-solid" [class.fa-chevron-right]="!showSidebar" [class.fa-chevron-left]="showSidebar"></i>
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Main Content Area -->
+        <div class="harness-body">
+            <!-- Chat Area -->
+            <div class="chat-area">
+                <!-- Messages Container -->
+                <div class="messages-container" #messagesContainer>
+                    @if (conversationMessages.length === 0) {
+                        <div class="empty-state">
+                            <i class="fa-solid fa-comments"></i>
+                            <h4>Start a conversation</h4>
+                            <p>Send a message to begin testing the AI agent</p>
+                        </div>
+                    }
+
+                    @for (message of conversationMessages; track message.id) {
+                        <div [ngClass]="getMessageClass(message)">
+                            <div class="message-header">
+                                <span class="message-role">
+                                    @if (message.role === 'user') {
+                                        <i class="fa-solid fa-user"></i> You
+                                    } @else {
+                                        <i class="fa-solid fa-robot"></i> {{ getEntityName() || 'Assistant' }}
+                                    }
+                                </span>
+                                <span class="message-time">{{ formatTimestamp(message.timestamp) }}</span>
+                                @if (message.isStreaming && message.elapsedTime !== undefined) {
+                                    <span class="execution-time streaming">
+                                        <i class="fa-solid fa-spinner fa-spin"></i> {{ formatElapsedTime(message.elapsedTime) }}
+                                    </span>
+                                } @else if (message.executionTime) {
+                                    <span class="execution-time">{{ formatExecutionTime(message.executionTime) }}</span>
+                                }
+                                @if (showRawToggle(message)) {
+                                    <button class="raw-toggle" (click)="showRawJsonDialog(message)" title="View raw JSON response">
+                                        <i class="fa-solid fa-code"></i>
+                                    </button>
+                                }
+                            </div>
+                            <div class="message-content">
+                                <button class="copy-button-in-bubble" (click)="copyMessage(message)" title="Copy message">
+                                    <i class="fa-solid fa-copy"></i>
+                                </button>
+                                @if (message.isStreaming) {
+                                    <div class="streaming-wrapper">
+                                        <span class="streaming-content">{{ message.streamingContent }}<span class="cursor">|</span></span>
+                                    </div>
+                                } @else {
+                                    <div [innerHTML]="getFormattedContent(message)"></div>
+                                }
+                                @if (message.error) {
+                                    <div class="error-details">
+                                        <i class="fa-solid fa-exclamation-triangle"></i>
+                                        {{ message.error }}
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <!-- Input Area -->
+                <div class="input-area">
+                    <div class="input-container">
+                        <kendo-textarea
+                            #messageInput
+                            [(ngModel)]="currentUserMessage"
+                            [rows]="3"
+                            placeholder="Type your message here... (Press Enter to send, Shift+Enter for new line)"
+                            (keypress)="handleKeyPress($event)"
+                            [disabled]="isExecuting"
+                            class="message-input">
+                        </kendo-textarea>
+                        <button
+                            class="send-button"
+                            (click)="sendMessage()"
+                            [disabled]="isExecuting || !currentUserMessage.trim()"
+                            title="Send message">
+                            @if (isExecuting) {
+                                <i class="fa-solid fa-spinner fa-spin"></i>
+                            } @else {
+                                <i class="fa-solid fa-paper-plane"></i>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            @if (showSidebar) {
+                <div class="sidebar">
+                    <!-- Tab Navigation -->
+                    <div class="sidebar-tabs">
+                        @if (mode === 'agent') {
+                            <button 
+                                class="tab-button"
+                                [class.active]="activeTab === 'dataContext'"
+                                (click)="selectTab('dataContext')">
+                                <i class="fa-solid fa-database"></i>
+                                Data Context
+                            </button>
+                            <button 
+                                class="tab-button"
+                                [class.active]="activeTab === 'templateData'"
+                                (click)="selectTab('templateData')">
+                                <i class="fa-solid fa-file-code"></i>
+                                Template Data
+                            </button>
+                        } @else {
+                            <button 
+                                class="tab-button"
+                                [class.active]="activeTab === 'templateVariables'"
+                                (click)="selectTab('templateVariables')">
+                                <i class="fa-solid fa-code"></i>
+                                Template Variables
+                            </button>
+                            <button 
+                                class="tab-button"
+                                [class.active]="activeTab === 'modelSettings'"
+                                (click)="selectTab('modelSettings')">
+                                <i class="fa-solid fa-sliders"></i>
+                                Model Settings
+                            </button>
+                        }
+                        <button 
+                            class="tab-button"
+                            [class.active]="activeTab === 'savedConversations'"
+                            (click)="selectTab('savedConversations')">
+                            <i class="fa-solid fa-history"></i>
+                            Saved
+                            @if (savedConversations.length > 0) {
+                                <span class="badge">{{ savedConversations.length }}</span>
+                            }
+                        </button>
+                    </div>
+
+                    <!-- Tab Content -->
+                    <div class="sidebar-content">
+                        <!-- Data Context Tab -->
+                        @if (activeTab === 'dataContext') {
+                            <div class="tab-content">
+                                <div class="tab-header">
+                                    <h4>Data Context Variables</h4>
+                                    <p>Variables available during agent execution</p>
+                                </div>
+                                
+                                <div class="variables-list">
+                                    @for (variable of dataContextVariables; track $index) {
+                                        <div class="variable-item">
+                                            <kendo-textbox 
+                                                [(ngModel)]="variable.name" 
+                                                placeholder="Variable name"
+                                                class="variable-name">
+                                            </kendo-textbox>
+                                            
+                                            <kendo-dropdownlist 
+                                                [(ngModel)]="variable.type"
+                                                [data]="[
+                                                    {text: 'String', value: 'string'}, 
+                                                    {text: 'Number', value: 'number'}, 
+                                                    {text: 'Boolean', value: 'boolean'}, 
+                                                    {text: 'Object', value: 'object'}
+                                                ]"
+                                                textField="text"
+                                                valueField="value"
+                                                [valuePrimitive]="true"
+                                                class="variable-type">
+                                            </kendo-dropdownlist>
+                                            
+                                            <kendo-textbox 
+                                                [(ngModel)]="variable.value" 
+                                                [placeholder]="variable.type === 'object' ? 'JSON value' : 'Value'"
+                                                class="variable-value">
+                                            </kendo-textbox>
+                                            
+                                            <button 
+                                                class="remove-button"
+                                                (click)="removeDataVariable($index)"
+                                                title="Remove variable">
+                                                <i class="fa-solid fa-times"></i>
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
+                                
+                                <button 
+                                    class="add-button"
+                                    (click)="addDataVariable()">
+                                    <i class="fa-solid fa-plus"></i> Add Variable
+                                </button>
+                            </div>
+                        }
+
+                        <!-- Template Data Tab -->
+                        @if (activeTab === 'templateData') {
+                            <div class="tab-content">
+                                <div class="tab-header">
+                                    <h4>Template Data Variables</h4>
+                                    <p>Variables for template rendering</p>
+                                </div>
+                                
+                                <div class="variables-list">
+                                    @if (templateDataVariables.length === 0) {
+                                        <div class="empty-variables">
+                                            <p>No template variables defined</p>
+                                        </div>
+                                    }
+                                    
+                                    @for (variable of templateDataVariables; track $index) {
+                                        <div class="variable-item">
+                                            <kendo-textbox 
+                                                [(ngModel)]="variable.name" 
+                                                placeholder="Variable name"
+                                                class="variable-name">
+                                            </kendo-textbox>
+                                            
+                                            <kendo-dropdownlist 
+                                                [(ngModel)]="variable.type"
+                                                [data]="[
+                                                    {text: 'String', value: 'string'}, 
+                                                    {text: 'Number', value: 'number'}, 
+                                                    {text: 'Boolean', value: 'boolean'}, 
+                                                    {text: 'Object', value: 'object'}
+                                                ]"
+                                                textField="text"
+                                                valueField="value"
+                                                [valuePrimitive]="true"
+                                                class="variable-type">
+                                            </kendo-dropdownlist>
+                                            
+                                            <kendo-textbox 
+                                                [(ngModel)]="variable.value" 
+                                                [placeholder]="variable.type === 'object' ? 'JSON value' : 'Value'"
+                                                class="variable-value">
+                                            </kendo-textbox>
+                                            
+                                            <button 
+                                                class="remove-button"
+                                                (click)="removeTemplateVariable($index)"
+                                                title="Remove variable">
+                                                <i class="fa-solid fa-times"></i>
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
+                                
+                                <button 
+                                    class="add-button"
+                                    (click)="addTemplateVariable()">
+                                    <i class="fa-solid fa-plus"></i> Add Variable
+                                </button>
+                            </div>
+                        }
+
+                        <!-- Template Variables Tab (Prompt Mode) -->
+                        @if (activeTab === 'templateVariables') {
+                            <div class="tab-content">
+                                <div class="tab-header">
+                                    <h4>Template Variables</h4>
+                                    <p>Variables for prompt template rendering</p>
+                                </div>
+                                
+                                <div class="variables-list">
+                                    @for (variable of templateVariables; track $index) {
+                                        <div class="variable-item">
+                                            <kendo-textbox 
+                                                [(ngModel)]="variable.name" 
+                                                placeholder="Variable name"
+                                                class="variable-name">
+                                            </kendo-textbox>
+                                            
+                                            <kendo-dropdownlist 
+                                                [(ngModel)]="variable.type"
+                                                [data]="[
+                                                    {text: 'String', value: 'string'}, 
+                                                    {text: 'Number', value: 'number'}, 
+                                                    {text: 'Boolean', value: 'boolean'}, 
+                                                    {text: 'Object', value: 'object'}
+                                                ]"
+                                                textField="text"
+                                                valueField="value"
+                                                [valuePrimitive]="true"
+                                                class="variable-type">
+                                            </kendo-dropdownlist>
+                                            
+                                            <kendo-textbox 
+                                                [(ngModel)]="variable.value" 
+                                                [placeholder]="variable.type === 'object' ? 'JSON value' : 'Value'"
+                                                class="variable-value">
+                                            </kendo-textbox>
+                                            
+                                            <button 
+                                                class="remove-button"
+                                                (click)="removeTemplateVariable($index)"
+                                                title="Remove variable">
+                                                <i class="fa-solid fa-times"></i>
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
+                                
+                                <button 
+                                    class="add-button"
+                                    (click)="addTemplateVariable()">
+                                    <i class="fa-solid fa-plus"></i>
+                                    Add Variable
+                                </button>
+                            </div>
+                        }
+
+                        <!-- Model Settings Tab (Prompt Mode) -->
+                        @if (activeTab === 'modelSettings') {
+                            <div class="tab-content">
+                                <div class="tab-header">
+                                    <h4>Model Settings</h4>
+                                    <p>Configure AI model parameters</p>
+                                </div>
+                                
+                                <div class="model-settings">
+                                    <div class="setting-group">
+                                        <label>AI Model</label>
+                                        <kendo-dropdownlist 
+                                            [(ngModel)]="selectedModelId"
+                                            [data]="availableModels"
+                                            textField="Name"
+                                            valueField="ID"
+                                            placeholder="Select a model..."
+                                            class="model-selector">
+                                        </kendo-dropdownlist>
+                                    </div>
+                                    
+                                    <div class="setting-group">
+                                        <label>Temperature ({{ temperature }})</label>
+                                        <kendo-slider 
+                                            [(ngModel)]="temperature"
+                                            [min]="0"
+                                            [max]="2"
+                                            [smallStep]="0.1"
+                                            [showButtons]="false"
+                                            class="temperature-slider">
+                                        </kendo-slider>
+                                        <div class="setting-help">
+                                            Lower values make output more focused and deterministic
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="setting-group">
+                                        <label>Max Tokens</label>
+                                        <kendo-numerictextbox 
+                                            [(ngModel)]="maxTokens"
+                                            [min]="100"
+                                            [max]="8000"
+                                            [step]="100"
+                                            placeholder="Max tokens..."
+                                            class="max-tokens-input">
+                                        </kendo-numerictextbox>
+                                        <div class="setting-help">
+                                            Maximum length of generated response
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Saved Conversations Tab -->
+                        @if (activeTab === 'savedConversations') {
+                            <div class="tab-content">
+                                <div class="tab-header">
+                                    <h4>Saved Conversations</h4>
+                                    <p>Previously saved test sessions</p>
+                                    @if (currentConversationId) {
+                                        <button class="custom-button small primary" (click)="newConversation()" title="Start a new conversation">
+                                            <i class="fa-solid fa-plus"></i>
+                                            New
+                                        </button>
+                                    }
+                                </div>
+                                
+                                <div class="saved-list">
+                                    @if (savedConversations.length === 0) {
+                                        <div class="empty-saved">
+                                            <i class="fa-solid fa-folder-open"></i>
+                                            <p>No saved conversations</p>
+                                        </div>
+                                    }
+                                    
+                                    @for (conv of savedConversations; track conv.id) {
+                                        <div class="saved-item" 
+                                             [class.current]="conv.id === currentConversationId"
+                                             (click)="loadConversation(conv)">
+                                            <div class="saved-info">
+                                                <h5>{{ conv.name }}</h5>
+                                                <p>{{ conv.messages.length }} messages</p>
+                                                <span class="saved-date">{{ conv.updatedAt | date:'short' }}</span>
+                                            </div>
+                                            <button 
+                                                class="delete-button"
+                                                (click)="deleteConversation(conv, $event)"
+                                                title="Delete conversation">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Save Conversation Dialog -->
+    @if (showSaveDialog) {
+        <kendo-dialog 
+            [title]="'Save Conversation'" 
+            [width]="400"
+            (close)="cancelSaveDialog()"
+            class="save-dialog">
+            <div class="dialog-content">
+                <p>Enter a name for this conversation:</p>
+                <input 
+                    #saveDialogInput
+                    type="text"
+                    (keyup)="updateTempConversation()"
+                    placeholder="Conversation name"
+                    class="k-textbox k-input k-input-md k-rounded-md k-input-solid full-width"  />
+            </div>
+            <kendo-dialog-actions>
+                <button kendoButton (click)="cancelSaveDialog()">Cancel</button>
+                <button kendoButton 
+                        [primary]="true" 
+                        (click)="confirmSaveConversation()"
+                        [disabled]="tempConversationName === ''">
+                    Save
+                </button>
+            </kendo-dialog-actions>
+        </kendo-dialog>
+    }
+    
+    <!-- Load Confirmation Dialog -->
+    @if (showLoadConfirmDialog) {
+        <kendo-dialog 
+            [title]="'Replace Current Conversation?'" 
+            [width]="400"
+            (close)="cancelLoadConversation()"
+            class="confirm-dialog">
+            <div class="dialog-content">
+                <p>Loading this conversation will replace the current one. Any unsaved changes will be lost.</p>
+                <p>Do you want to continue?</p>
+            </div>
+            <kendo-dialog-actions>
+                <button kendoButton (click)="cancelLoadConversation()">Cancel</button>
+                <button kendoButton 
+                        [primary]="true" 
+                        (click)="confirmLoadConversation()">
+                    Load Conversation
+                </button>
+            </kendo-dialog-actions>
+        </kendo-dialog>
+    }
+
+    <!-- JSON Display Dialog -->
+    @if (showJsonDialog) {
+        <kendo-window 
+            [title]="'Raw JSON Response'" 
+            [width]="900" 
+            [height]="700"
+            [minWidth]="600"
+            [minHeight]="400"
+            [resizable]="true"
+            [draggable]="true"
+            [state]="'default'"
+            [keepContent]="true"
+            (close)="closeJsonDialog()"
+            class="json-dialog-window">
+            <div class="json-dialog-content">
+                <div class="json-dialog-header">
+                    <button class="custom-button icon-only" (click)="copyJsonContent()" title="Copy JSON">
+                        <i class="fa-solid fa-copy"></i>
+                    </button>
+                </div>
+                <div class="json-dialog-body">
+                    <mj-code-editor 
+                        [(ngModel)]="currentJsonContent"
+                        [readonly]="true"
+                        [language]="'json'"
+                        [lineWrapping]="true"
+                        style="height: 100%; width: 100%;">
+                    </mj-code-editor>
+                </div>
+            </div>
+        </kendo-window>
+    }

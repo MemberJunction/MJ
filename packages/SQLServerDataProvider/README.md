@@ -21,6 +21,8 @@ The `@memberjunction/sqlserver-dataprovider` package implements MemberJunction's
 - **Duplicate Detection**: Built-in support for duplicate record detection
 - **Audit Logging**: Comprehensive audit trail capabilities
 - **Row-Level Security**: Enforce data access controls at the database level
+- **SQL Logging**: Real-time SQL statement capture for debugging and migration generation
+- **Session Management**: Multiple concurrent SQL logging sessions with user filtering
 
 ## Installation
 
@@ -414,6 +416,10 @@ The main class that implements IEntityDataProvider, IMetadataProvider, IRunViewP
 - `RunReport(params: RunReportParams, contextUser?: UserInfo): Promise<RunReportResult>` - Execute a report
 - `RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult>` - Execute a query
 - `ExecuteSQL(sql: string, params?: any, maxRows?: number): Promise<any[]>` - Execute raw SQL
+- `createSqlLogger(filePath: string, options?: SqlLoggingOptions): Promise<SqlLoggingSession>` - Create a new SQL logging session
+- `getActiveSqlLoggingSessions(): SqlLoggingSession[]` - Get all active logging sessions
+- `disposeAllSqlLoggingSessions(): Promise<void>` - Stop and clean up all logging sessions
+- `isSqlLoggingEnabled(): boolean` - Check if SQL logging is available
 
 ### SQLServerProviderConfigData
 
@@ -458,24 +464,23 @@ Helper function to initialize and configure the SQL Server data provider.
 setupSQLServerClient(config: SQLServerProviderConfigData): Promise<SQLServerDataProvider>
 ```
 
-## SQL Output Logging
+## SQL Logging
 
-The SQL Server Data Provider includes built-in SQL output logging capabilities that allow you to capture all SQL statements executed during operations. This is particularly useful for:
-
-- **Creating migration files** from application operations
-- **Debugging database operations** by reviewing exact SQL statements
-- **Performance analysis** by examining query patterns
-- **Compliance and auditing** requirements
+The SQL Server Data Provider includes comprehensive SQL logging capabilities that allow you to capture SQL statements in real-time. This feature supports both programmatic access and runtime control through the MemberJunction UI.
 
 ### Key Features
 
-- **Session-based logging** with unique identifiers for each logging session
-- **Parallel execution support** - logging runs alongside SQL execution without impacting performance
-- **Multiple output formats** - standard SQL logs or migration-ready files with Flyway naming
-- **Disposable pattern** - automatic resource cleanup when logging session ends
-- **Parameter capture** - logs both SQL statements and their parameters
+- **Real-time SQL capture** - Monitor SQL statements as they execute
+- **Session-based logging** with unique identifiers and names
+- **User filtering** - Capture SQL from specific users only
+- **Multiple output formats** - Standard SQL logs or migration-ready files
+- **Runtime control** - Start/stop sessions through GraphQL API and UI
+- **Owner-level security** - Only users with Owner privileges can access SQL logging
+- **Automatic cleanup** - Sessions auto-expire and clean up empty files
+- **Concurrent sessions** - Support multiple active logging sessions
+- **Parameter capture** - Logs both SQL statements and their parameters
 
-### Basic Usage
+### Programmatic Usage
 
 ```typescript
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
@@ -484,9 +489,12 @@ const dataProvider = new SQLServerDataProvider(/* config */);
 await dataProvider.initialize();
 
 // Create a SQL logging session
-const logger = await dataProvider.createSqlLogger('./output/operations.sql', {
+const logger = await dataProvider.createSqlLogger('./logs/sql/operations.sql', {
   formatAsMigration: false,
-  description: 'User registration operations'
+  sessionName: 'User registration operations',
+  filterByUserId: 'user@example.com',  // Only log SQL from this user
+  prettyPrint: true,
+  statementTypes: 'both'  // Log both queries and mutations
 });
 
 // Perform your database operations - they will be automatically logged
@@ -495,9 +503,66 @@ await dataProvider.ExecuteSQL('INSERT INTO Users (Name, Email) VALUES (@name, @e
   email: 'john@example.com'
 });
 
+// Check session status
+console.log(`Session ${logger.id} has captured ${logger.statementCount} statements`);
+
 // Clean up the logging session
 await logger.dispose();
 ```
+
+### Runtime Control via GraphQL
+
+```typescript
+// Start a new logging session
+const mutation = `
+  mutation {
+    startSqlLogging(input: {
+      fileName: "debug-session.sql"
+      filterToCurrentUser: true
+      options: {
+        sessionName: "Debug Session"
+        prettyPrint: true
+        statementTypes: "both"
+        formatAsMigration: false
+      }
+    }) {
+      id
+      filePath
+      sessionName
+    }
+  }
+`;
+
+// List active sessions
+const query = `
+  query {
+    activeSqlLoggingSessions {
+      id
+      sessionName
+      startTime
+      statementCount
+      filterByUserId
+    }
+  }
+`;
+
+// Stop a session
+const stopMutation = `
+  mutation {
+    stopSqlLogging(sessionId: "session-id-here")
+  }
+`;
+```
+
+### UI Integration
+
+SQL logging can be controlled through the MemberJunction Explorer UI:
+
+1. **Settings Panel**: Navigate to Settings > SQL Logging (Owner access required)
+2. **Session Management**: Start/stop sessions with custom options
+3. **Real-time Monitoring**: View active sessions and statement counts
+4. **User Filtering**: Option to capture only your SQL statements
+5. **Log Viewing**: Preview log file contents (implementation dependent)
 
 ### Migration-Ready Format
 
@@ -505,16 +570,32 @@ await logger.dispose();
 // Create logger with migration formatting
 const migrationLogger = await dataProvider.createSqlLogger('./migrations/V20241215120000__User_Operations.sql', {
   formatAsMigration: true,
-  description: 'User management operations for deployment'
+  sessionName: 'User management operations for deployment',
+  batchSeparator: 'GO',
+  logRecordChangeMetadata: true
 });
 
 // Your operations are logged in Flyway-compatible format
 // with proper headers and schema placeholders
 ```
 
-For comprehensive examples and advanced usage patterns, see [EXAMPLE_SQL_LOGGING.md](./EXAMPLE_SQL_LOGGING.md).
+### Session Management Methods
 
-> **Note**: This SQL output logging is different from the query execution logging available through subclassing the SQLServerDataProvider. SQL output logging captures statements for external use (like creating migrations), while execution logging is for debugging and monitoring the provider itself.
+```typescript
+// Get all active sessions
+const activeSessions = dataProvider.getActiveSqlLoggingSessions();
+console.log(`${activeSessions.length} sessions currently active`);
+
+// Dispose all sessions
+await dataProvider.disposeAllSqlLoggingSessions();
+
+// Check if logging is enabled
+if (dataProvider.isSqlLoggingEnabled()) {
+  console.log('SQL logging is available');
+}
+```
+
+> **Security Note**: SQL logging requires Owner-level privileges in the MemberJunction system. Only users with `Type = 'Owner'` can create, manage, or access SQL logging sessions.
 
 ## Troubleshooting
 

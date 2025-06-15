@@ -100,10 +100,10 @@ export abstract class ProviderBase implements IMetadataProvider {
      */
     public abstract get DatabaseConnection(): any;
 
-    public abstract GetEntityRecordName(entityName: string, compositeKey: CompositeKey): Promise<string>;
-    public abstract GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]>;
+    public abstract GetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): Promise<string>;
+    public abstract GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]>;
 
-    public abstract GetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey): Promise<boolean>;
+    public abstract GetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo): Promise<boolean>;
 
     public abstract SetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void>;
     /******** END - ABSTRACT SECTION ****************************************************************** */
@@ -369,7 +369,7 @@ export abstract class ProviderBase implements IMetadataProvider {
      * @param entityName the name of the entity to check
      * @param KeyValuePairs the values of the primary key of the record to check
      */
-    public abstract GetRecordDependencies(entityName: string, CompositeKey: CompositeKey): Promise<RecordDependency[]> 
+    public abstract GetRecordDependencies(entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo): Promise<RecordDependency[]> 
 
     /**
      * Returns a list of record IDs that are possible duplicates of the specified record. 
@@ -431,13 +431,13 @@ export abstract class ProviderBase implements IMetadataProvider {
      * @param datasetName 
      * @param itemFilters 
      */
-    public abstract GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetResultType>;
+    public abstract GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetResultType>;
     /**
      * Retrieves the date status information for a dataset and all its items from the server. This method will match the datasetName and itemFilters to the server's dataset and item filters to determine a match
      * @param datasetName 
      * @param itemFilters 
      */
-    public abstract GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetStatusResultType>;
+    public abstract GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetStatusResultType>;
 
     /**
      * Gets a database by name, if required, and caches it in a format available to the client (e.g. IndexedDB, LocalStorage, File, etc). The cache method is Provider specific
@@ -445,7 +445,7 @@ export abstract class ProviderBase implements IMetadataProvider {
      * @param datasetName 
      * @param itemFilters 
      */
-    public async GetAndCacheDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetResultType> {
+    public async GetAndCacheDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetResultType> {
         // first see if we have anything in cache at all, no reason to check server dates if we dont
         if (await this.IsDatasetCached(datasetName, itemFilters)) {
             // compare the local version, if exists to the server version dates
@@ -455,7 +455,7 @@ export abstract class ProviderBase implements IMetadataProvider {
             }
             else {
                 // we're out of date, so get the dataset from the server
-                const dataset = await this.GetDatasetByName(datasetName, itemFilters);
+                const dataset = await this.GetDatasetByName(datasetName, itemFilters, contextUser);
                 // cache it
                 await this.CacheDataset(datasetName, itemFilters, dataset);
 
@@ -464,7 +464,7 @@ export abstract class ProviderBase implements IMetadataProvider {
         }
         else {
             // get the dataset from the server
-            const dataset = await this.GetDatasetByName(datasetName, itemFilters);
+            const dataset = await this.GetDatasetByName(datasetName, itemFilters, contextUser);
             // cache it
             await this.CacheDataset(datasetName, itemFilters, dataset);
 
@@ -484,7 +484,7 @@ export abstract class ProviderBase implements IMetadataProvider {
         if (ls) {
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
             const dateKey = key + '_date';
-            const val: string = await ls.getItem(dateKey);
+            const val: string = await ls.GetItem(dateKey);
             if (val) {
                 return new Date(val);
             }
@@ -547,7 +547,7 @@ export abstract class ProviderBase implements IMetadataProvider {
         const ls = this.LocalStorageProvider;
         if (ls) {
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
-            const val = await ls.getItem(key);
+            const val = await ls.GetItem(key);
             if (val) {
                 const dataset = JSON.parse(val);
                 return dataset;
@@ -566,10 +566,10 @@ export abstract class ProviderBase implements IMetadataProvider {
         if (ls) {
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
             const val = JSON.stringify(dataset);
-            await ls.setItem(key, val);
+            await ls.SetItem(key, val);
             const dateKey = key + '_date';
             const dateVal = dataset.LatestUpdateDate.toISOString();
-            await ls.setItem(dateKey, dateVal);
+            await ls.SetItem(dateKey, dateVal);
         }
     }
 
@@ -583,7 +583,7 @@ export abstract class ProviderBase implements IMetadataProvider {
         const ls = this.LocalStorageProvider;
         if (ls) {
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
-            const val = await ls.getItem(key);
+            const val = await ls.GetItem(key);
             return val !== null && val !== undefined;
         }
     }
@@ -622,9 +622,9 @@ export abstract class ProviderBase implements IMetadataProvider {
         const ls = this.LocalStorageProvider;
         if (ls) {
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
-            await ls.remove(key);
+            await ls.Remove(key);
             const dateKey = key + '_date';
-            await ls.remove(dateKey);
+            await ls.Remove(dateKey);
         }
     }
 
@@ -732,8 +732,8 @@ export abstract class ProviderBase implements IMetadataProvider {
             const ls = this.LocalStorageProvider;
             if (ls) {
                 // execution environment supports local storage, use it
-                this._latestLocalMetadataTimestamps = JSON.parse(await ls.getItem(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey))
-                const temp = JSON.parse(await ls.getItem(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey)); // we now have a simple object for all the metadata
+                this._latestLocalMetadataTimestamps = JSON.parse(await ls.GetItem(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey))
+                const temp = JSON.parse(await ls.GetItem(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey)); // we now have a simple object for all the metadata
                 if (temp) {
                     // we have local metadata
                     LogStatus('Metadata loaded from local storage')
@@ -770,10 +770,10 @@ export abstract class ProviderBase implements IMetadataProvider {
             const ls = this.LocalStorageProvider;
             if (ls) {
                 // execution environment supports local storage, use it
-                await ls.setItem(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey, JSON.stringify(this._latestLocalMetadataTimestamps))
+                await ls.SetItem(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey, JSON.stringify(this._latestLocalMetadataTimestamps))
 
                 // now persist the AllMetadata object
-                await ls.setItem(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey, JSON.stringify(this._localMetadata))
+                await ls.SetItem(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey, JSON.stringify(this._localMetadata))
             }
         }
         catch (e) {
@@ -786,7 +786,7 @@ export abstract class ProviderBase implements IMetadataProvider {
         try {
             const ls = this.LocalStorageProvider;
             for (let i = 0; i < ProviderBase.localStorageKeys.length; i++) {
-                await ls.remove(this.LocalStoragePrefix + ProviderBase.localStorageKeys[i])
+                await ls.Remove(this.LocalStoragePrefix + ProviderBase.localStorageKeys[i])
             }
         }
         catch (e) {

@@ -7,6 +7,7 @@ import { MJTabStripComponent } from '@memberjunction/ng-tabstrip';
 import { Router } from '@angular/router';
 import { DashboardPreferencesDialogComponent, DashboardPreferencesResult } from '../dashboard-preferences-dialog/dashboard-preferences-dialog.component';
 import { SingleDashboardComponent } from '../single-dashboard/single-dashboard.component';
+import { SharedService } from '@memberjunction/ng-shared';
 
 @Component({
   selector: 'mj-tabbed-dashboard',
@@ -223,8 +224,9 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
                 // check to see if the data has entityname/pkey
                 if (data && data.EntityName && data.RecordPKey) {
                   // open the record in the explorer
-                  this.router.navigate(['resource', 'record', data.RecordPKey.ToURLSegment()], 
-                                       { queryParams: { Entity: data.EntityName } })                      
+                  SharedService.Instance.OpenEntityRecord(data.EntityName, data.RecordPKey);
+                  // this.router.navigate(['resource', 'record', data.RecordPKey.ToURLSegment()], 
+                  //                      { queryParams: { Entity: data.EntityName } })                      
                 }
               });
 

@@ -14,7 +14,7 @@ import {
   UserInfo,
 } from '@memberjunction/core';
 import { AuditLogEntity, UserViewEntity } from '@memberjunction/core-entities';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { SQLServerDataProvider, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { PubSubEngine } from 'type-graphql';
 import { GraphQLError } from 'graphql';
 import sql from 'mssql';
@@ -80,7 +80,7 @@ export class ResolverBase {
     return dataObjectArray;
   }
 
-  protected async findBy(dataSource: sql.ConnectionPool, entity: string, params: any) {
+  protected async findBy(dataSource: sql.ConnectionPool, entity: string, params: any, contextUser: UserInfo) {
     // build the SQL query based on the params passed in
     const md = new Metadata();
     const e = md.Entities.find((e) => e.Name === entity);
@@ -98,15 +98,15 @@ export class ResolverBase {
     });
 
     // ok, now we have a SQL string, run it and return the results
-    const request = new sql.Request(dataSource);
-    const result = await request.query(sqlQuery);
-    return result.recordset;
+    // use the SQLServerDataProvider
+    const result = await SQLServerDataProvider.ExecuteSQLWithPool(dataSource, sqlQuery, undefined, contextUser);
+    return result;
   }
 
   async RunViewByNameGeneric(viewInput: RunViewByNameInput, dataSource: sql.ConnectionPool, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
       const viewInfo: UserViewEntity = this.safeFirstArrayElement(
-        await this.findBy(dataSource, 'User Views', { Name: viewInput.ViewName })
+        await this.findBy(dataSource, 'User Views', { Name: viewInput.ViewName }, userPayload.userRecord)
       );
       return this.RunViewGenericInternal(
         viewInfo,
@@ -134,7 +134,7 @@ export class ResolverBase {
 
   async RunViewByIDGeneric(viewInput: RunViewByIDInput, dataSource: sql.ConnectionPool, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
-      const viewInfo: UserViewEntity = this.safeFirstArrayElement(await this.findBy(dataSource, 'User Views', { ID: viewInput.ViewID }));
+      const viewInfo: UserViewEntity = this.safeFirstArrayElement(await this.findBy(dataSource, 'User Views', { ID: viewInput.ViewID }, userPayload.userRecord));
       return this.RunViewGenericInternal(
         viewInfo,
         dataSource,
@@ -209,9 +209,9 @@ export class ResolverBase {
         let viewInfo: UserViewEntity | null = null;
 
         if (viewInput.ViewName) {
-          viewInfo = this.safeFirstArrayElement(await this.findBy(dataSource, 'User Views', { Name: viewInput.ViewName }));
+          viewInfo = this.safeFirstArrayElement(await this.findBy(dataSource, 'User Views', { Name: viewInput.ViewName }, userPayload.userRecord));
         } else if (viewInput.ViewID) {
-          viewInfo = this.safeFirstArrayElement(await this.findBy(dataSource, 'User Views', { ID: viewInput.ViewID }));
+          viewInfo = this.safeFirstArrayElement(await this.findBy(dataSource, 'User Views', { ID: viewInput.ViewID }, userPayload.userRecord));
         } else if (viewInput.EntityName) {
           md = md || new Metadata();
           const entity = md.Entities.find((e) => e.Name === viewInput.EntityName);
@@ -612,7 +612,14 @@ export class ResolverBase {
     return UserCache.Users.find((u) => u.Email.toLowerCase().trim() === email.toLowerCase().trim());
   }
   protected GetUserFromPayload(userPayload: UserPayload): UserInfo | undefined {
-    if (!userPayload || !userPayload.email) return undefined;
+    if (!userPayload) 
+      return undefined;
+
+    if (userPayload.userRecord)
+      return userPayload.userRecord; // if we have a user record, use that directly
+
+    if (!userPayload.email) 
+      return undefined;
 
     const md = new Metadata();
     return UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload.email.toLowerCase().trim());

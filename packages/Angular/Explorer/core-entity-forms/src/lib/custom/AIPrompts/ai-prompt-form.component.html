@@ -111,23 +111,11 @@
                     <!-- Right: Action Buttons -->
                     <div class="action-buttons" style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
                         <div style="display: flex; gap: 8px;">
-                            @if (record.ID && canExecute) {
-                                <kendo-button themeColor="primary" size="large"
-                                            (click)="executeAIPrompt()"
-                                            title="Execute this AI prompt">
-                                    <i class="fa-solid fa-play"></i> Execute Prompt
-                                </kendo-button>
-                            } @else if (record.ID && !canExecute) {
-                                <kendo-button themeColor="primary" size="large" [disabled]="true"
-                                            title="Prompt must be Active and have a Template to execute">
-                                    <i class="fa-solid fa-exclamation-triangle"></i> Cannot Execute
-                                </kendo-button>
-                            }
-                            
                             @if (record.ID) {
-                                <kendo-button fillMode="outline" themeColor="info"
-                                            title="View execution history">
-                                    <i class="fa-solid fa-history"></i> History
+                                <kendo-button themeColor="primary" size="large"
+                                            (click)="openTestHarness()"
+                                            title="Run AI Prompt Test Harness">
+                                    <i class="fa-solid fa-play"></i> Run
                                 </kendo-button>
                             }
                         </div>
@@ -742,4 +730,25 @@
         [aiPrompt]="record"
         [(isVisible)]="showExecutionDialog">
     </mj-ai-prompt-execution-dialog>
+    
+    <!-- AI Prompt Test Harness -->
+    @if (showTestHarness) {
+        <kendo-window 
+            [width]="1200" 
+            [height]="800" 
+            [minWidth]="800"
+            [minHeight]="600"
+            [draggable]="true"
+            [resizable]="true"
+            [state]="'default'"
+            (close)="onTestHarnessVisibilityChanged(false)"
+            title="Run AI Prompt - {{ record.Name || 'Untitled' }}">
+            <mj-ai-test-harness
+                [entity]="record"
+                [mode]="'prompt'"
+                [isVisible]="showTestHarness"
+                (visibilityChange)="onTestHarnessVisibilityChanged($event)">
+            </mj-ai-test-harness>
+        </kendo-window>
+    }
 </div>

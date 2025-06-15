@@ -208,6 +208,240 @@ const result = await runner.Run({
 // The agent run record tracks the compression activity
 ```
 
+## Extending BaseAgent
+
+The BaseAgent class provides a flexible execution pipeline that can be extended and customized through protected methods. This allows subclasses to override specific parts of the execution flow while maintaining the overall architecture.
+
+### Execution Pipeline Overview
+
+The BaseAgent execution pipeline consists of the following overridable methods:
+
+1. **`initializeEngines()`** - Initialize AI and Action engines
+2. **`validateAgent()`** - Validate agent readiness
+3. **`loadAgentConfiguration()`** - Load agent type and prompts
+4. **`preparePromptParams()`** - Prepare hierarchical prompt parameters
+5. **`executePrompt()`** - Execute the configured prompts
+6. **`processNextStep()`** - Process agent type decisions
+7. **`handleActionResults()`** - Handle action execution and recursion
+8. **`handleSubAgentResult()`** - Handle sub-agent execution and recursion
+9. **`createActionResultMessage()`** - Format action results as chat messages
+10. **`createSubAgentResultMessage()`** - Format sub-agent results as chat messages
+
+### Creating Custom Agent Classes
+
+```typescript
+import { BaseAgent, ExecuteAgentParams, ExecuteAgentResult } from '@memberjunction/ai-agents';
+import { AIPromptParams } from '@memberjunction/ai-prompts';
+
+export class CustomAnalysisAgent extends BaseAgent {
+    // Override initialization to add custom setup
+    protected async initializeEngines(contextUser?: UserInfo): Promise<void> {
+        await super.initializeEngines(contextUser);
+        
+        // Add custom initialization
+        await this.initializeAnalysisTools();
+    }
+    
+    // Override validation to add custom checks
+    protected async validateAgent(agent: AIAgentEntity): Promise<ExecuteAgentResult | null> {
+        const baseValidation = await super.validateAgent(agent);
+        if (baseValidation) return baseValidation;
+        
+        // Add custom validation
+        if (!this.hasRequiredPermissions(agent)) {
+            return {
+                nextStep: 'failed',
+                errorMessage: 'Agent lacks required analysis permissions'
+            };
+        }
+        
+        return null;
+    }
+    
+    // Override prompt preparation to inject custom data
+    protected async preparePromptParams(
+        agentType: AIAgentTypeEntity,
+        systemPrompt: any,
+        childPrompt: any,
+        params: ExecuteAgentParams
+    ): Promise<AIPromptParams> {
+        const promptParams = await super.preparePromptParams(agentType, systemPrompt, childPrompt, params);
+        
+        // Add custom context data
+        promptParams.data = {
+            ...promptParams.data,
+            analysisContext: await this.gatherAnalysisContext(),
+            historicalData: await this.loadHistoricalData()
+        };
+        
+        return promptParams;
+    }
+    
+    // Override action result formatting
+    protected createActionResultMessage(actions: AgentAction[], results: any[]): ChatMessage {
+        // Custom formatting for analysis results
+        const analysisResults = results.map((result, index) => {
+            return {
+                action: actions[index].name,
+                success: result.Success,
+                analysisScore: result.Params?.find(p => p.Name === 'score')?.Value,
+                insights: result.Params?.find(p => p.Name === 'insights')?.Value
+            };
+        });
+        
+        return {
+            role: 'user',
+            content: `Analysis completed:\n${JSON.stringify(analysisResults, null, 2)}`
+        };
+    }
+}
+```
+
+### Selective Method Overriding
+
+You can override just the methods you need to customize:
+
+```typescript
+export class StreamingAgent extends BaseAgent {
+    // Only override prompt execution to add streaming
+    protected async executePrompt(promptParams: AIPromptParams): Promise<any> {
+        // Add streaming configuration
+        promptParams.streaming = true;
+        promptParams.streamingCallback = (chunk) => {
+            this.handleStreamingChunk(chunk);
+        };
+        
+        return await super.executePrompt(promptParams);
+    }
+    
+    private handleStreamingChunk(chunk: string): void {
+        // Process streaming response chunks
+        console.log('Streaming:', chunk);
+    }
+}
+```
+
+### Customizing Recursion Behavior
+
+Override the action/sub-agent handling methods to customize recursion:
+
+```typescript
+export class BatchProcessingAgent extends BaseAgent {
+    protected async handleActionResults(
+        params: ExecuteAgentParams,
+        nextStep: any,
+        promptResult: any
+    ): Promise<ExecuteAgentResult> {
+        // Execute actions
+        const actionResults = await this.ExecuteActions(nextStep.actions, params.contextUser);
+        
+        // Batch results instead of immediate recursion
+        if (this.shouldBatchResults(actionResults)) {
+            this.batchedResults.push(...actionResults);
+            
+            // Continue without recursion if batching
+            return {
+                nextStep: 'retry',
+                returnValue: { batching: true, count: this.batchedResults.length }
+            };
+        }
+        
+        // Otherwise use default recursion behavior
+        return await super.handleActionResults(params, nextStep, promptResult);
+    }
+}
+```
+
+### Advanced Pipeline Customization
+
+For complex scenarios, you can completely override the Execute method while still using the helper methods:
+
+```typescript
+export class MultiStageAgent extends BaseAgent {
+    public async Execute(params: ExecuteAgentParams): Promise<ExecuteAgentResult> {
+        // Stage 1: Initial analysis
+        const stage1Result = await this.executeStage1(params);
+        if (stage1Result.nextStep === 'failed') return stage1Result;
+        
+        // Stage 2: Deep processing based on stage 1
+        const stage2Params = this.prepareStage2Params(params, stage1Result);
+        const stage2Result = await this.executeStage2(stage2Params);
+        if (stage2Result.nextStep === 'failed') return stage2Result;
+        
+        // Stage 3: Synthesis and final execution
+        return await this.executeFinalStage(params, stage1Result, stage2Result);
+    }
+    
+    private async executeStage1(params: ExecuteAgentParams): Promise<ExecuteAgentResult> {
+        // Use base methods for configuration loading
+        const config = await this.loadAgentConfiguration(params.agent);
+        if (!config.success) {
+            return { nextStep: 'failed', errorMessage: config.errorMessage };
+        }
+        
+        // Custom stage 1 logic...
+    }
+}
+```
+
+### Best Practices for Extending BaseAgent
+
+1. **Always call super methods** when overriding unless completely replacing functionality
+2. **Maintain the contract** - return the expected types from overridden methods
+3. **Use protected methods** for extensibility rather than duplicating logic
+4. **Document overrides** clearly in your subclass
+5. **Test thoroughly** - ensure your overrides work with the recursion logic
+6. **Handle errors gracefully** - follow the error result pattern
+7. **Preserve metadata** - pass through rawResult and other metadata
+
+### Common Extension Patterns
+
+#### Adding Pre/Post Processing
+```typescript
+protected async executePrompt(promptParams: AIPromptParams): Promise<any> {
+    // Pre-processing
+    await this.beforePromptExecution(promptParams);
+    
+    // Execute
+    const result = await super.executePrompt(promptParams);
+    
+    // Post-processing
+    await this.afterPromptExecution(result);
+    
+    return result;
+}
+```
+
+#### Custom Context Injection
+```typescript
+protected async preparePromptParams(...args): Promise<AIPromptParams> {
+    const params = await super.preparePromptParams(...args);
+    
+    // Inject custom context
+    params.data.customContext = await this.loadCustomContext();
+    params.conversationMessages = this.preprocessMessages(params.conversationMessages);
+    
+    return params;
+}
+```
+
+#### Conditional Execution Flow
+```typescript
+protected async processNextStep(
+    params: ExecuteAgentParams,
+    agentType: AIAgentTypeEntity,
+    promptResult: any
+): Promise<ExecuteAgentResult> {
+    // Check for special conditions
+    if (this.shouldUseAlternativeFlow(promptResult)) {
+        return await this.executeAlternativeFlow(params, promptResult);
+    }
+    
+    // Otherwise use default flow
+    return await super.processNextStep(params, agentType, promptResult);
+}
+```
+
 ## API Reference
 
 ### AgentRunner Class

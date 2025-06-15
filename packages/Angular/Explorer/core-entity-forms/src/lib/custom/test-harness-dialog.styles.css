@@ -1,0 +1,39 @@
+/* Global styles for test harness dialogs */
+.test-harness-dialog-wrapper {
+    padding: 0 !important;
+}
+
+.test-harness-dialog-wrapper .k-dialog {
+    display: flex;
+    flex-direction: column;
+}
+
+.test-harness-dialog-wrapper .k-dialog-wrapper {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.test-harness-dialog-wrapper .k-dialog-titlebar {
+    display: none; /* Hide default Kendo titlebar since we have custom header */
+}
+
+.test-harness-dialog-wrapper .k-dialog-content {
+    padding: 0;
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Ensure the test harness fills the dialog */
+.test-harness-dialog {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.test-harness-dialog .dialog-content {
+    flex: 1;
+    overflow: hidden;
+}

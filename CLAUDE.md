@@ -5,8 +5,8 @@
 - **NEVER commit changes without explicit user request** - Always stage changes and show what would be committed, but wait for user approval before running git commit
 
 ## Build Commands
-- Build all packages: `npm run build`
-- Build specific packages: `turbo build --filter="@memberjunction/package-name"`
+- Build all packages: `npm run build` - from repo root
+- Build specific packages: `cd packagedirectory && npm run build`
 - **IMPORTANT**: When building individual packages for testing/compilation, always use `npm run build` in the specific package directory (NOT turbo from root)
 - Watch mode: `npm run watch`
 - Start API server: `npm run start:api`
@@ -29,6 +29,8 @@
 
 ## Code Style Guide
 - Use TypeScript strict mode and explicit typing
+- Always use MemberJunction generated `BaseEntity` sub-classes for all data work for strong typing, never use `any`
+- Study the data model in /packages/MJCoreEntities to understand the schema and use properties/fields defined there
 - No explicit `any` types (enforced by ESLint)
 - Prefer object shorthand syntax
 - Follow existing naming conventions:

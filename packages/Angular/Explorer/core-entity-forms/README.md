@@ -218,6 +218,192 @@ Each entity form typically follows this structure:
 | AI-related forms | Forms for AI models, prompts, and agents |
 | Content forms | Forms for content management |
 | Communication forms | Forms for messaging and notifications |
+| **Test Harness Components** | **Interactive testing interfaces for AI agents and prompts** |
+
+## AI Test Harness System
+
+This package includes a comprehensive test harness system for AI Agents and AI Prompts, providing developers with powerful tools for testing, debugging, and validating AI components.
+
+### Test Harness Components
+
+#### 1. AI Agent Test Harness (`AIAgentTestHarnessComponent`)
+
+A full-featured testing interface for AI agents with the following capabilities:
+
+**Core Features:**
+- **Interactive Chat Interface**: Real-time conversation with AI agents
+- **Streaming Support**: Live streaming of agent responses with elapsed time tracking
+- **Data Context Management**: Configure variables passed to agents during execution
+- **Template Data Management**: Manage template variables for agent prompts
+- **Conversation Persistence**: Save/load conversations with full state restoration
+- **Import/Export**: JSON-based conversation backup and sharing
+- **Content Formatting**: Automatic detection and rendering of Markdown, JSON, and plain text
+- **Raw Content Toggle**: View both processed and raw AI responses
+- **Error Handling**: Comprehensive error display and user feedback
+
+**Usage Example:**
+```html
+<mj-ai-agent-test-harness 
+  [aiAgent]="myAgent"
+  [isVisible]="true"
+  (visibilityChange)="onVisibilityChanged($event)">
+</mj-ai-agent-test-harness>
+```
+
+**Data Context Configuration:**
+```typescript
+// Configure variables passed to the agent
+this.testHarness.dataContextVariables = [
+  { name: 'userId', value: 'user-123', type: 'string' },
+  { name: 'department', value: 'Engineering', type: 'string' },
+  { name: 'priority', value: '1', type: 'number' }
+];
+```
+
+#### 2. AI Prompt Test Harness (`AIPromptTestHarnessComponent`)
+
+A specialized testing interface for AI prompts with template variable management:
+
+**Core Features:**
+- **Prompt Testing**: Execute prompts with different AI models
+- **Template Variable Management**: Configure and test prompt variables
+- **Model Selection**: Choose from available AI models for testing
+- **Rendered Prompt Preview**: View how templates render with current variables
+- **Conversation Management**: Similar conversation features as agent harness
+- **Variable Auto-Detection**: Automatically detect variables in prompt templates
+
+**Usage Example:**
+```html
+<mj-ai-prompt-test-harness 
+  [aiPrompt]="myPrompt"
+  [template]="promptTemplate"
+  [templateContent]="templateContent"
+  [isVisible]="true">
+</mj-ai-prompt-test-harness>
+```
+
+#### 3. Test Harness Dialog Service (`TestHarnessDialogService`)
+
+A centralized service for opening test harnesses in modal dialogs:
+
+**Features:**
+- **Configurable Dialogs**: Custom sizing, titles, and initial data
+- **Agent Loading**: Load agents by ID or use existing entities
+- **Dimension Support**: Viewport units (vw, vh) and pixel dimensions
+- **Initial Data Setup**: Pre-populate context and template variables
+
+**Usage Examples:**
+```typescript
+// Open AI Agent test harness
+const dialogRef = this.testHarnessService.openAgentTestHarness({
+  agentId: 'agent-123',
+  title: 'Test My Agent',
+  width: '90vw',
+  height: '80vh',
+  initialDataContext: { 
+    userId: 'user-456',
+    department: 'Engineering'
+  }
+});
+
+// Open AI Prompt test harness
+const dialogRef = this.testHarnessService.openPromptTestHarness({
+  promptId: 'prompt-789',
+  selectedModelId: 'gpt-4',
+  initialTemplateVariables: { 
+    name: 'Alice',
+    context: 'Customer support inquiry'
+  }
+});
+
+// Convenience methods
+await this.testHarnessService.openAgentById('agent-123');
+await this.testHarnessService.openPromptById('prompt-456');
+```
+
+### Enhanced AI Agent Form
+
+The AI Agent form (`AIAgentFormComponentExtended`) includes integrated test harness access:
+
+**Features:**
+- **Built-in Test Button**: Direct access to test harness from agent form
+- **Related Entity Management**: View sub-agents, prompts, actions, and execution history
+- **Status Indicators**: Visual status badges and execution mode icons
+- **Navigation Support**: Links to related entities
+- **Execution History**: Recent runs with timing and status information
+
+**Enhanced Capabilities:**
+```typescript
+// Open test harness from form
+this.openTestHarness(); // Validates agent is saved first
+
+// View execution status
+this.getExecutionStatusIcon(status); // Returns appropriate FontAwesome icon
+this.getExecutionStatusColor(status); // Returns status color
+
+// Format timing information
+this.formatExecutionTime(milliseconds); // Human-readable time format
+```
+
+### Conversation Management
+
+Both test harnesses include comprehensive conversation management:
+
+**Features:**
+- **Auto-Save**: Conversations automatically save during active sessions
+- **Manual Save**: Save conversations with custom names
+- **Load/Restore**: Restore complete conversation state including variables
+- **Export/Import**: JSON-based conversation portability
+- **Storage Limits**: Automatic cleanup (50 conversation limit)
+
+**Export Format:**
+```json
+{
+  "agent": {
+    "id": "agent-123",
+    "name": "Customer Service Agent",
+    "description": "Handles customer inquiries"
+  },
+  "messages": [...],
+  "dataContext": {
+    "userId": "user-456",
+    "department": "Support"
+  },
+  "templateData": {
+    "customerName": "John Doe"
+  },
+  "exportedAt": "2024-01-15T10:30:00.000Z"
+}
+```
+
+### Content Rendering System
+
+Advanced content formatting with automatic type detection:
+
+**Supported Formats:**
+- **Markdown**: Headers, lists, code blocks, links, emphasis
+- **JSON**: Syntax highlighting and pretty formatting
+- **Plain Text**: Clean text rendering with line breaks
+
+**Content Type Detection:**
+```typescript
+// Automatically detects content type
+const contentType = this.detectContentType(content);
+// Returns: 'markdown' | 'json' | 'text'
+
+// Renders content appropriately
+const safeHtml = this.getFormattedContent(message);
+```
+
+### Integration Points
+
+The test harness system integrates seamlessly with:
+
+- **MemberJunction Entity System**: Uses proper entity loading patterns
+- **GraphQL Data Provider**: Executes agents and prompts via GraphQL mutations
+- **Notification Service**: User feedback for actions and errors
+- **LocalStorage**: Conversation persistence across sessions
+- **Kendo UI Dialogs**: Professional modal interfaces
 
 ## Notes
 
@@ -228,6 +414,7 @@ Each entity form typically follows this structure:
 
 ## Dependencies
 
+### Core Dependencies
 - @angular/common
 - @angular/core
 - @angular/forms
@@ -235,6 +422,8 @@ Each entity form typically follows this structure:
 - @memberjunction/core-entities
 - @memberjunction/ng-explorer-core
 - @memberjunction/ng-base-forms
+
+### UI Component Dependencies
 - @memberjunction/ng-form-toolbar
 - @memberjunction/ng-tabstrip
 - @memberjunction/ng-container-directives
@@ -243,3 +432,28 @@ Each entity form typically follows this structure:
 - @memberjunction/ng-join-grid
 - @progress/kendo-angular-grid
 - @progress/kendo-angular-dropdowns
+- @progress/kendo-angular-dialog
+
+### AI & Notification Dependencies
+- @memberjunction/ai
+- @memberjunction/ng-notifications
+- @memberjunction/graphql-dataprovider
+
+### Test Harness Components
+
+The test harness system introduces several new components and services:
+
+| Component/Service | Purpose |
+|------------------|---------|
+| `AIAgentTestHarnessComponent` | Interactive chat interface for testing AI agents |
+| `AIPromptTestHarnessComponent` | Template variable testing for AI prompts |
+| `AIAgentTestHarnessDialogComponent` | Modal dialog wrapper for agent testing |
+| `AIPromptTestHarnessDialogComponent` | Modal dialog wrapper for prompt testing |
+| `TestHarnessDialogService` | Centralized service for opening test harness dialogs |
+| `AIAgentFormComponentExtended` | Enhanced AI agent form with integrated test harness |
+
+### New Dependencies Added for Test Harness:
+- **Angular DomSanitizer**: Safe HTML rendering for formatted content
+- **RxJS Subjects**: Component lifecycle and event management
+- **LocalStorage**: Conversation persistence across sessions
+- **File API**: Import/export functionality for conversations

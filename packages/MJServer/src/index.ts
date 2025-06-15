@@ -66,6 +66,7 @@ export * from './resolvers/DatasetResolver.js';
 export * from './resolvers/EntityRecordNameResolver.js';
 export * from './resolvers/MergeRecordsResolver.js';
 export * from './resolvers/ReportResolver.js';
+export * from './resolvers/SqlLoggingConfigResolver.js';
 export * from './resolvers/SyncRolesUsersResolver.js';
 export * from './resolvers/SyncDataResolver.js';
 export * from './resolvers/GetDataResolver.js';
@@ -111,7 +112,7 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
   const setupComplete$ = new ReplaySubject(1);
   await pool.connect();
 
-  const config = new SQLServerProviderConfigData(pool, '', mj_core_schema, cacheRefreshInterval);
+  const config = new SQLServerProviderConfigData(pool, mj_core_schema, cacheRefreshInterval);
   await setupSQLServerClient(config); // datasource is already initialized, so we can setup the client right away
   const md = new Metadata();
   console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);

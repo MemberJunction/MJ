@@ -171,7 +171,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const ls = this.LocalStorageProvider;
             if (ls) {
                 const key = this.LocalStoragePrefix + "sessionId";
-                const storedSession = await ls.getItem(key);
+                const storedSession = await ls.GetItem(key);
                 return storedSession;
             }
             return null;
@@ -194,7 +194,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const ls = this.LocalStorageProvider;
             if (ls) {
                 const key = this.LocalStoragePrefix + "sessionId";
-                await ls.setItem(key, sessionId);
+                await ls.SetItem(key, sessionId);
             }
         } catch (e) {
             // Silently fail if storage is not available
@@ -1712,7 +1712,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 class BrowserStorageProviderBase implements ILocalStorageProvider {
     private _localStorage: { [key: string]: string } = {};
 
-    public async getItem(key: string): Promise<string | null> {
+    public async GetItem(key: string): Promise<string | null> {
         return new Promise((resolve) => {
             if (this._localStorage.hasOwnProperty(key))
                 resolve(this._localStorage[key]);
@@ -1721,14 +1721,14 @@ class BrowserStorageProviderBase implements ILocalStorageProvider {
         });
     }
 
-    public async setItem(key: string, value: string): Promise<void> {
+    public async SetItem(key: string, value: string): Promise<void> {
         return new Promise((resolve) => {
             this._localStorage[key] = value;
             resolve();
         });
     }
 
-    public async remove(key: string): Promise<void> {
+    public async Remove(key: string): Promise<void> {
         return new Promise((resolve) => {
             if (this._localStorage.hasOwnProperty(key)) {
                 delete this._localStorage[key];
@@ -1746,21 +1746,21 @@ class BrowserLocalStorageProvider extends BrowserStorageProviderBase  {
         if (localStorage)
             return localStorage.getItem(key);
         else
-            return await super.getItem(key)
+            return await super.GetItem(key)
     }
 
     public async setItem(key: string, value: string): Promise<void> {
         if (localStorage)
             localStorage.setItem(key, value);
         else
-            await super.setItem(key, value)
+            await super.SetItem(key, value)
     }
 
     public async remove(key: string): Promise<void> {
         if (localStorage)
             localStorage.removeItem(key);
         else
-            await super.remove(key)
+            await super.Remove(key)
     }
 }
 

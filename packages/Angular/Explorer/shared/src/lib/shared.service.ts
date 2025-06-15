@@ -1,5 +1,5 @@
 import { ElementRef, Injectable } from '@angular/core';
-import { LogError, Metadata } from '@memberjunction/core';
+import { CompositeKey, LogError, Metadata } from '@memberjunction/core';
 import { ResourcePermissionEngine, ResourceTypeEntity, UserNotificationEntity, ViewColumnInfo } from '@memberjunction/core-entities';
 import { MJEventType, MJGlobal, ConvertMarkdownStringToHtmlList, InvokeManualResize } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -7,6 +7,7 @@ import { Subject, Observable, BehaviorSubject, firstValueFrom } from 'rxjs';
 import { first, tap } from 'rxjs/operators';
 import { NotificationService } from "@progress/kendo-angular-notification";
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { Router } from '@angular/router';
 
 @Injectable({
   providedIn: 'root'
@@ -19,7 +20,7 @@ export class SharedService {
   private tabChange = new Subject();
   tabChange$ = this.tabChange.asObservable();
 
-  constructor(private notificationService: NotificationService, private mjNotificationsService: MJNotificationService) {
+  constructor(private notificationService: NotificationService, private mjNotificationsService: MJNotificationService, private router: Router) {
     if (SharedService._instance) {
       // return existing instance which will short circuit the creation of a new instance
       return SharedService._instance;
@@ -263,6 +264,16 @@ export class SharedService {
       return item.name;
     else
       return null 
+  }
+
+  public OpenEntityRecord(entityName: string, recordPkey: CompositeKey) {
+    try {
+      this.router.navigate(['resource', 'record', recordPkey.ToURLSegment()], 
+                            { queryParams: { Entity: entityName } })        
+    }
+    catch (e) {
+      LogError(e);    
+    }
   }
 }
 

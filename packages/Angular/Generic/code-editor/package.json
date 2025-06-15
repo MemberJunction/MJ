@@ -25,6 +25,10 @@
   "dependencies": {
     "@codemirror/language-data": "^6.5.1",
     "@codemirror/merge": "^6.6.3",
+    "@codemirror/lang-json": "^6.0.1",
+    "@codemirror/lang-javascript": "^6.2.2",
+    "@codemirror/lang-sql": "^6.7.1",
+    "@codemirror/lang-python": "^6.1.6",    
     "@memberjunction/core": "2.50.0",
     "@memberjunction/core-entities": "2.50.0",
     "@memberjunction/global": "2.50.0",

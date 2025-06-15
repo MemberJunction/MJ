@@ -1194,7 +1194,7 @@ export class AIPromptRunner {
         // Validation failed, check if we should retry
         if (prompt.ValidationBehavior === 'Strict' && attempt < maxRetries) {
           lastError = new Error(`Validation failed: ${validationErrors?.map(e => e.Message).join('; ')}`);
-          LogStatus(`❌ Validation failed on attempt ${attempt + 1}, will retry (Strict mode)`);
+          LogStatus(`⚠️ Validation failed on attempt ${attempt + 1}, will retry (Strict mode)`);
           continue; // Retry
         } else {
           // Either not strict mode or no more retries, return what we have
@@ -1341,15 +1341,82 @@ export class AIPromptRunner {
       type: 'object',
       properties: {},
       required: [],
-      additionalProperties: false,
+      additionalProperties: true, // Allow additional properties for flexibility with examples
     };
 
+    // Check if this entire object appears to be a placeholder/example
+    const isPlaceholderObject = this.isObjectLikelyPlaceholder(example);
+
     for (const [key, value] of Object.entries(example)) {
-      schema.properties[key] = this.generateSchemaForValue(value);
-      schema.required.push(key);
+      // For placeholder objects, generate very permissive schemas
+      if (isPlaceholderObject) {
+        // Don't define specific properties for placeholder objects
+        // Just indicate it should be an object with any properties
+        schema.properties = {};
+        schema.required = [];
+        break;
+      }
+      
+      // Check if the key ends with '?' to indicate optional property (TypeScript style)
+      const isOptional = key.endsWith('?');
+      const cleanKey = isOptional ? key.slice(0, -1) : key;
+      
+      schema.properties[cleanKey] = this.generateSchemaForValue(value);
+      
+      // Don't make fields required if:
+      // 1. They're marked as optional with '?'
+      // 2. They look like placeholder/example values
+      const isPlaceholder = this.isLikelyPlaceholder(cleanKey, value);
+      if (!isOptional && !isPlaceholder) {
+        schema.required.push(cleanKey);
+      }
     }
 
     return schema;
+  }
+
+  /**
+   * Detects if a key/value pair looks like a placeholder or example value
+   */
+  private isLikelyPlaceholder(key: string, value: unknown): boolean {
+    // Check if key contains common placeholder patterns
+    const placeholderKeyPatterns = /^(param|example|placeholder|sample|dummy|test)/i;
+    if (placeholderKeyPatterns.test(key)) {
+      return true;
+    }
+
+    // Check if string value contains common placeholder text
+    if (typeof value === 'string') {
+      const placeholderValuePatterns = /(goes here|placeholder|example|sample value|value\d+|UUID|your .* here|insert .* here)/i;
+      if (placeholderValuePatterns.test(value)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Detects if an entire object looks like it contains only placeholder/example data
+   */
+  private isObjectLikelyPlaceholder(obj: unknown): boolean {
+    if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) {
+      return false;
+    }
+
+    const entries = Object.entries(obj);
+    
+    // If object has placeholder-like keys (param1, param2, etc)
+    const hasPlaceholderKeys = entries.some(([key]) => 
+      /^(param\d+|key\d+|value\d+|example\d+|placeholder\d+)$/i.test(key)
+    );
+
+    // If all values are simple placeholders
+    const allValuesArePlaceholders = entries.every(([key, value]) => 
+      this.isLikelyPlaceholder(key, value)
+    );
+
+    return hasPlaceholderKeys || allValuesArePlaceholders;
   }
 
   /**
@@ -1373,9 +1440,10 @@ export class AIPromptRunner {
             return {
               type: 'array',
               items: this.generateSchemaForValue(value[0]),
+              minItems: 0, // Don't require minimum items for example arrays
             };
           } else {
-            return { type: 'array' };
+            return { type: 'array', minItems: 0 };
           }
         } else {
           return this.generateSchemaFromExample(value);
@@ -1574,10 +1642,14 @@ export class AIPromptRunner {
       if (validationErrors.length === 0) {
         LogStatus(`✅ Schema validation passed for prompt ${promptId}`);
       } else {
-        LogStatus(`❌ Schema validation found ${validationErrors.length} errors for prompt ${promptId}:`);
+        LogStatus(`⚠️ Schema validation found ${validationErrors.length} potential issues for prompt ${promptId}:`);
         validationErrors.forEach((error, index) => {
           LogStatus(`   ${index + 1}. ${error.Source}: ${error.Message}`);
         });
+        // Log additional context to help with debugging
+        LogStatus(`   Note: The schema was generated from OutputExample. Consider:`);
+        LogStatus(`   - Mark optional properties with '?' suffix (e.g., "subAgent?": {...})`)
+        LogStatus(`   - Example values like "param1", "value1" are treated as placeholders`);
       }
 
     } catch (error) {
