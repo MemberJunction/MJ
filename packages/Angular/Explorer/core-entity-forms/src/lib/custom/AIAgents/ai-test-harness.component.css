@@ -6,6 +6,43 @@
     background: #f8f9fa;
 }
 
+/* Model Settings Styles (Prompt Mode) */
+.model-settings {
+    padding: 16px;
+}
+
+.setting-group {
+    margin-bottom: 24px;
+}
+
+.setting-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #495057;
+    font-size: 14px;
+}
+
+.model-selector {
+    width: 100%;
+}
+
+.temperature-slider {
+    width: 100%;
+    margin-top: 8px;
+}
+
+.max-tokens-input {
+    width: 100%;
+}
+
+.setting-help {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #6c757d;
+    font-style: italic;
+}
+
 /* Header Styles */
 .harness-header {
     background: white;

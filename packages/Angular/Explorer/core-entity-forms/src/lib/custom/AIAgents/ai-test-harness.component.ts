@@ -216,12 +216,28 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
     /** Variables used for template rendering in agent prompts */
     public templateDataVariables: DataContextVariable[] = [];
     
+    // === Prompt-specific properties ===
+    /** Variables for prompt template rendering */
+    public templateVariables: DataContextVariable[] = [];
+    
+    /** Selected AI model for prompt execution */
+    public selectedModelId: string = '';
+    
+    /** Temperature setting for prompt execution */
+    public temperature: number = 0.7;
+    
+    /** Maximum tokens for prompt execution */
+    public maxTokens: number = 2000;
+    
+    /** Available AI models for prompt execution */
+    public availableModels: any[] = [];
+    
     // === UI State Management ===
     /** Whether the configuration sidebar is currently visible */
     public showSidebar = true;
     
     /** Currently active tab in the sidebar */
-    public activeTab: 'dataContext' | 'templateData' | 'savedConversations' = 'dataContext';
+    public activeTab: 'dataContext' | 'templateData' | 'templateVariables' | 'modelSettings' | 'savedConversations' = 'dataContext';
     
     /** Array of saved conversation sessions loaded from localStorage */
     public savedConversations: SavedConversation[] = [];
@@ -261,6 +277,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
         this.subscribeToEvents();
         this.resetHarness();
         this.setupGlobalJsonToggle();
+        
+        // Load models if in prompt mode
+        if (this.mode === 'prompt') {
+            this.loadAvailableModels();
+        }
     }
 
     /**
@@ -298,6 +319,34 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
         // - Handle streaming responses in real-time
         // - Update conversation messages as data arrives
     }
+    
+    /**
+     * Loads available AI models for prompt execution.
+     * Only called when the harness is in prompt mode.
+     */
+    private async loadAvailableModels() {
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView({
+                EntityName: 'AI Models',
+                ExtraFilter: `Active=1`,
+                OrderBy: 'Name ASC',
+                ResultType: 'entity_object'
+            });
+            
+            if (result && result.Success) {
+                this.availableModels = result.Results;
+                
+                // Set default model if not already set
+                if (!this.selectedModelId && this.availableModels.length > 0) {
+                    this.selectedModelId = this.availableModels[0].ID;
+                }
+            }
+        } catch (error) {
+            console.error('Error loading AI models:', error);
+            this.availableModels = [];
+        }
+    }
 
     private handleStreamingUpdate(data: any) {
         const message = this.conversationMessages.find(m => m.agentRunId === data.agentRunId);
@@ -328,9 +377,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
         this.currentStreamingMessageId = null;
         this.dataContextVariables = [{ name: '', value: '', type: 'string' }];
         this.templateDataVariables = [];
+        this.templateVariables = [];
         this.currentConversationId = null;
         this.showSidebar = true;
-        this.activeTab = 'dataContext';
+        // Set default tab based on mode
+        this.activeTab = this.mode === 'agent' ? 'dataContext' : 'templateVariables';
     }
 
     /**
@@ -352,9 +403,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
 
     /**
      * Switches to the specified tab in the configuration sidebar.
-     * @param tab - The tab to activate ('dataContext', 'templateData', or 'savedConversations')
+     * @param tab - The tab to activate
      */
-    public selectTab(tab: 'dataContext' | 'templateData' | 'savedConversations') {
+    public selectTab(tab: 'dataContext' | 'templateData' | 'templateVariables' | 'modelSettings' | 'savedConversations') {
         this.activeTab = tab;
     }
 
@@ -678,11 +729,18 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
      * Template data variables are used for prompt template rendering.
      */
     public addTemplateVariable() {
-        this.templateDataVariables.push({
+        const newVariable: DataContextVariable = {
             name: '',
             value: '',
             type: 'string'
-        });
+        };
+        
+        // Handle both template data variables (agent mode) and template variables (prompt mode)
+        if (this.mode === 'agent') {
+            this.templateDataVariables.push(newVariable);
+        } else {
+            this.templateVariables.push(newVariable);
+        }
     }
 
     /**
@@ -690,7 +748,12 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
      * @param index - Zero-based index of the variable to remove
      */
     public removeTemplateVariable(index: number) {
-        this.templateDataVariables.splice(index, 1);
+        // Handle both template data variables (agent mode) and template variables (prompt mode)
+        if (this.mode === 'agent') {
+            this.templateDataVariables.splice(index, 1);
+        } else {
+            this.templateVariables.splice(index, 1);
+        }
     }
 
     /**

@@ -96,7 +96,7 @@
                                     @if (message.role === 'user') {
                                         <i class="fa-solid fa-user"></i> You
                                     } @else {
-                                        <i class="fa-solid fa-robot"></i> {{ aiAgent?.Name || 'Assistant' }}
+                                        <i class="fa-solid fa-robot"></i> {{ getEntityName() || 'Assistant' }}
                                     }
                                 </span>
                                 <span class="message-time">{{ formatTimestamp(message.timestamp) }}</span>
@@ -163,20 +163,37 @@
                 <div class="sidebar">
                     <!-- Tab Navigation -->
                     <div class="sidebar-tabs">
-                        <button 
-                            class="tab-button"
-                            [class.active]="activeTab === 'dataContext'"
-                            (click)="selectTab('dataContext')">
-                            <i class="fa-solid fa-database"></i>
-                            Data Context
-                        </button>
-                        <button 
-                            class="tab-button"
-                            [class.active]="activeTab === 'templateData'"
-                            (click)="selectTab('templateData')">
-                            <i class="fa-solid fa-file-code"></i>
-                            Template Data
-                        </button>
+                        @if (mode === 'agent') {
+                            <button 
+                                class="tab-button"
+                                [class.active]="activeTab === 'dataContext'"
+                                (click)="selectTab('dataContext')">
+                                <i class="fa-solid fa-database"></i>
+                                Data Context
+                            </button>
+                            <button 
+                                class="tab-button"
+                                [class.active]="activeTab === 'templateData'"
+                                (click)="selectTab('templateData')">
+                                <i class="fa-solid fa-file-code"></i>
+                                Template Data
+                            </button>
+                        } @else {
+                            <button 
+                                class="tab-button"
+                                [class.active]="activeTab === 'templateVariables'"
+                                (click)="selectTab('templateVariables')">
+                                <i class="fa-solid fa-code"></i>
+                                Template Variables
+                            </button>
+                            <button 
+                                class="tab-button"
+                                [class.active]="activeTab === 'modelSettings'"
+                                (click)="selectTab('modelSettings')">
+                                <i class="fa-solid fa-sliders"></i>
+                                Model Settings
+                            </button>
+                        }
                         <button 
                             class="tab-button"
                             [class.active]="activeTab === 'savedConversations'"
@@ -316,6 +333,121 @@
                                     class="add-variable-button">
                                     <i class="fa-solid fa-plus"></i> Add Variable
                                 </kendo-button>
+                            </div>
+                        }
+
+                        <!-- Template Variables Tab (Prompt Mode) -->
+                        @if (activeTab === 'templateVariables') {
+                            <div class="tab-content">
+                                <div class="tab-header">
+                                    <h4>Template Variables</h4>
+                                    <p>Variables for prompt template rendering</p>
+                                </div>
+                                
+                                <div class="variables-list">
+                                    @for (variable of templateVariables; track $index) {
+                                        <div class="variable-item">
+                                            <kendo-textbox 
+                                                [(ngModel)]="variable.name" 
+                                                placeholder="Variable name"
+                                                class="variable-name">
+                                            </kendo-textbox>
+                                            
+                                            <kendo-dropdownlist 
+                                                [(ngModel)]="variable.type"
+                                                [data]="[
+                                                    {text: 'String', value: 'string'}, 
+                                                    {text: 'Number', value: 'number'}, 
+                                                    {text: 'Boolean', value: 'boolean'}, 
+                                                    {text: 'Object', value: 'object'}
+                                                ]"
+                                                textField="text"
+                                                valueField="value"
+                                                [valuePrimitive]="true"
+                                                class="variable-type">
+                                            </kendo-dropdownlist>
+                                            
+                                            <kendo-textbox 
+                                                [(ngModel)]="variable.value" 
+                                                [placeholder]="variable.type === 'object' ? 'JSON value' : 'Value'"
+                                                class="variable-value">
+                                            </kendo-textbox>
+                                            
+                                            <kendo-button 
+                                                fillMode="flat" 
+                                                themeColor="error" 
+                                                size="small"
+                                                (click)="removeTemplateVariable($index)"
+                                                title="Remove variable"
+                                                class="remove-button">
+                                                <i class="fa-solid fa-times"></i>
+                                            </kendo-button>
+                                        </div>
+                                    }
+                                </div>
+                                
+                                <kendo-button 
+                                    fillMode="outline" 
+                                    size="small"
+                                    (click)="addTemplateVariable()"
+                                    class="add-button">
+                                    <i class="fa-solid fa-plus"></i>
+                                    Add Variable
+                                </kendo-button>
+                            </div>
+                        }
+
+                        <!-- Model Settings Tab (Prompt Mode) -->
+                        @if (activeTab === 'modelSettings') {
+                            <div class="tab-content">
+                                <div class="tab-header">
+                                    <h4>Model Settings</h4>
+                                    <p>Configure AI model parameters</p>
+                                </div>
+                                
+                                <div class="model-settings">
+                                    <div class="setting-group">
+                                        <label>AI Model</label>
+                                        <kendo-dropdownlist 
+                                            [(ngModel)]="selectedModelId"
+                                            [data]="availableModels"
+                                            textField="Name"
+                                            valueField="ID"
+                                            placeholder="Select a model..."
+                                            class="model-selector">
+                                        </kendo-dropdownlist>
+                                    </div>
+                                    
+                                    <div class="setting-group">
+                                        <label>Temperature ({{ temperature }})</label>
+                                        <kendo-slider 
+                                            [(ngModel)]="temperature"
+                                            [min]="0"
+                                            [max]="2"
+                                            [smallStep]="0.1"
+                                            [showButtons]="false"
+                                            class="temperature-slider">
+                                        </kendo-slider>
+                                        <div class="setting-help">
+                                            Lower values make output more focused and deterministic
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="setting-group">
+                                        <label>Max Tokens</label>
+                                        <kendo-numerictextbox 
+                                            [(ngModel)]="maxTokens"
+                                            [min]="100"
+                                            [max]="8000"
+                                            [step]="100"
+                                            placeholder="Max tokens..."
+                                            class="max-tokens-input">
+                                        </kendo-numerictextbox>
+                                        <div class="setting-help">
+                                            Maximum length of generated response
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         }
 
