@@ -155,9 +155,9 @@
 .sessions-layout {
   display: flex;
   gap: 1.5rem;
-  height: calc(100vh - 400px); // Dynamic height based on viewport
+  height: calc(100vh - 450px); // Dynamic height based on viewport
   min-height: 400px;
-  max-height: 800px;
+  max-height: 600px;
 
   @media (max-width: 1024px) {
     flex-direction: column;
@@ -322,17 +322,45 @@
   @include scrollable-content;
   background: #1e1e1e;
   color: #d4d4d4;
-  padding: 1rem;
+  padding: 0; // Remove padding for code editor
+  min-height: 300px;
+  height: 100%;
+  position: relative;
+  
+  // Code editor styles
+  ::ng-deep {
+    .cm-editor {
+      height: 100%;
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      font-size: 0.875rem;
+    }
+    
+    .cm-scroller {
+      font-family: inherit;
+    }
+    
+    // Dark theme adjustments to match previous style
+    .cm-content {
+      background: #1e1e1e;
+      color: #d4d4d4;
+    }
+    
+    .cm-gutters {
+      background: #252526;
+      color: #858585;
+      border-right: 1px solid #464647;
+    }
+    
+    .cm-activeLineGutter {
+      background: #2a2a2a;
+    }
+    
+    .cm-activeLine {
+      background: rgba(255, 255, 255, 0.04);
+    }
+  }
 }
 
-.log-viewer {
-  margin: 0;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-size: 0.875rem;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
 
 // Empty State
 .empty-state {

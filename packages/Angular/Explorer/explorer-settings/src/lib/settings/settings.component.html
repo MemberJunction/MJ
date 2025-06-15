@@ -158,16 +158,54 @@
                       <span>Beta features - Use with caution</span>
                     </div>
                     
-                    <mj-settings-card 
-                      title="SQL Logging"
-                      icon="fa-solid fa-database"
-                      [expanded]="isSectionExpanded('sql-logging')"
-                      (toggle)="toggleSection('sql-logging')"
-                    >
-                      <div class="card-content">
-                        <mj-sql-logging></mj-sql-logging>
-                      </div>
-                    </mj-settings-card>
+                    <!-- Tab Navigation -->
+                    <div class="advanced-tabs">
+                      <button 
+                        class="tab-btn"
+                        [class.active]="advancedActiveTab === 'sql-logging'"
+                        (click)="setAdvancedTab('sql-logging')"
+                      >
+                        <i class="fa-solid fa-database"></i>
+                        SQL Logging
+                      </button>
+                      <button 
+                        class="tab-btn"
+                        [class.active]="advancedActiveTab === 'performance'"
+                        (click)="setAdvancedTab('performance')"
+                      >
+                        <i class="fa-solid fa-gauge-high"></i>
+                        Performance
+                      </button>
+                      <button 
+                        class="tab-btn"
+                        [class.active]="advancedActiveTab === 'developer'"
+                        (click)="setAdvancedTab('developer')"
+                      >
+                        <i class="fa-solid fa-code"></i>
+                        Developer Tools
+                      </button>
+                    </div>
+                    
+                    <!-- Tab Content -->
+                    <div class="advanced-tab-content">
+                      @switch (advancedActiveTab) {
+                        @case ('sql-logging') {
+                          <mj-sql-logging></mj-sql-logging>
+                        }
+                        @case ('performance') {
+                          <div class="performance-settings">
+                            <h3>Performance Settings</h3>
+                            <p>Performance monitoring and optimization tools coming soon.</p>
+                          </div>
+                        }
+                        @case ('developer') {
+                          <div class="developer-settings">
+                            <h3>Developer Tools</h3>
+                            <p>Advanced developer options coming soon.</p>
+                          </div>
+                        }
+                      }
+                    </div>
                   </div>
                 }
               }

@@ -216,7 +216,15 @@
                 </div>
               </div>
               <div class="log-content">
-                <pre class="log-viewer">{{ logContent }}</pre>
+                <mj-code-editor
+                  [value]="logContent"
+                  [readonly]="true"
+                  [language]="'sql'"
+                  [setup]="'basic'"
+                  [lineWrapping]="true"
+                  [highlightWhitespace]="false"
+                  style="height: 100%;"
+                ></mj-code-editor>
               </div>
             } @else {
               <div class="empty-state">

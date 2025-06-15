@@ -44,6 +44,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
   // State management
   public activeTab = 'general';
+  public advancedActiveTab = 'sql-logging';
   public searchTerm$ = new BehaviorSubject<string>('');
   public isLoading = false;
   public error: string | null = null;
@@ -164,6 +165,10 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
   public isSectionExpanded(sectionId: string): boolean {
     return this.expandedSections.includes(sectionId);
+  }
+
+  public setAdvancedTab(tabId: string): void {
+    this.advancedActiveTab = tabId;
   }
 
   private filterContent(term: string): void {

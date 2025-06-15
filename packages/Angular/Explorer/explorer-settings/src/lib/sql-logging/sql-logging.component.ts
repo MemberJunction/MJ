@@ -8,6 +8,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { SharedSettingsModule } from '../shared/shared-settings.module';
+import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 
 /**
  * Angular component for managing SQL logging sessions in MemberJunction.
@@ -34,7 +35,8 @@ import { SharedSettingsModule } from '../shared/shared-settings.module';
   imports: [
     CommonModule,
     FormsModule,
-    SharedSettingsModule
+    SharedSettingsModule,
+    CodeEditorModule
   ],
   templateUrl: './sql-logging.component.html',
   styleUrls: ['./sql-logging.component.scss']

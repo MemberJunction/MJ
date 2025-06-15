@@ -480,6 +480,75 @@
   color: #6b7280;
 }
 
+// Advanced Settings Tabs
+.advanced-tabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 2px solid #e5e7eb;
+  margin-bottom: 2rem;
+  margin-top: 1.5rem;
+
+  .tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: #6b7280;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+
+    &:hover {
+      color: #374151;
+      background: #f9fafb;
+    }
+
+    &.active {
+      color: #2196f3;
+      border-bottom-color: #2196f3;
+      background: #eff6ff;
+
+      i {
+        color: #2196f3;
+      }
+    }
+
+    i {
+      font-size: 1.125rem;
+    }
+  }
+}
+
+.advanced-tab-content {
+  @include scrollable-content;
+  background: white;
+  border-radius: 12px;
+  padding: 0;
+  min-height: 500px;
+  max-height: calc(100vh - 350px);
+}
+
+.performance-settings,
+.developer-settings {
+  padding: 2rem;
+  
+  h3 {
+    margin: 0 0 1rem 0;
+    color: #1f2937;
+    font-size: 1.25rem;
+  }
+  
+  p {
+    color: #6b7280;
+    font-size: 0.95rem;
+  }
+}
+
 // Animations
 @keyframes fadeIn {
   from {
