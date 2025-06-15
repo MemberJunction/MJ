@@ -48,9 +48,9 @@
                         <kendo-button themeColor="primary" size="large"
                                     (click)="openTestHarness()"
                                     [disabled]="record.Status !== 'Active'"
-                                    title="Test this AI agent">
-                            <i class="fa-solid fa-flask"></i>
-                            Test
+                                    title="Run this AI agent">
+                            <i class="fa-solid fa-play"></i>
+                            Run
                         </kendo-button>
                     }
                     <kendo-button fillMode="outline" size="small" (click)="refreshRelatedData()" title="Refresh all data">
@@ -507,7 +507,7 @@
             [resizable]="true"
             [state]="'default'"
             (close)="onTestHarnessVisibilityChanged(false)"
-            title="Test AI Agent - {{ record.Name || 'Untitled' }}">
+            title="Run AI Agent - {{ record.Name || 'Untitled' }}">
             <mj-ai-test-harness
                 [aiAgent]="record"
                 [isVisible]="showTestHarness"

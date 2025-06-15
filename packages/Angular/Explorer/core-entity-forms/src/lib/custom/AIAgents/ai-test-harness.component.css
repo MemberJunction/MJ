@@ -613,128 +613,9 @@
     }
 }
 
-/* Enhanced JSON display with proper text wrapping */
-.json-display-container {
-    background: #1e1e1e;
-    border: 1px solid #333;
-    border-radius: 8px;
-    padding: 16px;
+/* JSON raw section styling - simplified since we use code editor in dialog */
+.json-raw-section {
     margin-top: 12px;
-    font-family: 'JetBrains Mono', 'SF Mono', Monaco, 'Cascadia Code', 'Fira Code', 'Roboto Mono', Consolas, monospace;
-    font-size: 12px;
-    line-height: 1.6;
-    color: #d4d4d4;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    max-height: 400px;
-    overflow-y: auto;
-    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-/* Apply dark theme to JSON content spans within json-raw-section */
-.json-raw-section span {
-    font-family: 'JetBrains Mono', 'SF Mono', Monaco, 'Cascadia Code', 'Fira Code', 'Roboto Mono', Consolas, monospace;
-    font-size: 12px;
-    line-height: 1.6;
-}
-
-/* Custom scrollbar for JSON container */
-.json-display-container::-webkit-scrollbar,
-.json-raw-section::-webkit-scrollbar {
-    width: 8px;
-}
-
-.json-display-container::-webkit-scrollbar-track,
-.json-raw-section::-webkit-scrollbar-track {
-    background: #2d2d2d;
-    border-radius: 4px;
-}
-
-.json-display-container::-webkit-scrollbar-thumb,
-.json-raw-section::-webkit-scrollbar-thumb {
-    background: #555;
-    border-radius: 4px;
-}
-
-.json-display-container::-webkit-scrollbar-thumb:hover,
-.json-raw-section::-webkit-scrollbar-thumb:hover {
-    background: #666;
-}
-
-.json-property {
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-}
-
-.json-key {
-    color: #9cdcfe;
-    font-weight: 500;
-}
-
-.json-string {
-    color: #ce9178;
-}
-
-.json-string-content {
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    white-space: pre-wrap;
-    max-width: 100%;
-}
-
-.json-number {
-    color: #b5cea8;
-}
-
-.json-boolean {
-    color: #569cd6;
-    font-weight: 500;
-}
-
-.json-null {
-    color: #569cd6;
-    font-style: italic;
-}
-
-.json-bracket {
-    color: #d4d4d4;
-    font-weight: 600;
-}
-
-.json-colon {
-    color: #d4d4d4;
-    margin: 0 4px;
-}
-
-.json-array-item {
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-}
-
-.json-indent {
-    display: inline;
-}
-
-.json-fallback {
-    background: #fff3cd;
-    border: 1px solid #ffeaa7;
-    padding: 8px;
-    border-radius: 4px;
-    color: #856404;
-    font-family: monospace;
-    font-size: 12px;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    white-space: pre-wrap;
-}
-
-@media (max-width: 768px) {
-    .json-display-container {
-        font-size: 11px;
-        max-height: 200px;
-        padding: 8px;
-    }
 }
 
 /* Input Area */
@@ -1023,13 +904,13 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    background: #1e1e1e;
+    background: white;
 }
 
 .json-dialog-header {
     padding: 12px 16px;
-    background: #2d2d2d;
-    border-bottom: 1px solid #333;
+    background: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
     display: flex;
     justify-content: flex-end;
     align-items: center;
@@ -1039,36 +920,5 @@
     flex: 1;
     overflow: hidden;
     padding: 0;
-}
-
-.json-display {
-    margin: 0;
-    padding: 20px;
-    height: 100%;
-    overflow: auto;
-    background: #1e1e1e;
-    color: #d4d4d4;
-    font-family: 'JetBrains Mono', 'SF Mono', Monaco, 'Cascadia Code', 'Fira Code', 'Roboto Mono', Consolas, monospace;
-    font-size: 13px;
-    line-height: 1.6;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-}
-
-/* Custom scrollbar for JSON display */
-.json-display::-webkit-scrollbar {
-    width: 10px;
-}
-
-.json-display::-webkit-scrollbar-track {
-    background: #2d2d2d;
-}
-
-.json-display::-webkit-scrollbar-thumb {
-    background: #555;
-    border-radius: 5px;
-}
-
-.json-display::-webkit-scrollbar-thumb:hover {
-    background: #666;
+    position: relative;
 }

@@ -18,8 +18,15 @@ import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 import { indentWithTab } from '@codemirror/commands';
 import { LanguageDescription, indentUnit } from '@codemirror/language';
 import { Annotation, Compartment, EditorState, Extension, StateEffect } from '@codemirror/state';
-import { EditorView, highlightWhitespace, keymap, placeholder } from '@codemirror/view';
+import { EditorView, highlightWhitespace, keymap, placeholder, lineNumbers, EditorView as EditorViewType } from '@codemirror/view';
 import { basicSetup, minimalSetup } from 'codemirror';
+
+// Import common language extensions
+import { json } from '@codemirror/lang-json';
+import { javascript } from '@codemirror/lang-javascript';
+import { sql } from '@codemirror/lang-sql';
+import { python } from '@codemirror/lang-python';
+import { languages } from '@codemirror/language-data';
 
 export type Setup = 'basic' | 'minimal' | null;
 
@@ -83,7 +90,7 @@ export class CodeEditorComponent implements OnChanges, OnInit, OnDestroy, Contro
    *
    * Don't support change dynamically!
    */
-  @Input() languages: LanguageDescription[] = [];
+  @Input() languages: LanguageDescription[] = languages;
 
   /** The editor's language. You should set the `languages` prop at first. */
   @Input() language = '';
@@ -94,6 +101,12 @@ export class CodeEditorComponent implements OnChanges, OnInit, OnDestroy, Contro
    * [`minimal`](https://codemirror.net/docs/ref/#codemirror.minimalSetup) or `null`.
    */
   @Input() setup: Setup = 'basic';
+
+  /**
+   * Custom extension factories that can be provided by the parent component.
+   * These functions will be called when initializing the editor to get the extensions.
+   */
+  @Input() customExtensionFactories: (() => Extension)[] = [];
 
   /**
    * It will be appended to the root
@@ -141,7 +154,7 @@ export class CodeEditorComponent implements OnChanges, OnInit, OnDestroy, Contro
   private _languageConf = new Compartment();
 
   private _getAllExtensions() {
-    return [
+    const allExtensions: Extension[] = [
       this._updateListener,
 
       this._editableConf.of([]),
@@ -156,8 +169,49 @@ export class CodeEditorComponent implements OnChanges, OnInit, OnDestroy, Contro
 
       this.setup === 'basic' ? basicSetup : this.setup === 'minimal' ? minimalSetup : [],
 
+      // Add line wrapping support
+      this.lineWrapping ? EditorView.lineWrapping : [],
+
+      // Add built-in language support if no custom language is loaded
+      this._getBuiltInLanguageExtension(),
+
       ...this.extensions,
     ];
+
+    // Add custom extensions from factories
+    for (const factory of this.customExtensionFactories) {
+      try {
+        allExtensions.push(factory());
+      } catch (error) {
+        console.error('Error loading custom extension:', error);
+      }
+    }
+
+    return allExtensions;
+  }
+
+  /**
+   * Get built-in language extension if the language matches a known one
+   */
+  private _getBuiltInLanguageExtension(language?: string): Extension {
+    const lang = (language || this.language).toLowerCase();
+    switch (lang) {
+      case 'json':
+        return json();
+      case 'javascript':
+      case 'js':
+        return javascript();
+      case 'typescript':
+      case 'ts':
+        return javascript(); // Use JavaScript extension for TypeScript files
+      case 'sql':
+        return sql();
+      case 'python':
+      case 'py':
+        return python();
+      default:
+        return [];
+    }
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -300,6 +354,21 @@ export class CodeEditorComponent implements OnChanges, OnInit, OnDestroy, Contro
     if (!lang) {
       return;
     }
+    
+    // Check if it's a built-in language first
+    const lowerLang = lang.toLowerCase();
+    const builtInLanguages = ['json', 'javascript', 'js', 'typescript', 'ts', 'sql', 'python', 'py'];
+    
+    if (builtInLanguages.includes(lowerLang)) {
+      // For built-in languages, get the extension and reconfigure
+      const extension = this._getBuiltInLanguageExtension(lang);
+      if (extension) {
+        this._dispatchEffects(this._languageConf.reconfigure(extension));
+        return;
+      }
+    }
+    
+    // For other languages, use dynamic loading
     if (this.languages.length === 0) {
       if (this.view) {
         console.error('No supported languages. Please set the `languages` prop at first.');

@@ -470,8 +470,8 @@
     @if (showJsonDialog) {
         <kendo-dialog 
             [title]="'Raw JSON Response'" 
-            [width]="800" 
-            [height]="600"
+            [width]="900" 
+            [height]="700"
             [minWidth]="600"
             [minHeight]="400"
             (close)="closeJsonDialog()">
@@ -482,7 +482,12 @@
                     </button>
                 </div>
                 <div class="json-dialog-body">
-                    <pre class="json-display">{{ currentJsonContent }}</pre>
+                    <mj-code-editor 
+                        [(ngModel)]="currentJsonContent"
+                        [readonly]="true"
+                        [language]="'json'"
+                        style="height: 100%; width: 100%;">
+                    </mj-code-editor>
                 </div>
             </div>
         </kendo-dialog>

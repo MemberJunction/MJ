@@ -114,8 +114,8 @@
                             @if (record.ID) {
                                 <kendo-button themeColor="primary" size="large"
                                             (click)="openTestHarness()"
-                                            title="Open AI Prompt Test Harness">
-                                    <i class="fa-solid fa-flask"></i> Test
+                                            title="Run AI Prompt Test Harness">
+                                    <i class="fa-solid fa-play"></i> Run
                                 </kendo-button>
                             }
                         </div>
@@ -742,19 +742,13 @@
             [resizable]="true"
             [state]="'default'"
             (close)="onTestHarnessVisibilityChanged(false)"
-            title="Test AI Prompt - {{ record.Name || 'Untitled' }}">
-            <!-- TODO: AI Prompt test harness to be implemented
-            <mj-ai-prompt-test-harness
-                [aiPrompt]="record"
-                [template]="template"
-                [templateContent]="templateContent"
+            title="Run AI Prompt - {{ record.Name || 'Untitled' }}">
+            <mj-ai-test-harness
+                [entity]="record"
+                [mode]="'prompt'"
                 [isVisible]="showTestHarness"
                 (visibilityChange)="onTestHarnessVisibilityChanged($event)">
-            </mj-ai-prompt-test-harness>
-            -->
-            <div style="padding: 20px; text-align: center;">
-                <p>AI Prompt test harness coming soon...</p>
-            </div>
+            </mj-ai-test-harness>
         </kendo-window>
     }
 </div>

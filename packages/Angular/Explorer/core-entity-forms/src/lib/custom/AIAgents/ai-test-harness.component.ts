@@ -98,8 +98,10 @@ export interface SavedConversation {
     messages: ConversationMessage[];
     /** Data context variables used during the conversation */
     dataContext: Record<string, any>;
-    /** Template data variables used during the conversation */
+    /** Template data variables used during the conversation (agent mode) */
     templateData: Record<string, any>;
+    /** Template variables used during the conversation (prompt mode) */
+    templateVariables?: Record<string, any>;
     /** When the conversation was first created */
     createdAt: Date;
     /** When the conversation was last modified */
@@ -621,11 +623,100 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
         this.startElapsedTimeCounter(assistantMessage);
 
         try {
-            // TODO: Implement prompt execution
-            // For now, show a placeholder message
+            // Get GraphQL data provider
+            const dataProvider = Metadata.Provider as GraphQLDataProvider;
+
+            // Build template variables from user input
+            const templateVariables = this.buildTemplateVariables();
+            
+            // Prepare data context (template variables + user message)
+            const dataContext = {
+                ...templateVariables,
+                userMessage: userMessage
+            };
+            
+            // Execute the prompt using RunAIPrompt
+            const query = `
+                mutation RunAIPrompt($promptId: String!, $data: String, $modelId: String, $vendorId: String, $configurationId: String, $skipValidation: Boolean, $templateData: String) {
+                    RunAIPrompt(promptId: $promptId, data: $data, modelId: $modelId, vendorId: $vendorId, configurationId: $configurationId, skipValidation: $skipValidation, templateData: $templateData) {
+                        success
+                        output
+                        parsedResult
+                        error
+                        executionTimeMs
+                        tokensUsed
+                        promptRunId
+                        rawResult
+                        validationResult
+                    }
+                }
+            `;
+
+            const variables = {
+                promptId: (this.entity as AIPromptEntity).ID,
+                data: JSON.stringify(dataContext),
+                modelId: this.selectedModelId || undefined,
+                vendorId: undefined, // Use model's default vendor
+                configurationId: undefined, // Use default configuration
+                skipValidation: false,
+                templateData: null // Additional template context if needed
+            };
+
+            // Set up streaming simulation (will be replaced with real streaming)
+            this.currentStreamingMessageId = assistantMessage.id;
+            this.simulateStreaming(assistantMessage);
+
+            const result = await dataProvider.ExecuteGQL(query, variables);
+            const executionResult = result?.RunAIPrompt;
+
+            // Stop streaming simulation and elapsed time counter
+            if (this.streamingInterval) {
+                clearInterval(this.streamingInterval);
+                this.streamingInterval = null;
+            }
+            if (this.elapsedTimeInterval) {
+                clearInterval(this.elapsedTimeInterval);
+                this.elapsedTimeInterval = null;
+            }
+
+            // Update assistant message with result
             assistantMessage.isStreaming = false;
-            assistantMessage.content = 'Prompt execution coming soon. This will execute the prompt "' + (this.entity as AIPromptEntity).Name + '" with your message.';
-            assistantMessage.executionTime = 1000;
+            
+            if (executionResult?.success) {
+                // Use parsedResult if available, otherwise fall back to output
+                assistantMessage.content = executionResult.parsedResult || executionResult.output || 'No response generated';
+                assistantMessage.executionTime = executionResult.executionTimeMs;
+                
+                // Store raw result and metadata
+                assistantMessage.rawContent = executionResult.rawResult || executionResult.output || '';
+                
+                // Store execution metadata
+                if (executionResult.promptRunId || executionResult.tokensUsed) {
+                    assistantMessage.agentRunId = executionResult.promptRunId;
+                    // Store additional metadata in a structured format
+                    const metadata = {
+                        promptRunId: executionResult.promptRunId,
+                        tokensUsed: executionResult.tokensUsed,
+                        modelId: this.selectedModelId,
+                        validationResult: executionResult.validationResult
+                    };
+                    // If rawContent is JSON, try to merge metadata
+                    if (assistantMessage.rawContent) {
+                        try {
+                            const rawJson = JSON.parse(assistantMessage.rawContent);
+                            assistantMessage.rawContent = JSON.stringify({ ...rawJson, _metadata: metadata }, null, 2);
+                        } catch {
+                            // If not JSON, store metadata separately
+                            assistantMessage.rawContent = JSON.stringify(metadata, null, 2);
+                        }
+                    } else {
+                        assistantMessage.rawContent = JSON.stringify(metadata, null, 2);
+                    }
+                }
+            } else {
+                assistantMessage.content = 'I encountered an error processing your request.';
+                assistantMessage.error = executionResult?.error || 'Unknown error occurred';
+            }
             
             delete assistantMessage.streamingContent;
             this.currentStreamingMessageId = null;
@@ -633,6 +724,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
 
             // Auto-save conversation
             this.autoSaveConversation();
+            
+            // Focus back on input
+            this.focusMessageInput();
 
         } catch (error) {
             // Update assistant message with error
@@ -706,6 +800,18 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
         }
         
         return data;
+    }
+
+    private buildTemplateVariables(): Record<string, any> {
+        const variables: Record<string, any> = {};
+        
+        for (const variable of this.templateVariables) {
+            if (variable.name.trim()) {
+                variables[variable.name] = this.convertVariableValue(variable.value, variable.type);
+            }
+        }
+        
+        return variables;
     }
 
     private convertVariableValue(value: string, type: string): any {
@@ -805,10 +911,13 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
     }
 
     // Saved conversations functionality
-    private loadSavedConversations() {
-        const saved = localStorage.getItem('mj_agent_conversations');
-        if (saved) {
-            try {
+    private async loadSavedConversations() {
+        try {
+            const storageKey = this.getStorageKey();
+            const localStorageProvider = this._metadata.LocalStorageProvider;
+            const saved = await localStorageProvider.GetItem(storageKey);
+            
+            if (saved) {
                 this.savedConversations = JSON.parse(saved);
                 // Convert date strings back to Date objects
                 this.savedConversations.forEach(conv => {
@@ -818,11 +927,22 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
                         msg.timestamp = new Date(msg.timestamp);
                     });
                 });
-            } catch (error) {
-                console.error('Error loading saved conversations:', error);
-                this.savedConversations = [];
             }
+        } catch (error) {
+            console.error('Error loading saved conversations:', error);
+            this.savedConversations = [];
         }
+    }
+    
+    /**
+     * Gets the storage key for saved conversations based on entity type and ID
+     */
+    private getStorageKey(): string {
+        if (!this.entity) return '';
+        
+        const entityType = this.mode === 'agent' ? 'agent' : 'prompt';
+        const entityId = this.entity.ID || 'unknown';
+        return `mj_test_harness_${entityType}_${entityId}_conversations`;
     }
 
     /**
@@ -836,7 +956,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
      * this.saveConversation(); // Prompts for name and saves
      * ```
      */
-    public saveConversation() {
+    public async saveConversation() {
         if (this.conversationMessages.length === 0) {
             MJNotificationService.Instance.CreateSimpleNotification(
                 'No messages to save',
@@ -852,11 +972,12 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
         const conversation: SavedConversation = {
             id: this.generateMessageId(),
             name: name,
-            agentId: this.aiAgent?.ID || '',
-            agentName: this.aiAgent?.Name || '',
+            agentId: this.entity?.ID || '',
+            agentName: this.getEntityName() || '',
             messages: [...this.conversationMessages],
             dataContext: this.buildDataContext(),
-            templateData: this.buildTemplateData(),
+            templateData: this.mode === 'agent' ? this.buildTemplateData() : {},
+            templateVariables: this.mode === 'prompt' ? this.buildTemplateVariables() : {},
             createdAt: new Date(),
             updatedAt: new Date()
         };
@@ -880,7 +1001,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
             this.savedConversations = this.savedConversations.slice(0, 50);
         }
 
-        localStorage.setItem('mj_agent_conversations', JSON.stringify(this.savedConversations));
+        // Save to IndexedDB
+        await this.saveConversationsToStorage();
         
         MJNotificationService.Instance.CreateSimpleNotification(
             'Conversation saved successfully',
@@ -888,16 +1010,38 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
             3000
         );
     }
+    
+    /**
+     * Saves conversations to IndexedDB storage
+     */
+    private async saveConversationsToStorage() {
+        try {
+            const storageKey = this.getStorageKey();
+            const localStorageProvider = this._metadata.LocalStorageProvider;
+            await localStorageProvider.SetItem(storageKey, JSON.stringify(this.savedConversations));
+        } catch (error) {
+            console.error('Error saving conversations:', error);
+            throw error;
+        }
+    }
 
-    private autoSaveConversation() {
+    private async autoSaveConversation() {
         if (this.currentConversationId && this.conversationMessages.length > 0) {
             const index = this.savedConversations.findIndex(c => c.id === this.currentConversationId);
             if (index >= 0) {
                 this.savedConversations[index].messages = [...this.conversationMessages];
                 this.savedConversations[index].dataContext = this.buildDataContext();
-                this.savedConversations[index].templateData = this.buildTemplateData();
+                if (this.mode === 'agent') {
+                    this.savedConversations[index].templateData = this.buildTemplateData();
+                } else {
+                    this.savedConversations[index].templateVariables = this.buildTemplateVariables();
+                }
                 this.savedConversations[index].updatedAt = new Date();
-                localStorage.setItem('mj_agent_conversations', JSON.stringify(this.savedConversations));
+                
+                // Save to IndexedDB asynchronously without blocking
+                this.saveConversationsToStorage().catch(error => {
+                    console.error('Error auto-saving conversation:', error);
+                });
             }
         }
     }
@@ -924,16 +1068,29 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
             });
         }
         
-        // Restore template data
-        this.templateDataVariables = [];
-        for (const [key, value] of Object.entries(conversation.templateData)) {
-            this.templateDataVariables.push({
-                name: key,
-                value: typeof value === 'object' ? JSON.stringify(value) : String(value),
-                type: typeof value === 'boolean' ? 'boolean' : 
-                      typeof value === 'number' ? 'number' :
-                      typeof value === 'object' ? 'object' : 'string'
-            });
+        // Restore template data or template variables based on mode
+        if (this.mode === 'agent') {
+            this.templateDataVariables = [];
+            for (const [key, value] of Object.entries(conversation.templateData || {})) {
+                this.templateDataVariables.push({
+                    name: key,
+                    value: typeof value === 'object' ? JSON.stringify(value) : String(value),
+                    type: typeof value === 'boolean' ? 'boolean' : 
+                          typeof value === 'number' ? 'number' :
+                          typeof value === 'object' ? 'object' : 'string'
+                });
+            }
+        } else {
+            this.templateVariables = [];
+            for (const [key, value] of Object.entries(conversation.templateVariables || {})) {
+                this.templateVariables.push({
+                    name: key,
+                    value: typeof value === 'object' ? JSON.stringify(value) : String(value),
+                    type: typeof value === 'boolean' ? 'boolean' : 
+                          typeof value === 'number' ? 'number' :
+                          typeof value === 'object' ? 'object' : 'string'
+                });
+            }
         }
 
         this.scrollNeeded = true;
@@ -945,14 +1102,16 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
         );
     }
 
-    public deleteConversation(conversation: SavedConversation, event: Event) {
+    public async deleteConversation(conversation: SavedConversation, event: Event) {
         event.stopPropagation();
         
         if (confirm(`Delete conversation "${conversation.name}"?`)) {
             const index = this.savedConversations.findIndex(c => c.id === conversation.id);
             if (index >= 0) {
                 this.savedConversations.splice(index, 1);
-                localStorage.setItem('mj_agent_conversations', JSON.stringify(this.savedConversations));
+                
+                // Save to IndexedDB
+                await this.saveConversationsToStorage();
                 
                 if (this.currentConversationId === conversation.id) {
                     this.currentConversationId = null;
@@ -977,23 +1136,35 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
             return;
         }
 
-        const exportData = {
-            agent: {
-                id: this.aiAgent?.ID,
-                name: this.aiAgent?.Name,
-                description: this.aiAgent?.Description
+        const exportData: any = {
+            entity: {
+                id: this.entity?.ID,
+                name: this.getEntityName(),
+                type: this.mode
             },
             messages: this.conversationMessages,
             dataContext: this.buildDataContext(),
-            templateData: this.buildTemplateData(),
             exportedAt: new Date().toISOString()
         };
+        
+        // Add mode-specific data
+        if (this.mode === 'agent') {
+            exportData.templateData = this.buildTemplateData();
+        } else {
+            exportData.templateVariables = this.buildTemplateVariables();
+            exportData.modelSettings = {
+                modelId: this.selectedModelId,
+                temperature: this.temperature,
+                maxTokens: this.maxTokens
+            };
+        }
 
         const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `agent-conversation-${this.aiAgent?.Name?.replace(/[^a-zA-Z0-9]/g, '-')}-${new Date().toISOString().slice(0, 10)}.json`;
+        const entityName = this.getEntityName()?.replace(/[^a-zA-Z0-9]/g, '-') || 'conversation';
+        link.download = `${this.mode}-conversation-${entityName}-${new Date().toISOString().slice(0, 10)}.json`;
         link.click();
         window.URL.revokeObjectURL(url);
     }
