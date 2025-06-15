@@ -150,7 +150,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
      * Creates a new AI Test Harness component instance.
      * @param sanitizer - Angular DomSanitizer for safe HTML rendering of formatted content
      */
-    constructor(private sanitizer: DomSanitizer) {}
+    constructor(
+        private sanitizer: DomSanitizer
+    ) {}
     
     /** The mode of operation - either 'agent' or 'prompt' */
     @Input() mode: TestHarnessMode = 'agent';
@@ -248,6 +250,15 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
     
     /** ID of the currently active/loaded conversation, if any */
     public currentConversationId: string | null = null;
+    
+    /** Flag to control JSON dialog visibility */
+    public showJsonDialog: boolean = false;
+    
+    /** Current JSON content to display in the dialog */
+    public currentJsonContent: string = '';
+    
+    /** Reference to the current message for JSON display */
+    private currentJsonMessage: ConversationMessage | null = null;
     
     // === Private State & Intervals ===
     /** Subject for component destruction cleanup */
@@ -1348,11 +1359,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
      * and raw JSON in a collapsible section below with proper text wrapping.
      */
     private renderJsonWithCollapsibleRaw(extractedContent: string, rawJson: string, message: ConversationMessage): SafeHtml {
-        const showRawSection = message.showJsonRaw || false;
         const messageId = message.id;
-        
-        // Format JSON with proper wrapping for display
-        const wrappedJson = this.formatJsonForDisplay(rawJson);
         
         const html = `
             <div class="json-content-wrapper">
@@ -1360,10 +1367,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
                     ${this.sanitizer.sanitize(SecurityContext.HTML, this.renderMarkdown(extractedContent)) || ''}
                 </div>
                 <div class="json-raw-section">
-                    <button class="json-toggle-button" onclick="window.mjToggleJsonRaw && window.mjToggleJsonRaw('${messageId}')" title="${showRawSection ? 'Hide' : 'Show'} raw JSON">
-                        <i class="fa-solid fa-code"></i>
+                    <button class="json-toggle-button" onclick="window.mjToggleJsonRaw && window.mjToggleJsonRaw('${messageId}')" title="View raw JSON">
+                        <i class="fa-solid fa-code"></i> View Raw JSON
                     </button>
-                    ${showRawSection ? `<div class="json-display-container">${wrappedJson}</div>` : ''}
                 </div>
             </div>
         `;
@@ -1384,14 +1390,47 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
     }
 
     /**
-     * Toggles the visibility of the JSON raw section
+     * Opens the JSON dialog to display raw JSON content
      */
     public toggleJsonRaw(message: ConversationMessage) {
-        message.showJsonRaw = !message.showJsonRaw;
-        // Force re-render by triggering change detection
-        setTimeout(() => {
-            // This will cause the content to re-render with updated state
-        }, 0);
+        const content = message.rawContent || message.content;
+        const jsonStr = typeof content === 'string' ? content : JSON.stringify(content);
+        
+        try {
+            // Try to parse and format the JSON
+            const parsed = JSON.parse(jsonStr);
+            this.currentJsonContent = JSON.stringify(parsed, null, 2);
+        } catch {
+            // If parsing fails, show as-is
+            this.currentJsonContent = jsonStr;
+        }
+        
+        this.currentJsonMessage = message;
+        this.showJsonDialog = true;
+    }
+    
+    /**
+     * Closes the JSON dialog
+     */
+    public closeJsonDialog() {
+        this.showJsonDialog = false;
+        this.currentJsonContent = '';
+        this.currentJsonMessage = null;
+    }
+    
+    /**
+     * Copies the JSON content to clipboard
+     */
+    public copyJsonContent() {
+        if (this.currentJsonContent) {
+            navigator.clipboard.writeText(this.currentJsonContent).then(() => {
+                // Success - JSON copied
+                console.log('JSON copied to clipboard');
+            }).catch((err) => {
+                // Error copying
+                console.error('Failed to copy JSON:', err);
+            });
+        }
     }
 
     /**

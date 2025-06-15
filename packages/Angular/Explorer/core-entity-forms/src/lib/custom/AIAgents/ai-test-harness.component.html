@@ -465,3 +465,25 @@
             }
         </div>
     </div>
+
+    <!-- JSON Display Dialog -->
+    @if (showJsonDialog) {
+        <kendo-dialog 
+            [title]="'Raw JSON Response'" 
+            [width]="800" 
+            [height]="600"
+            [minWidth]="600"
+            [minHeight]="400"
+            (close)="closeJsonDialog()">
+            <div class="json-dialog-content">
+                <div class="json-dialog-header">
+                    <button class="custom-button icon-only" (click)="copyJsonContent()" title="Copy JSON">
+                        <i class="fa-solid fa-copy"></i>
+                    </button>
+                </div>
+                <div class="json-dialog-body">
+                    <pre class="json-display">{{ currentJsonContent }}</pre>
+                </div>
+            </div>
+        </kendo-dialog>
+    }
