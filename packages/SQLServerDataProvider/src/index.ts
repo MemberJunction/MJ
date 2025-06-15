@@ -1,3 +1,11 @@
 export { setupSQLServerClient } from "./config";
-export { SQLServerDataProvider, SQLServerProviderConfigData, SqlLoggingOptions, SqlLoggingSession } from "./SQLServerDataProvider";
+export { SQLServerDataProvider } from "./SQLServerDataProvider";
+export { 
+  ExecuteSQLOptions, 
+  ExecuteSQLBatchOptions, 
+  SQLServerProviderConfigData, 
+  SqlLoggingOptions, 
+  SqlLoggingSession 
+} from "./types";
+export { SqlLoggingSessionImpl } from "./SqlLogger";
 export { UserCache } from "./UserCache";

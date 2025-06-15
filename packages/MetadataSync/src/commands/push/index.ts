@@ -89,8 +89,8 @@ export default class Push extends Command {
         const { getDataProvider } = await import('../../lib/provider-utils');
         const dataProvider = getDataProvider();
         
-        if (dataProvider && typeof dataProvider.createSqlLogger === 'function') {
-          sqlLogger = await dataProvider.createSqlLogger(logFilePath, {
+        if (dataProvider && typeof dataProvider.CreateSqlLogger === 'function') {
+          sqlLogger = await dataProvider.CreateSqlLogger(logFilePath, {
             formatAsMigration,
             description: 'MetadataSync Push Operation',
             statementTypes: 'mutations', // Only log mutations (data changes)
@@ -100,7 +100,7 @@ export default class Push extends Command {
           
           this.log(`📝 SQL logging enabled: ${path.relative(process.cwd(), logFilePath)}`);
         } else {
-          this.warn('SQL logging requested but data provider does not support createSqlLogger');
+          this.warn('SQL logging requested but data provider does not support CreateSqlLogger');
         }
       }
       

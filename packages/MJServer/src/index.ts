@@ -112,7 +112,7 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
   const setupComplete$ = new ReplaySubject(1);
   await pool.connect();
 
-  const config = new SQLServerProviderConfigData(pool, '', mj_core_schema, cacheRefreshInterval);
+  const config = new SQLServerProviderConfigData(pool, mj_core_schema, cacheRefreshInterval);
   await setupSQLServerClient(config); // datasource is already initialized, so we can setup the client right away
   const md = new Metadata();
   console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);

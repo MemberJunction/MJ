@@ -154,8 +154,8 @@ export function getSystemUser(): UserInfo {
  * @example
  * ```typescript
  * const provider = getDataProvider();
- * if (provider?.createSqlLogger) {
- *   const logger = await provider.createSqlLogger('/path/to/log.sql');
+ * if (provider?.CreateSqlLogger) {
+ *   const logger = await provider.CreateSqlLogger('/path/to/log.sql');
  * }
  * ```
  */

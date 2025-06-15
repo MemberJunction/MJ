@@ -279,7 +279,7 @@ export class SqlLoggingConfigResolver {
     await this.checkOwnerAccess(context);
     const config = await loadConfig();
     const provider = Metadata.Provider as SQLServerDataProvider;
-    const activeSessions = provider.getActiveSqlLoggingSessions();
+    const activeSessions = provider.GetActiveSqlLoggingSessions();
 
     return {
       enabled: config.sqlLogging?.enabled ?? false,
@@ -334,7 +334,7 @@ export class SqlLoggingConfigResolver {
   async activeSqlLoggingSessions(@Ctx() context: AppContext): Promise<SqlLoggingSession[]> {
     await this.checkOwnerAccess(context);
     const provider = Metadata.Provider as SQLServerDataProvider;
-    const sessions = provider.getActiveSqlLoggingSessions();
+    const sessions = provider.GetActiveSqlLoggingSessions();
 
     return sessions.map(session => ({
       id: session.id,
@@ -399,7 +399,7 @@ export class SqlLoggingConfigResolver {
 
     // Check max active sessions
     const provider = Metadata.Provider as SQLServerDataProvider;
-    const activeSessions = provider.getActiveSqlLoggingSessions();
+    const activeSessions = provider.GetActiveSqlLoggingSessions();
     if (activeSessions.length >= (config.sqlLogging.maxActiveSessions ?? 5)) {
       throw new Error(`Maximum number of active SQL logging sessions (${config.sqlLogging.maxActiveSessions}) reached`);
     }
@@ -427,7 +427,7 @@ export class SqlLoggingConfigResolver {
     };
 
     // Create the logging session
-    const session = await provider.createSqlLogger(filePath, sessionOptions);
+    const session = await provider.CreateSqlLogger(filePath, sessionOptions);
 
     // Set up auto-cleanup after timeout
     if (config.sqlLogging.sessionTimeout > 0) {
@@ -496,7 +496,7 @@ export class SqlLoggingConfigResolver {
    * Stops and disposes of all currently active SQL logging sessions.
    * 
    * This is a convenience method that:
-   * - Calls disposeAllSqlLoggingSessions() on the data provider
+   * - Calls DisposeAllSqlLoggingSessions() on the data provider
    * - Ensures all file handles are properly closed
    * - Clears the active sessions map
    * - Performs cleanup for all sessions at once
@@ -516,7 +516,7 @@ export class SqlLoggingConfigResolver {
   async stopAllSqlLogging(@Ctx() context: AppContext): Promise<boolean> {
     await this.checkOwnerAccess(context);
     const provider = Metadata.Provider as SQLServerDataProvider;
-    await provider.disposeAllSqlLoggingSessions();
+    await provider.DisposeAllSqlLoggingSessions();
     return true;
   }
 
@@ -566,6 +566,104 @@ export class SqlLoggingConfigResolver {
     };
 
     return config.sqlLogging.defaultOptions;
+  }
+
+  /**
+   * Reads the contents of a specific SQL log file.
+   * 
+   * This method:
+   * - Validates the session exists and user has access
+   * - Ensures the file path is within the allowed log directory
+   * - Reads the file content with optional line limits
+   * - Returns the content as a string
+   * 
+   * @param sessionId - Unique identifier of the logging session
+   * @param maxLines - Maximum number of lines to read (optional, defaults to all)
+   * @param context - GraphQL context (requires Owner privileges)
+   * @returns Promise resolving to the log file content
+   * @throws Error if session not found, file not accessible, or user lacks privileges
+   * 
+   * @example
+   * ```graphql
+   * query {
+   *   readSqlLogFile(sessionId: "session-123", maxLines: 100)
+   * }
+   * ```
+   */
+  @Query(() => String)
+  async readSqlLogFile(
+    @Arg('sessionId', () => String) sessionId: string,
+    @Arg('maxLines', () => Int, { nullable: true }) maxLines: number | null,
+    @Ctx() context: AppContext
+  ): Promise<string> {
+    await this.checkOwnerAccess(context);
+    const config = await loadConfig();
+    
+    // Check if SQL logging is enabled
+    if (!config.sqlLogging?.enabled) {
+      throw new Error('SQL logging is not enabled in the server configuration');
+    }
+
+    // Find the session
+    const provider = Metadata.Provider as SQLServerDataProvider;
+    const sessions = provider.GetActiveSqlLoggingSessions();
+    const session = sessions.find(s => s.id === sessionId);
+    
+    if (!session) {
+      throw new Error(`SQL logging session ${sessionId} not found`);
+    }
+
+    // Validate file path is within allowed directory
+    const allowedDir = path.resolve(config.sqlLogging.allowedLogDirectory ?? './logs/sql');
+    const resolvedPath = path.resolve(session.filePath);
+    if (!resolvedPath.startsWith(allowedDir)) {
+      throw new Error('Access denied - file path outside allowed directory');
+    }
+
+    try {
+      // Check if file exists
+      await fs.access(session.filePath);
+      
+      // Read file content
+      const content = await fs.readFile(session.filePath, 'utf-8');
+      
+      // Apply line limit if specified
+      if (maxLines && maxLines > 0) {
+        const lines = content.split('\n');
+        if (lines.length > maxLines) {
+          // Return the last N lines
+          return lines.slice(-maxLines).join('\n');
+        }
+      }
+      
+      return content;
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        return '-- Log file not yet created or is empty --';
+      }
+      throw new Error(`Failed to read log file: ${error.message}`);
+    }
+  }
+
+  /**
+   * Debug query to check what the current user email is in the SQL provider.
+   * This helps diagnose user filtering issues when SQL statements aren't being captured.
+   * 
+   * Returns a comparison of the user email stored in the SQLServerDataProvider
+   * versus the user email from the GraphQL context, which helps identify mismatches
+   * that could prevent SQL filtering from working correctly.
+   * 
+   * @param context - GraphQL context containing user information
+   * @returns Formatted string showing both email values and whether they match
+   * @throws Error if user doesn't have Owner privileges
+   */
+  @Query(() => String)
+  async debugCurrentUserEmail(@Ctx() context: AppContext): Promise<string> {
+    await this.checkOwnerAccess(context);
+
+    const contextUserEmail = context.userPayload?.email || 'NOT_SET';
+    
+    return `Context User Email: "${contextUserEmail}" | Note: Provider no longer stores user email - uses contextUser parameter for SQL logging`;
   }
 
   /**
