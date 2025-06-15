@@ -1,0 +1,349 @@
+<div class="user-management-container">
+  <!-- Header Section -->
+  <div class="management-header">
+    <div class="header-content">
+      <div class="header-info">
+        <h2 class="header-title">
+          <i class="fa-solid fa-users"></i>
+          User Management
+        </h2>
+        <p class="header-description">Manage user accounts, roles, and permissions</p>
+      </div>
+      
+      <div class="header-actions">
+        <button class="btn-secondary" (click)="refreshData()" [disabled]="isLoading">
+          <i class="fa-solid fa-refresh" [class.fa-spin]="isLoading"></i>
+          Refresh
+        </button>
+        <button class="btn-secondary" (click)="exportUsers()">
+          <i class="fa-solid fa-download"></i>
+          Export
+        </button>
+        <button class="btn-primary" (click)="createNewUser()">
+          <i class="fa-solid fa-plus"></i>
+          Add User
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats Cards -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-total">
+        <i class="fa-solid fa-users"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-value">{{ stats.totalUsers }}</div>
+        <div class="stat-label">Total Users</div>
+      </div>
+    </div>
+    
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-active">
+        <i class="fa-solid fa-user-check"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-value">{{ stats.activeUsers }}</div>
+        <div class="stat-label">Active Users</div>
+      </div>
+    </div>
+    
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-inactive">
+        <i class="fa-solid fa-user-xmark"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-value">{{ stats.inactiveUsers }}</div>
+        <div class="stat-label">Inactive Users</div>
+      </div>
+    </div>
+    
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-admin">
+        <i class="fa-solid fa-shield-halved"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-value">{{ stats.adminUsers }}</div>
+        <div class="stat-label">Administrators</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters Section -->
+  <div class="filters-section">
+    <div class="filters-row">
+      <!-- Search -->
+      <div class="search-container">
+        <i class="fa-solid fa-search search-icon"></i>
+        <input 
+          type="text" 
+          class="search-input" 
+          placeholder="Search users by name or email..."
+          (input)="onSearchChange($event)"
+          [value]="filters$.value.search"
+        />
+      </div>
+      
+      <!-- Status Filter -->
+      <div class="filter-group">
+        <label class="filter-label">Status</label>
+        <div class="filter-buttons">
+          <button 
+            class="filter-btn"
+            [class.active]="filters$.value.status === 'all'"
+            (click)="onStatusFilterChange('all')"
+          >
+            All
+          </button>
+          <button 
+            class="filter-btn"
+            [class.active]="filters$.value.status === 'active'"
+            (click)="onStatusFilterChange('active')"
+          >
+            Active
+          </button>
+          <button 
+            class="filter-btn"
+            [class.active]="filters$.value.status === 'inactive'"
+            (click)="onStatusFilterChange('inactive')"
+          >
+            Inactive
+          </button>
+        </div>
+      </div>
+      
+      <!-- Role Filter -->
+      <div class="filter-group">
+        <label class="filter-label">Role</label>
+        <select class="filter-select" (change)="onRoleFilterChange($any($event.target).value)">
+          <option value="">All Roles</option>
+          @for (role of roles; track role.ID) {
+            <option [value]="role.ID">{{ role.Name }}</option>
+          }
+        </select>
+      </div>
+      
+      <!-- View Toggle -->
+      <div class="view-toggle">
+        <button 
+          class="view-btn"
+          [class.active]="viewMode === 'grid'"
+          (click)="viewMode = 'grid'"
+          title="Grid View"
+        >
+          <i class="fa-solid fa-table"></i>
+        </button>
+        <button 
+          class="view-btn"
+          [class.active]="viewMode === 'cards'"
+          (click)="viewMode = 'cards'"
+          title="Card View"
+        >
+          <i class="fa-solid fa-th-large"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  @if (isLoading) {
+    <div class="loading-container">
+      <div class="loading-spinner">
+        <div class="spinner-ring"></div>
+        <div class="spinner-ring"></div>
+        <div class="spinner-ring"></div>
+      </div>
+      <div class="loading-text">Loading users...</div>
+    </div>
+  }
+
+  <!-- Error State -->
+  @if (error && !isLoading) {
+    <div class="error-container">
+      <div class="error-content">
+        <i class="fa-solid fa-exclamation-triangle error-icon"></i>
+        <p class="error-message">{{ error }}</p>
+        <button class="retry-button" (click)="loadInitialData()">
+          <i class="fa-solid fa-refresh"></i>
+          Try Again
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- Content Area -->
+  @if (!isLoading && !error) {
+    <div class="content-area">
+      <!-- Grid View -->
+      @if (viewMode === 'grid') {
+        <div class="users-table">
+          <table class="modern-table">
+            <thead>
+              <tr>
+                <th class="th-checkbox">
+                  <input type="checkbox" class="checkbox" />
+                </th>
+                <th>User</th>
+                <th>Email</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Last Login</th>
+                <th class="th-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (user of filteredUsers; track user.ID) {
+                <tr class="table-row" (click)="selectUser(user)">
+                  <td class="td-checkbox" (click)="$event.stopPropagation()">
+                    <input type="checkbox" class="checkbox" />
+                  </td>
+                  <td>
+                    <div class="user-cell">
+                      <div class="user-avatar">
+                        {{ getUserInitials(user) }}
+                      </div>
+                      <div class="user-info">
+                        <div class="user-name">{{ user.Name }}</div>
+                        <div class="user-fullname">
+                          {{ user.FirstName }} {{ user.LastName }}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>{{ user.Email }}</td>
+                  <td>
+                    <div class="user-type">
+                      <i [class]="'fa-solid ' + getUserTypeIcon(user)"></i>
+                      {{ user.Type }}
+                    </div>
+                  </td>
+                  <td>
+                    <span class="status-badge" [class]="getStatusClass(user)">
+                      <i [class]="'fa-solid ' + getStatusIcon(user)"></i>
+                      {{ user.IsActive ? 'Active' : 'Inactive' }}
+                    </span>
+                  </td>
+                  <td>
+                    <span class="last-login">
+                      {{ user.LastLogin ? (user.LastLogin | date:'short') : 'Never' }}
+                    </span>
+                  </td>
+                  <td class="td-actions" (click)="$event.stopPropagation()">
+                    <button class="action-btn" (click)="editUser(user)" title="Edit">
+                      <i class="fa-solid fa-edit"></i>
+                    </button>
+                    <button 
+                      class="action-btn" 
+                      (click)="toggleUserStatus(user)"
+                      [title]="user.IsActive ? 'Deactivate' : 'Activate'"
+                    >
+                      <i [class]="user.IsActive ? 'fa-solid fa-toggle-on' : 'fa-solid fa-toggle-off'"></i>
+                    </button>
+                    <button class="action-btn action-btn-danger" (click)="confirmDeleteUser(user)" title="Delete">
+                      <i class="fa-solid fa-trash"></i>
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          
+          @if (filteredUsers.length === 0) {
+            <div class="empty-state">
+              <i class="fa-solid fa-users-slash empty-icon"></i>
+              <p class="empty-text">No users found</p>
+              <p class="empty-subtext">Try adjusting your filters or add a new user</p>
+            </div>
+          }
+        </div>
+      }
+
+      <!-- Card View -->
+      @if (viewMode === 'cards') {
+        <div class="users-grid">
+          @for (user of filteredUsers; track user.ID) {
+            <div class="user-card" (click)="selectUser(user)">
+              <div class="card-header">
+                <div class="user-avatar-large">
+                  {{ getUserInitials(user) }}
+                </div>
+                <div class="card-actions">
+                  <button class="action-btn" (click)="editUser(user); $event.stopPropagation()" title="Edit">
+                    <i class="fa-solid fa-edit"></i>
+                  </button>
+                  <button class="action-btn action-btn-danger" (click)="confirmDeleteUser(user); $event.stopPropagation()" title="Delete">
+                    <i class="fa-solid fa-trash"></i>
+                  </button>
+                </div>
+              </div>
+              
+              <div class="card-body">
+                <h3 class="user-name">{{ user.Name }}</h3>
+                <p class="user-fullname">{{ user.FirstName }} {{ user.LastName }}</p>
+                <p class="user-email">
+                  <i class="fa-solid fa-envelope"></i>
+                  {{ user.Email }}
+                </p>
+                
+                <div class="card-meta">
+                  <div class="meta-item">
+                    <i [class]="'fa-solid ' + getUserTypeIcon(user)"></i>
+                    {{ user.Type }}
+                  </div>
+                  <span class="status-badge" [class]="getStatusClass(user)">
+                    <i [class]="'fa-solid ' + getStatusIcon(user)"></i>
+                    {{ user.IsActive ? 'Active' : 'Inactive' }}
+                  </span>
+                </div>
+                
+                <div class="card-footer">
+                  <div class="last-login">
+                    <i class="fa-solid fa-clock"></i>
+                    Last login: {{ user.LastLogin ? (user.LastLogin | date:'short') : 'Never' }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          }
+          
+          @if (filteredUsers.length === 0) {
+            <div class="empty-state">
+              <i class="fa-solid fa-users-slash empty-icon"></i>
+              <p class="empty-text">No users found</p>
+              <p class="empty-subtext">Try adjusting your filters or add a new user</p>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Delete Confirmation Dialog -->
+  @if (showDeleteConfirm && selectedUser) {
+    <div class="modal-backdrop" (click)="showDeleteConfirm = false">
+      <div class="modal-dialog" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3 class="modal-title">
+            <i class="fa-solid fa-exclamation-triangle text-danger"></i>
+            Confirm Delete
+          </h3>
+          <button class="modal-close" (click)="showDeleteConfirm = false">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p>Are you sure you want to delete user <strong>{{ selectedUser.Name }}</strong>?</p>
+          <p class="text-muted">This action cannot be undone.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="showDeleteConfirm = false">Cancel</button>
+          <button class="btn-danger" (click)="deleteUser()">
+            <i class="fa-solid fa-trash"></i>
+            Delete User
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+}

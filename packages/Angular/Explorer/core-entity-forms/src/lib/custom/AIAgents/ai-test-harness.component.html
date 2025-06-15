@@ -1,13 +1,4 @@
-<kendo-dialog *ngIf="isVisible" 
-               [minWidth]="1200" 
-               [width]="1400"
-               [height]="800"
-               [title]="mode === 'agent' ? 'AI Agent Test Harness' : 'AI Prompt Test Harness'"
-               (close)="close()"
-               [actions]="[]"
-               class="ai-agent-test-harness">
-    
-    <div class="harness-container">
+<div class="harness-container" *ngIf="isVisible">
         <!-- Header -->
         <div class="harness-header">
             @if (entity) {
@@ -473,4 +464,3 @@
             }
         </div>
     </div>
-</kendo-dialog>

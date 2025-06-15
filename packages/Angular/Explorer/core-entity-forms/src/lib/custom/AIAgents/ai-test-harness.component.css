@@ -142,6 +142,7 @@
     justify-content: center;
     border-radius: 4px;
     opacity: 0;
+    z-index: 10; /* Ensure it's above content */
 }
 
 .message-content:hover .copy-button-in-bubble {
@@ -575,27 +576,26 @@
 
 .json-toggle-button {
     background: transparent;
-    border: 1px solid #dee2e6;
+    border: none;
     border-radius: 4px;
-    padding: 4px 10px;
-    font-size: 11px;
+    padding: 6px 8px;
+    font-size: 12px;
     color: #6c757d;
     cursor: pointer;
     transition: all 0.2s;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    justify-content: center;
     margin-bottom: 8px;
 }
 
 .json-toggle-button:hover {
     background: rgba(0, 0, 0, 0.05);
-    border-color: #adb5bd;
     color: #495057;
 }
 
 .json-toggle-button i {
-    font-size: 10px;
+    font-size: 12px;
 }
 
 /* Compact code block for JSON in collapsible sections */
@@ -620,16 +620,16 @@
     border: 1px solid #e9ecef;
     border-radius: 6px;
     padding: 12px;
-    margin: 8px 0 0 0;
+    margin-top: 8px;
     font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
-    font-size: 12px;
-    line-height: 1.4;
+    font-size: 13px;
+    line-height: 1.5;
     color: #212529;
-    max-height: 300px;
-    overflow-y: auto;
+    white-space: pre-wrap;
     word-wrap: break-word;
     overflow-wrap: break-word;
-    white-space: pre-wrap;
+    max-height: 300px;
+    overflow-y: auto;
 }
 
 .json-property {

@@ -1170,6 +1170,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
             );
         }
     }
+    
 
     /**
      * Determines if the provided content is valid JSON.
@@ -1338,9 +1339,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
                     ${this.sanitizer.sanitize(SecurityContext.HTML, this.renderMarkdown(extractedContent)) || ''}
                 </div>
                 <div class="json-raw-section">
-                    <button class="json-toggle-button" onclick="window.mjToggleJsonRaw && window.mjToggleJsonRaw('${messageId}')">
-                        <i class="fa-solid ${showRawSection ? 'fa-chevron-up' : 'fa-chevron-down'}"></i>
-                        ${showRawSection ? 'Hide' : 'Show'} raw JSON
+                    <button class="json-toggle-button" onclick="window.mjToggleJsonRaw && window.mjToggleJsonRaw('${messageId}')" title="${showRawSection ? 'Hide' : 'Show'} raw JSON">
+                        <i class="fa-solid fa-code"></i>
                     </button>
                     ${showRawSection ? `<div class="json-display-container">${wrappedJson}</div>` : ''}
                 </div>
