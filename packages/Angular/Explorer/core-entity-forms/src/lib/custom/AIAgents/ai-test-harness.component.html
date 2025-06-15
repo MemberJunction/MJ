@@ -2,7 +2,7 @@
                [minWidth]="1200" 
                [width]="1400"
                [height]="800"
-               title="AI Agent Test Harness"
+               [title]="mode === 'agent' ? 'AI Agent Test Harness' : 'AI Prompt Test Harness'"
                (close)="close()"
                [actions]="[]"
                class="ai-agent-test-harness">
@@ -10,14 +10,14 @@
     <div class="harness-container">
         <!-- Header -->
         <div class="harness-header">
-            @if (aiAgent) {
+            @if (entity) {
                 <div class="agent-info">
                     <div class="agent-details">
-                        <i class="fa-solid fa-robot"></i>
+                        <i class="fa-solid" [class.fa-robot]="mode === 'agent'" [class.fa-comment-dots]="mode === 'prompt'"></i>
                         <div>
-                            <h3>{{ aiAgent.Name }}</h3>
-                            @if (aiAgent.Description) {
-                                <p>{{ aiAgent.Description }}</p>
+                            <h3>{{ getEntityName() }}</h3>
+                            @if (entity.Description) {
+                                <p>{{ entity.Description }}</p>
                             }
                         </div>
                     </div>

@@ -1,12 +1,17 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { AIAgentEntity, AIAgentRunEntity, AIAgentRunStepEntity } from '@memberjunction/core-entities';
+import { AIAgentEntity, AIAgentRunEntity, AIAgentRunStepEntity, AIPromptEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ChatMessage } from '@memberjunction/ai';
 // import { MJGlobal } from '@memberjunction/global';
 import { Subject, takeUntil } from 'rxjs';
+
+/**
+ * Supported modes for the test harness
+ */
+export type TestHarnessMode = 'agent' | 'prompt';
 
 /**
  * Result interface for AI agent execution operations.
@@ -141,13 +146,28 @@ export interface SavedConversation {
 })
 export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewChecked {
     /**
-     * Creates a new AI Agent Test Harness component instance.
+     * Creates a new AI Test Harness component instance.
      * @param sanitizer - Angular DomSanitizer for safe HTML rendering of formatted content
      */
     constructor(private sanitizer: DomSanitizer) {}
     
-    /** The AI agent entity to test. Can be set programmatically or passed via dialog data. */
-    @Input() aiAgent: AIAgentEntity | null = null;
+    /** The mode of operation - either 'agent' or 'prompt' */
+    @Input() mode: TestHarnessMode = 'agent';
+    
+    /** The entity to test - either an AI Agent or AI Prompt */
+    @Input() entity: AIAgentEntity | AIPromptEntity | null = null;
+    
+    /** @deprecated Use 'entity' instead. Kept for backward compatibility. */
+    @Input() 
+    get aiAgent(): AIAgentEntity | null {
+        return this.isAgentEntity(this.entity) ? this.entity : null;
+    }
+    set aiAgent(value: AIAgentEntity | null) {
+        this.entity = value;
+        if (value) {
+            this.mode = 'agent';
+        }
+    }
     
     private _isVisible: boolean = false;
     
@@ -230,8 +250,15 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
      * and initializes the harness to a clean state.
      */
     ngOnInit() {
+        // Ensure we have an entity
+        if (!this.entity && this.aiAgent) {
+            // Handle backward compatibility
+            this.entity = this.aiAgent;
+            this.mode = 'agent';
+        }
+        
         this.loadSavedConversations();
-        this.subscribeToAgentEvents();
+        this.subscribeToEvents();
         this.resetHarness();
         this.setupGlobalJsonToggle();
     }
@@ -262,7 +289,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
         }
     }
 
-    private subscribeToAgentEvents() {
+    private subscribeToEvents() {
         // TODO: Subscribe to agent execution events when GraphQL subscriptions are available
         // For now, we'll use polling or simulated streaming
         
@@ -343,7 +370,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
      * ```
      */
     public async sendMessage() {
-        if (!this.currentUserMessage.trim() || !this.aiAgent) {
+        if (!this.currentUserMessage.trim() || !this.entity) {
             return;
         }
 
@@ -363,12 +390,16 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
         // Scroll to bottom
         this.scrollNeeded = true;
 
-        // Execute agent
-        await this.executeAgent(messageToSend);
+        // Execute based on mode
+        if (this.mode === 'agent') {
+            await this.executeAgent(messageToSend);
+        } else {
+            await this.executePrompt(messageToSend);
+        }
     }
 
     private async executeAgent(userMessage: string) {
-        if (!this.aiAgent) return;
+        if (!this.entity || !this.isAgentEntity(this.entity)) return;
 
         this.isExecuting = true;
 
@@ -423,7 +454,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
             `;
 
             const variables = {
-                agentId: this.aiAgent.ID,
+                agentId: (this.entity as AIAgentEntity).ID,
                 messages: JSON.stringify(messages),
                 data: Object.keys(dataContext).length > 0 ? JSON.stringify(dataContext) : null,
                 templateData: Object.keys(templateData).length > 0 ? JSON.stringify(templateData) : null
@@ -480,6 +511,72 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
             
             MJNotificationService.Instance.CreateSimpleNotification(
                 'Failed to execute agent: ' + (error as Error).message,
+                'error',
+                6000
+            );
+        } finally {
+            this.isExecuting = false;
+            this.currentStreamingMessageId = null;
+            if (this.streamingInterval) {
+                clearInterval(this.streamingInterval);
+                this.streamingInterval = null;
+            }
+            if (this.elapsedTimeInterval) {
+                clearInterval(this.elapsedTimeInterval);
+                this.elapsedTimeInterval = null;
+            }
+        }
+    }
+
+    private async executePrompt(userMessage: string) {
+        if (!this.entity || !this.isPromptEntity(this.entity)) return;
+
+        this.isExecuting = true;
+
+        // Add placeholder assistant message for streaming
+        const assistantMessage: ConversationMessage = {
+            id: this.generateMessageId(),
+            role: 'assistant',
+            content: '',
+            timestamp: new Date(),
+            isStreaming: true,
+            streamingContent: '',
+            agentRunId: '',
+            streamingStartTime: Date.now(),
+            elapsedTime: 0
+        };
+        this.conversationMessages.push(assistantMessage);
+        this.scrollNeeded = true;
+        
+        // Start elapsed time counter
+        this.startElapsedTimeCounter(assistantMessage);
+
+        try {
+            // TODO: Implement prompt execution
+            // For now, show a placeholder message
+            assistantMessage.isStreaming = false;
+            assistantMessage.content = 'Prompt execution coming soon. This will execute the prompt "' + (this.entity as AIPromptEntity).Name + '" with your message.';
+            assistantMessage.executionTime = 1000;
+            
+            delete assistantMessage.streamingContent;
+            this.currentStreamingMessageId = null;
+            this.scrollNeeded = true;
+
+            // Auto-save conversation
+            this.autoSaveConversation();
+
+        } catch (error) {
+            // Update assistant message with error
+            const lastMessage = this.conversationMessages[this.conversationMessages.length - 1];
+            if (lastMessage && lastMessage.role === 'assistant') {
+                lastMessage.isStreaming = false;
+                lastMessage.content = 'I encountered an error processing your request.';
+                lastMessage.error = (error as Error).message;
+                delete lastMessage.streamingContent;
+            }
+            
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Failed to execute prompt: ' + (error as Error).message,
                 'error',
                 6000
             );
@@ -1335,5 +1432,31 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, AfterViewCheck
         }
         
         return String(obj);
+    }
+    
+    /**
+     * Type guard to check if entity is an AI Agent
+     */
+    private isAgentEntity(entity: any): entity is AIAgentEntity {
+        // Check using the EntityInfo property from BaseEntity
+        return entity && entity.EntityInfo && entity.EntityInfo.Name === 'AI Agents';
+    }
+    
+    /**
+     * Type guard to check if entity is an AI Prompt
+     */
+    private isPromptEntity(entity: any): entity is AIPromptEntity {
+        // Check using the EntityInfo property from BaseEntity
+        const result = entity && entity.EntityInfo && entity.EntityInfo.Name === 'AI Prompts';
+        
+        return result;
+    }
+    
+    /**
+     * Gets the display name of the current entity
+     */
+    public getEntityName(): string {
+        if (!this.entity) return '';
+        return this.entity.Name || 'Untitled';
     }
 }

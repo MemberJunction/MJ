@@ -507,7 +507,7 @@
             [resizable]="true"
             [state]="'default'"
             (close)="onTestHarnessVisibilityChanged(false)"
-            title="Test AI Agent - {{ record?.Name || 'Untitled' }}">
+            title="Test AI Agent - {{ record.Name || 'Untitled' }}">
             <mj-ai-test-harness
                 [aiAgent]="record"
                 [isVisible]="showTestHarness"
