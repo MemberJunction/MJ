@@ -102,9 +102,6 @@
                                 } @else if (message.executionTime) {
                                     <span class="execution-time">{{ formatExecutionTime(message.executionTime) }}</span>
                                 }
-                                <button class="copy-button" (click)="copyMessage(message)" title="Copy message">
-                                    <i class="fa-solid fa-copy"></i>
-                                </button>
                                 @if (showRawToggle(message)) {
                                     <button class="raw-toggle" (click)="toggleRawView(message)" title="Toggle raw/formatted view">
                                         <i class="fa-solid" [class.fa-code]="!message.showRaw" [class.fa-eye]="message.showRaw"></i>
@@ -112,6 +109,9 @@
                                 }
                             </div>
                             <div class="message-content" [class.raw-view]="message.showRaw">
+                                <button class="copy-button-in-bubble" (click)="copyMessage(message)" title="Copy message">
+                                    <i class="fa-solid fa-copy"></i>
+                                </button>
                                 @if (message.isStreaming) {
                                     <div class="streaming-wrapper">
                                         <span class="streaming-content">{{ message.streamingContent }}<span class="cursor">|</span></span>

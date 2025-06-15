@@ -1,238 +1,205 @@
-import { Component, OnInit, ViewEncapsulation } from '@angular/core';
-import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
-import { BaseEntity, Metadata } from '@memberjunction/core';
-import { ApplicationEntity, RoleEntity, UserEntity } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
-import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { BaseNavigationComponent } from '@memberjunction/ng-shared';
-import { filter } from 'rxjs/operators';
+import { Component, OnInit, OnDestroy, EventEmitter, Output } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { Subject, BehaviorSubject } from 'rxjs';
+import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
+import { SharedSettingsModule } from '../shared/shared-settings.module';
+import { SqlLoggingComponent } from '../sql-logging/sql-logging.component';
 
-export enum SettingsItem {
-  EntityPermissions = 'EntityPermissions',
-  Users = 'Users',
-  User = 'User',
-  Roles = 'Roles',
-  Role = 'Role',
-  Applications = 'Applications',
-  Application = 'Application',
-  SqlLogging = 'SqlLogging'
+export interface SettingsTab {
+  id: string;
+  label: string;
+  icon: string;
+  component?: any;
+  badgeCount?: number;
+  badgeColor?: 'primary' | 'danger' | 'warning' | 'success';
+}
+
+export interface SettingsComponentState {
+  activeTab: string;
+  searchTerm: string;
+  expandedSections: string[];
 }
 
 @Component({
   selector: 'mj-settings',
+  standalone: true,
+  imports: [
+    CommonModule,
+    SharedSettingsModule,
+    SqlLoggingComponent
+  ],
   templateUrl: './settings.component.html',
-  styleUrls: ['./settings.component.scss'],
-  encapsulation: ViewEncapsulation.None
+  styleUrls: ['./settings.component.scss']
 })
-@RegisterClass(BaseNavigationComponent, 'Settings')
-export class SettingsComponent extends BaseNavigationComponent implements OnInit {
-  public currentItem: SettingsItem = SettingsItem.Users;
-  public baseRoute: string = '/settings';
+export class SettingsComponent implements OnInit, OnDestroy {
+  @Output() stateChange = new EventEmitter<SettingsComponentState>();
 
-  public selectedRoleID: string = '';
-  public selectedUserID: string = "";
-  public selectedApplicationName: string = '';
-  public selectedApplicationID: string = '';
-
-  public options = [
-    { label: 'Users', value: SettingsItem.Users },
-    { label: 'Roles', value: SettingsItem.Roles },
-    { label: 'Applications', value: SettingsItem.Applications },
-    { label: 'Entity Permissions', value: SettingsItem.EntityPermissions },
-    { label: 'SQL Logging', value: SettingsItem.SqlLogging }
+  // State management
+  public activeTab = 'general';
+  public searchTerm$ = new BehaviorSubject<string>('');
+  public isLoading = false;
+  public error: string | null = null;
+  
+  // Tab configuration
+  public tabs: SettingsTab[] = [
+    {
+      id: 'general',
+      label: 'General',
+      icon: 'fa-solid fa-cog',
+      badgeCount: 0
+    },
+    {
+      id: 'users',
+      label: 'Users',
+      icon: 'fa-solid fa-users',
+      badgeCount: 0
+    },
+    {
+      id: 'roles',
+      label: 'Roles',
+      icon: 'fa-solid fa-shield-halved',
+      badgeCount: 0
+    },
+    {
+      id: 'applications',
+      label: 'Applications',
+      icon: 'fa-solid fa-grid-2',
+      badgeCount: 0
+    },
+    {
+      id: 'permissions',
+      label: 'Permissions',
+      icon: 'fa-solid fa-lock',
+      badgeCount: 0
+    },
+    {
+      id: 'advanced',
+      label: 'Advanced',
+      icon: 'fa-solid fa-flask',
+      badgeCount: 1,
+      badgeColor: 'warning'
+    }
   ];
 
-
-  public selectItem(item: SettingsItem | string, changeRoute: boolean = true) {
-    if (typeof item === 'string')
-      this.currentItem = SettingsItem[item as keyof typeof SettingsItem];
-    else
-      this.currentItem = item;
-
-    if (changeRoute)
-        this.changeRoute(item.toLowerCase());
-  }
-
-  changeRoute(subPath: string) {
-    // Constructs a navigation path relative to the /settings base route
-    this.router.navigate([this.baseRoute, subPath]);
-  }
+  // Section expansion state
+  public expandedSections: string[] = ['profile', 'preferences'];
   
-  constructor(private router: Router, private activatedRoute: ActivatedRoute) { 
-    super();
-  }
- 
-
-  ngOnInit() {
-    // manually update the first time
-    this.updateComponentStateBasedOnPath();
-
-    // Listen to changes in the route
-    this.router.events.pipe(
-        filter(event => event instanceof NavigationEnd)
-      ).subscribe(() => {
-        this.updateComponentStateBasedOnPath();
-      }); 
-   }
-
-  updateComponentStateBasedOnPath() {
-    // On each navigation end, access the current URL from window.location
-    const fullPath = window.location.pathname + window.location.search;
-
-    // Split the fullPath into segments and query string as needed
-    const [path, queryString] = fullPath.split('?');
-    const segments = path.split('/').filter(segment => segment.length > 0);
-
-    const firstSegment = segments.length > 1 ? segments[1] : '';
-    switch (firstSegment.trim().toLowerCase()) {
-      case 'entitypermissions':
-        this.selectItem(SettingsItem.EntityPermissions, false);
-        break;
-      case 'applications':
-        this.selectItem(SettingsItem.Applications, false);
-        break;
-      case 'application':
-        this.selectedApplicationName = segments.length > 2 ? segments[2] : '';
-        const md = new Metadata();
-        this.selectedApplicationID = md.Applications.find(a => a.Name === this.selectedApplicationName)?.ID ?? '';
-        this.selectItem(SettingsItem.Application, false);
-        break;
-      case 'users':
-        this.selectItem(SettingsItem.Users, false);
-        break;
-      case 'user':
-        this.selectedUserID = segments.length > 2 ? segments[2] : "";
-        this.selectItem(SettingsItem.User, false);
-        break;
-      case 'roles':
-        this.selectItem(SettingsItem.Roles, false);
-        break;
-      case 'role':
-        this.selectedRoleID = segments.length > 2 ? segments[2] : '';
-        this.selectItem(SettingsItem.Role, false);
-        break;
-      case 'sqllogging':
-        this.selectItem(SettingsItem.SqlLogging, false);
-        break;
-      default:
-        break;
-    }
-  }
-
-  public selectApplication(a: BaseEntity) {
-    this.selectRoute('/settings/application', (<ApplicationEntity>a).Name);
-  }
-  public selectRole(r: BaseEntity) {
-    this.selectRoute('/settings/role', (<RoleEntity>r).ID);
-  }
-  public selectUser(u: BaseEntity) {
-    this.selectRoute('/settings/user', (<UserEntity>u).ID);
-  }
+  // Mobile state
+  public isMobile = window.innerWidth < 768;
   
-  /**
-   * Function that returns the appropriate Font Awesome icon for the user toggle button
-   * based on the user's IsActive status
-   */
-  public getUserToggleIcon(record: BaseEntity): string {
-    const user = record as UserEntity;
-    return user.IsActive ? 'fa-user-lock' : 'fa-user-check';
+  private destroy$ = new Subject<void>();
+
+  constructor() {
+    // Listen for window resize
+    window.addEventListener('resize', this.handleResize.bind(this));
   }
 
-  /**
-   * Function that returns the appropriate tooltip text for the user toggle button
-   * based on the user's IsActive status
-   */
-  public getUserToggleTooltip(record: BaseEntity): string {
-    const user = record as UserEntity;
-    return user.IsActive ? 'Deactivate user' : 'Activate user';
+  ngOnInit(): void {
+    this.setupSearchFilter();
+    this.loadInitialData();
   }
 
-  /**
-   * Handles toggling a user's activation status when the custom action is confirmed
-   */
-  public async toggleUserActivation(record: BaseEntity) {
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+    window.removeEventListener('resize', this.handleResize.bind(this));
+  }
+
+  private setupSearchFilter(): void {
+    this.searchTerm$
+      .pipe(
+        debounceTime(300),
+        distinctUntilChanged(),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(term => {
+        this.filterContent(term);
+        this.emitStateChange();
+      });
+  }
+
+  public async loadInitialData(): Promise<void> {
     try {
-      const user = record as UserEntity;
-      // Get current status
-      const currentlyActive = user.IsActive;
-      const userName = user.Name;
-      
-      // Toggle the IsActive flag
-      user.IsActive = !currentlyActive;
-      
-      if (await user.Save()) {
-        MJNotificationService.Instance.CreateSimpleNotification(
-          `User ${userName} has been ${currentlyActive ? 'deactivated' : 'activated'} successfully.`, 
-          'success', 
-          3000
-        );
-        
-        // Refresh the user list
-        this.selectItem(SettingsItem.Users);
-      } else {
-        MJNotificationService.Instance.CreateSimpleNotification(
-          `Error ${currentlyActive ? 'deactivating' : 'activating'} user ${userName}`, 
-          'error', 
-          5000
-        );
-      }
+      this.isLoading = true;
+      // TODO: Load user settings, roles, applications data
+      await this.simulateDataLoad();
+      this.isLoading = false;
     } catch (error) {
-      console.error('Error toggling user activation:', error);
-      MJNotificationService.Instance.CreateSimpleNotification(
-        'An error occurred while toggling user activation.', 
-        'error', 
-        5000
-      );
+      this.error = 'Failed to load settings data';
+      this.isLoading = false;
     }
   }
-  public selectRoute(route: string, value: any) {
-    this.router.navigate([route, value]);    
+
+  private async simulateDataLoad(): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, 500));
   }
 
-  public leftNavItemSelected(option: {label: string, value: any}) {
-    // if the currentItem matches it directly or if adding an S to the current item matches it, then return true
-    // for example for Application/Applications we want to match so the left nav item is highlighted
-    return option.value === this.currentItem || option.value === this.currentItem + 's';
+  public onTabChange(tabId: string): void {
+    this.activeTab = tabId;
+    this.emitStateChange();
   }
 
-  /**
-   * Returns the appropriate Font Awesome icon class for navigation items
-   */
-  public getNavIcon(settingsItem: SettingsItem): string {
-    const iconMap: { [key in SettingsItem]: string } = {
-      [SettingsItem.Users]: 'fa-solid fa-users',
-      [SettingsItem.User]: 'fa-solid fa-user',
-      [SettingsItem.Roles]: 'fa-solid fa-user-shield',
-      [SettingsItem.Role]: 'fa-solid fa-shield-alt',
-      [SettingsItem.Applications]: 'fa-solid fa-th-large',
-      [SettingsItem.Application]: 'fa-solid fa-cube',
-      [SettingsItem.EntityPermissions]: 'fa-solid fa-lock',
-      [SettingsItem.SqlLogging]: 'fa-solid fa-database'
+  public onSearchChange(event: Event): void {
+    const term = (event.target as HTMLInputElement).value;
+    this.searchTerm$.next(term);
+  }
+
+  public toggleSection(sectionId: string): void {
+    const index = this.expandedSections.indexOf(sectionId);
+    if (index === -1) {
+      this.expandedSections.push(sectionId);
+    } else {
+      this.expandedSections.splice(index, 1);
+    }
+    this.emitStateChange();
+  }
+
+  public isSectionExpanded(sectionId: string): boolean {
+    return this.expandedSections.includes(sectionId);
+  }
+
+  private filterContent(term: string): void {
+    // TODO: Implement content filtering based on search term
+    console.log('Filtering content with term:', term);
+  }
+
+  private handleResize(): void {
+    this.isMobile = window.innerWidth < 768;
+  }
+
+  private emitStateChange(): void {
+    const state: SettingsComponentState = {
+      activeTab: this.activeTab,
+      searchTerm: this.searchTerm$.value,
+      expandedSections: [...this.expandedSections]
     };
-    return iconMap[settingsItem] || 'fa-solid fa-cog';
+    this.stateChange.emit(state);
   }
 
-  /**
-   * Returns badge text for navigation items (if applicable)
-   */
-  public getNavBadge(settingsItem: SettingsItem): string | null {
-    switch (settingsItem) {
-      case SettingsItem.SqlLogging:
-        return 'Beta';
-      default:
-        return null;
+  public loadUserState(state: Partial<SettingsComponentState>): void {
+    if (state.activeTab) {
+      this.activeTab = state.activeTab;
+    }
+    if (state.searchTerm !== undefined) {
+      this.searchTerm$.next(state.searchTerm);
+    }
+    if (state.expandedSections) {
+      this.expandedSections = [...state.expandedSections];
     }
   }
 
-  /**
-   * Returns badge CSS class for navigation items
-   */
-  public getNavBadgeClass(settingsItem: SettingsItem): string {
-    switch (settingsItem) {
-      case SettingsItem.SqlLogging:
-        return 'nav-badge-warning';
-      default:
-        return 'nav-badge';
+  public getTabIcon(tab: SettingsTab): string {
+    return tab.icon;
+  }
+
+  public getTabClass(tab: SettingsTab): string {
+    const classes = ['settings-tab'];
+    if (this.activeTab === tab.id) {
+      classes.push('active');
     }
+    if (tab.badgeCount && tab.badgeCount > 0) {
+      classes.push('has-badge');
+    }
+    return classes.join(' ');
   }
 }

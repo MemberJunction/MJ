@@ -17,25 +17,13 @@ import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { SimpleRecordListModule } from '@memberjunction/ng-simple-record-list';
 
-import { SingleRoleComponent } from './single-role/single-role.component';
 import { SettingsComponent } from './settings/settings.component';
-import { UserRolesGridComponent } from './user-roles-grid/user-roles-grid.component';
-import { SingleUserComponent } from './single-user/single-user.component';
-import { SingleApplicationComponent } from './single-application/single-application.component';
-import { ApplicationEntitiesGridComponent } from './application-entities-grid/application-entities-grid.component';
 import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
 import { JoinGridModule } from '@memberjunction/ng-join-grid';
 import { SqlLoggingComponent } from './sql-logging/sql-logging.component';
 
 @NgModule({
-  declarations: [
-    SingleRoleComponent,
-    SettingsComponent,
-    UserRolesGridComponent,
-    SingleUserComponent,
-    SingleApplicationComponent,
-    ApplicationEntitiesGridComponent
-  ],
+  declarations: [],
   imports: [
     CommonModule,
     GridModule,
@@ -54,15 +42,11 @@ import { SqlLoggingComponent } from './sql-logging/sql-logging.component';
     UserViewGridModule,
     SimpleRecordListModule,
     JoinGridModule,
+    SettingsComponent,
     SqlLoggingComponent
   ],
   exports: [
-    SingleRoleComponent,
     SettingsComponent,
-    UserRolesGridComponent,
-    SingleUserComponent,
-    SingleApplicationComponent,
-    ApplicationEntitiesGridComponent,
     SqlLoggingComponent
   ]
 })

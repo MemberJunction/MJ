@@ -125,29 +125,36 @@
     color: #bd2130;
 }
 
-/* Copy Button */
-.copy-button {
+/* Copy Button in Message Bubble */
+.copy-button-in-bubble {
+    position: absolute;
+    top: 8px;
+    right: 8px;
     background: transparent;
     border: none;
-    padding: 4px 8px;
-    font-size: 12px;
-    color: #6c757d;
+    padding: 6px;
+    font-size: 14px;
+    color: #adb5bd;
     cursor: pointer;
     transition: all 0.2s;
-    margin-left: 8px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     border-radius: 4px;
+    opacity: 0;
 }
 
-.copy-button:hover {
-    background: rgba(0, 0, 0, 0.05);
-    color: #495057;
+.message-content:hover .copy-button-in-bubble {
+    opacity: 1;
 }
 
-.copy-button i {
-    font-size: 12px;
+.copy-button-in-bubble:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: #6c757d;
+}
+
+.copy-button-in-bubble i {
+    font-size: 14px;
 }
 
 /* Model Settings Styles (Prompt Mode) */
@@ -540,10 +547,11 @@
 .message-content {
     background: #f8f9fa;
     border-radius: 12px;
-    padding: 12px 16px;
+    padding: 12px 40px 12px 16px; /* Extra right padding for copy button */
     font-size: 14px;
     line-height: 1.5;
     word-wrap: break-word;
+    position: relative;
     overflow-wrap: break-word;
     hyphens: auto;
     max-width: 100%;

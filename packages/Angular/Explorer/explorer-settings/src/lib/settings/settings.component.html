@@ -1,94 +1,229 @@
-<div class="container">
-    <!-- Navigation Sidebar -->
-    <div class="options-container">
-        <div class="nav-header">
-            <h2>Settings</h2>
-            <div class="nav-subtitle">System Configuration</div>
-        </div>
-        
-        <div class="nav-divider"></div>
-        
-        <div *ngFor="let o of options"
-            class="option-item"
-            [class.active]="leftNavItemSelected(o)"
-            (click)="selectItem(o.value)"
-        >
-            <i class="nav-icon" [class]="getNavIcon(o.value)"></i>
-            <span class="nav-label">{{o.label}}</span>
-            @if (getNavBadge(o.value)) {
-                <span class="nav-badge" [class]="getNavBadgeClass(o.value)">{{getNavBadge(o.value)}}</span>
-            }
-        </div>
+<div class="settings-container" mjFillContainer>
+  <!-- Header Section -->
+  <div class="settings-header">
+    <div class="header-content">
+      <div class="header-title">
+        <i class="fa-solid fa-cog header-icon"></i>
+        <h1>Settings</h1>
+      </div>
+      
+      <div class="header-search">
+        <i class="fa-solid fa-search search-icon"></i>
+        <input 
+          type="text" 
+          class="search-input" 
+          placeholder="Search settings..."
+          (input)="onSearchChange($event)"
+          [value]="searchTerm$.value"
+        />
+      </div>
     </div>
+  </div>
 
-    <!-- Main Content Area -->
-    <div class="display-container">
-        <div class="content-wrapper">
-            @switch (currentItem) {
-                @case ('EntityPermissions') {
-                    <div class="content-enter">
-                        <mj-entity-permissions-selector-with-grid></mj-entity-permissions-selector-with-grid>
-                    </div>
-                }
-                @case ('Users') {
-                    <div class="content-enter">
-                        <mj-simple-record-list
-                            EntityName="Users"
-                            SortBy="Name"
-                            [Columns]="['Name', 'Email', 'IsActive', 'Type']" 
-                            [AllowDelete]="false"
-                            [AllowCustomAction]="true"
-                            [CustomActionIconFunction]="getUserToggleIcon"
-                            [CustomActionTooltipFunction]="getUserToggleTooltip"
-                            [CustomActionDialogTitle]="'Toggle User Activation'"
-                            [CustomActionDialogMessage]="'Are you sure you want to toggle activation for this user?'"
-                            [CustomActionDialogInfo]="'Active users can log in to the system. Inactive users cannot log in.'"
-                            (RecordSelected)="selectUser($event)"
-                            (CustomActionConfirmed)="toggleUserActivation($event)"
-                        ></mj-simple-record-list>
-                    </div>
-                }
-                @case ('User') {
-                    <div class="content-enter">
-                        <mj-single-user [UserID]="selectedUserID"></mj-single-user>
-                    </div>
-                }
-                @case ('Roles') {
-                    <div class="content-enter">
-                        <mj-simple-record-list
-                            EntityName="Roles"
-                            SortBy="Name"
-                            [Columns]="['Name', 'Description']"
-                            (RecordSelected)="selectRole($event)"
-                        ></mj-simple-record-list>
-                    </div>
-                }
-                @case ('Role') {
-                    <div class="content-enter">
-                        <mj-single-role [RoleID]="selectedRoleID"></mj-single-role>
-                    </div>
-                }
-                @case ('Applications') {
-                    <div class="content-enter">
-                        <mj-simple-record-list
-                            EntityName="Applications"
-                            SortBy="Name"
-                            [Columns]="['Name', 'Description']"
-                            (RecordSelected)="selectApplication($event)"
-                        ></mj-simple-record-list>
-                    </div>
-                }
-                @case ('Application') {
-                    <div class="content-enter">
-                        <mj-single-application [ApplicationID]="selectedApplicationID"></mj-single-application>
-                    </div>
-                }
-                @case ('SqlLogging') {
-                    <div class="content-enter">
-                        <mj-sql-logging></mj-sql-logging>
-                    </div>
-                }
-            }
+  <!-- Loading State -->
+  @if (isLoading) {
+    <div class="loading-container">
+      <div class="loading-content">
+        <div class="loading-spinner">
+          <div class="spinner-ring"></div>
+          <div class="spinner-ring"></div>
+          <div class="spinner-ring"></div>
         </div>
+        <div class="loading-text">Loading settings...</div>
+      </div>
     </div>
+  }
+
+  <!-- Error State -->
+  @if (error && !isLoading) {
+    <div class="error-container">
+      <div class="error-content">
+        <i class="fa-solid fa-exclamation-triangle error-icon"></i>
+        <p class="error-message">{{ error }}</p>
+        <button class="retry-button" (click)="loadInitialData()">
+          <i class="fa-solid fa-refresh"></i>
+          Try Again
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- Main Content -->
+  @if (!isLoading && !error) {
+    <div class="settings-content">
+      <!-- Desktop Layout -->
+      @if (!isMobile) {
+        <div class="desktop-layout">
+          <!-- Side Navigation -->
+          <nav class="side-navigation">
+            <ul class="nav-list">
+              @for (tab of tabs; track tab.id) {
+                <li 
+                  class="nav-item"
+                  [class.active]="activeTab === tab.id"
+                  (click)="onTabChange(tab.id)"
+                >
+                  <i [class]="tab.icon"></i>
+                  <span class="nav-label">{{ tab.label }}</span>
+                  @if (tab.badgeCount && tab.badgeCount > 0) {
+                    <span class="nav-badge" [class]="'badge-' + (tab.badgeColor || 'primary')">
+                      {{ tab.badgeCount }}
+                    </span>
+                  }
+                </li>
+              }
+            </ul>
+          </nav>
+
+          <!-- Content Area -->
+          <div class="content-area">
+            <div class="tab-content">
+              @switch (activeTab) {
+                @case ('general') {
+                  <div class="general-settings">
+                    <h2 class="section-title">General Settings</h2>
+                    <div class="settings-grid">
+                      <mj-settings-card 
+                        title="Profile Information"
+                        icon="fa-solid fa-user"
+                        [expanded]="isSectionExpanded('profile')"
+                        (toggle)="toggleSection('profile')"
+                      >
+                        <div class="card-content">
+                          <p>Manage your profile information and preferences.</p>
+                          <!-- Profile settings content will go here -->
+                        </div>
+                      </mj-settings-card>
+
+                      <mj-settings-card 
+                        title="Preferences"
+                        icon="fa-solid fa-sliders"
+                        [expanded]="isSectionExpanded('preferences')"
+                        (toggle)="toggleSection('preferences')"
+                      >
+                        <div class="card-content">
+                          <p>Customize your experience with display and behavior preferences.</p>
+                          <!-- Preferences content will go here -->
+                        </div>
+                      </mj-settings-card>
+
+                      <mj-settings-card 
+                        title="Notifications"
+                        icon="fa-solid fa-bell"
+                        [expanded]="isSectionExpanded('notifications')"
+                        (toggle)="toggleSection('notifications')"
+                      >
+                        <div class="card-content">
+                          <p>Configure how and when you receive notifications.</p>
+                          <!-- Notification settings will go here -->
+                        </div>
+                      </mj-settings-card>
+                    </div>
+                  </div>
+                }
+                
+                @case ('users') {
+                  <div class="users-settings">
+                    <h2 class="section-title">User Management</h2>
+                    <p class="section-description">Manage users, their roles, and permissions.</p>
+                    <!-- User management component will go here -->
+                  </div>
+                }
+                
+                @case ('roles') {
+                  <div class="roles-settings">
+                    <h2 class="section-title">Role Management</h2>
+                    <p class="section-description">Define and manage security roles.</p>
+                    <!-- Role management component will go here -->
+                  </div>
+                }
+                
+                @case ('applications') {
+                  <div class="applications-settings">
+                    <h2 class="section-title">Application Settings</h2>
+                    <p class="section-description">Configure applications and their entities.</p>
+                    <!-- Application management component will go here -->
+                  </div>
+                }
+                
+                @case ('permissions') {
+                  <div class="permissions-settings">
+                    <h2 class="section-title">Entity Permissions</h2>
+                    <p class="section-description">Manage entity-level permissions and access control.</p>
+                    <!-- Permissions component will go here -->
+                  </div>
+                }
+                
+                @case ('advanced') {
+                  <div class="advanced-settings">
+                    <h2 class="section-title">Advanced Settings</h2>
+                    <div class="beta-warning">
+                      <i class="fa-solid fa-flask"></i>
+                      <span>Beta features - Use with caution</span>
+                    </div>
+                    
+                    <mj-settings-card 
+                      title="SQL Logging"
+                      icon="fa-solid fa-database"
+                      [expanded]="isSectionExpanded('sql-logging')"
+                      (toggle)="toggleSection('sql-logging')"
+                    >
+                      <div class="card-content">
+                        <mj-sql-logging></mj-sql-logging>
+                      </div>
+                    </mj-settings-card>
+                  </div>
+                }
+              }
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Mobile Layout -->
+      @if (isMobile) {
+        <div class="mobile-layout">
+          <!-- Mobile Content -->
+          <div class="mobile-content">
+            @switch (activeTab) {
+              @case ('general') {
+                <div class="general-settings">
+                  <h2 class="section-title">General Settings</h2>
+                  <!-- Same content as desktop but responsive -->
+                </div>
+              }
+              <!-- Other cases similar to desktop -->
+            }
+          </div>
+
+          <!-- Mobile Bottom Navigation -->
+          <nav class="mobile-navigation">
+            <div class="nav-tabs">
+              @for (tab of tabs.slice(0, 5); track tab.id) {
+                <button 
+                  class="nav-tab"
+                  [class.active]="activeTab === tab.id"
+                  (click)="onTabChange(tab.id)"
+                >
+                  <i [class]="tab.icon"></i>
+                  @if (tab.badgeCount && tab.badgeCount > 0) {
+                    <span class="tab-badge" [class]="'badge-' + (tab.badgeColor || 'primary')">
+                      {{ tab.badgeCount }}
+                    </span>
+                  }
+                  <span class="tab-label">{{ tab.label }}</span>
+                </button>
+              }
+              @if (tabs.length > 5) {
+                <button class="nav-tab more-tab">
+                  <i class="fa-solid fa-ellipsis"></i>
+                  <span class="tab-label">More</span>
+                </button>
+              }
+            </div>
+          </nav>
+        </div>
+      }
+    </div>
+  }
 </div>
