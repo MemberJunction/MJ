@@ -1,5 +1,16 @@
 # @memberjunction/metadata-sync
 
+## 2.50.0
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@2.50.0
+- @memberjunction/core@2.50.0
+- @memberjunction/core-entities@2.50.0
+- @memberjunction/core-entities-server@2.50.0
+- @memberjunction/global@2.50.0
+- @memberjunction/sqlserver-dataprovider@2.50.0
+
 ## 2.49.0
 
 ### Minor Changes

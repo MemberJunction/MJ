@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/ng-query-grid
 
+## 2.50.0
+
+### Patch Changes
+
+- @memberjunction/ng-compare-records@2.50.0
+- @memberjunction/ng-shared@2.50.0
+- @memberjunction/ng-container-directives@2.50.0
+- @memberjunction/core@2.50.0
+- @memberjunction/core-entities@2.50.0
+- @memberjunction/global@2.50.0
+
 ## 2.49.0
 
 ### Minor Changes

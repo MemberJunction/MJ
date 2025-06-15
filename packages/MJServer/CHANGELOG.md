@@ -1,5 +1,38 @@
 # Change Log - @memberjunction/server
 
+## 2.50.0
+
+### Minor Changes
+
+- 099e4bb: Add missing dependency and add migration to filter constraint
+
+### Patch Changes
+
+- @memberjunction/ai-agents@2.50.0
+- @memberjunction/ai@2.50.0
+- @memberjunction/aiengine@2.50.0
+- @memberjunction/ai-prompts@2.50.0
+- @memberjunction/ai-mistral@2.50.0
+- @memberjunction/ai-openai@2.50.0
+- @memberjunction/ai-vectors-pinecone@2.50.0
+- @memberjunction/core-actions@2.50.0
+- @memberjunction/actions@2.50.0
+- @memberjunction/entity-communications-server@2.50.0
+- @memberjunction/doc-utils@2.50.0
+- @memberjunction/external-change-detection@2.50.0
+- @memberjunction/graphql-dataprovider@2.50.0
+- @memberjunction/core@2.50.0
+- @memberjunction/core-entities@2.50.0
+- @memberjunction/core-entities-server@2.50.0
+- @memberjunction/data-context@2.50.0
+- @memberjunction/data-context-server@2.50.0
+- @memberjunction/global@2.50.0
+- @memberjunction/queue@2.50.0
+- @memberjunction/storage@2.50.0
+- @memberjunction/sqlserver-dataprovider@2.50.0
+- @memberjunction/skip-types@2.50.0
+- @memberjunction/templates@2.50.0
+
 ## 2.49.0
 
 ### Minor Changes
