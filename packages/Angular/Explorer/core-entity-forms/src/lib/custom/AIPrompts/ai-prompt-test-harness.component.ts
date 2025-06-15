@@ -39,6 +39,8 @@ export interface ConversationMessage {
     showRaw?: boolean;
     streamingStartTime?: number;
     elapsedTime?: number;
+    /** Whether JSON raw section is expanded in collapsible view */
+    showJsonRaw?: boolean;
 }
 
 export interface SavedPromptConversation {
@@ -117,6 +119,7 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
         this.loadAvailableModels();
         this.resetHarness();
         this.initializeVariables();
+        this.setupGlobalJsonToggle();
     }
 
     ngOnDestroy() {
@@ -893,9 +896,21 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
         const contentStr = typeof content === 'string' ? content : String(content);
         const contentType = this.detectContentType(contentStr);
         
-        if (contentType === 'json') {
+        if (contentType === 'json' && !message.showRaw) {
+            // Try to extract human-readable content from JSON
+            const extractedContent = this.extractHumanReadableContent(contentStr);
+            if (extractedContent) {
+                // Render with collapsible JSON section
+                return this.renderJsonWithCollapsibleRaw(extractedContent, contentStr, message);
+            } else {
+                // Fallback to formatted JSON if no human-readable content found
+                const formattedJson = this.formatJson(contentStr);
+                const markdownJson = `\`\`\`json\n${formattedJson}\n\`\`\``;
+                return this.renderMarkdown(markdownJson);
+            }
+        } else if (contentType === 'json' && message.showRaw) {
+            // Show raw JSON when raw view is enabled
             const formattedJson = this.formatJson(contentStr);
-            // Wrap JSON in markdown code block for better formatting
             const markdownJson = `\`\`\`json\n${formattedJson}\n\`\`\``;
             return this.renderMarkdown(markdownJson);
         } else if (contentType === 'markdown' && !message.showRaw) {
@@ -910,9 +925,207 @@ export class AIPromptTestHarnessComponent implements OnInit, OnDestroy, AfterVie
         }
     }
 
+    /**
+     * Renders JSON content with human-readable content prominently displayed
+     * and raw JSON in a collapsible section below with proper text wrapping.
+     */
+    private renderJsonWithCollapsibleRaw(extractedContent: string, rawJson: string, message: ConversationMessage): SafeHtml {
+        const showRawSection = message.showJsonRaw || false;
+        const messageId = message.id;
+        
+        // Format JSON with proper wrapping for display
+        const wrappedJson = this.formatJsonForDisplay(rawJson);
+        
+        const html = `
+            <div class="json-content-wrapper">
+                <div class="json-main-content">
+                    ${this.renderMarkdown(extractedContent).toString().replace(/<div class="markdown-content">|<\/div>/g, '')}
+                </div>
+                <div class="json-raw-section">
+                    <button class="json-toggle-button" onclick="window.mjToggleJsonRawPrompt && window.mjToggleJsonRawPrompt('${messageId}')">
+                        <i class="fa-solid ${showRawSection ? 'fa-chevron-up' : 'fa-chevron-down'}"></i>
+                        ${showRawSection ? 'Hide' : 'Show'} raw JSON
+                    </button>
+                    ${showRawSection ? `<div class="json-display-container">${wrappedJson}</div>` : ''}
+                </div>
+            </div>
+        `;
+        
+        return this.sanitizer.bypassSecurityTrustHtml(html);
+    }
+
+    /**
+     * Sets up global function for JSON toggle functionality
+     */
+    private setupGlobalJsonToggle() {
+        (window as any).mjToggleJsonRawPrompt = (messageId: string) => {
+            const message = this.conversationMessages.find(m => m.id === messageId);
+            if (message) {
+                this.toggleJsonRaw(message);
+            }
+        };
+    }
+
+    /**
+     * Toggles the visibility of the JSON raw section
+     */
+    public toggleJsonRaw(message: ConversationMessage) {
+        message.showJsonRaw = !message.showJsonRaw;
+        // Force re-render by triggering change detection
+        setTimeout(() => {
+            // This will cause the content to re-render with updated state
+        }, 0);
+    }
+
+    /**
+     * Extracts human-readable content from JSON responses.
+     * Prioritizes userMessage field first, then checks other common fields.
+     * @param jsonStr - JSON string to extract content from
+     * @returns Extracted human-readable content or null if none found
+     */
+    private extractHumanReadableContent(jsonStr: string): string | null {
+        try {
+            const parsed = JSON.parse(jsonStr);
+            
+            // Priority 1: Always check userMessage first, regardless of taskComplete status
+            if (parsed.userMessage && typeof parsed.userMessage === 'string' && parsed.userMessage.trim()) {
+                return parsed.userMessage;
+            }
+            
+            // Priority 2: Check for nested userMessage in nextStep or other objects
+            if (parsed.nextStep && parsed.nextStep.userMessage && 
+                typeof parsed.nextStep.userMessage === 'string' && parsed.nextStep.userMessage.trim()) {
+                return parsed.nextStep.userMessage;
+            }
+            
+            // Priority 3: Other common human-readable fields
+            const contentFields = [
+                'message', 'content', 'response', 'text', 'output',
+                'result', 'answer', 'reply', 'description', 'summary'
+            ];
+            
+            for (const field of contentFields) {
+                if (parsed[field] && typeof parsed[field] === 'string' && parsed[field].trim()) {
+                    return parsed[field];
+                }
+            }
+            
+            // Priority 4: Check nested objects for content
+            for (const key of Object.keys(parsed)) {
+                if (typeof parsed[key] === 'object' && parsed[key] !== null) {
+                    for (const field of ['userMessage', 'message', 'content']) {
+                        if (parsed[key][field] && typeof parsed[key][field] === 'string' && parsed[key][field].trim()) {
+                            return parsed[key][field];
+                        }
+                    }
+                }
+            }
+            
+            // Priority 5: If it's a simple string value, return it
+            if (typeof parsed === 'string' && parsed.trim()) {
+                return parsed;
+            }
+            
+            // Priority 6: If it's an object with a single string property, consider returning it
+            const keys = Object.keys(parsed);
+            if (keys.length === 1 && typeof parsed[keys[0]] === 'string' && parsed[keys[0]].trim()) {
+                return parsed[keys[0]];
+            }
+            
+            return null;
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Checks if a message contains JSON content that has extractable human-readable content.
+     * Used to determine if the raw toggle should be shown.
+     * @param message - The conversation message to check
+     * @returns True if the message has extractable content different from raw JSON
+     */
+    public hasExtractableContent(message: ConversationMessage): boolean {
+        if (!message.content || message.role === 'user') {
+            return false;
+        }
+        
+        const contentStr = typeof message.content === 'string' ? message.content : String(message.content);
+        if (!this.isJsonContent(contentStr)) {
+            return false;
+        }
+        
+        const extractedContent = this.extractHumanReadableContent(contentStr);
+        return extractedContent !== null && extractedContent !== contentStr;
+    }
+
+    /**
+     * Determines whether to show the raw toggle button for a message.
+     * Combines the logic for raw content availability and extractable content.
+     * @param message - The conversation message to check
+     * @returns True if the raw toggle should be displayed
+     */
+    public showRawToggle(message: ConversationMessage): boolean {
+        return (message.rawContent && !message.isStreaming) || this.hasExtractableContent(message);
+    }
+
     private escapeHtml(text: string): string {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    /**
+     * Formats JSON for proper display with text wrapping instead of wide code blocks.
+     * Creates a structured, readable format that respects container width.
+     */
+    private formatJsonForDisplay(jsonStr: string): string {
+        try {
+            const parsed = JSON.parse(jsonStr);
+            return this.createJsonDisplayHtml(parsed, 0);
+        } catch {
+            // If JSON parsing fails, escape and display as-is with wrapping
+            return `<div class="json-fallback">${this.escapeHtml(jsonStr)}</div>`;
+        }
+    }
+
+    /**
+     * Creates formatted HTML for JSON display with proper indentation and wrapping.
+     */
+    private createJsonDisplayHtml(obj: any, depth: number = 0): string {
+        const indent = '  '.repeat(depth);
+        const nextIndent = '  '.repeat(depth + 1);
+        
+        if (obj === null) return `<span class="json-null">null</span>`;
+        if (typeof obj === 'boolean') return `<span class="json-boolean">${obj}</span>`;
+        if (typeof obj === 'number') return `<span class="json-number">${obj}</span>`;
+        if (typeof obj === 'string') {
+            const escaped = this.escapeHtml(obj);
+            return `<span class="json-string">"<span class="json-string-content">${escaped}</span>"</span>`;
+        }
+        
+        if (Array.isArray(obj)) {
+            if (obj.length === 0) return '<span class="json-bracket">[]</span>';
+            
+            const items = obj.map(item => 
+                `<div class="json-array-item">${nextIndent}${this.createJsonDisplayHtml(item, depth + 1)}</div>`
+            ).join(',\n');
+            
+            return `<span class="json-bracket">[</span>\n${items}\n<div class="json-indent">${indent}</div><span class="json-bracket">]</span>`;
+        }
+        
+        if (typeof obj === 'object') {
+            const keys = Object.keys(obj);
+            if (keys.length === 0) return '<span class="json-bracket">{}</span>';
+            
+            const properties = keys.map(key => {
+                const escapedKey = this.escapeHtml(key);
+                const value = this.createJsonDisplayHtml(obj[key], depth + 1);
+                return `<div class="json-property">${nextIndent}<span class="json-key">"${escapedKey}"</span><span class="json-colon">:</span> ${value}</div>`;
+            }).join(',\n');
+            
+            return `<span class="json-bracket">{</span>\n${properties}\n<div class="json-indent">${indent}</div><span class="json-bracket">}</span>`;
+        }
+        
+        return String(obj);
     }
 }

@@ -1,0 +1,183 @@
+<div *ngIf="this.record && this.record.IsSaved" class="overview-container">
+  <!-- Basic Information Card -->
+  <div class="info-card">
+    <h3>Agent Information</h3>
+    <div class="info-grid">
+      <div class="info-item">
+        <label>Name:</label>
+        <span>{{record.Name || 'Unnamed Agent'}}</span>
+      </div>
+      <div class="info-item">
+        <label>Description:</label>
+        <span>{{record.Description || 'No description'}}</span>
+      </div>
+      <div class="info-item">
+        <label>Status:</label>
+        <span class="status">{{record.Status || 'Unknown'}}</span>
+      </div>
+      <div class="info-item">
+        <label>Execution Mode:</label>
+        <span class="execution-mode">{{record.ExecutionMode}}</span>
+      </div>
+      <div class="info-item">
+        <label>Driver Class:</label>
+        <span>{{record.DriverClass || 'Not specified'}}</span>
+      </div>
+      <div class="info-item">
+        <label>Expose as Action:</label>
+        <span class="boolean-value">{{record.ExposeAsAction ? 'Yes' : 'No'}}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Related Entities Section -->
+  <div class="related-entities-section">
+    <h3>Related Components</h3>
+    
+    <!-- Agent Prompts -->
+    <div class="entity-group">
+      <h4 class="section-header">
+        <i class="fa-solid fa-comment"></i>
+        Agent Prompts ({{ agentPrompts.length }})
+      </h4>
+      <div *ngIf="loadingPrompts" class="loading">
+        <i class="fa-solid fa-spinner fa-spin"></i> Loading prompts...
+      </div>
+      <div *ngIf="!loadingPrompts && agentPrompts.length === 0" class="no-data">
+        No prompts configured for this agent.
+      </div>
+      <div *ngIf="!loadingPrompts && agentPrompts.length > 0" class="card-grid">
+        <div *ngFor="let prompt of agentPrompts" 
+             class="entity-card clickable" 
+             (click)="openPromptRecord(prompt.ID)"
+             title="Click to open prompt record">
+          <div class="card-header">
+            <h5>{{prompt.Name}}</h5>
+            <span class="badge">
+              {{prompt.ContextBehavior}}
+            </span>
+          </div>
+          <div class="card-body">
+            <p class="card-description">{{prompt.Purpose || 'No purpose specified'}}</p>
+            <div class="card-metadata">
+              <span class="metadata-item">
+                <i class="fa-solid fa-sort-numeric-up"></i>
+                Order: {{prompt.ExecutionOrder}}
+              </span>
+              <span class="metadata-item">
+                <i class="fa-solid fa-circle"></i>
+                {{prompt.Status}}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Agent Actions -->
+    <div class="entity-group">
+      <h4 class="section-header">
+        <i class="fa-solid fa-bolt"></i>
+        Agent Actions ({{ agentActions.length }})
+      </h4>
+      <div *ngIf="loadingActions" class="loading">
+        <i class="fa-solid fa-spinner fa-spin"></i> Loading actions...
+      </div>
+      <div *ngIf="!loadingActions && agentActions.length === 0" class="no-data">
+        No actions configured for this agent.
+      </div>
+      <div *ngIf="!loadingActions && agentActions.length > 0" class="card-grid">
+        <div *ngFor="let action of agentActions" 
+             class="entity-card clickable" 
+             (click)="openActionRecord(action.ID)"
+             title="Click to open action record">
+          <div class="card-header">
+            <h5>{{action.Name}}</h5>
+            <span class="badge">
+              {{action.Status}}
+            </span>
+          </div>
+          <div class="card-body">
+            <p class="card-description">Available action for this agent</p>
+            <div class="card-metadata">
+              <span class="metadata-item">
+                <i class="fa-solid fa-circle"></i>
+                {{action.Status}}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sub-Agents -->
+    <div class="entity-group">
+      <h4 class="section-header">
+        <i class="fa-solid fa-sitemap"></i>
+        Sub-Agents ({{ subAgents.length }})
+      </h4>
+      <div *ngIf="loadingSubAgents" class="loading">
+        <i class="fa-solid fa-spinner fa-spin"></i> Loading sub-agents...
+      </div>
+      <div *ngIf="!loadingSubAgents && subAgents.length === 0" class="no-data">
+        No sub-agents configured for this agent.
+      </div>
+      <div *ngIf="!loadingSubAgents && subAgents.length > 0" class="card-grid">
+        <div *ngFor="let subAgent of subAgents" 
+             class="entity-card clickable" 
+             (click)="openSubAgentRecord(subAgent.ID)"
+             title="Click to open sub-agent record">
+          <div class="card-header">
+            <h5>{{subAgent.Name}}</h5>
+            <span class="badge">
+              {{subAgent.ExecutionMode}}
+            </span>
+          </div>
+          <div class="card-body">
+            <p class="card-description">{{subAgent.Description || 'No description'}}</p>
+            <div class="card-metadata">
+              <span class="metadata-item">
+                <i class="fa-solid fa-sort-numeric-up"></i>
+                Order: {{subAgent.ExecutionOrder}}
+              </span>
+              <span class="metadata-item">
+                <i class="fa-solid fa-circle"></i>
+                {{subAgent.Status}}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div *ngIf="this.record && !this.record.IsSaved" class="overview-container">
+  <div class="alert alert-info">
+    <i class="fa-solid fa-info-circle"></i>
+    Save this AI Agent record first to view related prompts, actions, and sub-agents.
+  </div>
+  
+  <!-- Basic Info for new records -->
+  <div class="info-card">
+    <h3>Basic Information</h3>
+    <div class="info-grid">
+      <div class="info-item">
+        <label>Name:</label>
+        <span>{{record.Name || 'Unnamed Agent'}}</span>
+      </div>
+      <div class="info-item">
+        <label>Description:</label>
+        <span>{{record.Description || 'No description'}}</span>
+      </div>
+      <div class="info-item">
+        <label>Status:</label>
+        <span class="status">{{record.Status || 'Unknown'}}</span>
+      </div>
+      <div class="info-item">
+        <label>Execution Mode:</label>
+        <span class="execution-mode">{{record.ExecutionMode}}</span>
+      </div>
+    </div>
+  </div>
+</div>

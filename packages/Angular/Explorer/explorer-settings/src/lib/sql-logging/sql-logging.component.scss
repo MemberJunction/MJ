@@ -1,717 +1,681 @@
-// MemberJunction AI Dashboard Color Palette
-// Primary Colors
-$primary-blue: #2196f3;
-$primary-blue-hover: #1976d2;
-$primary-blue-light: rgba(33, 150, 243, 0.1);
-$primary-blue-border: rgba(33, 150, 243, 0.2);
+// =====================================================
+// SQL Logging Component - Professional Dashboard Design
+// Inspired by AI Dashboard - Modern, Clean, Powerful
+// Scoped for ViewEncapsulation.None
+// =====================================================
 
-// Neutral Colors
-$white: #ffffff;
-$background-light: #fafafa;
-$background-lighter: #f8f9fa;
-$gray-lightest: #f5f5f5;
-$gray-lighter: #f0f0f0;
-$gray-light: #e0e0e0;
-$gray-medium: #ccc;
-$gray-dark: #999;
-$gray-darker: #666;
-$gray-darkest: #333;
-$gray-text: #555;
+@import '../shared/styles/shared-settings';
 
-// Semantic Colors
-$success-green: #4caf50;
-$success-green-light: #e8f5e8;
-$success-green-text: #2e7d32;
-
-$warning-yellow: #ffc107;
-$warning-yellow-light: #fff3e0;
-$warning-yellow-text: #f57c00;
-
-$error-red: #f44336;
-$error-red-hover: #d32f2f;
-$error-red-light: #ffebee;
-$error-red-text: #c62828;
-
-$info-blue-light: #e3f2fd;
-$info-blue-text: #1976d2;
-
-// Additional Accent Colors
-$purple: #9c27b0;
-$orange: #ff6b35;
-$text-muted: #7f8c8d;
-$text-heading: #2c3e50;
-
-// Shadows and effects
-$box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-$box-shadow-hover: 0 2px 8px rgba(33, 150, 243, 0.1);
-$transition: all 0.2s ease;
-
-// Container following AI dashboard pattern
-.sql-logging-container {
-  overflow: hidden;
-  padding: 4px;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-// Dashboard header following AI dashboard pattern
-.dashboard-header {
-  margin-bottom: 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-shrink: 0;
-  
-  .header-info {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    
-    h2 {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 500;
-      color: $gray-darkest;
-    }
-    
-    .info-badge {
-      font-size: 12px;
-      color: $primary-blue;
-      font-weight: 600;
-      background: $primary-blue-light;
-      padding: 4px 8px;
-      border-radius: 4px;
-      border: 1px solid $primary-blue-border;
-    }
-  }
-  
-  .header-controls {
-    display: flex;
-    gap: 8px;
-  }
-}
-
-// Status bar
-.status-bar {
-  background: $white;
-  border: 1px solid $gray-light;
-  border-radius: 4px;
-  padding: 12px 16px;
-  margin-bottom: 16px;
-  display: flex;
-  gap: 24px;
-  align-items: center;
-  
-  .status-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    
-    .status-label {
-      font-size: 12px;
-      color: $gray-text;
-      font-weight: 500;
-    }
-    
-    .status-value {
-      font-size: 12px;
-      font-weight: 600;
-      color: $gray-darkest;
-    }
-  }
-}
-
-// Warning and error messages following AI dashboard pattern
-.warning-message {
-  background: $warning-yellow-light;
-  border: 1px solid $warning-yellow;
-  color: $warning-yellow-text;
-  padding: 12px 16px;
-  border-radius: 4px;
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 16px;
-  
-  .fa-solid {
-    color: $warning-yellow;
-  }
-}
-
-.error-banner {
-  background: $error-red-light;
-  border: 1px solid $error-red;
-  color: $error-red-text;
-  padding: 12px 16px;
-  border-radius: 4px;
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 16px;
-  
-  .fa-solid {
-    color: $error-red;
-  }
-}
-
-// Dashboard content following AI dashboard pattern
-.dashboard-content {
-  overflow: hidden;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-// Loading state following AI dashboard pattern
-.loading-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: $background-light;
-  flex: 1;
-  
-  p {
-    color: $gray-darker;
-    font-size: 14px;
-  }
-}
-
-.loading-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-}
-
-.loading-spinner {
-  position: relative;
-  width: 60px;
-  height: 60px;
-}
-
-.spinner-ring {
-  position: absolute;
+// Scope all styles to the component with ViewEncapsulation.None
+mj-sql-logging {
+  display: block;
   width: 100%;
   height: 100%;
-  border: 3px solid transparent;
-  border-radius: 50%;
-  animation: spin 1.5s linear infinite;
-  
-  &:nth-child(1) {
-    border-top-color: $primary-blue;
-    animation-delay: 0s;
-  }
-  
-  &:nth-child(2) {
-    border-top-color: $purple;
-    animation-delay: 0.3s;
-    transform: scale(0.8);
-  }
-  
-  &:nth-child(3) {
-    border-top-color: $orange;
-    animation-delay: 0.6s;
-    transform: scale(0.6);
-  }
-}
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-// Empty state following AI dashboard pattern
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
-  color: $gray-darker;
-  
-  .fa-solid {
-    font-size: 48px;
-    margin-bottom: 16px;
-    color: $gray-medium;
-  }
-  
-  h3 {
-    margin: 0 0 8px 0;
-    color: $gray-darkest;
-    font-size: 18px;
-    font-weight: 500;
-  }
-  
-  p {
-    margin: 0;
-    font-size: 14px;
-    color: $gray-darker;
-    max-width: 400px;
-    margin: 0 auto;
-    
-    code {
-      background-color: $gray-lightest;
-      padding: 2px 6px;
-      border-radius: 3px;
-      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-      font-size: 12px;
-      color: $gray-darkest;
-    }
-  }
-  
-  .info-box {
-    background: $warning-yellow-light;
-    border: 1px solid $warning-yellow;
-    color: $warning-yellow-text;
-    border-radius: 4px;
-    padding: 16px;
-    margin: 20px auto;
-    max-width: 500px;
-    text-align: left;
-    
-    h4 {
-      margin: 0 0 8px 0;
-      font-size: 14px;
-      font-weight: 600;
-      color: $warning-yellow-text;
-    }
-    
-    ol {
-      margin: 8px 0 0 0;
-      padding-left: 20px;
-      font-size: 13px;
-      
-      li {
-        margin-bottom: 6px;
-      }
-    }
-  }
-}
-
-// Sessions layout following AI dashboard split pattern
-.sessions-layout {
-  display: flex;
-  height: 100%;
-  overflow: hidden;
-  gap: 4px;
-}
-
-// Sessions panel following AI dashboard filter panel pattern
-.sessions-panel {
-  width: 320px;
-  background: $background-light;
-  border: 1px solid $gray-light;
-  border-radius: 4px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  
-  .panel-header {
-    padding: 16px;
-    border-bottom: 1px solid $gray-light;
-    background: $white;
-    
-    h3 {
-      margin: 0;
-      font-size: 14px;
-      font-weight: 600;
-      color: $gray-darkest;
-    }
-  }
-  
-  .sessions-list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 12px;
-  }
-}
-
-// Session card following AI dashboard card pattern
-.session-card {
-  background: $white;
-  border: 1px solid $gray-light;
-  border-radius: 4px;
-  padding: 16px;
-  margin-bottom: 8px;
-  cursor: pointer;
-  transition: $transition;
-  
-  &:hover {
-    border-color: $primary-blue;
-    box-shadow: $box-shadow-hover;
-    transform: translateY(-1px);
-  }
-  
-  &.selected {
-    border-color: $primary-blue;
-    background: $primary-blue-light;
-  }
-  
-  .session-header {
+  .sql-logging-container {
     display: flex;
-    justify-content: space-between;
-    align-items: start;
-    margin-bottom: 12px;
-    
-    .session-title {
-      font-weight: 600;
-      color: $gray-darkest;
-      font-size: 13px;
-      flex: 1;
-      word-break: break-word;
-      line-height: 1.4;
-    }
+    flex-direction: column;
+    height: 100%;
+    gap: $space-lg;
+    overflow: hidden;
   }
-  
-  .session-details {
-    margin-bottom: 12px;
-    
-    .detail-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-bottom: 6px;
-      font-size: 12px;
-      
-      .fa-solid {
-        color: $gray-dark;
-        font-size: 11px;
-        width: 14px;
-      }
-      
-      .detail-label {
-        color: $gray-text;
-      }
-      
-      .detail-value {
-        color: $gray-darkest;
-        font-weight: 500;
-      }
-    }
-  }
-  
-  .session-options {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    
-    .status-badge {
-      padding: 2px 6px;
-      border-radius: 3px;
-      font-size: 10px;
-      font-weight: 500;
-      text-transform: uppercase;
-      
-      &.status-active {
-        background: $success-green-light;
-        color: $success-green-text;
-      }
-      
-      &.status-migration {
-        background: lighten($purple, 40%);
-        color: darken($purple, 10%);
-      }
-    }
-  }
-}
 
-// Log viewer panel following AI dashboard pattern
-.log-viewer-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: $white;
-  border: 1px solid $gray-light;
-  border-radius: 4px;
-  overflow: hidden;
-  
-  .panel-header {
-    padding: 16px;
-    border-bottom: 1px solid $gray-light;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: $white;
+  // =====================================================
+  // DASHBOARD HEADER - Hero section with status
+  // =====================================================
+
+  .dashboard-header {
+    @include dashboard-header;
+    margin-bottom: $space-md;
     
-    h3 {
-      margin: 0;
-      font-size: 14px;
-      font-weight: 600;
-      color: $gray-darkest;
+    .header-info {
+      h2 {
+        color: $text-primary;
+        font-size: $font-size-xxl;
+        font-weight: $font-weight-semibold;
+        margin: 0;
+      }
+      
+      .info-badge {
+        @include badge-info;
+        font-size: $font-size-xs;
+        font-weight: $font-weight-semibold;
+        animation: pulse 2s infinite;
+      }
     }
     
-    .panel-actions {
-      display: flex;
-      align-items: center;
-      gap: 12px;
+    .header-controls {
+      gap: $space-sm;
+    }
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  // =====================================================
+  // STATUS BAR - Live system status
+  // =====================================================
+
+  .status-bar {
+    @include status-bar;
+    
+    .status-item {
+      .status-label {
+        color: $text-secondary;
+        font-weight: $font-weight-medium;
+      }
       
-      .auto-refresh-toggle {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 12px;
-        color: $gray-text;
-        cursor: pointer;
+      .status-value {
+        color: $text-primary;
+        font-weight: $font-weight-semibold;
         
-        input[type="checkbox"] {
-          margin: 0;
-          cursor: pointer;
+        &.text-success {
+          color: $success-green;
         }
+        
+        &.text-danger {
+          color: $error-red;
+        }
+      }
+    }
+  }
+
+  // =====================================================
+  // DASHBOARD CONTENT - Main container
+  // =====================================================
+
+  .dashboard-content {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  // =====================================================
+  // EMPTY STATES - Professional messaging
+  // =====================================================
+
+  .empty-state {
+    @include flex-center;
+    flex-direction: column;
+    gap: $space-lg;
+    padding: $space-xxl;
+    text-align: center;
+    flex: 1;
+    
+    i {
+      font-size: 64px;
+      color: $text-muted;
+      margin-bottom: $space-md;
+    }
+    
+    h3 {
+      margin: 0;
+      font-size: $font-size-xl;
+      font-weight: $font-weight-medium;
+      color: $text-primary;
+    }
+    
+    p {
+      margin: 0;
+      font-size: $font-size-md;
+      color: $text-secondary;
+      max-width: 500px;
+      line-height: $line-height-relaxed;
+    }
+    
+    .info-box {
+      @include card-elevated;
+      padding: $space-lg;
+      margin-top: $space-lg;
+      max-width: 600px;
+      text-align: left;
+      background: rgba($warning-amber, 0.05);
+      border: 1px solid rgba($warning-amber, 0.2);
+      
+      h4 {
+        margin: 0 0 $space-sm 0;
+        font-size: $font-size-md;
+        font-weight: $font-weight-semibold;
+        color: darken($warning-amber, 30%);
+      }
+      
+      ol {
+        margin: $space-sm 0 0 0;
+        padding-left: $space-lg;
+        color: darken($warning-amber, 20%);
+        
+        li {
+          margin-bottom: $space-xs;
+          font-size: $font-size-sm;
+        }
+      }
+      
+      code {
+        background: rgba($warning-amber, 0.1);
+        padding: 2px 6px;
+        border-radius: $radius-sm;
+        font-family: $font-family-mono;
+        font-size: $font-size-xs;
+        color: darken($warning-amber, 40%);
+      }
+    }
+  }
+
+  // =====================================================
+  // SESSIONS LAYOUT - Split panel design
+  // =====================================================
+
+  .sessions-layout {
+    display: flex;
+    flex: 1;
+    height: 100%;
+    min-height: 0;
+    gap: $space-lg;
+    overflow: hidden;
+  }
+
+  // =====================================================
+  // SESSIONS PANEL - Modern card-based session list
+  // =====================================================
+
+  .sessions-panel {
+    width: 380px;
+    min-width: 380px;
+    max-width: 380px;
+    @include card-elevated;
+    @include card-content-sm;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    
+    .panel-header {
+      @include section-header;
+      margin-bottom: $space-md;
+      
+      h3 {
+        font-size: $font-size-lg;
+        font-weight: $font-weight-semibold;
+        color: $text-primary;
+      }
+    }
+    
+    .sessions-list {
+      flex: 1;
+      overflow-y: auto;
+      margin: 0 (-$card-padding-sm);
+      padding: 0 $card-padding-sm;
+      
+      &::-webkit-scrollbar {
+        width: 6px;
+      }
+      
+      &::-webkit-scrollbar-track {
+        background: $background-light;
+        border-radius: $radius-sm;
+      }
+      
+      &::-webkit-scrollbar-thumb {
+        background: $border-medium;
+        border-radius: $radius-sm;
         
         &:hover {
-          color: $gray-darkest;
+          background: $border-dark;
         }
       }
     }
   }
-  
-  .log-content {
-    flex: 1;
-    overflow: hidden;
-    background: $gray-lightest;
-    
-    mj-code-editor {
-      height: 100%;
-    }
-  }
-}
 
-// Dialog styles following AI dashboard pattern
-.dialog-content {
-  padding: 24px;
-  
-  .form-field {
-    margin-bottom: 16px;
+  // =====================================================
+  // SESSION CARD - Premium card design
+  // =====================================================
+
+  .session-card {
+    @include card-base;
+    @include card-content-sm;
+    margin-bottom: $space-md;
+    cursor: pointer;
+    transition: $transition-normal;
+    border: 2px solid transparent;
     
-    &.checkbox-field {
-      margin-bottom: 12px;
+    &:hover {
+      border-color: $primary-blue-border;
+      box-shadow: $shadow-hover;
+      transform: translateY(-2px);
     }
     
-    .field-label {
-      display: block;
-      margin-bottom: 6px;
-      font-size: 12px;
-      font-weight: 500;
-      color: $gray-text;
+    &.selected {
+      border-color: $primary-blue;
+      background: $primary-blue-subtle;
+      box-shadow: $shadow-hover-strong;
+      
+      .session-title {
+        color: $primary-blue-dark;
+        font-weight: $font-weight-semibold;
+      }
     }
     
-    .field-hint {
-      margin-top: 4px;
-      font-size: 11px;
-      color: $gray-dark;
+    .session-header {
+      @include flex-between;
+      margin-bottom: $space-md;
+      
+      .session-title {
+        flex: 1;
+        font-size: $font-size-sm;
+        font-weight: $font-weight-medium;
+        color: $text-primary;
+        line-height: $line-height-tight;
+        @include truncate;
+      }
+    }
+    
+    .session-details {
+      margin-bottom: $space-md;
+      
+      .detail-row {
+        display: flex;
+        align-items: center;
+        gap: $space-xs;
+        margin-bottom: $space-xs;
+        font-size: $font-size-xs;
+        
+        i {
+          color: $text-muted;
+          font-size: $font-size-xs;
+          width: 14px;
+          text-align: center;
+        }
+        
+        .detail-label {
+          color: $text-secondary;
+          font-weight: $font-weight-medium;
+          min-width: 70px;
+        }
+        
+        .detail-value {
+          color: $text-primary;
+          font-weight: $font-weight-semibold;
+          flex: 1;
+        }
+      }
+    }
+    
+    .session-options {
+      display: flex;
+      gap: $space-xs;
+      flex-wrap: wrap;
+      align-items: center;
+      
+      .status-badge {
+        @include badge-neutral;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        
+        &.status-active {
+          @include badge-success;
+        }
+        
+        &.status-migration {
+          @include badge-info;
+        }
+      }
     }
   }
-  
-  .form-row {
+
+  // =====================================================
+  // LOG VIEWER PANEL - Professional code display
+  // =====================================================
+
+  .log-viewer-panel {
+    flex: 1;
+    @include card-elevated;
     display: flex;
-    gap: 16px;
+    flex-direction: column;
+    overflow: hidden;
+    
+    .panel-header {
+      @include section-header;
+      padding: $space-lg $space-lg $space-md $space-lg;
+      margin: 0;
+      
+      h3 {
+        font-size: $font-size-lg;
+        font-weight: $font-weight-semibold;
+        color: $text-primary;
+      }
+      
+      .panel-actions {
+        display: flex;
+        align-items: center;
+        gap: $space-md;
+        
+        .auto-refresh-toggle {
+          display: flex;
+          align-items: center;
+          gap: $space-xs;
+          font-size: $font-size-sm;
+          color: $text-secondary;
+          cursor: pointer;
+          transition: $transition-fast;
+          
+          &:hover {
+            color: $primary-blue;
+          }
+          
+          input[type="checkbox"] {
+            margin: 0;
+            transform: scale(0.9);
+            cursor: pointer;
+          }
+        }
+      }
+    }
+    
+    .log-content {
+      flex: 1;
+      overflow: hidden;
+      background: #1e1e1e;
+      border-radius: 0 0 $radius-lg $radius-lg;
+      
+      .log-viewer {
+        width: 100%;
+        height: 100%;
+        background: #1e1e1e;
+        color: #d4d4d4;
+        font-family: $font-family-mono;
+        font-size: $font-size-sm;
+        line-height: $line-height-relaxed;
+        padding: $space-lg;
+        margin: 0;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        border: none;
+        resize: none;
+        outline: none;
+        
+        &::-webkit-scrollbar {
+          width: 8px;
+          height: 8px;
+        }
+        
+        &::-webkit-scrollbar-track {
+          background: #2d2d2d;
+        }
+        
+        &::-webkit-scrollbar-thumb {
+          background: #404040;
+          border-radius: $radius-sm;
+          
+          &:hover {
+            background: #505050;
+          }
+        }
+      }
+    }
+  }
+
+  // =====================================================
+  // LOADING STATES - Elegant spinners
+  // =====================================================
+
+  .loading-container {
+    @include flex-center;
+    flex-direction: column;
+    gap: $space-lg;
+    padding: $space-xxl;
+    flex: 1;
+    
+    .loading-content {
+      @include flex-center;
+      flex-direction: column;
+      gap: $space-lg;
+    }
+    
+    .loading-spinner {
+      position: relative;
+      width: 60px;
+      height: 60px;
+    }
+    
+    .spinner-ring {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border: 3px solid transparent;
+      border-radius: $radius-round;
+      animation: spin 1.5s linear infinite;
+      
+      &:nth-child(1) {
+        border-top-color: $primary-blue;
+        animation-delay: 0s;
+      }
+      
+      &:nth-child(2) {
+        border-top-color: $secondary-purple;
+        animation-delay: 0.3s;
+        transform: scale(0.8);
+      }
+      
+      &:nth-child(3) {
+        border-top-color: $accent-orange;
+        animation-delay: 0.6s;
+        transform: scale(0.6);
+      }
+    }
+    
+    .loading-text {
+      font-size: $font-size-md;
+      color: $text-secondary;
+      font-weight: $font-weight-medium;
+      text-align: center;
+    }
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  // =====================================================
+  // DIALOG STYLES - Modern form design
+  // =====================================================
+
+  .dialog-content {
+    padding: $space-lg;
     
     .form-field {
-      flex: 1;
+      @include form-field;
+      
+      &.checkbox-field {
+        margin-bottom: $space-md;
+        
+        label {
+          display: flex;
+          align-items: center;
+          gap: $space-sm;
+          font-size: $font-size-sm;
+          color: $text-primary;
+          cursor: pointer;
+          margin: 0;
+          font-weight: $font-weight-normal;
+        }
+      }
+      
+      .field-label {
+        display: block;
+        margin-bottom: $space-xs;
+        font-size: $font-size-sm;
+        font-weight: $font-weight-medium;
+        color: $text-primary;
+      }
+      
+      .field-hint {
+        margin-top: $space-xs;
+        font-size: $font-size-xs;
+        color: $text-muted;
+        line-height: $line-height-normal;
+      }
+      
+      input, textarea, select {
+        @include input-base;
+      }
     }
-  }
-}
-
-// Log viewer styles
-.log-viewer {
-  background-color: #1e1e1e;
-  color: #d4d4d4;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 13px;
-  line-height: 1.5;
-  padding: 16px;
-  margin: 0;
-  overflow: auto;
-  height: 100%;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-}
-
-// Status text colors
-.text-success {
-  color: $success-green !important;
-}
-
-.text-danger {
-  color: $error-red !important;
-}
-
-// Button styles following AI dashboard pattern
-.control-btn {
-  padding: 8px 12px;
-  border: 1px solid $gray-medium;
-  border-radius: 4px;
-  background: $white;
-  cursor: pointer;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: $transition;
-  color: $gray-text;
-  font-weight: 500;
-  
-  &:hover {
-    background-color: $gray-lighter;
-    border-color: $primary-blue;
-    color: $primary-blue;
-  }
-  
-  &.active,
-  &.control-btn-primary {
-    background-color: $primary-blue;
-    border-color: $primary-blue;
-    color: $white;
     
-    &:hover {
-      background-color: $primary-blue-hover;
-      border-color: $primary-blue-hover;
+    .form-row {
+      display: flex;
+      gap: $space-md;
+      
+      .form-field {
+        flex: 1;
+      }
     }
   }
-  
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+
+  // =====================================================
+  // RESPONSIVE DESIGN
+  // =====================================================
+
+  @media (max-width: $breakpoint-lg) {
+    .sessions-layout {
+      flex-direction: column;
+      gap: $space-md;
+    }
     
-    &:hover {
-      background-color: $white;
-      border-color: $gray-medium;
-      color: $gray-text;
+    .sessions-panel {
+      width: 100%;
+      max-width: none;
+      max-height: 300px;
+      
+      .sessions-list {
+        display: flex;
+        gap: $space-sm;
+        overflow-x: auto;
+        overflow-y: hidden;
+        
+        .session-card {
+          min-width: 280px;
+          margin-bottom: 0;
+        }
+      }
+    }
+    
+    .log-viewer-panel {
+      .log-content {
+        .log-viewer {
+          font-size: $font-size-xs;
+          padding: $space-md;
+        }
+      }
     }
   }
-  
-  .fa-solid {
-    font-size: 11px;
+
+  @media (max-width: $breakpoint-md) {
+    .sql-logging-container {
+      gap: $space-md;
+    }
+    
+    .dashboard-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: $space-md;
+      
+      .header-controls {
+        width: 100%;
+        justify-content: flex-start;
+      }
+    }
+    
+    .dialog-content {
+      padding: $space-md;
+      
+      .form-row {
+        flex-direction: column;
+      }
+    }
   }
 }
 
-.action-btn {
-  padding: 6px 12px;
-  border: 1px solid $gray-light;
-  border-radius: 3px;
-  background: $white;
-  cursor: pointer;
-  font-size: 11px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  transition: $transition;
-  
-  &:hover {
-    background-color: $gray-lightest;
-    border-color: $gray-dark;
-  }
-  
-  &.action-btn-primary {
-    background-color: $primary-blue;
-    border-color: $primary-blue;
-    color: $white;
-    
-    &:hover {
-      background-color: $primary-blue-hover;
-    }
-  }
-  
-  &.action-btn-danger {
-    &:hover {
-      background-color: $error-red-light;
-      border-color: $error-red;
-      color: $error-red;
-    }
-  }
-  
-  .fa-solid {
-    font-size: 10px;
-  }
-}
+// =====================================================
+// KENDO UI CUSTOMIZATIONS - Global ::ng-deep styles
+// =====================================================
 
-// Kendo UI customizations following AI dashboard pattern
 ::ng-deep {
   .sql-logging-container {
-    .k-button {
-      font-size: 12px;
-      font-weight: 500;
-      padding: 8px 12px;
-      border-radius: 4px;
-      transition: $transition;
-      
-      &.k-button-solid-primary {
-        background-color: $primary-blue;
-        border-color: $primary-blue;
-        
-        &:hover:not(:disabled) {
-          background-color: $primary-blue-hover;
-          border-color: $primary-blue-hover;
-        }
-      }
-      
-      &.k-button-flat {
-        &:hover:not(:disabled) {
-          background-color: $gray-lighter;
-        }
-      }
-      
-      &.k-button-small {
-        font-size: 11px;
-        padding: 6px 10px;
-      }
-      
-      .fa-solid {
-        margin-right: 4px;
-      }
-    }
-    
     .k-dialog {
+      border-radius: $radius-lg;
+      border: none;
+      box-shadow: $shadow-4;
+      
       .k-dialog-titlebar {
-        background-color: $white;
-        border-bottom: 1px solid $gray-light;
-        padding: 16px 24px;
+        background: $white;
+        border-bottom: 1px solid $border-light;
+        border-radius: $radius-lg $radius-lg 0 0;
+        padding: $space-lg $space-lg $space-md $space-lg;
         
         .k-dialog-title {
-          font-size: 16px;
-          font-weight: 600;
-          color: $gray-darkest;
+          font-size: $font-size-lg;
+          font-weight: $font-weight-semibold;
+          color: $text-primary;
         }
+        
+        .k-dialog-close {
+          color: $text-muted;
+          
+          &:hover {
+            color: $text-primary;
+          }
+        }
+      }
+      
+      .k-dialog-content {
+        padding: 0;
       }
       
       .k-dialog-actions {
-        background-color: $background-light;
-        border-top: 1px solid $gray-light;
-        padding: 16px 24px;
-        gap: 8px;
+        background: $background-light;
+        border-top: 1px solid $border-light;
+        border-radius: 0 0 $radius-lg $radius-lg;
+        padding: $space-lg;
+        gap: $space-sm;
+        
+        .k-button {
+          font-size: $font-size-sm;
+          font-weight: $font-weight-medium;
+          padding: $space-sm $space-lg;
+          border-radius: $radius-md;
+          
+          &.k-button-solid-primary {
+            background: $primary-blue;
+            border-color: $primary-blue;
+            
+            &:hover:not(:disabled) {
+              background: $primary-blue-dark;
+              border-color: $primary-blue-dark;
+            }
+          }
+        }
       }
     }
     
     .k-textbox,
     .k-textarea,
     .k-dropdown {
-      font-size: 12px;
-      border-color: $gray-light;
-      
-      &:hover {
-        border-color: $gray-medium;
-      }
-      
-      &:focus,
-      &.k-focus {
-        border-color: $primary-blue;
-        box-shadow: 0 0 0 1px $primary-blue;
-      }
-    }
-    
-    .k-checkbox {
-      margin-right: 6px;
-      cursor: pointer;
-      
-      + span {
-        cursor: pointer;
-      }
+      @include input-base;
+      font-size: $font-size-sm;
     }
     
     .k-dropdown {
       width: 100%;
+    }
+    
+    .k-checkbox {
+      margin-right: $space-xs;
+      transform: scale(0.9);
     }
   }
 }

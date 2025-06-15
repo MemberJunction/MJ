@@ -239,7 +239,7 @@
                                     } @else if (message.executionTime) {
                                         <span class="execution-time">{{ formatExecutionTime(message.executionTime) }}</span>
                                     }
-                                    @if (message.rawContent && !message.isStreaming) {
+                                    @if (showRawToggle(message)) {
                                         <button class="raw-toggle" (click)="toggleRawView(message)" title="Toggle raw/formatted view">
                                             <i class="fa-solid" [class.fa-code]="!message.showRaw" [class.fa-eye]="message.showRaw"></i>
                                         </button>

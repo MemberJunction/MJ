@@ -1,0 +1,317 @@
+// =====================================================
+// MemberJunction Settings - Main Style Import
+// Professional, modern design system
+// =====================================================
+
+@import 'variables';
+@import 'mixins';
+
+// =====================================================
+// GLOBAL SETTINGS STYLES - Applied to all components
+// =====================================================
+
+:host {
+  font-family: $font-family-primary;
+  font-size: $font-size-md;
+  line-height: $line-height-normal;
+  color: $text-primary;
+  
+  * {
+    box-sizing: border-box;
+  }
+}
+
+// =====================================================
+// COMPONENT CLASSES - Ready-to-use styling classes
+// =====================================================
+
+// Cards
+.settings-card {
+  @include card-elevated;
+  @include card-content;
+}
+
+.settings-card-floating {
+  @include card-floating;
+  @include card-content;
+}
+
+.settings-card-sm {
+  @include card-elevated;
+  @include card-content-sm;
+}
+
+.settings-card-lg {
+  @include card-elevated;
+  @include card-content-lg;
+}
+
+// Headers
+.dashboard-header {
+  @include dashboard-header;
+}
+
+.section-header {
+  @include section-header;
+}
+
+// Buttons - Control Button System
+.control-btn {
+  @include btn-secondary;
+  
+  &.control-btn-primary {
+    @include btn-primary;
+  }
+  
+  &.control-btn-danger {
+    @include btn-danger;
+  }
+  
+  &.control-btn-ghost {
+    @include btn-ghost;
+  }
+  
+  &.control-btn-sm {
+    @include btn-sm;
+  }
+  
+  &.control-btn-lg {
+    @include btn-lg;
+  }
+}
+
+// Action Buttons - Smaller, icon-focused
+.action-btn {
+  @include btn-ghost;
+  @include btn-sm;
+  width: $button-height-sm;
+  padding: 0;
+  
+  &.action-btn-primary {
+    @include btn-primary;
+    @include btn-sm;
+    width: $button-height-sm;
+    padding: 0;
+  }
+  
+  &.action-btn-danger {
+    @include btn-danger;
+    @include btn-sm;
+    width: $button-height-sm;
+    padding: 0;
+  }
+}
+
+// Badges
+.info-badge {
+  @include badge-info;
+}
+
+.status-badge {
+  @include badge-neutral;
+  
+  &.status-active {
+    @include badge-success;
+  }
+  
+  &.status-migration {
+    @include badge-info;
+  }
+  
+  &.status-warning {
+    @include badge-warning;
+  }
+  
+  &.status-error {
+    @include badge-error;
+  }
+}
+
+// Navigation
+.settings-nav {
+  @include nav-container;
+  
+  .nav-item {
+    @include nav-item;
+  }
+}
+
+// Forms
+.form-field {
+  @include form-field;
+  
+  input, textarea, select {
+    @include input-base;
+  }
+}
+
+.form-row {
+  display: flex;
+  gap: $space-md;
+  
+  .form-field {
+    flex: 1;
+  }
+}
+
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  margin-bottom: $space-md;
+  
+  label {
+    display: flex;
+    align-items: center;
+    gap: $space-sm;
+    font-size: $font-size-sm;
+    color: $text-primary;
+    cursor: pointer;
+    margin: 0;
+  }
+}
+
+// Status
+.status-bar {
+  @include status-bar;
+}
+
+// Empty States
+.empty-state {
+  @include flex-center;
+  flex-direction: column;
+  gap: $space-md;
+  padding: $space-xxl;
+  text-align: center;
+  color: $text-secondary;
+  
+  i {
+    font-size: 48px;
+    color: $text-muted;
+    margin-bottom: $space-sm;
+  }
+  
+  h3 {
+    margin: 0;
+    font-size: $font-size-xl;
+    font-weight: $font-weight-medium;
+    color: $text-primary;
+  }
+  
+  p {
+    margin: 0;
+    font-size: $font-size-md;
+    max-width: 400px;
+    line-height: $line-height-relaxed;
+  }
+}
+
+// Loading States
+.loading-container {
+  @include flex-center;
+  flex-direction: column;
+  gap: $space-md;
+  padding: $space-xxl;
+  
+  .loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid $border-light;
+    border-top-color: $primary-blue;
+    border-radius: $radius-round;
+    animation: spin 1s linear infinite;
+  }
+  
+  .loading-text {
+    font-size: $font-size-sm;
+    color: $text-secondary;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// Text Utilities
+.text-success {
+  color: $success-green !important;
+}
+
+.text-warning {
+  color: $warning-amber !important;
+}
+
+.text-danger {
+  color: $error-red !important;
+}
+
+.text-info {
+  color: $info-cyan !important;
+}
+
+.text-muted {
+  color: $text-muted !important;
+}
+
+.text-primary {
+  color: $text-primary !important;
+}
+
+.text-secondary {
+  color: $text-secondary !important;
+}
+
+// Spacing Utilities
+.mb-0 { margin-bottom: 0 !important; }
+.mb-1 { margin-bottom: $space-xs !important; }
+.mb-2 { margin-bottom: $space-sm !important; }
+.mb-3 { margin-bottom: $space-md !important; }
+.mb-4 { margin-bottom: $space-lg !important; }
+.mb-5 { margin-bottom: $space-xl !important; }
+
+.mt-0 { margin-top: 0 !important; }
+.mt-1 { margin-top: $space-xs !important; }
+.mt-2 { margin-top: $space-sm !important; }
+.mt-3 { margin-top: $space-md !important; }
+.mt-4 { margin-top: $space-lg !important; }
+.mt-5 { margin-top: $space-xl !important; }
+
+// Display Utilities
+.d-flex { display: flex !important; }
+.d-block { display: block !important; }
+.d-inline-block { display: inline-block !important; }
+.d-none { display: none !important; }
+
+.flex-1 { flex: 1 !important; }
+.flex-column { flex-direction: column !important; }
+.flex-row { flex-direction: row !important; }
+.align-center { align-items: center !important; }
+.justify-center { justify-content: center !important; }
+.justify-between { justify-content: space-between !important; }
+
+// =====================================================
+// RESPONSIVE UTILITIES
+// =====================================================
+
+@media (max-width: $breakpoint-md) {
+  .settings-card {
+    @include card-content-sm;
+  }
+  
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: $space-md;
+    
+    .header-controls {
+      width: 100%;
+      justify-content: flex-start;
+    }
+  }
+  
+  .form-row {
+    flex-direction: column;
+  }
+}

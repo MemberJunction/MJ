@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ViewEncapsulation } from '@angular/core';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 import { BaseEntity, Metadata } from '@memberjunction/core';
 import { ApplicationEntity, RoleEntity, UserEntity } from '@memberjunction/core-entities';
@@ -21,7 +21,8 @@ export enum SettingsItem {
 @Component({
   selector: 'mj-settings',
   templateUrl: './settings.component.html',
-  styleUrls: ['./settings.component.scss']
+  styleUrls: ['./settings.component.scss'],
+  encapsulation: ViewEncapsulation.None
 })
 @RegisterClass(BaseNavigationComponent, 'Settings')
 export class SettingsComponent extends BaseNavigationComponent implements OnInit {
@@ -192,5 +193,46 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
     // if the currentItem matches it directly or if adding an S to the current item matches it, then return true
     // for example for Application/Applications we want to match so the left nav item is highlighted
     return option.value === this.currentItem || option.value === this.currentItem + 's';
+  }
+
+  /**
+   * Returns the appropriate Font Awesome icon class for navigation items
+   */
+  public getNavIcon(settingsItem: SettingsItem): string {
+    const iconMap: { [key in SettingsItem]: string } = {
+      [SettingsItem.Users]: 'fa-solid fa-users',
+      [SettingsItem.User]: 'fa-solid fa-user',
+      [SettingsItem.Roles]: 'fa-solid fa-user-shield',
+      [SettingsItem.Role]: 'fa-solid fa-shield-alt',
+      [SettingsItem.Applications]: 'fa-solid fa-th-large',
+      [SettingsItem.Application]: 'fa-solid fa-cube',
+      [SettingsItem.EntityPermissions]: 'fa-solid fa-lock',
+      [SettingsItem.SqlLogging]: 'fa-solid fa-database'
+    };
+    return iconMap[settingsItem] || 'fa-solid fa-cog';
+  }
+
+  /**
+   * Returns badge text for navigation items (if applicable)
+   */
+  public getNavBadge(settingsItem: SettingsItem): string | null {
+    switch (settingsItem) {
+      case SettingsItem.SqlLogging:
+        return 'Beta';
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Returns badge CSS class for navigation items
+   */
+  public getNavBadgeClass(settingsItem: SettingsItem): string {
+    switch (settingsItem) {
+      case SettingsItem.SqlLogging:
+        return 'nav-badge-warning';
+      default:
+        return 'nav-badge';
+    }
   }
 }

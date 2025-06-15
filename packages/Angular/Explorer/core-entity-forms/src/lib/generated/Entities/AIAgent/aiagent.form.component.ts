@@ -3,6 +3,7 @@ import { AIAgentEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadAIAgentDetailsComponent } from "./sections/details.component"
+import { LoadAIAgentFormOverviewComponent } from "./sections/aiagent-form-overview.component"
 import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'AI Agents') // Tell MemberJunction about this class
@@ -17,4 +18,5 @@ export class AIAgentFormComponent extends BaseFormComponent {
 
 export function LoadAIAgentFormComponent() {
     LoadAIAgentDetailsComponent();
+    LoadAIAgentFormOverviewComponent();
 }

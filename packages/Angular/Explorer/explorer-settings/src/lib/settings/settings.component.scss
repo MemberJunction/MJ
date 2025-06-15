@@ -1,14 +1,8 @@
-// Modern color palette inspired by AI dashboard
-$primary-blue: #2196f3;
-$primary-blue-dark: #1976d2;
-$primary-blue-light: rgba(33, 150, 243, 0.1);
-$background-light: #f8f9fa;
-$background-white: #ffffff;
-$border-color: #e0e0e0;
-$text-primary: #333;
-$text-secondary: #666;
-$box-shadow-hover: 0 2px 8px rgba(33, 150, 243, 0.2);
-$transition: all 0.2s ease;
+// =====================================================
+// Settings Component - Modern Professional Design
+// =====================================================
+
+@import '../shared/styles/shared-settings';
 
 :host {
   display: block;
@@ -17,92 +11,136 @@ $transition: all 0.2s ease;
   position: relative;
 }
 
+// Main container styles
 .container {
-  display: flex !important;
-  flex-direction: row !important;
+  display: flex;
+  flex-direction: row;
   width: 100%;
   height: 100%;
-  min-height: 0; // Important for flexbox children
+  min-height: 0;
   overflow: hidden;
-  background-color: $background-light;
+  background: $background-light;
   position: relative;
-  
-  // Clear any floats
-  &::after {
-    content: '';
-    display: table;
-    clear: both;
-  }
 }
 
+// Navigation sidebar
 .options-container {
-  width: 200px;
-  min-width: 200px;
-  max-width: 200px;
-  flex: 0 0 200px;
-  background-color: $background-white;
-  border-right: 1px solid $border-color;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  padding: 16px 0;
-  height: 100%;
-  overflow-y: auto;
+  @include nav-container;
+  padding: $space-lg 0;
+  
+  .nav-header {
+    padding: 0 $space-md $space-md $space-md;
+    
+    h2 {
+      margin: 0;
+      font-size: $font-size-lg;
+      font-weight: $font-weight-semibold;
+      color: $text-primary;
+    }
+    
+    .nav-subtitle {
+      font-size: $font-size-xs;
+      color: $text-muted;
+      margin-top: $space-xs;
+    }
+  }
+  
+  .nav-divider {
+    height: 1px;
+    background: $border-light;
+    margin: $space-md 0;
+  }
 }
 
+// Navigation items
 .option-item {
-  cursor: pointer;
-  padding: 12px 20px;
-  margin: 0 12px 4px 12px;
-  border-radius: 6px;
-  font-size: 14px;
-  color: $text-primary;
-  transition: $transition;
-  position: relative;
+  @include nav-item;
   
-  &::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 3px;
-    height: 0;
-    background-color: $primary-blue;
-    transition: height 0.2s ease;
+  .nav-icon {
+    width: 18px;
+    text-align: center;
+    font-size: $font-size-md;
   }
   
-  &:hover {
-    background-color: $background-light;
-    color: $primary-blue;
+  .nav-label {
+    flex: 1;
+    font-size: $font-size-sm;
   }
   
-  &.selected {
-    background-color: $primary-blue-light;
-    color: $primary-blue;
-    font-weight: 500;
+  .nav-badge {
+    @include badge-info;
+    font-size: 10px;
+    padding: 0 6px;
+    height: 16px;
     
-    &::before {
-      height: 24px;
+    &.nav-badge-warning {
+      @include badge-warning;
+    }
+    
+    &.nav-badge-success {
+      @include badge-success;
     }
   }
 }
 
+// Main content area
 .display-container {
   flex: 1 1 auto;
-  min-width: 0; // Important for flexbox
-  overflow: auto;
-  box-sizing: border-box;
-  background-color: $background-white;
-  padding: 20px;
-  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+  background: $background-light;
   display: flex;
   flex-direction: column;
   
-  // Ensure child components can fill the container
-  > * {
+  .content-wrapper {
     flex: 1;
     min-height: 0;
+    overflow: auto;
+    padding: $space-lg;
+    
+    // Ensure child components can fill properly
+    > * {
+      width: 100%;
+      min-height: 100%;
+    }
+  }
+}
+
+// Modern fade-in animation for content
+.content-enter {
+  opacity: 0;
+  transform: translateY(10px);
+  animation: contentFadeIn 0.3s ease-out forwards;
+}
+
+@keyframes contentFadeIn {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// Responsive design
+@media (max-width: $breakpoint-md) {
+  .container {
+    flex-direction: column;
+  }
+  
+  .options-container {
     width: 100%;
+    max-width: none;
+    flex: 0 0 auto;
+    border-right: none;
+    border-bottom: 1px solid $border-light;
+    
+    .option-item {
+      margin: 0 $space-sm $space-xs $space-sm;
+    }
+  }
+  
+  .display-container {
+    .content-wrapper {
+      padding: $space-md;
+    }
   }
 }

@@ -29,6 +29,17 @@
             Stop All
           </button>
         }
+        
+        <!-- Debug button for testing contextUser flow -->
+        <button 
+          class="control-btn control-btn-warning"
+          (click)="debugUserEmail()"
+          [disabled]="loading"
+          title="Test contextUser flow for SQL filtering"
+        >
+          <i class="fa-solid fa-bug"></i>
+          Test Context
+        </button>
       }
     </div>
   </div>

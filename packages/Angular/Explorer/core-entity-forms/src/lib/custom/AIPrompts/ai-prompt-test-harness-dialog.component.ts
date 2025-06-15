@@ -20,7 +20,7 @@ export interface AIPromptTestHarnessDialogData {
             <div class="dialog-header">
                 <h2>{{ title }}</h2>
                 <button class="close-button" (click)="close()">
-                    <span class="k-icon k-i-close"></span>
+                    <i class="fa-solid fa-times"></i>
                 </button>
             </div>
             <div class="dialog-content">

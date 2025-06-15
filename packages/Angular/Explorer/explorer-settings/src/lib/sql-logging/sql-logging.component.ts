@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewEncapsulation } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject, interval } from 'rxjs';
@@ -46,7 +46,8 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
     CheckBoxModule
   ],
   templateUrl: './sql-logging.component.html',
-  styleUrls: ['./sql-logging.component.scss']
+  styleUrls: ['./sql-logging.component.scss'],
+  encapsulation: ViewEncapsulation.None
 })
 export class SqlLoggingComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
@@ -394,19 +395,55 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
   }
   
   /**
-   * Loads the log file content for a specific session.
-   * Currently shows placeholder content; full implementation would read actual file.
+   * Loads the log file content for a specific session using real-time GraphQL query.
+   * Reads actual SQL statements from the log file on the server.
    * 
    * @param session - The session whose log to load
    */
   async loadSessionLog(session: any) {
     try {
-      // For now, show the file path. In a full implementation,
-      // you would read the file contents from the server
-      this.logContent = `-- SQL Log File: ${session.filePath}\n-- Session: ${session.sessionName}\n-- Started: ${new Date(session.startTime).toLocaleString()}\n-- Statements: ${session.statementCount}\n\n-- Log contents would appear here...\n-- This requires file reading capability on the server`;
-    } catch (error) {
+      const dataProvider = Metadata.Provider as GraphQLDataProvider;
+      const query = `
+        query ReadSqlLogFile($sessionId: String!, $maxLines: Int) {
+          readSqlLogFile(sessionId: $sessionId, maxLines: $maxLines)
+        }
+      `;
+      
+      const variables = {
+        sessionId: session.id,
+        maxLines: 1000 // Limit to last 1000 lines for performance
+      };
+      
+      const result = await dataProvider.ExecuteGQL(query, variables);
+      
+      if (result.errors) {
+        throw new Error(result.errors[0].message);
+      }
+      
+      const logContent = result?.readSqlLogFile || '';
+      
+      // Add session header information (show only filename for security)
+      const fileName = session.filePath ? session.filePath.split(/[\\\/]/).pop() : 'unknown';
+      const header = `-- =====================================================\n` +
+                   `-- SQL Log File: ${fileName}\n` +
+                   `-- Session: ${session.sessionName}\n` +
+                   `-- Started: ${new Date(session.startTime).toLocaleString()}\n` +
+                   `-- Statements Captured: ${session.statementCount}\n` +
+                   `-- User Filter: ${session.filterByUserId || 'All Users'}\n` +
+                   `-- Statement Types: ${session.options?.statementTypes || 'both'}\n` +
+                   `-- Pretty Print: ${session.options?.prettyPrint ? 'Yes' : 'No'}\n` +
+                   `-- Migration Format: ${session.options?.formatAsMigration ? 'Yes' : 'No'}\n` +
+                   `-- =====================================================\n\n`;
+      
+      this.logContent = header + (logContent || '-- No SQL statements captured yet --');
+      
+    } catch (error: any) {
       console.error('Error loading session log:', error);
-      this.logContent = 'Error loading log file';
+      this.logContent = `-- Error loading log file --\n-- ${error.message || 'Unknown error occurred'} --\n\n` +
+                       `-- Session Info --\n` +
+                       `-- File: ${session.filePath}\n` +
+                       `-- Session: ${session.sessionName}\n` +
+                       `-- Started: ${new Date(session.startTime).toLocaleString()}\n`;
     }
   }
   
@@ -573,6 +610,51 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
       console.log('Permissions refreshed');
     } catch (error) {
       console.error('Error refreshing permissions:', error);
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  /**
+   * Extracts the filename from a full file path for security purposes.
+   * Only shows the filename, not the full server path.
+   * 
+   * @param filePath - Full file path from server
+   * @returns Just the filename portion
+   */
+  getFileName(filePath: string): string {
+    if (!filePath) return 'unknown';
+    return filePath.split(/[\\\/]/).pop() || 'unknown';
+  }
+
+  /**
+   * Debug method to test contextUser flow for SQL filtering.
+   * This shows how the new architecture handles user context without storing email in provider.
+   */
+  async debugUserEmail() {
+    try {
+      this.loading = true;
+      
+      const dataProvider = Metadata.Provider as GraphQLDataProvider;
+      const query = `
+        query DebugCurrentUserEmail {
+          debugCurrentUserEmail
+        }
+      `;
+      
+      const result = await dataProvider.ExecuteGQL(query, {});
+      
+      if (result.errors) {
+        throw new Error(result.errors[0].message);
+      }
+      
+      const debugInfo = result?.debugCurrentUserEmail || 'No debug info returned';
+      
+      alert(`Context User Info:\n\n${debugInfo}\n\nThe system now passes user context through method calls instead of storing it in the provider.`);
+      
+    } catch (error: any) {
+      console.error('Error getting context user info:', error);
+      alert(`Error: ${error.message || 'Failed to get debug info'}`);
     } finally {
       this.loading = false;
     }

@@ -1,84 +1,94 @@
 <div class="container">
-    <!-- Options container -->
+    <!-- Navigation Sidebar -->
     <div class="options-container">
+        <div class="nav-header">
+            <h2>Settings</h2>
+            <div class="nav-subtitle">System Configuration</div>
+        </div>
+        
+        <div class="nav-divider"></div>
+        
         <div *ngFor="let o of options"
             class="option-item"
-            [class.selected]="leftNavItemSelected(o)"
+            [class.active]="leftNavItemSelected(o)"
             (click)="selectItem(o.value)"
-        >{{o.label}}</div>
+        >
+            <i class="nav-icon" [class]="getNavIcon(o.value)"></i>
+            <span class="nav-label">{{o.label}}</span>
+            @if (getNavBadge(o.value)) {
+                <span class="nav-badge" [class]="getNavBadgeClass(o.value)">{{getNavBadge(o.value)}}</span>
+            }
+        </div>
     </div>
 
-    <!-- Display container -->
+    <!-- Main Content Area -->
     <div class="display-container">
-        <!-- <mj-join-grid
-            RowsEntityName="Entities"
-            RowsEntityDisplayField="Name"
-            RowsEntityDataSource="FullEntity"
-            RowsExtraFilter="SchemaName <> '__mj' AND (Name like 'a%' or Name like 'p%')"
-            RowsOrderBy="Name"
-            ColumnsEntityName="Actions"
-            ColumnsEntityDisplayField="Name"
-            ColumnsEntityDataSource= "FullEntity"
-            ColumnsMode="Entity"
-            ColumnsExtraFilter="Name like 'v%' or Name like 'd%' or Name like 'test%'"
-            ColumnsOrderBy="Name"
-            JoinEntityName="Entity Actions"
-            JoinEntityRowForeignKey="EntityID"
-            JoinEntityColumnForeignKey="ActionID"
-            CheckBoxValueMode="RecordExists"
-            
-            style="height: 750px; width: 800px;"
-        >
-
-        </mj-join-grid> -->
-        @switch (currentItem) {
-            @case ('EntityPermissions') {
-                <mj-entity-permissions-selector-with-grid></mj-entity-permissions-selector-with-grid>
+        <div class="content-wrapper">
+            @switch (currentItem) {
+                @case ('EntityPermissions') {
+                    <div class="content-enter">
+                        <mj-entity-permissions-selector-with-grid></mj-entity-permissions-selector-with-grid>
+                    </div>
+                }
+                @case ('Users') {
+                    <div class="content-enter">
+                        <mj-simple-record-list
+                            EntityName="Users"
+                            SortBy="Name"
+                            [Columns]="['Name', 'Email', 'IsActive', 'Type']" 
+                            [AllowDelete]="false"
+                            [AllowCustomAction]="true"
+                            [CustomActionIconFunction]="getUserToggleIcon"
+                            [CustomActionTooltipFunction]="getUserToggleTooltip"
+                            [CustomActionDialogTitle]="'Toggle User Activation'"
+                            [CustomActionDialogMessage]="'Are you sure you want to toggle activation for this user?'"
+                            [CustomActionDialogInfo]="'Active users can log in to the system. Inactive users cannot log in.'"
+                            (RecordSelected)="selectUser($event)"
+                            (CustomActionConfirmed)="toggleUserActivation($event)"
+                        ></mj-simple-record-list>
+                    </div>
+                }
+                @case ('User') {
+                    <div class="content-enter">
+                        <mj-single-user [UserID]="selectedUserID"></mj-single-user>
+                    </div>
+                }
+                @case ('Roles') {
+                    <div class="content-enter">
+                        <mj-simple-record-list
+                            EntityName="Roles"
+                            SortBy="Name"
+                            [Columns]="['Name', 'Description']"
+                            (RecordSelected)="selectRole($event)"
+                        ></mj-simple-record-list>
+                    </div>
+                }
+                @case ('Role') {
+                    <div class="content-enter">
+                        <mj-single-role [RoleID]="selectedRoleID"></mj-single-role>
+                    </div>
+                }
+                @case ('Applications') {
+                    <div class="content-enter">
+                        <mj-simple-record-list
+                            EntityName="Applications"
+                            SortBy="Name"
+                            [Columns]="['Name', 'Description']"
+                            (RecordSelected)="selectApplication($event)"
+                        ></mj-simple-record-list>
+                    </div>
+                }
+                @case ('Application') {
+                    <div class="content-enter">
+                        <mj-single-application [ApplicationID]="selectedApplicationID"></mj-single-application>
+                    </div>
+                }
+                @case ('SqlLogging') {
+                    <div class="content-enter">
+                        <mj-sql-logging></mj-sql-logging>
+                    </div>
+                }
             }
-            @case ('Users') {
-                <mj-simple-record-list
-                    EntityName="Users"
-                    SortBy="Name"
-                    [Columns]="['Name', 'Email', 'IsActive', 'Type']" 
-                    [AllowDelete]="false"
-                    [AllowCustomAction]="true"
-                    [CustomActionIconFunction]="getUserToggleIcon"
-                    [CustomActionTooltipFunction]="getUserToggleTooltip"
-                    [CustomActionDialogTitle]="'Toggle User Activation'"
-                    [CustomActionDialogMessage]="'Are you sure you want to toggle activation for this user?'"
-                    [CustomActionDialogInfo]="'Active users can log in to the system. Inactive users cannot log in.'"
-                    (RecordSelected)="selectUser($event)"
-                    (CustomActionConfirmed)="toggleUserActivation($event)"
-                ></mj-simple-record-list>
-            }
-            @case ('User') {
-                <mj-single-user [UserID]="selectedUserID"></mj-single-user>
-            }
-            @case ('Roles') {
-                <mj-simple-record-list
-                    EntityName="Roles"
-                    SortBy="Name"
-                    [Columns]="['Name', 'Description']"
-                    (RecordSelected)="selectRole($event)"
-                ></mj-simple-record-list>
-            }
-            @case ('Role') {
-                <mj-single-role [RoleID]="selectedRoleID"></mj-single-role>
-            }
-            @case ('Applications') {
-                <mj-simple-record-list
-                    EntityName="Applications"
-                    SortBy="Name"
-                    [Columns]="['Name', 'Description']"
-                    (RecordSelected)="selectApplication($event)"
-                ></mj-simple-record-list>
-            }
-            @case ('Application') {
-                <mj-single-application [ApplicationID]="selectedApplicationID"></mj-single-application>
-            }
-            @case ('SqlLogging') {
-                <mj-sql-logging></mj-sql-logging>
-            }
-        }
+        </div>
     </div>
 </div>

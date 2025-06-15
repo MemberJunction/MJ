@@ -356,6 +356,155 @@
     overflow-x: hidden;
 }
 
+/* Enhanced JSON content display */
+.json-content-wrapper {
+    margin: 8px 0;
+}
+
+.json-main-content {
+    margin-bottom: 12px;
+}
+
+.json-raw-section {
+    border-top: 1px solid #e9ecef;
+    padding-top: 12px;
+    margin-top: 12px;
+}
+
+.json-toggle-button {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: #6c757d;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.json-toggle-button:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+    color: #495057;
+}
+
+.json-toggle-button i {
+    font-size: 11px;
+}
+
+/* Compact code block for JSON in collapsible sections */
+.json-raw-section .code-block {
+    margin: 8px 0 0 0;
+    font-size: 12px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* Better mobile responsiveness for JSON content */
+@media (max-width: 768px) {
+    .json-raw-section .code-block {
+        font-size: 11px;
+        max-height: 200px;
+    }
+}
+
+/* Enhanced JSON display with proper text wrapping */
+.json-display-container {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 12px;
+    margin: 8px 0 0 0;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #212529;
+    max-height: 300px;
+    overflow-y: auto;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+.json-property {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.json-key {
+    color: #0066cc;
+    font-weight: 500;
+}
+
+.json-string {
+    color: #22863a;
+}
+
+.json-string-content {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+    max-width: 100%;
+}
+
+.json-number {
+    color: #005cc5;
+}
+
+.json-boolean {
+    color: #d73a49;
+    font-weight: 500;
+}
+
+.json-null {
+    color: #6f42c1;
+    font-style: italic;
+}
+
+.json-bracket {
+    color: #24292e;
+    font-weight: 600;
+}
+
+.json-colon {
+    color: #24292e;
+    margin: 0 4px;
+}
+
+.json-array-item {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.json-indent {
+    display: inline;
+}
+
+.json-fallback {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    padding: 8px;
+    border-radius: 4px;
+    color: #856404;
+    font-family: monospace;
+    font-size: 12px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+@media (max-width: 768px) {
+    .json-display-container {
+        font-size: 11px;
+        max-height: 200px;
+        padding: 8px;
+    }
+}
+
 .message-user .message-content {
     background: #e3f2fd;
     border-color: #90caf9;
