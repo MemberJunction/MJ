@@ -81,9 +81,7 @@ export async function initializeProvider(config: MJConfig): Promise<SQLServerDat
     // Create provider config
     const providerConfig = new SQLServerProviderConfigData(
       pool,
-      'system@sync.cli', // Default user for CLI
-      config.mjCoreSchema || '__mj',
-      0
+      config.mjCoreSchema || '__mj' 
     );
     
     // Use setupSQLServerClient to properly initialize

@@ -264,6 +264,10 @@ export class SQLServerDataProvider
     };
   }
 
+  public async GetCurrentUser(): Promise<UserInfo> {
+    return this.CurrentUser;
+  }
+
   /**
    * Gets information about all active SQL logging sessions.
    * Useful for monitoring and debugging.

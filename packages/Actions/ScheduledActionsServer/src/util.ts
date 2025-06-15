@@ -14,7 +14,7 @@ let _serverInitalized = false;
 export async function handleServerInit(autoRefresh: boolean = false) {
     if (!_serverInitalized) {
         await pool.connect(); // Connect the pool first
-        const config = new SQLServerProviderConfigData(pool, currentUserEmail, mjCoreSchema, autoRefresh ? autoRefreshInterval : 0/*no auto refreshes*/);
+        const config = new SQLServerProviderConfigData(pool, mjCoreSchema, autoRefresh ? autoRefreshInterval : 0/*no auto refreshes*/);
         await setupSQLServerClient(config);
         _serverInitalized = true;
     }
