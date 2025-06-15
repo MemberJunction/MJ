@@ -24,3 +24,42 @@ export * from './custom/web/web-search.action';
 export * from './custom/web/web-page-content.action';
 export * from './custom/web/url-link-validator.action';
 export * from './custom/web/url-metadata-extractor.action';
+
+// Import Load functions to prevent tree shaking of @RegisterClass decorators
+import { LoadSendSingleMessageAction } from './custom/communication/send-single-message.action';
+import { LoadGetWeatherAction } from './custom/demo/get-weather.action';
+import { LoadGetStockPriceAction } from './custom/demo/get-stock-price.action';
+import { LoadCalculateExpressionAction } from './custom/demo/calculate-expression.action';
+import { LoadColorConverterAction } from './custom/demo/color-converter.action';
+import { LoadTextAnalyzerAction } from './custom/demo/text-analyzer.action';
+import { LoadUnitConverterAction } from './custom/demo/unit-converter.action';
+import { LoadVectorizeEntityAction } from './custom/utilities/vectorize-entity.action';
+import { LoadBusinessDaysCalculatorAction } from './custom/utilities/business-days-calculator.action';
+import { LoadIPGeolocationAction } from './custom/utilities/ip-geolocation.action';
+import { LoadCensusDataLookupAction } from './custom/utilities/census-data-lookup.action';
+import { LoadExternalChangeDetectionAction } from './custom/utilities/external-change-detection.action';
+import { LoadQRCodeAction } from './custom/utilities/qr-code.action';
+import { LoadWebSearchAction } from './custom/web/web-search.action';
+import { LoadWebPageContentAction } from './custom/web/web-page-content.action';
+import { LoadURLLinkValidatorAction } from './custom/web/url-link-validator.action';
+import { LoadURLMetadataExtractorAction } from './custom/web/url-metadata-extractor.action';
+
+// Call all Load functions to ensure @RegisterClass decorators execute
+// This prevents tree shaking from removing the action classes
+LoadSendSingleMessageAction();
+LoadGetWeatherAction();
+LoadGetStockPriceAction();
+LoadCalculateExpressionAction();
+LoadColorConverterAction();
+LoadTextAnalyzerAction();
+LoadUnitConverterAction();
+LoadVectorizeEntityAction();
+LoadBusinessDaysCalculatorAction();
+LoadIPGeolocationAction();
+LoadCensusDataLookupAction();
+LoadExternalChangeDetectionAction();
+LoadQRCodeAction();
+LoadWebSearchAction();
+LoadWebPageContentAction();
+LoadURLLinkValidatorAction();
+LoadURLMetadataExtractorAction();

@@ -72,20 +72,63 @@ export class WebSearchAction extends BaseAction {
                 };
             }
 
-            // Use DuckDuckGo's HTML search (no API key required)
-            const searchUrl = `https://html.duckduckgo.com/html/`;
-            const formData = new URLSearchParams();
-            formData.append('q', searchTerms);
-            formData.append('kl', region);
-            formData.append('safe', safeSearch === 'strict' ? 'strict' : safeSearch === 'off' ? '-1' : 'moderate');
+            // Try DuckDuckGo Instant Answer API first (JSON response)
+            let response: Response;
+            let html: string = '';
+            let useInstantAPI = true;
 
-            const response = await fetch(searchUrl, {
-                method: 'POST',
+            try {
+                // Try the Instant Answer API first (more reliable)
+                const instantUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(searchTerms)}&format=json&no_html=1&skip_disambig=1`;
+                
+                response = await fetch(instantUrl, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                    }
+                });
+
+                if (response.ok) {
+                    const jsonData = await response.text();
+                    const instantResults = this.parseInstantResults(jsonData, maxResults);
+                    
+                    if (instantResults.length > 0) {
+                        const resultData = {
+                            searchTerms,
+                            totalResults: instantResults.length,
+                            maxResults,
+                            region,
+                            safeSearch,
+                            results: instantResults,
+                            searchUrl: `https://duckduckgo.com/?q=${encodeURIComponent(searchTerms)}`,
+                            method: 'instant-api'
+                        };
+
+                        return {
+                            Success: true,
+                            ResultCode: "SUCCESS",
+                            Message: JSON.stringify(resultData, null, 2)
+                        };
+                    }
+                }
+            } catch (error) {
+                // Instant API failed, fall back to HTML scraping
+                useInstantAPI = false;
+            }
+
+            // Fallback to HTML search with more realistic headers
+            const searchUrl = `https://duckduckgo.com/html/?q=${encodeURIComponent(searchTerms)}&kl=${region}`;
+            
+            response = await fetch(searchUrl, {
+                method: 'GET',
                 headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'User-Agent': 'Mozilla/5.0 (compatible; MemberJunction/1.0; +https://memberjunction.org)'
-                },
-                body: formData
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.5',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'DNT': '1',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1'
+                }
             });
 
             if (!response.ok) {
@@ -96,13 +139,23 @@ export class WebSearchAction extends BaseAction {
                 };
             }
 
-            const html = await response.text();
+            html = await response.text();
+            
+            // Check if we got an empty or invalid response
+            if (!html || html.length < 1000 || !html.includes('result')) {
+                return {
+                    Success: false,
+                    Message: "DuckDuckGo returned empty or invalid response. This may be due to rate limiting or anti-bot measures.",
+                    ResultCode: "EMPTY_RESPONSE"
+                };
+            }
+            
             const results = this.parseSearchResults(html, maxResults);
 
             if (results.length === 0) {
                 return {
                     Success: false,
-                    Message: "No search results found",
+                    Message: "No search results found in response",
                     ResultCode: "NO_RESULTS"
                 };
             }
@@ -114,7 +167,8 @@ export class WebSearchAction extends BaseAction {
                 region,
                 safeSearch,
                 results,
-                searchUrl: `https://duckduckgo.com/?q=${encodeURIComponent(searchTerms)}`
+                searchUrl: `https://duckduckgo.com/?q=${encodeURIComponent(searchTerms)}`,
+                method: 'html-scraping'
             };
 
             return {
@@ -133,47 +187,177 @@ export class WebSearchAction extends BaseAction {
     }
 
     /**
+     * Parses DuckDuckGo Instant Answer API JSON response
+     */
+    private parseInstantResults(jsonData: string, maxResults: number): any[] {
+        const results: any[] = [];
+        
+        try {
+            const data = JSON.parse(jsonData);
+            
+            // Handle abstract (summary) if available
+            if (data.Abstract && data.AbstractText) {
+                results.push({
+                    title: data.Heading || 'Summary',
+                    url: data.AbstractURL || '',
+                    displayUrl: data.AbstractSource || '',
+                    snippet: data.AbstractText,
+                    rank: 1,
+                    type: 'abstract'
+                });
+            }
+
+            // Handle related topics
+            if (data.RelatedTopics && Array.isArray(data.RelatedTopics)) {
+                let rank = results.length + 1;
+                for (const topic of data.RelatedTopics.slice(0, maxResults - results.length)) {
+                    if (topic.FirstURL && topic.Text) {
+                        results.push({
+                            title: topic.Text.split(' - ')[0] || 'Related Topic',
+                            url: topic.FirstURL,
+                            displayUrl: this.extractDomain(topic.FirstURL),
+                            snippet: topic.Text,
+                            rank: rank++,
+                            type: 'related'
+                        });
+                    }
+                }
+            }
+
+            // Handle definition if available
+            if (data.Definition && data.DefinitionURL) {
+                results.push({
+                    title: `Definition: ${data.Heading || 'Term'}`,
+                    url: data.DefinitionURL,
+                    displayUrl: data.DefinitionSource || '',
+                    snippet: data.Definition,
+                    rank: results.length + 1,
+                    type: 'definition'
+                });
+            }
+
+            // Handle answer if available
+            if (data.Answer) {
+                results.push({
+                    title: 'Direct Answer',
+                    url: '',
+                    displayUrl: 'DuckDuckGo',
+                    snippet: data.Answer,
+                    rank: results.length + 1,
+                    type: 'answer'
+                });
+            }
+
+        } catch (error) {
+            console.error('Error parsing instant results:', error);
+        }
+
+        return results.slice(0, maxResults);
+    }
+
+    /**
+     * Extracts domain from URL
+     */
+    private extractDomain(url: string): string {
+        try {
+            return new URL(url).hostname;
+        } catch {
+            return url;
+        }
+    }
+
+    /**
      * Parses DuckDuckGo HTML search results
      */
     private parseSearchResults(html: string, maxResults: number): any[] {
         const results: any[] = [];
         
         try {
-            // Simple regex-based parsing for DuckDuckGo results
-            // Look for result containers with class 'result'
-            const resultRegex = /<div class="result[^"]*"[^>]*>(.*?)<\/div>/gs;
-            const linkRegex = /<a[^>]+href="([^"]+)"[^>]*class="result__a"[^>]*>(.*?)<\/a>/s;
-            const snippetRegex = /<a[^>]+result__snippet[^>]*>(.*?)<\/a>/s;
-            const urlDisplayRegex = /<span class="result__url[^>]*>(.*?)<\/span>/s;
+            // Improved regex patterns for DuckDuckGo HTML structure
+            // DuckDuckGo uses different class names, try multiple patterns
+            const resultPatterns = [
+                // Standard result pattern
+                /<div class="[^"]*result[^"]*"[^>]*>(.*?)<\/div>/gs,
+                // Alternative result pattern
+                /<div[^>]+data-testid="result"[^>]*>(.*?)<\/div>/gs,
+                // Links result pattern  
+                /<div class="[^"]*links_main[^"]*"[^>]*>(.*?)<\/div>/gs
+            ];
+
+            const linkPatterns = [
+                /<a[^>]+href="([^"]+)"[^>]*class="[^"]*result__a[^"]*"[^>]*>(.*?)<\/a>/s,
+                /<a[^>]+href="([^"]+)"[^>]*>(.*?)<\/a>/s
+            ];
+
+            const snippetPatterns = [
+                /<a[^>]+class="[^"]*result__snippet[^"]*"[^>]*>(.*?)<\/a>/s,
+                /<span class="[^"]*result__snippet[^"]*"[^>]*>(.*?)<\/span>/s,
+                /<div class="[^"]*snippet[^"]*"[^>]*>(.*?)<\/div>/s
+            ];
+
+            const urlDisplayPatterns = [
+                /<span class="[^"]*result__url[^"]*"[^>]*>(.*?)<\/span>/s,
+                /<cite[^>]*>(.*?)<\/cite>/s
+            ];
 
             let match: RegExpExecArray | null;
             let count = 0;
             
-            while ((match = resultRegex.exec(html)) !== null && count < maxResults) {
-                const resultHtml = match[1];
+            // Try each result pattern until we find matches
+            for (const resultPattern of resultPatterns) {
+                if (count >= maxResults) break;
                 
-                const linkMatch = linkRegex.exec(resultHtml);
-                if (linkMatch) {
-                    const url = this.decodeUrl(linkMatch[1]);
-                    const title = this.stripHtml(linkMatch[2]);
+                const regex = new RegExp(resultPattern.source, resultPattern.flags);
+                
+                while ((match = regex.exec(html)) !== null && count < maxResults) {
+                    const resultHtml = match[1];
                     
-                    const snippetMatch = snippetRegex.exec(resultHtml);
-                    const snippet = snippetMatch ? this.stripHtml(snippetMatch[1]) : '';
+                    // Try each link pattern
+                    let linkMatch = null;
+                    for (const linkPattern of linkPatterns) {
+                        linkMatch = linkPattern.exec(resultHtml);
+                        if (linkMatch) break;
+                    }
                     
-                    const urlDisplayMatch = urlDisplayRegex.exec(resultHtml);
-                    const displayUrl = urlDisplayMatch ? this.stripHtml(urlDisplayMatch[1]) : url;
-                    
-                    if (url && title && url.startsWith('http')) {
-                        results.push({
-                            title: title.trim(),
-                            url: url.trim(),
-                            displayUrl: displayUrl.trim(),
-                            snippet: snippet.trim(),
-                            rank: count + 1
-                        });
-                        count++;
+                    if (linkMatch) {
+                        const url = this.decodeUrl(linkMatch[1]);
+                        const title = this.stripHtml(linkMatch[2]);
+                        
+                        // Try each snippet pattern
+                        let snippetMatch = null;
+                        for (const snippetPattern of snippetPatterns) {
+                            snippetMatch = snippetPattern.exec(resultHtml);
+                            if (snippetMatch) break;
+                        }
+                        const snippet = snippetMatch ? this.stripHtml(snippetMatch[1]) : '';
+                        
+                        // Try each URL display pattern
+                        let urlDisplayMatch = null;
+                        for (const urlDisplayPattern of urlDisplayPatterns) {
+                            urlDisplayMatch = urlDisplayPattern.exec(resultHtml);
+                            if (urlDisplayMatch) break;
+                        }
+                        const displayUrl = urlDisplayMatch ? this.stripHtml(urlDisplayMatch[1]) : this.extractDomain(url);
+                        
+                        if (url && title && (url.startsWith('http') || url.startsWith('//'))) {
+                            // Clean up URL
+                            const cleanUrl = url.startsWith('//') ? 'https:' + url : url;
+                            
+                            results.push({
+                                title: title.trim(),
+                                url: cleanUrl.trim(),
+                                displayUrl: displayUrl.trim(),
+                                snippet: snippet.trim(),
+                                rank: count + 1,
+                                type: 'web'
+                            });
+                            count++;
+                        }
                     }
                 }
+                
+                // If we found results with this pattern, don't try others
+                if (results.length > 0) break;
             }
         } catch (error) {
             console.error('Error parsing search results:', error);

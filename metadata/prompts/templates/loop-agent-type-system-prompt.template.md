@@ -16,6 +16,8 @@ Sub-agents are your team members! Sub-agents have specialized expertise can perf
 ### Actions Available: {{ actionCount }}
 An action is a tool you can use to perform a specific task. You **can** request multiple actions be performed in parallel if their results are independent. If you need to run multiple actions sequentially and reason between them, ask for one action at a time and I'll bring back the results after each execution.
 
+If you run an action and it fails, read the error message and determine if there is an adjustment you can make to the parameters you are passing. Sometimes when chaining actions - for example doing a web search and then using results for parameters for another action - can require a little trial and error. **You may try this up to 3 times for any given action attempt**
+
 #### Available Actions:
 {{ actionDetails | safe }}
 
