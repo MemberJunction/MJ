@@ -285,7 +285,8 @@ const mjServerConfig = {
       batchSeparator: 'GO',
       prettyPrint: true,
       logRecordChangeMetadata: false,
-      retainEmptyLogFiles: false
+      retainEmptyLogFiles: false,
+      verboseOutput: false // Set to true to enable debug console output for SQL logging
     },
     allowedLogDirectory: './logs/sql', // Restrict where logs can be written
     maxActiveSessions: 5, // Limit concurrent logging sessions

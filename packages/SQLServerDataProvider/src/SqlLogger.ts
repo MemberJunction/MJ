@@ -70,31 +70,45 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    * @param simpleSQLFallback - Optional simple SQL to use if logRecordChangeMetadata=false
    */
   public async logSqlStatement(query: string, parameters?: any, description?: string, isMutation: boolean = false, simpleSQLFallback?: string): Promise<void> {
-    console.log(`=== SESSION ${this.id} LOG ATTEMPT ===`);
-    console.log(`Session disposed: ${this._disposed}, File handle exists: ${!!this._fileHandle}`);
-    console.log(`Query (first 100 chars): ${query.substring(0, 100)}...`);
-    console.log(`isMutation: ${isMutation}, description: ${description || 'none'}`);
-    console.log(`Options:`, this.options);
+    const verbose = this.options.verboseOutput === true;
+    
+    if (verbose) {
+      console.log(`=== SESSION ${this.id} LOG ATTEMPT ===`);
+      console.log(`Session disposed: ${this._disposed}, File handle exists: ${!!this._fileHandle}`);
+      console.log(`Query (first 100 chars): ${query.substring(0, 100)}...`);
+      console.log(`isMutation: ${isMutation}, description: ${description || 'none'}`);
+      console.log(`Options:`, this.options);
+    }
     
     if (this._disposed || !this._fileHandle) {
-      console.log(`Session ${this.id}: Skipping - disposed or no file handle`);
+      if (verbose) {
+        console.log(`Session ${this.id}: Skipping - disposed or no file handle`);
+      }
       return;
     }
 
     // Filter statements based on statementTypes option
     const statementTypes = this.options.statementTypes || 'both';
-    console.log(`Session ${this.id}: Statement filter check - statementTypes: ${statementTypes}, isMutation: ${isMutation}`);
+    if (verbose) {
+      console.log(`Session ${this.id}: Statement filter check - statementTypes: ${statementTypes}, isMutation: ${isMutation}`);
+    }
     
     if (statementTypes === 'mutations' && !isMutation) {
-      console.log(`Session ${this.id}: Skipping - mutations only but this is not a mutation`);
+      if (verbose) {
+        console.log(`Session ${this.id}: Skipping - mutations only but this is not a mutation`);
+      }
       return; // Skip logging non-mutation statements
     }
     if (statementTypes === 'queries' && isMutation) {
-      console.log(`Session ${this.id}: Skipping - queries only but this is a mutation`);
+      if (verbose) {
+        console.log(`Session ${this.id}: Skipping - queries only but this is a mutation`);
+      }
       return; // Skip logging mutation statements
     }
     
-    console.log(`Session ${this.id}: Statement passed filters, proceeding to log`);
+    if (verbose) {
+      console.log(`Session ${this.id}: Statement passed filters, proceeding to log`);
+    }
 
     let logEntry = '';
 
@@ -151,14 +165,18 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
 
     logEntry += '\n'; // Add blank line between statements
 
-    console.log(`Session ${this.id}: About to write log entry (${logEntry.length} chars)`);
-    console.log(`Session ${this.id}: Log entry preview: ${logEntry.substring(0, 200)}...`);
+    if (verbose) {
+      console.log(`Session ${this.id}: About to write log entry (${logEntry.length} chars)`);
+      console.log(`Session ${this.id}: Log entry preview: ${logEntry.substring(0, 200)}...`);
+    }
     
     try {
       await this._fileHandle.writeFile(logEntry);
       this._statementCount++;
       this._emittedStatementCount++; // Track actually emitted statements
-      console.log(`Session ${this.id}: Successfully wrote to file. New counts - total: ${this._statementCount}, emitted: ${this._emittedStatementCount}`);
+      if (verbose) {
+        console.log(`Session ${this.id}: Successfully wrote to file. New counts - total: ${this._statementCount}, emitted: ${this._emittedStatementCount}`);
+      }
     } catch (error) {
       console.error(`Session ${this.id}: Error writing to file:`, error);
       throw error;

@@ -94,6 +94,8 @@ export interface SqlLoggingOptions {
   filterByUserId?: string;
   /** Optional friendly name for this logging session (for UI display) */
   sessionName?: string;
+  /** Whether to output verbose debug information to console (default: false) */
+  verboseOutput?: boolean;
 }
 
 /**

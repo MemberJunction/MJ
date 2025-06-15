@@ -324,47 +324,62 @@ export class SQLServerDataProvider
       return;
     }
 
-    console.log('=== SQL LOGGING DEBUG ===');
-    console.log(`Query to log: ${query.substring(0, 100)}...`);
-    console.log(`Context user email: ${contextUser?.Email || 'NOT_PROVIDED'}`);
-    console.log(`Active sessions count: ${this._sqlLoggingSessions.size}`);
-    
-    // Log to all active sessions in parallel, filtering by user if specified
+    // Check if any session has verbose output enabled for debug logging
     const allSessions = Array.from(this._sqlLoggingSessions.values());
-    console.log(`All sessions:`, allSessions.map(s => ({
-      id: s.id,
-      filterByUserId: s.options.filterByUserId,
-      sessionName: s.options.sessionName
-    })));
+    const hasVerboseSession = allSessions.some(s => s.options.verboseOutput === true);
+    
+    if (hasVerboseSession) {
+      console.log('=== SQL LOGGING DEBUG ===');
+      console.log(`Query to log: ${query.substring(0, 100)}...`);
+      console.log(`Context user email: ${contextUser?.Email || 'NOT_PROVIDED'}`);
+      console.log(`Active sessions count: ${this._sqlLoggingSessions.size}`);
+      
+      console.log(`All sessions:`, allSessions.map(s => ({
+        id: s.id,
+        filterByUserId: s.options.filterByUserId,
+        sessionName: s.options.sessionName
+      })));
+    }
     
     const filteredSessions = allSessions.filter((session) => {
         // If session has user filter, only log if contextUser matches AND contextUser is provided
         if (session.options.filterByUserId) {
           if (!contextUser?.Email) {
-            console.log(`Session ${session.id}: Has user filter but no contextUser provided - SKIPPING`);
+            if (hasVerboseSession) {
+              console.log(`Session ${session.id}: Has user filter but no contextUser provided - SKIPPING`);
+            }
             return false; // Don't log if filtering requested but no user context provided
           }
           const matches = session.options.filterByUserId === contextUser.ID;
-          console.log(`Session ${session.id} filter check:`, {
-            filterByUserId: session.options.filterByUserId,
-            contextUserEmail: contextUser.Email,
-            matches: matches
-          });
+          if (hasVerboseSession) {
+            console.log(`Session ${session.id} filter check:`, {
+              filterByUserId: session.options.filterByUserId,
+              contextUserEmail: contextUser.Email,
+              matches: matches
+            });
+          }
           return matches;
         }
         // No filter means log for all users (regardless of contextUser)
-        console.log(`Session ${session.id} has no filter - including`);
+        if (hasVerboseSession) {
+          console.log(`Session ${session.id} has no filter - including`);
+        }
         return true;
       });
     
-    console.log(`Sessions after filtering: ${filteredSessions.length}`);
+    if (hasVerboseSession) {
+      console.log(`Sessions after filtering: ${filteredSessions.length}`);
+    }
     
     const logPromises = filteredSessions.map((session) => 
         session.logSqlStatement(query, parameters, description, isMutation, simpleSQLFallback)
       );
 
     await Promise.all(logPromises);
-    console.log('=== SQL LOGGING DEBUG END ===');
+    
+    if (hasVerboseSession) {
+      console.log('=== SQL LOGGING DEBUG END ===');
+    }
   }
 
   /**
