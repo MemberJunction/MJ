@@ -3137,7 +3137,7 @@ export class SQLServerDataProvider
     }
   }
 
-  protected async BeginTransaction() {
+  public async BeginTransaction() {
     try {
       // Create a new transaction from the pool
       this._transaction = new sql.Transaction(this._pool);
@@ -3151,7 +3151,7 @@ export class SQLServerDataProvider
     }
   }
 
-  protected async CommitTransaction() {
+  public async CommitTransaction() {
     try {
       if (this._transaction) {
         await this._transaction.commit();
@@ -3164,7 +3164,7 @@ export class SQLServerDataProvider
     }
   }
 
-  protected async RollbackTransaction() {
+  public async RollbackTransaction() {
     try {
       if (this._transaction) {
         await this._transaction.rollback();

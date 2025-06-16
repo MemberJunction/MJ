@@ -641,3 +641,126 @@ export MJ_LOG_LEVEL=debug
 ## License
 
 ISC
+
+## SQL Server Connection Pooling and Best Practices
+
+### Overview
+
+The MemberJunction SQL Server Data Provider is designed to support high-performance parallel database operations through proper connection pool management. The underlying `mssql` driver (node-mssql) is expressly designed to handle many concurrent database calls efficiently.
+
+### How MemberJunction Handles Parallelism
+
+1. **Single Shared Connection Pool**: MemberJunction creates one connection pool at server startup and reuses it throughout the application lifecycle. This pool is passed to the SQLServerDataProvider and used for all database operations.
+
+2. **Request-Per-Query Pattern**: Each database operation creates a new `sql.Request` object from the shared pool, allowing multiple queries to execute in parallel without blocking each other.
+
+3. **Configurable Pool Size**: The connection pool can be configured via `mj.config.cjs` to support your specific concurrency needs:
+
+```javascript
+// In your mj.config.cjs at the root level
+module.exports = {
+  databaseSettings: {
+    connectionPool: {
+      max: 50,              // Maximum connections (default: 50)
+      min: 5,               // Minimum connections (default: 5)
+      idleTimeoutMillis: 30000,    // Idle timeout (default: 30s)
+      acquireTimeoutMillis: 30000  // Acquire timeout (default: 30s)
+    }
+  }
+};
+```
+
+### Best Practices Implementation
+
+MemberJunction follows SQL Server connection best practices:
+
+#### ✅ What We Do Right
+
+1. **Create Pool Once**: The pool is created during server initialization and never recreated
+2. **Never Close Pool in Handlers**: The pool remains open for the server's lifetime
+3. **Fresh Request Per Query**: Each query gets its own `sql.Request` object
+4. **Proper Error Handling**: Connection failures are caught and logged appropriately
+5. **Read-Only Pool Option**: Separate pool for read operations if configured
+
+#### ❌ Anti-Patterns We Avoid
+
+1. We don't create new connections for each request
+2. We don't open/close the pool repeatedly
+3. We don't share Request objects between queries
+4. We don't use hardcoded pool limits
+
+### Recommended Pool Settings
+
+Based on your environment and load:
+
+#### Development Environment
+```javascript
+connectionPool: {
+  max: 10,
+  min: 2,
+  idleTimeoutMillis: 60000,
+  acquireTimeoutMillis: 15000
+}
+```
+
+#### Production - Standard Load
+```javascript
+connectionPool: {
+  max: 50,      // 2-4× CPU cores of your API server
+  min: 5,
+  idleTimeoutMillis: 30000,
+  acquireTimeoutMillis: 30000
+}
+```
+
+#### Production - High Load
+```javascript
+connectionPool: {
+  max: 100,     // Monitor SQL Server wait types to tune
+  min: 10,
+  idleTimeoutMillis: 30000,
+  acquireTimeoutMillis: 30000
+}
+```
+
+### Performance Considerations
+
+1. **Pool Size**: The practical concurrency limit equals your pool size. With default settings (max: 50), you can have up to 50 concurrent SQL operations.
+
+2. **Connection Reuse**: The mssql driver efficiently reuses connections from the pool, minimizing connection overhead.
+
+3. **Queue Management**: When all connections are busy, additional requests queue in FIFO order until a connection becomes available.
+
+4. **Monitoring**: Watch for these SQL Server wait types to identify if pool size is too large:
+   - `RESOURCE_SEMAPHORE`: Memory pressure
+   - `THREADPOOL`: Worker thread exhaustion
+
+### Troubleshooting Connection Pool Issues
+
+If you experience "connection pool exhausted" errors:
+
+1. **Increase Pool Size**: Adjust `max` in your configuration
+2. **Check for Leaks**: Ensure all queries complete properly
+3. **Monitor Long Queries**: Identify and optimize slow queries that hold connections
+4. **Review Concurrent Load**: Ensure pool size matches your peak concurrency needs
+
+### Technical Implementation Details
+
+The connection pool is created in `/packages/MJServer/src/index.ts`:
+
+```typescript
+const pool = new sql.ConnectionPool(createMSSQLConfig());
+await pool.connect();
+```
+
+And used in SQLServerDataProvider for each query:
+
+```typescript
+const request = new sql.Request(this._pool);
+const result = await request.query(sql);
+```
+
+#### **Important** 
+If you are using `SQLServerDataProvider` outside of the context of MJServer/MJAPI it is your responsibility to create connection pool in alignment with whatever practices make sense for your project and pass that along to the SQLServerDataProvider configuration process.
+
+This pattern ensures maximum parallelism while maintaining connection efficiency, allowing MemberJunction applications to scale to handle hundreds of concurrent database operations without blocking the Node.js event loop.
