@@ -13,15 +13,18 @@
 - Start Explorer UI: `npm run start:explorer`
 
 ## Database Migrations
-- **CRITICAL**: Migration files must use the format `VYYYYMMDDHHMM__v[VERSION].x_[DESCRIPTION].sql`
-- Always use `date +"%Y%m%d%H%M"` to get the current timestamp in 24-hour format
-- Example: `V202506130552__v2.49.x_Add_AIAgent_Status_And_DriverClass_Columns.sql`
-- This ensures Flyway executes migrations in the correct order
+- See `/migrations/CLAUDE.md` for comprehensive migration guidelines
+- Key points:
+  - Use format `VYYYYMMDDHHMM__v[VERSION].x_[DESCRIPTION].sql`
+  - Always use hardcoded UUIDs (not NEWID())
+  - Never insert __mj timestamp columns
+  - Use `${flyway:defaultSchema}` placeholder
 
 ## Development Workflow
 - **CRITICAL**: After making code changes, always compile the affected package by running `npm run build` in that package's directory to check for TypeScript errors
 - Fix all compilation errors before proceeding with additional changes
 - This ensures code quality and prevents runtime issues
+- **Package-Specific Builds**: When building individual packages for testing/compilation, always use `npm run build` in the specific package directory (NOT turbo from root)
 
 ## Lint & Format
 - Check with ESLint: `npx eslint packages/path/to/file.ts`
@@ -67,6 +70,30 @@
   - Create the package structure with its own package.json
   - Add dependencies to the package.json
   - Run `npm install` at the repo root to update the workspace
+
+## SQL Server Connection Pooling
+
+MemberJunction supports configurable connection pooling for optimal database performance. Configure via `mj.config.cjs` at the repository root:
+
+```javascript
+module.exports = {
+  databaseSettings: {
+    connectionPool: {
+      max: 50,              // Maximum connections (default: 50)
+      min: 5,               // Minimum connections (default: 5) 
+      idleTimeoutMillis: 30000,    // Idle timeout in ms (default: 30000)
+      acquireTimeoutMillis: 30000  // Acquire timeout in ms (default: 30000)
+    }
+  }
+};
+```
+
+### Recommended Settings:
+- **Development**: max: 10, min: 2
+- **Production Standard**: max: 50, min: 5 
+- **Production High Load**: max: 100, min: 10
+
+Monitor SQL Server wait types (RESOURCE_SEMAPHORE, THREADPOOL) to tune pool size. The pool is created once at server startup and reused throughout the application lifecycle.
 
 ## MemberJunction Entity and Data Access Patterns
 
@@ -197,6 +224,27 @@ When you add fields like `PromptRole` and `PromptPosition`:
 - **Server APIs**: `packages/MJServer/src/generated/generated.ts` 
 - **Angular Forms**: `packages/Angular/Explorer/core-entity-forms/src/lib/generated/`
 - **Migration SQL**: `migrations/v2/CodeGen_Run_YYYY-MM-DD_HH-MM-SS.sql`
+
+## AI Model and Vendor Configuration
+
+When adding new AI models and vendors:
+
+### Model Setup Guidelines
+- **Token Limits**: Use actual provider limits, not theoretical model capabilities
+  - Verify MaxInputTokens and MaxOutputTokens with provider documentation
+  - Example: Groq's implementation may differ from model's theoretical limits
+
+### Vendor Relationships
+- **Model Developer**: Company that created/trained the model
+- **Inference Provider**: Service offering API access to run the model
+- These are separate entities with different TypeIDs in AIVendorType
+
+### Configuration Fields
+- **Priority**: Lower number = higher priority (0 is highest)
+- **SupportedResponseFormats**: Comma-delimited list (e.g., "Any", "Any, JSON")
+- **DriverClass**: Follow naming convention (e.g., "OpenAILLM", "GroqLLM", not "APIService")
+- **SupportsEffortLevel**: Set based on provider capabilities
+- **SupportsStreaming**: Check provider documentation
 
 ### Working with CodeGen
 
