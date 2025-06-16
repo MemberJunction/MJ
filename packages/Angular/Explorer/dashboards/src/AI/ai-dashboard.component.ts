@@ -79,7 +79,12 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
   public onTabChange(tabId: string): void {
     this.activeTab = tabId;
     const index = this.navigationItems.indexOf(tabId);
-    this.selectedIndex = index >= 0 ? index : 0;
+    
+    // Defer selectedIndex update to avoid change detection issues
+    setTimeout(() => {
+      this.selectedIndex = index >= 0 ? index : 0;
+    });
+    
     this.visitedTabs.add(tabId); // Mark tab as visited
     this.emitStateChange();
   }
@@ -144,8 +149,12 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
     if (state.activeTab) {
       this.activeTab = state.activeTab;
       const index = this.navigationItems.indexOf(state.activeTab);
-      // Ensure we don't set selectedIndex to -1
-      this.selectedIndex = index >= 0 ? index : 0;
+      
+      // Defer selectedIndex update to avoid change detection issues
+      setTimeout(() => {
+        // Ensure we don't set selectedIndex to -1
+        this.selectedIndex = index >= 0 ? index : 0;
+      });
       
       // Mark the tab as visited
       this.visitedTabs.add(state.activeTab);

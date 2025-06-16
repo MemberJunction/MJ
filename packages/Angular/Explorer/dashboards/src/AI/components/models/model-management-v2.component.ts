@@ -30,9 +30,9 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
   public showFilters = true;
   public expandedModelId: string | null = null;
 
-  // Data
-  public models: ModelDisplayData[] = [];
-  public filteredModels: ModelDisplayData[] = [];
+  // Data - Keep as AIModelEntity to preserve getters
+  public models: AIModelEntity[] = [];
+  public filteredModels: AIModelEntity[] = [];
   public vendors: AIVendorEntity[] = [];
   public modelTypes: AIModelTypeEntity[] = [];
 
@@ -58,6 +58,11 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
     { value: 'created', label: 'Created Date' },
     { value: 'updated', label: 'Updated Date' }
   ];
+
+  // Max rank values calculated from all models
+  public maxPowerRank = 10;
+  public maxSpeedRank = 10;
+  public maxCostRank = 10;
 
   // Loading messages
   public loadingMessages = [
@@ -116,37 +121,44 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
     try {
       const rv = new RunView();
 
-      // Load all data in parallel using RunViews
-      const [modelResults, vendorResults, typeResults] = await rv.RunViews([
-        {
-          EntityName: 'AI Models',
-          OrderBy: 'Name',
-          MaxRows: 1000,
-          ResultType: 'entity_object'
-        },
-        {
+      // Load models with proper generic typing
+      const modelResults = await rv.RunView<AIModelEntity>({
+        EntityName: 'AI Models',
+        OrderBy: 'Name',
+        MaxRows: 1000,
+        ResultType: 'entity_object'
+      });
+
+      // Load vendors and types in parallel
+      const [vendorResults, typeResults] = await Promise.all([
+        rv.RunView<AIVendorEntity>({
           EntityName: 'MJ: AI Vendors',
           OrderBy: 'Name',
           MaxRows: 1000,
           ResultType: 'entity_object'
-        },
-        {
+        }),
+        rv.RunView<AIModelTypeEntity>({
           EntityName: 'AI Model Types',
           OrderBy: 'Name',
           MaxRows: 1000,
           ResultType: 'entity_object'
-        }
+        })
       ]);
 
-      this.vendors = vendorResults.Results as AIVendorEntity[];
-      this.modelTypes = typeResults.Results as AIModelTypeEntity[];
-
+      // Results are now properly typed, no casting needed
+      this.vendors = vendorResults.Results;
+      this.modelTypes = typeResults.Results;
+      
+      // Log summary data
+      console.log('Loaded:', this.vendors.length, 'vendors,', this.modelTypes.length, 'model types,', modelResults.Results.length, 'models');
+      
       // Create lookup maps
       const vendorMap = new Map(this.vendors.map(v => [v.ID, v.Name]));
       const typeMap = new Map(this.modelTypes.map(t => [t.ID, t.Name]));
 
-      // Transform models to display format
-      this.models = (modelResults.Results as AIModelEntity[]).map(model => {
+      // Transform models to display format - Results already typed as AIModelEntity[]
+      this.models = modelResults.Results.map((model, index) => {
+        
         // Find vendor ID by matching vendor name
         let vendorId: string | undefined;
         if (model.Vendor) {
@@ -154,16 +166,25 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
           vendorId = vendor?.ID;
         }
         
-        return {
-          ...model,
-          VendorID: vendorId,
-          VendorName: model.Vendor || 'No Vendor',
-          ModelTypeName: model.AIModelTypeID ? typeMap.get(model.AIModelTypeID) || 'Unknown' : 'No Type',
-          PowerRankDisplay: this.formatRank(model.PowerRank),
-          SpeedRankDisplay: this.formatRank(model.SpeedRank),
-          CostRankDisplay: this.formatRank(model.CostRank)
-        } as ModelDisplayData;
+        // Don't spread the model - it loses getter properties!
+        // Instead, augment the model with display properties
+        const modelWithDisplay = model as ModelDisplayData;
+        modelWithDisplay.VendorID = vendorId;
+        modelWithDisplay.VendorName = model.Vendor || 'No Vendor';
+        modelWithDisplay.ModelTypeName = model.AIModelTypeID ? typeMap.get(model.AIModelTypeID) || 'Unknown' : 'No Type';
+        
+        return model;
       });
+
+      // Calculate max values for each rank type from ALL models
+      this.maxPowerRank = Math.max(...this.models.map(m => m.PowerRank || 0), 10);
+      this.maxSpeedRank = Math.max(...this.models.map(m => m.SpeedRank || 0), 10);
+      this.maxCostRank = Math.max(...this.models.map(m => m.CostRank || 0), 10);
+
+      // Update filter ranges based on actual max values
+      this.powerRankRange = { min: 0, max: this.maxPowerRank };
+      this.speedRankRange = { min: 0, max: this.maxSpeedRank };
+      this.costRankRange = { min: 0, max: this.maxCostRank };
 
       this.filteredModels = [...this.models];
       this.sortModels();
@@ -180,8 +201,20 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
     }
   }
 
-  private formatRank(rank: number | null): string {
-    return rank !== null ? `${rank}/10` : 'N/A';
+  public formatRank(rank: number | null, rankType?: 'power' | 'speed' | 'cost'): string {
+    if (rank === null) return 'N/A';
+    
+    // Determine which max value to use
+    let maxValue = 10;
+    if (rankType === 'power') {
+      maxValue = this.maxPowerRank;
+    } else if (rankType === 'speed') {
+      maxValue = this.maxSpeedRank;
+    } else if (rankType === 'cost') {
+      maxValue = this.maxCostRank;
+    }
+    
+    return `${rank}/${maxValue}`;
   }
 
   private applyInitialState(state: any): void {
@@ -222,7 +255,8 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
   }
 
   public applyFilters(): void {
-    this.filteredModels = this.models.filter(model => {
+    this.filteredModels = this.models.filter(m => {
+      const model = m as ModelDisplayData;
       // Search filter
       if (this.searchTerm) {
         const searchLower = this.searchTerm.toLowerCase();
@@ -272,23 +306,25 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
 
   private sortModels(): void {
     this.filteredModels.sort((a, b) => {
+      const modelA = a as ModelDisplayData;
+      const modelB = b as ModelDisplayData;
       switch (this.sortBy) {
         case 'name':
-          return (a.Name || '').localeCompare(b.Name || '');
+          return (modelA.Name || '').localeCompare(modelB.Name || '');
         case 'vendor':
-          return (a.VendorName || '').localeCompare(b.VendorName || '');
+          return (modelA.VendorName || '').localeCompare(modelB.VendorName || '');
         case 'type':
-          return (a.ModelTypeName || '').localeCompare(b.ModelTypeName || '');
+          return (modelA.ModelTypeName || '').localeCompare(modelB.ModelTypeName || '');
         case 'powerRank':
-          return (b.PowerRank || 0) - (a.PowerRank || 0);
+          return (modelB.PowerRank || 0) - (modelA.PowerRank || 0);
         case 'speedRank':
-          return (b.SpeedRank || 0) - (a.SpeedRank || 0);
+          return (modelB.SpeedRank || 0) - (modelA.SpeedRank || 0);
         case 'costRank':
-          return (b.CostRank || 0) - (a.CostRank || 0);
+          return (modelA.CostRank || 0) - (modelB.CostRank || 0);
         case 'created':
-          return new Date(b.__mj_CreatedAt).getTime() - new Date(a.__mj_CreatedAt).getTime();
+          return new Date(modelB.__mj_CreatedAt).getTime() - new Date(modelA.__mj_CreatedAt).getTime();
         case 'updated':
-          return new Date(b.__mj_UpdatedAt).getTime() - new Date(a.__mj_UpdatedAt).getTime();
+          return new Date(modelB.__mj_UpdatedAt).getTime() - new Date(modelA.__mj_UpdatedAt).getTime();
         default:
           return 0;
       }
@@ -384,10 +420,24 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
     return 'fa-solid fa-microchip';
   }
 
-  public getRankClass(rank: number | null): string {
-    if (rank === null) return 'rank-none';
-    if (rank >= 8) return 'rank-high';
-    if (rank >= 5) return 'rank-medium';
+  public getRankClass(rank: number | null, rankType?: 'power' | 'speed' | 'cost'): string {
+    if (rank === null || rank === 0) return 'rank-none';
+    
+    // Determine which max value to use
+    let maxValue = 10;
+    if (rankType === 'power') {
+      maxValue = this.maxPowerRank;
+    } else if (rankType === 'speed') {
+      maxValue = this.maxSpeedRank;
+    } else if (rankType === 'cost') {
+      maxValue = this.maxCostRank;
+    }
+    
+    // Calculate percentage of max
+    const percentage = (rank / maxValue) * 100;
+    
+    if (percentage >= 70) return 'rank-high';
+    if (percentage >= 40) return 'rank-medium';
     return 'rank-low';
   }
 
@@ -413,11 +463,11 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
            this.selectedType !== 'all' || 
            this.selectedStatus !== 'all' ||
            this.powerRankRange.min > 0 ||
-           this.powerRankRange.max < 10 ||
+           this.powerRankRange.max < this.maxPowerRank ||
            this.speedRankRange.min > 0 ||
-           this.speedRankRange.max < 10 ||
+           this.speedRankRange.max < this.maxSpeedRank ||
            this.costRankRange.min > 0 ||
-           this.costRankRange.max < 10;
+           this.costRankRange.max < this.maxCostRank;
   }
 
   public clearFilters(): void {
@@ -425,9 +475,9 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
     this.selectedVendor = 'all';
     this.selectedType = 'all';
     this.selectedStatus = 'all';
-    this.powerRankRange = { min: 0, max: 10 };
-    this.speedRankRange = { min: 0, max: 10 };
-    this.costRankRange = { min: 0, max: 10 };
+    this.powerRankRange = { min: 0, max: this.maxPowerRank };
+    this.speedRankRange = { min: 0, max: this.maxSpeedRank };
+    this.costRankRange = { min: 0, max: this.maxCostRank };
     this.searchSubject.next('');
     this.applyFilters();
   }
@@ -439,5 +489,31 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
       return Math.floor(limit / 1000) + 'K';
     }
     return limit.toString();
+  }
+
+  public validateAndApplyRankFilters(rankType: 'power' | 'speed' | 'cost'): void {
+    // Get the appropriate range and max value based on type
+    let range = rankType === 'power' ? this.powerRankRange : 
+                 rankType === 'speed' ? this.speedRankRange : 
+                 this.costRankRange;
+    
+    let maxValue = rankType === 'power' ? this.maxPowerRank :
+                   rankType === 'speed' ? this.maxSpeedRank :
+                   this.maxCostRank;
+    
+    // Ensure min is not greater than max
+    if (range.min > range.max) {
+      // Swap the values
+      const temp = range.min;
+      range.min = range.max;
+      range.max = temp;
+    }
+    
+    // Ensure values are within bounds
+    range.min = Math.max(0, Math.min(maxValue, range.min));
+    range.max = Math.max(0, Math.min(maxValue, range.max));
+    
+    // Apply the filters
+    this.applyFilters();
   }
 }

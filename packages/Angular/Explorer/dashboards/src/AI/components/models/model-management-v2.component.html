@@ -152,24 +152,27 @@
               <div class="filter-group">
                 <label class="filter-label">
                   <span class="fa-solid fa-bolt"></span>
-                  Power Rank ({{ powerRankRange.min }}-{{ powerRankRange.max }})
+                  Power Rank
                 </label>
-                <div class="range-inputs">
+                <div class="rank-filter-inputs">
                   <input 
-                    type="range" 
+                    type="number" 
                     min="0" 
-                    max="10" 
+                    [max]="maxPowerRank" 
                     [(ngModel)]="powerRankRange.min"
-                    (change)="applyFilters()"
-                    class="range-input"
+                    (change)="validateAndApplyRankFilters('power')"
+                    class="rank-input"
+                    placeholder="Min"
                   />
+                  <span class="rank-separator">-</span>
                   <input 
-                    type="range" 
+                    type="number" 
                     min="0" 
-                    max="10" 
+                    [max]="maxPowerRank" 
                     [(ngModel)]="powerRankRange.max"
-                    (change)="applyFilters()"
-                    class="range-input"
+                    (change)="validateAndApplyRankFilters('power')"
+                    class="rank-input"
+                    placeholder="Max"
                   />
                 </div>
               </div>
@@ -211,7 +214,7 @@
                           <i [class]="getModelIcon(model)"></i>
                         </div>
                         <div class="card-info">
-                          <h4>{{ model.Name }}</h4>
+                          <h4>{{ model.Name || 'Unnamed Model' }}</h4>
                           <div class="card-meta">
                             @if (model.Vendor) {
                               <span class="vendor">{{ model.Vendor }}</span>
@@ -225,13 +228,13 @@
                           </div>
                           <div class="card-stats">
                             <span class="stat-item" title="Power Rank">
-                              <i class="fa-solid fa-bolt"></i> {{ model.PowerRank || 0 }}
+                              <i class="fa-solid fa-bolt"></i> {{ formatRank(model.PowerRank, 'power') }}
                             </span>
                             <span class="stat-item" title="Speed Rank">
-                              <i class="fa-solid fa-gauge-high"></i> {{ model.SpeedRank || 0 }}
+                              <i class="fa-solid fa-gauge-high"></i> {{ formatRank(model.SpeedRank, 'speed') }}
                             </span>
                             <span class="stat-item" title="Cost Rank">
-                              <i class="fa-solid fa-dollar-sign"></i> {{ model.CostRank || 0 }}
+                              <i class="fa-solid fa-dollar-sign"></i> {{ formatRank(model.CostRank, 'cost') }}
                             </span>
                             @if (model.InputTokenLimit) {
                               <span class="stat-item" title="Token Limit">
@@ -259,24 +262,24 @@
                                 <span class="rank-label">
                                   <i class="fa-solid fa-bolt"></i> Power
                                 </span>
-                                <span class="rank-value" [class]="getRankClass(model.PowerRank)">
-                                  {{ model.PowerRankDisplay }}
+                                <span class="rank-value" [class]="getRankClass(model.PowerRank, 'power')">
+                                  {{ formatRank(model.PowerRank, 'power') }}
                                 </span>
                               </div>
                               <div class="rank-item">
                                 <span class="rank-label">
                                   <i class="fa-solid fa-gauge-high"></i> Speed
                                 </span>
-                                <span class="rank-value" [class]="getRankClass(model.SpeedRank)">
-                                  {{ model.SpeedRankDisplay }}
+                                <span class="rank-value" [class]="getRankClass(model.SpeedRank, 'speed')">
+                                  {{ formatRank(model.SpeedRank, 'speed') }}
                                 </span>
                               </div>
                               <div class="rank-item">
                                 <span class="rank-label">
                                   <i class="fa-solid fa-dollar-sign"></i> Cost
                                 </span>
-                                <span class="rank-value" [class]="getRankClass(model.CostRank)">
-                                  {{ model.CostRankDisplay }}
+                                <span class="rank-value" [class]="getRankClass(model.CostRank, 'cost')">
+                                  {{ formatRank(model.CostRank, 'cost') }}
                                 </span>
                               </div>
                             </div>
@@ -285,16 +288,7 @@
                           <div class="stats-grid">
                             <div class="stat">
                               <span class="stat-label">Status</span>
-                              <span class="stat-value">
-                                <label class="toggle-switch">
-                                  <input 
-                                    type="checkbox" 
-                                    [checked]="model.IsActive"
-                                    (change)="toggleModelStatus(model, $event)"
-                                  />
-                                  <span class="toggle-slider"></span>
-                                </label>
-                              </span>
+                              <span class="stat-value">{{ model.IsActive ? 'Active' : 'Inactive' }}</span>
                             </div>
                             <div class="stat">
                               <span class="stat-label">API Name</span>
@@ -340,35 +334,30 @@
                           <td>
                             <div class="name-cell">
                               <i [class]="getModelIcon(model)"></i>
-                              {{ model.Name }}
+                              {{ model.Name || 'Unnamed Model' }}
                             </div>
                           </td>
                           <td>{{ model.Vendor || '-' }}</td>
                           <td>{{ model.AIModelType }}</td>
                           <td>
-                            <span class="rank-badge" [class]="getRankClass(model.PowerRank)">
-                              {{ model.PowerRankDisplay }}
+                            <span class="rank-badge" [class]="getRankClass(model.PowerRank, 'power')">
+                              {{ formatRank(model.PowerRank, 'power') }}
                             </span>
                           </td>
                           <td>
-                            <span class="rank-badge" [class]="getRankClass(model.SpeedRank)">
-                              {{ model.SpeedRankDisplay }}
+                            <span class="rank-badge" [class]="getRankClass(model.SpeedRank, 'speed')">
+                              {{ formatRank(model.SpeedRank, 'speed') }}
                             </span>
                           </td>
                           <td>
-                            <span class="rank-badge" [class]="getRankClass(model.CostRank)">
-                              {{ model.CostRankDisplay }}
+                            <span class="rank-badge" [class]="getRankClass(model.CostRank, 'cost')">
+                              {{ formatRank(model.CostRank, 'cost') }}
                             </span>
                           </td>
                           <td>
-                            <label class="toggle-switch small">
-                              <input 
-                                type="checkbox" 
-                                [checked]="model.IsActive"
-                                (change)="toggleModelStatus(model, $event)"
-                              />
-                              <span class="toggle-slider"></span>
-                            </label>
+                            <span class="status-badge" [class.active]="model.IsActive" [class.inactive]="!model.IsActive">
+                              {{ model.IsActive ? 'Active' : 'Inactive' }}
+                            </span>
                           </td>
                           <td>
                             <button class="action-button small" (click)="openModel(model.ID)">
