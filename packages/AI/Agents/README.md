@@ -14,6 +14,8 @@ The MemberJunction AI Agents package provides a comprehensive framework for crea
 - **🔧 Factory Pattern**: Enhanced AgentFactory for dynamic agent instantiation and extensibility
 - **🔐 Metadata-Driven**: Database-driven configuration for agents, types, and prompts
 - **📊 Analytics**: Hierarchical execution logging with performance tracking across agent workflows
+- **📡 Streaming Support**: Real-time streaming of execution progress and AI model responses
+- **🛑 Cancellation Support**: Graceful cancellation of long-running operations with AbortSignal
 
 ## Installation
 
@@ -206,6 +208,97 @@ const result = await runner.Run({
 
 // Compression is applied automatically by BaseAgent based on agent configuration
 // The agent run record tracks the compression activity
+```
+
+### Streaming and Progress Tracking
+
+The AI Agents framework supports real-time streaming of execution progress and AI model responses:
+
+```typescript
+import { AgentRunner } from '@memberjunction/ai-agents';
+
+const runner = new AgentRunner();
+
+// Execute with streaming and progress callbacks
+const result = await runner.RunAgent({
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: user,
+    
+    // Progress callback for execution status updates
+    onProgress: (progress) => {
+        console.log(`[${progress.percentage}%] ${progress.step}: ${progress.message}`);
+        
+        // Progress steps include:
+        // - initialization: Setting up the agent
+        // - validation: Validating agent configuration
+        // - prompt_execution: Executing AI prompts
+        // - action_execution: Running actions
+        // - subagent_execution: Running sub-agents
+        // - decision_processing: Processing next steps
+        // - finalization: Completing execution
+    },
+    
+    // Streaming callback for real-time AI responses
+    onStreaming: (chunk) => {
+        process.stdout.write(chunk.content);
+        
+        if (chunk.isComplete) {
+            console.log('\n--- Stream complete ---');
+        }
+        
+        // Additional metadata available:
+        // - chunk.stepType: 'prompt', 'action', 'subagent', or 'chat'
+        // - chunk.stepEntityId: ID of the step being executed
+        // - chunk.modelName: AI model producing the content (for prompts)
+    }
+});
+```
+
+### Cancellation Support
+
+Long-running agent operations can be cancelled gracefully using AbortSignal:
+
+```typescript
+import { AgentRunner } from '@memberjunction/ai-agents';
+
+const runner = new AgentRunner();
+const controller = new AbortController();
+
+// Set up cancellation after 30 seconds
+setTimeout(() => {
+    console.log('Cancelling agent execution...');
+    controller.abort();
+}, 30000);
+
+try {
+    const result = await runner.RunAgent({
+        agent: myAgent,
+        conversationMessages: messages,
+        contextUser: user,
+        cancellationToken: controller.signal,
+        onProgress: (progress) => {
+            console.log(`Progress: ${progress.message}`);
+        }
+    });
+    
+    if (result.cancelled) {
+        console.log('Execution was cancelled:', result.cancellationReason);
+    }
+} catch (error) {
+    if (controller.signal.aborted) {
+        console.log('Operation cancelled by user');
+    } else {
+        console.error('Execution error:', error);
+    }
+}
+
+// Cancellation is checked at multiple points:
+// - Before starting execution
+// - After initialization
+// - Before each execution step
+// - After prompt/action/sub-agent completion
+// The agent run is properly marked as 'Cancelled' in the database
 ```
 
 ## Extending BaseAgent

@@ -17,17 +17,53 @@ import { AIPromptRunResult } from '@memberjunction/ai-prompts';
 import { ActionResult, ActionResultSimple } from '@memberjunction/actions-base';
 
 /**
+ * Callback function type for agent execution progress updates
+ */
+export type AgentExecutionProgressCallback = (progress: {
+    /** Current step in the agent execution process */
+    step: 'initialization' | 'validation' | 'prompt_execution' | 'action_execution' | 'subagent_execution' | 'decision_processing' | 'finalization';
+    /** Progress percentage (0-100) */
+    percentage: number;
+    /** Human-readable status message */
+    message: string;
+    /** Additional metadata about the current step */
+    metadata?: Record<string, unknown>;
+}) => void;
+
+/**
+ * Callback function type for streaming content updates during agent execution
+ */
+export type AgentExecutionStreamingCallback = (chunk: {
+    /** The content chunk received */
+    content: string;
+    /** Whether this is the final chunk */
+    isComplete: boolean;
+    /** Which step is producing this content */
+    stepType?: 'prompt' | 'action' | 'subagent' | 'chat';
+    /** Specific step entity ID producing this content */
+    stepEntityId?: string;
+    /** Model name producing this content (for prompt steps) */
+    modelName?: string;
+}) => void;
+
+/**
  * Parameters required to execute an AI Agent.
  * 
  * @interface ExecuteAgentParams
  * @property {AIAgentEntity} agent - The agent entity to execute, containing all metadata and configuration
  * @property {ChatMessage[]} conversationMessages - Array of chat messages representing the conversation history
  * @property {UserInfo} [contextUser] - Optional user context for permission checking and personalization
+ * @property {AbortSignal} [cancellationToken] - Optional cancellation token to abort the agent execution
+ * @property {AgentExecutionProgressCallback} [onProgress] - Optional callback for receiving execution progress updates
+ * @property {AgentExecutionStreamingCallback} [onStreaming] - Optional callback for receiving streaming content updates
  */
 export type ExecuteAgentParams = {
     agent: AIAgentEntity;
     conversationMessages: ChatMessage[];
     contextUser?: UserInfo;
+    cancellationToken?: AbortSignal;
+    onProgress?: AgentExecutionProgressCallback;
+    onStreaming?: AgentExecutionStreamingCallback;
 }
 
 /**
@@ -42,6 +78,8 @@ export type ExecuteAgentParams = {
  * @property {BaseAgentNextStep['step']} finalStep - The final step type that terminated execution
  * @property {any} [returnValue] - Optional return value from the agent execution, type depends on agent implementation
  * @property {string} [errorMessage] - Error message if execution failed
+ * @property {boolean} [cancelled] - Whether the execution was cancelled via cancellation token
+ * @property {'user_requested' | 'timeout' | 'system'} [cancellationReason] - Reason for cancellation if cancelled
  * @property {AIAgentRunEntity} agentRun - The main database entity tracking this execution
  * @property {ExecutionChainStep[]} executionChain - Complete chain of execution steps showing the flow from start to finish
  */
@@ -50,6 +88,8 @@ export type ExecuteAgentResult = {
     finalStep: BaseAgentNextStep['step'];
     returnValue?: any;
     errorMessage?: string;
+    cancelled?: boolean;
+    cancellationReason?: 'user_requested' | 'timeout' | 'system';
     agentRun: AIAgentRunEntity;
     executionChain: ExecutionChainStep[];
 }

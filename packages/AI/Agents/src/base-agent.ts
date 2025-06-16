@@ -37,7 +37,9 @@ import {
     ChatExecutionResult,
     NextStepDetails,
     AgentRunContext,
-    BaseAgentNextStep
+    BaseAgentNextStep,
+    AgentExecutionProgressCallback,
+    AgentExecutionStreamingCallback
 } from './types';
 import { ActionEntityExtended, ActionResult, ActionResultSimple } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -128,11 +130,35 @@ export class BaseAgent {
      */
     public async Execute(params: ExecuteAgentParams): Promise<ExecuteAgentResult> {
         try {
+            // Check for cancellation at start
+            if (params.cancellationToken?.aborted) {
+                return await this.createCancelledResult('Cancelled before execution started');
+            }
+
+            // Report initialization progress
+            params.onProgress?.({
+                step: 'initialization',
+                percentage: 0,
+                message: 'Initializing agent execution'
+            });
+
             // Initialize execution tracking
             await this.initializeAgentRun(params);
 
             // Initialize engines
             await this.initializeEngines(params.contextUser);
+
+            // Check for cancellation after initialization
+            if (params.cancellationToken?.aborted) {
+                return await this.createCancelledResult('Cancelled during initialization');
+            }
+
+            // Report validation progress
+            params.onProgress?.({
+                step: 'validation',
+                percentage: 10,
+                message: 'Validating agent configuration'
+            });
 
             // Create and track validation step
             const validationResult = await this.validateAgentWithTracking(params.agent, params.contextUser);
@@ -148,10 +174,17 @@ export class BaseAgent {
             let continueExecution = true;
             let currentNextStep: BaseAgentNextStep | null = null;
             let finalReturnValue: any = undefined;
+            let stepCount = 0;
 
             while (continueExecution) {
+                // Check for cancellation before each step
+                if (params.cancellationToken?.aborted) {
+                    return await this.createCancelledResult('Cancelled during execution');
+                }
+
                 // Execute the current step based on previous decision or initial prompt
                 const stepResult = await this.executeNextStep(params, config, currentNextStep);
+                stepCount++;
                 
                 // Check if we should continue or terminate
                 if (stepResult.terminate) {
@@ -162,10 +195,21 @@ export class BaseAgent {
                 }
             }
 
+            // Report finalization progress
+            params.onProgress?.({
+                step: 'finalization',
+                percentage: 95,
+                message: 'Finalizing agent execution'
+            });
+
             // Finalize the agent run
             return await this.finalizeAgentRun(currentNextStep?.step || 'success', finalReturnValue);
 
         } catch (error) {
+            // Check if error is due to cancellation
+            if (params.cancellationToken?.aborted) {
+                return await this.createCancelledResult('Cancelled due to error during execution');
+            }
             return await this.createFailureResult(error.message);
         }
     }
@@ -597,7 +641,10 @@ export class BaseAgent {
     public async ExecuteSubAgent(
         subAgentRequest: AgentSubAgentRequest, 
         conversationMessages: ChatMessage[],
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        cancellationToken?: AbortSignal,
+        onProgress?: AgentExecutionProgressCallback,
+        onStreaming?: AgentExecutionStreamingCallback
     ): Promise<ExecuteAgentResult> {
         try {
             const engine = AIEngine.Instance;
@@ -627,11 +674,14 @@ export class BaseAgent {
             // This would need to be passed through the AgentRunner in a real implementation
             // For now, we execute normally and the sub-agent will track its parent relationship
             
-            // Execute the sub-agent
+            // Execute the sub-agent with cancellation and streaming support
             const result = await runner.RunAgent({
                 agent: subAgent,
                 conversationMessages: subAgentMessages,
-                contextUser: contextUser
+                contextUser: contextUser,
+                cancellationToken: cancellationToken,
+                onProgress: onProgress,
+                onStreaming: onStreaming
             });
             
             // Check if execution was successful
@@ -1014,6 +1064,14 @@ export class BaseAgent {
         const stepEntity = await this.createStepEntity('prompt', 'Execute Agent Prompt', params.contextUser, config.childPrompt?.ID);
         
         try {
+            // Report prompt execution progress
+            params.onProgress?.({
+                step: 'prompt_execution',
+                percentage: 30,
+                message: 'Executing agent prompt',
+                metadata: { promptId: config.childPrompt?.ID }
+            });
+
             // Prepare prompt parameters
             const promptParams = await this.preparePromptParams(
                 config.agentType!, 
@@ -1022,11 +1080,27 @@ export class BaseAgent {
                 params
             );
             
+            // Pass cancellation token and streaming callbacks to prompt execution
+            promptParams.cancellationToken = params.cancellationToken;
+            promptParams.onStreaming = params.onStreaming ? (chunk) => {
+                params.onStreaming!({
+                    ...chunk,
+                    stepType: 'prompt',
+                    stepEntityId: stepEntity.ID
+                });
+            } : undefined;
+            
             // Note: retry context is now handled through conversation messages
             // The retryContext parameter is kept for backward compatibility but not used
             
             // Execute the prompt
             const promptResult = await this.executePrompt(promptParams);
+            
+            // Check for cancellation after prompt execution
+            if (params.cancellationToken?.aborted) {
+                await this.finalizeStepEntity(stepEntity, false, 'Cancelled during prompt execution');
+                return { terminate: true, returnValue: await this.createCancelledResult('Cancelled during prompt execution') };
+            }
             
             // Create prompt execution result
             const executionResult: PromptExecutionResult = {
@@ -1035,6 +1109,13 @@ export class BaseAgent {
                 promptName: config.childPrompt!.Name,
                 result: promptResult
             };
+            
+            // Report decision processing progress
+            params.onProgress?.({
+                step: 'decision_processing',
+                percentage: 70,
+                message: 'Processing next step decision'
+            });
             
             // Determine next step using agent type
             const nextStep = await this.processNextStep(params, config.agentType!, promptResult);
@@ -1087,6 +1168,19 @@ export class BaseAgent {
         subAgentRequest: AgentSubAgentRequest
     ): Promise<{terminate: boolean, returnValue?: any, nextStep?: BaseAgentNextStep}> {
         
+        // Check for cancellation before starting
+        if (params.cancellationToken?.aborted) {
+            throw new Error('Cancelled before sub-agent execution');
+        }
+
+        // Report sub-agent execution progress
+        params.onProgress?.({
+            step: 'subagent_execution',
+            percentage: 60,
+            message: `Executing sub-agent: ${subAgentRequest.name}`,
+            metadata: { subAgentId: subAgentRequest.id }
+        });
+        
         // Add assistant message indicating we're executing a sub-agent
         params.conversationMessages.push({
             role: 'assistant',
@@ -1097,12 +1191,31 @@ export class BaseAgent {
         const stepEntity = await this.createStepEntity('subagent', `Execute Sub-Agent: ${subAgentRequest.name}`, params.contextUser, subAgentRequest.id);
         
         try {
-            // Execute sub-agent
+            // Execute sub-agent with cancellation and streaming support
             const subAgentResult = await this.ExecuteSubAgent(
                 subAgentRequest,
                 params.conversationMessages,
-                params.contextUser
+                params.contextUser,
+                params.cancellationToken,
+                // Pass through progress callback with sub-agent context
+                params.onProgress ? (progress) => {
+                    params.onProgress!(progress);
+                } : undefined,
+                // Pass through streaming callback with sub-agent context
+                params.onStreaming ? (chunk) => {
+                    params.onStreaming!({
+                        ...chunk,
+                        stepType: 'subagent',
+                        stepEntityId: stepEntity.ID
+                    });
+                } : undefined
             );
+            
+            // Check for cancellation after sub-agent execution
+            if (params.cancellationToken?.aborted) {
+                await this.finalizeStepEntity(stepEntity, false, 'Cancelled during sub-agent execution');
+                throw new Error('Cancelled during sub-agent execution');
+            }
             
             // Create sub-agent execution result
             const executionResult: SubAgentExecutionResult = {
@@ -1185,6 +1298,19 @@ export class BaseAgent {
         actions: AgentAction[]
     ): Promise<{terminate: boolean, returnValue?: any, nextStep?: BaseAgentNextStep}> {
         
+        // Check for cancellation before starting
+        if (params.cancellationToken?.aborted) {
+            throw new Error('Cancelled before action execution');
+        }
+
+        // Report action execution progress
+        params.onProgress?.({
+            step: 'action_execution',
+            percentage: 50,
+            message: `Executing ${actions.length} action(s)`,
+            metadata: { actionCount: actions.length }
+        });
+        
         // Add assistant message indicating we're executing actions
         const actionMessage = actions.length === 1 
             ? `Executing action: ${actions[0].name}`
@@ -1256,6 +1382,11 @@ export class BaseAgent {
         
         // Wait for all actions to complete
         const actionResults = await Promise.all(actionPromises);
+        
+        // Check for cancellation after actions complete
+        if (params.cancellationToken?.aborted) {
+            throw new Error('Cancelled after action execution');
+        }
         
         // Build a clean summary of action results
         const actionSummaries = actionSteps.map((step, index) => {
@@ -1353,6 +1484,33 @@ export class BaseAgent {
             success: false,
             finalStep: 'failed',
             errorMessage,
+            agentRun: this._agentRun!,
+            executionChain: this._executionChain
+        };
+    }
+
+    /**
+     * Creates a cancelled result.
+     * 
+     * @private
+     * @param {string} message - The cancellation message
+     * @returns {Promise<ExecuteAgentResult>} The cancelled result
+     */
+    private async createCancelledResult(message: string): Promise<ExecuteAgentResult> {
+        if (this._agentRun) {
+            this._agentRun.Status = 'Cancelled';
+            this._agentRun.CompletedAt = new Date();
+            this._agentRun.Success = false;
+            this._agentRun.ErrorMessage = message;
+            await this._agentRun.Save();
+        }
+        
+        return {
+            success: false,
+            finalStep: 'failed',
+            errorMessage: message,
+            cancelled: true,
+            cancellationReason: 'user_requested',
             agentRun: this._agentRun!,
             executionChain: this._executionChain
         };

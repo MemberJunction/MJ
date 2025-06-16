@@ -1,7 +1,6 @@
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID } from 'type-graphql';
 import { UserPayload } from '../types.js';
-import { LogError, LogStatus, Metadata } from '@memberjunction/core';
-import { AIAgentEntity, AIAgentRunEntity, AIAgentRunStepEntity } from '@memberjunction/core-entities';
+import { LogError, LogStatus } from '@memberjunction/core';
 import { AgentRunner, ExecuteAgentResult } from '@memberjunction/ai-agents';
 import { ResolverBase } from '../generic/ResolverBase.js';
 
@@ -36,6 +35,78 @@ export class AIAgentRunResult {
 }
 
 @ObjectType()
+export class AgentExecutionProgress {
+    @Field()
+    currentStep: string;
+
+    @Field()
+    percentage: number;
+
+    @Field()
+    message: string;
+
+    @Field({ nullable: true })
+    agentName?: string;
+
+    @Field({ nullable: true })
+    agentType?: string;
+}
+
+@ObjectType()
+export class AgentStreamingContent {
+    @Field()
+    content: string;
+
+    @Field()
+    isPartial: boolean;
+
+    @Field({ nullable: true })
+    stepName?: string;
+
+    @Field({ nullable: true })
+    agentName?: string;
+}
+
+@ObjectType()
+export class AgentExecutionStepSummary {
+    @Field()
+    stepId: string;
+
+    @Field()
+    stepName: string;
+
+    @Field({ nullable: true })
+    agentName?: string;
+
+    @Field({ nullable: true })
+    agentType?: string;
+
+    @Field()
+    startTime: Date;
+
+    @Field({ nullable: true })
+    endTime?: Date;
+
+    @Field()
+    status: string;
+
+    @Field({ nullable: true })
+    result?: string;
+}
+
+@ObjectType()
+export class AgentPartialResult {
+    @Field()
+    currentStep: string;
+
+    @Field(() => [AgentExecutionStepSummary])
+    executionChain: AgentExecutionStepSummary[];
+
+    @Field({ nullable: true })
+    partialOutput?: string;
+}
+
+@ObjectType()
 export class AgentExecutionStreamMessage {
     @Field(() => ID)
     sessionId: string;
@@ -59,80 +130,9 @@ export class AgentExecutionStreamMessage {
     timestamp: Date;
 }
 
-@ObjectType()
-export class AgentExecutionProgress {
-    @Field()
-    step: string;
 
-    @Field()
-    percentage: number;
 
-    @Field()
-    message: string;
 
-    @Field({ nullable: true })
-    metadata?: string; // JSON stringified metadata
-}
-
-@ObjectType()
-export class AgentStreamingContent {
-    @Field()
-    content: string;
-
-    @Field()
-    isComplete: boolean;
-
-    @Field({ nullable: true })
-    stepType?: string;
-
-    @Field({ nullable: true })
-    stepEntityId?: string;
-
-    @Field({ nullable: true })
-    modelName?: string;
-}
-
-@ObjectType()
-export class AgentPartialResult {
-    @Field(() => ID)
-    agentRunId: string;
-
-    @Field()
-    status: string;
-
-    @Field()
-    currentStepCount: number;
-
-    @Field({ nullable: true })
-    currentMessage?: string;
-
-    @Field(() => [AgentExecutionStepSummary])
-    executionSteps: AgentExecutionStepSummary[];
-}
-
-@ObjectType()
-export class AgentExecutionStepSummary {
-    @Field(() => ID)
-    stepId: string;
-
-    @Field()
-    stepType: string;
-
-    @Field()
-    stepName: string;
-
-    @Field()
-    status: string;
-
-    @Field({ nullable: true })
-    startedAt?: Date;
-
-    @Field({ nullable: true })
-    completedAt?: Date;
-
-    @Field({ nullable: true })
-    durationMs?: number;
-}
 
 @Resolver()
 export class RunAIAgentResolver extends ResolverBase {
@@ -204,13 +204,14 @@ export class RunAIAgentResolver extends ResolverBase {
                 };
             }
             
-            const md = new Metadata();
+            // Use AIEngine to get cached agent data
+            const { AIEngine } = await import('@memberjunction/ai');
+            await AIEngine.Instance.Config(false, currentUser);
             
-            // Load the AI agent entity
-            const agentEntity = await md.GetEntityObject<AIAgentEntity>('AI Agents', currentUser);
-            await agentEntity.Load(agentId);
+            // Find agent in cached collection
+            const agentEntity = AIEngine.Instance.Agents.find(a => a.ID === agentId);
             
-            if (!agentEntity.IsSaved) {
+            if (!agentEntity) {
                 return {
                     success: false,
                     errorMessage: `AI Agent with ID ${agentId} not found`,
@@ -238,38 +239,38 @@ export class RunAIAgentResolver extends ResolverBase {
                 agent: agentEntity,
                 conversationMessages: parsedMessages,
                 contextUser: currentUser,
-                data: parsedData,
-                templateData: parsedTemplateData,
                 onProgress: (progress) => {
                     // Publish progress updates
-                    pubSub.publish(AGENT_EXECUTION_STREAM_TOPIC, {
+                    const progressMsg: AgentExecutionStreamMessage = {
                         sessionId,
                         agentRunId: currentAgentRunId,
                         type: 'progress',
                         progress: {
-                            step: progress.step,
+                            currentStep: progress.step,
                             percentage: progress.percentage,
                             message: progress.message,
-                            metadata: progress.metadata ? JSON.stringify(progress.metadata) : undefined
+                            agentName: (progress.metadata as any)?.agentName || undefined,
+                            agentType: (progress.metadata as any)?.agentType || undefined
                         },
                         timestamp: new Date()
-                    } as AgentExecutionStreamMessage);
+                    };
+                    pubSub.publish(AGENT_EXECUTION_STREAM_TOPIC, { agentExecutionStream: progressMsg });
                 },
                 onStreaming: (chunk) => {
                     // Publish streaming content
-                    pubSub.publish(AGENT_EXECUTION_STREAM_TOPIC, {
+                    const streamMsg: AgentExecutionStreamMessage = {
                         sessionId,
                         agentRunId: currentAgentRunId,
                         type: 'streaming',
                         streaming: {
                             content: chunk.content,
-                            isComplete: chunk.isComplete,
-                            stepType: chunk.stepType,
-                            stepEntityId: chunk.stepEntityId,
-                            modelName: chunk.modelName
+                            isPartial: !chunk.isComplete,
+                            stepName: chunk.stepType,
+                            agentName: chunk.modelName
                         },
                         timestamp: new Date()
-                    } as AgentExecutionStreamMessage);
+                    };
+                    pubSub.publish(AGENT_EXECUTION_STREAM_TOPIC, { agentExecutionStream: streamMsg });
                 }
             });
 
@@ -283,39 +284,40 @@ export class RunAIAgentResolver extends ResolverBase {
             // Publish partial results periodically (this would be done inside BaseAgent in a real implementation)
             if (result.agentRun) {
                 const partialResult: AgentPartialResult = {
-                    agentRunId: result.agentRun.ID,
-                    status: result.agentRun.Status,
-                    currentStepCount: result.executionChain.length,
-                    currentMessage: result.executionChain.length > 0 
-                        ? `Executing step ${result.executionChain.length}: ${result.executionChain[result.executionChain.length - 1].stepEntity.StepName}`
-                        : 'Initializing...',
-                    executionSteps: result.executionChain.map(step => ({
+                    currentStep: result.executionChain.length > 0 
+                        ? result.executionChain[result.executionChain.length - 1].stepEntity.StepName
+                        : 'Initializing',
+                    executionChain: result.executionChain.map(step => ({
                         stepId: step.stepEntity.ID,
-                        stepType: step.executionType,
                         stepName: step.stepEntity.StepName,
+                        agentName: undefined, // AIAgentRunStepEntity doesn't have AgentName field
+                        agentType: step.executionType,
+                        startTime: step.stepEntity.StartedAt,
+                        endTime: step.stepEntity.CompletedAt || undefined,
                         status: step.stepEntity.Status,
-                        startedAt: step.stepEntity.StartedAt,
-                        completedAt: step.stepEntity.CompletedAt,
-                        durationMs: step.durationMs
-                    }))
+                        result: step.stepEntity.OutputData || undefined
+                    })),
+                    partialOutput: result.returnValue || undefined
                 };
 
-                pubSub.publish(AGENT_EXECUTION_STREAM_TOPIC, {
+                const partialMsg: AgentExecutionStreamMessage = {
                     sessionId,
                     agentRunId: result.agentRun.ID,
                     type: 'partial_result',
                     partialResult,
                     timestamp: new Date()
-                } as AgentExecutionStreamMessage);
+                };
+                pubSub.publish(AGENT_EXECUTION_STREAM_TOPIC, { agentExecutionStream: partialMsg });
             }
 
             // Publish completion
-            pubSub.publish(AGENT_EXECUTION_STREAM_TOPIC, {
+            const completeMsg: AgentExecutionStreamMessage = {
                 sessionId,
                 agentRunId: result.agentRun?.ID || 'unknown',
                 type: 'complete',
                 timestamp: new Date()
-            } as AgentExecutionStreamMessage);
+            };
+            pubSub.publish(AGENT_EXECUTION_STREAM_TOPIC, { agentExecutionStream: completeMsg });
 
             if (result.success) {
                 LogStatus(`=== AI AGENT RUN COMPLETED FOR: ${agentEntity.Name} (${executionTime}ms) ===`);
