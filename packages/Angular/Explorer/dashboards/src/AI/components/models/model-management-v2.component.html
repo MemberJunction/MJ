@@ -1,0 +1,341 @@
+<div class="model-management-v2">
+  @if (isLoading) {
+    <div class="loading-container">
+      <div class="loading-content">
+        <div class="loading-spinner">
+          <div class="spinner-ring"></div>
+          <div class="spinner-ring"></div>
+          <div class="spinner-ring"></div>
+        </div>
+        <div class="loading-text">{{ currentLoadingMessage }}</div>
+      </div>
+    </div>
+  } @else {
+    <div class="dashboard-header">
+      <div class="header-info">
+        <h2 class="dashboard-title">
+          <i class="fa-solid fa-microchip"></i>
+          AI Models
+        </h2>
+        <button 
+          type="button" 
+          class="filter-toggle-btn"
+          (click)="toggleFilters()"
+          title="Toggle Filters">
+          <i class="fa-solid fa-filter"></i>
+          @if (showFilters) {
+            Hide Filters
+          } @else {
+            Show Filters
+          }
+        </button>
+        <span class="item-count">{{ filteredModels.length }} models</span>
+      </div>
+      
+      <div class="header-controls">
+        <div class="view-toggle">
+          <button 
+            type="button" 
+            class="view-btn"
+            [class.active]="viewMode === 'grid'"
+            (click)="setViewMode('grid')"
+            title="Grid View">
+            <i class="fa-solid fa-grip"></i>
+          </button>
+          <button 
+            type="button" 
+            class="view-btn"
+            [class.active]="viewMode === 'list'"
+            (click)="setViewMode('list')"
+            title="List View">
+            <i class="fa-solid fa-list"></i>
+          </button>
+        </div>
+        
+        <button 
+          type="button" 
+          class="control-btn primary"
+          (click)="createNewModel()"
+          title="Create New Model">
+          <i class="fa-solid fa-plus"></i>
+          New Model
+        </button>
+      </div>
+    </div>
+
+    <kendo-splitter [style.height.px]="600" orientation="horizontal">
+      @if (showFilters) {
+        <kendo-splitter-pane size="320" min="250" max="400">
+          <div class="filter-panel">
+            <div class="filter-panel-header">
+              <h3>Model Filters</h3>
+              <span class="filter-summary">{{ filteredModels.length }} of {{ models.length }}</span>
+              <button type="button" class="reset-btn" (click)="clearFilters()" [disabled]="!hasActiveFilters">
+                <i class="fa-solid fa-rotate-left"></i>
+                Reset Filters
+              </button>
+            </div>
+            <div class="filter-panel-content">
+              <div class="filter-section">
+              <h3>Search</h3>
+              <input 
+                type="text"
+                class="search-input"
+                placeholder="Search models..."
+                [value]="searchTerm"
+                (input)="onSearchChange($any($event.target).value)"
+              />
+            </div>
+
+            <div class="filter-section">
+              <h3>Sort By</h3>
+              <select class="filter-select" [value]="sortBy" (change)="onSortChange($any($event.target).value)">
+                @for (option of sortOptions; track option.value) {
+                  <option [value]="option.value">{{ option.label }}</option>
+                }
+              </select>
+            </div>
+
+            <div class="filter-section">
+              <h3>Vendor</h3>
+              <select class="filter-select" [value]="selectedVendor" (change)="onVendorChange($any($event.target).value)">
+                <option value="all">All Vendors</option>
+                @for (vendor of vendors; track vendor.ID) {
+                  <option [value]="vendor.ID">{{ vendor.Name }}</option>
+                }
+              </select>
+            </div>
+
+            <div class="filter-section">
+              <h3>Type</h3>
+              <select class="filter-select" [value]="selectedType" (change)="onTypeChange($any($event.target).value)">
+                <option value="all">All Types</option>
+                @for (type of modelTypes; track type.ID) {
+                  <option [value]="type.ID">{{ type.Name }}</option>
+                }
+              </select>
+            </div>
+
+            <div class="filter-section">
+              <h3>Status</h3>
+              <select class="filter-select" [value]="selectedStatus" (change)="onStatusChange($any($event.target).value)">
+                <option value="all">All Statuses</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+
+            <div class="filter-section">
+              <h3>Power Rank ({{ powerRankRange.min }}-{{ powerRankRange.max }})</h3>
+              <div class="range-inputs">
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="10" 
+                  [(ngModel)]="powerRankRange.min"
+                  (change)="applyFilters()"
+                  class="range-input"
+                />
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="10" 
+                  [(ngModel)]="powerRankRange.max"
+                  (change)="applyFilters()"
+                  class="range-input"
+                />
+              </div>
+            </div>
+
+            @if (hasActiveFilters) {
+              <div class="filter-actions">
+                <button class="clear-filters" (click)="clearFilters()">
+                  <i class="fa-solid fa-times"></i>
+                  Clear Filters
+                </button>
+              </div>
+            }
+            </div>
+          </div>
+        </kendo-splitter-pane>
+      }
+
+      <kendo-splitter-pane>
+        <div class="content-area">
+          @if (filteredModels.length === 0) {
+            <div class="empty-state">
+              <i class="fa-solid fa-microchip fa-4x"></i>
+              <h3>No models found</h3>
+              <p>{{ hasActiveFilters ? 'Try adjusting your filters' : 'Create your first AI model to get started' }}</p>
+              @if (!hasActiveFilters) {
+                <button class="primary-action" (click)="createNewModel()">
+                  <i class="fa-solid fa-plus"></i>
+                  Create First Model
+                </button>
+              }
+            </div>
+          } @else {
+            @switch (viewMode) {
+              @case ('grid') {
+                <div class="model-grid">
+                  @for (model of filteredModels; track model.ID) {
+                    <div class="model-card" [class.expanded]="expandedModelId === model.ID">
+                      <div class="card-header" (click)="toggleModelExpansion(model.ID)">
+                        <div class="card-icon">
+                          <i [class]="getModelIcon(model)"></i>
+                        </div>
+                        <div class="card-info">
+                          <h4>{{ model.Name }}</h4>
+                          <div class="card-meta">
+                            <span class="vendor">{{ model.VendorName }}</span>
+                            <span class="type">{{ model.ModelTypeName }}</span>
+                          </div>
+                        </div>
+                        <i class="fa-solid fa-chevron-down expand-icon" [class.rotated]="expandedModelId === model.ID"></i>
+                      </div>
+
+                      @if (expandedModelId === model.ID) {
+                        <div class="card-content">
+                          @if (model.Description) {
+                            <div class="description-section">
+                              <h5>Description</h5>
+                              <p>{{ model.Description }}</p>
+                            </div>
+                          }
+
+                          <div class="ranks-section">
+                            <h5>Performance Rankings</h5>
+                            <div class="ranks-grid">
+                              <div class="rank-item">
+                                <span class="rank-label">
+                                  <i class="fa-solid fa-bolt"></i> Power
+                                </span>
+                                <span class="rank-value" [class]="getRankClass(model.PowerRank)">
+                                  {{ model.PowerRankDisplay }}
+                                </span>
+                              </div>
+                              <div class="rank-item">
+                                <span class="rank-label">
+                                  <i class="fa-solid fa-gauge-high"></i> Speed
+                                </span>
+                                <span class="rank-value" [class]="getRankClass(model.SpeedRank)">
+                                  {{ model.SpeedRankDisplay }}
+                                </span>
+                              </div>
+                              <div class="rank-item">
+                                <span class="rank-label">
+                                  <i class="fa-solid fa-dollar-sign"></i> Cost
+                                </span>
+                                <span class="rank-value" [class]="getRankClass(model.CostRank)">
+                                  {{ model.CostRankDisplay }}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div class="stats-grid">
+                            <div class="stat">
+                              <span class="stat-label">Status</span>
+                              <span class="stat-value">
+                                <label class="toggle-switch">
+                                  <input 
+                                    type="checkbox" 
+                                    [checked]="model.IsActive"
+                                    (change)="toggleModelStatus(model, $event)"
+                                  />
+                                  <span class="toggle-slider"></span>
+                                </label>
+                              </span>
+                            </div>
+                            <div class="stat">
+                              <span class="stat-label">API Name</span>
+                              <span class="stat-value">{{ model.APIName || 'N/A' }}</span>
+                            </div>
+                            <div class="stat">
+                              <span class="stat-label">Driver</span>
+                              <span class="stat-value">{{ model.DriverClass || 'N/A' }}</span>
+                            </div>
+                          </div>
+
+                          <div class="card-footer">
+                            <button class="action-button" (click)="openModel(model.ID); $event.stopPropagation()">
+                              <i class="fa-solid fa-edit"></i>
+                              Edit
+                            </button>
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+              
+              @case ('list') {
+                <div class="model-list">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Vendor</th>
+                        <th>Type</th>
+                        <th>Power</th>
+                        <th>Speed</th>
+                        <th>Cost</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (model of filteredModels; track model.ID) {
+                        <tr>
+                          <td>
+                            <div class="name-cell">
+                              <i [class]="getModelIcon(model)"></i>
+                              {{ model.Name }}
+                            </div>
+                          </td>
+                          <td>{{ model.VendorName }}</td>
+                          <td>{{ model.ModelTypeName }}</td>
+                          <td>
+                            <span class="rank-badge" [class]="getRankClass(model.PowerRank)">
+                              {{ model.PowerRankDisplay }}
+                            </span>
+                          </td>
+                          <td>
+                            <span class="rank-badge" [class]="getRankClass(model.SpeedRank)">
+                              {{ model.SpeedRankDisplay }}
+                            </span>
+                          </td>
+                          <td>
+                            <span class="rank-badge" [class]="getRankClass(model.CostRank)">
+                              {{ model.CostRankDisplay }}
+                            </span>
+                          </td>
+                          <td>
+                            <label class="toggle-switch small">
+                              <input 
+                                type="checkbox" 
+                                [checked]="model.IsActive"
+                                (change)="toggleModelStatus(model, $event)"
+                              />
+                              <span class="toggle-slider"></span>
+                            </label>
+                          </td>
+                          <td>
+                            <button class="action-button small" (click)="openModel(model.ID)">
+                              <i class="fa-solid fa-edit"></i>
+                            </button>
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            }
+          }
+        </div>
+      </kendo-splitter-pane>
+    </kendo-splitter>
+  }
+</div>

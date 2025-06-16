@@ -12,7 +12,9 @@ import { EntityDetailsComponent } from './EntityAdmin/components/entity-details.
 import { ERDDiagramComponent } from './EntityAdmin/components/erd-diagram.component';
 import { AIDashboardComponent } from './AI/ai-dashboard.component';
 import { ModelManagementComponent } from './AI/components/models/model-management.component';
+import { ModelManagementV2Component } from './AI/components/models/model-management-v2.component';
 import { PromptManagementComponent } from './AI/components/prompts/prompt-management.component';
+import { PromptManagementV2Component } from './AI/components/prompts/prompt-management-v2.component';
 import { PromptFilterPanelComponent } from './AI/components/prompts/prompt-filter-panel.component';
 import { AgentConfigurationComponent } from './AI/components/agents/agent-configuration.component';
 import { AgentFilterPanelComponent } from './AI/components/agents/agent-filter-panel.component';
@@ -52,7 +54,9 @@ import { AIInstrumentationService } from './AI/services/ai-instrumentation.servi
     ERDDiagramComponent,
     AIDashboardComponent,
     ModelManagementComponent,
+    ModelManagementV2Component,
     PromptManagementComponent,
+    PromptManagementV2Component,
     PromptFilterPanelComponent,
     AgentConfigurationComponent,
     AgentFilterPanelComponent,

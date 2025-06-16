@@ -78,7 +78,8 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
 
   public onTabChange(tabId: string): void {
     this.activeTab = tabId;
-    this.selectedIndex = this.navigationItems.indexOf(tabId);
+    const index = this.navigationItems.indexOf(tabId);
+    this.selectedIndex = index >= 0 ? index : 0;
     this.visitedTabs.add(tabId); // Mark tab as visited
     this.emitStateChange();
   }
@@ -142,7 +143,12 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
   public loadUserState(state: Partial<AIDashboardState>): void {
     if (state.activeTab) {
       this.activeTab = state.activeTab;
-      this.selectedIndex = this.navigationItems.indexOf(state.activeTab);
+      const index = this.navigationItems.indexOf(state.activeTab);
+      // Ensure we don't set selectedIndex to -1
+      this.selectedIndex = index >= 0 ? index : 0;
+      
+      // Mark the tab as visited
+      this.visitedTabs.add(state.activeTab);
     }
     
     // Store component states for when they're rendered
@@ -158,6 +164,8 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
     if (state.systemConfigurationState) {
       this.systemConfigurationState = state.systemConfigurationState;
     }
+    
+    // No need for manual change detection with default strategy
   }
 
   // Handle entity record opening from sub-components
@@ -190,7 +198,12 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
     // Load any initial data needed for the AI dashboard
     // Check if we have user state in the Config and apply it
     if (this.Config?.userState) {
-      this.loadUserState(this.Config.userState);
+      // Wrap in setTimeout to avoid ExpressionChangedAfterItHasBeenCheckedError
+      setTimeout(() => {
+        if (this.Config?.userState) {
+          this.loadUserState(this.Config.userState);
+        }
+      }, 0);
     }
     
     // Emit loading complete event

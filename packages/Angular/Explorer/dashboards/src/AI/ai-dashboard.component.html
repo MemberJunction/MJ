@@ -16,18 +16,18 @@
     <div class="dashboard-content-wrapper">
       <div class="dashboard-content">
         @if (activeTab === 'models' && hasVisited('models')) {
-          <app-model-management
+          <app-model-management-v2
             (openEntityRecord)="onOpenEntityRecord($event)"
             mjFillContainer>
-          </app-model-management>
+          </app-model-management-v2>
         }
         
         @if (activeTab === 'prompts' && hasVisited('prompts')) {
-          <app-prompt-management
+          <app-prompt-management-v2
             (openEntityRecord)="onOpenEntityRecord($event)"
             (stateChange)="onPromptManagementStateChange($event)"
             mjFillContainer>
-          </app-prompt-management>
+          </app-prompt-management-v2>
         }
         
         @if (activeTab === 'agents' && hasVisited('agents')) {

@@ -1,8 +1,12 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { AIAgentEntity } from '@memberjunction/core-entities';
+import { AIAgentEntity, AIAgentTypeEntity } from '@memberjunction/core-entities';
+import { AIEngineBase } from '@memberjunction/ai-base-engine';
 
 interface AgentFilter {
   searchTerm: string;
+  agentType: string;
+  parentAgent: string;
+  status: string;
   executionMode: string;
   exposeAsAction: string;
 }
@@ -17,6 +21,9 @@ export class AgentFilterPanelComponent implements OnInit {
   @Input() filteredAgents: AIAgentEntity[] = [];
   @Input() filters: AgentFilter = {
     searchTerm: '',
+    agentType: 'all',
+    parentAgent: 'all',
+    status: 'all',
     executionMode: 'all',
     exposeAsAction: 'all'
   };
@@ -25,6 +32,21 @@ export class AgentFilterPanelComponent implements OnInit {
   @Output() filterChange = new EventEmitter<void>();
   @Output() resetFilters = new EventEmitter<void>();
   @Output() closePanel = new EventEmitter<void>();
+
+  public agentTypeOptions: { text: string; value: string }[] = [
+    { text: 'All Types', value: 'all' }
+  ];
+
+  public parentAgentOptions: { text: string; value: string }[] = [
+    { text: 'All Agents', value: 'all' },
+    { text: 'No Parent', value: 'none' }
+  ];
+
+  public statusOptions = [
+    { text: 'All Statuses', value: 'all' },
+    { text: 'Active', value: 'active' },
+    { text: 'Inactive', value: 'inactive' }
+  ];
 
   public executionModeOptions = [
     { text: 'All Execution Modes', value: 'all' },
@@ -38,8 +60,34 @@ export class AgentFilterPanelComponent implements OnInit {
     { text: 'Not Exposed', value: 'false' }
   ];
 
-  ngOnInit(): void {
-    // Initialize component
+  async ngOnInit(): Promise<void> {
+    // Load agent types from AIEngineBase
+    try {
+      const aiEngine = AIEngineBase.Instance;
+      if (!aiEngine.Loaded) {
+        await aiEngine.Config();
+      }
+      
+      // Add agent types to options
+      const agentTypes = aiEngine.AgentTypes;
+      agentTypes.forEach((type: AIAgentTypeEntity) => {
+        this.agentTypeOptions.push({
+          text: type.Name,
+          value: type.ID
+        });
+      });
+
+      // Add parent agents to options (only those without parents themselves)
+      const parentAgents = this.agents.filter(agent => !agent.ParentID);
+      parentAgents.forEach(agent => {
+        this.parentAgentOptions.push({
+          text: agent.Name || 'Unnamed Agent',
+          value: agent.ID
+        });
+      });
+    } catch (error) {
+      console.error('Error loading agent metadata:', error);
+    }
   }
 
   public onFilterChange(): void {

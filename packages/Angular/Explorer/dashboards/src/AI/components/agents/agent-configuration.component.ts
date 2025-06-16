@@ -4,6 +4,9 @@ import { AIAgentEntity } from '@memberjunction/core-entities';
 
 interface AgentFilter {
   searchTerm: string;
+  agentType: string;
+  parentAgent: string;
+  status: string;
   executionMode: string;
   exposeAsAction: string;
 }
@@ -27,6 +30,9 @@ export class AgentConfigurationComponent implements OnInit {
   
   public currentFilters: AgentFilter = {
     searchTerm: '',
+    agentType: 'all',
+    parentAgent: 'all',
+    status: 'all',
     executionMode: 'all',
     exposeAsAction: 'all'
   };
@@ -78,6 +84,9 @@ export class AgentConfigurationComponent implements OnInit {
   public onResetFilters(): void {
     this.currentFilters = {
       searchTerm: '',
+      agentType: 'all',
+      parentAgent: 'all',
+      status: 'all',
       executionMode: 'all',
       exposeAsAction: 'all'
     };
@@ -87,13 +96,37 @@ export class AgentConfigurationComponent implements OnInit {
   private applyFilters(): void {
     let filtered = [...this.agents];
 
-    // Apply search filter
+    // Apply search filter (name contains)
     if (this.currentFilters.searchTerm) {
       const searchTerm = this.currentFilters.searchTerm.toLowerCase();
       filtered = filtered.filter(agent => 
         (agent.Name || '').toLowerCase().includes(searchTerm) ||
         (agent.Description || '').toLowerCase().includes(searchTerm)
       );
+    }
+
+    // Apply agent type filter
+    if (this.currentFilters.agentType !== 'all') {
+      filtered = filtered.filter(agent => agent.TypeID === this.currentFilters.agentType);
+    }
+
+    // Apply parent agent filter
+    if (this.currentFilters.parentAgent !== 'all') {
+      if (this.currentFilters.parentAgent === 'none') {
+        filtered = filtered.filter(agent => !agent.ParentID);
+      } else {
+        filtered = filtered.filter(agent => agent.ParentID === this.currentFilters.parentAgent);
+      }
+    }
+
+    // Apply status filter
+    if (this.currentFilters.status !== 'all') {
+      const wantActive = this.currentFilters.status === 'active';
+      if (wantActive) {
+        filtered = filtered.filter(agent => agent.Status === 'Active');
+      } else {
+        filtered = filtered.filter(agent => agent.Status !== 'Active');
+      }
     }
 
     // Apply execution mode filter
