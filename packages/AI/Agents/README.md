@@ -442,6 +442,205 @@ protected async processNextStep(
 }
 ```
 
+## Enhanced Execution Result Structure
+
+The AI Agents framework now provides comprehensive execution tracking through the enhanced `ExecuteAgentResult` type. This structure gives complete visibility into every step of agent execution, including all prompts, actions, sub-agents, and decisions made along the way.
+
+### ExecuteAgentResult
+
+The main result structure returned from agent execution:
+
+```typescript
+interface ExecuteAgentResult {
+    // Core execution outcome
+    success: boolean;                    // Whether the overall execution was successful
+    finalStep: BaseAgentNextStep['step']; // The final step type that terminated execution
+    returnValue?: any;                   // Optional return value from the agent
+    errorMessage?: string;               // Error message if execution failed
+    
+    // Tracking and history
+    agentRun: AIAgentRunEntity;          // Database entity tracking this execution
+    executionChain: ExecutionChainStep[]; // Complete chain of execution steps
+}
+```
+
+### ExecutionChainStep
+
+Each step in the execution chain captures:
+
+```typescript
+interface ExecutionChainStep {
+    stepEntity: AIAgentRunStepEntity;    // Database entity for this step
+    executionType: 'prompt' | 'action' | 'sub-agent' | 'decision' | 'chat' | 'validation';
+    executionResult: StepExecutionResult; // The actual result (varies by type)
+    nextStepDecision: NextStepDecision;   // What was decided after this step
+    startTime: Date;                      // When the step started
+    endTime?: Date;                       // When the step completed
+    durationMs?: number;                  // Execution duration in milliseconds
+}
+```
+
+### Step Execution Results
+
+Different execution types have specialized result structures:
+
+#### PromptExecutionResult
+```typescript
+{
+    type: 'prompt';
+    promptId: string;
+    promptName: string;
+    result: AIPromptRunResult;  // Native result from @memberjunction/ai-prompts
+}
+```
+
+#### ActionExecutionResult
+```typescript
+{
+    type: 'action';
+    actionId: string;
+    actionName: string;
+    result: ActionResult | ActionResultSimple;  // Native result from @memberjunction/actions
+}
+```
+
+#### SubAgentExecutionResult
+```typescript
+{
+    type: 'sub-agent';
+    subAgentId: string;
+    subAgentName: string;
+    result: ExecuteAgentResult;  // Recursive - full execution result of sub-agent
+}
+```
+
+### Usage Example
+
+```typescript
+const runner = new AgentRunner();
+const result = await runner.RunAgent({
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: user
+});
+
+// Access execution outcome
+console.log(`Success: ${result.success}`);
+console.log(`Final step: ${result.finalStep}`);
+console.log(`Return value:`, result.returnValue);
+
+// Access the agent run record
+console.log(`Agent run ID: ${result.agentRun.ID}`);
+console.log(`Started at: ${result.agentRun.StartedAt}`);
+console.log(`Duration: ${result.agentRun.CompletedAt - result.agentRun.StartedAt}ms`);
+
+// Analyze the execution chain
+result.executionChain.forEach((step, index) => {
+    console.log(`\nStep ${index + 1}: ${step.executionType}`);
+    console.log(`  Name: ${step.stepEntity.StepName}`);
+    console.log(`  Duration: ${step.durationMs}ms`);
+    console.log(`  Success: ${step.stepEntity.Success}`);
+    
+    // Access type-specific results
+    switch (step.executionResult.type) {
+        case 'prompt':
+            console.log(`  Prompt: ${step.executionResult.promptName}`);
+            console.log(`  Tokens used: ${step.executionResult.result.tokensUsed}`);
+            break;
+        case 'action':
+            console.log(`  Action: ${step.executionResult.actionName}`);
+            console.log(`  Result: ${step.executionResult.result.Success}`);
+            break;
+        case 'sub-agent':
+            console.log(`  Sub-agent: ${step.executionResult.subAgentName}`);
+            console.log(`  Sub-steps: ${step.executionResult.result.executionChain.length}`);
+            break;
+    }
+    
+    // Show what was decided next
+    console.log(`  Next decision: ${step.nextStepDecision.decision}`);
+    console.log(`  Reasoning: ${step.nextStepDecision.reasoning}`);
+});
+
+// Visualize the execution flow
+const executionFlow = result.executionChain
+    .map(step => `${step.executionType} → ${step.nextStepDecision.decision}`)
+    .join(' → ');
+console.log(`\nExecution flow: ${executionFlow}`);
+```
+
+### Database Persistence
+
+All execution data is automatically persisted to the database:
+
+- **AIAgentRun**: Tracks the overall agent execution
+  - Links to parent runs for sub-agent tracking
+  - Stores final results and state
+  - Tracks timing and success status
+
+- **AIAgentRunStep**: Tracks individual execution steps
+  - Links to the parent run
+  - Stores step-specific data (input/output)
+  - Tracks step timing and success
+
+This enables:
+- Historical analysis of agent behavior
+- Performance optimization based on real data
+- Debugging complex agent interactions
+- Compliance and audit trails
+
+### Analyzing Sub-Agent Execution
+
+Sub-agent results are fully recursive, allowing deep analysis:
+
+```typescript
+function analyzeExecutionDepth(result: ExecuteAgentResult, depth = 0): void {
+    const indent = '  '.repeat(depth);
+    console.log(`${indent}Agent: ${result.agentRun.AgentID}`);
+    console.log(`${indent}Steps: ${result.executionChain.length}`);
+    
+    // Find sub-agent executions
+    const subAgentSteps = result.executionChain.filter(
+        step => step.executionType === 'sub-agent'
+    ) as Array<{ executionResult: SubAgentExecutionResult }>;
+    
+    // Recursively analyze sub-agents
+    for (const step of subAgentSteps) {
+        analyzeExecutionDepth(step.executionResult.result, depth + 1);
+    }
+}
+
+// Analyze the entire execution tree
+analyzeExecutionDepth(result);
+```
+
+### Performance Analysis
+
+Use the execution chain for performance optimization:
+
+```typescript
+// Calculate time spent in each type of operation
+const timingAnalysis = result.executionChain.reduce((acc, step) => {
+    const type = step.executionType;
+    acc[type] = (acc[type] || 0) + (step.durationMs || 0);
+    return acc;
+}, {} as Record<string, number>);
+
+console.log('Time spent by operation type:', timingAnalysis);
+
+// Find slowest steps
+const slowestSteps = result.executionChain
+    .filter(step => step.durationMs)
+    .sort((a, b) => b.durationMs! - a.durationMs!)
+    .slice(0, 5);
+
+console.log('Top 5 slowest steps:', slowestSteps.map(s => ({
+    name: s.stepEntity.StepName,
+    duration: s.durationMs,
+    type: s.executionType
+})));
+```
+
 ## API Reference
 
 ### AgentRunner Class

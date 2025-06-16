@@ -83,9 +83,13 @@ export class AgentRunner {
             LogError(`AgentRunner execution failed: ${errorMessage}`, undefined, error);
             
             // Return error result in the same format as BaseAgent
+            // Create a minimal failure result when we can't get a proper agent run
             return {
-                nextStep: 'failed',
-                errorMessage
+                success: false,
+                finalStep: 'failed',
+                errorMessage,
+                agentRun: null as any, // This is an edge case where we couldn't create the run
+                executionChain: []
             };
         }
     }
