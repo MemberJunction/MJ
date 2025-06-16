@@ -69,92 +69,118 @@
           <div class="filter-panel">
             <div class="filter-panel-header">
               <h3>Model Filters</h3>
-              <span class="filter-summary">{{ filteredModels.length }} of {{ models.length }}</span>
-              <button type="button" class="reset-btn" (click)="clearFilters()" [disabled]="!hasActiveFilters">
-                <i class="fa-solid fa-rotate-left"></i>
-                Reset Filters
+              <div class="filter-summary-inline">
+                <span class="summary-value">{{ filteredModels.length }}</span>
+                <span class="summary-label">of {{ models.length }}</span>
+              </div>
+              <button class="close-btn" (click)="toggleFilterPanel()">
+                <span class="fa-solid fa-times"></span>
               </button>
             </div>
-            <div class="filter-panel-content">
-              <div class="filter-section">
-              <h3>Search</h3>
-              <input 
-                type="text"
-                class="search-input"
-                placeholder="Search models..."
-                [value]="searchTerm"
-                (input)="onSearchChange($any($event.target).value)"
-              />
-            </div>
-
-            <div class="filter-section">
-              <h3>Sort By</h3>
-              <select class="filter-select" [value]="sortBy" (change)="onSortChange($any($event.target).value)">
-                @for (option of sortOptions; track option.value) {
-                  <option [value]="option.value">{{ option.label }}</option>
-                }
-              </select>
-            </div>
-
-            <div class="filter-section">
-              <h3>Vendor</h3>
-              <select class="filter-select" [value]="selectedVendor" (change)="onVendorChange($any($event.target).value)">
-                <option value="all">All Vendors</option>
-                @for (vendor of vendors; track vendor.ID) {
-                  <option [value]="vendor.ID">{{ vendor.Name }}</option>
-                }
-              </select>
-            </div>
-
-            <div class="filter-section">
-              <h3>Type</h3>
-              <select class="filter-select" [value]="selectedType" (change)="onTypeChange($any($event.target).value)">
-                <option value="all">All Types</option>
-                @for (type of modelTypes; track type.ID) {
-                  <option [value]="type.ID">{{ type.Name }}</option>
-                }
-              </select>
-            </div>
-
-            <div class="filter-section">
-              <h3>Status</h3>
-              <select class="filter-select" [value]="selectedStatus" (change)="onStatusChange($any($event.target).value)">
-                <option value="all">All Statuses</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
-
-            <div class="filter-section">
-              <h3>Power Rank ({{ powerRankRange.min }}-{{ powerRankRange.max }})</h3>
-              <div class="range-inputs">
+            
+            <div class="filter-content">
+              <!-- Search Filter -->
+              <div class="filter-group">
+                <label class="filter-label">
+                  <span class="fa-solid fa-search"></span>
+                  Name
+                </label>
                 <input 
-                  type="range" 
-                  min="0" 
-                  max="10" 
-                  [(ngModel)]="powerRankRange.min"
-                  (change)="applyFilters()"
-                  class="range-input"
-                />
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="10" 
-                  [(ngModel)]="powerRankRange.max"
-                  (change)="applyFilters()"
-                  class="range-input"
+                  type="text"
+                  class="filter-input"
+                  placeholder="Search models..."
+                  [value]="searchTerm"
+                  (input)="onSearchChange($any($event.target).value)"
                 />
               </div>
-            </div>
 
-            @if (hasActiveFilters) {
+              <!-- Sort By Filter -->
+              <div class="filter-group">
+                <label class="filter-label">
+                  <span class="fa-solid fa-sort"></span>
+                  Sort By
+                </label>
+                <select class="filter-select" [value]="sortBy" (change)="onSortChange($any($event.target).value)">
+                  @for (option of sortOptions; track option.value) {
+                    <option [value]="option.value">{{ option.label }}</option>
+                  }
+                </select>
+              </div>
+
+              <!-- Vendor Filter -->
+              <div class="filter-group">
+                <label class="filter-label">
+                  <span class="fa-solid fa-building"></span>
+                  Vendor
+                </label>
+                <select class="filter-select" [value]="selectedVendor" (change)="onVendorChange($any($event.target).value)">
+                  <option value="all">All Vendors</option>
+                  @for (vendor of vendors; track vendor.ID) {
+                    <option [value]="vendor.ID">{{ vendor.Name }}</option>
+                  }
+                </select>
+              </div>
+
+              <!-- Type Filter -->
+              <div class="filter-group">
+                <label class="filter-label">
+                  <span class="fa-solid fa-microchip"></span>
+                  Type
+                </label>
+                <select class="filter-select" [value]="selectedType" (change)="onTypeChange($any($event.target).value)">
+                  <option value="all">All Types</option>
+                  @for (type of modelTypes; track type.ID) {
+                    <option [value]="type.ID">{{ type.Name }}</option>
+                  }
+                </select>
+              </div>
+
+              <!-- Status Filter -->
+              <div class="filter-group">
+                <label class="filter-label">
+                  <span class="fa-solid fa-toggle-on"></span>
+                  Status
+                </label>
+                <select class="filter-select" [value]="selectedStatus" (change)="onStatusChange($any($event.target).value)">
+                  <option value="all">All Statuses</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+
+              <!-- Power Rank Filter -->
+              <div class="filter-group">
+                <label class="filter-label">
+                  <span class="fa-solid fa-bolt"></span>
+                  Power Rank ({{ powerRankRange.min }}-{{ powerRankRange.max }})
+                </label>
+                <div class="range-inputs">
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max="10" 
+                    [(ngModel)]="powerRankRange.min"
+                    (change)="applyFilters()"
+                    class="range-input"
+                  />
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max="10" 
+                    [(ngModel)]="powerRankRange.max"
+                    (change)="applyFilters()"
+                    class="range-input"
+                  />
+                </div>
+              </div>
+
+              <!-- Reset Button -->
               <div class="filter-actions">
-                <button class="clear-filters" (click)="clearFilters()">
-                  <i class="fa-solid fa-times"></i>
-                  Clear Filters
+                <button class="reset-btn" (click)="clearFilters()" title="Reset all filters">
+                  <span class="fa-solid fa-undo"></span>
+                  Reset Filters
                 </button>
               </div>
-            }
             </div>
           </div>
         </kendo-splitter-pane>

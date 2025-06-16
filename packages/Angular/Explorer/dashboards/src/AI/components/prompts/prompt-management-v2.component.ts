@@ -197,6 +197,11 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
     this.emitStateChange();
   }
 
+  public toggleFilterPanel(): void {
+    this.showFilters = !this.showFilters;
+    this.emitStateChange();
+  }
+
   public setViewMode(mode: 'grid' | 'list' | 'priority-matrix'): void {
     this.viewMode = mode;
     this.expandedPromptId = null;

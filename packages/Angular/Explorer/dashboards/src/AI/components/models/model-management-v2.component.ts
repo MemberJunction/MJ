@@ -206,6 +206,11 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
     this.emitStateChange();
   }
 
+  public toggleFilterPanel(): void {
+    this.showFilters = !this.showFilters;
+    this.emitStateChange();
+  }
+
   public setViewMode(mode: 'grid' | 'list'): void {
     this.viewMode = mode;
     this.expandedModelId = null;

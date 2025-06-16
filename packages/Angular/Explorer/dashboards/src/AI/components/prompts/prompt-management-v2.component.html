@@ -77,61 +77,79 @@
           <div class="filter-panel">
             <div class="filter-panel-header">
               <h3>Prompt Filters</h3>
-              <span class="filter-summary">{{ filteredPrompts.length }} of {{ prompts.length }}</span>
-              <button type="button" class="reset-btn" (click)="clearFilters()" [disabled]="!hasActiveFilters">
-                <i class="fa-solid fa-rotate-left"></i>
-                Reset Filters
+              <div class="filter-summary-inline">
+                <span class="summary-value">{{ filteredPrompts.length }}</span>
+                <span class="summary-label">of {{ prompts.length }}</span>
+              </div>
+              <button class="close-btn" (click)="toggleFilterPanel()">
+                <span class="fa-solid fa-times"></span>
               </button>
             </div>
-            <div class="filter-panel-content">
-              <div class="filter-section">
-              <h3>Search</h3>
-              <input 
-                type="text"
-                class="search-input"
-                placeholder="Search prompts..."
-                [value]="searchTerm"
-                (input)="onSearchChange($any($event.target).value)"
-              />
-            </div>
+            
+            <div class="filter-content">
+              <!-- Search Filter -->
+              <div class="filter-group">
+                <label class="filter-label">
+                  <span class="fa-solid fa-search"></span>
+                  Name
+                </label>
+                <input 
+                  type="text"
+                  class="filter-input"
+                  placeholder="Search prompts..."
+                  [value]="searchTerm"
+                  (input)="onSearchChange($any($event.target).value)"
+                />
+              </div>
 
-            <div class="filter-section">
-              <h3>Category</h3>
-              <select class="filter-select" [value]="selectedCategory" (change)="onCategoryChange($any($event.target).value)">
-                <option value="all">All Categories</option>
-                @for (category of categories; track category.ID) {
-                  <option [value]="category.ID">{{ category.Name }}</option>
-                }
-              </select>
-            </div>
+              <!-- Category Filter -->
+              <div class="filter-group">
+                <label class="filter-label">
+                  <span class="fa-solid fa-folder"></span>
+                  Category
+                </label>
+                <select class="filter-select" [value]="selectedCategory" (change)="onCategoryChange($any($event.target).value)">
+                  <option value="all">All Categories</option>
+                  @for (category of categories; track category.ID) {
+                    <option [value]="category.ID">{{ category.Name }}</option>
+                  }
+                </select>
+              </div>
 
-            <div class="filter-section">
-              <h3>Type</h3>
-              <select class="filter-select" [value]="selectedType" (change)="onTypeChange($any($event.target).value)">
-                <option value="all">All Types</option>
-                @for (type of types; track type.ID) {
-                  <option [value]="type.ID">{{ type.Name }}</option>
-                }
-              </select>
-            </div>
+              <!-- Type Filter -->
+              <div class="filter-group">
+                <label class="filter-label">
+                  <span class="fa-solid fa-tag"></span>
+                  Type
+                </label>
+                <select class="filter-select" [value]="selectedType" (change)="onTypeChange($any($event.target).value)">
+                  <option value="all">All Types</option>
+                  @for (type of types; track type.ID) {
+                    <option [value]="type.ID">{{ type.Name }}</option>
+                  }
+                </select>
+              </div>
 
-            <div class="filter-section">
-              <h3>Status</h3>
-              <select class="filter-select" [value]="selectedStatus" (change)="onStatusChange($any($event.target).value)">
-                <option value="all">All Statuses</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
+              <!-- Status Filter -->
+              <div class="filter-group">
+                <label class="filter-label">
+                  <span class="fa-solid fa-toggle-on"></span>
+                  Status
+                </label>
+                <select class="filter-select" [value]="selectedStatus" (change)="onStatusChange($any($event.target).value)">
+                  <option value="all">All Statuses</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
 
-            @if (hasActiveFilters) {
+              <!-- Reset Button -->
               <div class="filter-actions">
-                <button class="clear-filters" (click)="clearFilters()">
-                  <i class="fa-solid fa-times"></i>
-                  Clear Filters
+                <button class="reset-btn" (click)="clearFilters()" title="Reset all filters">
+                  <span class="fa-solid fa-undo"></span>
+                  Reset Filters
                 </button>
               </div>
-            }
             </div>
           </div>
         </kendo-splitter-pane>
