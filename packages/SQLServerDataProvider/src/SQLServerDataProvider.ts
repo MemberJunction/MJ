@@ -88,6 +88,7 @@ import { AIEngine, EntityAIActionParams } from '@memberjunction/aiengine';
 import { QueueManager } from '@memberjunction/queue';
 
 import * as sql from 'mssql';
+import { BehaviorSubject, Observable } from 'rxjs';
 import { SQLServerTransactionGroup } from './SQLServerTransactionGroup';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { 
@@ -134,13 +135,36 @@ export class SQLServerDataProvider
   private _pool: sql.ConnectionPool;
   private _poolConfig: any; // Store the connection config for later use
   private _transaction: sql.Transaction;
-  private _transactionRequest: sql.Request;
+  // Removed _transactionRequest - creating new Request objects for each query to avoid concurrency issues
   private _localStorageProvider: ILocalStorageProvider;
   private _bAllowRefresh: boolean = true;
   private _recordDupeDetector: DuplicateRecordDetector;
   private _needsDatetimeOffsetAdjustment: boolean = false;
   private _datetimeOffsetTestComplete: boolean = false;
   private _sqlLoggingSessions: Map<string, SqlLoggingSessionImpl> = new Map();
+  
+  // Transaction state management
+  private _transactionState$ = new BehaviorSubject<boolean>(false);
+  private _deferredTasks: Array<{ type: string; data: any; options: any; user: UserInfo }> = [];
+  
+  /**
+   * Observable that emits the current transaction state (true when active, false when not)
+   * External code can subscribe to this to know when transactions start and end
+   * @example
+   * provider.transactionState$.subscribe(isActive => {
+   *   console.log('Transaction active:', isActive);
+   * });
+   */
+  public get transactionState$(): Observable<boolean> {
+    return this._transactionState$.asObservable();
+  }
+  
+  /**
+   * Gets whether a transaction is currently active
+   */
+  public get isTransactionActive(): boolean {
+    return this._transactionState$.value;
+  }
 
   /**
    * Gets the current configuration data for this provider instance
@@ -1583,7 +1607,13 @@ export class SQLServerDataProvider
             } else {
               // just add a task and move on, we are doing 'after save' so we don't wait
               try {
-                QueueManager.AddTask('Entity AI Action', p, null, user);
+                if (this.isTransactionActive) {
+                  // Defer the task until after the transaction completes
+                  this._deferredTasks.push({ type: 'Entity AI Action', data: p, options: null, user });
+                } else {
+                  // No transaction active, add the task immediately
+                  QueueManager.AddTask('Entity AI Action', p, null, user);
+                }
               } catch (e) {
                 LogError(e.message);
               }
@@ -2809,6 +2839,182 @@ export class SQLServerDataProvider
     });
   }
 
+
+  /**
+   * Internal centralized method for executing SQL queries with consistent transaction and connection handling.
+   * This method ensures proper request object creation and management to avoid concurrency issues,
+   * particularly when using transactions where multiple operations may execute in parallel.
+   * 
+   * @private
+   * @param query - The SQL query to execute
+   * @param parameters - Optional parameters for the query (array for positional, object for named)
+   * @param connectionSource - Optional specific connection source (pool, transaction, or request)
+   * @param loggingOptions - Optional logging configuration
+   * @returns Promise<sql.IResult<any>> - The raw mssql result object
+   * 
+   * @remarks
+   * - Always creates a new Request object for each query to avoid "EREQINPROG" errors
+   * - Handles both positional (?) and named (@param) parameter styles
+   * - Automatically uses active transaction if one exists, otherwise uses connection pool
+   * - Handles SQL logging in parallel with query execution
+   * - Provides automatic retry with pool connection if transaction fails
+   * 
+   * @throws {Error} Rethrows any SQL execution errors after logging
+   */
+  private async _internalExecuteSQL(
+    query: string,
+    parameters?: any,
+    connectionSource?: sql.ConnectionPool | sql.Transaction | sql.Request,
+    loggingOptions?: {
+      description?: string;
+      ignoreLogging?: boolean;
+      isMutation?: boolean;
+      simpleSQLFallback?: string;
+      contextUser?: UserInfo;
+    }
+  ): Promise<sql.IResult<any>> {
+    // If no connection source provided, determine what to use
+    if (!connectionSource) {
+      // Check if we have a transaction and if it's still valid
+      // The mssql Transaction doesn't expose a direct "isOpen" property, but we can check
+      // if it's been set to null (which we do on commit/rollback) or try to use it
+      if (this._transaction) {
+        try {
+          // Try to create a request to test if the transaction is still valid
+          // This is a lightweight operation that will fail fast if the transaction is closed
+          const testRequest = new sql.Request(this._transaction);
+          connectionSource = this._transaction;
+        } catch (error: any) {
+          // Transaction is no longer valid, clear it and use the pool
+          this._transaction = null;
+          connectionSource = this._pool;
+        }
+      } else {
+        connectionSource = this._pool;
+      }
+    }
+
+    // If we have logging options, we need to handle the _logSqlStatement call here
+    // because it's an instance method that needs access to this._activeSqlLoggingSessions
+    let logPromise: Promise<void>;
+    if (loggingOptions && !loggingOptions.ignoreLogging) {
+      logPromise = this._logSqlStatement(
+        query,
+        parameters,
+        loggingOptions.description,
+        loggingOptions.ignoreLogging,
+        loggingOptions.isMutation,
+        loggingOptions.simpleSQLFallback,
+        loggingOptions.contextUser
+      );
+    } else {
+      logPromise = Promise.resolve();
+    }
+
+    try {
+      // Create the request object based on connection source type
+      let request: sql.Request;
+
+      if (connectionSource instanceof sql.Request) {
+        // Use provided request directly (for backwards compatibility)
+        request = connectionSource;
+      } else if (connectionSource instanceof sql.Transaction) {
+        // Create new request from transaction
+        // This ensures each query gets its own request object to avoid concurrency issues
+        request = new sql.Request(connectionSource);
+      } else if (connectionSource instanceof sql.ConnectionPool) {
+        // Create new request from pool
+        request = new sql.Request(connectionSource);
+      } else {
+        throw new Error('Invalid connection source type');
+      }
+
+      // Add parameters if provided
+      let processedQuery = query;
+      if (parameters) {
+        if (Array.isArray(parameters)) {
+          // Handle positional parameters (legacy TypeORM style)
+          // Convert to named parameters for mssql
+          parameters.forEach((value, index) => {
+            request.input(`p${index}`, value);
+          });
+          // Replace ? with @p0, @p1, etc. in the query
+          let paramIndex = 0;
+          processedQuery = query.replace(/\?/g, () => `@p${paramIndex++}`);
+        } else if (typeof parameters === 'object') {
+          // Handle named parameters
+          for (const [key, value] of Object.entries(parameters)) {
+            request.input(key, value);
+          }
+        }
+      }
+
+      // Execute query and logging in parallel
+      const [result] = await Promise.all([
+        request.query(processedQuery),
+        logPromise
+      ]);
+      
+      return result;
+    } catch (error: any) {
+      // If we still get an EREQINPROG error, it means concurrent operations are happening
+      // on a closed transaction. Clear it and retry with the pool.
+      if (error?.code === 'EREQINPROG' && connectionSource === this._transaction) {
+        // Log the retry
+        LogStatus('Transaction connection busy (EREQINPROG) - retrying with pool connection');
+        
+        // Clear the stale transaction reference
+        this._transaction = null;
+        
+        // Retry with the pool connection (and re-log if needed)
+        const retryLogPromise = loggingOptions && !loggingOptions.ignoreLogging
+          ? this._logSqlStatement(
+              query,
+              parameters,
+              loggingOptions.description + ' (retry with pool)',
+              loggingOptions.ignoreLogging,
+              loggingOptions.isMutation,
+              loggingOptions.simpleSQLFallback,
+              loggingOptions.contextUser
+            )
+          : Promise.resolve();
+        
+        // Create new request with pool
+        const poolRequest = new sql.Request(this._pool);
+        
+        // Add parameters again
+        let processedQuery = query;
+        if (parameters) {
+          if (Array.isArray(parameters)) {
+            parameters.forEach((value, index) => {
+              poolRequest.input(`p${index}`, value);
+            });
+            let paramIndex = 0;
+            processedQuery = query.replace(/\?/g, () => `@p${paramIndex++}`);
+          } else if (typeof parameters === 'object') {
+            for (const [key, value] of Object.entries(parameters)) {
+              poolRequest.input(key, value);
+            }
+          }
+        }
+        
+        // Execute with pool
+        const [retryResult] = await Promise.all([
+          poolRequest.query(processedQuery),
+          retryLogPromise
+        ]);
+        
+        return retryResult;
+      }
+      
+      // Log other errors
+      LogError(error);
+      
+      // Re-throw all errors
+      throw error;
+    }
+  }
+
   /**
    * This method can be used to execute raw SQL statements outside of the MJ infrastructure.
    * *CAUTION* - use this method with great care.
@@ -2823,48 +3029,20 @@ export class SQLServerDataProvider
     contextUser?: UserInfo,
   ): Promise<any> {
     try {
-      let request: sql.Request;
-
-      if (this._transaction && this._transactionRequest) {
-        // Use transaction request if in a transaction
-        request = this._transactionRequest;
-      } else if (this._transaction) {
-        // Create a new request for this transaction if we don't have one
-        request = new sql.Request(this._transaction);
-      } else {
-        // Use pool request for non-transactional queries
-        request = new sql.Request(this._pool);
-      }
-
-      // Add parameters if provided
-      if (parameters) {
-        if (Array.isArray(parameters)) {
-          // Handle positional parameters (legacy TypeORM style)
-          // Convert to named parameters for mssql
-          parameters.forEach((value, index) => {
-            request.input(`p${index}`, value);
-          });
-          // Replace ? with @p0, @p1, etc. in the query
-          let paramIndex = 0;
-          query = query.replace(/\?/g, () => `@p${paramIndex++}`);
-        } else if (typeof parameters === 'object') {
-          // Handle named parameters
-          for (const [key, value] of Object.entries(parameters)) {
-            request.input(key, value);
-          }
-        }
-      }
-
-      // Log SQL statement to all active logging sessions (runs in parallel with execution)
-      const loggingPromise = this._logSqlStatement(query, parameters, options?.description, options?.ignoreLogging, options?.isMutation, options?.simpleSQLFallback, contextUser);
-
-      // Execute SQL and logging in parallel, but wait for both to complete
-      const [result] = await Promise.all([request.query(query), loggingPromise]);
+      // Use internal method with logging options
+      const result = await this._internalExecuteSQL(query, parameters, undefined, {
+        description: options?.description,
+        ignoreLogging: options?.ignoreLogging,
+        isMutation: options?.isMutation,
+        simpleSQLFallback: options?.simpleSQLFallback,
+        contextUser: contextUser
+      });
+      
       // Return recordset for consistency with TypeORM behavior
       // If multiple recordsets, return recordsets array
       return result.recordsets && Array.isArray(result.recordsets) && result.recordsets.length > 1 ? result.recordsets : result.recordset;
     } catch (e) {
-      LogError(e);
+      // Error already logged by _internalExecuteSQL
       throw e; // force caller to handle
     }
   }
@@ -2882,9 +3060,12 @@ export class SQLServerDataProvider
    */
   public static async ExecuteSQLWithPool(pool: sql.ConnectionPool, query: string, parameters?: any, contextUser?: UserInfo): Promise<any[]> {
     try {
+      // Since this is a static method, we'll handle SQL execution directly here
+      // without logging (logging requires instance access to _activeSqlLoggingSessions)
       const request = new sql.Request(pool);
 
       // Add parameters if provided
+      let processedQuery = query;
       if (parameters) {
         if (Array.isArray(parameters)) {
           // Handle positional parameters
@@ -2893,7 +3074,7 @@ export class SQLServerDataProvider
           });
           // Replace ? with @p0, @p1, etc. in the query
           let paramIndex = 0;
-          query = query.replace(/\?/g, () => `@p${paramIndex++}`);
+          processedQuery = query.replace(/\?/g, () => `@p${paramIndex++}`);
         } else if (typeof parameters === 'object') {
           // Handle named parameters
           for (const [key, value] of Object.entries(parameters)) {
@@ -2902,14 +3083,14 @@ export class SQLServerDataProvider
         }
       }
 
-      const logPromise = this.LogSQLStatement(query, parameters, undefined, false, undefined, contextUser);
-      const resultPromise = request.query(query);
-
-      // await the completion of both the SQL execution and logging
-      const results = await Promise.all([resultPromise, logPromise]);
+      // Log to console for static method (no access to SQL logging sessions)
+      await this.LogSQLStatement(query, parameters, 'ExecuteSQLWithPool', false, undefined, contextUser);
+      
+      // Execute the query
+      const result = await request.query(processedQuery);
 
       // Always return array for consistency
-      return results[0].recordset || [];
+      return result.recordset || [];
     } catch (e) {
       LogError(e);
       throw e;
@@ -2934,59 +3115,70 @@ export class SQLServerDataProvider
     contextUser?: UserInfo,
   ): Promise<any[][]> {
     try {
-      let request: sql.Request;
-
-      // Determine the request to use based on connection source type
-      if (connectionSource instanceof sql.Request) {
-        request = connectionSource;
-      } else if (connectionSource instanceof sql.Transaction) {
-        request = new sql.Request(connectionSource);
-      } else {
-        // Assume it's a ConnectionPool
-        request = new sql.Request(connectionSource);
-      }
-
-      // Build combined batch SQL
+      // Build combined batch SQL and parameters
       let batchSQL = '';
-      let paramIndex = 0;
+      const batchParameters: Record<string, any> = {};
+      let globalParamIndex = 0;
 
       queries.forEach((query, queryIndex) => {
+        let processedQuery = query;
+        
         // Add parameters for this query if provided
         if (parameters && parameters[queryIndex]) {
           const queryParams = parameters[queryIndex];
           if (Array.isArray(queryParams)) {
             // Handle positional parameters
-            queryParams.forEach((value) => {
-              request.input(`p${paramIndex}`, value);
-              paramIndex++;
+            queryParams.forEach((value, localIndex) => {
+              const paramName = `p${globalParamIndex}`;
+              batchParameters[paramName] = value;
+              globalParamIndex++;
             });
-            // Replace @p0, @p1, etc. with actual parameter names
-            let localParamIndex = paramIndex - queryParams.length;
-            query = query.replace(/@p(\d+)/g, () => `@p${localParamIndex++}`);
+            // Replace ? placeholders with parameter names
+            let localParamIndex = globalParamIndex - queryParams.length;
+            processedQuery = processedQuery.replace(/\?/g, () => `@p${localParamIndex++}`);
           } else if (typeof queryParams === 'object') {
             // Handle named parameters - prefix with query index to avoid conflicts
             for (const [key, value] of Object.entries(queryParams)) {
               const paramName = `q${queryIndex}_${key}`;
-              request.input(paramName, value);
+              batchParameters[paramName] = value;
               // Replace parameter references in query
-              query = query.replace(new RegExp(`@${key}\\b`, 'g'), `@${paramName}`);
+              processedQuery = processedQuery.replace(new RegExp(`@${key}\\b`, 'g'), `@${paramName}`);
             }
           }
         }
 
-        batchSQL += query;
+        batchSQL += processedQuery;
         if (queryIndex < queries.length - 1) {
           batchSQL += ';\n';
         }
       });
 
-      // Execute the batch SQL
-      const logPromise = SQLServerDataProvider.LogSQLStatement(batchSQL, undefined, undefined, false, undefined, contextUser);
-      const resultPromise = request.query(batchSQL);
-
-      // Wait for both execution and logging to complete
-      const results = await Promise.all([resultPromise, logPromise]);
-      const result = results[0];
+      // Execute the batch SQL directly (static method can't use instance _internalExecuteSQL)
+      let request: sql.Request;
+      
+      if (connectionSource instanceof sql.Request) {
+        request = connectionSource;
+      } else if (connectionSource instanceof sql.Transaction) {
+        request = new sql.Request(connectionSource);
+      } else if (connectionSource instanceof sql.ConnectionPool) {
+        request = new sql.Request(connectionSource);
+      } else {
+        throw new Error('Invalid connection source type');
+      }
+      
+      // Add all batch parameters to the request
+      for (const [key, value] of Object.entries(batchParameters)) {
+        request.input(key, value);
+      }
+      
+      // Log the batch SQL
+      const logPromise = SQLServerDataProvider.LogSQLStatement(batchSQL, batchParameters, 'Batch execution', false, undefined, contextUser);
+      
+      // Execute batch SQL and logging in parallel
+      const [result] = await Promise.all([
+        request.query(batchSQL),
+        logPromise
+      ]);
       
       // Return array of recordsets - one for each query
       // Handle both single and multiple recordsets
@@ -2998,7 +3190,7 @@ export class SQLServerDataProvider
         return [];
       }
     } catch (e) {
-      LogError(e);
+      // Error already logged by _internalExecuteSQLStatic
       throw e;
     }
   }
@@ -3023,26 +3215,16 @@ export class SQLServerDataProvider
     try {
       let connectionSource: sql.ConnectionPool | sql.Transaction | sql.Request;
 
-      if (this._transaction && this._transactionRequest) {
-        // Use transaction request if in a transaction
-        connectionSource = this._transactionRequest;
-      } else if (this._transaction) {
+      if (this._transaction) {
         // Use transaction if we have one
         connectionSource = this._transaction;
       } else {
-        // Use pool request for non-transactional queries
+        // Use pool for non-transactional queries
         connectionSource = this._pool;
       }
 
-      // Log batch SQL statement to all active logging sessions
-      const description = options?.description ? `${options.description} (Batch: ${queries.length} queries)` : `Batch execution: ${queries.length} queries`;
-      const batchSQL = queries.join(';\n');
-      const loggingPromise = this._logSqlStatement(batchSQL, parameters, description, options?.ignoreLogging, options?.isMutation, undefined, contextUser);
-
-      // Execute SQL and logging in parallel, but wait for both to complete
-      const [result] = await Promise.all([SQLServerDataProvider.ExecuteSQLBatchStatic(connectionSource, queries, parameters), loggingPromise]);
-
-      return result;
+      // ExecuteSQLBatchStatic handles its own logging, so we don't need to duplicate it here
+      return await SQLServerDataProvider.ExecuteSQLBatchStatic(connectionSource, queries, parameters, contextUser);
     } catch (e) {
       LogError(e);
       throw e;
@@ -3143,8 +3325,11 @@ export class SQLServerDataProvider
       this._transaction = new sql.Transaction(this._pool);
       await this._transaction.begin();
 
-      // Create a request for this transaction that can be reused
-      this._transactionRequest = new sql.Request(this._transaction);
+      // Transaction created successfully
+      // Note: We create new Request objects for each query to avoid concurrency issues
+      
+      // Emit transaction state change
+      this._transactionState$.next(true);
     } catch (e) {
       LogError(e);
       throw e; // force caller to handle
@@ -3156,7 +3341,12 @@ export class SQLServerDataProvider
       if (this._transaction) {
         await this._transaction.commit();
         this._transaction = null;
-        this._transactionRequest = null;
+        
+        // Emit transaction state change
+        this._transactionState$.next(false);
+        
+        // Process any deferred tasks after successful commit
+        await this.processDeferredTasks();
       }
     } catch (e) {
       LogError(e);
@@ -3169,12 +3359,68 @@ export class SQLServerDataProvider
       if (this._transaction) {
         await this._transaction.rollback();
         this._transaction = null;
-        this._transactionRequest = null;
+        
+        // Emit transaction state change
+        this._transactionState$.next(false);
+        
+        // Clear deferred tasks after rollback (don't process them)
+        const deferredCount = this._deferredTasks.length;
+        this._deferredTasks = [];
+        if (deferredCount > 0) {
+          LogStatus(`Cleared ${deferredCount} deferred tasks after transaction rollback`);
+        }
       }
     } catch (e) {
       LogError(e);
       throw e; // force caller to handle
     }
+  }
+
+  /**
+   * Override RefreshIfNeeded to skip refresh when a transaction is active
+   * This prevents conflicts between metadata refresh operations and active transactions
+   * @returns Promise<boolean> - true if refresh was performed, false if skipped or no refresh needed
+   */
+  public async RefreshIfNeeded(): Promise<boolean> {
+    // Skip refresh if a transaction is active
+    if (this.isTransactionActive) {
+      LogStatus('Skipping metadata refresh - transaction is active');
+      return false;
+    }
+
+    // Call parent implementation if no transaction
+    return super.RefreshIfNeeded();
+  }
+
+  /**
+   * Process any deferred tasks that were queued during a transaction
+   * This is called after a successful transaction commit
+   * @private
+   */
+  private async processDeferredTasks(): Promise<void> {
+    if (this._deferredTasks.length === 0) return;
+
+    LogStatus(`Processing ${this._deferredTasks.length} deferred tasks after transaction commit`);
+    
+    // Copy and clear the deferred tasks array
+    const tasksToProcess = [...this._deferredTasks];
+    this._deferredTasks = [];
+    
+    // Process each deferred task
+    for (const task of tasksToProcess) {
+      try {
+        if (task.type === 'Entity AI Action') {
+          // Process the AI action now that we're outside the transaction
+          await QueueManager.AddTask('Entity AI Action', task.data, task.options, task.user);
+        }
+        // Add other task types here as needed
+      } catch (error) {
+        LogError(`Failed to process deferred ${task.type} task: ${error}`);
+        // Continue processing other tasks even if one fails
+      }
+    }
+    
+    LogStatus(`Completed processing deferred tasks`);
   }
 
   get LocalStorageProvider(): ILocalStorageProvider {
