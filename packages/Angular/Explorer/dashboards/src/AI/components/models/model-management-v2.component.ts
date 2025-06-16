@@ -431,4 +431,13 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
     this.searchSubject.next('');
     this.applyFilters();
   }
+
+  public formatTokenLimit(limit: number): string {
+    if (limit >= 1000000) {
+      return Math.floor(limit / 1000000) + 'M';
+    } else if (limit >= 1000) {
+      return Math.floor(limit / 1000) + 'K';
+    }
+    return limit.toString();
+  }
 }

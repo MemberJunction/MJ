@@ -1,4 +1,4 @@
-<div class="model-management-v2">
+<div class="model-management-v2" mjFillContainer [rightMargin]="8" [bottomMargin]="8">
   @if (isLoading) {
     <div class="loading-container">
       <div class="loading-content">
@@ -213,8 +213,31 @@
                         <div class="card-info">
                           <h4>{{ model.Name }}</h4>
                           <div class="card-meta">
-                            <span class="vendor">{{ model.VendorName }}</span>
-                            <span class="type">{{ model.ModelTypeName }}</span>
+                            @if (model.Vendor) {
+                              <span class="vendor">{{ model.Vendor }}</span>
+                            }
+                            <span class="type">{{ model.AIModelType }}</span>
+                            @if (model.IsActive) {
+                              <span class="status active">Active</span>
+                            } @else {
+                              <span class="status inactive">Inactive</span>
+                            }
+                          </div>
+                          <div class="card-stats">
+                            <span class="stat-item" title="Power Rank">
+                              <i class="fa-solid fa-bolt"></i> {{ model.PowerRank || 0 }}
+                            </span>
+                            <span class="stat-item" title="Speed Rank">
+                              <i class="fa-solid fa-gauge-high"></i> {{ model.SpeedRank || 0 }}
+                            </span>
+                            <span class="stat-item" title="Cost Rank">
+                              <i class="fa-solid fa-dollar-sign"></i> {{ model.CostRank || 0 }}
+                            </span>
+                            @if (model.InputTokenLimit) {
+                              <span class="stat-item" title="Token Limit">
+                                <i class="fa-solid fa-coins"></i> {{ formatTokenLimit(model.InputTokenLimit) }}
+                              </span>
+                            }
                           </div>
                         </div>
                         <i class="fa-solid fa-chevron-down expand-icon" [class.rotated]="expandedModelId === model.ID"></i>
@@ -320,8 +343,8 @@
                               {{ model.Name }}
                             </div>
                           </td>
-                          <td>{{ model.VendorName }}</td>
-                          <td>{{ model.ModelTypeName }}</td>
+                          <td>{{ model.Vendor || '-' }}</td>
+                          <td>{{ model.AIModelType }}</td>
                           <td>
                             <span class="rank-badge" [class]="getRankClass(model.PowerRank)">
                               {{ model.PowerRankDisplay }}
