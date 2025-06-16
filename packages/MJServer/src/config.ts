@@ -22,6 +22,12 @@ const databaseSettingsInfoSchema = z.object({
   metadataCacheRefreshInterval: z.number(),
   dbReadOnlyUsername: z.string().optional(),
   dbReadOnlyPassword: z.string().optional(),
+  connectionPool: z.object({
+    max: z.number().optional().default(50),
+    min: z.number().optional().default(5),
+    idleTimeoutMillis: z.number().optional().default(30000),
+    acquireTimeoutMillis: z.number().optional().default(30000),
+  }).optional().default({}),
 });
  
 const viewingSystemInfoSchema = z.object({

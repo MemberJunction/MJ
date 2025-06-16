@@ -10,6 +10,12 @@ const createMSSQLConfig = (): sql.config => {
     database: dbDatabase,
     requestTimeout: configInfo.databaseSettings.requestTimeout,
     connectionTimeout: configInfo.databaseSettings.connectionTimeout,
+    pool: {
+      max: configInfo.databaseSettings.connectionPool?.max ?? 50,
+      min: configInfo.databaseSettings.connectionPool?.min ?? 5,
+      idleTimeoutMillis: configInfo.databaseSettings.connectionPool?.idleTimeoutMillis ?? 30000,
+      acquireTimeoutMillis: configInfo.databaseSettings.connectionPool?.acquireTimeoutMillis ?? 30000,
+    },
     options: {
       encrypt: true, // Use encryption
       enableArithAbort: true,
