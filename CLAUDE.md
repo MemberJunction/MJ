@@ -95,6 +95,37 @@ module.exports = {
 
 Monitor SQL Server wait types (RESOURCE_SEMAPHORE, THREADPOOL) to tune pool size. The pool is created once at server startup and reused throughout the application lifecycle.
 
+## MetadataSync Package
+
+### Validation System
+The MetadataSync package includes a comprehensive validation system that runs automatically before push operations:
+
+- **Smart Field Detection**: Recognizes virtual properties (getter/setter methods) on BaseEntity subclasses
+- **Intelligent Required Field Checking**: Skips fields with defaults, computed fields, and virtual relationships
+- **Reference Validation**: Validates @file, @lookup, @template, @parent, and @root references
+- **Dependency Analysis**: Uses topological sorting to ensure correct processing order
+
+### Key Commands
+```bash
+# Validate metadata
+npx mj-sync validate --dir=./metadata
+
+# Push with validation (default)
+npx mj-sync push
+
+# Skip validation (use with caution)
+npx mj-sync push --no-validate
+
+# Generate markdown report
+npx mj-sync validate --save-report
+```
+
+### Virtual Properties in Validation
+Some entities have virtual properties that manage complex relationships:
+- `TemplateText` on Templates entity manages Template and TemplateContent records
+- These properties exist as getters/setters on the entity class but not in database metadata
+- The validation system automatically detects these by creating entity instances
+
 ## MemberJunction Entity and Data Access Patterns
 
 ### Entity Object Creation
