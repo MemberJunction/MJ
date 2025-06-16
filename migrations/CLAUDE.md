@@ -79,8 +79,11 @@ When adding AI models and vendors:
 
 Before committing:
 1. Verify all foreign key references exist
+   - Check entity schemas in `packages/MJCoreEntities/src/generated/entity_subclasses.ts`
+   - This file contains all entity definitions with exact field names, types, and constraints
+   - Look for the entity class (e.g., `AIModelEntity`, `AIVendorEntity`) to see all fields
 2. Check that TypeIDs match existing definitions
-3. Ensure all required fields are populated
+3. Ensure all required fields are populated (non-nullable fields in entity definitions)
 4. Test rollback scenarios if applicable
 
 ## Common Entity IDs
