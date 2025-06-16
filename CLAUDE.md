@@ -63,6 +63,23 @@
 - **NEVER** directly instantiate entity classes with `new EntityClass()`
 - **NEVER** look up entity names at runtime - they are fixed in the schema
 
+## Performance Best Practices
+
+### Batch Database Operations
+- Use `RunViews` (plural) instead of multiple `RunView` calls
+- Group related queries together in a single batch operation
+- Example: Load all dashboard data in 2-3 calls instead of 30+
+
+### Client-Side Data Aggregation
+- Load raw data once, aggregate in memory
+- More efficient than multiple filtered queries
+- Reduces database round trips significantly
+
+### Observable Patterns
+- Use shareReplay(1) for caching data streams
+- Implement proper loading states with BehaviorSubject
+- Ensure streams are reactive to parameter changes
+
 ### Efficient Data Loading with RunViews
 
 #### Batch Multiple Independent Queries
@@ -232,6 +249,24 @@ const entity = new TemplateContentEntity();
 const md = new Metadata();
 const entity = await md.GetEntityObject<TemplateContentEntity>('Template Contents');
 ```
+
+### Server-Side Context User Requirements
+When working on server-side code, **ALWAYS** pass `contextUser` to `GetEntityObject` and `RunView` methods:
+
+```typescript
+// ❌ Wrong - missing contextUser on server
+const entity = await md.GetEntityObject<SomeEntity>('Entity Name');
+const results = await rv.RunView({ EntityName: 'Entity Name' });
+
+// ✅ Correct - includes contextUser for server-side operations
+const entity = await md.GetEntityObject<SomeEntity>('Entity Name', contextUser);
+const results = await rv.RunView({ EntityName: 'Entity Name' }, contextUser);
+```
+
+**Important:** 
+- **Server-side code** serves multiple users concurrently and MUST include `contextUser` parameter
+- **Client-side code** (Angular components) can omit `contextUser` as the context is already established
+- This ensures proper data isolation, security, and audit tracking in multi-user environments
 
 ### Loading Multiple Records with RunView
 For loading collections of records, use the RunView class with proper generic typing and ResultType parameter:
