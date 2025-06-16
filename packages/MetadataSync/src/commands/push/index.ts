@@ -4,18 +4,22 @@ import path from 'path';
 import { confirm } from '@inquirer/prompts';
 import ora from 'ora-classic';
 import fastGlob from 'fast-glob';
+import chalk from 'chalk';
 import { loadMJConfig, loadSyncConfig, loadEntityConfig } from '../../config';
 import { SyncEngine, RecordData } from '../../lib/sync-engine';
 import { initializeProvider, findEntityDirectories, getSystemUser } from '../../lib/provider-utils';
-import { BaseEntity } from '@memberjunction/core';
+import { BaseEntity, LogStatus, Metadata } from '@memberjunction/core';
 import { cleanupProvider } from '../../lib/provider-utils';
 import { configManager } from '../../lib/config-manager';
 import { getSyncEngine, resetSyncEngine } from '../../lib/singleton-manager';
-import type { SqlLoggingSession } from '@memberjunction/sqlserver-dataprovider';
+import { SQLServerDataProvider, type SqlLoggingSession } from '@memberjunction/sqlserver-dataprovider';
 import { uuidv4 } from '@memberjunction/global';
 
 export default class Push extends Command {
   static description = 'Push local file changes to the database';
+  
+  private warnings: string[] = [];
+  private errors: string[] = [];
   
   static examples = [
     `<%= config.bin %> <%= command.id %>`,
@@ -29,12 +33,21 @@ export default class Push extends Command {
     'dry-run': Flags.boolean({ description: 'Show what would be pushed without actually pushing' }),
     ci: Flags.boolean({ description: 'CI mode - no prompts, fail on issues' }),
     verbose: Flags.boolean({ char: 'v', description: 'Show detailed field-level output' }),
+    'no-validate': Flags.boolean({ description: 'Skip validation before push' }),
   };
+  
+  // Override warn to collect warnings
+  warn(input: string | Error): string | Error {
+    const message = typeof input === 'string' ? input : input.message;
+    this.warnings.push(message);
+    return super.warn(input);
+  }
   
   async run(): Promise<void> {
     const { flags } = await this.parse(Push);
     const spinner = ora();
     let sqlLogger: SqlLoggingSession | null = null;
+    const startTime = Date.now();
     
     try {
       // Load configurations
@@ -58,7 +71,30 @@ export default class Push extends Command {
       const syncEngine = await getSyncEngine(getSystemUser());
       
       // Show success after all initialization is complete
-      spinner.succeed('Configuration and metadata loaded');
+      if (flags.verbose) {
+        spinner.succeed('Configuration and metadata loaded');
+      } else {
+        spinner.stop();
+      }
+      
+      // Start a database transaction for the entire push operation (unless in dry-run mode)
+      if (!flags['dry-run']) {
+        const { getDataProvider } = await import('../../lib/provider-utils');
+        const dataProvider = getDataProvider();
+        if (dataProvider && typeof dataProvider.BeginTransaction === 'function') {
+          try {
+            await dataProvider.BeginTransaction();
+            if (flags.verbose) {
+              this.log('🔄 Transaction started - all changes will be committed or rolled back as a unit');
+            }
+          } catch (error) {
+            this.warn('Failed to start transaction - changes will be committed individually');
+            this.warn(`Transaction error: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        } else {
+          this.warn('Transaction support not available - changes will be committed individually');
+        }
+      }
       
       // Initialize SQL logging AFTER provider setup is complete
       if (syncConfig?.sqlLogging?.enabled) {
@@ -98,7 +134,9 @@ export default class Push extends Command {
             prettyPrint: true     // Enable pretty printing for readable output
           });
           
-          this.log(`📝 SQL logging enabled: ${path.relative(process.cwd(), logFilePath)}`);
+          if (flags.verbose) {
+            this.log(`📝 SQL logging enabled: ${path.relative(process.cwd(), logFilePath)}`);
+          }
         } else {
           this.warn('SQL logging requested but data provider does not support CreateSqlLogger');
         }
@@ -111,7 +149,47 @@ export default class Push extends Command {
         this.error('No entity directories found');
       }
       
-      this.log(`Found ${entityDirs.length} entity ${entityDirs.length === 1 ? 'directory' : 'directories'} to process`);
+      if (flags.verbose) {
+        this.log(`Found ${entityDirs.length} entity ${entityDirs.length === 1 ? 'directory' : 'directories'} to process`);
+      }
+      
+      // Run validation unless disabled
+      if (!flags['no-validate']) {
+        const { ValidationService } = await import('../../services/ValidationService');
+        const { FormattingService } = await import('../../services/FormattingService');
+        
+        spinner.start('Validating metadata...');
+        const validator = new ValidationService({ verbose: flags.verbose });
+        const formatter = new FormattingService();
+        
+        const targetDir = flags.dir ? path.resolve(configManager.getOriginalCwd(), flags.dir) : configManager.getOriginalCwd();
+        const validationResult = await validator.validateDirectory(targetDir);
+        spinner.stop();
+        
+        if (!validationResult.isValid || validationResult.warnings.length > 0) {
+          // Show validation results
+          this.log('\n' + formatter.formatValidationResult(validationResult, flags.verbose));
+          
+          if (!validationResult.isValid) {
+            // In CI mode, fail immediately
+            if (flags.ci) {
+              this.error('Validation failed. Cannot proceed with push.');
+            }
+            
+            // Otherwise, ask for confirmation
+            const shouldContinue = await confirm({
+              message: 'Validation failed with errors. Do you want to continue anyway?',
+              default: false
+            });
+            
+            if (!shouldContinue) {
+              this.error('Push cancelled due to validation errors.');
+            }
+          }
+        } else {
+          this.log(chalk.green('✓ Validation passed'));
+        }
+      }
       
       // Process each entity directory
       let totalCreated = 0;
@@ -125,7 +203,9 @@ export default class Push extends Command {
           continue;
         }
         
-        this.log(`\nProcessing ${entityConfig.entity} in ${entityDir}`);
+        if (flags.verbose) {
+          this.log(`\nProcessing ${entityConfig.entity} in ${entityDir}`);
+        }
         
         const result = await this.processEntityDirectory(
           entityDir,
@@ -140,18 +220,109 @@ export default class Push extends Command {
         totalErrors += result.errors;
       }
       
-      // Summary
-      this.log('\n=== Push Summary ===');
-      this.log(`Created: ${totalCreated}`);
-      this.log(`Updated: ${totalUpdated}`);
-      this.log(`Errors: ${totalErrors}`);
+      // Summary using FormattingService
+      const endTime = Date.now();
+      const { FormattingService } = await import('../../services/FormattingService');
+      const formatter = new FormattingService();
       
-      if (totalErrors > 0 && flags.ci) {
-        this.error('Push failed with errors in CI mode');
+      this.log('\n' + formatter.formatSyncSummary('push', {
+        created: totalCreated,
+        updated: totalUpdated,
+        deleted: 0,
+        skipped: 0,
+        errors: totalErrors,
+        duration: endTime - startTime
+      }));
+      
+      // Handle transaction commit/rollback
+      if (!flags['dry-run']) {
+        const dataProvider = Metadata.Provider as SQLServerDataProvider;
+        
+        // Check if we have an active transaction
+        if (dataProvider ) {
+          let shouldCommit = true;
+          
+          // If there are any errors, always rollback
+          if (totalErrors > 0 || this.errors.length > 0) {
+            shouldCommit = false;
+            this.log('\n❌ Errors detected - rolling back all changes');
+          }
+          // If there are warnings, ask user (unless in CI mode)
+          else if (this.warnings.length > 0) {
+            // Filter out transaction-related warnings since we're now using transactions
+            const nonTransactionWarnings = this.warnings.filter(w => 
+              !w.includes('Transaction support not available') && 
+              !w.includes('Failed to start transaction')
+            );
+            
+            if (nonTransactionWarnings.length > 0) {
+              if (flags.ci) {
+                // In CI mode, rollback on warnings
+                shouldCommit = false;
+                this.log('\n⚠️  Warnings detected in CI mode - rolling back all changes');
+              } else {
+                // Show warnings to user
+                this.log('\n⚠️  The following warnings were encountered:');
+                for (const warning of nonTransactionWarnings) {
+                  this.log(`   - ${warning}`);
+                }
+                
+                // Ask user whether to commit or rollback
+                shouldCommit = await confirm({
+                  message: 'Do you want to commit these changes despite the warnings?',
+                  default: false // Default to rollback
+                });
+              }
+            }
+          }
+          
+          try {
+            if (shouldCommit) {
+              await dataProvider.CommitTransaction();
+              this.log('\n✅ All changes committed successfully');
+            } else {
+              // User chose to rollback or errors/warnings in CI mode
+              this.log('\n🔙 Rolling back all changes...');
+              await dataProvider.RollbackTransaction();
+              this.log('✅ Rollback completed - no changes were made to the database');
+            }
+          } catch (error) {
+            // Try to rollback on any error
+            this.log('\n❌ Transaction error - attempting to roll back changes');
+            try {
+              await dataProvider.RollbackTransaction();
+              this.log('✅ Rollback completed');
+            } catch (rollbackError) {
+              this.log('❌ Rollback failed: ' + (rollbackError instanceof Error ? rollbackError.message : String(rollbackError)));
+            }
+            throw error;
+          }
+        }
+      }
+      
+      // Exit with error if there were errors in CI mode
+      if ((totalErrors > 0 || this.errors.length > 0 || (this.warnings.length > 0 && flags.ci)) && flags.ci) {
+        this.error('Push failed in CI mode');
       }
       
     } catch (error) {
       spinner.fail('Push failed');
+      
+      // Try to rollback the transaction if one is active
+      if (!flags['dry-run']) {
+        const { getDataProvider } = await import('../../lib/provider-utils');
+        const dataProvider = getDataProvider();
+        
+        if (dataProvider && typeof dataProvider.RollbackTransaction === 'function') {
+          try {
+            this.log('\n🔙 Rolling back transaction due to error...');
+            await dataProvider.RollbackTransaction();
+            this.log('✅ Rollback completed - no changes were made to the database');
+          } catch (rollbackError) {
+            this.log('❌ Rollback failed: ' + (rollbackError instanceof Error ? rollbackError.message : String(rollbackError)));
+          }
+        }
+      }
       
       // Enhanced error logging for debugging
       this.log('\n=== Push Error Details ===');
@@ -187,7 +358,9 @@ export default class Push extends Command {
       if (sqlLogger) {
         try {
           await sqlLogger.dispose();
-          this.log('✅ SQL logging session closed');
+          if (flags.verbose) {
+            this.log('✅ SQL logging session closed');
+          }
         } catch (error) {
           this.warn(`Failed to close SQL logging session: ${error}`);
         }
@@ -221,7 +394,9 @@ export default class Push extends Command {
       onlyFiles: true
     });
     
-    this.log(`Processing ${jsonFiles.length} records in ${path.relative(process.cwd(), entityDir) || '.'}`);
+    if (flags.verbose) {
+      this.log(`Processing ${jsonFiles.length} records in ${path.relative(process.cwd(), entityDir) || '.'}`);
+    }
     
     // First, process all JSON files in this directory
     await this.processJsonFiles(jsonFiles, entityDir, entityConfig, syncEngine, flags, result);
@@ -341,11 +516,17 @@ export default class Push extends Command {
       } catch (error) {
         result.errors++;
         const errorMessage = error instanceof Error ? error.message : String(error);
-        this.error(`Failed to process ${file}: ${errorMessage}`, { exit: false });
+        const fullErrorMessage = `Failed to process ${file}: ${errorMessage}`;
+        this.errors.push(fullErrorMessage);
+        this.error(fullErrorMessage, { exit: false });
       }
     }
     
-    spinner.succeed(`Processed ${totalRecords} records from ${jsonFiles.length} files`);
+    if (flags.verbose) {
+      spinner.succeed(`Processed ${totalRecords} records from ${jsonFiles.length} files`);
+    } else {
+      spinner.stop();
+    }
   }
   
   private async pushRecord(
@@ -497,7 +678,9 @@ export default class Push extends Command {
     const indent = '  '.repeat(indentLevel);
     
     for (const [entityName, records] of Object.entries(relatedEntities)) {
-      this.log(`${indent}↳ Processing ${records.length} related ${entityName} records`);
+      if (verbose) {
+        this.log(`${indent}↳ Processing ${records.length} related ${entityName} records`);
+      }
       
       for (const relatedRecord of records) {
         try {
