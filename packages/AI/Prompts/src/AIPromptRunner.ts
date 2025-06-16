@@ -832,27 +832,8 @@ export class AIPromptRunner {
       await AIEngine.Instance.Config(false, contextUser);
 
       // Resolve vendor ID to vendor name if provided
-      let vendorName: string | undefined;
-      if (vendorId) {
-        try {
-          const rv = new RunView();
-          const vendorResult = await rv.RunView({
-            EntityName: 'AI Vendors',
-            ExtraFilter: `ID='${vendorId}'`,
-            ResultType: 'entity_object',
-          });
-
-          if (vendorResult.Results && vendorResult.Results.length > 0) {
-            vendorName = vendorResult.Results[0].Name;
-          } else {
-            LogError(`Vendor with ID ${vendorId} not found`);
-            // Continue without vendor filtering rather than fail
-          }
-        } catch (error) {
-          LogError(`Error loading vendor ${vendorId}: ${error.message}`);
-          // Continue without vendor filtering rather than fail
-        }
-      }
+      // use metadata cache
+      const vendorName: string | undefined = AIEngine.Instance.Vendors.find((v) => v.ID === vendorId)?.Name;      
 
       // If explicit model is specified, validate it from cached models
       if (explicitModelId) {
