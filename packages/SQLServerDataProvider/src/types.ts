@@ -7,7 +7,8 @@
  * @module @memberjunction/sqlserver-dataprovider/types
  */
 
-import { ProviderConfigDataBase } from '@memberjunction/core';
+import { ProviderConfigDataBase, UserInfo } from '@memberjunction/core';
+import * as sql from 'mssql';
 
 /**
  * Configuration options for SQL execution with logging support
@@ -21,6 +22,44 @@ export interface ExecuteSQLOptions {
   isMutation?: boolean;
   /** Simple SQL fallback for loggers with logRecordChangeMetadata=false (only for Save/Delete operations) */
   simpleSQLFallback?: string;
+}
+
+/**
+ * Context for SQL execution containing all necessary resources
+ */
+export interface SQLExecutionContext {
+  /** The connection pool to use for queries */
+  pool: sql.ConnectionPool;
+  /** Optional transaction if one is active */
+  transaction?: sql.Transaction | null;
+  /** Function to log SQL statements */
+  logSqlStatement?: (
+    query: string,
+    parameters?: any,
+    description?: string,
+    ignoreLogging?: boolean,
+    isMutation?: boolean,
+    simpleSQLFallback?: string,
+    contextUser?: UserInfo
+  ) => Promise<void>;
+  /** Function to clear transaction reference on EREQINPROG */
+  clearTransaction?: () => void;
+}
+
+/**
+ * Options for internal SQL execution
+ */
+export interface InternalSQLOptions {
+  /** Optional description for this SQL operation */
+  description?: string;
+  /** If true, this statement will not be logged */
+  ignoreLogging?: boolean;
+  /** Whether this is a data mutation operation */
+  isMutation?: boolean;
+  /** Simple SQL fallback for loggers */
+  simpleSQLFallback?: string;
+  /** User context for logging */
+  contextUser?: UserInfo;
 }
 
 /**

@@ -77,25 +77,6 @@ export default class Push extends Command {
         spinner.stop();
       }
       
-      // Start a database transaction for the entire push operation (unless in dry-run mode)
-      if (!flags['dry-run']) {
-        const { getDataProvider } = await import('../../lib/provider-utils');
-        const dataProvider = getDataProvider();
-        if (dataProvider && typeof dataProvider.BeginTransaction === 'function') {
-          try {
-            await dataProvider.BeginTransaction();
-            if (flags.verbose) {
-              this.log('🔄 Transaction started - all changes will be committed or rolled back as a unit');
-            }
-          } catch (error) {
-            this.warn('Failed to start transaction - changes will be committed individually');
-            this.warn(`Transaction error: ${error instanceof Error ? error.message : String(error)}`);
-          }
-        } else {
-          this.warn('Transaction support not available - changes will be committed individually');
-        }
-      }
-      
       // Initialize SQL logging AFTER provider setup is complete
       if (syncConfig?.sqlLogging?.enabled) {
         const outputDir = syncConfig.sqlLogging.outputDirectory || './sql_logging';
@@ -188,6 +169,27 @@ export default class Push extends Command {
           }
         } else {
           this.log(chalk.green('✓ Validation passed'));
+        }
+      }
+      
+      // Start a database transaction for the entire push operation (unless in dry-run mode)
+      // IMPORTANT: We start the transaction AFTER metadata loading and validation to avoid
+      // transaction conflicts with background refresh operations
+      if (!flags['dry-run']) {
+        const { getDataProvider } = await import('../../lib/provider-utils');
+        const dataProvider = getDataProvider();
+        if (dataProvider && typeof dataProvider.BeginTransaction === 'function') {
+          try {
+            await dataProvider.BeginTransaction();
+            if (flags.verbose) {
+              this.log('🔄 Transaction started - all changes will be committed or rolled back as a unit');
+            }
+          } catch (error) {
+            this.warn('Failed to start transaction - changes will be committed individually');
+            this.warn(`Transaction error: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        } else {
+          this.warn('Transaction support not available - changes will be committed individually');
         }
       }
       

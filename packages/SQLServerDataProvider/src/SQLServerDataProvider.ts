@@ -96,7 +96,9 @@ import {
   ExecuteSQLBatchOptions, 
   SQLServerProviderConfigData, 
   SqlLoggingOptions, 
-  SqlLoggingSession 
+  SqlLoggingSession,
+  SQLExecutionContext,
+  InternalSQLOptions
 } from './types.js';
 
 import { UserCache } from './UserCache';
@@ -2841,6 +2843,128 @@ export class SQLServerDataProvider
 
 
   /**
+   * Static method for executing SQL with proper handling of connections and logging.
+   * This is the single point where all SQL execution happens in the entire class.
+   * 
+   * @param query - SQL query to execute
+   * @param parameters - Query parameters
+   * @param context - Execution context containing pool, transaction, and logging functions
+   * @param options - Options for SQL execution
+   * @returns Promise<sql.IResult<any>> - Query result
+   * @private
+   */
+  private static async _internalExecuteSQLStatic(
+    query: string,
+    parameters: any,
+    context: SQLExecutionContext,
+    options?: InternalSQLOptions
+  ): Promise<sql.IResult<any>> {
+    // Determine which connection source to use
+    let connectionSource: sql.ConnectionPool | sql.Transaction;
+    
+    if (context.transaction) {
+      // Try to use the transaction if provided
+      try {
+        // Test if the transaction is still valid by creating a request
+        const testRequest = new sql.Request(context.transaction);
+        connectionSource = context.transaction;
+      } catch (error: any) {
+        // Transaction is no longer valid, clear it and use the pool
+        if (context.clearTransaction) {
+          context.clearTransaction();
+        }
+        connectionSource = context.pool;
+      }
+    } else {
+      connectionSource = context.pool;
+    }
+
+    // Handle logging
+    let logPromise: Promise<void>;
+    if (options && !options.ignoreLogging && context.logSqlStatement) {
+      logPromise = context.logSqlStatement(
+        query,
+        parameters,
+        options.description,
+        options.ignoreLogging,
+        options.isMutation,
+        options.simpleSQLFallback,
+        options.contextUser
+      );
+    } else {
+      logPromise = Promise.resolve();
+    }
+
+    try {
+      // Create a new request object for this query
+      let request: sql.Request;
+      if (connectionSource instanceof sql.Transaction) {
+        request = new sql.Request(connectionSource);
+      } else {
+        request = new sql.Request(connectionSource);
+      }
+
+      // Add parameters if provided
+      let processedQuery = query;
+      if (parameters) {
+        if (Array.isArray(parameters)) {
+          // Handle positional parameters (legacy TypeORM style)
+          parameters.forEach((value, index) => {
+            request.input(`p${index}`, value);
+          });
+          // Replace ? with @p0, @p1, etc. in the query
+          let paramIndex = 0;
+          processedQuery = query.replace(/\?/g, () => `@p${paramIndex++}`);
+        } else if (typeof parameters === 'object') {
+          // Handle named parameters
+          for (const [key, value] of Object.entries(parameters)) {
+            request.input(key, value);
+          }
+        }
+      }
+
+      // Execute query and logging in parallel
+      const [result] = await Promise.all([
+        request.query(processedQuery),
+        logPromise
+      ]);
+      
+      return result;
+    } catch (error: any) {
+      // If we get an EREQINPROG error and we were using a transaction, retry with the pool
+      if (error?.code === 'EREQINPROG' && connectionSource === context.transaction) {
+        // Silently retry with pool connection - this is expected behavior during concurrent operations
+        // LogDebug('Transaction connection busy (EREQINPROG) - retrying with pool connection');
+        
+        // Clear the transaction reference
+        if (context.clearTransaction) {
+          context.clearTransaction();
+        }
+        
+        // Retry using the pool connection
+        return SQLServerDataProvider._internalExecuteSQLStatic(
+          query, 
+          parameters, 
+          {
+            ...context,
+            transaction: null // Force use of pool
+          },
+          options ? {
+            ...options,
+            description: options.description + ' (retry with pool)'
+          } : undefined
+        );
+      }
+      
+      // Log other errors
+      LogError(error);
+      
+      // Re-throw all errors
+      throw error;
+    }
+  }
+
+  /**
    * Internal centralized method for executing SQL queries with consistent transaction and connection handling.
    * This method ensures proper request object creation and management to avoid concurrency issues,
    * particularly when using transactions where multiple operations may execute in parallel.
@@ -2873,117 +2997,37 @@ export class SQLServerDataProvider
       contextUser?: UserInfo;
     }
   ): Promise<sql.IResult<any>> {
-    // If no connection source provided, determine what to use
-    if (!connectionSource) {
-      // Check if we have a transaction and if it's still valid
-      // The mssql Transaction doesn't expose a direct "isOpen" property, but we can check
-      // if it's been set to null (which we do on commit/rollback) or try to use it
-      if (this._transaction) {
-        try {
-          // Try to create a request to test if the transaction is still valid
-          // This is a lightweight operation that will fail fast if the transaction is closed
-          const testRequest = new sql.Request(this._transaction);
-          connectionSource = this._transaction;
-        } catch (error: any) {
-          // Transaction is no longer valid, clear it and use the pool
-          this._transaction = null;
-          connectionSource = this._pool;
-        }
-      } else {
-        connectionSource = this._pool;
-      }
+    // Handle the connectionSource parameter for backwards compatibility
+    // If a specific source is provided, we'll pass it as the transaction (if it's a transaction)
+    // or ignore it if it's a pool/request (since we'll use our own pool)
+    let transaction: sql.Transaction | null = null;
+    
+    if (connectionSource instanceof sql.Transaction) {
+      transaction = connectionSource;
+    } else if (!connectionSource) {
+      // Use our transaction if available
+      transaction = this._transaction;
     }
-
-    // If we have logging options, we need to handle the _logSqlStatement call here
-    // because it's an instance method that needs access to this._activeSqlLoggingSessions
-    let logPromise: Promise<void>;
-    if (loggingOptions && !loggingOptions.ignoreLogging) {
-      logPromise = this._logSqlStatement(
-        query,
-        parameters,
-        loggingOptions.description,
-        loggingOptions.ignoreLogging,
-        loggingOptions.isMutation,
-        loggingOptions.simpleSQLFallback,
-        loggingOptions.contextUser
-      );
-    } else {
-      logPromise = Promise.resolve();
-    }
-
-    try {
-      // Create the request object based on connection source type
-      let request: sql.Request;
-
-      if (connectionSource instanceof sql.Request) {
-        // Use provided request directly (for backwards compatibility)
-        request = connectionSource;
-      } else if (connectionSource instanceof sql.Transaction) {
-        // Create new request from transaction
-        // This ensures each query gets its own request object to avoid concurrency issues
-        request = new sql.Request(connectionSource);
-      } else if (connectionSource instanceof sql.ConnectionPool) {
-        // Create new request from pool
-        request = new sql.Request(connectionSource);
-      } else {
-        throw new Error('Invalid connection source type');
-      }
-
-      // Add parameters if provided
-      let processedQuery = query;
-      if (parameters) {
-        if (Array.isArray(parameters)) {
-          // Handle positional parameters (legacy TypeORM style)
-          // Convert to named parameters for mssql
-          parameters.forEach((value, index) => {
-            request.input(`p${index}`, value);
-          });
-          // Replace ? with @p0, @p1, etc. in the query
-          let paramIndex = 0;
-          processedQuery = query.replace(/\?/g, () => `@p${paramIndex++}`);
-        } else if (typeof parameters === 'object') {
-          // Handle named parameters
-          for (const [key, value] of Object.entries(parameters)) {
-            request.input(key, value);
-          }
-        }
-      }
-
-      // Execute query and logging in parallel
-      const [result] = await Promise.all([
-        request.query(processedQuery),
-        logPromise
-      ]);
-      
-      return result;
-    } catch (error: any) {
-      // If we still get an EREQINPROG error, it means concurrent operations are happening
-      // on a closed transaction. Clear it and retry with the pool.
-      if (error?.code === 'EREQINPROG' && connectionSource === this._transaction) {
-        // Log the retry
-        LogStatus('Transaction connection busy (EREQINPROG) - retrying with pool connection');
-        
-        // Clear the stale transaction reference
-        this._transaction = null;
-        
-        // Retry using the pool connection by recursively calling this method
-        return this._internalExecuteSQL(
-          query, 
-          parameters, 
-          this._pool, // Use pool instead of transaction
-          loggingOptions ? {
-            ...loggingOptions,
-            description: loggingOptions.description + ' (retry with pool)'
-          } : undefined
-        );
-      }
-      
-      // Log other errors
-      LogError(error);
-      
-      // Re-throw all errors
-      throw error;
-    }
+    
+    // Create the execution context
+    const context: SQLExecutionContext = {
+      pool: this._pool,
+      transaction: transaction,
+      logSqlStatement: this._logSqlStatement.bind(this),
+      clearTransaction: () => { this._transaction = null; }
+    };
+    
+    // Convert logging options to internal format
+    const options: InternalSQLOptions | undefined = loggingOptions ? {
+      description: loggingOptions.description,
+      ignoreLogging: loggingOptions.ignoreLogging,
+      isMutation: loggingOptions.isMutation,
+      simpleSQLFallback: loggingOptions.simpleSQLFallback,
+      contextUser: loggingOptions.contextUser
+    } : undefined;
+    
+    // Delegate to static method
+    return SQLServerDataProvider._internalExecuteSQLStatic(query, parameters, context, options);
   }
 
   /**
@@ -3031,41 +3075,31 @@ export class SQLServerDataProvider
    */
   public static async ExecuteSQLWithPool(pool: sql.ConnectionPool, query: string, parameters?: any, contextUser?: UserInfo): Promise<any[]> {
     try {
-      // Since this is a static method, we'll handle SQL execution directly here
-      // without logging (logging requires instance access to _activeSqlLoggingSessions)
-      const request = new sql.Request(pool);
-
-      // Add parameters if provided
-      let processedQuery = query;
-      if (parameters) {
-        if (Array.isArray(parameters)) {
-          // Handle positional parameters
-          parameters.forEach((value, index) => {
-            request.input(`p${index}`, value);
-          });
-          // Replace ? with @p0, @p1, etc. in the query
-          let paramIndex = 0;
-          processedQuery = query.replace(/\?/g, () => `@p${paramIndex++}`);
-        } else if (typeof parameters === 'object') {
-          // Handle named parameters
-          for (const [key, value] of Object.entries(parameters)) {
-            request.input(key, value);
-          }
+      // Create the execution context for static method
+      const context: SQLExecutionContext = {
+        pool: pool,
+        transaction: null,
+        logSqlStatement: async (q, p, d, i, m, s, u) => {
+          // Use static logging method
+          await SQLServerDataProvider.LogSQLStatement(q, p, d || 'ExecuteSQLWithPool', m || false, s, u);
         }
-      }
-
-      // Execute query and logging in parallel
-      const logPromise = this.LogSQLStatement(query, parameters, 'ExecuteSQLWithPool', false, undefined, contextUser);
+      };
       
-      const [result] = await Promise.all([
-        request.query(processedQuery),
-        logPromise
-      ]);
+      // Create options
+      const options: InternalSQLOptions = {
+        description: 'ExecuteSQLWithPool',
+        ignoreLogging: false,
+        isMutation: false,
+        contextUser: contextUser
+      };
+      
+      // Use the static execution method
+      const result = await SQLServerDataProvider._internalExecuteSQLStatic(query, parameters, context, options);
 
       // Always return array for consistency
       return result.recordset || [];
     } catch (e) {
-      LogError(e);
+      // Error already logged by _internalExecuteSQLStatic
       throw e;
     }
   }
