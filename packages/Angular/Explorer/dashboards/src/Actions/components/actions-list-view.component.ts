@@ -70,10 +70,34 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
     try {
       this.isLoading = true;
       
-      const [actions, categories] = await Promise.all([
-        this.loadActions(),
-        this.loadCategories()
+      const rv = new RunView();
+      const [actionsResult, categoriesResult] = await rv.RunViews([
+        {
+          EntityName: 'Actions',
+          ExtraFilter: '',
+          OrderBy: 'Name',
+          UserSearchString: '',
+          IgnoreMaxRows: false,
+          MaxRows: 1000,
+          ResultType: 'entity_object'
+        },
+        {
+          EntityName: 'Action Categories',
+          ExtraFilter: '',
+          OrderBy: 'Name',
+          UserSearchString: '',
+          IgnoreMaxRows: false,
+          MaxRows: 1000,
+          ResultType: 'entity_object'
+        }
       ]);
+      
+      if (!actionsResult.Success || !categoriesResult.Success) {
+        throw new Error('Failed to load data');
+      }
+      
+      const actions = actionsResult.Results as ActionEntity[];
+      const categories = categoriesResult.Results as ActionCategoryEntity[];
 
       this.actions = actions;
       this.populateCategoriesMap(categories);
@@ -87,41 +111,6 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
     }
   }
 
-  private async loadActions(): Promise<ActionEntity[]> {
-    const rv = new RunView();
-    const result = await rv.RunView({
-      EntityName: 'Actions',
-      ExtraFilter: '',
-      OrderBy: 'Name',
-      UserSearchString: '',
-      IgnoreMaxRows: false,
-      MaxRows: 1000
-    });
-    
-    if (result && result.Success && result.Results) {
-      return result.Results as ActionEntity[];
-    } else {
-      throw new Error('Failed to load actions');
-    }
-  }
-
-  private async loadCategories(): Promise<ActionCategoryEntity[]> {
-    const rv = new RunView();
-    const result = await rv.RunView({
-      EntityName: 'Action Categories',
-      ExtraFilter: '',
-      OrderBy: 'Name',
-      UserSearchString: '',
-      IgnoreMaxRows: false,
-      MaxRows: 1000
-    });
-    
-    if (result && result.Success && result.Results) {
-      return result.Results as ActionCategoryEntity[];
-    } else {
-      throw new Error('Failed to load action categories');
-    }
-  }
 
   private populateCategoriesMap(categories: ActionCategoryEntity[]): void {
     this.categories.clear();

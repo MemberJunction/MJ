@@ -45,6 +45,99 @@
 - Document public APIs with TSDoc comments
 - Follow single responsibility principle
 
+## Entity Metadata Best Practices (CRITICAL)
+
+### Finding Entity Names
+- **ALWAYS** use `/packages/MJCoreEntities/src/generated/entity_subclasses.ts` to find correct entity names
+- Entity names are in the `@RegisterClass` decorator JSDoc comments
+- Examples:
+  - `AIPromptEntity` → `"AI Prompts"`
+  - `AIAgentEntity` → `"AI Agents"`
+  - `AIModelEntity` → `"AI Models"`
+  - `AIPromptRunEntity` → `"MJ: AI Prompt Runs"` (newer entities use "MJ: " prefix)
+  - `AIAgentRunEntity` → `"MJ: AI Agent Runs"`
+
+### Using Metadata Class
+- Create a single instance: `const md = new Metadata()`
+- Use for entity object creation: `const entity = await md.GetEntityObject<EntityType>('Entity Name')`
+- **NEVER** directly instantiate entity classes with `new EntityClass()`
+- **NEVER** look up entity names at runtime - they are fixed in the schema
+
+### Efficient Data Loading with RunViews
+
+#### Batch Multiple Independent Queries
+- **ALWAYS** use `RunViews` (plural) when loading multiple independent entities
+- This dramatically reduces database round trips and improves performance
+- Example - **DO THIS**:
+  ```typescript
+  const rv = new RunView();
+  const [actions, categories, executions] = await rv.RunViews([
+    {
+      EntityName: 'Actions',
+      ExtraFilter: '',
+      OrderBy: 'UpdatedAt DESC',
+      MaxRows: 1000,
+      ResultType: 'entity_object'
+    },
+    {
+      EntityName: 'Action Categories',
+      ExtraFilter: '',
+      OrderBy: 'Name',
+      MaxRows: 1000,
+      ResultType: 'entity_object'
+    },
+    {
+      EntityName: 'Action Execution Logs',
+      ExtraFilter: '',
+      OrderBy: 'StartedAt DESC',
+      MaxRows: 1000,
+      ResultType: 'entity_object'
+    }
+  ]);
+  ```
+- **DON'T DO THIS** (inefficient):
+  ```typescript
+  // Multiple separate calls - AVOID!
+  const [actions, categories, executions] = await Promise.all([
+    new RunView().RunView({ EntityName: 'Actions', ... }),
+    new RunView().RunView({ EntityName: 'Action Categories', ... }),
+    new RunView().RunView({ EntityName: 'Action Execution Logs', ... })
+  ]);
+  ```
+
+#### Use View Fields Instead of Lookups
+- Most MJ views include denormalized fields from related entities
+- Example: `AIPromptRunEntity` has both `ModelID` and `Model` (name) fields
+- **DO THIS**: Use `run.Model` directly
+- **DON'T DO THIS**: Look up model name with a separate query using `ModelID`
+
+#### Avoid Per-Item Queries in Loops
+- **NEVER** make RunView calls inside loops
+- Load all data once, then process client-side
+- Example - **DO THIS**:
+  ```typescript
+  // Load all data for time range once
+  const [promptRuns, agentRuns] = await rv.RunViews([
+    { EntityName: 'MJ: AI Prompt Runs', ExtraFilter: dateRangeFilter, ... },
+    { EntityName: 'MJ: AI Agent Runs', ExtraFilter: dateRangeFilter, ... }
+  ]);
+  
+  // Then aggregate into buckets client-side
+  for (const bucket of timeBuckets) {
+    const bucketData = allRuns.filter(run => isInBucket(run, bucket));
+    // Process bucket data
+  }
+  ```
+- **DON'T DO THIS**:
+  ```typescript
+  // Making queries per bucket - AVOID!
+  for (const bucket of timeBuckets) {
+    const data = await rv.RunView({ 
+      ExtraFilter: `Date >= '${bucket.start}' AND Date < '${bucket.end}'` 
+    });
+  }
+  ```
+
 ## Icon Libraries
 - **Primary**: Font Awesome (already included) - Use for all icons throughout the application
 - Font Awesome classes: `fa-solid`, `fa-regular`, `fa-light`, `fa-brands` etc.
