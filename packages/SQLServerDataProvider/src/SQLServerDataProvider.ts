@@ -2966,45 +2966,16 @@ export class SQLServerDataProvider
         // Clear the stale transaction reference
         this._transaction = null;
         
-        // Retry with the pool connection (and re-log if needed)
-        const retryLogPromise = loggingOptions && !loggingOptions.ignoreLogging
-          ? this._logSqlStatement(
-              query,
-              parameters,
-              loggingOptions.description + ' (retry with pool)',
-              loggingOptions.ignoreLogging,
-              loggingOptions.isMutation,
-              loggingOptions.simpleSQLFallback,
-              loggingOptions.contextUser
-            )
-          : Promise.resolve();
-        
-        // Create new request with pool
-        const poolRequest = new sql.Request(this._pool);
-        
-        // Add parameters again
-        let processedQuery = query;
-        if (parameters) {
-          if (Array.isArray(parameters)) {
-            parameters.forEach((value, index) => {
-              poolRequest.input(`p${index}`, value);
-            });
-            let paramIndex = 0;
-            processedQuery = query.replace(/\?/g, () => `@p${paramIndex++}`);
-          } else if (typeof parameters === 'object') {
-            for (const [key, value] of Object.entries(parameters)) {
-              poolRequest.input(key, value);
-            }
-          }
-        }
-        
-        // Execute with pool
-        const [retryResult] = await Promise.all([
-          poolRequest.query(processedQuery),
-          retryLogPromise
-        ]);
-        
-        return retryResult;
+        // Retry using the pool connection by recursively calling this method
+        return this._internalExecuteSQL(
+          query, 
+          parameters, 
+          this._pool, // Use pool instead of transaction
+          loggingOptions ? {
+            ...loggingOptions,
+            description: loggingOptions.description + ' (retry with pool)'
+          } : undefined
+        );
       }
       
       // Log other errors
@@ -3083,11 +3054,13 @@ export class SQLServerDataProvider
         }
       }
 
-      // Log to console for static method (no access to SQL logging sessions)
-      await this.LogSQLStatement(query, parameters, 'ExecuteSQLWithPool', false, undefined, contextUser);
+      // Execute query and logging in parallel
+      const logPromise = this.LogSQLStatement(query, parameters, 'ExecuteSQLWithPool', false, undefined, contextUser);
       
-      // Execute the query
-      const result = await request.query(processedQuery);
+      const [result] = await Promise.all([
+        request.query(processedQuery),
+        logPromise
+      ]);
 
       // Always return array for consistency
       return result.recordset || [];
