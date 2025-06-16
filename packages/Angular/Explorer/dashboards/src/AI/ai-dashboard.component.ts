@@ -32,6 +32,9 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
   public systemConfigurationState: any = null;
   public executionMonitoringState: any = null;
   
+  // Track which tabs have been visited for lazy loading
+  private visitedTabs = new Set<string>();
+  
   // Navigation items for bottom navigation - reordered with monitoring first
   public navigationItems: string[] = ['monitoring', 'prompts', 'agents', 'models', 'config'];
   
@@ -64,6 +67,8 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
 
   ngAfterViewInit(): void {
     // Initialize the dashboard after view init
+    // Mark the initial tab as visited
+    this.visitedTabs.add(this.activeTab);
     this.emitStateChange();
   }
 
@@ -74,7 +79,12 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
   public onTabChange(tabId: string): void {
     this.activeTab = tabId;
     this.selectedIndex = this.navigationItems.indexOf(tabId);
+    this.visitedTabs.add(tabId); // Mark tab as visited
     this.emitStateChange();
+  }
+  
+  public hasVisited(tabId: string): boolean {
+    return this.visitedTabs.has(tabId);
   }
 
   public onNavigationChange(event: any): void {

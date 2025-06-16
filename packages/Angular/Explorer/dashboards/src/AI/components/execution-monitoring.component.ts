@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, Output, EventEmitter, Input } from '@angular/core';
+import { Component, OnInit, OnDestroy, Output, EventEmitter, Input, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { Observable, Subject, combineLatest } from 'rxjs';
 import { map, takeUntil, startWith, debounceTime, take } from 'rxjs/operators';
 import { 
@@ -60,6 +60,7 @@ export interface ExecutionMonitoringState {
 
 @Component({
   selector: 'app-execution-monitoring',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="execution-monitoring" [class.loading]="isLoading">
       <!-- Loading Overlay -->
@@ -1828,7 +1829,8 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   }
 
   constructor(
-    private instrumentationService: AIInstrumentationService
+    private instrumentationService: AIInstrumentationService,
+    private cdr: ChangeDetectorRef
   ) {
     // Initialize data streams
     this.kpis$ = this.instrumentationService.kpis$;
@@ -1841,6 +1843,7 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
       takeUntil(this.destroy$)
     ).subscribe(loading => {
       this.isLoading = loading;
+      this.cdr.markForCheck();
     });
 
     // Derived streams
@@ -2081,6 +2084,7 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
     if (!this.drillDownTabs.find(tab => tab.id === tabId)) {
       this.drillDownTabs.push(newTab);
       this.emitStateChange(); // Emit state when new tab is added
+      this.cdr.markForCheck();
     }
     
     // Switch to the new tab
@@ -2221,6 +2225,7 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
       window.dispatchEvent(new Event('resize'));
     }, 100);
     this.emitStateChange();
+    this.cdr.markForCheck();
   }
 
   closeTab(event: MouseEvent, tabId: string): void {
@@ -2300,20 +2305,60 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
       const hours = duration / (1000 * 60 * 60);
       
       let windowSizeMs: number;
+      let alignToDay = false;
+      
       if (hours <= 24) {
         // For up to 24 hours, use 1 hour window (30 min before and after)
         windowSizeMs = 30 * 60 * 1000;
       } else if (hours <= 24 * 7) {
-        // For up to 7 days, use 2 hour window (matches 4-hour bucket)
-        windowSizeMs = 2 * 60 * 60 * 1000;
+        // For up to 7 days, use full day window
+        // Since data is aggregated into 4-hour buckets, we need to capture the full day
+        windowSizeMs = 12 * 60 * 60 * 1000; // 12 hours before/after = 24 hour window
+        alignToDay = true;
       } else {
-        // For more than 7 days, use 12 hour window (matches daily bucket)
-        windowSizeMs = 12 * 60 * 60 * 1000;
+        // For more than 7 days, use full day window
+        windowSizeMs = 12 * 60 * 60 * 1000; // 12 hours before/after = 24 hour window
+        alignToDay = true;
       }
       
       // Create time window around the clicked point
-      const startTime = new Date(tab.timestamp.getTime() - windowSizeMs);
-      const endTime = new Date(tab.timestamp.getTime() + windowSizeMs);
+      let startTime = new Date(tab.timestamp.getTime() - windowSizeMs);
+      let endTime = new Date(tab.timestamp.getTime() + windowSizeMs);
+      
+      // For day-aligned queries, expand to full day boundaries
+      if (alignToDay) {
+        // Set start to beginning of the day
+        startTime = new Date(tab.timestamp);
+        startTime.setHours(0, 0, 0, 0);
+        
+        // Set end to end of the day
+        endTime = new Date(tab.timestamp);
+        endTime.setHours(23, 59, 59, 999);
+      }
+      
+      // Debug logging
+      console.log('=== DRILL-DOWN DEBUG START ===');
+      console.log('1. Click Event Details:', {
+        clickedTimestamp: tab.timestamp.toISOString(),
+        clickedDate: tab.timestamp.toLocaleString(),
+        metric: tab.metric,
+        tabId: tab.id
+      });
+      console.log('2. Time Range Calculation:', {
+        selectedTimeRange: this.selectedTimeRange,
+        totalHours: hours,
+        windowSizeMinutes: windowSizeMs / (60 * 1000),
+        windowCondition: hours <= 24 ? '≤24h' : hours <= 24 * 7 ? '≤7d' : '>7d',
+        alignToDay: alignToDay,
+        dayAlignmentNote: alignToDay ? 'Query will capture full day' : 'Query uses exact time window'
+      });
+      console.log('3. Query Window:', {
+        startTime: startTime.toISOString(),
+        startTimeLocal: startTime.toLocaleString(),
+        endTime: endTime.toISOString(),
+        endTimeLocal: endTime.toLocaleString(),
+        windowSpan: `${(endTime.getTime() - startTime.getTime()) / (60 * 60 * 1000)} hours`
+      });
       
       // Load executions for this time period
       const [promptResults, agentResults] = await Promise.all([
@@ -2330,6 +2375,34 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
           ResultType: 'entity_object'
         })
       ]);
+      
+      // Debug logging results
+      console.log('4. Query Results:', {
+        promptRunsFound: promptResults.Results.length,
+        agentRunsFound: agentResults.Results.length,
+        totalFound: promptResults.Results.length + agentResults.Results.length
+      });
+      
+      // Log sample data if found
+      if (promptResults.Results.length > 0) {
+        console.log('5. Sample Prompt Run:', {
+          id: promptResults.Results[0].ID,
+          runAt: promptResults.Results[0].RunAt,
+          runAtLocal: new Date(promptResults.Results[0].RunAt).toLocaleString(),
+          name: promptResults.Results[0].Prompt
+        });
+      }
+      
+      if (agentResults.Results.length > 0) {
+        console.log('6. Sample Agent Run:', {
+          id: agentResults.Results[0].ID,
+          startedAt: agentResults.Results[0].StartedAt,
+          startedAtLocal: new Date(agentResults.Results[0].StartedAt).toLocaleString(),
+          name: agentResults.Results[0].Agent
+        });
+      }
+      
+      console.log('=== DRILL-DOWN DEBUG END ===');
       
       // Convert to ExecutionRecord format
       const executions: ExecutionRecord[] = [];
@@ -2380,12 +2453,15 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
       
       // Update tab data
       tab.data = executions;
+      this.cdr.markForCheck();
       
     } catch (error) {
       console.error('Error loading drill-down data:', error);
       tab.data = [];
+      this.cdr.markForCheck();
     } finally {
       this.loadingDrillDown = false;
+      this.cdr.markForCheck();
     }
   }
 

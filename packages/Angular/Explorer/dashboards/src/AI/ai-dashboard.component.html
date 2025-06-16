@@ -15,14 +15,14 @@
   @if (!isLoading) {
     <div class="dashboard-content-wrapper">
       <div class="dashboard-content">
-        @if (activeTab === 'models') {
+        @if (activeTab === 'models' && hasVisited('models')) {
           <app-model-management
             (openEntityRecord)="onOpenEntityRecord($event)"
             mjFillContainer>
           </app-model-management>
         }
         
-        @if (activeTab === 'prompts') {
+        @if (activeTab === 'prompts' && hasVisited('prompts')) {
           <app-prompt-management
             (openEntityRecord)="onOpenEntityRecord($event)"
             (stateChange)="onPromptManagementStateChange($event)"
@@ -30,7 +30,7 @@
           </app-prompt-management>
         }
         
-        @if (activeTab === 'agents') {
+        @if (activeTab === 'agents' && hasVisited('agents')) {
           <app-agent-configuration
             (openEntityRecord)="onOpenEntityRecord($event)"
             (stateChange)="onAgentConfigurationStateChange($event)"
@@ -38,7 +38,7 @@
           </app-agent-configuration>
         }
         
-        @if (activeTab === 'monitoring') {
+        @if (activeTab === 'monitoring' && hasVisited('monitoring')) {
           <app-execution-monitoring
             [initialState]="executionMonitoringState"
             (openEntityRecord)="onOpenEntityRecord($event)"
@@ -47,7 +47,7 @@
           </app-execution-monitoring>
         }
         
-        @if (activeTab === 'config') {
+        @if (activeTab === 'config' && hasVisited('config')) {
           <app-system-configuration
             (openEntityRecord)="onOpenEntityRecord($event)"
             (stateChange)="onSystemConfigurationStateChange($event)"
