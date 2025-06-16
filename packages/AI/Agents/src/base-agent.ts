@@ -135,7 +135,7 @@ export class BaseAgent {
             await this.initializeEngines(params.contextUser);
 
             // Create and track validation step
-            const validationResult = await this.validateAgentWithTracking(params.agent);
+            const validationResult = await this.validateAgentWithTracking(params.agent, params.contextUser);
             if (validationResult) return validationResult;
 
             // Load agent configuration
@@ -797,7 +797,7 @@ export class BaseAgent {
      */
     private async initializeAgentRun(params: ExecuteAgentParams): Promise<void> {
         // Create AIAgentRunEntity
-        this._agentRun = await this._metadata.GetEntityObject<AIAgentRunEntity>('MJ: AI Agent Runs');
+        this._agentRun = await this._metadata.GetEntityObject<AIAgentRunEntity>('MJ: AI Agent Runs', params.contextUser);
         this._agentRun.AgentID = params.agent.ID;
         this._agentRun.Status = 'Running';
         this._agentRun.StartedAt = new Date();
@@ -832,7 +832,7 @@ export class BaseAgent {
      * @param {AIAgentEntity} agent - The agent to validate
      * @returns {Promise<ExecuteAgentResult | null>} - Failure result if validation fails, null if successful
      */
-    private async validateAgentWithTracking(agent: AIAgentEntity): Promise<ExecuteAgentResult | null> {
+    private async validateAgentWithTracking(agent: AIAgentEntity, contextUser: UserInfo): Promise<ExecuteAgentResult | null> {
         const startTime = new Date();
         
         try {
@@ -841,7 +841,7 @@ export class BaseAgent {
             
             if (validationResult) {
                 // Create validation step
-                const stepEntity = await this.createStepEntity('validation', 'Agent Validation');
+                const stepEntity = await this.createStepEntity('validation', 'Agent Validation', contextUser);
                 
                 // Create validation execution result
                 const executionResult: ValidationExecutionResult = {
@@ -875,7 +875,7 @@ export class BaseAgent {
             }
             
             // Validation successful - create success step
-            const stepEntity = await this.createStepEntity('validation', 'Agent Validation');
+            const stepEntity = await this.createStepEntity('validation', 'Agent Validation', contextUser);
             
             const executionResult: ValidationExecutionResult = {
                 type: 'validation',
@@ -916,8 +916,8 @@ export class BaseAgent {
      * @param {string} [targetId] - Optional ID of the target entity
      * @returns {Promise<AIAgentRunStepEntity>} - The created step entity
      */
-    private async createStepEntity(stepType: string, stepName: string, targetId?: string): Promise<AIAgentRunStepEntity> {
-        const stepEntity = await this._metadata.GetEntityObject<AIAgentRunStepEntity>('MJ: AI Agent Run Steps');
+    private async createStepEntity(stepType: string, stepName: string, contextUser: UserInfo, targetId?: string): Promise<AIAgentRunStepEntity> {
+        const stepEntity = await this._metadata.GetEntityObject<AIAgentRunStepEntity>('MJ: AI Agent Run Steps', contextUser);
         
         stepEntity.AgentRunID = this._agentRun!.ID;
         stepEntity.StepNumber = this._runContext!.currentStepIndex + 1;
@@ -928,7 +928,7 @@ export class BaseAgent {
         stepEntity.StartedAt = new Date();
         
         if (!await stepEntity.Save()) {
-            throw new Error('Failed to create agent run step record');
+            throw new Error(`Failed to create agent run step record: ${JSON.stringify(stepEntity.LatestResult)}`);
         }
         
         this._runContext!.currentStepIndex++;
@@ -1011,7 +1011,7 @@ export class BaseAgent {
     ): Promise<{terminate: boolean, returnValue?: any, nextStep?: BaseAgentNextStep}> {
         
         const startTime = new Date();
-        const stepEntity = await this.createStepEntity('prompt', 'Execute Agent Prompt', config.childPrompt?.ID);
+        const stepEntity = await this.createStepEntity('prompt', 'Execute Agent Prompt', params.contextUser, config.childPrompt?.ID);
         
         try {
             // Prepare prompt parameters
@@ -1022,14 +1022,8 @@ export class BaseAgent {
                 params
             );
             
-            // Add retry context if this is a retry
-            if (retryContext) {
-                promptParams.data = {
-                    ...promptParams.data,
-                    retryReason: retryContext.retryReason,
-                    retryInstructions: retryContext.retryInstructions
-                };
-            }
+            // Note: retry context is now handled through conversation messages
+            // The retryContext parameter is kept for backward compatibility but not used
             
             // Execute the prompt
             const promptResult = await this.executePrompt(promptParams);
@@ -1068,7 +1062,10 @@ export class BaseAgent {
                 promptResult.success ? undefined : promptResult.errorMessage);
             
             // Return based on next step
-            if (nextStep.step === 'success' || nextStep.step === 'failed') {
+            if (nextStep.step === 'chat') {
+                return { terminate: true, returnValue: nextStep };
+            }
+            else if (nextStep.step === 'success' || nextStep.step === 'failed') {
                 return { terminate: true, returnValue: nextStep.returnValue };
             } else {
                 return { terminate: false, nextStep };
@@ -1090,8 +1087,14 @@ export class BaseAgent {
         subAgentRequest: AgentSubAgentRequest
     ): Promise<{terminate: boolean, returnValue?: any, nextStep?: BaseAgentNextStep}> {
         
+        // Add assistant message indicating we're executing a sub-agent
+        params.conversationMessages.push({
+            role: 'assistant',
+            content: `Executing sub-agent: ${subAgentRequest.name}\nReason: ${subAgentRequest.message}`
+        });
+        
         const startTime = new Date();
-        const stepEntity = await this.createStepEntity('subagent', `Execute Sub-Agent: ${subAgentRequest.name}`, subAgentRequest.id);
+        const stepEntity = await this.createStepEntity('subagent', `Execute Sub-Agent: ${subAgentRequest.name}`, params.contextUser, subAgentRequest.id);
         
         try {
             // Execute sub-agent
@@ -1133,16 +1136,35 @@ export class BaseAgent {
             // Finalize step entity
             await this.finalizeStepEntity(stepEntity, subAgentResult.success);
             
+            // Build a clean summary of sub-agent result
+            const subAgentSummary = {
+                subAgentName: subAgentRequest.name,
+                subAgentId: subAgentRequest.id,
+                success: subAgentResult.success,
+                finalStep: subAgentResult.finalStep,
+                returnValue: subAgentResult.returnValue,
+                errorMessage: subAgentResult.errorMessage || null
+            };
+            
+            // Add user message with the sub-agent results
+            const resultMessage = subAgentResult.success
+                ? `Sub-agent completed successfully:\n${JSON.stringify(subAgentSummary, null, 2)}`
+                : `Sub-agent failed:\n${JSON.stringify(subAgentSummary, null, 2)}`;
+                
+            params.conversationMessages.push({
+                role: 'user',
+                content: resultMessage
+            });
+            
             if (shouldTerminate) {
                 return { terminate: true, returnValue: subAgentResult.returnValue };
             } else {
-                // Continue with a retry to incorporate sub-agent results
+                // Continue processing - no need for retryInstructions anymore
                 return { 
                     terminate: false, 
                     nextStep: {
                         step: 'retry',
-                        retryReason: 'Processing sub-agent results',
-                        retryInstructions: `The sub-agent ${subAgentRequest.name} has completed. Result: ${JSON.stringify(subAgentResult.returnValue)}`
+                        retryReason: 'Processing sub-agent results'
                     }
                 };
             }
@@ -1163,17 +1185,36 @@ export class BaseAgent {
         actions: AgentAction[]
     ): Promise<{terminate: boolean, returnValue?: any, nextStep?: BaseAgentNextStep}> {
         
-        const results: any[] = [];
+        // Add assistant message indicating we're executing actions
+        const actionMessage = actions.length === 1 
+            ? `Executing action: ${actions[0].name}`
+            : `Executing ${actions.length} actions: ${actions.map(a => a.name).join(', ')}`;
         
+        params.conversationMessages.push({
+            role: 'assistant',
+            content: actionMessage
+        });
+        
+        // Create step entities for all actions first
+        const actionSteps: Array<{
+            action: AgentAction;
+            stepEntity: AIAgentRunStepEntity;
+            startTime: Date;
+        }> = [];
+        
+        // Create all step entities sequentially (fast operation)
         for (const action of actions) {
             const startTime = new Date();
-            const stepEntity = await this.createStepEntity('action', `Execute Action: ${action.name}`, action.id);
-            
+            const stepEntity = await this.createStepEntity('action', `Execute Action: ${action.name}`, params.contextUser, action.id);
+            actionSteps.push({ action, stepEntity, startTime });
+        }
+        
+        // Execute all actions in parallel
+        const actionPromises = actionSteps.map(async ({ action, stepEntity, startTime }) => {
             try {
                 // Execute the action
                 const actionResults = await this.ExecuteActions([action], params.contextUser);
                 const actionResult = actionResults[0];
-                results.push(actionResult);
                 
                 // Create action execution result
                 const executionResult: ActionExecutionResult = {
@@ -1186,7 +1227,7 @@ export class BaseAgent {
                 // Create next step decision
                 const nextStepDecision: NextStepDecision = {
                     decision: 'retry',
-                    reasoning: 'Action completed, continuing with results',
+                    reasoning: 'Action completed successfully',
                     nextStepDetails: undefined
                 };
                 
@@ -1205,19 +1246,51 @@ export class BaseAgent {
                 await this.finalizeStepEntity(stepEntity, actionResult.Success, 
                     actionResult.Success ? undefined : actionResult.Message);
                 
+                return { success: true, result: actionResult };
+                
             } catch (error) {
                 await this.finalizeStepEntity(stepEntity, false, error.message);
-                throw error;
+                return { success: false, error: error.message };
             }
-        }
+        });
         
-        // After all actions, continue with a retry to process results
+        // Wait for all actions to complete
+        const actionResults = await Promise.all(actionPromises);
+        
+        // Build a clean summary of action results
+        const actionSummaries = actionSteps.map((step, index) => {
+            const result = actionResults[index];
+            const actionResult = result.success ? result.result : null;
+            
+            return {
+                actionName: step.action.name,
+                actionId: step.action.id,
+                params: step.action.params,
+                success: result.success,
+                resultCode: actionResult?.ResultCode || (result.success ? 'SUCCESS' : 'ERROR'),
+                message: result.success ? actionResult?.Message || 'Action completed' : result.error
+            };
+        });
+        
+        // Check if any actions failed
+        const failedActions = actionSummaries.filter(a => !a.success);
+        
+        // Add user message with the results
+        const resultsMessage = failedActions.length > 0
+            ? `Action results (${failedActions.length} failed):\n${JSON.stringify(actionSummaries, null, 2)}`
+            : `Action results (all succeeded):\n${JSON.stringify(actionSummaries, null, 2)}`;
+            
+        params.conversationMessages.push({
+            role: 'user',
+            content: resultsMessage
+        });
+        
+        // Return to continue processing - no need for retryInstructions anymore
         return {
             terminate: false,
             nextStep: {
                 step: 'retry',
-                retryReason: 'Processing action results',
-                retryInstructions: `Actions have been executed. Results: ${JSON.stringify(results)}`
+                retryReason: failedActions.length > 0 ? 'Some actions failed' : 'All actions completed successfully'
             }
         };
     }
@@ -1234,7 +1307,7 @@ export class BaseAgent {
         // Chat functionality would need to be implemented based on the specific chat system
         // For now, we'll just create a failed step
         const startTime = new Date();
-        const stepEntity = await this.createStepEntity('chat', 'User Interaction');
+        const stepEntity = await this.createStepEntity('chat', 'User Interaction', params.contextUser);
         
         const executionResult: ChatExecutionResult = {
             type: 'chat',

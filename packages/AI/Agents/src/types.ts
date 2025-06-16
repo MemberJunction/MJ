@@ -120,14 +120,17 @@ export type AgentSubAgentRequest = {
  * @property {'success' | 'failed' | 'retry' | 'sub-agent' | 'actions' | 'chat'} step - The determined next step
  *   - 'success': The agent has completed its task successfully
  *   - 'failed': The agent has failed to complete its task
- *   - 'retry': The agent should retry the last step by running it again
+ *   - 'retry': The agent should re-run to either:
+ *     a) Process new results from completed actions or sub-agents
+ *     b) Retry after a failure condition
+ *     c) Continue processing with updated context
  *   - 'sub-agent': The agent should spawn a sub-agent to handle a specific task
  *   - 'actions': The agent should perform one or more actions using the Actions framework
  *   - 'chat': The agent needs to communicate with the user before proceeding
  * @property {any} [returnValue] - Optional value to return with the step determination
  * @property {string} [errorMessage] - Error message when step is 'failed'
- * @property {string} [retryReason] - Reason for retry when step is 'retry'
- * @property {string} [retryInstructions] - Instructions for the retry attempt
+ * @property {string} [retryReason] - Reason for retry when step is 'retry' (e.g., "Processing action results", "Handling error condition")
+ * @property {string} [retryInstructions] - Instructions for the retry attempt, including any new context or results
  * @property {AgentSubAgentRequest} [subAgent] - Sub-agent details when step is 'sub-agent'
  * @property {AgentAction[]} [actions] - Array of actions to execute when step is 'actions'
  * @property {string} [userMessage] - Message to send to user when step is 'chat'
