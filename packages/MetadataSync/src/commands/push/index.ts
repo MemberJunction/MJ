@@ -9,7 +9,6 @@ import { loadMJConfig, loadSyncConfig, loadEntityConfig } from '../../config';
 import { SyncEngine, RecordData } from '../../lib/sync-engine';
 import { initializeProvider, findEntityDirectories, getSystemUser } from '../../lib/provider-utils';
 import { BaseEntity, LogStatus, Metadata } from '@memberjunction/core';
-import { cleanupProvider } from '../../lib/provider-utils';
 import { configManager } from '../../lib/config-manager';
 import { getSyncEngine, resetSyncEngine } from '../../lib/singleton-manager';
 import { SQLServerDataProvider, type SqlLoggingSession } from '@memberjunction/sqlserver-dataprovider';
@@ -370,10 +369,9 @@ export default class Push extends Command {
       
       // Reset sync engine singleton
       resetSyncEngine();
-      // Clean up database connection
-      await cleanupProvider();
       
       // Exit process to prevent background MJ tasks from throwing errors
+      // We don't explicitly close the connection - let the process termination handle it
       process.exit(0);
     }
   }

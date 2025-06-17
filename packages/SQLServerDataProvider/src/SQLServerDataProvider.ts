@@ -2879,6 +2879,14 @@ export class SQLServerDataProvider
       connectionSource = context.pool;
     }
 
+    // Check if the pool is connected before attempting to execute
+    if (connectionSource === context.pool && !context.pool.connected) {
+      const errorMessage = 'Connection pool is closed. Cannot execute SQL query.';
+      const error = new Error(errorMessage);
+      (error as any).code = 'POOL_CLOSED';
+      throw error;
+    }
+
     // Handle logging
     let logPromise: Promise<void>;
     if (options && !options.ignoreLogging && context.logSqlStatement) {

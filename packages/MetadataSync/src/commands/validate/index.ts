@@ -6,7 +6,7 @@ import { ValidationService } from '../../services/ValidationService';
 import { FormattingService } from '../../services/FormattingService';
 import { ValidationOptions } from '../../types/validation';
 import { loadMJConfig } from '../../config';
-import { initializeProvider, cleanupProvider } from '../../lib/provider-utils';
+import { initializeProvider } from '../../lib/provider-utils';
 import ora from 'ora-classic';
 
 export default class Validate extends Command {
@@ -124,8 +124,9 @@ export default class Validate extends Command {
             }
             this.exit(1);
         } finally {
-            // Clean up database connection
-            await cleanupProvider();
+            // Exit process to prevent background MJ tasks from throwing errors
+            // We don't explicitly close the connection - let the process termination handle it
+            process.exit(0);
         }
     }
 }

@@ -19,7 +19,7 @@ import ora from 'ora-classic';
 import { loadMJConfig, loadEntityConfig, RelatedEntityConfig } from '../../config';
 import { SyncEngine, RecordData } from '../../lib/sync-engine';
 import { RunView, Metadata, EntityInfo } from '@memberjunction/core';
-import { getSystemUser, initializeProvider, cleanupProvider } from '../../lib/provider-utils';
+import { getSystemUser, initializeProvider } from '../../lib/provider-utils';
 import { configManager } from '../../lib/config-manager';
 import { getSyncEngine, resetSyncEngine } from '../../lib/singleton-manager';
 import chalk from 'chalk';
@@ -525,11 +525,11 @@ export default class Pull extends Command {
       
       this.error(error as Error);
     } finally {
-      // Clean up database connection and reset singletons
-      await cleanupProvider();
+      // Reset singletons
       resetSyncEngine();
       
       // Exit process to prevent background MJ tasks from throwing errors
+      // We don't explicitly close the connection - let the process termination handle it
       process.exit(0);
     }
   }
