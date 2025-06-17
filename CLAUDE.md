@@ -26,6 +26,46 @@
 - This ensures code quality and prevents runtime issues
 - **Package-Specific Builds**: When building individual packages for testing/compilation, always use `npm run build` in the specific package directory (NOT turbo from root)
 
+## Debugging Build Failures
+
+When packages fail to build during `npm install`, use this systematic debugging process:
+
+### 1. Verify Dependencies Exist
+```bash
+npm ls @memberjunction/package-name
+```
+
+### 2. Check Turbo Detection
+```bash
+npx turbo build --dry-run --filter="@memberjunction/package-name"
+```
+This shows if Turbo can detect the package and its dependency graph.
+
+### 3. Run Isolated Build with Verbose Logging
+```bash
+npx turbo build --log-order=stream --filter="@memberjunction/package-name"
+```
+This reveals the exact TypeScript compilation errors.
+
+### 4. Check for Circular Dependencies
+Look for packages that depend on each other:
+- Package A imports from Package B
+- Package B depends on Package A in package.json
+- This creates a circular dependency that prevents building
+
+### 5. Verify Build Order
+- Turbo uses `"dependsOn": ["^build"]` in turbo.json
+- Dependencies should build before dependents
+- Check that all dependencies have `dist/` folders (indicating successful builds)
+
+### Common Issues
+- **Missing imports**: Package tries to import from unbuilt dependency
+- **Circular dependencies**: Two packages depend on each other
+- **Workspace detection**: Package not properly included in workspaces array
+- **Build order**: Dependencies not built in correct sequence
+
+**Note**: The `build.order.json` file is only used by legacy PowerShell scripts, not by Turbo builds.
+
 ## Lint & Format
 - Check with ESLint: `npx eslint packages/path/to/file.ts`
 - Format with Prettier: `npx prettier --write packages/path/to/file.ts`
