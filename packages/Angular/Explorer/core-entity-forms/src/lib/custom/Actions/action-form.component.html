@@ -123,9 +123,9 @@
                                 @if (record.ID) {
                                     <kendo-button themeColor="primary" size="large"
                                                 (click)="openTestHarness()"
-                                                title="Open Test Harness"
+                                                title="Open Run Harness"
                                                 [disabled]="record.Status !== 'Active'">
-                                        <i class="fa-solid fa-flask"></i> Test
+                                        <i class="fa-solid fa-play"></i> Run
                                     </kendo-button>
                                 }
                                 @if (EditMode && record.Type === 'Generated') {
@@ -193,27 +193,48 @@
                                     }
                                 </div>
                             } @else {
-                                <div class="params-flow">
-                                    <!-- Input Parameters -->
-                                    <div class="param-group input-params">
-                                        <h3><i class="fa-solid fa-sign-in-alt"></i> Inputs</h3>
-                                        <div class="param-cards">
-                                            @if (getInputParams().length === 0) {
-                                                <div class="no-params">
-                                                    <p>No input parameters</p>
-                                                </div>
-                                            } @else {
-                                                @for (param of getInputParams(); track param.ID) {
-                                                    <div class="param-card" [class.required]="param.IsRequired">
-                                                        <div class="param-header">
-                                                            <span class="param-name">{{ param.Name }}</span>
+                                <!-- Input Parameters Grid -->
+                                <div class="params-section">
+                                    <div class="params-header">
+                                        <h3><i class="fa-solid fa-sign-in-alt"></i> Input Parameters</h3>
+                                        @if (EditMode && record.IsSaved) {
+                                            <kendo-button fillMode="flat" size="small" (click)="addParameter('Input')">
+                                                <i class="fa-solid fa-plus"></i> Add Input
+                                            </kendo-button>
+                                        }
+                                    </div>
+                                    
+                                    @if (getInputParams().length === 0) {
+                                        <div class="empty-state" style="padding: 30px; text-align: center;">
+                                            <i class="fa-solid fa-inbox" style="font-size: 2em; color: #6c757d; opacity: 0.3;"></i>
+                                            <p style="margin: 12px 0 0 0; color: #6c757d;">No input parameters defined</p>
+                                        </div>
+                                    } @else {
+                                        <div class="params-grid">
+                                            @for (param of getInputParams(); track param.ID) {
+                                                <div class="param-card" [class.required]="param.IsRequired" 
+                                                     [class.clickable]="true"
+                                                     (click)="onParamClick(param, $event)">
+                                                    <div class="param-header">
+                                                        <span class="param-name">{{ param.Name }}</span>
+                                                        <div class="param-badges">
                                                             @if (param.IsRequired) {
                                                                 <span class="required-badge">Required</span>
                                                             }
                                                             @if (param.IsArray) {
                                                                 <span class="array-badge">Array</span>
                                                             }
+                                                            @if (EditMode) {
+                                                                <button class="param-edit-btn" (click)="editParameter(param)" title="Edit parameter">
+                                                                    <i class="fa-solid fa-edit"></i>
+                                                                </button>
+                                                                <button class="param-delete-btn" (click)="deleteParameter(param)" title="Delete parameter">
+                                                                    <i class="fa-solid fa-trash"></i>
+                                                                </button>
+                                                            }
                                                         </div>
+                                                    </div>
+                                                    <div class="param-details">
                                                         <div class="param-type">{{ param.ValueType }}</div>
                                                         @if (param.Description) {
                                                             <div class="param-description">{{ param.Description }}</div>
@@ -225,53 +246,67 @@
                                                             </div>
                                                         }
                                                     </div>
-                                                }
+                                                </div>
                                             }
                                         </div>
-                                    </div>
+                                    }
+                                </div>
 
-                                    <!-- Flow Arrow -->
-                                    <div class="param-flow-arrow">
-                                        <i class="fa-solid fa-arrow-right"></i>
+                                <!-- Output Parameters Grid -->
+                                <div class="params-section" style="margin-top: 24px;" 
+                                     [class.params-section-compact]="getOutputParams().length === 0">
+                                    <div class="params-header">
+                                        <h3><i class="fa-solid fa-sign-out-alt"></i> Output Parameters</h3>
+                                        @if (EditMode && record.IsSaved) {
+                                            <kendo-button fillMode="flat" size="small" (click)="addParameter('Output')">
+                                                <i class="fa-solid fa-plus"></i> Add Output
+                                            </kendo-button>
+                                        }
                                     </div>
-
-                                    <!-- Action Box -->
-                                    <div class="action-box">
-                                        <i class="fa-solid fa-cog"></i>
-                                        <span>{{ record.Name }}</span>
-                                    </div>
-
-                                    <!-- Flow Arrow -->
-                                    <div class="param-flow-arrow">
-                                        <i class="fa-solid fa-arrow-right"></i>
-                                    </div>
-
-                                    <!-- Output Parameters -->
-                                    <div class="param-group output-params">
-                                        <h3><i class="fa-solid fa-sign-out-alt"></i> Outputs</h3>
-                                        <div class="param-cards">
-                                            @if (getOutputParams().length === 0) {
-                                                <div class="no-params">
-                                                    <p>No output parameters</p>
-                                                </div>
-                                            } @else {
-                                                @for (param of getOutputParams(); track param.ID) {
-                                                    <div class="param-card">
-                                                        <div class="param-header">
-                                                            <span class="param-name">{{ param.Name }}</span>
+                                    
+                                    @if (getOutputParams().length === 0) {
+                                        <div class="empty-state" style="padding: 20px; text-align: center;">
+                                            <i class="fa-solid fa-inbox" style="font-size: 2em; color: #6c757d; opacity: 0.3;"></i>
+                                            <p style="margin: 12px 0 0 0; color: #6c757d;">No output parameters defined</p>
+                                        </div>
+                                    } @else {
+                                        <div class="params-grid">
+                                            @for (param of getOutputParams(); track param.ID) {
+                                                <div class="param-card"
+                                                     [class.clickable]="true"
+                                                     (click)="onParamClick(param, $event)">
+                                                    <div class="param-header">
+                                                        <span class="param-name">{{ param.Name }}</span>
+                                                        <div class="param-badges">
                                                             @if (param.IsArray) {
                                                                 <span class="array-badge">Array</span>
                                                             }
+                                                            @if (EditMode) {
+                                                                <button class="param-edit-btn" (click)="editParameter(param)" title="Edit parameter">
+                                                                    <i class="fa-solid fa-edit"></i>
+                                                                </button>
+                                                                <button class="param-delete-btn" (click)="deleteParameter(param)" title="Delete parameter">
+                                                                    <i class="fa-solid fa-trash"></i>
+                                                                </button>
+                                                            }
                                                         </div>
+                                                    </div>
+                                                    <div class="param-details">
                                                         <div class="param-type">{{ param.ValueType }}</div>
                                                         @if (param.Description) {
                                                             <div class="param-description">{{ param.Description }}</div>
                                                         }
+                                                        @if (param.DefaultValue) {
+                                                            <div class="param-default">
+                                                                <span class="default-label">Default:</span>
+                                                                <code>{{ param.DefaultValue }}</code>
+                                                            </div>
+                                                        }
                                                     </div>
-                                                }
+                                                </div>
                                             }
                                         </div>
-                                    </div>
+                                    }
                                 </div>
                             }
                         </div>
@@ -302,9 +337,9 @@
                                             <label>User Prompt</label>
                                             <kendo-textarea [(ngModel)]="record.UserPrompt"
                                                            name="userPrompt"
-                                                           [rows]="4"
+                                                           [rows]="8"
                                                            placeholder="Describe what this action should do..."
-                                                           style="width: 100%;">
+                                                           style="width: 100%; min-height: 120px;">
                                             </kendo-textarea>
                                         </div>
                                         <div class="comments-section">
@@ -590,3 +625,24 @@
         </form>
     }
 </div>
+
+<!-- Action Test Harness -->
+@if (showTestHarness) {
+    <kendo-window 
+        [width]="1200" 
+        [height]="800" 
+        [minWidth]="800"
+        [minHeight]="600"
+        [draggable]="true"
+        [resizable]="true"
+        [state]="'default'"
+        (close)="onTestHarnessVisibilityChanged(false)"
+        title="Run Action - {{ record.Name || 'Untitled' }}">
+        <mj-action-test-harness
+            [action]="record"
+            [actionParams]="actionParams"
+            [isVisible]="showTestHarness"
+            (visibilityChange)="onTestHarnessVisibilityChanged($event)">
+        </mj-action-test-harness>
+    </kendo-window>
+}

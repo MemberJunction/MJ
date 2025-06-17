@@ -2,8 +2,15 @@
     background: white;
     border-radius: 8px;
     padding: 24px;
-    max-width: 1200px;
-    margin: 0 auto;
+    max-width: 100%;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Ensure all child elements use border-box */
+.action-test-harness * {
+    box-sizing: border-box;
 }
 
 /* Header */
@@ -11,9 +18,11 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 24px;
+    margin-bottom: 20px;
     padding-bottom: 16px;
     border-bottom: 2px solid #e9ecef;
+    flex-wrap: wrap;
+    gap: 12px;
 }
 
 .harness-header h3 {
@@ -31,11 +40,14 @@
 .header-actions {
     display: flex;
     align-items: center;
+    gap: 8px;
 }
 
 /* Parameters Section */
 .parameters-section {
-    margin-bottom: 24px;
+    margin-bottom: 20px;
+    width: 100%;
+    overflow-x: auto;
 }
 
 .parameters-section h4 {
@@ -60,16 +72,19 @@
 
 .params-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-    gap: 20px;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+    width: 100%;
 }
 
 .param-field {
     background: #f8f9fa;
     border: 1px solid #e9ecef;
     border-radius: 6px;
-    padding: 16px;
+    padding: 12px;
     transition: all 0.2s;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .param-field:hover {
@@ -89,10 +104,12 @@
 .param-field label {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     margin-bottom: 8px;
     font-weight: 600;
     color: #495057;
+    flex-wrap: wrap;
+    font-size: 0.95em;
 }
 
 .required-indicator {
@@ -111,8 +128,9 @@
 .value-type {
     margin-left: auto;
     color: #6c757d;
-    font-size: 0.85em;
+    font-size: 0.8em;
     font-weight: 400;
+    white-space: nowrap;
 }
 
 .param-description {
@@ -130,6 +148,8 @@
     font-family: inherit;
     font-size: 0.95em;
     transition: border-color 0.2s;
+    box-sizing: border-box;
+    max-width: 100%;
 }
 
 .param-input:focus {
@@ -175,9 +195,11 @@ textarea.param-input {
     display: flex;
     gap: 12px;
     margin-bottom: 24px;
-    padding: 20px;
+    padding: 16px;
     background: #f8f9fa;
     border-radius: 6px;
+    align-items: center;
+    flex-wrap: wrap;
 }
 
 /* Results Section */
@@ -185,6 +207,7 @@ textarea.param-input {
     border: 2px solid #e9ecef;
     border-radius: 8px;
     overflow: hidden;
+    margin-top: 20px;
 }
 
 .results-header {
@@ -280,14 +303,32 @@ textarea.param-input {
 }
 
 .result-message h5 {
-    margin: 0 0 8px 0;
+    margin: 0 0 12px 0;
     color: #495057;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.result-message h5 i {
+    color: #17a2b8;
 }
 
 .result-message p {
     margin: 0;
     color: #6c757d;
     line-height: 1.5;
+}
+
+.result-message .code-editor-container {
+    margin-bottom: 0;
+}
+
+.result-message .code-editor {
+    color: #e8e8e8;
+    background: #2d2d30;
+    max-height: 200px;
+    overflow-y: auto;
 }
 
 /* Result Data */
@@ -298,6 +339,18 @@ textarea.param-input {
 .result-data h5 {
     margin: 0 0 16px 0;
     color: #495057;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.result-data h5 i {
+    color: #6f42c1;
+}
+
+.toggle-view-btn {
+    margin-left: auto;
+    font-size: 0.85em;
 }
 
 .raw-data {
@@ -311,6 +364,68 @@ textarea.param-input {
     overflow-x: auto;
     white-space: pre-wrap;
     word-break: break-word;
+}
+
+/* Code Editor Styles */
+.code-editor-container {
+    background: #1e1e1e;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 16px;
+}
+
+.code-editor-container.compact {
+    margin-bottom: 0;
+}
+
+.code-editor-header {
+    background: #2d2d30;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #3e3e42;
+}
+
+.language-badge {
+    background: #007acc;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 0.75em;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.copy-btn {
+    color: #cccccc;
+    padding: 4px 8px;
+    min-width: auto;
+}
+
+.copy-btn:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.code-editor {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    border: none;
+    border-radius: 0;
+    padding: 16px;
+    margin: 0;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.code-editor.json {
+    /* JSON syntax highlighting simulation */
+    color: #9cdcfe;
 }
 
 /* Output Parameters */
@@ -327,10 +442,17 @@ textarea.param-input {
 }
 
 .output-param label {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 6px;
     margin-bottom: 8px;
     font-weight: 600;
     color: #495057;
+}
+
+.output-param label i {
+    color: #6f42c1;
+    font-size: 0.9em;
 }
 
 .output-value {

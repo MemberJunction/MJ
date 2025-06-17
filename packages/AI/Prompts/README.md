@@ -210,10 +210,21 @@ npm install @memberjunction/ai-prompts
 
 > **Note**: This package uses MemberJunction's class registration system. The package automatically registers its classes on import to ensure proper functionality within the MJ ecosystem.
 
+### Type Organization Update (2025)
+
+As part of improving code organization:
+- **This package** now imports base AI types from `@memberjunction/ai` (Core)
+- **Prompt-specific types** remain in this package:
+  - `AIPromptParams`, `AIPromptRunResult`
+  - `ChildPromptParam`, `SystemPlaceholder`
+  - Execution callbacks and progress types
+- **Agent integration types** are imported from `@memberjunction/ai-agents` when needed
+
 ## Requirements
 
 - Node.js 16+
 - MemberJunction Core libraries
+- [@memberjunction/ai](../Core/README.md) for base AI types and result structures
 - [@memberjunction/aiengine](../Engine/README.md) for model management and basic AI operations
 - [@memberjunction/templates](../../Templates/README.md) for template rendering
 
@@ -1444,8 +1455,31 @@ The streaming system integrates seamlessly with BaseLLM capabilities:
 The package exports the following public API:
 
 ```typescript
+// Main classes
 export { AIPromptCategoryEntityExtended } from './AIPromptCategoryExtended';
 export { AIPromptRunner, AIPromptParams, AIPromptRunResult } from './AIPromptRunner';
+
+// Helper types
+export { ChildPromptParam } from './AIPromptRunner';
+export { SystemPlaceholder, SystemPlaceholderManager } from './SystemPlaceholders';
+
+// Callback types
+export type { ExecutionProgressCallback, ExecutionStreamingCallback } from './AIPromptRunner';
+```
+
+### Import Examples
+
+```typescript
+// Import from this package
+import { AIPromptRunner, AIPromptParams, AIPromptRunResult } from '@memberjunction/ai-prompts';
+import { ChildPromptParam, SystemPlaceholderManager } from '@memberjunction/ai-prompts';
+
+// Import base types from Core
+import { ChatResult, ModelUsage, ChatMessage } from '@memberjunction/ai';
+
+// Import entities and engine types
+import { AIPromptEntity } from '@memberjunction/core-entities';
+import { AIEngine } from '@memberjunction/aiengine';
 ```
 
 ### AIPromptRunner Class
@@ -1703,7 +1737,7 @@ ORDER BY pr.RunAt;
 - `@memberjunction/core` (v2.43.0): MemberJunction core library
 - `@memberjunction/global` (v2.43.0): MemberJunction global utilities  
 - `@memberjunction/core-entities` (v2.43.0): MemberJunction entity definitions
-- `@memberjunction/ai` (v2.43.0): AI abstractions and interfaces
+- `@memberjunction/ai` (v2.43.0): Base AI types and result structures (imported for core types)
 - `@memberjunction/aiengine` (v2.43.0): AI model management and basic operations
 - `@memberjunction/templates` (v2.43.0): Template rendering system
 - `dotenv` (^16.4.1): Environment variable management

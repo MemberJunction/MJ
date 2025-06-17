@@ -61,12 +61,21 @@
             }
         </div>
 
-        <!-- Main Content Area -->
+        <!-- Main Content Area with Splitter -->
         <div class="harness-body">
-            <!-- Chat Area -->
-            <div class="chat-area">
-                <!-- Messages Container -->
-                <div class="messages-container" #messagesContainer>
+            @if (showSidebar) {
+                <kendo-splitter 
+                    orientation="horizontal"
+                    style="height: 100%; width: 100%;">
+                    
+                    <!-- Chat Area (Left Pane) -->
+                    <kendo-splitter-pane 
+                        [collapsible]="false"
+                        [resizable]="true"
+                        [min]="'400px'">
+                        <div class="chat-area">
+                            <!-- Messages Container -->
+                            <div class="messages-container" #messagesContainer>
                     @if (conversationMessages.length === 0) {
                         <div class="empty-state">
                             <i class="fa-solid fa-comments"></i>
@@ -146,17 +155,23 @@
                         </button>
                     </div>
                 </div>
-            </div>
-
-            <!-- Sidebar -->
-            @if (showSidebar) {
-                <div class="sidebar">
+                        </div>
+                    </kendo-splitter-pane>
+                    
+                    <!-- Sidebar (Right Pane) -->
+                    <kendo-splitter-pane 
+                        [collapsible]="false"
+                        [resizable]="true"
+                        [size]="'30%'"
+                        [min]="'300px'">
+                        <div class="sidebar">
                     <!-- Tab Navigation -->
                     <div class="sidebar-tabs">
                         @if (mode === 'agent') {
                             <button 
                                 class="tab-button"
                                 [class.active]="activeTab === 'agentVariables'"
+                                [disabled]="executionMonitorMode === 'live' && activeTab !== 'agentVariables'"
                                 (click)="selectTab('agentVariables')">
                                 <i class="fa-solid fa-code"></i>
                                 Agent Variables
@@ -187,6 +202,7 @@
                         <button 
                             class="tab-button"
                             [class.active]="activeTab === 'savedConversations'"
+                            [disabled]="executionMonitorMode === 'live' && activeTab !== 'savedConversations'"
                             (click)="selectTab('savedConversations')">
                             <i class="fa-solid fa-history"></i>
                             Saved
@@ -218,6 +234,7 @@
                                             <kendo-textbox 
                                                 [(ngModel)]="variable.name" 
                                                 placeholder="Variable name"
+                                                [disabled]="isExecuting"
                                                 class="variable-name">
                                             </kendo-textbox>
                                             
@@ -232,18 +249,21 @@
                                                 textField="text"
                                                 valueField="value"
                                                 [valuePrimitive]="true"
+                                                [disabled]="isExecuting"
                                                 class="variable-type">
                                             </kendo-dropdownlist>
                                             
                                             <kendo-textbox 
                                                 [(ngModel)]="variable.value" 
                                                 [placeholder]="variable.type === 'object' ? 'JSON value' : 'Value'"
+                                                [disabled]="isExecuting"
                                                 class="variable-value">
                                             </kendo-textbox>
                                             
                                             <button 
                                                 class="remove-button"
                                                 (click)="removeAgentVariable($index)"
+                                                [disabled]="isExecuting"
                                                 title="Remove variable">
                                                 <i class="fa-solid fa-times"></i>
                                             </button>
@@ -253,7 +273,8 @@
                                 
                                 <button 
                                     class="add-button"
-                                    (click)="addAgentVariable()">
+                                    (click)="addAgentVariable()"
+                                    [disabled]="isExecuting">
                                     <i class="fa-solid fa-plus"></i> Add Variable
                                 </button>
                             </div>
@@ -284,6 +305,7 @@
                                             <kendo-textbox 
                                                 [(ngModel)]="variable.name" 
                                                 placeholder="Variable name"
+                                                [disabled]="isExecuting"
                                                 class="variable-name">
                                             </kendo-textbox>
                                             
@@ -298,12 +320,14 @@
                                                 textField="text"
                                                 valueField="value"
                                                 [valuePrimitive]="true"
+                                                [disabled]="isExecuting"
                                                 class="variable-type">
                                             </kendo-dropdownlist>
                                             
                                             <kendo-textbox 
                                                 [(ngModel)]="variable.value" 
                                                 [placeholder]="variable.type === 'object' ? 'JSON value' : 'Value'"
+                                                [disabled]="isExecuting"
                                                 class="variable-value">
                                             </kendo-textbox>
                                             
@@ -342,6 +366,7 @@
                                             [data]="availableModels"
                                             textField="Name"
                                             valueField="ID"
+                                            [valuePrimitive]="true"
                                             placeholder="Select a model..."
                                             class="model-selector">
                                         </kendo-dropdownlist>
@@ -359,6 +384,21 @@
                                         </kendo-slider>
                                         <div class="setting-help">
                                             Lower values make output more focused and deterministic
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="setting-group">
+                                        <label>Response Format</label>
+                                        <kendo-dropdownlist 
+                                            [(ngModel)]="selectedResponseFormat"
+                                            [data]="responseFormatOptions"
+                                            textField="text"
+                                            valueField="value"
+                                            placeholder="Select format..."
+                                            class="format-selector">
+                                        </kendo-dropdownlist>
+                                        <div class="setting-help">
+                                            Expected format for AI response (defaults to prompt setting)
                                         </div>
                                     </div>
                                     
@@ -422,6 +462,98 @@
                                 </div>
                             </div>
                         }
+                    </div>
+                        </div>
+                    </kendo-splitter-pane>
+                </kendo-splitter>
+            } @else {
+                <!-- No sidebar - full width chat -->
+                <div class="chat-area">
+                    <!-- Messages Container -->
+                    <div class="messages-container" #messagesContainer>
+                        @if (conversationMessages.length === 0) {
+                            <div class="empty-state">
+                                <i class="fa-solid fa-comments"></i>
+                                <h4>Start a conversation</h4>
+                                <p>Send a message to begin testing the AI agent</p>
+                            </div>
+                        }
+
+                        @for (message of conversationMessages; track message.id) {
+                            <div [ngClass]="getMessageClass(message)">
+                                <div class="message-header">
+                                    <span class="message-role">
+                                        @if (message.role === 'user') {
+                                            <i class="fa-solid fa-user"></i> You
+                                        } @else {
+                                            <i class="fa-solid fa-robot"></i> {{ getEntityName() || 'Assistant' }}
+                                        }
+                                    </span>
+                                    <span class="message-time">{{ formatTimestamp(message.timestamp) }}</span>
+                                    @if (message.isStreaming && message.elapsedTime !== undefined) {
+                                        <span class="execution-time streaming">
+                                            <i class="fa-solid fa-spinner fa-spin"></i> {{ formatElapsedTime(message.elapsedTime) }}
+                                        </span>
+                                    } @else if (message.executionTime) {
+                                        <span class="execution-time" [title]="getExecutionSummary(message)">{{ formatExecutionTime(message.executionTime) }}</span>
+                                    }
+                                    @if (showRawToggle(message)) {
+                                        <button class="raw-toggle" (click)="showRawJsonDialog(message)" title="View raw JSON response">
+                                            <i class="fa-solid fa-code"></i>
+                                        </button>
+                                    }
+                                    @if (message.executionData && mode === 'agent' && message.role === 'assistant') {
+                                        <button class="execution-history-toggle" (click)="showMessageExecutionHistory(message)" title="View execution details">
+                                            <i class="fa-solid fa-diagram-project"></i>
+                                        </button>
+                                    }
+                                </div>
+                                <div class="message-content">
+                                    <button class="copy-button-in-bubble" (click)="copyMessage(message)" title="Copy message">
+                                        <i class="fa-solid fa-copy"></i>
+                                    </button>
+                                    @if (message.isStreaming) {
+                                        <div class="streaming-wrapper">
+                                            <span class="streaming-content">{{ message.streamingContent }}<span class="cursor">|</span></span>
+                                        </div>
+                                    } @else {
+                                        <div [innerHTML]="getFormattedContent(message)"></div>
+                                    }
+                                    @if (message.error) {
+                                        <div class="error-details">
+                                            <i class="fa-solid fa-exclamation-triangle"></i>
+                                            {{ message.error }}
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Input Area -->
+                    <div class="input-area">
+                        <div class="input-container">
+                            <kendo-textarea
+                                #messageInput
+                                [(ngModel)]="currentUserMessage"
+                                [rows]="3"
+                                placeholder="Type your message here... (Press Enter to send, Shift+Enter for new line)"
+                                (keypress)="handleKeyPress($event)"
+                                [disabled]="isExecuting"
+                                class="message-input">
+                            </kendo-textarea>
+                            <button
+                                class="send-button"
+                                (click)="sendMessage()"
+                                [disabled]="isExecuting || !currentUserMessage.trim()"
+                                title="Send message">
+                                @if (isExecuting) {
+                                    <i class="fa-solid fa-spinner fa-spin"></i>
+                                } @else {
+                                    <i class="fa-solid fa-paper-plane"></i>
+                                }
+                            </button>
+                        </div>
                     </div>
                 </div>
             }

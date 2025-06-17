@@ -7,7 +7,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { ActionFormComponent } from '../../generated/Entities/Action/action.form.component';
 import { DialogService } from '@progress/kendo-angular-dialog';
-import { ActionTestHarnessDialogComponent } from './action-test-harness-dialog.component';
+import { ActionParamDialogComponent } from './action-param-dialog.component';
 
 @RegisterClass(BaseFormComponent, 'Actions')
 @Component({
@@ -30,6 +30,9 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
     private _inputParams: ActionParamEntity[] = [];
     private _outputParams: ActionParamEntity[] = [];
     
+    // Track params to delete
+    private paramsToDelete: ActionParamEntity[] = [];
+    
     // Loading states
     public isLoadingParams = false;
     public isLoadingResultCodes = false;
@@ -45,6 +48,9 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         execution: false,
         configuration: false
     };
+    
+    // Test harness state
+    public showTestHarness = false;
     
     // Execution stats
     public executionStats = {
@@ -95,7 +101,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
                 await this.category.Load(this.record.CategoryID);
             }
         } catch (error) {
-            console.error('Error loading category:', error);
+            // Error loading category
         }
     }
 
@@ -112,39 +118,23 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             
             if (result.Success) {
                 this.actionParams = result.Results || [];
-                console.log(`Loaded ${this.actionParams.length} action params for action ${this.record.Name}`);
-                
-                // Update cached filtered params - trim Type values to handle any whitespace
+                // Update cached filtered params - trim and lowercase Type values to handle any whitespace and case
                 this._inputParams = this.actionParams.filter(p => {
-                    const type = p.Type?.trim();
-                    return type === 'Input' || type === 'Both';
+                    const type = p.Type?.trim().toLowerCase();
+                    return type === 'input' || type === 'both';
                 });
                 this._outputParams = this.actionParams.filter(p => {
-                    const type = p.Type?.trim();
-                    return type === 'Output' || type === 'Both';
+                    const type = p.Type?.trim().toLowerCase();
+                    return type === 'output' || type === 'both';
                 });
-                
-                // Log details for debugging params display issue
-                if (this.actionParams.length > 0) {
-                    console.log('Action params details:', this.actionParams.map(p => ({
-                        ID: p.ID,
-                        Name: p.Name,
-                        Type: p.Type,
-                        TypeLength: p.Type?.length,
-                        ValueType: p.ValueType,
-                        IsRequired: p.IsRequired
-                    })));
-                    console.log('Input params count:', this._inputParams.length);
-                    console.log('Output params count:', this._outputParams.length);
-                }
             } else {
-                console.error('Failed to load action params:', result.ErrorMessage);
+                // Failed to load action params
                 this.actionParams = [];
                 this._inputParams = [];
                 this._outputParams = [];
             }
         } catch (error) {
-            console.error('Error loading action params:', error);
+            // Error loading action params
             this.actionParams = [];
             this._inputParams = [];
             this._outputParams = [];
@@ -168,11 +158,11 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             if (result.Success) {
                 this.resultCodes = result.Results || [];
             } else {
-                console.error('Failed to load result codes:', result.ErrorMessage);
+                // Failed to load result codes
                 this.resultCodes = [];
             }
         } catch (error) {
-            console.error('Error loading result codes:', error);
+            // Error loading result codes
             this.resultCodes = [];
         } finally {
             this.isLoadingResultCodes = false;
@@ -194,11 +184,11 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             if (result.Success) {
                 this.recentExecutions = result.Results || [];
             } else {
-                console.error('Failed to load executions:', result.ErrorMessage);
+                // Failed to load executions
                 this.recentExecutions = [];
             }
         } catch (error) {
-            console.error('Error loading executions:', error);
+            // Error loading executions
             this.recentExecutions = [];
         } finally {
             this.isLoadingExecutions = false;
@@ -235,7 +225,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
                 }
             }
         } catch (error) {
-            console.error('Error loading libraries:', error);
+            // Error loading libraries
         } finally {
             this.isLoadingLibraries = false;
         }
@@ -271,7 +261,8 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
                 if (completedExecutions.length > 0) {
                     const totalDuration = completedExecutions.reduce((sum, e) => {
                         const duration = new Date(e.EndedAt!).getTime() - new Date(e.StartedAt).getTime();
-                        return sum + duration;
+                        // Use absolute value to handle any swapped dates
+                        return sum + Math.abs(duration);
                     }, 0);
                     this.executionStats.avgDuration = totalDuration / completedExecutions.length;
                 }
@@ -280,7 +271,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
                 this.executionStats.lastRun = new Date(allExecutions[0].StartedAt);
             }
         } catch (error) {
-            console.error('Error loading execution stats:', error);
+            // Error loading execution stats
         }
     }
 
@@ -389,19 +380,19 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
 
     // Actions
     openTestHarness() {
-        if (!this.record || !this.record.ID || this.record.Status !== 'Active') {
+        if (!this.record || !this.record.ID || !this.record.IsSaved || this.record.Status !== 'Active') {
+            // Cannot open test harness: Action must be saved and active
             return;
         }
         
-        const dialogRef = this.dialogService.open({
-            content: ActionTestHarnessDialogComponent,
-            width: 900,
-            height: 700
-        });
-        
-        const dialog = dialogRef.content.instance;
-        dialog.action = this.record;
-        dialog.actionParams = this.actionParams;
+        this.showTestHarness = true;
+    }
+    
+    /**
+     * Event handler for test harness visibility changes
+     */
+    public onTestHarnessVisibilityChanged(isVisible: boolean) {
+        this.showTestHarness = isVisible;
     }
 
     async regenerateCode() {
@@ -442,17 +433,24 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             await navigator.clipboard.writeText(text);
             // Could add a notification here
         } catch (err) {
-            console.error('Failed to copy:', err);
+            // Failed to copy
         }
     }
 
     // Helper methods for template filtering
     getInputParams(): ActionParamEntity[] {
-        return this._inputParams;
+        // Sort by IsRequired (required first) then by Name
+        return this._inputParams.sort((a, b) => {
+            if (a.IsRequired === b.IsRequired) {
+                return (a.Name || '').localeCompare(b.Name || '');
+            }
+            return a.IsRequired ? -1 : 1;
+        });
     }
 
     getOutputParams(): ActionParamEntity[] {
-        return this._outputParams;
+        // Sort by Name
+        return this._outputParams.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
     }
 
     isExecutionSuccess(execution: ActionExecutionLogEntity): boolean {
@@ -468,7 +466,13 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
 
     getExecutionDuration(execution: ActionExecutionLogEntity): number {
         if (!execution.EndedAt) return 0;
-        return new Date(execution.EndedAt).getTime() - new Date(execution.StartedAt).getTime();
+        
+        const startTime = new Date(execution.StartedAt).getTime();
+        const endTime = new Date(execution.EndedAt).getTime();
+        const duration = endTime - startTime;
+        
+        // Return absolute value to handle timezone mismatches
+        return Math.abs(duration);
     }
 
     getSuccessRateColor(): string {
@@ -477,4 +481,134 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         if (rate >= 60) return '#ffc107'; // yellow
         return '#dc3545'; // red
     }
+
+    // Parameter management methods
+    async addParameter(type: 'Input' | 'Output' | 'Both') {
+        if (!this.EditMode || !this.record.IsSaved) return;
+        
+        const md = new Metadata();
+        const newParam = await md.GetEntityObject<ActionParamEntity>('Action Params');
+        
+        // Set default values
+        newParam.ActionID = this.record.ID;
+        newParam.Name = '';
+        newParam.Type = type;
+        newParam.ValueType = 'Scalar';
+        newParam.IsRequired = false;
+        newParam.IsArray = false;
+        
+        const dialogRef = this.dialogService.open({
+            content: ActionParamDialogComponent,
+            width: 500,
+            appendTo: this.elementRef.nativeElement
+        });
+        
+        const dialog = dialogRef.content.instance;
+        dialog.param = newParam;
+        dialog.isNew = true;
+        dialog.editMode = true;
+        
+        dialogRef.result.subscribe(result => {
+            if (result && (result as any).save) {
+                // Add to local array and mark as new/dirty
+                this.actionParams.push(newParam);
+                // New params are not saved yet, they'll be detected by !IsSaved
+                // Update the filtered arrays
+                this.updateParamArrays();
+                this.cdr.detectChanges();
+            }
+        });
+    }
+
+    async editParameter(param: ActionParamEntity) {
+        const dialogRef = this.dialogService.open({
+            content: ActionParamDialogComponent,
+            width: 500,
+            appendTo: this.elementRef.nativeElement
+        });
+        
+        const dialog = dialogRef.content.instance;
+        dialog.param = param;
+        dialog.isNew = false;
+        dialog.editMode = this.EditMode;
+        
+        dialogRef.result.subscribe(result => {
+            if (result && (result as any).save && this.EditMode) {
+                // Param will be dirty from property changes in dialog
+                // Update the local arrays
+                this.updateParamArrays();
+                this.cdr.detectChanges();
+            }
+        });
+    }
+    
+    onParamClick(param: ActionParamEntity, event: Event) {
+        // Prevent event bubbling if clicking on edit/delete buttons
+        const target = event.target as HTMLElement;
+        if (target.closest('.param-edit-btn') || target.closest('.param-delete-btn')) {
+            return;
+        }
+        
+        // Show the parameter dialog
+        this.editParameter(param);
+    }
+
+    async deleteParameter(param: ActionParamEntity) {
+        if (!this.EditMode) return;
+        
+        if (confirm(`Are you sure you want to delete parameter "${param.Name}"?`)) {
+            if (param.IsSaved) {
+                // Track for deletion using a separate array
+                if (!this.paramsToDelete) this.paramsToDelete = [];
+                this.paramsToDelete.push(param);
+            } else {
+                // Remove from local array if it's new
+                const index = this.actionParams.indexOf(param);
+                if (index > -1) {
+                    this.actionParams.splice(index, 1);
+                }
+            }
+            // Update the filtered arrays
+            await this.updateParamArrays();
+            this.cdr.detectChanges();
+        }
+    }
+    
+    private async updateParamArrays() {
+        // Update cached filtered params - exclude deleted items
+        const activeParams = this.actionParams.filter(p => !this.paramsToDelete || !this.paramsToDelete.includes(p));
+        
+        this._inputParams = activeParams.filter(p => {
+            const type = p.Type?.trim().toLowerCase();
+            return type === 'input' || type === 'both';
+        });
+        
+        this._outputParams = activeParams.filter(p => {
+            const type = p.Type?.trim().toLowerCase();
+            return type === 'output' || type === 'both';
+        });
+    }
+    
+    // Override to populate pending records with our action params
+    protected PopulatePendingRecords() {
+        super.PopulatePendingRecords();
+        
+        // Add our action params to pending records
+        if (this.actionParams && this.actionParams.length > 0) {
+            for (const param of this.actionParams) {
+                if (param.Dirty || (this.paramsToDelete && this.paramsToDelete.includes(param)) || !param.IsSaved) {
+                    const action = (this.paramsToDelete && this.paramsToDelete.includes(param)) ? 'delete' : 'save';
+                    this.PendingRecords.push({
+                        entityObject: param,
+                        action: action
+                    });
+                }
+            }
+        }
+    }
+}
+
+// Loader function required for the component to be properly registered
+export function LoadActionFormComponentExtended() {
+    // This function is called to ensure the form is loaded and registered
 }

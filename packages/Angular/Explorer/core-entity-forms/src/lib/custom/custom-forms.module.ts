@@ -5,7 +5,7 @@ import { InputsModule, TextBoxModule, TextAreaModule, NumericTextBoxModule, Swit
 import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { ButtonsModule, ButtonModule, SplitButtonModule } from '@progress/kendo-angular-buttons';
 import { DropDownsModule, ComboBoxModule } from '@progress/kendo-angular-dropdowns';
-import { LayoutModule, ExpansionPanelModule, TabStripModule } from '@progress/kendo-angular-layout';
+import { LayoutModule, ExpansionPanelModule, TabStripModule, SplitterModule } from '@progress/kendo-angular-layout';
 import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { FormToolbarModule } from '@memberjunction/ng-form-toolbar';
@@ -30,13 +30,13 @@ import { CodeEditorModule } from "@memberjunction/ng-code-editor";
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
 import { EntitySelectorDialogComponent } from "./shared/entity-selector-dialog.component";
 import { AIPromptRunFormComponentExtended } from "./AIPromptRuns/ai-prompt-run-form.component";
-import { ActionFormComponentExtended } from "./Actions/action-form.component";
+import { ActionFormComponentExtended, LoadActionFormComponentExtended } from "./Actions/action-form.component";
 import { ActionTestHarnessComponent } from "./Actions/action-test-harness.component";
 import { ActionTestHarnessDialogComponent } from "./Actions/action-test-harness-dialog.component";
 import { ActionExecutionLogFormComponentExtended } from "./Actions/action-execution-log-form.component";
-import { UsersFormComponentExtended, LoadUsersFormComponentExtended } from "./Users/users-form.component";
+import { ActionParamDialogComponent } from "./Actions/action-param-dialog.component";
 import { AgentExecutionMonitorComponent } from "./AIAgents/agent-execution-monitor.component";
-import { DashboardsFormComponent } from "./Dashboards/dashboards-form.component";
+import { ExecutionNodeComponent } from "./AIAgents/agent-execution-node.component";
 
 @NgModule({
     declarations: [
@@ -57,16 +57,17 @@ import { DashboardsFormComponent } from "./Dashboards/dashboards-form.component"
         ActionTestHarnessComponent,
         ActionTestHarnessDialogComponent,
         ActionExecutionLogFormComponentExtended,
-        UsersFormComponentExtended,
-        DashboardsFormComponent,
+        ActionParamDialogComponent,
     ],
     imports: [
         CommonModule,
         AgentExecutionMonitorComponent,
+        ExecutionNodeComponent,
         FormsModule,
         LayoutModule,
         ExpansionPanelModule,
         TabStripModule,
+        SplitterModule,
         DialogsModule,
         WindowModule,
         InputsModule,
@@ -105,8 +106,7 @@ import { DashboardsFormComponent } from "./Dashboards/dashboards-form.component"
         ActionTestHarnessComponent,
         ActionTestHarnessDialogComponent,
         ActionExecutionLogFormComponentExtended,
-        UsersFormComponentExtended,
-        DashboardsFormComponent
+        ExecutionNodeComponent,
     ],
     providers: [
         TestHarnessDialogService
@@ -126,8 +126,6 @@ export function LoadCoreCustomForms() {
     LoadTemplatesFormExtendedComponent();
     LoadAIPromptFormComponentExtended();
     LoadAIAgentFormComponentExtended();
-    LoadUsersFormComponentExtended();
     LoadActionExecutionLogFormComponentExtended();
-    // Note: AIPromptRunFormComponentExtended, ActionFormComponentExtended, and DashboardsFormComponent
-    // don't need loader functions as they extend the generated forms directly
+    LoadActionFormComponentExtended();
 }

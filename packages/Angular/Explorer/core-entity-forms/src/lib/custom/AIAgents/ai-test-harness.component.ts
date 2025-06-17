@@ -62,6 +62,8 @@ export interface ConversationMessage extends ChatMessage {
     elapsedTime?: number;
     /** Whether JSON raw section is expanded in collapsible view */
     showJsonRaw?: boolean;
+    /** Execution history data for this message (agent mode) */
+    executionData?: any;
 }
 
 /**
@@ -215,10 +217,22 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     public temperature: number = 0.7;
     
     /** Maximum tokens for prompt execution */
-    public maxTokens: number = 2000;
+    public maxTokens: number | null = null;
     
     /** Available AI models for prompt execution */
     public availableModels: any[] = [];
+    
+    /** Selected response format for prompt execution */
+    public selectedResponseFormat: 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific' = 'Any';
+    
+    /** Available response format options */
+    public responseFormatOptions = [
+        { text: 'Any', value: 'Any' },
+        { text: 'Text', value: 'Text' },
+        { text: 'Markdown', value: 'Markdown' },
+        { text: 'JSON', value: 'JSON' },
+        { text: 'Model Specific', value: 'ModelSpecific' }
+    ];
     
     // === UI State Management ===
     /** Whether the configuration sidebar is currently visible */
@@ -245,6 +259,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     
     /** Current execution data for the monitor */
     public currentExecutionData: any = null;
+    
+    /** Agent conversation state tracking */
+    private agentConversationState: any = null;
+    private lastAgentReturnValue: any = null;
+    private subAgentHistory: any[] = [];
     
     /** Whether to show the save conversation dialog */
     public showSaveDialog: boolean = false;
@@ -373,19 +392,16 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     }
 
     private subscribeToEvents() {
-        console.log('🎯 AI Test Harness: Setting up event subscriptions for streaming');
-        
-        // First, set up direct GraphQL subscription for agent execution stream
+        // Set up direct GraphQL subscription for agent execution stream
         const dataProvider = Metadata.Provider as GraphQLDataProvider;
         const _providerPushStatusSub = dataProvider.PushStatusUpdates().subscribe((status: any) => {
             const message = JSON.parse(status.message || '{}');
-            if (message?.resolver === 'RunAIAgentResolver' && 
-                message?.type === 'ExecutionProgress' ) {
-                if (message.data?.progress) {
-                    const userMsg =  message.data.progress.message;
-                    console.log('📡 AI Test Harness: Received GraphQL push status update:', userMsg);
+            if (message?.resolver === 'RunAIAgentResolver') {
+                // Handle different types of streaming messages
+                if (message?.type === 'ExecutionProgress' && message.data?.progress) {
+                    const userMsg = message.data.progress.message;
                     
-                    // Find the in-progress message and update its content
+                    // Update streaming message content
                     const streamingMessage = this.conversationMessages.find(m => m.isStreaming);
                     if (streamingMessage) {
                         // Clear any typing animation interval
@@ -399,6 +415,55 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                         streamingMessage.streamingContent = userMsg;
                         this.scrollNeeded = true;
                     }
+                    
+                    // Update execution monitor with live progress
+                    if (!this.currentExecutionData) {
+                        this.currentExecutionData = { liveSteps: [] };
+                    }
+                    this.executionMonitorMode = 'live';
+                    
+                    // Add or update the current step in the execution tree
+                    const stepInfo = {
+                        step: {
+                            ID: `temp-${Date.now()}`,
+                            StepName: userMsg,
+                            StepType: message.data.progress.step || 'unknown',
+                            Status: 'Running',
+                            StartedAt: new Date()
+                        },
+                        executionType: message.data.progress.step || 'unknown',
+                        agentHierarchy: message.data.progress.agentHierarchy || [],
+                        depth: message.data.progress.depth || 0,
+                        startTime: new Date()
+                    };
+                    
+                    // For live mode, we'll append steps as they come
+                    if (!this.currentExecutionData.liveSteps) {
+                        this.currentExecutionData.liveSteps = [];
+                    }
+                    this.currentExecutionData.liveSteps.push(stepInfo);
+                    
+                    // Trigger change detection for the monitor
+                    this.currentExecutionData = { ...this.currentExecutionData };
+                }
+                else if (message?.type === 'StreamingContent' && message.data?.streaming) {
+                    
+                    const streamingMessage = this.conversationMessages.find(m => m.isStreaming);
+                    if (streamingMessage) {
+                        // Append streaming content
+                        if (!streamingMessage.streamingContent) {
+                            streamingMessage.streamingContent = '';
+                        }
+                        streamingMessage.streamingContent = message.data.streaming.content;
+                        this.scrollNeeded = true;
+                    }
+                }
+                else if (message?.type === 'partial_result' && message.data?.partialResult) {
+                    // Could update execution monitor with partial results
+                }
+                else if (message?.type === 'complete') {
+                    // Switch execution monitor to historical mode with final data
+                    this.executionMonitorMode = 'historical';
                 }
             }
         });
@@ -411,14 +476,37 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     private async loadAvailableModels() {
         await AIEngineBase.Instance.Config(false);
-        this.availableModels = AIEngineBase.Instance.Models;
-        // Set default model if not already set
-        if (!this.selectedModelId && this.availableModels.length > 0) {
-            // Defer to avoid ExpressionChangedAfterItHasBeenCheckedError
+        
+        // Filter models by the prompt's AIModelTypeID if it exists
+        let filteredModels: any[] = [];
+        if (this.entity && 'AIModelTypeID' in this.entity) {
+            const prompt = this.entity as AIPromptEntity;
+            if (prompt.AIModelTypeID) {
+                filteredModels = AIEngineBase.Instance.Models.filter(
+                    model => model.AIModelTypeID === prompt.AIModelTypeID && model.IsActive
+                );
+            } else {
+                // No model type restriction, show all active models
+                filteredModels = AIEngineBase.Instance.Models.filter(model => model.IsActive);
+            }
+            
+            // Set default response format from prompt with slight delay for Kendo dropdown
             setTimeout(() => {
-                this.selectedModelId = this.availableModels[0].ID;
+                this.selectedResponseFormat = prompt.ResponseFormat || 'Any';
             }, 0);
+        } else {
+            // Not a prompt entity, show all active models
+            filteredModels = AIEngineBase.Instance.Models.filter(model => model.IsActive);
         }
+        
+        // Add a blank option at the beginning
+        this.availableModels = [
+            { ID: '', Name: '-- Use Default Model --' },
+            ...filteredModels
+        ];
+        
+        // Don't auto-select a model - let the dropdown show the blank option
+        this.selectedModelId = '';
     }
 
 
@@ -436,6 +524,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         this.showSidebar = true;
         this.currentExecutionData = null;
         this.executionMonitorMode = 'historical';
+        // Reset conversation state
+        this.agentConversationState = null;
+        this.lastAgentReturnValue = null;
+        this.subAgentHistory = [];
         // Set default tab based on mode
         this.activeTab = this.mode === 'agent' ? 'agentVariables' : 'templateVariables';
     }
@@ -482,7 +574,60 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      * @param tab - The tab to activate
      */
     public selectTab(tab: 'agentVariables' | 'executionMonitor' | 'templateVariables' | 'modelSettings' | 'savedConversations') {
+        
         this.activeTab = tab;
+        
+        // If switching to execution monitor tab, ensure it has the latest data
+        if (tab === 'executionMonitor' && this.conversationMessages.length > 0) {
+            const lastAssistantMessage = this.conversationMessages
+                .filter(m => m.role === 'assistant' && m.executionData)
+                .pop();
+                
+            if (lastAssistantMessage && lastAssistantMessage.executionData) {
+                this.currentExecutionData = lastAssistantMessage.executionData;
+                this.executionMonitorMode = 'historical';
+            }
+        }
+    }
+
+    /**
+     * Shows the execution history for a specific message
+     * @param message - The message to show execution history for
+     */
+    public showMessageExecutionHistory(message: ConversationMessage) {
+        if (message.executionData && this.mode === 'agent') {
+            this.currentExecutionData = message.executionData;
+            this.executionMonitorMode = 'historical';
+            // Switch to execution monitor tab if not already there
+            if (this.activeTab !== 'executionMonitor') {
+                this.selectTab('executionMonitor');
+            }
+        }
+    }
+    
+    /**
+     * Extract sub-agent nodes from execution tree
+     */
+    private extractSubAgentNodes(executionTree: any[]): any[] {
+        const subAgentNodes: any[] = [];
+        
+        const traverse = (nodes: any[]) => {
+            for (const node of nodes) {
+                if (node.executionType === 'sub-agent') {
+                    subAgentNodes.push({
+                        agentName: node.step?.StepName,
+                        result: node.outputData,
+                        timestamp: node.endTime || node.startTime
+                    });
+                }
+                if (node.children) {
+                    traverse(node.children);
+                }
+            }
+        };
+        
+        traverse(executionTree);
+        return subAgentNodes;
     }
 
     /**
@@ -519,6 +664,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         // Scroll to bottom
         this.scrollNeeded = true;
 
+        // Auto-switch to execution monitor tab if in agent mode
+        if (this.mode === 'agent' && this.activeTab !== 'executionMonitor') {
+            this.selectTab('executionMonitor');
+        }
+        
         // Execute based on mode
         if (this.mode === 'agent') {
             await this.executeAgent(messageToSend);
@@ -531,6 +681,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         if (!this.entity || !this.isAgentEntity(this.entity)) return;
 
         this.isExecuting = true;
+
+        // Clear previous execution data when starting a new run
+        this.currentExecutionData = { liveSteps: [] };
+        this.executionMonitorMode = 'live';
 
         // Add placeholder assistant message for streaming
         const assistantMessage: ConversationMessage = {
@@ -549,6 +703,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         
         // Start elapsed time counter
         this.startElapsedTimeCounter(assistantMessage);
+        
+        // Initialize execution monitor for live mode
+        this.currentExecutionData = { liveSteps: [] };
+        this.executionMonitorMode = 'live';
+        
 
         try {
             // Get GraphQL data provider
@@ -562,18 +721,31 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                     content: m.content
                 }));
 
-            // Build data context
+            // Build data context - include conversation state if available
             const dataContext = this.buildDataContext();
             const templateData = this.buildTemplateData();
+            
+            // Add conversation state to data context if we have it
+            if (this.agentConversationState) {
+                dataContext._conversationState = this.agentConversationState;
+            }
+            if (this.lastAgentReturnValue) {
+                dataContext._lastReturnValue = this.lastAgentReturnValue;
+            }
+            if (this.subAgentHistory.length > 0) {
+                dataContext._subAgentHistory = this.subAgentHistory;
+            }
 
             // Generate a session ID for this execution
             const sessionId = dataProvider.sessionId;
             
-            console.log('🚀 AI Test Harness: Sending agent execution request', {
-                agentId: (this.entity as AIAgentEntity).ID,
-                sessionId: sessionId,
-                messageCount: messages.length
-            });
+            // DEBUG: Log authentication context and request details
+            const authToken = (dataProvider as any)._authToken || (window as any).localStorage?.getItem('mj-auth-token');
+            if (!authToken) {
+                console.warn('🔐 AI Test Harness: No authentication token found in dataProvider or localStorage');
+            } else {
+            }
+            
             
             // Execute the agent
             const query = `
@@ -599,7 +771,21 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             // Start typing animation while we wait for the first real stream
             this.startTypingAnimation(assistantMessage);
 
-            const result = await dataProvider.ExecuteGQL(query, variables);
+            
+            let result;
+            try {
+                result = await dataProvider.ExecuteGQL(query, variables);
+            } catch (gqlError: any) {
+                console.error('❌ AI Test Harness: GraphQL execution failed', {
+                    error: gqlError,
+                    message: gqlError?.message,
+                    networkError: gqlError?.networkError,
+                    graphQLErrors: gqlError?.graphQLErrors,
+                    statusCode: gqlError?.networkError?.statusCode
+                });
+                throw gqlError;
+            }
+            
             const executionResult = result?.RunAIAgent;
 
             // Stop elapsed time counter
@@ -615,9 +801,36 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 // Parse the payload to get the full execution result
                 const fullResult = JSON.parse(executionResult.payload);
                 
+                // Store execution data with the message
+                assistantMessage.executionData = fullResult;
+                
+                // Merge live steps with final result if needed
+                if (this.currentExecutionData && this.currentExecutionData.liveSteps && fullResult) {
+                    // Preserve the live steps we collected during execution
+                    fullResult.liveSteps = this.currentExecutionData.liveSteps;
+                }
+                
                 // Update execution monitor with the new data
                 this.currentExecutionData = fullResult;
                 this.executionMonitorMode = 'historical';
+                
+                // Preserve conversation state from the result
+                if (fullResult.returnValue) {
+                    this.lastAgentReturnValue = fullResult.returnValue;
+                    
+                    // Extract conversation state if present
+                    if (fullResult.returnValue.conversationState) {
+                        this.agentConversationState = fullResult.returnValue.conversationState;
+                    }
+                    
+                    // Track sub-agent executions
+                    if (fullResult.executionTree) {
+                        const subAgentNodes = this.extractSubAgentNodes(fullResult.executionTree);
+                        if (subAgentNodes.length > 0) {
+                            this.subAgentHistory.push(...subAgentNodes);
+                        }
+                    }
+                }
                 
                 // Extract the user message from the nested returnValue structure
                 let displayContent = 'No response generated';
@@ -642,6 +855,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 // Store the full result as raw content for debugging/inspection
                 assistantMessage.rawContent = executionResult.payload;
             } else {
+                console.error('❌ AI Test Harness: Execution failed', {
+                    success: executionResult?.success,
+                    errorMessage: executionResult?.errorMessage,
+                    hasPayload: !!executionResult?.payload
+                });
                 assistantMessage.content = 'I encountered an error processing your request.';
                 assistantMessage.error = executionResult?.errorMessage || 'Unknown error occurred';
                 
@@ -663,6 +881,13 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             this.autoSaveConversation();
 
         } catch (error) {
+            console.error('❌ AI Test Harness: Caught error during agent execution', {
+                error: error,
+                message: (error as any)?.message,
+                stack: (error as any)?.stack,
+                type: (error as any)?.constructor?.name
+            });
+            
             // Update assistant message with error
             const lastMessage = this.conversationMessages[this.conversationMessages.length - 1];
             if (lastMessage && lastMessage.role === 'assistant') {
@@ -727,8 +952,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             
             // Execute the prompt using RunAIPrompt
             const query = `
-                mutation RunAIPrompt($promptId: String!, $data: String, $modelId: String, $vendorId: String, $configurationId: String, $skipValidation: Boolean, $templateData: String) {
-                    RunAIPrompt(promptId: $promptId, data: $data, modelId: $modelId, vendorId: $vendorId, configurationId: $configurationId, skipValidation: $skipValidation, templateData: $templateData) {
+                mutation RunAIPrompt($promptId: String!, $data: String, $modelId: String, $vendorId: String, $configurationId: String, $skipValidation: Boolean, $templateData: String, $responseFormat: String) {
+                    RunAIPrompt(promptId: $promptId, data: $data, modelId: $modelId, vendorId: $vendorId, configurationId: $configurationId, skipValidation: $skipValidation, templateData: $templateData, responseFormat: $responseFormat) {
                         success
                         output
                         parsedResult
@@ -749,7 +974,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 vendorId: undefined, // Use model's default vendor
                 configurationId: undefined, // Use default configuration
                 skipValidation: false,
-                templateData: null // Additional template context if needed
+                templateData: null, // Additional template context if needed
+                responseFormat: this.selectedResponseFormat || undefined
             };
 
             const result = await dataProvider.ExecuteGQL(query, variables);
@@ -971,7 +1197,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 this.messagesContainer.nativeElement.scrollTop = this.messagesContainer.nativeElement.scrollHeight;
             }
         } catch(err) {
-            console.error('Error scrolling to bottom:', err);
+            // Error scrolling to bottom
         }
     }
 
@@ -1001,7 +1227,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 this.savedConversations = [];
             }
         } catch (error) {
-            console.error('Error loading saved conversations:', error);
+            // Error loading saved conversations
             this.savedConversations = [];
         }
     }
@@ -1148,7 +1374,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             const storageKey = this.getStorageKey();
             localStorage.setItem(storageKey, JSON.stringify(this.savedConversations));
         } catch (error) {
-            console.error('Error saving conversations:', error);
+            // Error saving conversations
             throw error;
         }
     }
@@ -1170,7 +1396,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 try {
                     this.saveConversationsToStorage();
                 } catch (error) {
-                    console.error('Error auto-saving conversation:', error);
+                    // Error auto-saving conversation
                 }
             }
         }
@@ -1237,6 +1463,29 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                           typeof value === 'object' ? 'object' : 'string'
                 });
             }
+        }
+        
+        // Load execution data from the last assistant message if available
+        const lastAssistantMessage = this.conversationMessages
+            .filter(m => m.role === 'assistant' && m.executionData)
+            .pop();
+            
+        if (lastAssistantMessage && lastAssistantMessage.executionData) {
+            
+            this.currentExecutionData = lastAssistantMessage.executionData;
+            this.executionMonitorMode = 'historical';
+            
+            // If execution monitor tab is active, ensure it updates
+            if (this.activeTab === 'executionMonitor') {
+                // Force change detection
+                setTimeout(() => {
+                    this.currentExecutionData = { ...lastAssistantMessage.executionData };
+                }, 0);
+            }
+        } else {
+            // Clear execution data if no execution found
+            this.currentExecutionData = null;
+            this.executionMonitorMode = 'historical';
         }
 
         this.scrollNeeded = true;
@@ -1552,7 +1801,6 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 2000
             );
         } catch (error) {
-            console.error('Failed to copy message:', error);
             MJNotificationService.Instance.CreateSimpleNotification(
                 'Failed to copy message',
                 'error',
@@ -1799,10 +2047,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         if (this.currentJsonContent) {
             navigator.clipboard.writeText(this.currentJsonContent).then(() => {
                 // Success - JSON copied
-                console.log('JSON copied to clipboard');
             }).catch((err) => {
                 // Error copying
-                console.error('Failed to copy JSON:', err);
             });
         }
     }

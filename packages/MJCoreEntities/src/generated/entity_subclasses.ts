@@ -208,14 +208,14 @@ export const ActionExecutionLogSchema = z.object({
     StartedAt: z.date().describe(`
         * * Field Name: StartedAt
         * * Display Name: Started At
-        * * SQL Data Type: datetime
-        * * Default Value: getdate()
-    * * Description: Timestamp of when the action started execution.`),
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+    * * Description: Timestamp when the action execution started (timezone-aware)`),
     EndedAt: z.date().nullable().describe(`
         * * Field Name: EndedAt
         * * Display Name: Ended At
-        * * SQL Data Type: datetime
-    * * Description: Timestamp of when the action ended execution.`),
+        * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the action execution ended (timezone-aware)`),
     Params: z.string().nullable().describe(`
         * * Field Name: Params
         * * Display Name: Params
@@ -12611,9 +12611,9 @@ export class ActionExecutionLogEntity extends BaseEntity<ActionExecutionLogEntit
     /**
     * * Field Name: StartedAt
     * * Display Name: Started At
-    * * SQL Data Type: datetime
-    * * Default Value: getdate()
-    * * Description: Timestamp of when the action started execution.
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: Timestamp when the action execution started (timezone-aware)
     */
     get StartedAt(): Date {
         return this.Get('StartedAt');
@@ -12625,8 +12625,8 @@ export class ActionExecutionLogEntity extends BaseEntity<ActionExecutionLogEntit
     /**
     * * Field Name: EndedAt
     * * Display Name: Ended At
-    * * SQL Data Type: datetime
-    * * Description: Timestamp of when the action ended execution.
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the action execution ended (timezone-aware)
     */
     get EndedAt(): Date | null {
         return this.Get('EndedAt');

@@ -106,7 +106,8 @@
 
     <!-- Action Buttons -->
     <div class="action-buttons">
-        <kendo-button 
+        <button 
+            kendoButton
             themeColor="primary" 
             size="large"
             (click)="executeAction()"
@@ -116,20 +117,22 @@
             } @else {
                 <i class="fa-solid fa-play"></i> Execute Action
             }
-        </kendo-button>
+        </button>
         
-        <kendo-button 
+        <button 
+            kendoButton
             fillMode="outline"
             (click)="resetParams()">
             <i class="fa-solid fa-undo"></i> Reset
-        </kendo-button>
+        </button>
         
         @if (executionResult || executionError) {
-            <kendo-button 
+            <button 
+                kendoButton
                 fillMode="outline"
                 (click)="clearResults()">
                 <i class="fa-solid fa-trash"></i> Clear Results
-            </kendo-button>
+            </button>
         }
     </div>
 
@@ -147,19 +150,21 @@
                         {{ executionTime }}ms
                     </span>
                     @if (executionResult) {
-                        <kendo-button 
+                        <button 
+                            kendoButton
                             fillMode="flat" 
                             size="small"
                             (click)="copyResultToClipboard()">
                             <i class="fa-solid fa-copy"></i> Copy
-                        </kendo-button>
-                        <kendo-button 
+                        </button>
+                        <button 
+                            kendoButton
                             fillMode="flat" 
                             size="small"
                             (click)="showRawResult = !showRawResult">
                             <i class="fa-solid fa-code"></i> 
                             {{ showRawResult ? 'Hide' : 'Show' }} Raw
-                        </kendo-button>
+                        </button>
                     }
                 </div>
             </div>
@@ -188,36 +193,75 @@
                     <!-- Message -->
                     @if (executionResult.Message) {
                         <div class="result-message">
-                            <h5>Message</h5>
-                            <p>{{ executionResult.Message }}</p>
+                            <h5>
+                                <i class="fa-solid fa-message"></i> Message
+                            </h5>
+                            <div class="code-editor-container">
+                                <pre class="code-editor">{{ executionResult.Message }}</pre>
+                            </div>
                         </div>
                     }
 
                     <!-- Result Data -->
                     @if (executionResult.ResultData !== null && executionResult.ResultData !== undefined) {
                         <div class="result-data">
-                            <h5>Result Data</h5>
+                            <h5>
+                                <i class="fa-solid fa-database"></i> Result Data
+                                <button 
+                                    kendoButton
+                                    fillMode="flat" 
+                                    size="small"
+                                    class="toggle-view-btn"
+                                    (click)="showRawResult = !showRawResult">
+                                    <i class="fa-solid" [class.fa-code]="!showRawResult" [class.fa-list]="showRawResult"></i> 
+                                    {{ showRawResult ? 'Formatted View' : 'Raw JSON' }}
+                                </button>
+                            </h5>
                             @if (showRawResult) {
-                                <pre class="raw-data">{{ formatResultData(executionResult.ResultData) }}</pre>
+                                <div class="code-editor-container">
+                                    <div class="code-editor-header">
+                                        <span class="language-badge">JSON</span>
+                                        <button 
+                                            kendoButton
+                                            fillMode="flat" 
+                                            size="small"
+                                            class="copy-btn"
+                                            (click)="copyResultDataToClipboard()">
+                                            <i class="fa-solid fa-copy"></i>
+                                        </button>
+                                    </div>
+                                    <pre class="code-editor json">{{ formatResultData(executionResult.ResultData) }}</pre>
+                                </div>
                             } @else {
                                 <!-- Output Parameters Mapping -->
                                 @if (getOutputParams().length > 0) {
                                     <div class="output-params">
                                         @for (outputParam of getOutputParams(); track outputParam.ID) {
                                             <div class="output-param">
-                                                <label>{{ outputParam.Name }}</label>
-                                                <div class="output-value">
-                                                    @if (executionResult.ResultData && executionResult.ResultData[outputParam.Name] !== undefined) {
-                                                        <pre>{{ formatResultData(executionResult.ResultData[outputParam.Name]) }}</pre>
-                                                    } @else {
-                                                        <span class="no-value">No value returned</span>
-                                                    }
+                                                <label>
+                                                    <i class="fa-solid fa-tag"></i> {{ outputParam.Name }}
+                                                </label>
+                                                <div class="code-editor-container compact">
+                                                    <pre class="code-editor">{{ formatResultData(executionResult.ResultData[outputParam.Name]) }}</pre>
                                                 </div>
                                             </div>
                                         }
                                     </div>
                                 } @else {
-                                    <pre class="raw-data">{{ formatResultData(executionResult.ResultData) }}</pre>
+                                    <div class="code-editor-container">
+                                        <div class="code-editor-header">
+                                            <span class="language-badge">JSON</span>
+                                            <button 
+                                                kendoButton
+                                                fillMode="flat" 
+                                                size="small"
+                                                class="copy-btn"
+                                                (click)="copyResultDataToClipboard()">
+                                                <i class="fa-solid fa-copy"></i>
+                                            </button>
+                                        </div>
+                                        <pre class="code-editor json">{{ formatResultData(executionResult.ResultData) }}</pre>
+                                    </div>
                                 }
                             }
                         </div>
