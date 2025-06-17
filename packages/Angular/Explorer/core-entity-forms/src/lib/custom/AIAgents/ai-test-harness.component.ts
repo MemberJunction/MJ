@@ -222,6 +222,18 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /** Available AI models for prompt execution */
     public availableModels: any[] = [];
     
+    /** Selected response format for prompt execution */
+    public selectedResponseFormat: 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific' = 'Any';
+    
+    /** Available response format options */
+    public responseFormatOptions = [
+        { text: 'Any', value: 'Any' },
+        { text: 'Text', value: 'Text' },
+        { text: 'Markdown', value: 'Markdown' },
+        { text: 'JSON', value: 'JSON' },
+        { text: 'Model Specific', value: 'ModelSpecific' }
+    ];
+    
     // === UI State Management ===
     /** Whether the configuration sidebar is currently visible */
     public showSidebar = true;
@@ -466,22 +478,34 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         await AIEngineBase.Instance.Config(false);
         
         // Filter models by the prompt's AIModelTypeID if it exists
+        let filteredModels: any[] = [];
         if (this.entity && 'AIModelTypeID' in this.entity) {
             const prompt = this.entity as AIPromptEntity;
             if (prompt.AIModelTypeID) {
-                this.availableModels = AIEngineBase.Instance.Models.filter(
+                filteredModels = AIEngineBase.Instance.Models.filter(
                     model => model.AIModelTypeID === prompt.AIModelTypeID && model.IsActive
                 );
             } else {
                 // No model type restriction, show all active models
-                this.availableModels = AIEngineBase.Instance.Models.filter(model => model.IsActive);
+                filteredModels = AIEngineBase.Instance.Models.filter(model => model.IsActive);
             }
+            
+            // Set default response format from prompt with slight delay for Kendo dropdown
+            setTimeout(() => {
+                this.selectedResponseFormat = prompt.ResponseFormat || 'Any';
+            }, 0);
         } else {
             // Not a prompt entity, show all active models
-            this.availableModels = AIEngineBase.Instance.Models.filter(model => model.IsActive);
+            filteredModels = AIEngineBase.Instance.Models.filter(model => model.IsActive);
         }
         
-        // Don't auto-select a model - let the dropdown show placeholder
+        // Add a blank option at the beginning
+        this.availableModels = [
+            { ID: '', Name: '-- Use Default Model --' },
+            ...filteredModels
+        ];
+        
+        // Don't auto-select a model - let the dropdown show the blank option
         this.selectedModelId = '';
     }
 
@@ -657,6 +681,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         if (!this.entity || !this.isAgentEntity(this.entity)) return;
 
         this.isExecuting = true;
+
+        // Clear previous execution data when starting a new run
+        this.currentExecutionData = { liveSteps: [] };
+        this.executionMonitorMode = 'live';
 
         // Add placeholder assistant message for streaming
         const assistantMessage: ConversationMessage = {
@@ -924,8 +952,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             
             // Execute the prompt using RunAIPrompt
             const query = `
-                mutation RunAIPrompt($promptId: String!, $data: String, $modelId: String, $vendorId: String, $configurationId: String, $skipValidation: Boolean, $templateData: String) {
-                    RunAIPrompt(promptId: $promptId, data: $data, modelId: $modelId, vendorId: $vendorId, configurationId: $configurationId, skipValidation: $skipValidation, templateData: $templateData) {
+                mutation RunAIPrompt($promptId: String!, $data: String, $modelId: String, $vendorId: String, $configurationId: String, $skipValidation: Boolean, $templateData: String, $responseFormat: String) {
+                    RunAIPrompt(promptId: $promptId, data: $data, modelId: $modelId, vendorId: $vendorId, configurationId: $configurationId, skipValidation: $skipValidation, templateData: $templateData, responseFormat: $responseFormat) {
                         success
                         output
                         parsedResult
@@ -946,7 +974,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 vendorId: undefined, // Use model's default vendor
                 configurationId: undefined, // Use default configuration
                 skipValidation: false,
-                templateData: null // Additional template context if needed
+                templateData: null, // Additional template context if needed
+                responseFormat: this.selectedResponseFormat || undefined
             };
 
             const result = await dataProvider.ExecuteGQL(query, variables);

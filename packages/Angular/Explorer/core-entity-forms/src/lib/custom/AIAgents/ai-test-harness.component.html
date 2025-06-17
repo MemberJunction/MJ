@@ -171,6 +171,7 @@
                             <button 
                                 class="tab-button"
                                 [class.active]="activeTab === 'agentVariables'"
+                                [disabled]="executionMonitorMode === 'live' && activeTab !== 'agentVariables'"
                                 (click)="selectTab('agentVariables')">
                                 <i class="fa-solid fa-code"></i>
                                 Agent Variables
@@ -201,6 +202,7 @@
                         <button 
                             class="tab-button"
                             [class.active]="activeTab === 'savedConversations'"
+                            [disabled]="executionMonitorMode === 'live' && activeTab !== 'savedConversations'"
                             (click)="selectTab('savedConversations')">
                             <i class="fa-solid fa-history"></i>
                             Saved
@@ -364,6 +366,7 @@
                                             [data]="availableModels"
                                             textField="Name"
                                             valueField="ID"
+                                            [valuePrimitive]="true"
                                             placeholder="Select a model..."
                                             class="model-selector">
                                         </kendo-dropdownlist>
@@ -381,6 +384,21 @@
                                         </kendo-slider>
                                         <div class="setting-help">
                                             Lower values make output more focused and deterministic
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="setting-group">
+                                        <label>Response Format</label>
+                                        <kendo-dropdownlist 
+                                            [(ngModel)]="selectedResponseFormat"
+                                            [data]="responseFormatOptions"
+                                            textField="text"
+                                            valueField="value"
+                                            placeholder="Select format..."
+                                            class="format-selector">
+                                        </kendo-dropdownlist>
+                                        <div class="setting-help">
+                                            Expected format for AI response (defaults to prompt setting)
                                         </div>
                                     </div>
                                     

@@ -66,6 +66,16 @@ export class AIPromptExecutionDialogComponent implements OnInit {
     public isRunning = false;
     public executionResult: AIPromptRunResult | null = null;
     
+    // Response format options
+    public selectedResponseFormat: 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific' = 'Any';
+    public responseFormatOptions = [
+        { text: 'Any', value: 'Any' },
+        { text: 'Text', value: 'Text' },
+        { text: 'Markdown', value: 'Markdown' },
+        { text: 'JSON', value: 'JSON' },
+        { text: 'Model Specific', value: 'ModelSpecific' }
+    ];
+    
     // UI State
     public dataContextExpanded = true;
     public optionsExpanded = false;
@@ -86,6 +96,13 @@ export class AIPromptExecutionDialogComponent implements OnInit {
         this.dataContextExpanded = true;
         this.optionsExpanded = false;
         this.resultsExpanded = false;
+        
+        // Set default response format from prompt with slight delay for Kendo dropdown
+        if (this.aiPrompt) {
+            setTimeout(() => {
+                this.selectedResponseFormat = this.aiPrompt.ResponseFormat || 'Any';
+            }, 0);
+        }
         
         // Initialize with one default variable
         this.addDataContextVariable();
@@ -142,7 +159,11 @@ export class AIPromptExecutionDialogComponent implements OnInit {
                 ResultType: 'entity_object'
             });
 
-            this.availableModels = result.Results || [];
+            // Add a blank option at the beginning
+            this.availableModels = [
+                { ID: '', Name: '-- Use Default Model --' } as AIModelEntityExtended,
+                ...(result.Results || [])
+            ];
 
         } catch (error) {
             console.error('Error loading AI models:', error);
@@ -271,8 +292,8 @@ export class AIPromptExecutionDialogComponent implements OnInit {
             
             // Execute the RunAIPrompt GraphQL mutation
             const query = `
-                mutation RunAIPrompt($promptId: String!, $data: String, $modelId: String, $vendorId: String, $configurationId: String, $skipValidation: Boolean, $templateData: String) {
-                    RunAIPrompt(promptId: $promptId, data: $data, modelId: $modelId, vendorId: $vendorId, configurationId: $configurationId, skipValidation: $skipValidation, templateData: $templateData) {
+                mutation RunAIPrompt($promptId: String!, $data: String, $modelId: String, $vendorId: String, $configurationId: String, $skipValidation: Boolean, $templateData: String, $responseFormat: String) {
+                    RunAIPrompt(promptId: $promptId, data: $data, modelId: $modelId, vendorId: $vendorId, configurationId: $configurationId, skipValidation: $skipValidation, templateData: $templateData, responseFormat: $responseFormat) {
                         success
                         output
                         parsedResult
@@ -293,7 +314,8 @@ export class AIPromptExecutionDialogComponent implements OnInit {
                 vendorId: this.executionOptions.vendorId,
                 configurationId: this.executionOptions.configurationId,
                 skipValidation: this.executionOptions.skipValidation,
-                templateData: null // Could be extended for additional template context
+                templateData: null, // Could be extended for additional template context
+                responseFormat: this.selectedResponseFormat || undefined
             };
 
             const result = await dataProvider.ExecuteGQL(query, variables);
