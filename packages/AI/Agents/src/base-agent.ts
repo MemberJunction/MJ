@@ -12,7 +12,7 @@
  */
 
 import { AIAgentEntity, AIAgentTypeEntity, AIAgentRunEntity, AIAgentRunStepEntity } from '@memberjunction/core-entities';
-import { UserInfo, Metadata } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { AIPromptRunner, AIPromptParams, ChildPromptParam, AIPromptRunResult } from '@memberjunction/ai-prompts';
 import { ChatMessage } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
@@ -21,11 +21,16 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import {
     ExecuteAgentParams, 
-    ExecuteAgentResult, 
     AgentContextData,
+    AgentConfiguration,
+    AgentRunContext,
+    AgentExecutionProgressCallback,
+    AgentExecutionStreamingCallback
+} from './types';
+import {
+    ExecuteAgentResult,
     AgentAction,
     AgentSubAgentRequest,
-    AgentConfiguration,
     ExecutionChainStep,
     StepExecutionResult,
     NextStepDecision,
@@ -36,11 +41,8 @@ import {
     ValidationExecutionResult,
     ChatExecutionResult,
     NextStepDetails,
-    AgentRunContext,
-    BaseAgentNextStep,
-    AgentExecutionProgressCallback,
-    AgentExecutionStreamingCallback
-} from './types';
+    BaseAgentNextStep
+} from '@memberjunction/aiengine';
 import { ActionEntityExtended, ActionResult, ActionResultSimple } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
 
@@ -104,6 +106,31 @@ export class BaseAgent {
     private _executionChain: ExecutionChainStep[] = [];
 
     /**
+     * Sub-agent execution results.
+     * @private
+     */
+    private _subAgentRuns: ExecuteAgentResult[] = [];
+
+    /**
+     * Get all agent run steps for the current execution.
+     * @private
+     */
+    private async getAgentRunSteps(contextUser?: UserInfo): Promise<AIAgentRunStepEntity[]> {
+        if (!this._agentRun) return [];
+        
+        const md = new Metadata();
+        const rv = new RunView();
+        const result = await rv.RunView<AIAgentRunStepEntity>({
+            EntityName: 'MJ: AI Agent Run Steps',
+            ExtraFilter: `AgentRunID = '${this._agentRun.ID}'`,
+            OrderBy: 'StepNumber',
+            ResultType: 'entity_object'
+        }, contextUser);
+        
+        return result.Success ? result.Results : [];
+    }
+
+    /**
      * Executes an AI agent using hierarchical prompt composition.
      * 
      * This method orchestrates the entire agent execution process, from loading
@@ -132,7 +159,7 @@ export class BaseAgent {
         try {
             // Check for cancellation at start
             if (params.cancellationToken?.aborted) {
-                return await this.createCancelledResult('Cancelled before execution started');
+                return await this.createCancelledResult('Cancelled before execution started', params.contextUser);
             }
 
             // Report initialization progress
@@ -150,7 +177,7 @@ export class BaseAgent {
 
             // Check for cancellation after initialization
             if (params.cancellationToken?.aborted) {
-                return await this.createCancelledResult('Cancelled during initialization');
+                return await this.createCancelledResult('Cancelled during initialization', params.contextUser);
             }
 
             // Report validation progress
@@ -167,7 +194,7 @@ export class BaseAgent {
             // Load agent configuration
             const config = await this.loadAgentConfiguration(params.agent);
             if (!config.success) {
-                return await this.createFailureResult(config.errorMessage || 'Failed to load agent configuration');
+                return await this.createFailureResult(config.errorMessage || 'Failed to load agent configuration', params.contextUser);
             }
 
             // Main execution loop
@@ -179,7 +206,7 @@ export class BaseAgent {
             while (continueExecution) {
                 // Check for cancellation before each step
                 if (params.cancellationToken?.aborted) {
-                    return await this.createCancelledResult('Cancelled during execution');
+                    return await this.createCancelledResult('Cancelled during execution', params.contextUser);
                 }
 
                 // Execute the current step based on previous decision or initial prompt
@@ -203,14 +230,14 @@ export class BaseAgent {
             });
 
             // Finalize the agent run
-            return await this.finalizeAgentRun(currentNextStep?.step || 'success', finalReturnValue);
+            return await this.finalizeAgentRun(finalReturnValue?.step || 'success', finalReturnValue, params.contextUser);
 
         } catch (error) {
             // Check if error is due to cancellation
             if (params.cancellationToken?.aborted) {
-                return await this.createCancelledResult('Cancelled due to error during execution');
+                return await this.createCancelledResult('Cancelled due to error during execution', params.contextUser);
             }
-            return await this.createFailureResult(error.message);
+            return await this.createFailureResult(error.message, params.contextUser);
         }
     }
 
@@ -241,6 +268,8 @@ export class BaseAgent {
                 finalStep: 'failed',
                 errorMessage: `Agent '${agent.Name}' is not active. Current status: ${agent.Status}`,
                 agentRun: this._agentRun!,
+                agentRunSteps: [],
+                subAgentRuns: [],
                 executionChain: this._executionChain
             };
         }
@@ -921,7 +950,7 @@ export class BaseAgent {
                 // Update step entity
                 await this.finalizeStepEntity(stepEntity, false, validationResult.errorMessage);
                 
-                return await this.createFailureResult(validationResult.errorMessage || 'Validation failed');
+                return await this.createFailureResult(validationResult.errorMessage || 'Validation failed', contextUser);
             }
             
             // Validation successful - create success step
@@ -953,7 +982,7 @@ export class BaseAgent {
             
             return null;
         } catch (error) {
-            return await this.createFailureResult(`Validation error: ${error.message}`);
+            return await this.createFailureResult(`Validation error: ${(error as Error).message}`, contextUser);
         }
     }
 
@@ -1099,7 +1128,7 @@ export class BaseAgent {
             // Check for cancellation after prompt execution
             if (params.cancellationToken?.aborted) {
                 await this.finalizeStepEntity(stepEntity, false, 'Cancelled during prompt execution');
-                return { terminate: true, returnValue: await this.createCancelledResult('Cancelled during prompt execution') };
+                return { terminate: true, returnValue: await this.createCancelledResult('Cancelled during prompt execution', params.contextUser) };
             }
             
             // Create prompt execution result
@@ -1224,6 +1253,9 @@ export class BaseAgent {
                 subAgentName: subAgentRequest.name,
                 result: subAgentResult
             };
+            
+            // Store sub-agent run for complete tracking
+            this._subAgentRuns.push(subAgentResult);
             
             // Determine if we should terminate after sub-agent
             const shouldTerminate = subAgentRequest.terminateAfter;
@@ -1471,7 +1503,7 @@ export class BaseAgent {
      * 
      * @private
      */
-    private async createFailureResult(errorMessage: string): Promise<ExecuteAgentResult> {
+    private async createFailureResult(errorMessage: string, contextUser?: UserInfo): Promise<ExecuteAgentResult> {
         if (this._agentRun) {
             this._agentRun.Status = 'Failed';
             this._agentRun.CompletedAt = new Date();
@@ -1485,6 +1517,8 @@ export class BaseAgent {
             finalStep: 'failed',
             errorMessage,
             agentRun: this._agentRun!,
+            agentRunSteps: await this.getAgentRunSteps(contextUser),
+            subAgentRuns: this._subAgentRuns,
             executionChain: this._executionChain
         };
     }
@@ -1496,7 +1530,7 @@ export class BaseAgent {
      * @param {string} message - The cancellation message
      * @returns {Promise<ExecuteAgentResult>} The cancelled result
      */
-    private async createCancelledResult(message: string): Promise<ExecuteAgentResult> {
+    private async createCancelledResult(message: string, contextUser?: UserInfo): Promise<ExecuteAgentResult> {
         if (this._agentRun) {
             this._agentRun.Status = 'Cancelled';
             this._agentRun.CompletedAt = new Date();
@@ -1512,6 +1546,8 @@ export class BaseAgent {
             cancelled: true,
             cancellationReason: 'user_requested',
             agentRun: this._agentRun!,
+            agentRunSteps: await this.getAgentRunSteps(contextUser),
+            subAgentRuns: this._subAgentRuns,
             executionChain: this._executionChain
         };
     }
@@ -1521,7 +1557,7 @@ export class BaseAgent {
      * 
      * @private
      */
-    private async finalizeAgentRun(finalStep: BaseAgentNextStep['step'], returnValue?: any): Promise<ExecuteAgentResult> {
+    private async finalizeAgentRun(finalStep: BaseAgentNextStep['step'], returnValue?: any, contextUser?: UserInfo): Promise<ExecuteAgentResult> {
         if (this._agentRun) {
             this._agentRun.Status = 'Completed';
             this._agentRun.CompletedAt = new Date();
@@ -1531,10 +1567,12 @@ export class BaseAgent {
         }
         
         return {
-            success: finalStep === 'success',
+            success: finalStep === 'success' || finalStep === 'chat',
             finalStep,
             returnValue,
             agentRun: this._agentRun!,
+            agentRunSteps: await this.getAgentRunSteps(contextUser),
+            subAgentRuns: this._subAgentRuns,
             executionChain: this._executionChain
         };
     }

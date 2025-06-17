@@ -12,7 +12,7 @@
 
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
-import { BaseAgentNextStep } from '../types';
+import { BaseAgentNextStep } from '@memberjunction/aiengine';
 import { AIPromptRunResult } from '@memberjunction/ai-prompts';
 import { LogError, LogStatus } from '@memberjunction/core';
 

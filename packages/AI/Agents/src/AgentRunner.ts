@@ -12,9 +12,9 @@
 
 import { LogError, LogStatus } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
-import { AIEngine } from '@memberjunction/aiengine';
+import { AIEngine, ExecuteAgentResult } from '@memberjunction/aiengine';
 import { BaseAgent } from './base-agent';
-import { ExecuteAgentParams, ExecuteAgentResult } from './types';
+import { ExecuteAgentParams } from './types';
 
 /**
  * AgentRunner provides a thin wrapper for executing AI agents.
@@ -89,6 +89,8 @@ export class AgentRunner {
                 finalStep: 'failed',
                 errorMessage,
                 agentRun: null as any, // This is an edge case where we couldn't create the run
+                agentRunSteps: [],
+                subAgentRuns: [],
                 executionChain: []
             };
         }

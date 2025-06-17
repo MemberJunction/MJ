@@ -303,7 +303,36 @@ for (const result of results.Results) {
 
 // ❌ Type casting approach (unnecessary with proper generics)
 const entities = results.Results as SomeEntity[];
+
+// ❌ Using any or unknown types
+const results: any = await rv.RunView({...});
+const data = results.Results as unknown as SomeEntity[];
 ```
+
+## Type Safety Guidelines
+
+### NEVER Use `any` or `unknown` Types
+MemberJunction provides strong typing throughout the framework. Always use proper generic types instead of `any` or `unknown`:
+
+```typescript
+// ❌ Wrong - loses all type safety
+const results: any = await rv.RunView({...});
+const entity: any = await md.GetEntityObject('EntityName');
+
+// ✅ Correct - full type safety with generics
+const results = await rv.RunView<AIModelEntity>({
+    EntityName: 'AI Models',
+    ResultType: 'entity_object'
+});
+const entity = await md.GetEntityObject<AIModelEntity>('AI Models');
+```
+
+### Always Use Generics with Data Loading Methods
+- `RunView<T>()` - for loading collections
+- `GetEntityObject<T>()` - for creating new entity instances
+- `Load<T>()` - for loading single records
+
+This ensures TypeScript provides proper IntelliSense, compile-time checking, and prevents runtime errors.
 
 ## MemberJunction CodeGen System
 
