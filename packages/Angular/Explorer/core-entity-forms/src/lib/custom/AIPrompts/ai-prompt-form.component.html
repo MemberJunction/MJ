@@ -226,6 +226,10 @@
                                         {{ promptModels.length }}
                                     </span>
                                 }
+                                <span style="color: #6c757d; font-size: 0.8em; font-weight: normal; margin-left: 8px;">
+                                    <i class="fa-solid fa-info-circle" title="Models are tried in order from top to bottom. The first available model will be used."></i>
+                                    Priority order (first available model will be used)
+                                </span>
                             </span>
                         </ng-template>
                         
@@ -251,9 +255,18 @@
                                             }
                                         </div>
                                     } @else {
+                                        <!-- Priority explanation for multiple models -->
+                                        @if (promptModels.length > 1) {
+                                            <div style="padding: 12px 16px; background: #e3f2fd; border-bottom: 1px solid #bbdefb; color: #1565c0; font-size: 0.85em;">
+                                                <i class="fa-solid fa-info-circle" style="margin-right: 6px;"></i>
+                                                Models are tried in priority order (1, 2, 3...). The first available model that meets requirements will be used for execution.
+                                            </div>
+                                        }
                                         <!-- Column Headers -->
                                         <div class="model-header" style="display: grid; grid-template-columns: 40px 2fr 1fr 1fr 60px; gap: 12px; padding: 12px 16px; background: #e9ecef; font-weight: 600; font-size: 0.85em; color: #495057; border-bottom: 1px solid #dee2e6;">
-                                            <div></div>
+                                            <div title="Priority order - models are tried from top to bottom">
+                                                <i class="fa-solid fa-sort" style="color: #6c757d;"></i>
+                                            </div>
                                             <div>AI Model <span style="color: #dc3545;">*</span></div>
                                             <div>Vendor</div>
                                             <div>Created</div>
@@ -266,12 +279,13 @@
                                                  [style.border-left]="!model.ModelID ? '3px solid #ffc107' : 'none'"
                                                  style="display: grid; grid-template-columns: 40px 2fr 1fr 1fr 60px; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #e9ecef; align-items: start;">
                                                 
-                                                <!-- Drag Handle -->
-                                                <div class="drag-handle" style="display: flex; align-items: center; justify-content: center; cursor: move; color: #6c757d;">
+                                                <!-- Drag Handle / Priority -->
+                                                <div class="drag-handle" style="display: flex; flex-direction: column; align-items: center; justify-content: center; color: #6c757d;">
                                                     @if (EditMode) {
-                                                        <i class="fa-solid fa-grip-vertical" title="Drag to reorder"></i>
+                                                        <i class="fa-solid fa-grip-vertical" title="Drag to reorder priority" style="cursor: move;"></i>
+                                                        <span style="font-size: 0.7em; margin-top: 2px;">#{{ i + 1 }}</span>
                                                     } @else {
-                                                        <span style="font-size: 0.8em; color: #6c757d;">{{ i + 1 }}</span>
+                                                        <span style="font-size: 0.9em; font-weight: 600;" title="Priority {{ i + 1 }} - Lower numbers are tried first">#{{ i + 1 }}</span>
                                                     }
                                                 </div>
                                                 
