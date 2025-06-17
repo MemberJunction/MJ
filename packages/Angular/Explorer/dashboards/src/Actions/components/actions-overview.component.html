@@ -189,8 +189,8 @@
                   {{ execution.StartedAt | date:'MMM d, HH:mm' }}
                 </div>
                 <div class="execution-info">
-                  <div class="execution-action">Action ID: {{ execution.ActionID }}</div>
-                  <div class="execution-user">User: {{ execution.UserID }}</div>
+                  <div class="execution-action">{{ execution.Action || 'Action ID: ' + execution.ActionID }}</div>
+                  <div class="execution-user">{{ execution.User || 'User ID: ' + execution.UserID }}</div>
                 </div>
                 <div class="execution-result">
                   <kendo-chip 

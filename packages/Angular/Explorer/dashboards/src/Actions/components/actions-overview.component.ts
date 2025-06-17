@@ -186,7 +186,11 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
 
   private calculateSuccessRate(executions: ActionExecutionLogEntity[]): number {
     if (executions.length === 0) return 0;
-    const successful = executions.filter(e => e.ResultCode === 'Success').length;
+    // Check for success based on result code - Actions may use different success codes
+    const successful = executions.filter(e => {
+      const code = e.ResultCode?.toLowerCase();
+      return code === 'success' || code === 'ok' || code === 'completed';
+    }).length;
     return Math.round((successful / executions.length) * 100);
   }
 
