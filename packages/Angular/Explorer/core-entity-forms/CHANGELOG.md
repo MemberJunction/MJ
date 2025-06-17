@@ -1,5 +1,29 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.51.0
+
+### Minor Changes
+
+- 7a9b88e: AI Improvements
+- 53f8167: AI Agent Infra - bump to 2.51.0
+- 0ddb438: various
+
+### Patch Changes
+
+- Updated dependencies [7a9b88e]
+- Updated dependencies [53f8167]
+  - @memberjunction/ng-explorer-core@2.51.0
+  - @memberjunction/core@2.51.0
+  - @memberjunction/core-entities@2.51.0
+  - @memberjunction/ai-engine-base@2.51.0
+  - @memberjunction/ng-base-forms@2.51.0
+  - @memberjunction/ng-form-toolbar@2.51.0
+  - @memberjunction/ng-code-editor@2.51.0
+  - @memberjunction/ng-container-directives@2.51.0
+  - @memberjunction/ng-join-grid@2.51.0
+  - @memberjunction/ng-timeline@2.51.0
+  - @memberjunction/ng-tabstrip@2.51.0
+
 ## 2.50.0
 
 ### Patch Changes

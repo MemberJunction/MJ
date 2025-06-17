@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/core
 
+## 2.51.0
+
+### Minor Changes
+
+- 7a9b88e: AI Improvements
+
+### Patch Changes
+
+- @memberjunction/global@2.51.0
+
 ## 2.50.0
 
 ### Patch Changes

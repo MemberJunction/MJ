@@ -1,5 +1,50 @@
 # @memberjunction/ai-agents
 
+## 2.51.0
+
+### Minor Changes
+
+- 0ddb438: various
+
+### Patch Changes
+
+- 4a79606: **Breaking circular dependency between AI packages**
+
+  Resolves a circular dependency that was preventing `@memberjunction/core-entities-server` and other packages from
+  building during `npm install`.
+
+  **Root Cause:**
+
+  - `@memberjunction/aiengine` imported `AIPromptRunResult` from `@memberjunction/ai-prompts`
+  - `@memberjunction/ai-prompts` depended on `@memberjunction/aiengine` in package.json
+  - This circular dependency blocked the build chain
+
+  **Solution:**
+
+  - Moved `AIPromptRunResult` and related types to `@memberjunction/ai` as shared types
+  - Updated all packages to import from the shared location instead of creating circular references
+  - Added comprehensive build failure debugging guide to development documentation
+
+  **Packages Fixed:**
+
+  - `@memberjunction/core-entities-server` now builds successfully
+  - All AI packages (`aiengine`, `ai-prompts`, `ai-agents`) build without circular dependency issues
+  - Build order now resolves properly in the monorepo
+
+- Updated dependencies [4a79606]
+- Updated dependencies [faf513c]
+- Updated dependencies [7a9b88e]
+- Updated dependencies [53f8167]
+- Updated dependencies [0ddb438]
+  - @memberjunction/ai@2.51.0
+  - @memberjunction/aiengine@2.51.0
+  - @memberjunction/ai-prompts@2.51.0
+  - @memberjunction/core@2.51.0
+  - @memberjunction/core-entities@2.51.0
+  - @memberjunction/actions@2.51.0
+  - @memberjunction/actions-base@2.51.0
+  - @memberjunction/global@2.51.0
+
 ## 2.50.0
 
 ### Patch Changes

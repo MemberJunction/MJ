@@ -1,5 +1,26 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.51.0
+
+### Patch Changes
+
+- Updated dependencies [4a79606]
+- Updated dependencies [faf513c]
+- Updated dependencies [7a9b88e]
+- Updated dependencies [53f8167]
+- Updated dependencies [0ddb438]
+  - @memberjunction/ai@2.51.0
+  - @memberjunction/aiengine@2.51.0
+  - @memberjunction/core@2.51.0
+  - @memberjunction/core-entities@2.51.0
+  - @memberjunction/actions@2.51.0
+  - @memberjunction/ai-anthropic@2.51.0
+  - @memberjunction/ai-groq@2.51.0
+  - @memberjunction/ai-mistral@2.51.0
+  - @memberjunction/ai-openai@2.51.0
+  - @memberjunction/sqlserver-dataprovider@2.51.0
+  - @memberjunction/global@2.51.0
+
 ## 2.50.0
 
 ### Patch Changes

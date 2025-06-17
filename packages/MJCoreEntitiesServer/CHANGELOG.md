@@ -1,5 +1,46 @@
 # @memberjunction/core-entities-server
 
+## 2.51.0
+
+### Minor Changes
+
+- 7a9b88e: AI Improvements
+
+### Patch Changes
+
+- 4a79606: **Breaking circular dependency between AI packages**
+
+  Resolves a circular dependency that was preventing `@memberjunction/core-entities-server` and other packages from
+  building during `npm install`.
+
+  **Root Cause:**
+
+  - `@memberjunction/aiengine` imported `AIPromptRunResult` from `@memberjunction/ai-prompts`
+  - `@memberjunction/ai-prompts` depended on `@memberjunction/aiengine` in package.json
+  - This circular dependency blocked the build chain
+
+  **Solution:**
+
+  - Moved `AIPromptRunResult` and related types to `@memberjunction/ai` as shared types
+  - Updated all packages to import from the shared location instead of creating circular references
+  - Added comprehensive build failure debugging guide to development documentation
+
+  **Packages Fixed:**
+
+  - `@memberjunction/core-entities-server` now builds successfully
+  - All AI packages (`aiengine`, `ai-prompts`, `ai-agents`) build without circular dependency issues
+  - Build order now resolves properly in the monorepo
+
+- Updated dependencies [4a79606]
+- Updated dependencies [7a9b88e]
+- Updated dependencies [53f8167]
+  - @memberjunction/aiengine@2.51.0
+  - @memberjunction/core@2.51.0
+  - @memberjunction/core-entities@2.51.0
+  - @memberjunction/ai-vector-dupe@2.51.0
+  - @memberjunction/skip-types@2.51.0
+  - @memberjunction/global@2.51.0
+
 ## 2.50.0
 
 ### Patch Changes
