@@ -156,17 +156,17 @@
                         @if (mode === 'agent') {
                             <button 
                                 class="tab-button"
-                                [class.active]="activeTab === 'dataContext'"
-                                (click)="selectTab('dataContext')">
-                                <i class="fa-solid fa-database"></i>
-                                Data Context
+                                [class.active]="activeTab === 'agentVariables'"
+                                (click)="selectTab('agentVariables')">
+                                <i class="fa-solid fa-code"></i>
+                                Agent Variables
                             </button>
                             <button 
                                 class="tab-button"
-                                [class.active]="activeTab === 'templateData'"
-                                (click)="selectTab('templateData')">
-                                <i class="fa-solid fa-file-code"></i>
-                                Template Data
+                                [class.active]="activeTab === 'executionMonitor'"
+                                (click)="selectTab('executionMonitor')">
+                                <i class="fa-solid fa-diagram-project"></i>
+                                Execution Monitor
                             </button>
                         } @else {
                             <button 
@@ -198,16 +198,22 @@
 
                     <!-- Tab Content -->
                     <div class="sidebar-content">
-                        <!-- Data Context Tab -->
-                        @if (activeTab === 'dataContext') {
+                        <!-- Agent Variables Tab (Unified) -->
+                        @if (activeTab === 'agentVariables') {
                             <div class="tab-content">
                                 <div class="tab-header">
-                                    <h4>Data Context Variables</h4>
-                                    <p>Variables available during agent execution</p>
+                                    <h4>Agent Variables</h4>
+                                    <p>Variables available during agent execution and template rendering</p>
                                 </div>
                                 
                                 <div class="variables-list">
-                                    @for (variable of dataContextVariables; track $index) {
+                                    @if (agentVariables.length === 0) {
+                                        <div class="empty-variables">
+                                            <p>No variables defined. Click "Add Variable" to get started.</p>
+                                        </div>
+                                    }
+                                    
+                                    @for (variable of agentVariables; track $index) {
                                         <div class="variable-item">
                                             <kendo-textbox 
                                                 [(ngModel)]="variable.name" 
@@ -237,7 +243,7 @@
                                             
                                             <button 
                                                 class="remove-button"
-                                                (click)="removeDataVariable($index)"
+                                                (click)="removeAgentVariable($index)"
                                                 title="Remove variable">
                                                 <i class="fa-solid fa-times"></i>
                                             </button>
@@ -247,70 +253,20 @@
                                 
                                 <button 
                                     class="add-button"
-                                    (click)="addDataVariable()">
+                                    (click)="addAgentVariable()">
                                     <i class="fa-solid fa-plus"></i> Add Variable
                                 </button>
                             </div>
                         }
 
-                        <!-- Template Data Tab -->
-                        @if (activeTab === 'templateData') {
-                            <div class="tab-content">
-                                <div class="tab-header">
-                                    <h4>Template Data Variables</h4>
-                                    <p>Variables for template rendering</p>
-                                </div>
-                                
-                                <div class="variables-list">
-                                    @if (templateDataVariables.length === 0) {
-                                        <div class="empty-variables">
-                                            <p>No template variables defined</p>
-                                        </div>
-                                    }
-                                    
-                                    @for (variable of templateDataVariables; track $index) {
-                                        <div class="variable-item">
-                                            <kendo-textbox 
-                                                [(ngModel)]="variable.name" 
-                                                placeholder="Variable name"
-                                                class="variable-name">
-                                            </kendo-textbox>
-                                            
-                                            <kendo-dropdownlist 
-                                                [(ngModel)]="variable.type"
-                                                [data]="[
-                                                    {text: 'String', value: 'string'}, 
-                                                    {text: 'Number', value: 'number'}, 
-                                                    {text: 'Boolean', value: 'boolean'}, 
-                                                    {text: 'Object', value: 'object'}
-                                                ]"
-                                                textField="text"
-                                                valueField="value"
-                                                [valuePrimitive]="true"
-                                                class="variable-type">
-                                            </kendo-dropdownlist>
-                                            
-                                            <kendo-textbox 
-                                                [(ngModel)]="variable.value" 
-                                                [placeholder]="variable.type === 'object' ? 'JSON value' : 'Value'"
-                                                class="variable-value">
-                                            </kendo-textbox>
-                                            
-                                            <button 
-                                                class="remove-button"
-                                                (click)="removeTemplateVariable($index)"
-                                                title="Remove variable">
-                                                <i class="fa-solid fa-times"></i>
-                                            </button>
-                                        </div>
-                                    }
-                                </div>
-                                
-                                <button 
-                                    class="add-button"
-                                    (click)="addTemplateVariable()">
-                                    <i class="fa-solid fa-plus"></i> Add Variable
-                                </button>
+                        <!-- Execution Monitor Tab -->
+                        @if (activeTab === 'executionMonitor') {
+                            <div class="tab-content" style="padding: 0; height: 100%;">
+                                <mj-agent-execution-monitor
+                                    [mode]="executionMonitorMode"
+                                    [executionData]="currentExecutionData"
+                                    [autoExpand]="true">
+                                </mj-agent-execution-monitor>
                             </div>
                         }
 

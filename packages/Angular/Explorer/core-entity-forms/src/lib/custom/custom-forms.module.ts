@@ -33,6 +33,10 @@ import { AIPromptRunFormComponentExtended } from "./AIPromptRuns/ai-prompt-run-f
 import { ActionFormComponentExtended } from "./Actions/action-form.component";
 import { ActionTestHarnessComponent } from "./Actions/action-test-harness.component";
 import { ActionTestHarnessDialogComponent } from "./Actions/action-test-harness-dialog.component";
+import { ActionExecutionLogFormComponentExtended } from "./Actions/action-execution-log-form.component";
+import { UsersFormComponentExtended, LoadUsersFormComponentExtended } from "./Users/users-form.component";
+import { AgentExecutionMonitorComponent } from "./AIAgents/agent-execution-monitor.component";
+import { DashboardsFormComponent } from "./Dashboards/dashboards-form.component";
 
 @NgModule({
     declarations: [
@@ -51,10 +55,14 @@ import { ActionTestHarnessDialogComponent } from "./Actions/action-test-harness-
         AIPromptRunFormComponentExtended,
         ActionFormComponentExtended,
         ActionTestHarnessComponent,
-        ActionTestHarnessDialogComponent
+        ActionTestHarnessDialogComponent,
+        ActionExecutionLogFormComponentExtended,
+        UsersFormComponentExtended,
+        DashboardsFormComponent,
     ],
     imports: [
         CommonModule,
+        AgentExecutionMonitorComponent,
         FormsModule,
         LayoutModule,
         ExpansionPanelModule,
@@ -95,13 +103,21 @@ import { ActionTestHarnessDialogComponent } from "./Actions/action-test-harness-
         AIPromptRunFormComponentExtended,
         ActionFormComponentExtended,
         ActionTestHarnessComponent,
-        ActionTestHarnessDialogComponent
+        ActionTestHarnessDialogComponent,
+        ActionExecutionLogFormComponentExtended,
+        UsersFormComponentExtended,
+        DashboardsFormComponent
     ],
     providers: [
         TestHarnessDialogService
     ]
 })
 export class MemberJunctionCoreEntityFormsModule { }
+
+// Loader function for ActionExecutionLogFormComponentExtended
+export function LoadActionExecutionLogFormComponentExtended() {
+    // This function is called to ensure the form is loaded
+}
 
 export function LoadCoreCustomForms() {
     LoadEntitiesFormComponent()
@@ -110,6 +126,8 @@ export function LoadCoreCustomForms() {
     LoadTemplatesFormExtendedComponent();
     LoadAIPromptFormComponentExtended();
     LoadAIAgentFormComponentExtended();
-    // Note: AIPromptRunFormComponentExtended doesn't need a loader function
-    // as it extends the generated form directly
+    LoadUsersFormComponentExtended();
+    LoadActionExecutionLogFormComponentExtended();
+    // Note: AIPromptRunFormComponentExtended, ActionFormComponentExtended, and DashboardsFormComponent
+    // don't need loader functions as they extend the generated forms directly
 }

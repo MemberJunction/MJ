@@ -7,6 +7,7 @@ import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ChatMessage } from '@memberjunction/ai';
 import { Subject, Subscription } from 'rxjs';
+import { AgentExecutionMonitorComponent } from './agent-execution-monitor.component';
 
 /**
  * Supported modes for the test harness
@@ -200,11 +201,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     public isExecuting = false;
     
     // === Data Context Management ===
-    /** Variables passed to the agent as data context during execution */
-    public dataContextVariables: DataContextVariable[] = [];
-    
-    /** Variables used for template rendering in agent prompts */
-    public templateDataVariables: DataContextVariable[] = [];
+    /** Unified variables for agent execution (combines data context and template data) */
+    public agentVariables: DataContextVariable[] = [];
     
     // === Prompt-specific properties ===
     /** Variables for prompt template rendering */
@@ -227,7 +225,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     public showSidebar = true;
     
     /** Currently active tab in the sidebar */
-    public activeTab: 'dataContext' | 'templateData' | 'templateVariables' | 'modelSettings' | 'savedConversations' = 'dataContext';
+    public activeTab: 'agentVariables' | 'executionMonitor' | 'templateVariables' | 'modelSettings' | 'savedConversations' = 'agentVariables';
     
     /** Array of saved conversation sessions loaded from localStorage */
     public savedConversations: SavedConversation[] = [];
@@ -240,6 +238,13 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     
     /** Current JSON content to display in the dialog */
     public currentJsonContent: string = '';
+    
+    // === Execution Monitor Properties ===
+    /** Mode for the execution monitor component */
+    public executionMonitorMode: 'live' | 'historical' = 'historical';
+    
+    /** Current execution data for the monitor */
+    public currentExecutionData: any = null;
     
     /** Whether to show the save conversation dialog */
     public showSaveDialog: boolean = false;
@@ -425,13 +430,14 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         this.conversationMessages = [];
         this.currentUserMessage = '';
         this.isExecuting = false;
-        this.dataContextVariables = [{ name: '', value: '', type: 'string' }];
-        this.templateDataVariables = [];
+        this.agentVariables = [{ name: '', value: '', type: 'string' }];
         this.templateVariables = [];
         this.currentConversationId = null;
         this.showSidebar = true;
+        this.currentExecutionData = null;
+        this.executionMonitorMode = 'historical';
         // Set default tab based on mode
-        this.activeTab = this.mode === 'agent' ? 'dataContext' : 'templateVariables';
+        this.activeTab = this.mode === 'agent' ? 'agentVariables' : 'templateVariables';
     }
     
     /**
@@ -475,7 +481,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      * Switches to the specified tab in the configuration sidebar.
      * @param tab - The tab to activate
      */
-    public selectTab(tab: 'dataContext' | 'templateData' | 'templateVariables' | 'modelSettings' | 'savedConversations') {
+    public selectTab(tab: 'agentVariables' | 'executionMonitor' | 'templateVariables' | 'modelSettings' | 'savedConversations') {
         this.activeTab = tab;
     }
 
@@ -608,6 +614,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             if (executionResult?.success) {
                 // Parse the payload to get the full execution result
                 const fullResult = JSON.parse(executionResult.payload);
+                
+                // Update execution monitor with the new data
+                this.currentExecutionData = fullResult;
+                this.executionMonitorMode = 'historical';
                 
                 // Extract the user message from the nested returnValue structure
                 let displayContent = 'No response generated';
@@ -857,7 +867,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     private buildDataContext(): Record<string, any> {
         const context: Record<string, any> = {};
         
-        for (const variable of this.dataContextVariables) {
+        // Use unified agent variables
+        for (const variable of this.agentVariables) {
             if (variable.name.trim()) {
                 context[variable.name] = this.convertVariableValue(variable.value, variable.type);
             }
@@ -867,15 +878,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     }
 
     private buildTemplateData(): Record<string, any> {
-        const data: Record<string, any> = {};
-        
-        for (const variable of this.templateDataVariables) {
-            if (variable.name.trim()) {
-                data[variable.name] = this.convertVariableValue(variable.value, variable.type);
-            }
-        }
-        
-        return data;
+        // For backward compatibility, return the same data as buildDataContext
+        // since we've unified the variables
+        return this.buildDataContext();
     }
 
     private buildTemplateVariables(): Record<string, any> {
@@ -908,11 +913,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     }
 
     /**
-     * Adds a new empty data context variable to the collection.
-     * Data context variables are passed to the agent during execution for dynamic content.
+     * Adds a new empty agent variable to the collection.
+     * Agent variables are passed to the agent during execution for dynamic content and template rendering.
      */
-    public addDataVariable() {
-        this.dataContextVariables.push({
+    public addAgentVariable() {
+        this.agentVariables.push({
             name: '',
             value: '',
             type: 'string'
@@ -920,43 +925,31 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     }
 
     /**
-     * Removes a data context variable at the specified index.
+     * Removes an agent variable at the specified index.
      * @param index - Zero-based index of the variable to remove
      */
-    public removeDataVariable(index: number) {
-        this.dataContextVariables.splice(index, 1);
+    public removeAgentVariable(index: number) {
+        this.agentVariables.splice(index, 1);
     }
 
     /**
-     * Adds a new empty template data variable to the collection.
-     * Template data variables are used for prompt template rendering.
+     * Adds a new empty template variable to the collection (prompt mode only).
+     * Template variables are used for prompt template rendering.
      */
     public addTemplateVariable() {
-        const newVariable: DataContextVariable = {
+        this.templateVariables.push({
             name: '',
             value: '',
             type: 'string'
-        };
-        
-        // Handle both template data variables (agent mode) and template variables (prompt mode)
-        if (this.mode === 'agent') {
-            this.templateDataVariables.push(newVariable);
-        } else {
-            this.templateVariables.push(newVariable);
-        }
+        });
     }
 
     /**
-     * Removes a template data variable at the specified index.
+     * Removes a template variable at the specified index (prompt mode only).
      * @param index - Zero-based index of the variable to remove
      */
     public removeTemplateVariable(index: number) {
-        // Handle both template data variables (agent mode) and template variables (prompt mode)
-        if (this.mode === 'agent') {
-            this.templateDataVariables.splice(index, 1);
-        } else {
-            this.templateVariables.splice(index, 1);
-        }
+        this.templateVariables.splice(index, 1);
     }
 
     /**
@@ -1219,10 +1212,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         this.conversationMessages = [...conversation.messages];
         this.currentConversationId = conversation.id;
         
-        // Restore data context
-        this.dataContextVariables = [];
-        for (const [key, value] of Object.entries(conversation.dataContext)) {
-            this.dataContextVariables.push({
+        // Restore agent variables (unified from dataContext and templateData)
+        this.agentVariables = [];
+        const allVariables = { ...conversation.dataContext, ...(conversation.templateData || {}) };
+        for (const [key, value] of Object.entries(allVariables)) {
+            this.agentVariables.push({
                 name: key,
                 value: typeof value === 'object' ? JSON.stringify(value) : String(value),
                 type: typeof value === 'boolean' ? 'boolean' : 
@@ -1231,19 +1225,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             });
         }
         
-        // Restore template data or template variables based on mode
-        if (this.mode === 'agent') {
-            this.templateDataVariables = [];
-            for (const [key, value] of Object.entries(conversation.templateData || {})) {
-                this.templateDataVariables.push({
-                    name: key,
-                    value: typeof value === 'object' ? JSON.stringify(value) : String(value),
-                    type: typeof value === 'boolean' ? 'boolean' : 
-                          typeof value === 'number' ? 'number' :
-                          typeof value === 'object' ? 'object' : 'string'
-                });
-            }
-        } else {
+        // Restore template variables for prompt mode
+        if (this.mode === 'prompt') {
             this.templateVariables = [];
             for (const [key, value] of Object.entries(conversation.templateVariables || {})) {
                 this.templateVariables.push({
@@ -1359,33 +1342,20 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                             timestamp: new Date(msg.timestamp)
                         }));
                         
-                        // Import data context
-                        if (data.dataContext) {
-                            this.dataContextVariables = [];
-                            for (const [key, value] of Object.entries(data.dataContext)) {
-                                this.dataContextVariables.push({
-                                    name: key,
-                                    value: typeof value === 'object' ? JSON.stringify(value) : String(value),
-                                    type: typeof value === 'boolean' ? 'boolean' : 
-                                          typeof value === 'number' ? 'number' :
-                                          typeof value === 'object' ? 'object' : 'string'
-                                });
-                            }
+                        // Import agent variables (unified from dataContext and templateData)
+                        this.agentVariables = [];
+                        const importedVariables = { ...(data.dataContext || {}), ...(data.templateData || {}) };
+                        for (const [key, value] of Object.entries(importedVariables)) {
+                            this.agentVariables.push({
+                                name: key,
+                                value: typeof value === 'object' ? JSON.stringify(value) : String(value),
+                                type: typeof value === 'boolean' ? 'boolean' : 
+                                      typeof value === 'number' ? 'number' :
+                                      typeof value === 'object' ? 'object' : 'string'
+                            });
                         }
                         
-                        // Import template data
-                        if (data.templateData) {
-                            this.templateDataVariables = [];
-                            for (const [key, value] of Object.entries(data.templateData)) {
-                                this.templateDataVariables.push({
-                                    name: key,
-                                    value: typeof value === 'object' ? JSON.stringify(value) : String(value),
-                                    type: typeof value === 'boolean' ? 'boolean' : 
-                                          typeof value === 'number' ? 'number' :
-                                          typeof value === 'object' ? 'object' : 'string'
-                                });
-                            }
-                        }
+                        // Template data is already imported into agentVariables above
                         
                         this.currentConversationId = null;
                         this.scrollNeeded = true;
@@ -1805,8 +1775,6 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                     .map(([type, count]) => `${count} ${type}`)
                     .join(', ');
                 return `${summary.totalSteps} steps executed (${stepCounts})`;
-            } else if (parsed.agentRunSteps) {
-                return `${parsed.agentRunSteps.length} steps executed`;
             }
         } catch {
             // Ignore parse errors

@@ -89,9 +89,6 @@ export class AgentRunner {
                 finalStep: 'failed',
                 errorMessage,
                 agentRun: null as any, // This is an edge case where we couldn't create the run
-                agentRunSteps: [],
-                subAgentRuns: [],
-                executionChain: [],
                 executionTree: []
             };
         }

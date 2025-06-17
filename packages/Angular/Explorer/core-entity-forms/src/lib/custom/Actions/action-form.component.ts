@@ -26,6 +26,10 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
     public actionLibraries: ActionLibraryEntity[] = [];
     public libraries: LibraryEntity[] = [];
     
+    // Cached filtered params
+    private _inputParams: ActionParamEntity[] = [];
+    private _outputParams: ActionParamEntity[] = [];
+    
     // Loading states
     public isLoadingParams = false;
     public isLoadingResultCodes = false;
@@ -109,15 +113,44 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             if (result.Success) {
                 this.actionParams = result.Results || [];
                 console.log(`Loaded ${this.actionParams.length} action params for action ${this.record.Name}`);
+                
+                // Update cached filtered params - trim Type values to handle any whitespace
+                this._inputParams = this.actionParams.filter(p => {
+                    const type = p.Type?.trim();
+                    return type === 'Input' || type === 'Both';
+                });
+                this._outputParams = this.actionParams.filter(p => {
+                    const type = p.Type?.trim();
+                    return type === 'Output' || type === 'Both';
+                });
+                
+                // Log details for debugging params display issue
+                if (this.actionParams.length > 0) {
+                    console.log('Action params details:', this.actionParams.map(p => ({
+                        ID: p.ID,
+                        Name: p.Name,
+                        Type: p.Type,
+                        TypeLength: p.Type?.length,
+                        ValueType: p.ValueType,
+                        IsRequired: p.IsRequired
+                    })));
+                    console.log('Input params count:', this._inputParams.length);
+                    console.log('Output params count:', this._outputParams.length);
+                }
             } else {
                 console.error('Failed to load action params:', result.ErrorMessage);
                 this.actionParams = [];
+                this._inputParams = [];
+                this._outputParams = [];
             }
         } catch (error) {
             console.error('Error loading action params:', error);
             this.actionParams = [];
+            this._inputParams = [];
+            this._outputParams = [];
         } finally {
             this.isLoadingParams = false;
+            this.cdr.detectChanges(); // Force change detection
         }
     }
 
@@ -415,11 +448,11 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
 
     // Helper methods for template filtering
     getInputParams(): ActionParamEntity[] {
-        return this.actionParams.filter(p => p.Type === 'Input' || p.Type === 'Both');
+        return this._inputParams;
     }
 
     getOutputParams(): ActionParamEntity[] {
-        return this.actionParams.filter(p => p.Type === 'Output' || p.Type === 'Both');
+        return this._outputParams;
     }
 
     isExecutionSuccess(execution: ActionExecutionLogEntity): boolean {

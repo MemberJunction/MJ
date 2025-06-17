@@ -87,7 +87,8 @@ export type BaseAgentNextStep = {
  * 
  * This result structure provides complete visibility into the agent's execution flow,
  * including all prompts executed, actions taken, sub-agents invoked, and decisions made.
- * The execution tree provides a hierarchical view that mirrors the actual execution flow.
+ * The execution tree provides a hierarchical view that mirrors the actual execution flow,
+ * with each node containing the AIAgentRunStepEntity via its step property.
  * 
  * @interface ExecuteAgentResult
  * @property {boolean} success - Whether the overall agent execution was successful
@@ -97,9 +98,6 @@ export type BaseAgentNextStep = {
  * @property {boolean} [cancelled] - Whether the execution was cancelled via cancellation token
  * @property {'user_requested' | 'timeout' | 'system'} [cancellationReason] - Reason for cancellation if cancelled
  * @property {AIAgentRunEntity} agentRun - The main database entity tracking this execution
- * @property {AIAgentRunStepEntity[]} agentRunSteps - All step entities for this run (flat list for backward compatibility)
- * @property {ExecuteAgentResult[]} subAgentRuns - Complete results from any sub-agent executions (for backward compatibility)
- * @property {ExecutionChainStep[]} executionChain - Complete chain of execution steps (for backward compatibility)
  * @property {ExecutionNode[]} executionTree - Hierarchical tree of execution nodes showing parent-child relationships
  */
 export type ExecuteAgentResult = {
@@ -110,9 +108,6 @@ export type ExecuteAgentResult = {
     cancelled?: boolean;
     cancellationReason?: 'user_requested' | 'timeout' | 'system';
     agentRun: AIAgentRunEntity;
-    agentRunSteps: AIAgentRunStepEntity[];
-    subAgentRuns: ExecuteAgentResult[];
-    executionChain: ExecutionChainStep[];
     executionTree: ExecutionNode[];
 }
 

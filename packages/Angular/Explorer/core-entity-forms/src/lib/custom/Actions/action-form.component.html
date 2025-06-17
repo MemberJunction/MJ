@@ -198,28 +198,34 @@
                                     <div class="param-group input-params">
                                         <h3><i class="fa-solid fa-sign-in-alt"></i> Inputs</h3>
                                         <div class="param-cards">
-                                            @for (param of getInputParams(); track param.ID) {
-                                                <div class="param-card" [class.required]="param.IsRequired">
-                                                    <div class="param-header">
-                                                        <span class="param-name">{{ param.Name }}</span>
-                                                        @if (param.IsRequired) {
-                                                            <span class="required-badge">Required</span>
+                                            @if (getInputParams().length === 0) {
+                                                <div class="no-params">
+                                                    <p>No input parameters</p>
+                                                </div>
+                                            } @else {
+                                                @for (param of getInputParams(); track param.ID) {
+                                                    <div class="param-card" [class.required]="param.IsRequired">
+                                                        <div class="param-header">
+                                                            <span class="param-name">{{ param.Name }}</span>
+                                                            @if (param.IsRequired) {
+                                                                <span class="required-badge">Required</span>
+                                                            }
+                                                            @if (param.IsArray) {
+                                                                <span class="array-badge">Array</span>
+                                                            }
+                                                        </div>
+                                                        <div class="param-type">{{ param.ValueType }}</div>
+                                                        @if (param.Description) {
+                                                            <div class="param-description">{{ param.Description }}</div>
                                                         }
-                                                        @if (param.IsArray) {
-                                                            <span class="array-badge">Array</span>
+                                                        @if (param.DefaultValue) {
+                                                            <div class="param-default">
+                                                                <span class="default-label">Default:</span>
+                                                                <code>{{ param.DefaultValue }}</code>
+                                                            </div>
                                                         }
                                                     </div>
-                                                    <div class="param-type">{{ param.ValueType }}</div>
-                                                    @if (param.Description) {
-                                                        <div class="param-description">{{ param.Description }}</div>
-                                                    }
-                                                    @if (param.DefaultValue) {
-                                                        <div class="param-default">
-                                                            <span class="default-label">Default:</span>
-                                                            <code>{{ param.DefaultValue }}</code>
-                                                        </div>
-                                                    }
-                                                </div>
+                                                }
                                             }
                                         </div>
                                     </div>
@@ -244,19 +250,25 @@
                                     <div class="param-group output-params">
                                         <h3><i class="fa-solid fa-sign-out-alt"></i> Outputs</h3>
                                         <div class="param-cards">
-                                            @for (param of getOutputParams(); track param.ID) {
-                                                <div class="param-card">
-                                                    <div class="param-header">
-                                                        <span class="param-name">{{ param.Name }}</span>
-                                                        @if (param.IsArray) {
-                                                            <span class="array-badge">Array</span>
+                                            @if (getOutputParams().length === 0) {
+                                                <div class="no-params">
+                                                    <p>No output parameters</p>
+                                                </div>
+                                            } @else {
+                                                @for (param of getOutputParams(); track param.ID) {
+                                                    <div class="param-card">
+                                                        <div class="param-header">
+                                                            <span class="param-name">{{ param.Name }}</span>
+                                                            @if (param.IsArray) {
+                                                                <span class="array-badge">Array</span>
+                                                            }
+                                                        </div>
+                                                        <div class="param-type">{{ param.ValueType }}</div>
+                                                        @if (param.Description) {
+                                                            <div class="param-description">{{ param.Description }}</div>
                                                         }
                                                     </div>
-                                                    <div class="param-type">{{ param.ValueType }}</div>
-                                                    @if (param.Description) {
-                                                        <div class="param-description">{{ param.Description }}</div>
-                                                    }
-                                                </div>
+                                                }
                                             }
                                         </div>
                                     </div>

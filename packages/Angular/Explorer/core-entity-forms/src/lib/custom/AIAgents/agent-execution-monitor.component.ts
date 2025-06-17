@@ -167,7 +167,7 @@ export interface ExecutionStats {
                                             <span class="tokens">{{ node.tokensUsed }} tokens</span>
                                         }
                                         @if (node.cost) {
-                                            <span class="cost">${{ node.cost.toFixed(4) }}</span>
+                                            <span class="cost">\${{ node.cost.toFixed(4) }}</span>
                                         }
                                     </span>
                                 }
@@ -237,7 +237,7 @@ export interface ExecutionStats {
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Cost</span>
-                        <span class="stat-value">${{ stats.totalCost.toFixed(4) }}</span>
+                        <span class="stat-value">\${{ stats.totalCost.toFixed(4) }}</span>
                     </div>
                     @if (stats.totalDuration) {
                         <div class="stat-item">
@@ -246,7 +246,7 @@ export interface ExecutionStats {
                         </div>
                     }
                 </div>
-                @if (Object.keys(stats.stepsByType).length > 0) {
+                @if (getStepTypes().length > 0) {
                     <div class="step-types">
                         @for (type of getStepTypes(); track type) {
                             <span class="type-badge">
@@ -621,13 +621,9 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy {
     private buildTreeFromHistoricalData(): void {
         if (!this.executionData) return;
         
-        // Handle new executionTree format
+        // Handle executionTree format
         if (this.executionData.executionTree) {
             this.executionTree = this.convertExecutionTree(this.executionData.executionTree);
-        }
-        // Fallback to legacy format
-        else if (this.executionData.agentRunSteps) {
-            this.executionTree = this.convertLegacySteps(this.executionData.agentRunSteps);
         }
     }
     

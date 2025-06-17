@@ -269,9 +269,6 @@ export class BaseAgent {
                 finalStep: 'failed',
                 errorMessage: `Agent '${agent.Name}' is not active. Current status: ${agent.Status}`,
                 agentRun: this._agentRun!,
-                agentRunSteps: [],
-                subAgentRuns: [],
-                executionChain: this._executionChain,
                 executionTree: []
             };
         }
@@ -1391,7 +1388,7 @@ export class BaseAgent {
                     returnValue: subAgentResult.returnValue,
                     errorMessage: subAgentResult.errorMessage,
                     agentRunId: subAgentResult.agentRun?.ID,
-                    stepCount: subAgentResult.agentRunSteps?.length || 0
+                    stepCount: this.countStepsInTree(subAgentResult.executionTree)
                 },
                 shouldTerminate: shouldTerminate,
                 nextStep: nextStepDecision.decision
@@ -1677,9 +1674,6 @@ export class BaseAgent {
             finalStep: 'failed',
             errorMessage,
             agentRun: this._agentRun!,
-            agentRunSteps: await this.getAgentRunSteps(contextUser),
-            subAgentRuns: this._subAgentRuns,
-            executionChain: this._executionChain,
             executionTree: this.buildExecutionTree()
         };
     }
@@ -1707,9 +1701,6 @@ export class BaseAgent {
             cancelled: true,
             cancellationReason: 'user_requested',
             agentRun: this._agentRun!,
-            agentRunSteps: await this.getAgentRunSteps(contextUser),
-            subAgentRuns: this._subAgentRuns,
-            executionChain: this._executionChain,
             executionTree: this.buildExecutionTree()
         };
     }
@@ -1733,11 +1724,26 @@ export class BaseAgent {
             finalStep,
             returnValue,
             agentRun: this._agentRun!,
-            agentRunSteps: await this.getAgentRunSteps(contextUser),
-            subAgentRuns: this._subAgentRuns,
-            executionChain: this._executionChain,
             executionTree: this.buildExecutionTree()
         };
+    }
+
+    /**
+     * Counts the total number of steps in an execution tree.
+     * 
+     * @private
+     * @param {ExecutionNode[]} nodes - The execution tree nodes
+     * @returns {number} The total count of steps
+     */
+    private countStepsInTree(nodes: ExecutionNode[]): number {
+        let count = 0;
+        for (const node of nodes) {
+            count++;
+            if (node.children && node.children.length > 0) {
+                count += this.countStepsInTree(node.children);
+            }
+        }
+        return count;
     }
 
     /**

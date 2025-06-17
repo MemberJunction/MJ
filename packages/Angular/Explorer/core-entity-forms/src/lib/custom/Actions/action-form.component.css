@@ -861,6 +861,17 @@
     opacity: 0.7;
 }
 
+.no-params {
+    text-align: center;
+    padding: 20px;
+    color: #6c757d;
+    font-style: italic;
+}
+
+.no-params p {
+    margin: 0;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .action-hero-header {
