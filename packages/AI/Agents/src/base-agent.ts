@@ -166,7 +166,7 @@ export class BaseAgent {
             params.onProgress?.({
                 step: 'initialization',
                 percentage: 0,
-                message: 'Initializing agent execution'
+                message: `Initializing ${params.agent.Name} agent and preparing execution environment`
             });
 
             // Initialize execution tracking
@@ -184,7 +184,7 @@ export class BaseAgent {
             params.onProgress?.({
                 step: 'validation',
                 percentage: 10,
-                message: 'Validating agent configuration'
+                message: 'Validating agent configuration and loading prompts'
             });
 
             // Create and track validation step
@@ -1093,12 +1093,21 @@ export class BaseAgent {
         const stepEntity = await this.createStepEntity('prompt', 'Execute Agent Prompt', params.contextUser, config.childPrompt?.ID);
         
         try {
-            // Report prompt execution progress
+            // Report prompt execution progress with context
+            const isRetry = !!retryContext;
+            const promptMessage = isRetry 
+                ? `Re-executing agent prompt with additional context from ${retryContext.retryReason || 'previous actions'}`
+                : `Executing agent's initial prompt to analyze your request`;
+                
             params.onProgress?.({
                 step: 'prompt_execution',
                 percentage: 30,
-                message: 'Executing agent prompt',
-                metadata: { promptId: config.childPrompt?.ID }
+                message: promptMessage,
+                metadata: { 
+                    promptId: config.childPrompt?.ID,
+                    isRetry,
+                    promptName: config.childPrompt?.Name
+                }
             });
 
             // Prepare prompt parameters
@@ -1143,7 +1152,7 @@ export class BaseAgent {
             params.onProgress?.({
                 step: 'decision_processing',
                 percentage: 70,
-                message: 'Processing next step decision'
+                message: 'Analyzing response and determining next steps'
             });
             
             // Determine next step using agent type
@@ -1202,18 +1211,22 @@ export class BaseAgent {
             throw new Error('Cancelled before sub-agent execution');
         }
 
-        // Report sub-agent execution progress
+        // Report sub-agent execution progress with descriptive context
         params.onProgress?.({
             step: 'subagent_execution',
             percentage: 60,
-            message: `Executing sub-agent: ${subAgentRequest.name}`,
-            metadata: { subAgentId: subAgentRequest.id }
+            message: `Delegating to specialized agent "${subAgentRequest.name}" to ${subAgentRequest.message.toLowerCase()}`,
+            metadata: { 
+                subAgentId: subAgentRequest.id,
+                subAgentName: subAgentRequest.name,
+                reason: subAgentRequest.message
+            }
         });
         
         // Add assistant message indicating we're executing a sub-agent
         params.conversationMessages.push({
             role: 'assistant',
-            content: `Executing sub-agent: ${subAgentRequest.name}\nReason: ${subAgentRequest.message}`
+            content: `I'm delegating this task to the "${subAgentRequest.name}" agent.\n\nReason: ${subAgentRequest.message}`
         });
         
         const startTime = new Date();
@@ -1309,7 +1322,7 @@ export class BaseAgent {
                     terminate: false, 
                     nextStep: {
                         step: 'retry',
-                        retryReason: 'Processing sub-agent results'
+                        retryReason: `Analyzing results from "${subAgentRequest.name}" agent to integrate findings`
                     }
                 };
             }
@@ -1335,18 +1348,25 @@ export class BaseAgent {
             throw new Error('Cancelled before action execution');
         }
 
-        // Report action execution progress
+        // Report action execution progress with descriptive details
+        const progressMessage = actions.length === 1 
+            ? `Executing action: ${actions[0].name}`
+            : `Executing ${actions.length} actions:\n${actions.map(a => `• ${a.name}`).join('\n')}`;
+            
         params.onProgress?.({
             step: 'action_execution',
             percentage: 50,
-            message: `Executing ${actions.length} action(s)`,
-            metadata: { actionCount: actions.length }
+            message: progressMessage,
+            metadata: { 
+                actionCount: actions.length,
+                actionNames: actions.map(a => a.name)
+            }
         });
         
-        // Add assistant message indicating we're executing actions
+        // Add assistant message indicating we're executing actions with more detail
         const actionMessage = actions.length === 1 
-            ? `Executing action: ${actions[0].name}`
-            : `Executing ${actions.length} actions: ${actions.map(a => a.name).join(', ')}`;
+            ? `I'm executing the "${actions[0].name}" action...`
+            : `I'm executing ${actions.length} actions to gather the information needed:\n${actions.map(a => `• ${a.name}`).join('\n')}`;
         
         params.conversationMessages.push({
             role: 'assistant',
@@ -1453,7 +1473,9 @@ export class BaseAgent {
             terminate: false,
             nextStep: {
                 step: 'retry',
-                retryReason: failedActions.length > 0 ? 'Some actions failed' : 'All actions completed successfully'
+                retryReason: failedActions.length > 0 
+                    ? `Processing results with ${failedActions.length} failed action(s): ${failedActions.map(a => a.actionName).join(', ')}`
+                    : `Analyzing results from ${actionSummaries.length} completed action(s) to formulate response`
             }
         };
     }
