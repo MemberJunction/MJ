@@ -1,0 +1,56 @@
+// dashboard-browser.component.css
+
+/* Dialog Styling */
+.mj-dialog {
+    .k-window-content {
+        padding: 0;
+    }
+}
+
+.mj-dialog-content {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.mj-form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    
+    .k-label {
+        color: var(--navy);
+        font-size: 14px;
+        font-weight: 500;
+    }
+}
+
+.mj-form-input {
+    width: 100%;
+    
+    .k-input {
+        border-radius: var(--border-radius);
+        border: 1px solid var(--gray-700);
+        padding: 10px 12px;
+        font-size: 16px;
+        
+        &:focus {
+            border-color: var(--mj-blue);
+            box-shadow: 0 0 0 2px rgba(0, 118, 182, 0.2);
+        }
+    }
+}
+
+.mj-dialog-actions {
+    padding: 16px 24px;
+    border-top: 1px solid var(--gray-600);
+    background: var(--gray-600);
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    
+    button {
+        min-width: 100px;
+    }
+}

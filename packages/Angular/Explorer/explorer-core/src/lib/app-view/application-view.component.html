@@ -1,112 +1,105 @@
-<div class="app-container" *ngIf="this.app">
-    <div class="card-header-entity cloumn">
-        <div class="header-wrap"> 
-            @if (this.app.Icon && this.app.Icon.length > 0) {
-                <div class="title-icon">
-                    <span [ngClass]="this.app.Icon"></span>
-                </div>    
-            }
-            <div class="title-wrap">
-                <div class="title-wrap-inner">
-                    <span class="breadcrumb" (click)="GoHome($event)">Home</span>  
-                    <span class="breadcrumb-separator"><span class="fa-solid fa-chevron-right"></span></span>
-                    <span  class="breadcrumb" (click)="GoToApps($event)">Applications</span>
-                    <span class="breadcrumb-separator"><span class="fa-solid fa-chevron-right"></span></span>
-                    <span class="breadcrumb-end">{{this.app.Name}}</span>
-                </div>
+<!-- application-view.component.html -->
+<div class="mj-page-container" *ngIf="this.app">
+    <!-- Header Section -->
+     <div class="mj-breadcrumb">
+        <span class="mj-breadcrumb-item" (click)="GoHome($event)">
+            <i class="fa-solid fa-house"></i> Home
+        </span>
+        <span class="mj-breadcrumb-separator">
+            <i class="fa-solid fa-chevron-right"></i>
+        </span>
+        <span class="mj-breadcrumb-item" (click)="GoToApps($event)">Applications</span>
+        <span class="mj-breadcrumb-separator">
+            <i class="fa-solid fa-chevron-right"></i>
+        </span>
+        <span class="mj-breadcrumb-current">{{this.app.Name}}</span>
+    </div>
+    <div class="mj-header"> 
+        <div class="mj-header-title">
+            <div class="mj-header-icon" *ngIf="this.app.Icon && this.app.Icon.length > 0">
+                <span [ngClass]="this.app.Icon"></span>
             </div>
-            <div class="config-button">
-                <button kendoButton (click)="ShowAppEntitySelectionDialog()"><span class="fa-solid fa-gear"></span></button>
-                <mj-record-selector-dialog  
-                                            EntityName="Entities"
-                                            [AvailableRecords]="AllAppEntities" 
-                                            [SelectedRecords]="SelectedAppEntities" 
-                                            [UnselectedRecords]="UnselectedAppEntities"
-                                            [DialogVisible]="AppEntitySelectionDialogVisible"
-                                            DisplayField="Name"
-                                            DisplayIconField="Icon"
-                                            (DialogClosed)="OnAppEntitySelectionDialogClosed($event)"
-                >
-                </mj-record-selector-dialog>
+            <div>
+                <h1>{{this.app.Name}}</h1>
             </div>
-        </div>        
-        <div class="row" #entityRow style="max-width: 100%;">
-            <div class="col-xs-12 col-sm-6 example-col">
-                <button
-                    *ngFor="let item of SelectedAppEntities"
-                    kendoButton
-                    fillMode="flat"
-                    [toggleable]="true"
-                    [selected]="IsEntitySelected(item)"
-                    (click)="onAppEntityButtonClicked(item)"
-                >
-                    <span>
-                        @if (item.Icon && item.Icon.length > 0) {
-                            <span [ngClass]="item.Icon + ' button-icon'" ></span>
-                        }
-                        {{item.Name}}
-                    </span>
-                </button>
-            </div>
+        </div>
+        <div class="mj-header-actions">
+            <button class="mj-btn-icon-only" (click)="ShowAppEntitySelectionDialog()">
+                <i class="fa-solid fa-gear"></i>
+            </button>
         </div>
     </div>
-    @if (SelectedAppEntities.length === 0 && !showLoader) {
-        <div (click)="ShowAppEntitySelectionDialog()">
-            <span class="fa-solid fa-gear"></span>
-            Click Here to Select Entities
-        </div>
-    }
-    @if(showLoader) {
-        <kendo-loader></kendo-loader>
-    }
-    @else {
-        <div class="main-area margin-top-neg-20" *ngIf="SelectedAppEntities.length > 0">
-            <mj-resource-browser
-                ResourceTypeName="User Views"
-                [EnableCategories]="true"
-                [CategoryEntityID]="currentlySelectedAppEntity?.ID"
-                [CurrentCategoryID]="selectedFolderID"
-                [Title]="currentlySelectedAppEntity?.Name"
-                [ItemFilter]="ResourceItemFilter"
-                DisplayMode="Tile"
-                [NewItemOptions]="NewItemOptions"
-                (ResourceSelected)="onItemClick($event)"
-                (NavigateToParentEvent)="navigateToParentFolder()"
-                (EditItemEvent)="editView($event)"
-            />
-                
-           <!--
-            <app-generic-browser-list 
-                iconName="aggregateFields" 
-                [items]="items"
-                [categoryEntityID]="categoryEntityID"
-                addText="Create New View"
-                ItemEntityName="User Views"
-                resourceName="View"
-                [title]="pageTitle"
-                [extraDropdownOptions]="extraDropdownOptions"
-                [CategoryEntityName]="categoryEntityName"
-                (itemClickEvent)="onItemClick($event)" 
-                [selectedFolderID]="selectedFolderID"
-                [showLoader]="showLoader"
-                [viewingResource]=false
-                [displayAsGrid]="displayAsGrid"
-                (AfterAddFolderEvent)="onEvent($event)"
-                (AfterAddItemEvent)="onEvent($event)"
-                (AfterDeleteItemEvent)="onEvent($event)"
-                (AfterDeleteFolderEvent)="onEvent($event)"
-                (AfterUnlinkItemEvent)="onEvent($event)"
-                (viewModeChangeEvent)="onViewModeChange($event)"
-                (BeforeAddItemEvent)="createNewView($event)"
-                (BeforeUpdateItemEvent)="editView($event)"
-                (dropdownOptionClickEvent)="createItemClickedEvent($event)"
-                (NavigateToParentEvent)="navigateToParentFolder()"
-            />
-            -->
-        </div>
-    }
 
-    <mj-user-view-properties-dialog #userViewDialog [ShowPropertiesButton]="false"(dialogClosed)="OnViewPropertiesDialogClose($event)"></mj-user-view-properties-dialog>
+    <!-- Entity Selection Buttons -->
+    <div class="mj-entity-selection" *ngIf="SelectedAppEntities.length > 0">
+        <div class="mj-entity-buttons">
+            <button
+                *ngFor="let item of SelectedAppEntities"
+                class="mj-entity-btn"
+                [class.mj-entity-btn-active]="IsEntitySelected(item)"
+                (click)="onAppEntityButtonClicked(item)"
+            >
+                <i *ngIf="item.Icon && item.Icon.length > 0" 
+                   [ngClass]="item.Icon" 
+                   class="mj-entity-btn-icon"></i>
+                <span>{{item.Name}}</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Empty State -->
+    <div class="mj-empty-state" *ngIf="SelectedAppEntities.length === 0 && !showLoader">
+        <div class="mj-empty-icon">
+            <i class="fa-solid fa-gear"></i>
+        </div>
+        <h3>No Entities Selected</h3>
+        <p>Click the settings button to select entities for this application</p>
+        <button class="mj-btn-primary" (click)="ShowAppEntitySelectionDialog()">
+            <i class="fa-solid fa-gear"></i>
+            Select Entities
+        </button>
+    </div>
+
+    <!-- Loading State -->
+    <div class="mj-loading" *ngIf="showLoader">
+        <kendo-loader></kendo-loader>
+    </div>
+
+    <!-- Main Content -->
+    <div class="mj-main-content" *ngIf="SelectedAppEntities.length > 0 && !showLoader">
+        <mj-resource-browser
+            ResourceTypeName="User Views"
+            [EnableCategories]="true"
+            [CategoryEntityID]="currentlySelectedAppEntity?.ID"
+            [CurrentCategoryID]="selectedFolderID"
+            [Title]="currentlySelectedAppEntity?.Name"
+            [ItemFilter]="ResourceItemFilter"
+            DisplayMode="Tile"
+            [NewItemOptions]="NewItemOptions"
+            (ResourceSelected)="onItemClick($event)"
+            (NavigateToParentEvent)="navigateToParentFolder()"
+            (EditItemEvent)="editView($event)"
+        />
+    </div>
+
+    <!-- Dialogs -->
+    <mj-record-selector-dialog  
+        EntityName="Entities"
+        [AvailableRecords]="AllAppEntities" 
+        [SelectedRecords]="SelectedAppEntities" 
+        [UnselectedRecords]="UnselectedAppEntities"
+        [DialogVisible]="AppEntitySelectionDialogVisible"
+        DisplayField="Name"
+        DisplayIconField="Icon"
+        (DialogClosed)="OnAppEntitySelectionDialogClosed($event)"
+    >
+    </mj-record-selector-dialog>
+
+    <mj-user-view-properties-dialog 
+        #userViewDialog 
+        [ShowPropertiesButton]="false"
+        (dialogClosed)="OnViewPropertiesDialogClose($event)">
+    </mj-user-view-properties-dialog>
 
     <mj-generic-dialog
         DialogTitle="Available Resources"
@@ -119,7 +112,7 @@
             [User]="currentUser"
             [ResourceTypeID]="ViewResourceTypeID"
             [ResourceExtraFilter]="FilterOutCurrentUserViews"
-            ExtraColumns= "UserName, Description"
+            ExtraColumns="UserName, Description"
             SelectionMode="Multiple"
         >
         </mj-available-resources>

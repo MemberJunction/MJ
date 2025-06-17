@@ -1,36 +1,29 @@
-<div class="home-container">
-    <div class="card-header-entity">
-        <div class="title-wrap">
+<!-- home.component.html -->
+<div class="mj-page-container">
+    <div class="mj-header">
+        <div class="mj-header-title">
             <h1>Welcome to MemberJunction</h1>
         </div>
     </div>
     
-    <div class="main-area"> 
-        <div class="nav-container"> 
-            @for (item of HomeItems; track item) {
-                <div class="nav-item" (click)="navigate(item.Route)">
-                    <div class="nav-item-icon">
-                        <i [class]="'fa-solid ' + item.IconCSSClass"></i>
-                    </div>
-                    <div class="nav-item-content">
-                        <h3 class="nav-item-title">{{item.Name}}</h3>
-                        <p class="nav-item-subtitle">{{getItemDescription(item)}}</p>
-                    </div>
+    <div class="mj-grid-responsive"> 
+        <div class="mj-card mj-grid-item" 
+             *ngFor="let item of HomeItems; track item" 
+             (click)="navigate(item.Route)">
+            <div class="mj-card-body">
+                <div class="mj-nav-item-icon">
+                    <i [class]="'fa-solid ' + item.IconCSSClass"></i>
                 </div>
-            }
-        </div>
-
-        <!--<div class="home-favorites">
-            <div class="favorites-header">
-                <i class="fa-solid fa-star favorites-icon"></i>
-                <h2 class="favorites-title">Quick Access</h2>
+                <div class="mj-nav-item-content">
+                    <h3>{{item.Name}}</h3>
+                    <p>{{getItemDescription(item)}}</p>
+                </div>
             </div>
-            <app-favorites></app-favorites>
-        </div>-->
+        </div>
     </div>
     
-    <div class="version-info">
-        <i class="fa-solid fa-code-branch version-icon"></i>
+    <div class="mj-version-info">
+        <i class="fa-solid fa-code-branch"></i>
         <span>{{versionString}}</span>
     </div>
 </div>
