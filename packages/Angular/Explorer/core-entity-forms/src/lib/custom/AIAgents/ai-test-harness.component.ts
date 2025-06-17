@@ -1,13 +1,12 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, ElementRef, AfterViewChecked, SecurityContext } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
-import { AIAgentEntity, AIAgentRunEntity, AIAgentRunStepEntity, AIPromptEntity } from '@memberjunction/core-entities';
-import { Metadata, RunView } from '@memberjunction/core';
+import { AIAgentEntity, AIPromptEntity } from '@memberjunction/core-entities';
+import { Metadata } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ChatMessage } from '@memberjunction/ai';
-// import { MJGlobal } from '@memberjunction/global';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, Subscription } from 'rxjs';
 
 /**
  * Supported modes for the test harness
@@ -18,24 +17,7 @@ export type TestHarnessMode = 'agent' | 'prompt';
  * Result interface for AI agent execution operations.
  * Contains comprehensive information about the execution outcome, timing, and data.
  */
-export interface AIAgentRunResult {
-    /** Whether the agent execution completed successfully */
-    success: boolean;
-    /** Raw output from the agent execution */
-    output?: string;
-    /** Parsed/processed result content optimized for display */
-    parsedResult?: string;
-    /** Error message if execution failed */
-    error?: string;
-    /** Total execution time in milliseconds */
-    executionTimeMs?: number;
-    /** Unique identifier for this agent run instance */
-    agentRunId?: string;
-    /** Unprocessed raw result from the underlying AI model */
-    rawResult?: string;
-    /** Information about the next step in multi-step agent workflows */
-    nextStep?: string;
-}
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 /**
  * Represents a variable in the data context or template data for agent execution.
@@ -217,9 +199,6 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /** Whether an agent execution is currently in progress */
     public isExecuting = false;
     
-    /** ID of the message currently being streamed, if any */
-    public currentStreamingMessageId: string | null = null;
-    
     // === Data Context Management ===
     /** Variables passed to the agent as data context during execution */
     public dataContextVariables: DataContextVariable[] = [];
@@ -287,8 +266,6 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /** Flag indicating that auto-scroll is needed on next view check */
     private scrollNeeded = false;
     
-    /** Interval handle for streaming text animation */
-    private streamingInterval: any;
     
     /** Interval handle for elapsed time counter during streaming */
     private elapsedTimeInterval: any;
@@ -298,6 +275,12 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     
     /** Track if input has been focused to prevent repeated focusing */
     private _hasFocused = false;
+    
+    /** Subscription to MJGlobal events for streaming updates */
+    private _mjGlobalEventSub: Subscription | undefined;
+    
+    /** Direct GraphQL subscription for agent execution streaming */
+    private _agentStreamSub: Subscription | undefined;
 
     /**
      * Component initialization. Loads saved conversations, sets up event subscriptions,
@@ -354,11 +337,14 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     ngOnDestroy() {
         this.destroy$.next();
         this.destroy$.complete();
-        if (this.streamingInterval) {
-            clearInterval(this.streamingInterval);
-        }
         if (this.elapsedTimeInterval) {
             clearInterval(this.elapsedTimeInterval);
+        }
+        if (this._mjGlobalEventSub) {
+            this._mjGlobalEventSub.unsubscribe();
+        }
+        if (this._agentStreamSub) {
+            this._agentStreamSub.unsubscribe();
         }
     }
 
@@ -382,60 +368,54 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     }
 
     private subscribeToEvents() {
-        // TODO: Subscribe to agent execution events when GraphQL subscriptions are available
-        // For now, we'll use polling or simulated streaming
+        console.log('🎯 AI Test Harness: Setting up event subscriptions for streaming');
         
-        // Future implementation:
-        // - Subscribe to GraphQL subscription for agent execution updates
-        // - Handle streaming responses in real-time
-        // - Update conversation messages as data arrives
+        // First, set up direct GraphQL subscription for agent execution stream
+        const dataProvider = Metadata.Provider as GraphQLDataProvider;
+        const _providerPushStatusSub = dataProvider.PushStatusUpdates().subscribe((status: any) => {
+            const message = JSON.parse(status.message || '{}');
+            if (message?.resolver === 'RunAIAgentResolver' && 
+                message?.type === 'ExecutionProgress' ) {
+                if (message.data?.progress) {
+                    const userMsg =  message.data.progress.message;
+                    console.log('📡 AI Test Harness: Received GraphQL push status update:', userMsg);
+                    
+                    // Find the in-progress message and update its content
+                    const streamingMessage = this.conversationMessages.find(m => m.isStreaming);
+                    if (streamingMessage) {
+                        // Clear any typing animation interval
+                        const typingInterval = (streamingMessage as any)._typingInterval;
+                        if (typingInterval) {
+                            clearInterval(typingInterval);
+                            delete (streamingMessage as any)._typingInterval;
+                        }
+                        
+                        // Update the streaming content with the status message
+                        streamingMessage.streamingContent = userMsg;
+                        this.scrollNeeded = true;
+                    }
+                }
+            }
+        });
     }
+    
     
     /**
      * Loads available AI models for prompt execution.
      * Only called when the harness is in prompt mode.
      */
     private async loadAvailableModels() {
-        try {
-            const rv = new RunView();
-            const result = await rv.RunView({
-                EntityName: 'AI Models',
-                ExtraFilter: `Active=1`,
-                OrderBy: 'Name ASC',
-                ResultType: 'entity_object'
-            });
-            
-            if (result && result.Success) {
-                this.availableModels = result.Results;
-                
-                // Set default model if not already set
-                if (!this.selectedModelId && this.availableModels.length > 0) {
-                    this.selectedModelId = this.availableModels[0].ID;
-                }
-            }
-        } catch (error) {
-            console.error('Error loading AI models:', error);
-            this.availableModels = [];
+        await AIEngineBase.Instance.Config(false);
+        this.availableModels = AIEngineBase.Instance.Models;
+        // Set default model if not already set
+        if (!this.selectedModelId && this.availableModels.length > 0) {
+            // Defer to avoid ExpressionChangedAfterItHasBeenCheckedError
+            setTimeout(() => {
+                this.selectedModelId = this.availableModels[0].ID;
+            }, 0);
         }
     }
 
-    private handleStreamingUpdate(data: any) {
-        const message = this.conversationMessages.find(m => m.agentRunId === data.agentRunId);
-        if (message && message.isStreaming) {
-            message.streamingContent = (message.streamingContent || '') + data.content;
-            this.scrollNeeded = true;
-        }
-    }
-
-    private handleStreamingComplete(data: any) {
-        const message = this.conversationMessages.find(m => m.agentRunId === data.agentRunId);
-        if (message) {
-            message.isStreaming = false;
-            message.content = message.streamingContent || message.content;
-            message.executionTime = data.executionTimeMs;
-            delete message.streamingContent;
-        }
-    }
 
     /**
      * Resets the test harness to its initial state, clearing all conversations,
@@ -445,7 +425,6 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         this.conversationMessages = [];
         this.currentUserMessage = '';
         this.isExecuting = false;
-        this.currentStreamingMessageId = null;
         this.dataContextVariables = [{ name: '', value: '', type: 'string' }];
         this.templateDataVariables = [];
         this.templateVariables = [];
@@ -525,9 +504,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         };
         this.conversationMessages.push(userMessage);
         
-        // Clear input
+        // Clear input after change detection to avoid ExpressionChangedAfterItHasBeenCheckedError
         const messageToSend = this.currentUserMessage;
-        this.currentUserMessage = '';
+        setTimeout(() => {
+            this.currentUserMessage = '';
+        }, 0);
         
         // Scroll to bottom
         this.scrollNeeded = true;
@@ -579,18 +560,23 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             const dataContext = this.buildDataContext();
             const templateData = this.buildTemplateData();
 
+            // Generate a session ID for this execution
+            const sessionId = dataProvider.sessionId;
+            
+            console.log('🚀 AI Test Harness: Sending agent execution request', {
+                agentId: (this.entity as AIAgentEntity).ID,
+                sessionId: sessionId,
+                messageCount: messages.length
+            });
+            
             // Execute the agent
             const query = `
-                mutation RunAIAgent($agentId: String!, $messages: String!, $data: String, $templateData: String) {
-                    RunAIAgent(agentId: $agentId, messages: $messages, data: $data, templateData: $templateData) {
+                mutation RunAIAgent($agentId: String!, $messages: String!, $sessionId: String!, $data: String, $templateData: String) {
+                    RunAIAgent(agentId: $agentId, messages: $messages, sessionId: $sessionId, data: $data, templateData: $templateData) {
                         success
-                        output
-                        parsedResult
-                        error
+                        errorMessage
                         executionTimeMs
-                        agentRunId
-                        rawResult
-                        nextStep
+                        payload
                     }
                 }
             `;
@@ -598,23 +584,19 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             const variables = {
                 agentId: (this.entity as AIAgentEntity).ID,
                 messages: JSON.stringify(messages),
+                sessionId: sessionId,
                 data: Object.keys(dataContext).length > 0 ? JSON.stringify(dataContext) : null,
                 templateData: Object.keys(templateData).length > 0 ? JSON.stringify(templateData) : null
             };
 
-            // Set up streaming simulation (will be replaced with real streaming)
-            assistantMessage.agentRunId = this.generateMessageId(); // Temporary until we get real ID
-            this.currentStreamingMessageId = assistantMessage.agentRunId;
-            this.simulateStreaming(assistantMessage);
+            
+            // Start typing animation while we wait for the first real stream
+            this.startTypingAnimation(assistantMessage);
 
             const result = await dataProvider.ExecuteGQL(query, variables);
-            const executionResult: AIAgentRunResult = result?.RunAIAgent;
+            const executionResult = result?.RunAIAgent;
 
-            // Stop streaming simulation and elapsed time counter
-            if (this.streamingInterval) {
-                clearInterval(this.streamingInterval);
-                this.streamingInterval = null;
-            }
+            // Stop elapsed time counter
             if (this.elapsedTimeInterval) {
                 clearInterval(this.elapsedTimeInterval);
                 this.elapsedTimeInterval = null;
@@ -622,20 +604,49 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
 
             // Update assistant message with result
             assistantMessage.isStreaming = false;
-            assistantMessage.agentRunId = executionResult?.agentRunId || assistantMessage.agentRunId;
             
             if (executionResult?.success) {
-                // Store both raw and parsed content
-                assistantMessage.rawContent = executionResult.rawResult || executionResult.output || '';
-                assistantMessage.content = executionResult.parsedResult || executionResult.output || 'No response generated';
+                // Parse the payload to get the full execution result
+                const fullResult = JSON.parse(executionResult.payload);
+                
+                // Extract the user message from the nested returnValue structure
+                let displayContent = 'No response generated';
+                if (fullResult.returnValue) {
+                    if (typeof fullResult.returnValue === 'object' && 
+                        fullResult.returnValue.nextStep?.userMessage) {
+                        // This is the expected structure for chat responses
+                        displayContent = fullResult.returnValue.nextStep.userMessage;
+                    } else if (typeof fullResult.returnValue === 'string') {
+                        // Simple string response
+                        displayContent = fullResult.returnValue;
+                    } else {
+                        // Other structured response - show as JSON
+                        displayContent = JSON.stringify(fullResult.returnValue, null, 2);
+                    }
+                }
+                
+                assistantMessage.content = displayContent;
                 assistantMessage.executionTime = executionResult.executionTimeMs;
+                assistantMessage.agentRunId = fullResult.agentRun?.ID || assistantMessage.agentRunId;
+                
+                // Store the full result as raw content for debugging/inspection
+                assistantMessage.rawContent = executionResult.payload;
             } else {
                 assistantMessage.content = 'I encountered an error processing your request.';
-                assistantMessage.error = executionResult?.error || 'Unknown error occurred';
+                assistantMessage.error = executionResult?.errorMessage || 'Unknown error occurred';
+                
+                // Try to parse error payload if available
+                if (executionResult?.payload) {
+                    try {
+                        JSON.parse(executionResult.payload); // Validate it's valid JSON
+                        assistantMessage.rawContent = executionResult.payload;
+                    } catch {
+                        // Ignore parse errors
+                    }
+                }
             }
 
             delete assistantMessage.streamingContent;
-            this.currentStreamingMessageId = null;
             this.scrollNeeded = true;
 
             // Auto-save conversation
@@ -658,11 +669,6 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             );
         } finally {
             this.isExecuting = false;
-            this.currentStreamingMessageId = null;
-            if (this.streamingInterval) {
-                clearInterval(this.streamingInterval);
-                this.streamingInterval = null;
-            }
             if (this.elapsedTimeInterval) {
                 clearInterval(this.elapsedTimeInterval);
                 this.elapsedTimeInterval = null;
@@ -736,18 +742,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 templateData: null // Additional template context if needed
             };
 
-            // Set up streaming simulation (will be replaced with real streaming)
-            this.currentStreamingMessageId = assistantMessage.id;
-            this.simulateStreaming(assistantMessage);
-
             const result = await dataProvider.ExecuteGQL(query, variables);
             const executionResult = result?.RunAIPrompt;
 
-            // Stop streaming simulation and elapsed time counter
-            if (this.streamingInterval) {
-                clearInterval(this.streamingInterval);
-                this.streamingInterval = null;
-            }
+            // Stop elapsed time counter
             if (this.elapsedTimeInterval) {
                 clearInterval(this.elapsedTimeInterval);
                 this.elapsedTimeInterval = null;
@@ -793,7 +791,6 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             }
             
             delete assistantMessage.streamingContent;
-            this.currentStreamingMessageId = null;
             this.scrollNeeded = true;
 
             // Auto-save conversation
@@ -819,11 +816,6 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             );
         } finally {
             this.isExecuting = false;
-            this.currentStreamingMessageId = null;
-            if (this.streamingInterval) {
-                clearInterval(this.streamingInterval);
-                this.streamingInterval = null;
-            }
             if (this.elapsedTimeInterval) {
                 clearInterval(this.elapsedTimeInterval);
                 this.elapsedTimeInterval = null;
@@ -833,23 +825,33 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             this.focusMessageInput();
         }
     }
+ 
 
-    private simulateStreaming(message: ConversationMessage) {
-        // Simulate streaming for demo purposes
-        // This will be replaced with real GraphQL subscription streaming
-        const sampleText = "I'm processing your request and will provide a response shortly...";
+    private startTypingAnimation(message: ConversationMessage) {
+        const initialMessages = [
+            "I'm processing your request...",
+            "Let me think about that...",
+            "Working on your request...",
+            "Analyzing your question...",
+            "Processing..."
+        ];
+        
+        const selectedMessage = initialMessages[Math.floor(Math.random() * initialMessages.length)];
         let index = 0;
         
-        this.streamingInterval = setInterval(() => {
-            if (index < sampleText.length) {
-                message.streamingContent = (message.streamingContent || '') + sampleText[index];
+        // Store the interval handle on the message itself so we can cancel it when real streaming starts
+        const typingInterval = setInterval(() => {
+            if (index < selectedMessage.length && message.isStreaming) {
+                message.streamingContent = selectedMessage.substring(0, index + 1);
                 index++;
                 this.scrollNeeded = true;
             } else {
-                clearInterval(this.streamingInterval);
-                this.streamingInterval = null;
+                clearInterval(typingInterval);
             }
         }, 50);
+        
+        // Store interval reference in case we need to clear it
+        (message as any)._typingInterval = typingInterval;
     }
 
     private buildDataContext(): Record<string, any> {

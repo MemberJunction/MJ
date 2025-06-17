@@ -1655,6 +1655,47 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     private _wsClient: Client = null;
     private _pushStatusRequests: {sessionId: string, observable: Observable<string>}[] = [];
+    
+    /**
+     * Generic subscription method for GraphQL subscriptions
+     * @param subscription The GraphQL subscription query
+     * @param variables Variables to pass to the subscription
+     * @returns Observable that emits subscription data
+     */
+    public subscribe(subscription: string, variables?: any): Observable<any> {
+        // Ensure websocket client is initialized
+        if (!this._wsClient) {
+            this._wsClient = createClient({
+                url: this.ConfigData.WSURL,
+                connectionParams: {
+                    Authorization: 'Bearer ' + this.ConfigData.Token,
+                },
+            });
+        }
+
+        return new Observable((observer) => {
+            const unsubscribe = this._wsClient.subscribe(
+                { query: subscription, variables },
+                {
+                    next: (data) => {
+                        observer.next(data.data);
+                    },
+                    error: (error) => {
+                        observer.error(error);
+                    },
+                    complete: () => {
+                        observer.complete();
+                    },
+                }
+            );
+
+            // Return cleanup function
+            return () => {
+                unsubscribe();
+            };
+        });
+    }
+    
     public PushStatusUpdates(sessionId: string = null): Observable<string> {
         if (!sessionId)
             sessionId = this.sessionId;
