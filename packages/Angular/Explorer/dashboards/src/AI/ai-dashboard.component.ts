@@ -4,6 +4,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { CompositeKey } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
+import { SharedService } from '@memberjunction/ng-shared';
 
 interface AIDashboardState {
   activeTab: string;
@@ -27,6 +28,7 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
   public selectedIndex = 0; // Track selected navigation index
   
   // Component states
+  public modelManagementState: any = null;
   public promptManagementState: any = null;
   public agentConfigurationState: any = null;
   public systemConfigurationState: any = null;
@@ -77,20 +79,43 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
   }
 
   public onTabChange(tabId: string): void {
+    console.log('[AIDashboard] Tab change requested', {
+      fromTab: this.activeTab,
+      toTab: tabId,
+      visitedTabs: Array.from(this.visitedTabs),
+      timestamp: new Date().toISOString()
+    });
+    
     this.activeTab = tabId;
     const index = this.navigationItems.indexOf(tabId);
     
     // Defer selectedIndex update to avoid change detection issues
     setTimeout(() => {
       this.selectedIndex = index >= 0 ? index : 0;
-    });
+      
+      // Invoke manual resize after tab change to fix rendering issues
+      // TODO: Remove this when resize issues are properly fixed
+      SharedService.Instance.InvokeManualResize();
+    }, 100); // Give a bit more time for the DOM to update
     
     this.visitedTabs.add(tabId); // Mark tab as visited
+    console.log('[AIDashboard] Tab marked as visited', {
+      tabId,
+      allVisitedTabs: Array.from(this.visitedTabs)
+    });
+    
     this.emitStateChange();
   }
   
   public hasVisited(tabId: string): boolean {
-    return this.visitedTabs.has(tabId);
+    const visited = this.visitedTabs.has(tabId);
+    console.log('[AIDashboard] Checking if tab visited', {
+      tabId,
+      visited,
+      allVisitedTabs: Array.from(this.visitedTabs),
+      activeTab: this.activeTab
+    });
+    return visited;
   }
 
   public onNavigationChange(event: any): void {
@@ -100,6 +125,12 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
       this.selectedIndex = index;
       this.activeTab = this.navigationItems[index];
       this.emitStateChange();
+      
+      // Invoke manual resize after navigation change
+      // TODO: Remove this when resize issues are properly fixed
+      setTimeout(() => {
+        SharedService.Instance.InvokeManualResize();
+      }, 100);
     }
   }
 
@@ -115,7 +146,7 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
   private emitStateChange(): void {
     const state: AIDashboardState = {
       activeTab: this.activeTab,
-      modelManagementState: {},
+      modelManagementState: this.modelManagementState || {},
       promptManagementState: this.promptManagementState || {},
       agentConfigurationState: this.agentConfigurationState || {},
       executionMonitoringState: this.executionMonitoringState || {},
@@ -125,6 +156,11 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
     this.stateChangeSubject.next(state);
   }
   
+  public onModelManagementStateChange(state: any): void {
+    this.modelManagementState = state;
+    this.emitStateChange();
+  }
+
   public onPromptManagementStateChange(state: any): void {
     this.promptManagementState = state;
     this.emitStateChange();
@@ -161,6 +197,9 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
     }
     
     // Store component states for when they're rendered
+    if (state.modelManagementState) {
+      this.modelManagementState = state.modelManagementState;
+    }
     if (state.executionMonitoringState) {
       this.executionMonitoringState = state.executionMonitoringState;
     }

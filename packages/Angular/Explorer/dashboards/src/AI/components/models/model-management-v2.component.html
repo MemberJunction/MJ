@@ -11,9 +11,9 @@
       </div>
     </div>
   } @else {
-    <div class="dashboard-header">
-      <div class="header-info">
-        <h2 class="dashboard-title">
+    <div class="dashboard-header" style="display: flex !important; justify-content: space-between !important; align-items: center !important; padding: 16px 24px !important; background: white !important;">
+      <div class="header-info" style="display: flex !important; align-items: center !important; gap: 16px !important; flex: 1 !important;">
+        <h2 class="dashboard-title" style="margin: 0 !important; display: flex !important; align-items: center !important; gap: 8px !important;">
           <i class="fa-solid fa-microchip"></i>
           AI Models
         </h2>
@@ -32,7 +32,7 @@
         <span class="item-count">{{ filteredModels.length }} models</span>
       </div>
       
-      <div class="header-controls">
+      <div class="header-controls" style="display: flex !important; align-items: center !important; gap: 16px !important;">
         <div class="view-toggle">
           <button 
             type="button" 
@@ -63,7 +63,7 @@
       </div>
     </div>
 
-    <kendo-splitter [style.height.px]="600" orientation="horizontal">
+    <kendo-splitter mjFillContainer orientation="horizontal">
       @if (showFilters) {
         <kendo-splitter-pane size="320" min="250" max="400">
           <div class="filter-panel">

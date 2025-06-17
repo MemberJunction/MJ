@@ -356,6 +356,7 @@ kendo-splitter {
   height: 100%;
   padding: 24px;
   overflow-y: auto;
+  background: #f5f7fa;
 }
 
 // Empty state
@@ -390,13 +391,14 @@ kendo-splitter {
 .prompt-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-  gap: 20px;
 }
 
 .prompt-card {
-  background-color: white;
+  margin: 20px; // instead of gap in grid, for some reason that didn't work
+  background: white;
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  border: 1px solid #e0e6ed;
   transition: all 0.3s ease;
   overflow: hidden;
   
@@ -406,6 +408,7 @@ kendo-splitter {
   }
   
   &.expanded {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
     .expand-icon {
       transform: rotate(180deg);
     }
@@ -598,9 +601,10 @@ kendo-splitter {
 
 // List view
 .prompt-list {
-  background-color: white;
+  background: white;
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  border: 1px solid #e0e6ed;
   overflow: hidden;
 }
 

@@ -17,7 +17,9 @@
       <div class="dashboard-content">
         @if (activeTab === 'models' && hasVisited('models')) {
           <app-model-management-v2
+            [initialState]="modelManagementState"
             (openEntityRecord)="onOpenEntityRecord($event)"
+            (stateChange)="onModelManagementStateChange($event)"
             mjFillContainer>
           </app-model-management-v2>
         }
@@ -32,6 +34,7 @@
         
         @if (activeTab === 'agents' && hasVisited('agents')) {
           <app-agent-configuration
+            [initialState]="agentConfigurationState"
             (openEntityRecord)="onOpenEntityRecord($event)"
             (stateChange)="onAgentConfigurationStateChange($event)"
             mjFillContainer>

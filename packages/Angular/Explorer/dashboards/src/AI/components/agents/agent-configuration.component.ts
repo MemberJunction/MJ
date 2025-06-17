@@ -1,4 +1,4 @@
-import { Component, Output, EventEmitter, OnInit, Inject, Optional } from '@angular/core';
+import { Component, Output, EventEmitter, OnInit, OnDestroy, Inject, Optional, Input } from '@angular/core';
 import { RunView, CompositeKey } from '@memberjunction/core';
 import { AIAgentEntity } from '@memberjunction/core-entities';
 
@@ -16,7 +16,8 @@ interface AgentFilter {
   templateUrl: './agent-configuration.component.html',
   styleUrls: ['./agent-configuration.component.scss']
 })
-export class AgentConfigurationComponent implements OnInit {
+export class AgentConfigurationComponent implements OnInit, OnDestroy {
+  @Input() initialState: any = null;
   @Output() openEntityRecord = new EventEmitter<{entityName: string, recordId: string}>();
   @Output() stateChange = new EventEmitter<any>();
 
@@ -40,11 +41,43 @@ export class AgentConfigurationComponent implements OnInit {
   constructor() {}
 
   ngOnInit(): void {
+    console.log('[AgentConfig] Component initialized', {
+      hasInitialState: !!this.initialState,
+      initialState: this.initialState,
+      timestamp: new Date().toISOString()
+    });
+    
+    if (this.initialState) {
+      this.applyInitialState(this.initialState);
+    }
     this.loadAgents();
+  }
+
+  ngOnDestroy(): void {
+    console.log('[AgentConfig] Component destroyed', {
+      timestamp: new Date().toISOString(),
+      agentCount: this.agents.length
+    });
+  }
+
+  private applyInitialState(state: any): void {
+    if (state.filterPanelVisible !== undefined) {
+      this.filterPanelVisible = state.filterPanelVisible;
+    }
+    if (state.viewMode) {
+      this.viewMode = state.viewMode;
+    }
+    if (state.expandedAgentId) {
+      this.expandedAgentId = state.expandedAgentId;
+    }
+    if (state.currentFilters) {
+      this.currentFilters = { ...this.currentFilters, ...state.currentFilters };
+    }
   }
 
   private async loadAgents(): Promise<void> {
     try {
+      console.log('[AgentConfig] Starting to load agents...');
       this.isLoading = true;
       const rv = new RunView();
       const result = await rv.RunView({
@@ -54,12 +87,24 @@ export class AgentConfigurationComponent implements OnInit {
         MaxRows: 1000
       });
       
+      console.log('[AgentConfig] RunView completed', {
+        resultCount: result.Results?.length || 0,
+        hasResults: !!result.Results
+      });
+      
       this.agents = result.Results as AIAgentEntity[];
       this.filteredAgents = [...this.agents];
+      
+      console.log('[AgentConfig] Agents loaded successfully', {
+        totalAgents: this.agents.length,
+        filteredAgents: this.filteredAgents.length,
+        isLoading: this.isLoading
+      });
     } catch (error) {
-      console.error('Error loading AI agents:', error);
+      console.error('[AgentConfig] Error loading AI agents:', error);
     } finally {
       this.isLoading = false;
+      console.log('[AgentConfig] Loading complete, isLoading set to false');
     }
   }
 
@@ -146,7 +191,10 @@ export class AgentConfigurationComponent implements OnInit {
   private emitStateChange(): void {
     const state = {
       filterPanelVisible: this.filterPanelVisible,
-      filters: this.currentFilters
+      viewMode: this.viewMode,
+      expandedAgentId: this.expandedAgentId,
+      currentFilters: this.currentFilters,
+      agentCount: this.filteredAgents.length
     };
     this.stateChange.emit(state);
   }
