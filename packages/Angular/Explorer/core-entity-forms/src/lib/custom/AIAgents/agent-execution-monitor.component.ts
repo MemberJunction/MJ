@@ -855,12 +855,12 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                 outputPreview: this.createPreview(node.outputData),
                 error: node.step?.ErrorMessage,
                 expanded: false,
-                depth: depth,
+                depth: node.depth !== undefined ? node.depth : depth,  // Use node.depth if available, fallback to recursion depth
                 tokensUsed: this.extractTokens(node.outputData),
                 cost: this.extractCost(node.outputData),
                 detailsMarkdown: detailsMarkdown,
                 detailsExpanded: false,
-                children: node.children ? this.convertExecutionTree(node.children, depth + 1) : undefined
+                children: node.children ? this.convertExecutionTree(node.children, node.depth !== undefined ? node.depth + 1 : depth + 1) : undefined
             };
             
             return treeNode;
