@@ -285,6 +285,35 @@ const results = await rv.RunView<TemplateContentEntity>({
 const entities = results.Results; // No casting needed!
 ```
 
+### RunView Error Handling
+**Important**: RunView does NOT throw exceptions when it fails. Instead, it returns a result object with `Success` and `ErrorMessage` properties:
+
+```typescript
+const result = await rv.RunView<ActionParamEntity>({
+    EntityName: 'Action Params',
+    ExtraFilter: `ActionID='${actionId}'`,
+    OrderBy: 'Name',
+    ResultType: 'entity_object'
+});
+
+// ✅ Always check the Success property
+if (result.Success) {
+    const params = result.Results || [];
+    console.log(`Loaded ${params.length} parameters`);
+} else {
+    console.error('Failed to load params:', result.ErrorMessage);
+    // Handle the error appropriately
+}
+
+// ❌ Don't assume success - this won't catch failures
+try {
+    const result = await rv.RunView({...});
+    // RunView won't throw, so this catch block won't be reached
+} catch (error) {
+    // This won't catch RunView failures!
+}
+```
+
 ### Key Benefits of This Pattern
 - **Type Safety**: Generic method provides full TypeScript typing
 - **Performance**: `ResultType: 'entity_object'` eliminates manual conversion loops

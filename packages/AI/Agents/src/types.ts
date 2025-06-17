@@ -53,6 +53,8 @@ export type AgentExecutionStreamingCallback = (chunk: {
  * @property {AbortSignal} [cancellationToken] - Optional cancellation token to abort the agent execution
  * @property {AgentExecutionProgressCallback} [onProgress] - Optional callback for receiving execution progress updates
  * @property {AgentExecutionStreamingCallback} [onStreaming] - Optional callback for receiving streaming content updates
+ * @property {string[]} [parentAgentHierarchy] - Optional parent agent hierarchy for sub-agent execution
+ * @property {number} [parentDepth] - Optional parent depth for sub-agent execution
  */
 export type ExecuteAgentParams = {
     agent: AIAgentEntity;
@@ -61,6 +63,8 @@ export type ExecuteAgentParams = {
     cancellationToken?: AbortSignal;
     onProgress?: AgentExecutionProgressCallback;
     onStreaming?: AgentExecutionStreamingCallback;
+    parentAgentHierarchy?: string[];
+    parentDepth?: number;
 }
 
 /**

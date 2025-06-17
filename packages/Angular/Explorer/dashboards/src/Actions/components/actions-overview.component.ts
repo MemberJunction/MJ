@@ -30,6 +30,10 @@ interface CategoryStats {
   templateUrl: './actions-overview.component.html',
   styleUrls: ['./actions-overview.component.scss']
 })
+interface ExecutionWithExpanded extends ActionExecutionLogEntity {
+  isExpanded?: boolean;
+}
+
 export class ActionsOverviewComponent implements OnInit, OnDestroy {
   @Output() openEntityRecord = new EventEmitter<{entityName: string; recordId: string}>();
   @Output() showActionsListView = new EventEmitter<void>();
@@ -52,7 +56,7 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
 
   public categoryStats: CategoryStats[] = [];
   public recentActions: ActionEntity[] = [];
-  public recentExecutions: ActionExecutionLogEntity[] = [];
+  public recentExecutions: ExecutionWithExpanded[] = [];
   public topCategories: ActionCategoryEntity[] = [];
 
   public searchTerm$ = new BehaviorSubject<string>('');
@@ -150,7 +154,7 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
       this.calculateMetrics(actions, categories, executions);
       this.calculateCategoryStats(actions, categories, executions);
       this.recentActions = actions.slice(0, 10);
-      this.recentExecutions = executions.slice(0, 10);
+      this.recentExecutions = executions.slice(0, 10).map(e => ({ ...e, isExpanded: false }));
       this.topCategories = categories.slice(0, 5);
 
     } catch (error) {
@@ -309,6 +313,11 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
     });
   }
 
+  public isExecutionSuccess(execution: ActionExecutionLogEntity): boolean {
+    const code = execution.ResultCode?.toLowerCase();
+    return code === 'success' || code === 'ok' || code === 'completed' || code === '200';
+  }
+
   public getStatusColor(status: string): 'success' | 'warning' | 'error' | 'info' {
     switch (status) {
       case 'Active': return 'success';
@@ -342,5 +351,21 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
   public onAIGeneratedClick(): void {
     // Filter to show AI generated actions in the current view
     this.selectedType$.next('Generated');
+  }
+
+  public toggleExecutionExpanded(execution: ExecutionWithExpanded): void {
+    execution.isExpanded = !execution.isExpanded;
+  }
+
+  public formatJsonParams(params: string | null): string {
+    if (!params) return '{}';
+    try {
+      // Try to parse and reformat
+      const parsed = JSON.parse(params);
+      return JSON.stringify(parsed, null, 2);
+    } catch {
+      // If parse fails, return as is
+      return params;
+    }
   }
 }

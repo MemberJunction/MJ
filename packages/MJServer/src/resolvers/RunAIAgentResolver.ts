@@ -203,7 +203,48 @@ export class RunAIAgentResolver extends ResolverBase {
             }));
         }
 
+        // Safely extract execution tree (new hierarchical structure)
+        if (result.executionTree && Array.isArray(result.executionTree)) {
+            sanitized.executionTree = this.sanitizeExecutionTree(result.executionTree);
+        }
+
         return sanitized;
+    }
+
+    /**
+     * Sanitize execution tree for JSON serialization
+     */
+    private sanitizeExecutionTree(nodes: any[]): any[] {
+        return nodes.map(node => ({
+            step: node.step ? {
+                ID: node.step.ID,
+                AgentRunID: node.step.AgentRunID,
+                StepNumber: node.step.StepNumber,
+                StepType: node.step.StepType,
+                StepName: node.step.StepName,
+                TargetID: node.step.TargetID,
+                Status: node.step.Status,
+                StartedAt: node.step.StartedAt,
+                CompletedAt: node.step.CompletedAt,
+                Success: node.step.Success,
+                ErrorMessage: node.step.ErrorMessage,
+                InputData: node.step.InputData,
+                OutputData: node.step.OutputData
+            } : null,
+            inputData: node.inputData,
+            outputData: node.outputData,
+            executionType: node.executionType,
+            startTime: node.startTime,
+            endTime: node.endTime,
+            durationMs: node.durationMs,
+            nextStepDecision: node.nextStepDecision,
+            children: node.children && node.children.length > 0 
+                ? this.sanitizeExecutionTree(node.children) 
+                : [],
+            depth: node.depth,
+            parentStepId: node.parentStepId,
+            agentHierarchy: node.agentHierarchy
+        }));
     }
 
     /**

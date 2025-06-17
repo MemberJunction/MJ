@@ -91,7 +91,8 @@ export class AgentRunner {
                 agentRun: null as any, // This is an edge case where we couldn't create the run
                 agentRunSteps: [],
                 subAgentRuns: [],
-                executionChain: []
+                executionChain: [],
+                executionTree: []
             };
         }
     }

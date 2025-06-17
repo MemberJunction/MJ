@@ -100,7 +100,7 @@
                                     <span style="color: #495057; font-weight: 500;">{{ record.Type }}</span>
                                 </div>
                                 
-                                @if (record.CodeApprovalStatus) {
+                                @if (record.Type === 'Generated' && record.CodeApprovalStatus) {
                                     <div class="config-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
                                         <i [class]="'fa-solid ' + getApprovalStatusIcon()" [style.color]="getApprovalStatusColor()"></i>
                                         <span style="color: #6c757d;">Code:</span>
@@ -443,10 +443,10 @@
                                             </div>
                                         </div>
                                         <div class="stat-box">
-                                            <i class="fa-solid fa-check-circle"></i>
+                                            <i class="fa-solid fa-check-circle" [style.color]="getSuccessRateColor()"></i>
                                             <div class="stat-info">
                                                 <div class="stat-label" style="color: #212529;">Success Rate</div>
-                                                <div class="stat-value" style="color: #212529;">{{ executionStats.successRate.toFixed(0) }}%</div>
+                                                <div class="stat-value" [style.color]="getSuccessRateColor()" style="font-weight: 600;">{{ executionStats.successRate.toFixed(0) }}%</div>
                                             </div>
                                         </div>
                                         <div class="stat-box">
@@ -503,18 +503,20 @@
                             </div>
                         </kendo-expansionpanel>
                     }
-                </div>
 
-                <!-- Related Configuration Section -->
-                @if (record.IsSaved) {
-                    <div class="content-section" [class.expanded]="expandedSections.configuration">
-                        <div class="section-header" (click)="toggleSection('configuration')">
-                            <i class="fa-solid fa-cogs"></i>
-                            <h2>Related Configuration</h2>
-                            <i class="fa-solid fa-chevron-down toggle-icon" [class.rotated]="!expandedSections.configuration"></i>
-                        </div>
-                        @if (expandedSections.configuration) {
-                            <div class="section-content">
+                    <!-- Related Configuration Section -->
+                    @if (record.IsSaved) {
+                        <kendo-expansionpanel 
+                            [expanded]="expandedSections.configuration"
+                            style="margin-bottom: 12px;">
+                            <ng-template kendoExpansionPanelTitleDirective>
+                                <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                    <i class="fa-solid fa-cogs" style="color: #6c757d;"></i>
+                                    Related Configuration
+                                </span>
+                            </ng-template>
+                            
+                            <div style="padding: 16px;">
                                 <!-- Libraries -->
                                 <div class="config-subsection">
                                     <h3><i class="fa-solid fa-book"></i> Libraries</h3>
@@ -569,9 +571,9 @@
                                     </div>
                                 </div>
                             </div>
-                        }
-                    </div>
-                }
+                        </kendo-expansionpanel>
+                    }
+                </div>
             </div>
         </form>
     }

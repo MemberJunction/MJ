@@ -91,7 +91,7 @@
                                         <i class="fa-solid fa-spinner fa-spin"></i> {{ formatElapsedTime(message.elapsedTime) }}
                                     </span>
                                 } @else if (message.executionTime) {
-                                    <span class="execution-time">{{ formatExecutionTime(message.executionTime) }}</span>
+                                    <span class="execution-time" [title]="getExecutionSummary(message)">{{ formatExecutionTime(message.executionTime) }}</span>
                                 }
                                 @if (showRawToggle(message)) {
                                     <button class="raw-toggle" (click)="showRawJsonDialog(message)" title="View raw JSON response">

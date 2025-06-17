@@ -75,10 +75,9 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
                 this.loadActionParams(),
                 this.loadResultCodes(),
                 this.loadRecentExecutions(),
-                this.loadActionLibraries()
+                this.loadActionLibraries(),
+                this.loadExecutionStats()
             ]);
-            
-            this.calculateExecutionStats();
         }
     }
 
@@ -103,12 +102,20 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             const result = await rv.RunView<ActionParamEntity>({
                 EntityName: 'Action Params',
                 ExtraFilter: `ActionID='${this.record.ID}'`,
-                OrderBy: 'Sequence, Name',
+                OrderBy: 'Name',
                 ResultType: 'entity_object'
             });
-            this.actionParams = result.Results;
+            
+            if (result.Success) {
+                this.actionParams = result.Results || [];
+                console.log(`Loaded ${this.actionParams.length} action params for action ${this.record.Name}`);
+            } else {
+                console.error('Failed to load action params:', result.ErrorMessage);
+                this.actionParams = [];
+            }
         } catch (error) {
             console.error('Error loading action params:', error);
+            this.actionParams = [];
         } finally {
             this.isLoadingParams = false;
         }
@@ -124,9 +131,16 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
                 OrderBy: 'IsSuccess DESC, ResultCode',
                 ResultType: 'entity_object'
             });
-            this.resultCodes = result.Results;
+            
+            if (result.Success) {
+                this.resultCodes = result.Results || [];
+            } else {
+                console.error('Failed to load result codes:', result.ErrorMessage);
+                this.resultCodes = [];
+            }
         } catch (error) {
             console.error('Error loading result codes:', error);
+            this.resultCodes = [];
         } finally {
             this.isLoadingResultCodes = false;
         }
@@ -143,9 +157,16 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
                 MaxRows: 10,
                 ResultType: 'entity_object'
             });
-            this.recentExecutions = result.Results;
+            
+            if (result.Success) {
+                this.recentExecutions = result.Results || [];
+            } else {
+                console.error('Failed to load executions:', result.ErrorMessage);
+                this.recentExecutions = [];
+            }
         } catch (error) {
             console.error('Error loading executions:', error);
+            this.recentExecutions = [];
         } finally {
             this.isLoadingExecutions = false;
         }
@@ -161,19 +182,22 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
                 OrderBy: 'Library',
                 ResultType: 'entity_object'
             });
-            this.actionLibraries = result.Results;
             
-            // Load library details
-            if (this.actionLibraries.length > 0) {
-                const libraryIds = this.actionLibraries.map(al => al.LibraryID).filter(id => id);
-                const md = new Metadata();
-                this.libraries = [];
-                
-                for (const libId of libraryIds) {
-                    const lib = await md.GetEntityObject<LibraryEntity>('Libraries');
-                    if (lib && libId) {
-                        await lib.Load(libId);
-                        this.libraries.push(lib);
+            if (result.Success) {
+                this.actionLibraries = result.Results || [];
+            
+                // Load library details
+                if (this.actionLibraries.length > 0) {
+                    const libraryIds = this.actionLibraries.map(al => al.LibraryID).filter(id => id);
+                    const md = new Metadata();
+                    this.libraries = [];
+                    
+                    for (const libId of libraryIds) {
+                        const lib = await md.GetEntityObject<LibraryEntity>('Libraries');
+                        if (lib && libId) {
+                            await lib.Load(libId);
+                            this.libraries.push(lib);
+                        }
                     }
                 }
             }
@@ -184,30 +208,46 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         }
     }
 
-    private calculateExecutionStats() {
-        if (this.recentExecutions.length === 0) return;
-        
-        this.executionStats.totalRuns = this.recentExecutions.length;
-        
-        const successfulRuns = this.recentExecutions.filter(e => {
-            const resultCode = this.resultCodes.find(rc => rc.ResultCode === e.ResultCode);
-            return resultCode?.IsSuccess;
-        });
-        
-        this.executionStats.successRate = (successfulRuns.length / this.executionStats.totalRuns) * 100;
-        
-        // Calculate average duration
-        const durations = this.recentExecutions
-            .filter(e => e.StartedAt && e.EndedAt)
-            .map(e => new Date(e.EndedAt!).getTime() - new Date(e.StartedAt).getTime());
-        
-        if (durations.length > 0) {
-            this.executionStats.avgDuration = durations.reduce((a, b) => a + b, 0) / durations.length;
-        }
-        
-        // Get last run date
-        if (this.recentExecutions.length > 0) {
-            this.executionStats.lastRun = new Date(this.recentExecutions[0].StartedAt);
+    private async loadExecutionStats() {
+        try {
+            const rv = new RunView();
+            // Load ALL executions for accurate statistics
+            const result = await rv.RunView<ActionExecutionLogEntity>({
+                EntityName: 'Action Execution Logs',
+                ExtraFilter: `ActionID='${this.record.ID}'`,
+                OrderBy: 'StartedAt DESC',
+                ResultType: 'entity_object'
+            });
+            
+            if (result.Success && result.Results && result.Results.length > 0) {
+                const allExecutions = result.Results;
+                this.executionStats.totalRuns = allExecutions.length;
+                
+                // Calculate success rate based on result codes
+                const successfulRuns = allExecutions.filter(e => {
+                    const resultCode = this.resultCodes.find(rc => rc.ResultCode === e.ResultCode);
+                    return resultCode?.IsSuccess || false;
+                });
+                
+                this.executionStats.successRate = this.executionStats.totalRuns > 0 
+                    ? (successfulRuns.length / this.executionStats.totalRuns) * 100 
+                    : 0;
+                
+                // Calculate average duration from ALL completed executions
+                const completedExecutions = allExecutions.filter(e => e.StartedAt && e.EndedAt);
+                if (completedExecutions.length > 0) {
+                    const totalDuration = completedExecutions.reduce((sum, e) => {
+                        const duration = new Date(e.EndedAt!).getTime() - new Date(e.StartedAt).getTime();
+                        return sum + duration;
+                    }, 0);
+                    this.executionStats.avgDuration = totalDuration / completedExecutions.length;
+                }
+                
+                // Get last run date from most recent execution
+                this.executionStats.lastRun = new Date(allExecutions[0].StartedAt);
+            }
+        } catch (error) {
+            console.error('Error loading execution stats:', error);
         }
     }
 
@@ -383,12 +423,25 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
     }
 
     isExecutionSuccess(execution: ActionExecutionLogEntity): boolean {
+        const code = execution.ResultCode?.toLowerCase();
+        // First check if we have a result code definition
         const resultCode = this.resultCodes.find(rc => rc.ResultCode === execution.ResultCode);
-        return resultCode?.IsSuccess || false;
+        if (resultCode) {
+            return resultCode.IsSuccess;
+        }
+        // Fallback to common success patterns if no result code defined
+        return code === 'success' || code === 'ok' || code === 'completed' || code === '200';
     }
 
     getExecutionDuration(execution: ActionExecutionLogEntity): number {
         if (!execution.EndedAt) return 0;
         return new Date(execution.EndedAt).getTime() - new Date(execution.StartedAt).getTime();
+    }
+
+    getSuccessRateColor(): string {
+        const rate = this.executionStats.successRate;
+        if (rate >= 80) return '#28a745'; // green
+        if (rate >= 60) return '#ffc107'; // yellow
+        return '#dc3545'; // red
     }
 }

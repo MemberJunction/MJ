@@ -1499,13 +1499,68 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             try {
                 // Try to parse and format the JSON
                 const parsed = JSON.parse(message.rawContent);
-                this.currentJsonContent = JSON.stringify(parsed, null, 2);
+                
+                // If this is an agent result with execution tree, enhance the display
+                if (parsed.executionTree) {
+                    this.currentJsonContent = JSON.stringify({
+                        ...parsed,
+                        _executionTreeSummary: this.summarizeExecutionTree(parsed.executionTree)
+                    }, null, 2);
+                } else {
+                    this.currentJsonContent = JSON.stringify(parsed, null, 2);
+                }
             } catch {
                 // If not valid JSON, show as-is
                 this.currentJsonContent = message.rawContent;
             }
             this.showJsonDialog = true;
         }
+    }
+    
+    /**
+     * Creates a summary of the execution tree for easier viewing
+     * @param executionTree - The execution tree to summarize
+     * @returns A human-readable summary of the execution
+     */
+    private summarizeExecutionTree(executionTree: any[]): any {
+        if (!executionTree || !Array.isArray(executionTree)) return null;
+        
+        const summary = {
+            totalSteps: 0,
+            stepsByType: {} as Record<string, number>,
+            hierarchy: [] as any[]
+        };
+        
+        const processNode = (node: any, level: number = 0) => {
+            summary.totalSteps++;
+            
+            // Count by type
+            const type = node.executionType || 'unknown';
+            summary.stepsByType[type] = (summary.stepsByType[type] || 0) + 1;
+            
+            // Create hierarchical summary
+            const nodeSummary = {
+                level,
+                stepName: node.step?.StepName || 'Unknown Step',
+                type: node.executionType,
+                duration: node.durationMs ? `${node.durationMs}ms` : 'N/A',
+                status: node.step?.Status || 'Unknown',
+                agentPath: node.agentHierarchy?.join(' → ') || '',
+                hasInputData: !!node.inputData,
+                hasOutputData: !!node.outputData
+            };
+            
+            summary.hierarchy.push(nodeSummary);
+            
+            // Process children recursively
+            if (node.children && node.children.length > 0) {
+                node.children.forEach((child: any) => processNode(child, level + 1));
+            }
+        };
+        
+        executionTree.forEach(node => processNode(node));
+        
+        return summary;
     }
     
     /**
@@ -1734,6 +1789,32 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      * and raw JSON in a collapsible section below with proper text wrapping.
      */
     
+    /**
+     * Gets a summary of the execution for tooltip display
+     * @param message - The message to get execution summary for
+     * @returns A brief summary of the execution steps
+     */
+    public getExecutionSummary(message: ConversationMessage): string {
+        if (!message.rawContent) return '';
+        
+        try {
+            const parsed = JSON.parse(message.rawContent);
+            if (parsed.executionTree) {
+                const summary = this.summarizeExecutionTree(parsed.executionTree);
+                const stepCounts = Object.entries(summary.stepsByType)
+                    .map(([type, count]) => `${count} ${type}`)
+                    .join(', ');
+                return `${summary.totalSteps} steps executed (${stepCounts})`;
+            } else if (parsed.agentRunSteps) {
+                return `${parsed.agentRunSteps.length} steps executed`;
+            }
+        } catch {
+            // Ignore parse errors
+        }
+        
+        return '';
+    }
+
     /**
      * Closes the JSON dialog
      */
