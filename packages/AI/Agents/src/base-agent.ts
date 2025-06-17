@@ -1804,6 +1804,9 @@ export class BaseAgent {
         // Create a combined list of all events (progress and execution) sorted by time
         const allEvents: any[] = [];
         
+        // Track the highest step number used for progress events
+        let maxProgressStepNumber = 0;
+        
         // Add progress events
         for (const progressStep of this._allProgressSteps) {
             allEvents.push({
@@ -1830,10 +1833,11 @@ export class BaseAgent {
             if (event.type === 'progress') {
                 // Create a lightweight node for progress events
                 const progressData = event.data;
+                maxProgressStepNumber++;
                 const progressNode: ExecutionNode = {
                     step: {
                         ID: `progress-${event.timestamp.getTime()}`,
-                        StepNumber: executionTree.length + 1,
+                        StepNumber: maxProgressStepNumber,
                         StepName: progressData.message,
                         StepType: progressData.step || 'progress',
                         Status: 'Completed',
@@ -1850,9 +1854,9 @@ export class BaseAgent {
                     endTime: event.timestamp,
                     durationMs: 0,
                     children: [],
-                    depth: progressData.depth || 0,
+                    depth: progressData.depth || this._runContext?.depth || 0,
                     parentStepId: null,
-                    agentHierarchy: progressData.agentHierarchy || []
+                    agentHierarchy: progressData.agentHierarchy || this._runContext?.agentHierarchy || []
                 };
                 executionTree.push(progressNode);
             } else {
@@ -1863,52 +1867,80 @@ export class BaseAgent {
                 // Parse input/output data if available
                 let inputData = null;
                 let outputData = null;
-            try {
-                if (stepEntity.InputData) {
-                    inputData = JSON.parse(stepEntity.InputData);
+                try {
+                    if (stepEntity.InputData) {
+                        inputData = JSON.parse(stepEntity.InputData);
+                    }
+                    if (stepEntity.OutputData) {
+                        outputData = JSON.parse(stepEntity.OutputData);
+                    }
+                } catch (e) {
+                    // If parsing fails, use raw data
+                    inputData = stepEntity.InputData;
+                    outputData = stepEntity.OutputData;
                 }
-                if (stepEntity.OutputData) {
-                    outputData = JSON.parse(stepEntity.OutputData);
+                
+                const node: ExecutionNode = {
+                    step: stepEntity,
+                    inputData,
+                    outputData,
+                    executionType: chainStep.executionType,
+                    startTime: chainStep.startTime,
+                    endTime: chainStep.endTime,
+                    durationMs: chainStep.durationMs,
+                    nextStepDecision: chainStep.nextStepDecision,
+                    children: [],
+                    depth: this._runContext?.depth || 0,
+                    parentStepId: null,
+                    agentHierarchy: this._runContext?.agentHierarchy || []
+                };
+                
+                // If this is a sub-agent step, add its execution tree as children
+                if (chainStep.executionType === 'sub-agent' && chainStep.executionResult?.type === 'sub-agent') {
+                    const subAgentResult = (chainStep.executionResult as SubAgentExecutionResult).result;
+                    if (subAgentResult.executionTree) {
+                        // Update depth and parent info for all sub-agent nodes
+                        node.children = subAgentResult.executionTree.map(childNode => ({
+                            ...childNode,
+                            parentStepId: stepEntity.ID,
+                            depth: (this._runContext?.depth || 0) + 1
+                        }));
+                        
+                        // Sort children by StepNumber recursively
+                        this.sortExecutionTreeByStepNumber(node.children);
+                    }
                 }
-            } catch (e) {
-                // If parsing fails, use raw data
-                inputData = stepEntity.InputData;
-                outputData = stepEntity.OutputData;
-            }
-            
-            const node: ExecutionNode = {
-                step: stepEntity,
-                inputData,
-                outputData,
-                executionType: chainStep.executionType,
-                startTime: chainStep.startTime,
-                endTime: chainStep.endTime,
-                durationMs: chainStep.durationMs,
-                nextStepDecision: chainStep.nextStepDecision,
-                children: [],
-                depth: this._runContext?.depth || 0,
-                parentStepId: null,
-                agentHierarchy: this._runContext?.agentHierarchy || []
-            };
-            
-            // If this is a sub-agent step, add its execution tree as children
-            if (chainStep.executionType === 'sub-agent' && chainStep.executionResult?.type === 'sub-agent') {
-                const subAgentResult = (chainStep.executionResult as SubAgentExecutionResult).result;
-                if (subAgentResult.executionTree) {
-                    // Update depth and parent info for all sub-agent nodes
-                    node.children = subAgentResult.executionTree.map(childNode => ({
-                        ...childNode,
-                        parentStepId: stepEntity.ID,
-                        depth: (this._runContext?.depth || 0) + 1
-                    }));
-                }
-            }
-            
-            executionTree.push(node);
+                
+                executionTree.push(node);
             }
         }
         
+        // Sort the top-level tree by StepNumber
+        this.sortExecutionTreeByStepNumber(executionTree);
+        
         return executionTree;
+    }
+    
+    /**
+     * Sorts an execution tree by StepNumber at each level recursively.
+     * 
+     * @private
+     * @param {ExecutionNode[]} nodes - The nodes to sort
+     */
+    private sortExecutionTreeByStepNumber(nodes: ExecutionNode[]): void {
+        // Sort by StepNumber
+        nodes.sort((a, b) => {
+            const aStepNumber = a.step?.StepNumber || 0;
+            const bStepNumber = b.step?.StepNumber || 0;
+            return aStepNumber - bStepNumber;
+        });
+        
+        // Recursively sort children
+        for (const node of nodes) {
+            if (node.children && node.children.length > 0) {
+                this.sortExecutionTreeByStepNumber(node.children);
+            }
+        }
     }
 
     /**

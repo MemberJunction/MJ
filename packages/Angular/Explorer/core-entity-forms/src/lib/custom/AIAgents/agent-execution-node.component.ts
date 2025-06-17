@@ -9,7 +9,7 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
     template: `
         <div class="tree-node" 
              [class.expanded]="node.expanded"
-             [style.padding-left.px]="node.depth * 30">
+             [style.margin-left.px]="node.depth > 0 ? node.depth * 20 : 0">
             
             <!-- Node Header -->
             <div class="node-header" (dblclick)="onDoubleClick()">
@@ -68,15 +68,6 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
                 <!-- Node Name -->
                 <span class="node-name">
                     {{ getTruncatedName() }}
-                    @if (node.detailsMarkdown || isNameTruncated()) {
-                        <button class="details-toggle" 
-                                (click)="onToggleDetails($event)"
-                                [title]="node.detailsExpanded ? 'Hide details' : 'Show details'">
-                            <i class="fa-solid" 
-                               [class.fa-chevron-down]="!node.detailsExpanded"
-                               [class.fa-chevron-up]="node.detailsExpanded"></i>
-                        </button>
-                    }
                 </span>
                 
                 <!-- Duration -->
@@ -97,20 +88,21 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
                 }
             </div>
             
-            <!-- Expanded Details -->
-            @if (node.detailsExpanded) {
-                <div class="markdown-details">
-                    @if (isNameTruncated()) {
-                        <div class="full-name">{{ node.name }}</div>
-                    }
-                    @if (node.detailsMarkdown) {
-                        <div class="detail-content markdown" [innerHTML]="formatMarkdown(node.detailsMarkdown)"></div>
-                    }
-                </div>
-            }
-            
-            <!-- Node Details (when expanded) -->
-            @if (node.expanded && (node.inputPreview || node.outputPreview || node.error)) {
+            <!-- All Details (when expanded) -->
+            @if (node.expanded) {
+                <!-- Show markdown details first if available -->
+                @if (node.detailsMarkdown || isNameTruncated()) {
+                    <div class="markdown-details">
+                        @if (isNameTruncated()) {
+                            <div class="full-name">{{ node.name }}</div>
+                        }
+                        @if (node.detailsMarkdown) {
+                            <div class="detail-content markdown" [innerHTML]="formatMarkdown(node.detailsMarkdown)"></div>
+                        }
+                    </div>
+                }
+                
+                @if (node.inputPreview || node.outputPreview || node.error) {
                 <div class="node-details">
                     @if (node.error) {
                         <div class="detail-section error">
@@ -137,6 +129,7 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
                         </div>
                     }
                 </div>
+                }
             }
             
             <!-- Children (when expanded) -->
@@ -145,7 +138,6 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
                     <mj-execution-node 
                         [node]="child"
                         (toggleNode)="toggleNode.emit($event)"
-                        (toggleDetails)="toggleDetails.emit($event)"
                         (userInteracted)="userInteracted.emit()">
                     </mj-execution-node>
                 }
@@ -155,6 +147,7 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
     styles: [`
         :host {
             display: block;
+            width: 100%;
         }
         
         .tree-node {
@@ -227,22 +220,6 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
             color: #1a1a1a;
         }
         
-        .details-toggle {
-            background: transparent;
-            border: none;
-            padding: 2px 6px;
-            margin-left: 8px;
-            cursor: pointer;
-            color: #666;
-            font-size: 10px;
-            border-radius: 3px;
-            transition: all 0.2s ease;
-        }
-        
-        .details-toggle:hover {
-            background: #e0e0e0;
-            color: #333;
-        }
         
         .node-duration {
             font-size: 12px;
@@ -375,7 +352,6 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
 export class ExecutionNodeComponent {
     @Input() node!: ExecutionTreeNode;
     @Output() toggleNode = new EventEmitter<ExecutionTreeNode>();
-    @Output() toggleDetails = new EventEmitter<{ node: ExecutionTreeNode, event: Event }>();
     @Output() userInteracted = new EventEmitter<void>();
     
     hasExpandableContent(): boolean {
@@ -388,6 +364,10 @@ export class ExecutionNodeComponent {
                !!this.node.detailsMarkdown;
     }
     
+    hasChildren(): boolean {
+        return !!(this.node.children && this.node.children.length > 0);
+    }
+    
     onToggleNode(event?: Event): void {
         if (event) {
             event.stopPropagation();
@@ -398,10 +378,6 @@ export class ExecutionNodeComponent {
         }
     }
     
-    onToggleDetails(event: Event): void {
-        this.toggleDetails.emit({ node: this.node, event });
-        this.userInteracted.emit();
-    }
     
     onDoubleClick(): void {
         if (this.hasExpandableContent()) {

@@ -100,7 +100,7 @@ export class AIPromptExecutionDialogComponent implements OnInit {
         // Set default response format from prompt with slight delay for Kendo dropdown
         if (this.aiPrompt) {
             setTimeout(() => {
-                this.selectedResponseFormat = this.aiPrompt.ResponseFormat || 'Any';
+                this.selectedResponseFormat = this.aiPrompt?.ResponseFormat || 'Any';
             }, 0);
         }
         

@@ -786,6 +786,12 @@
     background: #0d6efd;
 }
 
+.tab-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
 /* Sidebar Content */
 .sidebar-content {
     flex: 1;
