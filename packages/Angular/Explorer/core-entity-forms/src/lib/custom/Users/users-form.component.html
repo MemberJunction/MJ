@@ -1,0 +1,685 @@
+<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
+    <form *ngIf="record" class="record-form" #form="ngForm" mjFillContainer>
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+        <!-- Main Content Area -->
+        <div class="user-main-area" style="display: flex; flex-direction: column; height: 100%; overflow-y: auto;">
+            
+            <!-- Header Section -->
+            <div class="user-header" style="flex-shrink: 0; padding: 20px; background: #f8f9fa; border-bottom: 2px solid #e9ecef;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
+                    
+                    <!-- Left: User Info -->
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 12px;">
+                            <i class="fa-user-circle fa-3x" style="color: #6c757d;"></i>
+                            <div style="flex: 1;">
+                                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 4px;">
+                                    @if (EditMode) {
+                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: 1;">
+                                            <kendo-textbox [(ngModel)]="record.FirstName" 
+                                                          name="firstName"
+                                                          placeholder="First Name"
+                                                          style="font-size: 1.1em;">
+                                            </kendo-textbox>
+                                            <kendo-textbox [(ngModel)]="record.LastName" 
+                                                          name="lastName"
+                                                          placeholder="Last Name"
+                                                          style="font-size: 1.1em;">
+                                            </kendo-textbox>
+                                        </div>
+                                    } @else {
+                                        <h4 style="margin: 0; color: #495057; font-weight: 600;">
+                                            {{ record.FirstName || '' }} {{ record.LastName || record.Name || 'Unnamed User' }}
+                                        </h4>
+                                    }
+                                    <span class="status-badge" [style.background-color]="getStatusBadgeColor()" 
+                                          style="color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.75em; font-weight: 500;">
+                                        {{ getStatusText() }}
+                                    </span>
+                                    <span class="user-type-badge" [style.background-color]="getUserTypeBadgeColor()"
+                                          style="color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.75em; font-weight: 500;">
+                                        {{ record.Type }}
+                                    </span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 16px; color: #6c757d; font-size: 0.9em;">
+                                    @if (EditMode) {
+                                        <div style="display: flex; gap: 8px; align-items: center;">
+                                            <i class="fa-envelope"></i>
+                                            <kendo-textbox [(ngModel)]="record.Email" 
+                                                          name="email"
+                                                          placeholder="Email address"
+                                                          style="width: 250px;">
+                                            </kendo-textbox>
+                                        </div>
+                                        <div style="display: flex; gap: 8px; align-items: center;">
+                                            <i class="fa-briefcase"></i>
+                                            <kendo-textbox [(ngModel)]="record.Title" 
+                                                          name="title"
+                                                          placeholder="Job Title"
+                                                          style="width: 200px;">
+                                            </kendo-textbox>
+                                        </div>
+                                    } @else {
+                                        <span><i class="fa-envelope"></i> {{ record.Email }}</span>
+                                        @if (record.Title) {
+                                            <span><i class="fa-briefcase"></i> {{ record.Title }}</span>
+                                        }
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Quick Stats -->
+                        <div style="display: flex; gap: 24px; margin-top: 16px;">
+                            <div class="stat-item">
+                                <i class="fa-sign-in-alt" style="color: #17a2b8; margin-right: 6px;"></i>
+                                <span style="color: #6c757d;">Last Login:</span>
+                                <strong style="color: #495057;">{{ formatDate(lastLoginDate) }}</strong>
+                            </div>
+                            <div class="stat-item">
+                                <i class="fa-shield-halved" style="color: #28a745; margin-right: 6px;"></i>
+                                <span style="color: #6c757d;">Roles:</span>
+                                <strong style="color: #495057;">{{ userRoles.length }}</strong>
+                            </div>
+                            <div class="stat-item">
+                                <i class="fa-grid" style="color: #6f42c1; margin-right: 6px;"></i>
+                                <span style="color: #6c757d;">Applications:</span>
+                                <strong style="color: #495057;">{{ userApplications.length }}</strong>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Right: Action Buttons -->
+                    <div class="action-buttons" style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
+                        @if (record.IsSaved) {
+                            <kendo-button fillMode="outline" themeColor="primary"
+                                        (click)="impersonateUser()"
+                                        title="Impersonate this user">
+                                <i class="fa-user-secret"></i> Impersonate
+                            </kendo-button>
+                            <kendo-button fillMode="outline"
+                                        (click)="sendPasswordResetEmail()"
+                                        title="Send password reset email">
+                                <i class="fa-key"></i> Reset Password
+                            </kendo-button>
+                            <kendo-button fillMode="outline"
+                                        (click)="exportUserData()"
+                                        title="Export user data (GDPR)">
+                                <i class="fa-download"></i> Export Data
+                            </kendo-button>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configuration Sections with Expansion Panels -->
+            <div class="configuration-sections" style="flex: 1; background: white; padding: 16px; min-height: 0; overflow-y: auto;">
+                
+                <!-- Account Information Panel -->
+                <kendo-expansionpanel 
+                    [expanded]="true"
+                    style="margin-bottom: 12px;">
+                    <ng-template kendoExpansionPanelTitleDirective>
+                        <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                            <i class="fa-id-card" style="color: #6c757d;"></i>
+                            Account Information
+                        </span>
+                    </ng-template>
+                    
+                    <div style="padding: 16px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <!-- Left Column -->
+                            <div>
+                                <mj-form-field 
+                                    [record]="record"
+                                    [ShowLabel]="true"
+                                    FieldName="Name"
+                                    Type="textbox"
+                                    [EditMode]="EditMode">
+                                </mj-form-field>
+                                
+                                <mj-form-field 
+                                    [record]="record"
+                                    [ShowLabel]="true"
+                                    FieldName="Email"
+                                    Type="email"
+                                    [EditMode]="EditMode">
+                                </mj-form-field>
+                                
+                                <mj-form-field 
+                                    [record]="record"
+                                    [ShowLabel]="true"
+                                    FieldName="Type"
+                                    Type="dropdownlist"
+                                    [EditMode]="EditMode">
+                                </mj-form-field>
+                            </div>
+                            
+                            <!-- Right Column -->
+                            <div>
+                                <mj-form-field 
+                                    [record]="record"
+                                    [ShowLabel]="true"
+                                    FieldName="IsActive"
+                                    Type="checkbox"
+                                    [EditMode]="EditMode">
+                                </mj-form-field>
+                                
+                                <mj-form-field 
+                                    [record]="record"
+                                    [ShowLabel]="true"
+                                    FieldName="EmployeeID"
+                                    Type="subform"
+                                    [EditMode]="EditMode">
+                                </mj-form-field>
+                            </div>
+                        </div>
+                        
+                        <!-- Password Management Section -->
+                        @if (EditMode && record.IsSaved) {
+                            <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #e9ecef;">
+                                <h6 style="margin-bottom: 16px; color: #495057;">
+                                    <i class="fa-lock" style="margin-right: 8px;"></i>
+                                    Password & Security
+                                </h6>
+                                
+                                <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 16px;">
+                                    <kendo-button fillMode="outline" size="small"
+                                                (click)="togglePasswordFields()">
+                                        <i class="fa-key"></i> {{ showPasswordFields ? 'Cancel' : 'Change Password' }}
+                                    </kendo-button>
+                                    
+                                    <kendo-switch [(ngModel)]="twoFactorEnabled"
+                                                name="twoFactorEnabled"
+                                                (ngModelChange)="toggle2FA()">
+                                    </kendo-switch>
+                                    <span style="color: #6c757d;">Two-Factor Authentication</span>
+                                </div>
+                                
+                                @if (showPasswordFields) {
+                                    <div style="background: #f8f9fa; padding: 16px; border-radius: 6px;">
+                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 12px;">
+                                            <div>
+                                                <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #495057; font-size: 0.9em;">
+                                                    New Password
+                                                </label>
+                                                <kendo-textbox [(ngModel)]="newPassword"
+                                                             name="newPassword"
+                                                             type="password"
+                                                             placeholder="Enter new password"
+                                                             (ngModelChange)="calculatePasswordStrength()"
+                                                             style="width: 100%;">
+                                                </kendo-textbox>
+                                            </div>
+                                            <div>
+                                                <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #495057; font-size: 0.9em;">
+                                                    Confirm Password
+                                                </label>
+                                                <kendo-textbox [(ngModel)]="confirmPassword"
+                                                             name="confirmPassword"
+                                                             type="password"
+                                                             placeholder="Confirm new password"
+                                                             style="width: 100%;">
+                                                </kendo-textbox>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Password Strength Indicator -->
+                                        @if (newPassword) {
+                                            <div style="margin-bottom: 12px;">
+                                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                                                    <span style="font-size: 0.85em; color: #6c757d;">Password Strength:</span>
+                                                    <span [style.color]="getPasswordStrengthColor()" style="font-weight: 600; font-size: 0.85em;">
+                                                        {{ getPasswordStrengthText() }}
+                                                    </span>
+                                                </div>
+                                                <div style="height: 4px; background: #e9ecef; border-radius: 2px; overflow: hidden;">
+                                                    <div [style.width.%]="passwordStrength * 20"
+                                                         [style.background-color]="getPasswordStrengthColor()"
+                                                         style="height: 100%; transition: all 0.3s ease;">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                        
+                        <!-- Login History Preview -->
+                        @if (record.IsSaved && recentLogins.length > 0) {
+                            <div style="margin-top: 24px;">
+                                <h6 style="margin-bottom: 12px; color: #495057;">
+                                    <i class="fa-history" style="margin-right: 8px;"></i>
+                                    Recent Login History
+                                </h6>
+                                <div style="border: 1px solid #e9ecef; border-radius: 6px; overflow: hidden;">
+                                    <table style="width: 100%; font-size: 0.9em;">
+                                        <thead style="background: #f8f9fa;">
+                                            <tr>
+                                                <th style="padding: 8px; text-align: left;">Date & Time</th>
+                                                <th style="padding: 8px; text-align: left;">IP Address</th>
+                                                <th style="padding: 8px; text-align: left;">Browser</th>
+                                                <th style="padding: 8px; text-align: center;">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @for (login of recentLogins.slice(0, 5); track login.timestamp) {
+                                                <tr style="border-top: 1px solid #f1f3f5;">
+                                                    <td style="padding: 8px;">{{ formatDate(login.timestamp) }}</td>
+                                                    <td style="padding: 8px;">{{ login.ipAddress }}</td>
+                                                    <td style="padding: 8px;">{{ login.browser }}</td>
+                                                    <td style="padding: 8px; text-align: center;">
+                                                        <span [style.color]="login.status === 'Success' ? '#28a745' : '#dc3545'">
+                                                            {{ login.status }}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </kendo-expansionpanel>
+
+                <!-- Roles & Permissions Panel -->
+                @if (record.IsSaved) {
+                    <kendo-expansionpanel 
+                        [expanded]="false"
+                        style="margin-bottom: 12px;">
+                        <ng-template kendoExpansionPanelTitleDirective>
+                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                <i class="fa-shield-halved" style="color: #6c757d;"></i>
+                                Roles & Permissions
+                                @if (userRoles.length > 0) {
+                                    <span class="badge" style="background: #28a745; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                                        {{ userRoles.length }}
+                                    </span>
+                                }
+                            </span>
+                        </ng-template>
+                        
+                        <div style="padding: 16px;">
+                            @if (isLoadingRoles) {
+                                <div style="text-align: center; padding: 40px; color: #6c757d;">
+                                    <i class="fa-spinner fa-spin" style="font-size: 2em; margin-bottom: 12px;"></i>
+                                    <p>Loading roles...</p>
+                                </div>
+                            } @else {
+                                <div style="margin-bottom: 16px;">
+                                    <kendo-button fillMode="outline" themeColor="primary" size="small"
+                                                (click)="copyPermissionsFromUser()">
+                                        <i class="fa-copy"></i> Copy Permissions from Another User
+                                    </kendo-button>
+                                </div>
+                                
+                                @if (EditMode) {
+                                    <!-- Drag & Drop Role Assignment -->
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                                        <!-- Available Roles -->
+                                        <div>
+                                            <h6 style="margin-bottom: 12px; color: #495057;">Available Roles</h6>
+                                            <div style="border: 1px solid #e9ecef; border-radius: 6px; min-height: 300px; background: #f8f9fa; padding: 8px;">
+                                                @if (availableRoles.length === 0) {
+                                                    <div style="text-align: center; padding: 40px; color: #6c757d;">
+                                                        <i class="fa-check-circle" style="font-size: 2em; margin-bottom: 8px;"></i>
+                                                        <p>All roles assigned</p>
+                                                    </div>
+                                                } @else {
+                                                    @for (role of availableRoles; track role.id) {
+                                                        <div class="role-item" 
+                                                             style="background: white; padding: 12px; margin-bottom: 8px; border-radius: 4px; cursor: pointer; transition: all 0.2s;"
+                                                             (click)="assignRole(role)">
+                                                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                                <div>
+                                                                    <strong style="color: #495057;">{{ role.name }}</strong>
+                                                                    @if (role.description) {
+                                                                        <p style="margin: 4px 0 0 0; color: #6c757d; font-size: 0.85em;">{{ role.description }}</p>
+                                                                    }
+                                                                </div>
+                                                                <i class="fa-chevron-right" style="color: #6c757d;"></i>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                }
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Assigned Roles -->
+                                        <div>
+                                            <h6 style="margin-bottom: 12px; color: #495057;">Assigned Roles</h6>
+                                            <div style="border: 1px solid #e9ecef; border-radius: 6px; min-height: 300px; background: #e3f2fd; padding: 8px;">
+                                                @if (assignedRoles.length === 0) {
+                                                    <div style="text-align: center; padding: 40px; color: #6c757d;">
+                                                        <i class="fa-user-slash" style="font-size: 2em; margin-bottom: 8px;"></i>
+                                                        <p>No roles assigned</p>
+                                                    </div>
+                                                } @else {
+                                                    @for (role of assignedRoles; track role.id) {
+                                                        <div class="role-item assigned" 
+                                                             style="background: white; padding: 12px; margin-bottom: 8px; border-radius: 4px; cursor: pointer; transition: all 0.2s; border-left: 3px solid #2196f3;"
+                                                             (click)="removeRole(role)">
+                                                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                                <div>
+                                                                    <strong style="color: #495057;">{{ role.name }}</strong>
+                                                                    @if (role.description) {
+                                                                        <p style="margin: 4px 0 0 0; color: #6c757d; font-size: 0.85em;">{{ role.description }}</p>
+                                                                    }
+                                                                </div>
+                                                                <i class="fa-times" style="color: #dc3545;"></i>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div style="margin-top: 12px; padding: 12px; background: #f8f9fa; border-radius: 6px;">
+                                        <i class="fa-info-circle" style="color: #17a2b8; margin-right: 6px;"></i>
+                                        <span style="color: #6c757d; font-size: 0.85em;">Click on roles to move them between lists</span>
+                                    </div>
+                                } @else {
+                                    <!-- Read-only Role Display -->
+                                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px;">
+                                        @for (role of userRoles; track role.ID) {
+                                            <div style="background: #f8f9fa; padding: 12px; border-radius: 6px; border-left: 3px solid #2196f3;">
+                                                <strong style="color: #495057;">{{ role.RoleName }}</strong>
+                                                @if (role.get('RoleDescription')) {
+                                                    <p style="margin: 4px 0 0 0; color: #6c757d; font-size: 0.85em;">{{ role.get('RoleDescription') }}</p>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                
+                                <!-- Effective Permissions Preview -->
+                                <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #e9ecef;">
+                                    <h6 style="margin-bottom: 12px; color: #495057;">
+                                        <i class="fa-calculator" style="margin-right: 8px;"></i>
+                                        Effective Permissions Calculator
+                                    </h6>
+                                    <div style="padding: 20px; background: #f8f9fa; border-radius: 6px; text-align: center; color: #6c757d;">
+                                        <i class="fa-cogs" style="font-size: 2em; margin-bottom: 8px;"></i>
+                                        <p>Permission calculation coming soon</p>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </kendo-expansionpanel>
+                }
+
+                <!-- Applications Access Panel -->
+                @if (record.IsSaved) {
+                    <kendo-expansionpanel 
+                        [expanded]="false"
+                        style="margin-bottom: 12px;">
+                        <ng-template kendoExpansionPanelTitleDirective>
+                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                <i class="fa-grid" style="color: #6c757d;"></i>
+                                Applications Access
+                                @if (userApplications.length > 0) {
+                                    <span class="badge" style="background: #6f42c1; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                                        {{ userApplications.length }}
+                                    </span>
+                                }
+                            </span>
+                        </ng-template>
+                        
+                        <div style="padding: 16px;">
+                            @if (isLoadingApplications) {
+                                <div style="text-align: center; padding: 40px; color: #6c757d;">
+                                    <i class="fa-spinner fa-spin" style="font-size: 2em; margin-bottom: 12px;"></i>
+                                    <p>Loading applications...</p>
+                                </div>
+                            } @else {
+                                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px;">
+                                    @for (app of userApplications; track app.ID) {
+                                        <div class="app-card" 
+                                             [class.active]="app.IsActive"
+                                             style="background: white; border: 2px solid #e9ecef; border-radius: 8px; padding: 16px; text-align: center; transition: all 0.2s;">
+                                            <i class="fa-cube fa-2x" [style.color]="app.IsActive ? '#6f42c1' : '#6c757d'" style="margin-bottom: 8px;"></i>
+                                            <h6 style="margin: 8px 0 4px 0; color: #495057;">{{ app.Application }}</h6>
+                                            <p style="margin: 0 0 8px 0; color: #6c757d; font-size: 0.85em;">Sequence: {{ app.Sequence }}</p>
+                                            
+                                            @if (EditMode) {
+                                                <kendo-switch [(ngModel)]="app.IsActive"
+                                                            [name]="'appActive_' + app.ID"
+                                                            (ngModelChange)="toggleApplicationAccess(app)"
+                                                            style="margin-top: 8px;">
+                                                </kendo-switch>
+                                            } @else {
+                                                <span [style.color]="app.IsActive ? '#28a745' : '#dc3545'" style="font-weight: 600; font-size: 0.85em;">
+                                                    {{ app.IsActive ? 'Active' : 'Inactive' }}
+                                                </span>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                                
+                                @if (userApplications.length === 0) {
+                                    <div style="text-align: center; padding: 40px; color: #6c757d;">
+                                        <i class="fa-cube-slash" style="font-size: 3em; margin-bottom: 12px; opacity: 0.3;"></i>
+                                        <p>No applications assigned</p>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </kendo-expansionpanel>
+                }
+
+                <!-- Preferences & Settings Panel -->
+                @if (record.IsSaved) {
+                    <kendo-expansionpanel 
+                        [expanded]="false"
+                        style="margin-bottom: 12px;">
+                        <ng-template kendoExpansionPanelTitleDirective>
+                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                <i class="fa-cog" style="color: #6c757d;"></i>
+                                Preferences & Settings
+                            </span>
+                        </ng-template>
+                        
+                        <div style="padding: 16px;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                                <!-- Theme Selection -->
+                                <div>
+                                    <h6 style="margin-bottom: 12px; color: #495057;">
+                                        <i class="fa-palette" style="margin-right: 8px;"></i>
+                                        Theme Selection
+                                    </h6>
+                                    <div style="padding: 20px; background: #f8f9fa; border-radius: 6px; text-align: center; color: #6c757d;">
+                                        <i class="fa-paint-brush" style="font-size: 2em; margin-bottom: 8px;"></i>
+                                        <p>Theme selection coming soon</p>
+                                    </div>
+                                </div>
+                                
+                                <!-- Notification Preferences -->
+                                <div>
+                                    <h6 style="margin-bottom: 12px; color: #495057;">
+                                        <i class="fa-bell" style="margin-right: 8px;"></i>
+                                        Notification Preferences
+                                    </h6>
+                                    <div style="padding: 20px; background: #f8f9fa; border-radius: 6px; text-align: center; color: #6c757d;">
+                                        <i class="fa-bell-slash" style="font-size: 2em; margin-bottom: 8px;"></i>
+                                        <p>Notification settings coming soon</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Default Dashboard -->
+                            <div style="margin-top: 20px;">
+                                <h6 style="margin-bottom: 12px; color: #495057;">
+                                    <i class="fa-tachometer-alt" style="margin-right: 8px;"></i>
+                                    Default Dashboard
+                                </h6>
+                                <div style="padding: 20px; background: #f8f9fa; border-radius: 6px; text-align: center; color: #6c757d;">
+                                    <i class="fa-chart-line" style="font-size: 2em; margin-bottom: 8px;"></i>
+                                    <p>Dashboard selection coming soon</p>
+                                </div>
+                            </div>
+                        </div>
+                    </kendo-expansionpanel>
+                }
+
+                <!-- Activity & Audit Panel -->
+                @if (record.IsSaved) {
+                    <kendo-expansionpanel 
+                        [expanded]="false"
+                        style="margin-bottom: 12px;">
+                        <ng-template kendoExpansionPanelTitleDirective>
+                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                <i class="fa-history" style="color: #6c757d;"></i>
+                                Activity & Audit
+                            </span>
+                        </ng-template>
+                        
+                        <div style="padding: 16px;">
+                            @if (isLoadingActivity) {
+                                <div style="text-align: center; padding: 40px; color: #6c757d;">
+                                    <i class="fa-spinner fa-spin" style="font-size: 2em; margin-bottom: 12px;"></i>
+                                    <p>Loading activity...</p>
+                                </div>
+                            } @else {
+                                <!-- Recent Activity Timeline -->
+                                <h6 style="margin-bottom: 16px; color: #495057;">
+                                    <i class="fa-clock" style="margin-right: 8px;"></i>
+                                    Recent Activity
+                                </h6>
+                                
+                                <div style="border-left: 3px solid #e9ecef; padding-left: 20px;">
+                                    @for (activity of recentActivity; track activity.timestamp; let i = $index) {
+                                        <div style="position: relative; padding-bottom: 20px;">
+                                            <div style="position: absolute; left: -28px; top: 0; width: 14px; height: 14px; background: white; border: 3px solid #6c757d; border-radius: 50%;"></div>
+                                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                                <div>
+                                                    <strong style="color: #495057;">{{ activity.action }}</strong>
+                                                    <p style="margin: 4px 0 0 0; color: #6c757d; font-size: 0.9em;">{{ activity.details }}</p>
+                                                </div>
+                                                <span style="color: #6c757d; font-size: 0.85em;">{{ formatDate(activity.timestamp) }}</span>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                                
+                                <!-- Related Grids -->
+                                <div style="margin-top: 32px;">
+                                    <h6 style="margin-bottom: 16px; color: #495057;">
+                                        <i class="fa-bell" style="margin-right: 8px;"></i>
+                                        Recent Notifications
+                                    </h6>
+                                    @if (userNotifications.length > 0) {
+                                        <div style="border: 1px solid #e9ecef; border-radius: 6px; overflow: hidden;">
+                                            @for (notification of userNotifications; track notification.ID; let i = $index) {
+                                                <div style="padding: 12px; border-bottom: 1px solid #f1f3f5;"
+                                                     [style.background]="i % 2 === 0 ? '#f8f9fa' : 'white'">
+                                                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                                        <div>
+                                                            <strong style="color: #495057;">{{ notification.Title || 'Notification' }}</strong>
+                                                            @if (notification.Message) {
+                                                                <p style="margin: 4px 0 0 0; color: #6c757d; font-size: 0.9em;">{{ notification.Message }}</p>
+                                                            }
+                                                        </div>
+                                                        <span style="color: #6c757d; font-size: 0.8em;">{{ formatDate(notification.CreatedAt) }}</span>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    } @else {
+                                        <div style="padding: 20px; background: #f8f9fa; border-radius: 6px; text-align: center; color: #6c757d;">
+                                            <i class="fa-bell-slash" style="font-size: 2em; margin-bottom: 8px;"></i>
+                                            <p>No recent notifications</p>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </kendo-expansionpanel>
+                }
+
+                <!-- Related Items Panel -->
+                @if (record.IsSaved) {
+                    <kendo-expansionpanel 
+                        [expanded]="false"
+                        style="margin-bottom: 12px;">
+                        <ng-template kendoExpansionPanelTitleDirective>
+                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                <i class="fa-link" style="color: #6c757d;"></i>
+                                Related Items
+                            </span>
+                        </ng-template>
+                        
+                        <div style="padding: 16px;">
+                            <!-- Owned Dashboards -->
+                            <div style="margin-bottom: 24px;">
+                                <h6 style="margin-bottom: 12px; color: #495057;">
+                                    <i class="fa-tachometer-alt" style="margin-right: 8px;"></i>
+                                    Owned Dashboards ({{ userDashboards.length }})
+                                </h6>
+                                @if (userDashboards.length > 0) {
+                                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px;">
+                                        @for (dashboard of userDashboards; track dashboard.ID) {
+                                            <div class="dashboard-card" 
+                                                 style="background: #f8f9fa; padding: 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s;"
+                                                 (click)="navigateToDashboard(dashboard.ID)">
+                                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                    <div>
+                                                        <strong style="color: #495057;">{{ dashboard.Name }}</strong>
+                                                        @if (dashboard.Description) {
+                                                            <p style="margin: 4px 0 0 0; color: #6c757d; font-size: 0.85em;">{{ dashboard.Description }}</p>
+                                                        }
+                                                    </div>
+                                                    <i class="fa-external-link" style="color: #6c757d;"></i>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                } @else {
+                                    <div style="padding: 20px; background: #f8f9fa; border-radius: 6px; text-align: center; color: #6c757d;">
+                                        <i class="fa-chart-pie" style="font-size: 2em; margin-bottom: 8px;"></i>
+                                        <p>No dashboards created</p>
+                                    </div>
+                                }
+                            </div>
+                            
+                            <!-- Owned Reports -->
+                            <div>
+                                <h6 style="margin-bottom: 12px; color: #495057;">
+                                    <i class="fa-file-lines" style="margin-right: 8px;"></i>
+                                    Recent Reports ({{ userReports.length }})
+                                </h6>
+                                @if (userReports.length > 0) {
+                                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px;">
+                                        @for (report of userReports; track report.ID) {
+                                            <div class="report-card" 
+                                                 style="background: #f8f9fa; padding: 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s;"
+                                                 (click)="navigateToReport(report.ID)">
+                                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                    <div>
+                                                        <strong style="color: #495057;">{{ report.Name }}</strong>
+                                                        @if (report.Description) {
+                                                            <p style="margin: 4px 0 0 0; color: #6c757d; font-size: 0.85em;">{{ report.Description }}</p>
+                                                        }
+                                                    </div>
+                                                    <i class="fa-external-link" style="color: #6c757d;"></i>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                } @else {
+                                    <div style="padding: 20px; background: #f8f9fa; border-radius: 6px; text-align: center; color: #6c757d;">
+                                        <i class="fa-file" style="font-size: 2em; margin-bottom: 8px;"></i>
+                                        <p>No reports created</p>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </kendo-expansionpanel>
+                }
+            </div>
+        </div>
+    </form>
+</div>

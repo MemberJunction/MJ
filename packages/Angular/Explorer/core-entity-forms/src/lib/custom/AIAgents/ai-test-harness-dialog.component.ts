@@ -165,17 +165,18 @@ export class AITestHarnessDialogComponent implements OnInit {
                     value: typeof value === 'object' ? JSON.stringify(value) : String(value),
                     type: this.detectVariableType(value)
                 }));
-                this.testHarness.dataContextVariables = variables;
+                this.testHarness.agentVariables = variables;
             }
             
             if (this.testHarness && this.data.initialTemplateData) {
-                // Convert initial template data to variables
-                const variables = Object.entries(this.data.initialTemplateData).map(([name, value]) => ({
+                // Add template data to the unified agent variables
+                const templateVariables = Object.entries(this.data.initialTemplateData).map(([name, value]) => ({
                     name,
                     value: typeof value === 'object' ? JSON.stringify(value) : String(value),
                     type: this.detectVariableType(value)
                 }));
-                this.testHarness.templateDataVariables = variables;
+                // Merge with existing agent variables
+                this.testHarness.agentVariables = [...this.testHarness.agentVariables, ...templateVariables];
             }
         }, 100);
     }

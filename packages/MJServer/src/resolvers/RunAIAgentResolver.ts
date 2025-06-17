@@ -88,9 +88,6 @@ export class AgentPartialResult {
     @Field()
     currentStep: string;
 
-    @Field(() => [AgentExecutionStepSummary])
-    executionChain: AgentExecutionStepSummary[];
-
     @Field({ nullable: true })
     partialOutput?: string;
 }
@@ -155,55 +152,48 @@ export class RunAIAgentResolver extends ResolverBase {
             };
         }
 
-        // Safely extract all agent run steps
-        if (result.agentRunSteps && Array.isArray(result.agentRunSteps)) {
-            sanitized.agentRunSteps = result.agentRunSteps.map(step => ({
-                ID: step.ID,
-                AgentRunID: step.AgentRunID,
-                StepNumber: step.StepNumber,
-                StepType: step.StepType,
-                StepName: step.StepName,
-                TargetID: step.TargetID,
-                Status: step.Status,
-                StartedAt: step.StartedAt,
-                CompletedAt: step.CompletedAt,
-                Success: step.Success,
-                ErrorMessage: step.ErrorMessage,
-                InputData: step.InputData,
-                OutputData: step.OutputData
-            }));
-        }
-
-        // Safely extract sub-agent runs (recursive)
-        if (result.subAgentRuns && Array.isArray(result.subAgentRuns)) {
-            sanitized.subAgentRuns = result.subAgentRuns.map(subRun => 
-                this.sanitizeAgentResult(subRun)
-            );
-        }
-
-        // Safely extract execution chain
-        if (result.executionChain && Array.isArray(result.executionChain)) {
-            sanitized.executionChain = result.executionChain.map(step => ({
-                executionType: step.executionType,
-                stepEntity: step.stepEntity ? {
-                    ID: step.stepEntity.ID,
-                    AgentRunID: step.stepEntity.AgentRunID,
-                    StepNumber: step.stepEntity.StepNumber,
-                    StepType: step.stepEntity.StepType,
-                    StepName: step.stepEntity.StepName,
-                    TargetID: step.stepEntity.TargetID,
-                    Status: step.stepEntity.Status,
-                    StartedAt: step.stepEntity.StartedAt,
-                    CompletedAt: step.stepEntity.CompletedAt,
-                    Success: step.stepEntity.Success,
-                    ErrorMessage: step.stepEntity.ErrorMessage,
-                    InputData: step.stepEntity.InputData,
-                    OutputData: step.stepEntity.OutputData
-                } : null
-            }));
+        // Safely extract execution tree (hierarchical structure with all step data)
+        if (result.executionTree && Array.isArray(result.executionTree)) {
+            sanitized.executionTree = this.sanitizeExecutionTree(result.executionTree);
         }
 
         return sanitized;
+    }
+
+    /**
+     * Sanitize execution tree for JSON serialization
+     */
+    private sanitizeExecutionTree(nodes: any[]): any[] {
+        return nodes.map(node => ({
+            step: node.step ? {
+                ID: node.step.ID,
+                AgentRunID: node.step.AgentRunID,
+                StepNumber: node.step.StepNumber,
+                StepType: node.step.StepType,
+                StepName: node.step.StepName,
+                TargetID: node.step.TargetID,
+                Status: node.step.Status,
+                StartedAt: node.step.StartedAt,
+                CompletedAt: node.step.CompletedAt,
+                Success: node.step.Success,
+                ErrorMessage: node.step.ErrorMessage,
+                InputData: node.step.InputData,
+                OutputData: node.step.OutputData
+            } : null,
+            inputData: node.inputData,
+            outputData: node.outputData,
+            executionType: node.executionType,
+            startTime: node.startTime,
+            endTime: node.endTime,
+            durationMs: node.durationMs,
+            nextStepDecision: node.nextStepDecision,
+            children: node.children && node.children.length > 0 
+                ? this.sanitizeExecutionTree(node.children) 
+                : [],
+            depth: node.depth,
+            parentStepId: node.parentStepId,
+            agentHierarchy: node.agentHierarchy
+        }));
     }
 
     /**
@@ -438,21 +428,24 @@ export class RunAIAgentResolver extends ResolverBase {
      */
     private publishFinalEvents(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, result: ExecuteAgentResult) {
         if (result.agentRun) {
-            // Publish partial result with execution chain
+            // Get the last step from execution tree
+            let lastStep = 'Completed';
+            if (result.executionTree && result.executionTree.length > 0) {
+                // Find the last step by traversing the tree
+                const findLastStep = (nodes: any[]): any => {
+                    let last = nodes[nodes.length - 1];
+                    if (last.children && last.children.length > 0) {
+                        return findLastStep(last.children);
+                    }
+                    return last;
+                };
+                const lastNode = findLastStep(result.executionTree);
+                lastStep = lastNode.step?.StepName || 'Completed';
+            }
+
+            // Publish partial result
             const partialResult: AgentPartialResult = {
-                currentStep: result.executionChain.length > 0 
-                    ? result.executionChain[result.executionChain.length - 1].stepEntity.StepName
-                    : 'Completed',
-                executionChain: result.executionChain.map(step => ({
-                    stepId: step.stepEntity.ID,
-                    stepName: step.stepEntity.StepName,
-                    agentName: undefined,
-                    agentType: step.executionType,
-                    startTime: step.stepEntity.StartedAt,
-                    endTime: step.stepEntity.CompletedAt || undefined,
-                    status: step.stepEntity.Status,
-                    result: step.stepEntity.OutputData || undefined
-                })),
+                currentStep: lastStep,
                 partialOutput: result.returnValue || undefined
             };
 

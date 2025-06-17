@@ -27578,6 +27578,9 @@ export class ActionExecutionLog_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `JSON-formatted output data or response from the action execution`}) 
+    Message?: string;
+        
     @Field() 
     @MaxLength(850)
     Action: string;
@@ -27616,6 +27619,9 @@ export class CreateActionExecutionLogInput {
 
     @Field(() => Int, { nullable: true })
     RetentionPeriod: number | null;
+
+    @Field({ nullable: true })
+    Message: string | null;
 }
     
 
@@ -27647,6 +27653,9 @@ export class UpdateActionExecutionLogInput {
 
     @Field(() => Int, { nullable: true })
     RetentionPeriod?: number | null;
+
+    @Field({ nullable: true })
+    Message?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

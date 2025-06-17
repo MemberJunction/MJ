@@ -474,14 +474,44 @@ export class SyncEngine {
    * ```
    */
   async loadEntity(entityName: string, primaryKey: Record<string, any>): Promise<BaseEntity | null> {
-    const entity = await this.createEntityObject(entityName);
     const entityInfo = this.getEntityInfo(entityName);
     
     if (!entityInfo) {
       throw new Error(`Entity not found: ${entityName}`);
     }
     
-    // Handle composite keys
+    // First, check if the record exists using RunView to avoid "Error in BaseEntity.Load" messages
+    // when records don't exist (which is a normal scenario during sync operations)
+    const rv = new RunView();
+    
+    // Build filter for primary key(s)
+    const filters: string[] = [];
+    for (const pk of entityInfo.PrimaryKeys) {
+      const value = primaryKey[pk.Name];
+      if (value === undefined || value === null) {
+        throw new Error(`Missing primary key value for ${pk.Name} in entity ${entityName}`);
+      }
+      
+      // Check if field needs quotes
+      const field = entityInfo.Fields.find(f => f.Name === pk.Name);
+      const quotes = field?.NeedsQuotes ? "'" : '';
+      const escapedValue = field?.NeedsQuotes && typeof value === 'string' ? value.replace(/'/g, "''") : value;
+      filters.push(`${pk.Name} = ${quotes}${escapedValue}${quotes}`);
+    }
+    
+    const result = await rv.RunView({
+      EntityName: entityName,
+      ExtraFilter: filters.join(' AND '),
+      MaxRows: 1
+    }, this.contextUser);
+    
+    // If no record found, return null without attempting to load
+    if (!result.Success || result.Results.length === 0) {
+      return null;
+    }
+    
+    // Record exists, now load it properly through the entity
+    const entity = await this.createEntityObject(entityName);
     const compositeKey = new CompositeKey();
     compositeKey.LoadFromSimpleObject(primaryKey);
     const loaded = await entity.InnerLoad(compositeKey);

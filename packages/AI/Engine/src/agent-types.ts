@@ -10,8 +10,8 @@
  * @since 2.50.0
  */
 
-import { ChatMessage, AIPromptRunResult } from '@memberjunction/ai';
-import { AIAgentEntity, AIAgentRunEntity, AIAgentRunStepEntity } from '@memberjunction/core-entities';
+import { AIPromptRunResult } from '@memberjunction/ai';
+import { AIAgentRunEntity, AIAgentRunStepEntity } from '@memberjunction/core-entities';
 import { ActionResult, ActionResultSimple } from '@memberjunction/actions-base';
 
 /**
@@ -86,7 +86,8 @@ export type BaseAgentNextStep = {
  * 
  * This result structure provides complete visibility into the agent's execution flow,
  * including all prompts executed, actions taken, sub-agents invoked, and decisions made.
- * Each step in the execution chain is tracked with its result and the subsequent decision.
+ * The execution tree provides a hierarchical view that mirrors the actual execution flow,
+ * with each node containing the AIAgentRunStepEntity via its step property.
  * 
  * @interface ExecuteAgentResult
  * @property {boolean} success - Whether the overall agent execution was successful
@@ -96,9 +97,7 @@ export type BaseAgentNextStep = {
  * @property {boolean} [cancelled] - Whether the execution was cancelled via cancellation token
  * @property {'user_requested' | 'timeout' | 'system'} [cancellationReason] - Reason for cancellation if cancelled
  * @property {AIAgentRunEntity} agentRun - The main database entity tracking this execution
- * @property {AIAgentRunStepEntity[]} agentRunSteps - All step entities for this run
- * @property {ExecuteAgentResult[]} subAgentRuns - Complete results from any sub-agent executions
- * @property {ExecutionChainStep[]} executionChain - Complete chain of execution steps showing the flow from start to finish
+ * @property {ExecutionNode[]} executionTree - Hierarchical tree of execution nodes showing parent-child relationships
  */
 export type ExecuteAgentResult = {
     success: boolean;
@@ -108,9 +107,7 @@ export type ExecuteAgentResult = {
     cancelled?: boolean;
     cancellationReason?: 'user_requested' | 'timeout' | 'system';
     agentRun: AIAgentRunEntity;
-    agentRunSteps: AIAgentRunStepEntity[];
-    subAgentRuns: ExecuteAgentResult[];
-    executionChain: ExecutionChainStep[];
+    executionTree: ExecutionNode[];
 }
 
 /**
@@ -152,6 +149,42 @@ export type StepExecutionResult =
     | DecisionExecutionResult
     | ChatExecutionResult
     | ValidationExecutionResult;
+
+/**
+ * Represents a single node in the hierarchical execution tree.
+ * 
+ * Each node contains the step entity data, rich input/output information,
+ * and can have child nodes representing sub-steps (especially for sub-agents).
+ * This structure provides complete traceability of the agent's execution flow.
+ * 
+ * @interface ExecutionNode
+ * @property {AIAgentRunStepEntity} step - The database entity for this execution step
+ * @property {any} inputData - Full input data passed to this step (varies by step type)
+ * @property {any} outputData - Full output data from this step (varies by step type)
+ * @property {'prompt' | 'action' | 'sub-agent' | 'decision' | 'chat' | 'validation'} executionType - Type of execution performed
+ * @property {Date} startTime - When this step began execution
+ * @property {Date} [endTime] - When this step completed (null while running)
+ * @property {number} [durationMs] - How long this step took to execute in milliseconds
+ * @property {NextStepDecision} [nextStepDecision] - Decision about what to do next after this step
+ * @property {ExecutionNode[]} [children] - Child nodes for sub-steps (primarily for sub-agents)
+ * @property {number} depth - Nesting level (0 = root agent, 1 = first sub-agent, etc.)
+ * @property {string} [parentStepId] - ID of the parent step (null for root steps)
+ * @property {string[]} agentHierarchy - Full agent name hierarchy for breadcrumb display
+ */
+export type ExecutionNode = {
+    step: AIAgentRunStepEntity;
+    inputData: any;
+    outputData: any;
+    executionType: 'prompt' | 'action' | 'sub-agent' | 'decision' | 'chat' | 'validation';
+    startTime: Date;
+    endTime?: Date;
+    durationMs?: number;
+    nextStepDecision?: NextStepDecision;
+    children?: ExecutionNode[];
+    depth: number;
+    parentStepId?: string;
+    agentHierarchy: string[];
+}
 
 /**
  * Result from executing a prompt within an agent step.

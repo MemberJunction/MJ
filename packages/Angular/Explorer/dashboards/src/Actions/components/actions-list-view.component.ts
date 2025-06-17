@@ -71,6 +71,8 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
       this.isLoading = true;
       
       const rv = new RunView();
+      console.log('Loading Actions list data...');
+      
       const [actionsResult, categoriesResult] = await rv.RunViews([
         {
           EntityName: 'Actions',
@@ -92,12 +94,20 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
         }
       ]);
       
+      console.log('Actions list result:', actionsResult);
+      console.log('Categories list result:', categoriesResult);
+      
       if (!actionsResult.Success || !categoriesResult.Success) {
-        throw new Error('Failed to load data');
+        const errors = [];
+        if (!actionsResult.Success) errors.push('Actions: ' + actionsResult.ErrorMessage);
+        if (!categoriesResult.Success) errors.push('Categories: ' + categoriesResult.ErrorMessage);
+        throw new Error('Failed to load data: ' + errors.join(', '));
       }
       
-      const actions = actionsResult.Results as ActionEntity[];
-      const categories = categoriesResult.Results as ActionCategoryEntity[];
+      const actions = (actionsResult.Results || []) as ActionEntity[];
+      const categories = (categoriesResult.Results || []) as ActionCategoryEntity[];
+      
+      console.log(`Loaded ${actions.length} actions and ${categories.length} categories in list view`);
 
       this.actions = actions;
       this.populateCategoriesMap(categories);
@@ -105,6 +115,7 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
       this.applyFilters();
 
     } catch (error) {
+      console.error('Error loading actions list data:', error);
       LogError('Failed to load actions list data', undefined, error);
     } finally {
       this.isLoading = false;
@@ -131,6 +142,7 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
 
   private applyFilters(): void {
     let filtered = [...this.actions];
+    console.log('Applying filters to', this.actions.length, 'actions');
 
     // Apply search filter
     const searchTerm = this.searchTerm$.value.toLowerCase();
@@ -160,6 +172,7 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
     }
 
     this.filteredActions = filtered;
+    console.log('Filtered to', this.filteredActions.length, 'actions');
   }
 
   public onSearchChange(searchTerm: string): void {
