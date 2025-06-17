@@ -1589,9 +1589,21 @@ export class BaseAgent {
                     durationMs: new Date().getTime() - startTime.getTime()
                 });
                 
-                // Finalize step entity
+                // Prepare output data with action result
+                const outputData = {
+                    actionResult: {
+                        success: actionResult.Success,
+                        resultCode: actionResult.ResultCode,
+                        message: actionResult.Message,
+                        result: actionResult.ResultType === 'ComplexObject' 
+                            ? actionResult.Complex 
+                            : actionResult.Simple
+                    }
+                };
+                
+                // Finalize step entity with output data
                 await this.finalizeStepEntity(stepEntity, actionResult.Success, 
-                    actionResult.Success ? undefined : actionResult.Message);
+                    actionResult.Success ? undefined : actionResult.Message, outputData);
                 
                 return { success: true, result: actionResult };
                 

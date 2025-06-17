@@ -615,6 +615,9 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     // View initialization flag
     private viewInitialized = false;
     
+    // Track processed step IDs to avoid duplication
+    private processedStepIds = new Set<string>();
+    
     private destroy$ = new Subject<void>();
     private updateSubscription?: Subscription;
     
@@ -670,6 +673,9 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      * Process execution data based on mode
      */
     private processExecutionData(): void {
+        
+        // Clear processed step IDs when processing new data
+        this.processedStepIds.clear();
         
         if (this.mode === 'historical') {
             // Process historical data
@@ -894,6 +900,25 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             if (parsed.userMessage) return parsed.userMessage;
             
             // Show action results clearly
+            if (parsed.actionResult) {
+                const result = parsed.actionResult;
+                let preview = '';
+                if (result.success !== undefined) {
+                    preview += `Success: ${result.success}\n`;
+                }
+                if (result.resultCode) {
+                    preview += `Result Code: ${result.resultCode}\n`;
+                }
+                if (result.message) {
+                    preview += `Message: ${result.message}\n`;
+                }
+                if (result.result) {
+                    preview += `Result: ${typeof result.result === 'object' ? JSON.stringify(result.result, null, 2) : result.result}`;
+                }
+                return preview.trim();
+            }
+            
+            // Legacy action result format
             if (parsed.result) {
                 if (typeof parsed.result === 'object') {
                     return JSON.stringify(parsed.result, null, 2);
@@ -965,7 +990,8 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         
         // Handle live streaming data format
         if (this.executionData && this.executionData.liveSteps) {
-            // For initial setup, clear the tree first
+            // For initial setup, clear everything first
+            this.clearNodeComponents();
             this.executionTree = [];
             // Then append all steps
             this.appendNewLiveSteps(this.executionData.liveSteps);
@@ -1339,7 +1365,16 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         let hasNewNodes = false;
         
         for (const step of liveSteps) {
-            const stepId = step.step?.ID || `live-${Date.now()}-${Math.random()}`;
+            // Generate a stable ID based on step content to avoid duplicates
+            const stepId = step.step?.ID || this.generateStepId(step);
+            
+            // Skip if we've already processed this exact step
+            if (this.processedStepIds.has(stepId)) {
+                continue;
+            }
+            
+            // Mark as processed
+            this.processedStepIds.add(stepId);
             
             // Check if this node already exists
             const existingNode = nodeMap.get(stepId);
@@ -1421,6 +1456,20 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     }
     
     /**
+     * Generate a stable ID for a step based on its content
+     */
+    private generateStepId(step: any): string {
+        // Create a stable ID based on step properties that should be unique
+        const parts = [
+            step.executionType || 'unknown',
+            step.depth || 0,
+            step.step?.StepName || '',
+            step.startTime || Date.now()
+        ];
+        return `live-${parts.join('-').replace(/[^a-zA-Z0-9-]/g, '')}`;
+    }
+    
+    /**
      * Find parent node based on depth
      */
     private findParentNode(nodes: ExecutionTreeNode[], childNode: ExecutionTreeNode): ExecutionTreeNode | null {
@@ -1475,7 +1524,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         }
         
         return {
-            id: step.step?.ID || `live-${Date.now()}-${Math.random()}`,
+            id: step.step?.ID || this.generateStepId(step),
             name: name,
             type: this.mapStepType(step.executionType || step.step?.StepType),
             status: status,
