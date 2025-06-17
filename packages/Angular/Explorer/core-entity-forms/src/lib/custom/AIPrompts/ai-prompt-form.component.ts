@@ -1,7 +1,9 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, OnInit, ViewChild, ChangeDetectorRef, ElementRef } from '@angular/core';
+import { Router, ActivatedRoute } from '@angular/router';
 import { AIPromptEntity, TemplateEntity, TemplateContentEntity, AIPromptModelEntity, AIModelEntity, AIVendorEntity, AIPromptCategoryEntity, AIModelVendorEntity, AIPromptTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import { SharedService } from '@memberjunction/ng-shared';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { TemplateEditorConfig, TemplateEditorComponent } from '../../shared/components/template-editor.component';
@@ -39,6 +41,9 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     public resultSelectorTreeData: any[] = [];
     public isLoadingResultSelectorData = false;
     
+    // Drag and drop state
+    public draggedIndex: number = -1;
+    
     // Template editor configuration
     public get templateEditorConfig(): TemplateEditorConfig {
         return {
@@ -52,6 +57,16 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     private __InferenceProvider_VendorTypeDefinitionID: string = '';
 
     @ViewChild('templateEditor') templateEditor: TemplateEditorComponent | undefined;
+
+    constructor(
+        elementRef: ElementRef,
+        sharedService: SharedService,
+        router: Router,
+        route: ActivatedRoute,
+        public cdr: ChangeDetectorRef
+    ) {
+        super(elementRef, sharedService, router, route, cdr);
+    }
 
     async ngOnInit() {
         await super.ngOnInit();
@@ -946,26 +961,42 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     }
 
     /**
-     * Moves a model up in the list
+     * Moves a model up in the list by swapping with the previous item
      */
     public moveModelUp(index: number) {
         if (index > 0 && index < this.promptModels.length) {
-            const model = this.promptModels[index];
-            this.promptModels.splice(index, 1);
-            this.promptModels.splice(index - 1, 0, model);
+            // Create new array to ensure Angular detects the change
+            const newModels = [...this.promptModels];
+            
+            // Swap with previous item
+            [newModels[index - 1], newModels[index]] = 
+            [newModels[index], newModels[index - 1]];
+            
+            // Replace the array
+            this.promptModels = newModels;
+            
             this.updateModelPriorities();
+            this.cdr.detectChanges();
         }
     }
 
     /**
-     * Moves a model down in the list
+     * Moves a model down in the list by swapping with the next item
      */
     public moveModelDown(index: number) {
         if (index >= 0 && index < this.promptModels.length - 1) {
-            const model = this.promptModels[index];
-            this.promptModels.splice(index, 1);
-            this.promptModels.splice(index + 1, 0, model);
+            // Create new array to ensure Angular detects the change
+            const newModels = [...this.promptModels];
+            
+            // Swap with next item
+            [newModels[index], newModels[index + 1]] = 
+            [newModels[index + 1], newModels[index]];
+            
+            // Replace the array
+            this.promptModels = newModels;
+            
             this.updateModelPriorities();
+            this.cdr.detectChanges();
         }
     }
 
@@ -976,6 +1007,57 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         this.promptModels.forEach((model, index) => {
             model.Priority = index + 1;
         });
+    }
+
+    /**
+     * Handles drag start event
+     */
+    public onDragStart(event: DragEvent, index: number) {
+        this.draggedIndex = index;
+        event.dataTransfer!.effectAllowed = 'move';
+        event.dataTransfer!.setData('text/html', ''); // Required for Firefox
+    }
+
+    /**
+     * Handles drag over event
+     */
+    public onDragOver(event: DragEvent) {
+        event.preventDefault();
+        event.dataTransfer!.dropEffect = 'move';
+    }
+
+    /**
+     * Handles drop event
+     */
+    public onDrop(event: DragEvent, dropIndex: number) {
+        event.preventDefault();
+        
+        if (this.draggedIndex !== -1 && this.draggedIndex !== dropIndex) {
+            // Create new array to ensure Angular detects the change
+            const newModels = [...this.promptModels];
+            
+            // Remove dragged item
+            const draggedItem = newModels.splice(this.draggedIndex, 1)[0];
+            
+            // Insert at new position
+            newModels.splice(dropIndex, 0, draggedItem);
+            
+            // Replace the array
+            this.promptModels = newModels;
+            
+            // Update priorities
+            this.updateModelPriorities();
+            this.cdr.detectChanges();
+        }
+        
+        this.draggedIndex = -1;
+    }
+
+    /**
+     * Handles drag end event
+     */
+    public onDragEnd(event: DragEvent) {
+        this.draggedIndex = -1;
     }
 }
 
