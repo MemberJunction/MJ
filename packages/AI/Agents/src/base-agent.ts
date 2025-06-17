@@ -760,10 +760,10 @@ export class BaseAgent {
             // Parameters with detailed information
             Parameters: {
                 Input: action.Params
-                    .filter(p => p.Type === 'Input' || p.Type === 'Both')
+                    .filter(p => p.Type.trim().toLowerCase() === 'input' || p.Type.trim().toLowerCase() === 'both')
                     .map(param => this.formatActionParameter(param)),
                 Output: action.Params
-                    .filter(p => p.Type === 'Output' || p.Type === 'Both')
+                    .filter(p => p.Type.trim().toLowerCase() === 'output' || p.Type.trim().toLowerCase() === 'both')
                     .map(param => this.formatActionParameter(param))
             },
             // Result codes with detailed information
