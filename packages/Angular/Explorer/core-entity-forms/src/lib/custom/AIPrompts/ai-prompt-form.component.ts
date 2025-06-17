@@ -1,10 +1,10 @@
 import { Component, OnInit, ViewChild, ChangeDetectorRef, ElementRef } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
-import { AIPromptEntity, TemplateEntity, TemplateContentEntity, AIPromptModelEntity, AIModelEntity, AIVendorEntity, AIPromptCategoryEntity, AIModelVendorEntity, AIPromptTypeEntity } from '@memberjunction/core-entities';
+import { AIPromptEntity, TemplateEntity, TemplateContentEntity, AIPromptModelEntity, AIModelEntity, AIVendorEntity, AIPromptCategoryEntity, AIModelVendorEntity, AIPromptTypeEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
-import { Metadata, RunView } from '@memberjunction/core';
+import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { TemplateEditorConfig, TemplateEditorComponent } from '../../shared/components/template-editor.component';
 import { AIPromptFormComponent } from '../../generated/Entities/AIPrompt/aiprompt.form.component';
@@ -20,7 +20,8 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     public record!: AIPromptEntity;
     public template: TemplateEntity | null = null;
     public templateContent: TemplateContentEntity | null = null;
-    public isLoadingTemplate = false;
+    public isLoadingTemplate = true; // Default to loading state
+    public templateNotFoundInDatabase = false;
     public showExecutionDialog = false;
     public showTestHarness = false;
     
@@ -43,6 +44,12 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     
     // Drag and drop state
     public draggedIndex: number = -1;
+    
+    // Execution History
+    public executionHistory: AIPromptRunEntity[] = [];
+    public isLoadingHistory = false;
+    public historySortField: 'runAt' | 'executionTime' | 'cost' | 'tokens' = 'runAt';
+    public historySortDirection: 'asc' | 'desc' = 'desc';
     
     // Template editor configuration
     public get templateEditorConfig(): TemplateEditorConfig {
@@ -88,7 +95,11 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         
         // Load template when record changes
         if (this.record?.TemplateID) {
-            this.loadTemplate();
+            // isLoadingTemplate is already true by default
+            this.loadTemplate(); // Don't await so other loads can happen in parallel
+        } else {
+            // No template ID, so we're not loading
+            this.isLoadingTemplate = false;
         }
         
         // Load available models, vendors, prompt types, prompt models, and result selector data
@@ -99,6 +110,11 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             this.loadPromptModels(),
             this.loadResultSelectorTreeData()
         ]);
+        
+        // Load execution history if record is saved
+        if (this.record?.IsSaved) {
+            await this.loadExecutionHistory();
+        }
         
         // Set defaults for new records
         if (!this.record.IsSaved) {
@@ -120,16 +136,19 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     public async loadTemplate() {
         if (!this.record?.TemplateID) {
             this.template = null;
+            this.templateNotFoundInDatabase = false;
             return;
         }
 
         this.isLoadingTemplate = true;
+        this.templateNotFoundInDatabase = false; // Reset the flag
         try {
             this.template = await this._metadata.GetEntityObject<TemplateEntity>('Templates');
             await this.template.Load(this.record.TemplateID);
             
             if (!this.template.IsSaved) {
                 this.template = null;
+                this.templateNotFoundInDatabase = true; // Set flag when template not found
                 console.warn(`Template with ID ${this.record.TemplateID} not found`);
             } else {
                 // Load template content
@@ -139,6 +158,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         } catch (error) {
             console.error('Error loading template:', error);
             this.template = null;
+            this.templateNotFoundInDatabase = true; // Set flag on error
             MJNotificationService.Instance.CreateSimpleNotification(
                 'Error loading associated template',
                 'error',
@@ -1058,6 +1078,142 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
      */
     public onDragEnd(event: DragEvent) {
         this.draggedIndex = -1;
+    }
+    
+    /**
+     * Load execution history for this prompt
+     */
+    public async loadExecutionHistory() {
+        if (!this.record?.ID) return;
+        
+        this.isLoadingHistory = true;
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<AIPromptRunEntity>({
+                EntityName: 'MJ: AI Prompt Runs',
+                ExtraFilter: `PromptID='${this.record.ID}'`,
+                OrderBy: 'RunAt DESC',
+                MaxRows: 100,
+                ResultType: 'entity_object'
+            });
+            
+            this.executionHistory = result.Results;
+            this.sortExecutionHistory();
+        } catch (error) {
+            console.error('Error loading execution history:', error);
+            this.executionHistory = [];
+        } finally {
+            this.isLoadingHistory = false;
+        }
+    }
+    
+    /**
+     * Sort execution history based on current sort field and direction
+     */
+    public sortExecutionHistory() {
+        if (!this.executionHistory || this.executionHistory.length === 0) return;
+        
+        this.executionHistory.sort((a, b) => {
+            let aVal: any, bVal: any;
+            
+            switch (this.historySortField) {
+                case 'runAt':
+                    aVal = a.RunAt ? new Date(a.RunAt).getTime() : 0;
+                    bVal = b.RunAt ? new Date(b.RunAt).getTime() : 0;
+                    break;
+                case 'executionTime':
+                    aVal = a.ExecutionTimeMS || 0;
+                    bVal = b.ExecutionTimeMS || 0;
+                    break;
+                case 'cost':
+                    aVal = a.TotalCost || a.Cost || 0;
+                    bVal = b.TotalCost || b.Cost || 0;
+                    break;
+                case 'tokens':
+                    aVal = a.TokensUsed || 0;
+                    bVal = b.TokensUsed || 0;
+                    break;
+            }
+            
+            if (this.historySortDirection === 'asc') {
+                return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+            } else {
+                return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+            }
+        });
+    }
+    
+    /**
+     * Change sort field and direction for execution history
+     */
+    public changeHistorySort(field: 'runAt' | 'executionTime' | 'cost' | 'tokens') {
+        if (this.historySortField === field) {
+            // Toggle direction if same field
+            this.historySortDirection = this.historySortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            // New field, default to desc
+            this.historySortField = field;
+            this.historySortDirection = 'desc';
+        }
+        this.sortExecutionHistory();
+    }
+    
+    /**
+     * Navigate to a prompt run record
+     */
+    public navigateToPromptRun(runId: string) {
+        SharedService.Instance.OpenEntityRecord('MJ: AI Prompt Runs', CompositeKey.FromID(runId));
+    }
+    
+    /**
+     * Format duration for display
+     */
+    public formatDuration(ms: number | null): string {
+        if (!ms) return '-';
+        
+        if (ms < 1000) {
+            return `${ms}ms`;
+        } else if (ms < 60000) {
+            return `${(ms / 1000).toFixed(1)}s`;
+        } else {
+            const minutes = Math.floor(ms / 60000);
+            const seconds = ((ms % 60000) / 1000).toFixed(0);
+            return `${minutes}m ${seconds}s`;
+        }
+    }
+    
+    /**
+     * Format cost for display
+     */
+    public formatCost(cost: number | null): string {
+        if (!cost) return '-';
+        return `$${cost.toFixed(4)}`;
+    }
+    
+    /**
+     * Format tokens for display
+     */
+    public formatTokens(tokens: number | null): string {
+        if (!tokens) return '-';
+        return tokens.toLocaleString();
+    }
+    
+    /**
+     * Get status color for execution
+     */
+    public getExecutionStatusColor(success: boolean | null): string {
+        if (success === true) return '#28a745';
+        if (success === false) return '#dc3545';
+        return '#ffc107';
+    }
+    
+    /**
+     * Get status icon for execution
+     */
+    public getExecutionStatusIcon(success: boolean | null): string {
+        if (success === true) return 'fa-check-circle';
+        if (success === false) return 'fa-times-circle';
+        return 'fa-spinner fa-spin';
     }
 }
 
