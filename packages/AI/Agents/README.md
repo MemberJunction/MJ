@@ -23,12 +23,25 @@ The MemberJunction AI Agents package provides a comprehensive framework for crea
 npm install @memberjunction/ai-agents
 ```
 
+### Type Organization Update (2025)
+
+As part of improving code organization and reducing circular dependencies:
+- **This package** now contains all agent-specific types:
+  - Agent execution types (`AgentExecutionParams`, `AgentExecutionResult`, etc.)
+  - Agent runner types (`AgentRunnerParams`, `AgentRunnerResult`)
+  - Conductor types (`ConductorDecisionInput`, `ConductorDecisionResponse`)
+  - Progress and streaming callbacks
+- **Base AI types** are imported from `@memberjunction/ai` (Core)
+- **Prompt types** are imported from `@memberjunction/ai-prompts`
+- **Engine types** (agent type definitions) are imported from `@memberjunction/aiengine`
+
 ## Requirements
 
 - Node.js 16+
 - MemberJunction Core libraries
+- [@memberjunction/ai](../Core/README.md) for base AI types and interfaces
 - [@memberjunction/ai-prompts](../Prompts/README.md) for advanced prompt management
-- [@memberjunction/aiengine](../Engine/README.md) for AI model orchestration
+- [@memberjunction/aiengine](../Engine/README.md) for AI model orchestration and agent type definitions
 
 ## Core Architecture
 
@@ -734,6 +747,59 @@ console.log('Top 5 slowest steps:', slowestSteps.map(s => ({
 })));
 ```
 
+## Type Exports
+
+The Agents package exports comprehensive types for agent operations:
+
+### Core Agent Types
+- `AgentExecutionParams` - Parameters for agent execution
+- `AgentExecutionResult` - Result from agent execution
+- `BaseAgentNextStep` - Next step decision structure
+- `ExecutionChainStep` - Individual step in execution chain
+
+### Agent Runner Types
+- `AgentRunnerParams` - Parameters for AgentRunner
+- `AgentRunnerResult` - Enhanced result with decision history
+- `AgentProgressUpdate` - Progress tracking structure
+- `AgentStreamingUpdate` - Streaming content structure
+
+### Conductor Types
+- `ConductorDecisionInput` - Input for conductor decisions
+- `ConductorDecisionResponse` - Structured decision response
+- `ExecutionStep` - Individual execution plan step
+- `ConductorDecisionType` - Decision type enumeration
+
+### Factory and Interface Types
+- `IAgentFactory` - Factory interface for agent creation
+- `BaseAgent` - Base class for all agents
+- `ConductorAgent` - Specialized conductor agent class
+
+## Import Examples
+
+```typescript
+// Import main classes
+import { BaseAgent, ConductorAgent, AgentRunner } from '@memberjunction/ai-agents';
+import { GetAgentFactory } from '@memberjunction/ai-agents';
+
+// Import types
+import { 
+  AgentExecutionParams, 
+  AgentExecutionResult,
+  AgentRunnerParams,
+  AgentRunnerResult,
+  ConductorDecisionResponse 
+} from '@memberjunction/ai-agents';
+
+// Import base AI types from Core
+import { ChatMessage, ChatResult } from '@memberjunction/ai';
+
+// Import prompt types when needed
+import { AIPromptParams, AIPromptRunResult } from '@memberjunction/ai-prompts';
+
+// Import entity types
+import { AIAgentEntity, AIAgentTypeEntity } from '@memberjunction/core-entities';
+```
+
 ## API Reference
 
 ### AgentRunner Class
@@ -922,8 +988,8 @@ await agentPrompt.Save();
 - `@memberjunction/core`: ^2.43.0 - MemberJunction core library
 - `@memberjunction/global`: ^2.43.0 - MemberJunction global utilities
 - `@memberjunction/core-entities`: ^2.43.0 - MemberJunction entity definitions
-- `@memberjunction/ai`: ^2.43.0 - Base AI functionality
-- `@memberjunction/aiengine`: ^2.43.0 - AI model orchestration
+- `@memberjunction/ai`: ^2.43.0 - Base AI types and interfaces (imported for core types)
+- `@memberjunction/aiengine`: ^2.43.0 - AI model orchestration and agent type definitions
 - `@memberjunction/ai-prompts`: ^2.43.0 - Advanced prompt management
 - `@memberjunction/templates`: ^2.43.0 - Template rendering support
 - `rxjs`: ^7.8.1 - Reactive programming support
