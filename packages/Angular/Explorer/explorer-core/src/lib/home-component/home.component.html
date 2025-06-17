@@ -1,22 +1,36 @@
 <div class="home-container">
     <div class="card-header-entity">
         <div class="title-wrap">
-            <h1>Home</h1>
+            <h1>Welcome to MemberJunction</h1>
         </div>
     </div>
+    
     <div class="main-area"> 
         <div class="nav-container"> 
             @for (item of HomeItems; track item) {
                 <div class="nav-item" (click)="navigate(item.Route)">
-                    <span [ngClass]="'fa-solid fa-4x sky-blue ' + item.IconCSSClass"></span>
-                    <span>{{item.Name}}</span>
+                    <div class="nav-item-icon">
+                        <i [class]="'fa-solid ' + item.IconCSSClass"></i>
+                    </div>
+                    <div class="nav-item-content">
+                        <h3 class="nav-item-title">{{item.Name}}</h3>
+                        <p class="nav-item-subtitle">{{getItemDescription(item)}}</p>
+                    </div>
                 </div>
             }
         </div>
 
-        <app-favorites class="home-favorites"></app-favorites>
-        <div class="float-bottom">
-            {{versionString}}
-        </div>
+        <!--<div class="home-favorites">
+            <div class="favorites-header">
+                <i class="fa-solid fa-star favorites-icon"></i>
+                <h2 class="favorites-title">Quick Access</h2>
+            </div>
+            <app-favorites></app-favorites>
+        </div>-->
+    </div>
+    
+    <div class="version-info">
+        <i class="fa-solid fa-code-branch version-icon"></i>
+        <span>{{versionString}}</span>
     </div>
 </div>

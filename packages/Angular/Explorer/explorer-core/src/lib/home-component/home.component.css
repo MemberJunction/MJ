@@ -1,50 +1,71 @@
-.home-container {
-    padding: 15px;
-}
-
-.nav-container {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 24px;
-    flex: 1;
-}
-.nav-item {
-    border: solid 1px lightgray;
-    border-radius: 5px;
-    background: #fff;
-    border-radius: 15px;
-    width: 100%;;
-    height: auto;
-    box-sizing: border-box;
-    padding: 25px;
-    text-align: left;
-    display: flex;
-    gap: 26px;
-    vertical-align: middle; 
-    font-size: 20px;
-    cursor: pointer;
-}
-.nav-item .k-svg-icon {
-    width: 75px;
-    height: 75px;
-    color: var(--sky-blue);
-}
-.nav-item:hover  {
-    box-shadow: 0px 0px 20px 0px rgba(60, 73, 99, 0.2);
-}
-
-
 .home-favorites {
-    width: 500px;
+    background: var(--white-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    padding: 1.5rem;
+    height: fit-content;
+    position: sticky;
+    top: 2rem;
 }
 
-.sky-blue {
-    color: var(--sky-blue);
+.favorites-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid var(--gray-600);
 }
 
-.float-bottom {
+.favorites-icon {
+    color: var(--mj-blue);
+    font-size: 1.25rem;
+}
+
+.favorites-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--navy);
+    margin: 0;
+}
+
+.version-info {
     position: fixed;
-    bottom: 20px;
+    bottom: 2rem;
+    background: var(--navy);
+    color: var(--white-color);
+    padding: 0.75rem 1.25rem;
+    border-radius: 2rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    box-shadow: var(--shadow);
     z-index: 1000;
-    font-size: medium;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all var(--transition-time);
+}
+
+.version-info:hover {
+    background: var(--mj-blue);
+    transform: translateY(-2px);
+}
+
+.version-icon {
+    font-size: 0.75rem;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+    .home-favorites {
+        position: static;
+    }
+}
+
+@media (max-width: 768px) {
+    .version-info {
+        bottom: 1rem;
+        font-size: 0.8rem;
+        padding: 0.6rem 1rem;
+    }
 }
