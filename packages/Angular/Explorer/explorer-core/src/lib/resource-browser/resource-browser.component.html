@@ -87,39 +87,39 @@
           </kendo-grid>
         }
         @else {
-          <div class="card-list k-d-flex k-flex-row k-h-full k-flex-wrap">
+          <div class="nav-container">
             @for(item of Items; track item) {
-              <kendo-card class="card-wrapper cursor-pointer">
-                <div class="list-item-icon">
-                  @if(EnableItemEdit && (!item.IsLink || item.LinkPermissionLevel === 'Owner' || item.LinkPermissionLevel === 'Edit')) {
-                    <button (click)="editItem(item)" class="list-btn" title="Edit Item">
-                      <span class="fa-regular fa-pen-to-square"></span>
-                    </button>
+              <div class="nav-item">
+                <div class="nav-item-icon">
+                  @if(item.IsLink) {
+                    <i [title]="item.Name + '(Shared)'" [ngClass]="getIconForResourceType(item)"></i>
                   }
-                  @if(EnableItemDelete && (!item.IsLink || item.LinkPermissionLevel === 'Owner') ) {
-                    <button (click)="deleteItem(item)" class="list-btn" title="Delete Item">
-                      <span class="fa-regular fa-trash-can"></span>
-                    </button>                    
-                  }
-                  @else if (EnableRemoveLink && item.IsLink) {
-                    <button (click)="unlinkItem(item)" class="list-btn" title="Remove Link to Shared Item" >
-                      <span class="fa-solid fa-link-slash" style="color: rgb(19, 92, 201);"></span>
-                    </button>                    
+                  @else {
+                    <span [title]="item.Name" [ngClass]="getIconForResourceType(item)"></span>
                   }
                 </div>
-                <kendo-card-body (click)="itemClick(item)">
-                    @if(item.IsLink) {
-                      <i [title]="item.Name + '(Shared)'" [ngClass]="getIconForResourceType(item)" style="color: rgb(19, 92, 201);"></i>
+                <div class="nav-item-content">
+                  <h3 class="nav-item-title" (click)="itemClick(item)">{{item.Name}}</h3>
+                  <!-- <p class="nav-item-subtitle">{{item.Description}}</p>-->
+                  <div class="nav-item-edit">
+                    @if(EnableItemEdit && (!item.IsLink || item.LinkPermissionLevel === 'Owner' || item.LinkPermissionLevel === 'Edit')) {
+                      <button (click)="editItem(item)" class="list-btn" title="Edit Item">
+                        <span class="fa-regular fa-pen-to-square"></span>
+                      </button>
                     }
-                    @else {
-                      <span [title]="item.Name" [ngClass]="getIconForResourceType(item)"></span>
+                    @if(EnableItemDelete && (!item.IsLink || item.LinkPermissionLevel === 'Owner') ) {
+                      <button (click)="deleteItem(item)" class="list-btn" title="Delete Item">
+                        <span class="fa-regular fa-trash-can"></span>
+                      </button>                    
                     }
-                    <div class="padding-top-small">
-                      <h5 kendoCardTitle>{{ item.Name }}</h5>
-                      <p kendoCardSubtitle>{{ item.Description }}</p>
-                    </div>
-                </kendo-card-body>
-              </kendo-card>
+                    @else if (EnableRemoveLink && item.IsLink) {
+                      <button (click)="unlinkItem(item)" class="list-btn" title="Remove Link to Shared Item" >
+                        <span class="fa-solid fa-link-slash"></span>
+                      </button>                    
+                    }
+                  </div>
+                </div>
+              </div>
             }
           </div>
         }
@@ -128,8 +128,6 @@
   </div>
 
   <kendo-dialog 
-  [minWidth]="450"
-  [width]="650"
   class="dialog-wrapper" 
   title="Confirm" 
   *ngIf="deleteDialogOpened" 
@@ -151,8 +149,6 @@
     [title]="selectedFolder ? 'Edit Folder' : 'Create new folder'" 
     *ngIf="upsertFolderDialogVisible" 
     (close)="toggleUpsertFolderView(false, false)"
-    [minWidth]="250"
-    [width]="450"
     class="dialog-wrapper"
   >
   <div class="search">
@@ -177,7 +173,7 @@
         Create
       </button>
     }
-    <button  class="yes-btn" (click)="toggleUpsertFolderView(false, false)" kendoButton fillMode="outline" themeColor="info">
+    <button class="yes-btn" (click)="toggleUpsertFolderView(false, false)" kendoButton fillMode="outline" themeColor="info">
       Cancel
     </button>
   </kendo-dialog-actions>

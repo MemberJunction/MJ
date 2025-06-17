@@ -23,19 +23,17 @@
   </div>
   <div class="main-area"> 
       <kendo-loader *ngIf="showLoader" type="converging-spinner" ></kendo-loader>
-      <div class="card-list k-d-flex k-flex-row k-h-full k-flex-wrap" *ngIf="!showLoader">
-        <div class="card-item" *ngFor="let app of SelectedApplications"  (click)="appItemClick(app)">
-          <kendo-card class="card-wrapper">
-            <kendo-card-body>
-              <div class="view-card-content k-cursor-pointer">
-                @if (app.Icon && app.Icon.length > 0) {
-                  <span [ngClass]="app.Icon + ' icon'"></span>
-                }
-                <h2 kendoCardTitle>{{ app.Name }}</h2>
-                <p kendoCardSubtitle>{{ app.Description }}</p>
-              </div>
-            </kendo-card-body>
-          </kendo-card>
+      <div class="nav-container" *ngIf="!showLoader">
+        <div class="nav-item" *ngFor="let app of SelectedApplications"  (click)="appItemClick(app)">
+          @if (app.Icon && app.Icon.length > 0) {
+            <div class="nav-item-icon">
+              <span [ngClass]="app.Icon + ' icon'"></span>
+            </div>
+          }
+          <div class="nav-item-content">
+              <h3 class="nav-item-title">{{ app.Name }}</h3>
+              <p class="nav-item-subtitle">{{ app.Description }}</p>
+          </div>
         </div>
         @if (SelectedApplications.length === 0 && !showLoader) {
           <div class="card-item" (click)="ShowAppSelectionDialog()">
