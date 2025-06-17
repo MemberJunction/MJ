@@ -217,7 +217,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     public temperature: number = 0.7;
     
     /** Maximum tokens for prompt execution */
-    public maxTokens: number = 2000;
+    public maxTokens: number | null = null;
     
     /** Available AI models for prompt execution */
     public availableModels: any[] = [];
@@ -464,14 +464,25 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     private async loadAvailableModels() {
         await AIEngineBase.Instance.Config(false);
-        this.availableModels = AIEngineBase.Instance.Models;
-        // Set default model if not already set
-        if (!this.selectedModelId && this.availableModels.length > 0) {
-            // Defer to avoid ExpressionChangedAfterItHasBeenCheckedError
-            setTimeout(() => {
-                this.selectedModelId = this.availableModels[0].ID;
-            }, 0);
+        
+        // Filter models by the prompt's AIModelTypeID if it exists
+        if (this.entity && 'AIModelTypeID' in this.entity) {
+            const prompt = this.entity as AIPromptEntity;
+            if (prompt.AIModelTypeID) {
+                this.availableModels = AIEngineBase.Instance.Models.filter(
+                    model => model.AIModelTypeID === prompt.AIModelTypeID && model.IsActive
+                );
+            } else {
+                // No model type restriction, show all active models
+                this.availableModels = AIEngineBase.Instance.Models.filter(model => model.IsActive);
+            }
+        } else {
+            // Not a prompt entity, show all active models
+            this.availableModels = AIEngineBase.Instance.Models.filter(model => model.IsActive);
         }
+        
+        // Don't auto-select a model - let the dropdown show placeholder
+        this.selectedModelId = '';
     }
 
 

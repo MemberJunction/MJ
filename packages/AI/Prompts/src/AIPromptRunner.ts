@@ -832,11 +832,21 @@ export class AIPromptRunner {
       // If explicit model is specified, validate it from cached models
       if (explicitModelId) {
         const model = AIEngine.Instance.Models.find((m) => m.ID === explicitModelId && (!vendorName || m.Vendor === vendorName));
-        if (model && model.IsActive) {
-          return model;
+        if (!model) {
+          throw new Error(`Specified model ${explicitModelId} not found in available models`);
         }
-        // If explicit model not found or inactive, log warning but continue with normal selection
-        LogError(`Explicit model ${explicitModelId} not found, inactive, or not from specified vendor, using prompt model selection`);
+        if (!model.IsActive) {
+          throw new Error(`Specified model ${model.Name} (${explicitModelId}) is not active`);
+        }
+        
+        // Check if model type is compatible with prompt's model type requirement
+        if (prompt.AIModelTypeID && model.AIModelTypeID !== prompt.AIModelTypeID) {
+          const modelType = AIEngine.Instance.ModelTypes.find(mt => mt.ID === model.AIModelTypeID);
+          const promptModelType = AIEngine.Instance.ModelTypes.find(mt => mt.ID === prompt.AIModelTypeID);
+          throw new Error(`Specified model ${model.Name} is of type ${modelType?.Name || 'unknown'} but prompt ${prompt.Name} requires model type ${promptModelType?.Name || 'unknown'}`);
+        }
+        
+        return model;
       }
 
       // Get prompt-specific model associations from AIPromptModels

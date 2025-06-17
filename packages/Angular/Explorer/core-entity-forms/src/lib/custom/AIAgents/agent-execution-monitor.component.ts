@@ -618,6 +618,9 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     // Track processed step IDs to avoid duplication
     private processedStepIds = new Set<string>();
     
+    // Track which nodes were added in the current update
+    private newlyAddedNodeIds = new Set<string>();
+    
     private destroy$ = new Subject<void>();
     private updateSubscription?: Subscription;
     
@@ -1096,6 +1099,43 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         };
         
         this.currentStep = findRunning(this.executionTree);
+        this.cdr.markForCheck();
+    }
+    
+    /**
+     * Mark previously new nodes as completed
+     */
+    private markPreviouslyNewNodesAsComplete(): void {
+        // Only mark nodes that were previously marked as newly added
+        for (const nodeId of this.newlyAddedNodeIds) {
+            const node = this.findNodeById(this.executionTree, nodeId);
+            if (node && node.status === 'running') {
+                node.status = 'completed';
+                
+                // Update the component if it exists
+                const componentRef = this.nodeComponentMap.get(nodeId);
+                if (componentRef) {
+                    componentRef.instance.node = { ...node };
+                    componentRef.changeDetectorRef.detectChanges();
+                }
+            }
+        }
+    }
+    
+    /**
+     * Find a node by ID in the tree
+     */
+    private findNodeById(nodes: ExecutionTreeNode[], id: string): ExecutionTreeNode | null {
+        for (const node of nodes) {
+            if (node.id === id) {
+                return node;
+            }
+            if (node.children) {
+                const found = this.findNodeById(node.children, id);
+                if (found) return found;
+            }
+        }
+        return null;
     }
     
     /**
@@ -1163,19 +1203,6 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                !!node.detailsMarkdown;
     }
     
-    /**
-     * Find a node by ID in the tree
-     */
-    private findNodeById(nodes: ExecutionTreeNode[], id: string): ExecutionTreeNode | null {
-        for (const node of nodes) {
-            if (node.id === id) return node;
-            if (node.children) {
-                const found = this.findNodeById(node.children, id);
-                if (found) return found;
-            }
-        }
-        return null;
-    }
     
     /**
      * Handle scroll events
@@ -1364,6 +1391,14 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         
         let hasNewNodes = false;
         
+        // First, mark all previously new nodes as complete
+        if (this.newlyAddedNodeIds.size > 0) {
+            this.markPreviouslyNewNodesAsComplete();
+        }
+        
+        // Clear the set for new additions
+        this.newlyAddedNodeIds.clear();
+        
         for (const step of liveSteps) {
             // Generate a stable ID based on step content to avoid duplicates
             const stepId = step.step?.ID || this.generateStepId(step);
@@ -1382,6 +1417,10 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                 // Update existing node in the component
                 const componentRef = this.nodeComponentMap.get(stepId);
                 if (componentRef) {
+                    // Preserve current UI state
+                    const currentExpanded = existingNode.expanded;
+                    const currentDetailsExpanded = existingNode.detailsExpanded;
+                    
                     const updatedStatus = step.step?.Status ? 
                         this.mapStepStatus(step.step.Status) : 
                         (step.endTime || step.outputData ? 'completed' : existingNode.status);
@@ -1401,6 +1440,10 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                         existingNode.tokensUsed = this.extractTokens(step.outputData);
                         existingNode.cost = this.extractCost(step.outputData);
                     }
+                    
+                    // Restore UI state
+                    existingNode.expanded = currentExpanded;
+                    existingNode.detailsExpanded = currentDetailsExpanded;
                     
                     // Update the component's node reference and trigger change detection
                     componentRef.instance.node = { ...existingNode };
@@ -1437,10 +1480,14 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                 }
                 
                 hasNewNodes = true;
+                // Track this as a newly added node
+                this.newlyAddedNodeIds.add(newNode.id);
             }
         }
         
         if (hasNewNodes) {
+            // Update current step
+            this.updateCurrentStep();
             
             // Recalculate stats
             this.calculateStats();
@@ -1514,13 +1561,15 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             }
         }
         
-        // Determine status based on whether step has completed
+        // For live steps, always start as running
+        // The status will be updated to completed in markPreviouslyNewNodesAsComplete
         let status: ExecutionTreeNode['status'] = 'running';
         if (step.step?.Status) {
-            status = this.mapStepStatus(step.step.Status);
-        } else if (step.endTime || step.outputData) {
-            // If we have end time or output data, the step is completed
-            status = 'completed';
+            // Only use explicit status if it's failed
+            const mappedStatus = this.mapStepStatus(step.step.Status);
+            if (mappedStatus === 'failed') {
+                status = 'failed';
+            }
         }
         
         return {

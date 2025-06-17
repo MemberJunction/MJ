@@ -9,10 +9,10 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
     template: `
         <div class="tree-node" 
              [class.expanded]="node.expanded"
-             [style.padding-left.px]="node.depth * 24">
+             [style.padding-left.px]="node.depth * 30">
             
             <!-- Node Header -->
-            <div class="node-header">
+            <div class="node-header" (dblclick)="onDoubleClick()">
                 <!-- Expand/Collapse Icon -->
                 @if (hasExpandableContent()) {
                     <i class="expand-icon fa-solid"
@@ -67,8 +67,8 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
                 
                 <!-- Node Name -->
                 <span class="node-name">
-                    {{ node.name }}
-                    @if (node.detailsMarkdown) {
+                    {{ getTruncatedName() }}
+                    @if (node.detailsMarkdown || isNameTruncated()) {
                         <button class="details-toggle" 
                                 (click)="onToggleDetails($event)"
                                 [title]="node.detailsExpanded ? 'Hide details' : 'Show details'">
@@ -97,10 +97,15 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
                 }
             </div>
             
-            <!-- Markdown Details (when expanded) -->
-            @if (node.detailsExpanded && node.detailsMarkdown) {
+            <!-- Expanded Details -->
+            @if (node.detailsExpanded) {
                 <div class="markdown-details">
-                    <div class="detail-content markdown" [innerHTML]="formatMarkdown(node.detailsMarkdown)"></div>
+                    @if (isNameTruncated()) {
+                        <div class="full-name">{{ node.name }}</div>
+                    }
+                    @if (node.detailsMarkdown) {
+                        <div class="detail-content markdown" [innerHTML]="formatMarkdown(node.detailsMarkdown)"></div>
+                    }
                 </div>
             }
             
@@ -356,6 +361,15 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
             font-style: italic;
             color: #555;
         }
+        
+        .full-name {
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e0e0e0;
+            word-wrap: break-word;
+        }
     `]
 })
 export class ExecutionNodeComponent {
@@ -387,6 +401,25 @@ export class ExecutionNodeComponent {
     onToggleDetails(event: Event): void {
         this.toggleDetails.emit({ node: this.node, event });
         this.userInteracted.emit();
+    }
+    
+    onDoubleClick(): void {
+        if (this.hasExpandableContent()) {
+            this.toggleNode.emit(this.node);
+            this.userInteracted.emit();
+        }
+    }
+    
+    getTruncatedName(): string {
+        const maxLength = 120;
+        if (this.node.name.length <= maxLength) {
+            return this.node.name;
+        }
+        return this.node.name.substring(0, maxLength) + '...';
+    }
+    
+    isNameTruncated(): boolean {
+        return this.node.name.length > 120;
     }
     
     formatDuration(ms: number): string {

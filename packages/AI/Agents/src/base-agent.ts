@@ -1326,7 +1326,7 @@ export class BaseAgent {
         params.onProgress?.({
             step: 'subagent_execution',
             percentage: 60,
-            message: this.formatHierarchicalMessage(`Delegating to specialized agent "${subAgentRequest.name}" to ${subAgentRequest.message.toLowerCase()}`),
+            message: this.formatHierarchicalMessage(`Delegating to ${subAgentRequest.name} agent`),
             metadata: { 
                 subAgentId: subAgentRequest.id,
                 subAgentName: subAgentRequest.name,

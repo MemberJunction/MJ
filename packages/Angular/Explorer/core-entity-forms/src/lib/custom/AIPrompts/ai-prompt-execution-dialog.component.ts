@@ -128,9 +128,16 @@ export class AIPromptExecutionDialogComponent implements OnInit {
     private async loadAvailableModels() {
         try {
             const rv = new RunView();
+            
+            // Filter by the prompt's AIModelTypeID if it exists
+            let extraFilter = `IsActive=1`;
+            if (this.aiPrompt?.AIModelTypeID) {
+                extraFilter += ` AND AIModelTypeID='${this.aiPrompt.AIModelTypeID}'`;
+            }
+            
             const result = await rv.RunView<AIModelEntityExtended>({
                 EntityName: 'AI Models',
-                ExtraFilter: `IsActive=1`,
+                ExtraFilter: extraFilter,
                 OrderBy: 'PowerRank DESC, Name ASC',
                 ResultType: 'entity_object'
             });
