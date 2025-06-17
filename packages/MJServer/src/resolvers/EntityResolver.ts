@@ -2,11 +2,12 @@ import { EntityPermissionType } from '@memberjunction/core';
 import { AppContext } from '../types.js';
 import { Arg, Ctx, Query, Resolver, InputType, Field } from 'type-graphql';
 import { Entity_, EntityResolverBase } from '../generated/generated.js';
+import sql from 'mssql';
 
 @Resolver(Entity_)
 export class EntityResolver extends EntityResolverBase {
   @Query(() => [Entity_])
-  EntitiesBySchemas(
+  async EntitiesBySchemas(
     @Ctx() { dataSource, userPayload }: AppContext,
     @Arg('IncludeSchemas', () => [String], { nullable: true }) IncludeSchemas?: string[],
     @Arg('ExcludeSchemas', () => [String], { nullable: true }) ExcludeSchemas?: string[]
@@ -30,6 +31,8 @@ export class EntityResolver extends EntityResolverBase {
       else totalWhere = ` WHERE ${rlsWhere}`;
     }
     const sSQL = `SELECT * FROM [${this.MJCoreSchema}].vwEntities${totalWhere}`;
-    return dataSource.query(sSQL);
+    const request = new sql.Request(dataSource);
+    const result = await request.query(sSQL);
+    return result.recordset;
   }
 }

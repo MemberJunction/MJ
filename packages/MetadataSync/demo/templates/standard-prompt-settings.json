@@ -1,0 +1,15 @@
+{
+  "ResponseFormat": "JSON",
+  "ValidationBehavior": "Strict",
+  "MaxRetries": 3,
+  "RetryDelayMS": 1000,
+  "RetryStrategy": "Exponential",
+  "EnableCaching": true,
+  "CacheTTLSeconds": 3600,
+  "CacheMatchType": "Exact",
+  "CacheMustMatchModel": false,
+  "CacheMustMatchVendor": false,
+  "Status": "Active",
+  "ParallelizationMode": "None",
+  "OutputType": "object"
+}

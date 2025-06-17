@@ -21,6 +21,8 @@ export * from "./generic/util";
 export * from "./generic/logging";
 export * from "./generic/queryInfo";
 export * from "./generic/compositeKey";
+export * from "./generic/authEvaluator";
+export * from "./generic/metadataUtil";
 
 export function SetProvider(provider) {
     Metadata.Provider = provider;

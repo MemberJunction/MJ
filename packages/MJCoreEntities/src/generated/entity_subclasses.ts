@@ -244,6 +244,11 @@ export const ActionExecutionLogSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Message: z.string().nullable().describe(`
+        * * Field Name: Message
+        * * Display Name: Message
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON-formatted output data or response from the action execution`),
     Action: z.string().describe(`
         * * Field Name: Action
         * * Display Name: Action
@@ -576,6 +581,11 @@ export const ActionSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    DriverClass: z.string().nullable().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+    * * Description: For actions where Type='Custom', this specifies the fully qualified class name of the BaseAction sub-class that should be instantiated to handle the action execution. This provides a more reliable mechanism than relying on the Name field for class instantiation.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category
@@ -1072,6 +1082,22 @@ export const AIAgentSchema = z.object({
         * * Display Name: Context Compression Message Retention Count
         * * SQL Data Type: int
     * * Description: Number of recent messages to keep uncompressed when context compression is applied.`),
+    TypeID: z.string().nullable().describe(`
+        * * Field Name: TypeID
+        * * Display Name: Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
+    * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.`),
+    Status: z.string().nullable().describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+    * * Description: Current status of the AI agent. Active agents can be executed, Disabled agents are inactive, and Pending agents are awaiting configuration or approval. Allowed values: Active, Disabled, Pending.`),
+    DriverClass: z.string().nullable().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+    * * Description: Optional override for the class name used by the MemberJunction class factory to instantiate this specific agent. If specified, this overrides the agent type's DriverClass. Useful for specialized agent implementations.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -1080,6 +1106,10 @@ export const AIAgentSchema = z.object({
         * * Field Name: ContextCompressionPrompt
         * * Display Name: Context Compression Prompt
         * * SQL Data Type: nvarchar(255)`),
+    Type: z.string().nullable().describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type AIAgentEntityType = z.infer<typeof AIAgentSchema>;
@@ -1383,7 +1413,7 @@ export const AIPromptSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ResponseFormat: z.union([z.literal('Any'), z.literal('Text'), z.literal('Markdown'), z.literal('ModelSpecific'), z.literal('JSON')]).describe(`
+    ResponseFormat: z.union([z.literal('Any'), z.literal('Text'), z.literal('Markdown'), z.literal('JSON'), z.literal('ModelSpecific'), z.literal('JSON')]).describe(`
         * * Field Name: ResponseFormat
         * * Display Name: Response Format
         * * SQL Data Type: nvarchar(20)
@@ -1393,6 +1423,7 @@ export const AIPromptSchema = z.object({
     *   * Any
     *   * Text
     *   * Markdown
+    *   * JSON
     *   * ModelSpecific
     *   * JSON
     * * Description: Specifies the expected response format for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.`),
@@ -3595,7 +3626,7 @@ export const DashboardSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Type: z.union([z.literal('Config'), z.literal('Code')]).describe(`
+    Type: z.union([z.literal('Config'), z.literal('Code'), z.literal('Dynamic Code')]).describe(`
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(20)
@@ -3604,7 +3635,8 @@ export const DashboardSchema = z.object({
     * * Possible Values 
     *   * Config
     *   * Code
-    * * Description: Specifies if the dashboard is metadata-driven (Config) or code-based (Code)`),
+    *   * Dynamic Code
+    * * Description: Dashboard type supporting Config (metadata-driven), Code (compiled TypeScript), and Dynamic Code (Skip-generated runtime JavaScript/React) options`),
     Thumbnail: z.string().nullable().describe(`
         * * Field Name: Thumbnail
         * * Display Name: Thumbnail
@@ -3626,16 +3658,16 @@ export const DashboardSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Applications (vwApplications.ID)
     * * Description: Associated Application ID if Scope is App, otherwise NULL`),
-    Code: z.string().nullable().describe(`
-        * * Field Name: Code
-        * * Display Name: Code
-        * * SQL Data Type: nvarchar(255)
-    * * Description: Used to identify the dashboard for code-base dashboards. Allows reuse of the same DriverClass for multiple dashboards that can be rendered differently.`),
     DriverClass: z.string().nullable().describe(`
         * * Field Name: DriverClass
         * * Display Name: Driver Class
         * * SQL Data Type: nvarchar(255)
     * * Description: Specifies the runtime class that will be used for the Dashboard when Type is set to 'Code'. This class contains the custom logic and implementation for code-based dashboards.`),
+    Code: z.string().nullable().describe(`
+        * * Field Name: Code
+        * * Display Name: Code
+        * * SQL Data Type: nvarchar(255)
+    * * Description: Used to identify the dashboard for code-base dashboards. Allows reuse of the same DriverClass for multiple dashboards that can be rendered differently.`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -3727,6 +3759,11 @@ export const DataContextItemSchema = z.object({
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
+    CodeName: z.string().nullable().describe(`
+        * * Field Name: CodeName
+        * * Display Name: Code Name
+        * * SQL Data Type: nvarchar(255)
+    * * Description: Optional programmatic identifier for this data context item. Must be unique within the DataContext and follow JavaScript naming conventions (letters, numbers, underscore, starting with letter or underscore). Used for improved code generation and programmatic access to data context items.`),
     DataContext: z.string().describe(`
         * * Field Name: DataContext
         * * Display Name: Data Context
@@ -7083,6 +7120,305 @@ export const AIAgentPromptSchema = z.object({
 export type AIAgentPromptEntityType = z.infer<typeof AIAgentPromptSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Run Steps
+ */
+export const AIAgentRunStepSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+    * * Description: Unique identifier for this execution step`),
+    AgentRunID: z.string().describe(`
+        * * Field Name: AgentRunID
+        * * Display Name: Agent Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: Reference to the parent AIAgentRun that contains this step`),
+    StepNumber: z.number().describe(`
+        * * Field Name: StepNumber
+        * * Display Name: Step Number
+        * * SQL Data Type: int
+    * * Description: Sequential number of this step within the agent run, starting from 1`),
+    StepType: z.string().describe(`
+        * * Field Name: StepType
+        * * Display Name: Step Type
+        * * SQL Data Type: nvarchar(50)
+    * * Description: Type of execution step: prompt, tool, subagent, decision`),
+    StepName: z.string().describe(`
+        * * Field Name: StepName
+        * * Display Name: Step Name
+        * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable name of what this step accomplishes`),
+    TargetID: z.string().nullable().describe(`
+        * * Field Name: TargetID
+        * * Display Name: Target ID
+        * * SQL Data Type: uniqueidentifier
+    * * Description: ID of the specific target being executed (AIPrompt.ID, AIAction.ID, AIAgent.ID, etc.). NULL for steps that don't target a specific entity.`),
+    Status: z.union([z.literal('Running'), z.literal('Completed'), z.literal('Failed'), z.literal('Cancelled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Running
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Running
+    *   * Completed
+    *   * Failed
+    *   * Cancelled
+    * * Description: Current execution status of this step: Running, Completed, Failed, Cancelled`),
+    StartedAt: z.date().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+    * * Description: Timestamp when this step began execution`),
+    CompletedAt: z.date().nullable().describe(`
+        * * Field Name: CompletedAt
+        * * Display Name: Completed At
+        * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when this step completed. NULL while still running.`),
+    Success: z.boolean().nullable().describe(`
+        * * Field Name: Success
+        * * Display Name: Success
+        * * SQL Data Type: bit
+    * * Description: Whether this step completed successfully. NULL while running, TRUE/FALSE when completed.`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Error message if this step failed. NULL for successful steps.`),
+    InputData: z.string().nullable().describe(`
+        * * Field Name: InputData
+        * * Display Name: Input Data
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON serialization of input data passed to this step for execution`),
+    OutputData: z.string().nullable().describe(`
+        * * Field Name: OutputData
+        * * Display Name: Output Data
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON serialization of the output data produced by this step`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type AIAgentRunStepEntityType = z.infer<typeof AIAgentRunStepSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Agent Runs
+ */
+export const AIAgentRunSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+    * * Description: Unique identifier for this agent run`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    * * Description: Reference to the AIAgent that is being executed in this run`),
+    ParentRunID: z.string().nullable().describe(`
+        * * Field Name: ParentRunID
+        * * Display Name: Parent Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: Reference to the parent agent run if this is a sub-agent execution. NULL for root-level agent runs. Enables hierarchical execution tracking.`),
+    Status: z.union([z.literal('Running'), z.literal('Completed'), z.literal('Paused'), z.literal('Failed'), z.literal('Cancelled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Running
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Running
+    *   * Completed
+    *   * Paused
+    *   * Failed
+    *   * Cancelled
+    * * Description: Current status of the agent run. Running -> Completed/Failed/Cancelled`),
+    StartedAt: z.date().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+    * * Description: Timestamp when the agent run began execution`),
+    CompletedAt: z.date().nullable().describe(`
+        * * Field Name: CompletedAt
+        * * Display Name: Completed At
+        * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the agent run completed (successfully or with failure). NULL while running.`),
+    Success: z.boolean().nullable().describe(`
+        * * Field Name: Success
+        * * Display Name: Success
+        * * SQL Data Type: bit
+    * * Description: Indicates whether the agent run completed successfully. NULL while running, TRUE/FALSE when completed.`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Error message if the agent run failed. NULL for successful runs.`),
+    ConversationID: z.string().nullable().describe(`
+        * * Field Name: ConversationID
+        * * Display Name: Conversation ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Conversations (vwConversations.ID)
+    * * Description: Identifier linking multiple agent runs that are part of the same conversation or user session`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: User context identifier for authentication and permissions during the agent run`),
+    Result: z.string().nullable().describe(`
+        * * Field Name: Result
+        * * Display Name: Result
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Final result or output from the agent execution, stored as JSON or text`),
+    AgentState: z.string().nullable().describe(`
+        * * Field Name: AgentState
+        * * Display Name: Agent State
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON serialization of the complete agent state, including conversation context, variables, and execution state. Enables pause/resume functionality.`),
+    TotalTokensUsed: z.number().nullable().describe(`
+        * * Field Name: TotalTokensUsed
+        * * Display Name: Total Tokens Used
+        * * SQL Data Type: int
+        * * Default Value: 0
+    * * Description: Total number of tokens consumed by all LLM calls during this agent run`),
+    TotalCost: z.number().nullable().describe(`
+        * * Field Name: TotalCost
+        * * Display Name: Total Cost
+        * * SQL Data Type: decimal(18, 6)
+        * * Default Value: 0.000000
+    * * Description: Total estimated cost for all AI model usage during this agent run`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    TotalPromptTokensUsed: z.number().nullable().describe(`
+        * * Field Name: TotalPromptTokensUsed
+        * * Display Name: Total Prompt Tokens Used
+        * * SQL Data Type: int
+    * * Description: Total number of prompt/input tokens used across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.`),
+    TotalCompletionTokensUsed: z.number().nullable().describe(`
+        * * Field Name: TotalCompletionTokensUsed
+        * * Display Name: Total Completion Tokens Used
+        * * SQL Data Type: int
+    * * Description: Total number of completion/output tokens generated across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.`),
+    TotalTokensUsedRollup: z.number().nullable().describe(`
+        * * Field Name: TotalTokensUsedRollup
+        * * Display Name: Total Tokens Used Rollup
+        * * SQL Data Type: int
+    * * Description: Total tokens used including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalTokensUsed. For parent agents, this includes the sum of all descendant agent tokens. Calculated as TotalPromptTokensUsedRollup + TotalCompletionTokensUsedRollup.`),
+    TotalPromptTokensUsedRollup: z.number().nullable().describe(`
+        * * Field Name: TotalPromptTokensUsedRollup
+        * * Display Name: Total Prompt Tokens Used Rollup
+        * * SQL Data Type: int
+    * * Description: Total prompt/input tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalPromptTokensUsed. For parent agents, this includes the sum of all descendant agent prompt tokens.`),
+    TotalCompletionTokensUsedRollup: z.number().nullable().describe(`
+        * * Field Name: TotalCompletionTokensUsedRollup
+        * * Display Name: Total Completion Tokens Used Rollup
+        * * SQL Data Type: int
+    * * Description: Total completion/output tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCompletionTokensUsed. For parent agents, this includes the sum of all descendant agent completion tokens.`),
+    TotalCostRollup: z.number().nullable().describe(`
+        * * Field Name: TotalCostRollup
+        * * Display Name: Total Cost Rollup
+        * * SQL Data Type: decimal(19, 8)
+    * * Description: Total cost including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCost. For parent agents, this includes the sum of all descendant agent costs. Note: This assumes all costs are in the same currency for accurate rollup.`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+    Conversation: z.string().nullable().describe(`
+        * * Field Name: Conversation
+        * * Display Name: Conversation
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type AIAgentRunEntityType = z.infer<typeof AIAgentRunSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Agent Types
+ */
+export const AIAgentTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+    * * Description: Unique identifier for the agent type`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+    * * Description: Unique name of the agent type (e.g., "Base", "CustomerSupport", "DataAnalysis"). Used for programmatic identification and factory instantiation.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of the agent type, its purpose, and typical use cases`),
+    SystemPromptID: z.string().nullable().describe(`
+        * * Field Name: SystemPromptID
+        * * Display Name: System Prompt ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: Reference to the AI Prompt that contains the system-level instructions for all agents of this type. This prompt will be blended with individual agent prompts.`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Is Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+    * * Description: Indicates whether this agent type is available for use. Inactive types cannot be assigned to new agents.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    AgentPromptPlaceholder: z.string().nullable().describe(`
+        * * Field Name: AgentPromptPlaceholder
+        * * Display Name: Agent Prompt Placeholder
+        * * SQL Data Type: nvarchar(255)
+    * * Description: The placeholder name used in the system prompt template where the agent prompt result should be injected. For example, if the system prompt contains "{{ agentPrompt }}", this field should contain "agentPrompt". This enables proper hierarchical prompt execution where the agent type's system prompt acts as the parent and the agent's specific prompt acts as the child.`),
+    DriverClass: z.string().nullable().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+    * * Description: The class name used by the MemberJunction class factory to instantiate the specific agent type implementation. For example, "LoopAgentType" for a looping agent pattern. If not specified, defaults to using the agent type Name for the DriverClass lookup key.`),
+    SystemPrompt: z.string().nullable().describe(`
+        * * Field Name: SystemPrompt
+        * * Display Name: System Prompt
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type AIAgentTypeEntityType = z.infer<typeof AIAgentTypeSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Configuration Params
  */
 export const AIConfigurationParamSchema = z.object({
@@ -7212,6 +7548,187 @@ export const AIConfigurationSchema = z.object({
 });
 
 export type AIConfigurationEntityType = z.infer<typeof AIConfigurationSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Model Costs
+ */
+export const AIModelCostSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ModelID: z.string().describe(`
+        * * Field Name: ModelID
+        * * Display Name: Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)`),
+    VendorID: z.string().describe(`
+        * * Field Name: VendorID
+        * * Display Name: Vendor ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)`),
+    StartedAt: z.date().nullable().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+    * * Description: Date and time with timezone when this pricing became effective. NULL disables temporal tracking. Defaults to current UTC time when record is created`),
+    EndedAt: z.date().nullable().describe(`
+        * * Field Name: EndedAt
+        * * Display Name: Ended At
+        * * SQL Data Type: datetimeoffset
+    * * Description: Date and time with timezone when this pricing expired or will expire. NULL indicates currently active pricing`),
+    Status: z.union([z.literal('Active'), z.literal('Pending'), z.literal('Expired'), z.literal('Invalid')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Expired
+    *   * Invalid
+    * * Description: Current status of this pricing record. Active=currently in use, Pending=scheduled for future, Expired=no longer valid, Invalid=data error`),
+    Currency: z.string().describe(`
+        * * Field Name: Currency
+        * * Display Name: Currency
+        * * SQL Data Type: nchar(3)
+    * * Description: ISO 4217 three-letter currency code (e.g., USD, EUR, GBP) in uppercase`),
+    PriceTypeID: z.string().describe(`
+        * * Field Name: PriceTypeID
+        * * Display Name: Price Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Model Price Types (vwAIModelPriceTypes.ID)`),
+    InputPricePerUnit: z.number().describe(`
+        * * Field Name: InputPricePerUnit
+        * * Display Name: Input Price Per Unit
+        * * SQL Data Type: decimal(18, 8)
+    * * Description: Price per unit for input tokens/requests. Must be non-negative. Precision allows for micro-pricing scenarios`),
+    OutputPricePerUnit: z.number().describe(`
+        * * Field Name: OutputPricePerUnit
+        * * Display Name: Output Price Per Unit
+        * * SQL Data Type: decimal(18, 8)
+    * * Description: Price per unit for output tokens/responses. Must be non-negative. Often higher than input pricing`),
+    UnitTypeID: z.string().describe(`
+        * * Field Name: UnitTypeID
+        * * Display Name: Unit Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Model Price Unit Types (vwAIModelPriceUnitTypes.ID)`),
+    ProcessingType: z.union([z.literal('Realtime'), z.literal('Batch')]).describe(`
+        * * Field Name: ProcessingType
+        * * Display Name: Processing Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Realtime
+    *   * Batch
+    * * Description: Processing method that affects pricing. Realtime=immediate response, Batch=delayed processing often with discounts`),
+    Comments: z.string().nullable().describe(`
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional notes about pricing context, source, special conditions, or vendor-specific details`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Model: z.string().describe(`
+        * * Field Name: Model
+        * * Display Name: Model
+        * * SQL Data Type: nvarchar(50)`),
+    Vendor: z.string().describe(`
+        * * Field Name: Vendor
+        * * Display Name: Vendor
+        * * SQL Data Type: nvarchar(50)`),
+    PriceType: z.string().describe(`
+        * * Field Name: PriceType
+        * * Display Name: Price Type
+        * * SQL Data Type: nvarchar(100)`),
+    UnitType: z.string().describe(`
+        * * Field Name: UnitType
+        * * Display Name: Unit Type
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type AIModelCostEntityType = z.infer<typeof AIModelCostSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Model Price Types
+ */
+export const AIModelPriceTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+    * * Description: Short, descriptive name for the price type (e.g., "Tokens", "Minutes", "Characters")`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of what this price type represents and how it is measured`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type AIModelPriceTypeEntityType = z.infer<typeof AIModelPriceTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Model Price Unit Types
+ */
+export const AIModelPriceUnitTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+    * * Description: Display name for the pricing unit (e.g., "Per 1M Tokens", "Per 1K Tokens", "Per Minute")`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed explanation of the unit scale and any special considerations for this pricing unit`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+    * * Description: Fully qualified class name that handles cost calculations and unit normalization for this pricing unit (e.g., "TokenPer1M", "TokenPer1K")`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type AIModelPriceUnitTypeEntityType = z.infer<typeof AIModelPriceUnitTypeSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Model Vendors
@@ -7481,14 +7998,14 @@ export const AIPromptRunSchema = z.object({
     RunAt: z.date().describe(`
         * * Field Name: RunAt
         * * Display Name: Run At
-        * * SQL Data Type: datetime2
-        * * Default Value: getutcdate()
-    * * Description: When the prompt execution started.`),
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+    * * Description: When the prompt run started, with timezone offset information.`),
     CompletedAt: z.date().nullable().describe(`
         * * Field Name: CompletedAt
         * * Display Name: Completed At
-        * * SQL Data Type: datetime2
-    * * Description: When the prompt execution finished. NULL indicates a pending or interrupted execution.`),
+        * * SQL Data Type: datetimeoffset
+    * * Description: When the prompt run completed, with timezone offset information.`),
     ExecutionTimeMS: z.number().nullable().describe(`
         * * Field Name: ExecutionTimeMS
         * * Display Name: Execution Time MS
@@ -7523,7 +8040,7 @@ export const AIPromptRunSchema = z.object({
         * * Field Name: TotalCost
         * * Display Name: Total Cost
         * * SQL Data Type: decimal(18, 6)
-    * * Description: Estimated cost of this execution in USD.`),
+    * * Description: Total cost including this execution and all child/grandchild executions. For leaf nodes (no children), this equals Cost. For parent nodes, this includes the sum of all descendant costs. Note: This assumes all costs are in the same currency for accurate rollup. Currency conversions should be handled at the application layer if needed.`),
     Success: z.boolean().describe(`
         * * Field Name: Success
         * * Display Name: Success
@@ -7568,6 +8085,37 @@ export const AIPromptRunSchema = z.object({
         * * Display Name: Execution Order
         * * SQL Data Type: int
     * * Description: Execution order for parallel child runs and result selector runs. Used to track the sequence of execution within a parallel run group. NULL for single runs and parallel parent runs.`),
+    AgentRunID: z.string().nullable().describe(`
+        * * Field Name: AgentRunID
+        * * Display Name: Agent Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: Optional reference to the AIAgentRun that initiated this prompt execution. Links prompt runs to their parent agent runs for comprehensive execution tracking.`),
+    Cost: z.number().nullable().describe(`
+        * * Field Name: Cost
+        * * Display Name: Cost
+        * * SQL Data Type: decimal(19, 8)
+    * * Description: The cost of this specific prompt execution as reported by the AI provider. This does not include costs from child executions. The currency is specified in CostCurrency field.`),
+    CostCurrency: z.string().nullable().describe(`
+        * * Field Name: CostCurrency
+        * * Display Name: Cost Currency
+        * * SQL Data Type: nvarchar(10)
+    * * Description: ISO 4217 currency code for the Cost field (e.g., USD, EUR, GBP). Different AI providers may use different currencies.`),
+    TokensUsedRollup: z.number().nullable().describe(`
+        * * Field Name: TokensUsedRollup
+        * * Display Name: Tokens Used Rollup
+        * * SQL Data Type: int
+    * * Description: Total tokens used including this execution and all child/grandchild executions. This provides a complete view of token usage for hierarchical prompt trees. Calculated as TokensPromptRollup + TokensCompletionRollup.`),
+    TokensPromptRollup: z.number().nullable().describe(`
+        * * Field Name: TokensPromptRollup
+        * * Display Name: Tokens Prompt Rollup
+        * * SQL Data Type: int
+    * * Description: Total prompt/input tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensPrompt. For parent nodes, this includes the sum of all descendant prompt tokens.`),
+    TokensCompletionRollup: z.number().nullable().describe(`
+        * * Field Name: TokensCompletionRollup
+        * * Display Name: Tokens Completion Rollup
+        * * SQL Data Type: int
+    * * Description: Total completion/output tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensCompletion. For parent nodes, this includes the sum of all descendant completion tokens.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -11571,6 +12119,9 @@ export class ActionAuthorizationEntity extends BaseEntity<ActionAuthorizationEnt
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: ActionID
@@ -11688,6 +12239,9 @@ export class ActionCategoryEntity extends BaseEntity<ActionCategoryEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -11818,6 +12372,9 @@ export class ActionContextTypeEntity extends BaseEntity<ActionContextTypeEntityT
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -11905,6 +12462,9 @@ export class ActionContextEntity extends BaseEntity<ActionContextEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -12031,6 +12591,9 @@ export class ActionExecutionLogEntity extends BaseEntity<ActionExecutionLogEntit
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: ActionID
@@ -12143,6 +12706,19 @@ export class ActionExecutionLogEntity extends BaseEntity<ActionExecutionLogEntit
     }
 
     /**
+    * * Field Name: Message
+    * * Display Name: Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON-formatted output data or response from the action execution
+    */
+    get Message(): string | null {
+        return this.Get('Message');
+    }
+    set Message(value: string | null) {
+        this.Set('Message', value);
+    }
+
+    /**
     * * Field Name: Action
     * * Display Name: Action
     * * SQL Data Type: nvarchar(425)
@@ -12200,6 +12776,9 @@ export class ActionFilterEntity extends BaseEntity<ActionFilterEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -12310,6 +12889,9 @@ export class ActionLibraryEntity extends BaseEntity<ActionLibraryEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -12429,6 +13011,9 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -12612,6 +13197,9 @@ export class ActionResultCodeEntity extends BaseEntity<ActionResultCodeEntityTyp
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: ActionID
@@ -12734,6 +13322,9 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -12980,6 +13571,19 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     }
 
     /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: For actions where Type='Custom', this specifies the fully qualified class name of the BaseAction sub-class that should be instantiated to handle the action execution. This provides a more reliable mechanism than relying on the Name field for class instantiation.
+    */
+    get DriverClass(): string | null {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string | null) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
     * * Field Name: Category
     * * Display Name: Category
     * * SQL Data Type: nvarchar(255)
@@ -13038,6 +13642,9 @@ export class AIActionEntity extends BaseEntity<AIActionEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -13173,6 +13780,9 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: AgentID
@@ -13299,6 +13909,9 @@ export class AIAgentLearningCycleEntity extends BaseEntity<AIAgentLearningCycleE
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -13445,6 +14058,9 @@ export class AIAgentModelEntity extends BaseEntity<AIAgentModelEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: AgentID
@@ -13577,6 +14193,9 @@ export class AIAgentNoteTypeEntity extends BaseEntity<AIAgentNoteTypeEntityType>
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -13661,6 +14280,9 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -13819,6 +14441,9 @@ export class AIAgentRequestEntity extends BaseEntity<AIAgentRequestEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -14084,6 +14709,9 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -14257,6 +14885,46 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     }
 
     /**
+    * * Field Name: TypeID
+    * * Display Name: Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
+    * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.
+    */
+    get TypeID(): string | null {
+        return this.Get('TypeID');
+    }
+    set TypeID(value: string | null) {
+        this.Set('TypeID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Description: Current status of the AI agent. Active agents can be executed, Disabled agents are inactive, and Pending agents are awaiting configuration or approval. Allowed values: Active, Disabled, Pending.
+    */
+    get Status(): string | null {
+        return this.Get('Status');
+    }
+    set Status(value: string | null) {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional override for the class name used by the MemberJunction class factory to instantiate this specific agent. If specified, this overrides the agent type's DriverClass. Useful for specialized agent implementations.
+    */
+    get DriverClass(): string | null {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string | null) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
@@ -14272,6 +14940,15 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     */
     get ContextCompressionPrompt(): string | null {
         return this.Get('ContextCompressionPrompt');
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Type(): string | null {
+        return this.Get('Type');
     }
 }
 
@@ -14315,6 +14992,9 @@ export class AIModelActionEntity extends BaseEntity<AIModelActionEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -14434,6 +15114,9 @@ export class AIModelTypeEntity extends BaseEntity<AIModelTypeEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -14574,6 +15257,9 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -14814,6 +15500,9 @@ export class AIPromptCategoryEntity extends BaseEntity<AIPromptCategoryEntityTyp
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -14922,6 +15611,9 @@ export class AIPromptTypeEntity extends BaseEntity<AIPromptTypeEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -15119,6 +15811,9 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -15233,14 +15928,15 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     *   * Any
     *   * Text
     *   * Markdown
+    *   * JSON
     *   * ModelSpecific
     *   * JSON
     * * Description: Specifies the expected response format for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.
     */
-    get ResponseFormat(): 'Any' | 'Text' | 'Markdown' | 'ModelSpecific' | 'JSON' {
+    get ResponseFormat(): 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific' | 'JSON' {
         return this.Get('ResponseFormat');
     }
-    set ResponseFormat(value: 'Any' | 'Text' | 'Markdown' | 'ModelSpecific' | 'JSON') {
+    set ResponseFormat(value: 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific' | 'JSON') {
         this.Set('ResponseFormat', value);
     }
 
@@ -15721,6 +16417,9 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: AIPromptID
@@ -15993,6 +16692,9 @@ export class ApplicationEntityEntity extends BaseEntity<ApplicationEntityEntityT
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: ApplicationID
@@ -16157,6 +16859,9 @@ export class ApplicationSettingEntity extends BaseEntity<ApplicationSettingEntit
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: ApplicationID
@@ -16275,6 +16980,9 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -16423,6 +17131,9 @@ export class AuditLogTypeEntity extends BaseEntity<AuditLogTypeEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -16563,6 +17274,9 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -16790,6 +17504,9 @@ export class AuthorizationRoleEntity extends BaseEntity<AuthorizationRoleEntityT
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: AuthorizationID
@@ -16936,6 +17653,9 @@ export class AuthorizationEntity extends BaseEntity<AuthorizationEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: ParentID
@@ -17070,6 +17790,9 @@ export class CommunicationBaseMessageTypeEntity extends BaseEntity<Communication
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -17211,6 +17934,9 @@ export class CommunicationLogEntity extends BaseEntity<CommunicationLogEntityTyp
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -17407,6 +18133,9 @@ export class CommunicationProviderMessageTypeEntity extends BaseEntity<Communica
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: CommunicationProviderID
@@ -17581,6 +18310,9 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -17768,6 +18500,9 @@ export class CommunicationRunEntity extends BaseEntity<CommunicationRunEntityTyp
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: UserID
@@ -17936,6 +18671,9 @@ export class CompanyEntity extends BaseEntity<CompanyEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -18065,6 +18803,9 @@ export class CompanyIntegrationRecordMapEntity extends BaseEntity<CompanyIntegra
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -18196,6 +18937,9 @@ export class CompanyIntegrationRunAPILogEntity extends BaseEntity<CompanyIntegra
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -18350,6 +19094,9 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity<CompanyIntegra
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -18523,6 +19270,9 @@ export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRu
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -18730,6 +19480,9 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -18999,6 +19752,9 @@ export class ContentFileTypeEntity extends BaseEntity<ContentFileTypeEntityType>
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -19083,6 +19839,9 @@ export class ContentItemAttributeEntity extends BaseEntity<ContentItemAttributeE
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -19191,6 +19950,9 @@ export class ContentItemTagEntity extends BaseEntity<ContentItemTagEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: ItemID
@@ -19285,6 +20047,9 @@ export class ContentItemEntity extends BaseEntity<ContentItemEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -19495,6 +20260,9 @@ export class ContentProcessRunEntity extends BaseEntity<ContentProcessRunEntityT
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: SourceID
@@ -19626,6 +20394,9 @@ export class ContentSourceParamEntity extends BaseEntity<ContentSourceParamEntit
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: ContentSourceID
@@ -19732,6 +20503,9 @@ export class ContentSourceTypeParamEntity extends BaseEntity<ContentSourceTypePa
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -19854,6 +20628,9 @@ export class ContentSourceTypeEntity extends BaseEntity<ContentSourceTypeEntityT
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -19938,6 +20715,9 @@ export class ContentSourceEntity extends BaseEntity<ContentSourceEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -20090,6 +20870,9 @@ export class ContentTypeAttributeEntity extends BaseEntity<ContentTypeAttributeE
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: ContentTypeID
@@ -20198,6 +20981,9 @@ export class ContentTypeEntity extends BaseEntity<ContentTypeEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -20355,6 +21141,9 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -20631,6 +21420,9 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: UserID
@@ -20850,6 +21642,9 @@ export class DashboardCategoryEntity extends BaseEntity<DashboardCategoryEntityT
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -20980,6 +21775,9 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -21072,12 +21870,13 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     * * Possible Values 
     *   * Config
     *   * Code
-    * * Description: Specifies if the dashboard is metadata-driven (Config) or code-based (Code)
+    *   * Dynamic Code
+    * * Description: Dashboard type supporting Config (metadata-driven), Code (compiled TypeScript), and Dynamic Code (Skip-generated runtime JavaScript/React) options
     */
-    get Type(): 'Config' | 'Code' {
+    get Type(): 'Config' | 'Code' | 'Dynamic Code' {
         return this.Get('Type');
     }
-    set Type(value: 'Config' | 'Code') {
+    set Type(value: 'Config' | 'Code' | 'Dynamic Code') {
         this.Set('Type', value);
     }
 
@@ -21127,19 +21926,6 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     }
 
     /**
-    * * Field Name: Code
-    * * Display Name: Code
-    * * SQL Data Type: nvarchar(255)
-    * * Description: Used to identify the dashboard for code-base dashboards. Allows reuse of the same DriverClass for multiple dashboards that can be rendered differently.
-    */
-    get Code(): string | null {
-        return this.Get('Code');
-    }
-    set Code(value: string | null) {
-        this.Set('Code', value);
-    }
-
-    /**
     * * Field Name: DriverClass
     * * Display Name: Driver Class
     * * SQL Data Type: nvarchar(255)
@@ -21150,6 +21936,19 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     }
     set DriverClass(value: string | null) {
         this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: Code
+    * * Display Name: Code
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Used to identify the dashboard for code-base dashboards. Allows reuse of the same DriverClass for multiple dashboards that can be rendered differently.
+    */
+    get Code(): string | null {
+        return this.Get('Code');
+    }
+    set Code(value: string | null) {
+        this.Set('Code', value);
     }
 
     /**
@@ -21219,6 +22018,9 @@ export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType>
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -21378,6 +22180,19 @@ export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType>
     }
 
     /**
+    * * Field Name: CodeName
+    * * Display Name: Code Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional programmatic identifier for this data context item. Must be unique within the DataContext and follow JavaScript naming conventions (letters, numbers, underscore, starting with letter or underscore). Used for improved code generation and programmatic access to data context items.
+    */
+    get CodeName(): string | null {
+        return this.Get('CodeName');
+    }
+    set CodeName(value: string | null) {
+        this.Set('CodeName', value);
+    }
+
+    /**
     * * Field Name: DataContext
     * * Display Name: Data Context
     * * SQL Data Type: nvarchar(255)
@@ -21453,6 +22268,9 @@ export class DataContextEntity extends BaseEntity<DataContextEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -21585,6 +22403,9 @@ export class DatasetItemEntity extends BaseEntity<DatasetItemEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -21778,6 +22599,9 @@ export class DatasetEntity extends BaseEntity<DatasetEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -21874,6 +22698,9 @@ export class DuplicateRunDetailMatchEntity extends BaseEntity<DuplicateRunDetail
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -22093,6 +22920,9 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: DuplicateRunID
@@ -22266,6 +23096,9 @@ export class DuplicateRunEntity extends BaseEntity<DuplicateRunEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -22513,6 +23346,9 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: EmployeeID
@@ -22625,6 +23461,9 @@ export class EmployeeRoleEntity extends BaseEntity<EmployeeRoleEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: EmployeeID
@@ -22721,6 +23560,9 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: EmployeeID
@@ -22816,6 +23658,9 @@ export class EmployeeEntity extends BaseEntity<EmployeeEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -23053,6 +23898,9 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -23881,6 +24729,9 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: EntityActionID
@@ -24001,6 +24852,9 @@ export class EntityActionInvocationTypeEntity extends BaseEntity<EntityActionInv
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -24101,6 +24955,9 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -24217,6 +25074,9 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -24425,6 +25285,9 @@ export class EntityActionEntity extends BaseEntity<EntityActionEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Entity
@@ -24485,6 +25348,9 @@ export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -24743,6 +25609,9 @@ export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicati
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: EntityCommunicationMessageTypeID
@@ -24843,6 +25712,9 @@ export class EntityCommunicationMessageTypeEntity extends BaseEntity<EntityCommu
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -24975,6 +25847,9 @@ export class EntityDocumentRunEntity extends BaseEntity<EntityDocumentRunEntityT
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: EntityDocumentID
@@ -25101,6 +25976,9 @@ export class EntityDocumentSettingEntity extends BaseEntity<EntityDocumentSettin
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: EntityDocumentID
@@ -25219,6 +26097,9 @@ export class EntityDocumentTypeEntity extends BaseEntity<EntityDocumentTypeEntit
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -25348,6 +26229,9 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -25589,6 +26473,9 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: EntityFieldID
@@ -25737,6 +26624,9 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -26471,6 +27361,9 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: EntityID
@@ -26737,6 +27630,9 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: EntityID
@@ -26937,6 +27833,9 @@ export class EntityRelationshipDisplayComponentEntity extends BaseEntity<EntityR
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -27039,6 +27938,9 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -27458,6 +28360,9 @@ export class EntitySettingEntity extends BaseEntity<EntitySettingEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: EntityID
@@ -27587,6 +28492,9 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -27771,6 +28679,9 @@ export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationI
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Sequence
@@ -27952,6 +28863,9 @@ export class FileCategoryEntity extends BaseEntity<FileCategoryEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -28058,6 +28972,9 @@ export class FileEntityRecordLinkEntity extends BaseEntity<FileEntityRecordLinkE
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -28175,6 +29092,9 @@ export class FileStorageProviderEntity extends BaseEntity<FileStorageProviderEnt
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -28311,6 +29231,9 @@ export class FileEntity extends BaseEntity<FileEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -28445,6 +29368,7 @@ export class FileEntity extends BaseEntity<FileEntityType> {
  * * Schema: __mj
  * * Base Table: GeneratedCodeCategory
  * * Base View: vwGeneratedCodeCategories
+ * * @description Categorization for generated code, including optional parent-child relationships.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -28477,6 +29401,9 @@ export class GeneratedCodeCategoryEntity extends BaseEntity<GeneratedCodeCategor
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -28585,6 +29512,9 @@ export class GeneratedCodeEntity extends BaseEntity<GeneratedCodeEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -28835,6 +29765,9 @@ export class IntegrationURLFormatEntity extends BaseEntity<IntegrationURLFormatE
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: IntegrationID
@@ -29077,6 +30010,9 @@ export class IntegrationEntity extends BaseEntity<IntegrationEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 }
 
 
@@ -29118,6 +30054,9 @@ export class LibraryEntity extends BaseEntity<LibraryEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -29250,6 +30189,9 @@ export class LibraryItemEntity extends BaseEntity<LibraryItemEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -29365,6 +30307,9 @@ export class ListCategoryEntity extends BaseEntity<ListCategoryEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -29494,6 +30439,9 @@ export class ListDetailEntity extends BaseEntity<ListDetailEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -29637,6 +30585,9 @@ export class ListEntity extends BaseEntity<ListEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -29838,6 +30789,9 @@ export class AIAgentPromptEntity extends BaseEntity<AIAgentPromptEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: AgentID
@@ -30013,6 +30967,770 @@ export class AIAgentPromptEntity extends BaseEntity<AIAgentPromptEntityType> {
 
 
 /**
+ * MJ: AI Agent Run Steps - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentRunStep
+ * * Base View: vwAIAgentRunSteps
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Run Steps')
+export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
+    /**
+    * Loads the MJ: AI Agent Run Steps record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Run Steps record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentRunStepEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Run Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * StepNumber: This rule ensures that the step number must always be greater than zero.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateStepNumberGreaterThanZero(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the step number must always be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateStepNumberGreaterThanZero(result: ValidationResult) {
+    	if (this.StepNumber <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("StepNumber", "Step number must be greater than zero.", this.StepNumber, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier for this execution step
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentRunID
+    * * Display Name: Agent Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: Reference to the parent AIAgentRun that contains this step
+    */
+    get AgentRunID(): string {
+        return this.Get('AgentRunID');
+    }
+    set AgentRunID(value: string) {
+        this.Set('AgentRunID', value);
+    }
+
+    /**
+    * * Field Name: StepNumber
+    * * Display Name: Step Number
+    * * SQL Data Type: int
+    * * Description: Sequential number of this step within the agent run, starting from 1
+    */
+    get StepNumber(): number {
+        return this.Get('StepNumber');
+    }
+    set StepNumber(value: number) {
+        this.Set('StepNumber', value);
+    }
+
+    /**
+    * * Field Name: StepType
+    * * Display Name: Step Type
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Type of execution step: prompt, tool, subagent, decision
+    */
+    get StepType(): string {
+        return this.Get('StepType');
+    }
+    set StepType(value: string) {
+        this.Set('StepType', value);
+    }
+
+    /**
+    * * Field Name: StepName
+    * * Display Name: Step Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable name of what this step accomplishes
+    */
+    get StepName(): string {
+        return this.Get('StepName');
+    }
+    set StepName(value: string) {
+        this.Set('StepName', value);
+    }
+
+    /**
+    * * Field Name: TargetID
+    * * Display Name: Target ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: ID of the specific target being executed (AIPrompt.ID, AIAction.ID, AIAgent.ID, etc.). NULL for steps that don't target a specific entity.
+    */
+    get TargetID(): string | null {
+        return this.Get('TargetID');
+    }
+    set TargetID(value: string | null) {
+        this.Set('TargetID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Running
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Running
+    *   * Completed
+    *   * Failed
+    *   * Cancelled
+    * * Description: Current execution status of this step: Running, Completed, Failed, Cancelled
+    */
+    get Status(): 'Running' | 'Completed' | 'Failed' | 'Cancelled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Running' | 'Completed' | 'Failed' | 'Cancelled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: Timestamp when this step began execution
+    */
+    get StartedAt(): Date {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: CompletedAt
+    * * Display Name: Completed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when this step completed. NULL while still running.
+    */
+    get CompletedAt(): Date | null {
+        return this.Get('CompletedAt');
+    }
+    set CompletedAt(value: Date | null) {
+        this.Set('CompletedAt', value);
+    }
+
+    /**
+    * * Field Name: Success
+    * * Display Name: Success
+    * * SQL Data Type: bit
+    * * Description: Whether this step completed successfully. NULL while running, TRUE/FALSE when completed.
+    */
+    get Success(): boolean | null {
+        return this.Get('Success');
+    }
+    set Success(value: boolean | null) {
+        this.Set('Success', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Error message if this step failed. NULL for successful steps.
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: InputData
+    * * Display Name: Input Data
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON serialization of input data passed to this step for execution
+    */
+    get InputData(): string | null {
+        return this.Get('InputData');
+    }
+    set InputData(value: string | null) {
+        this.Set('InputData', value);
+    }
+
+    /**
+    * * Field Name: OutputData
+    * * Display Name: Output Data
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON serialization of the output data produced by this step
+    */
+    get OutputData(): string | null {
+        return this.Get('OutputData');
+    }
+    set OutputData(value: string | null) {
+        this.Set('OutputData', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: AI Agent Runs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentRun
+ * * Base View: vwAIAgentRuns
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Runs')
+export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
+    /**
+    * Loads the MJ: AI Agent Runs record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Runs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentRunEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier for this agent run
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    * * Description: Reference to the AIAgent that is being executed in this run
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: ParentRunID
+    * * Display Name: Parent Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: Reference to the parent agent run if this is a sub-agent execution. NULL for root-level agent runs. Enables hierarchical execution tracking.
+    */
+    get ParentRunID(): string | null {
+        return this.Get('ParentRunID');
+    }
+    set ParentRunID(value: string | null) {
+        this.Set('ParentRunID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Running
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Running
+    *   * Completed
+    *   * Paused
+    *   * Failed
+    *   * Cancelled
+    * * Description: Current status of the agent run. Running -> Completed/Failed/Cancelled
+    */
+    get Status(): 'Running' | 'Completed' | 'Paused' | 'Failed' | 'Cancelled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Running' | 'Completed' | 'Paused' | 'Failed' | 'Cancelled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: Timestamp when the agent run began execution
+    */
+    get StartedAt(): Date {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: CompletedAt
+    * * Display Name: Completed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the agent run completed (successfully or with failure). NULL while running.
+    */
+    get CompletedAt(): Date | null {
+        return this.Get('CompletedAt');
+    }
+    set CompletedAt(value: Date | null) {
+        this.Set('CompletedAt', value);
+    }
+
+    /**
+    * * Field Name: Success
+    * * Display Name: Success
+    * * SQL Data Type: bit
+    * * Description: Indicates whether the agent run completed successfully. NULL while running, TRUE/FALSE when completed.
+    */
+    get Success(): boolean | null {
+        return this.Get('Success');
+    }
+    set Success(value: boolean | null) {
+        this.Set('Success', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Error message if the agent run failed. NULL for successful runs.
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: ConversationID
+    * * Display Name: Conversation ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Conversations (vwConversations.ID)
+    * * Description: Identifier linking multiple agent runs that are part of the same conversation or user session
+    */
+    get ConversationID(): string | null {
+        return this.Get('ConversationID');
+    }
+    set ConversationID(value: string | null) {
+        this.Set('ConversationID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: User context identifier for authentication and permissions during the agent run
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: Result
+    * * Display Name: Result
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Final result or output from the agent execution, stored as JSON or text
+    */
+    get Result(): string | null {
+        return this.Get('Result');
+    }
+    set Result(value: string | null) {
+        this.Set('Result', value);
+    }
+
+    /**
+    * * Field Name: AgentState
+    * * Display Name: Agent State
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON serialization of the complete agent state, including conversation context, variables, and execution state. Enables pause/resume functionality.
+    */
+    get AgentState(): string | null {
+        return this.Get('AgentState');
+    }
+    set AgentState(value: string | null) {
+        this.Set('AgentState', value);
+    }
+
+    /**
+    * * Field Name: TotalTokensUsed
+    * * Display Name: Total Tokens Used
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Total number of tokens consumed by all LLM calls during this agent run
+    */
+    get TotalTokensUsed(): number | null {
+        return this.Get('TotalTokensUsed');
+    }
+    set TotalTokensUsed(value: number | null) {
+        this.Set('TotalTokensUsed', value);
+    }
+
+    /**
+    * * Field Name: TotalCost
+    * * Display Name: Total Cost
+    * * SQL Data Type: decimal(18, 6)
+    * * Default Value: 0.000000
+    * * Description: Total estimated cost for all AI model usage during this agent run
+    */
+    get TotalCost(): number | null {
+        return this.Get('TotalCost');
+    }
+    set TotalCost(value: number | null) {
+        this.Set('TotalCost', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: TotalPromptTokensUsed
+    * * Display Name: Total Prompt Tokens Used
+    * * SQL Data Type: int
+    * * Description: Total number of prompt/input tokens used across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.
+    */
+    get TotalPromptTokensUsed(): number | null {
+        return this.Get('TotalPromptTokensUsed');
+    }
+    set TotalPromptTokensUsed(value: number | null) {
+        this.Set('TotalPromptTokensUsed', value);
+    }
+
+    /**
+    * * Field Name: TotalCompletionTokensUsed
+    * * Display Name: Total Completion Tokens Used
+    * * SQL Data Type: int
+    * * Description: Total number of completion/output tokens generated across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.
+    */
+    get TotalCompletionTokensUsed(): number | null {
+        return this.Get('TotalCompletionTokensUsed');
+    }
+    set TotalCompletionTokensUsed(value: number | null) {
+        this.Set('TotalCompletionTokensUsed', value);
+    }
+
+    /**
+    * * Field Name: TotalTokensUsedRollup
+    * * Display Name: Total Tokens Used Rollup
+    * * SQL Data Type: int
+    * * Description: Total tokens used including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalTokensUsed. For parent agents, this includes the sum of all descendant agent tokens. Calculated as TotalPromptTokensUsedRollup + TotalCompletionTokensUsedRollup.
+    */
+    get TotalTokensUsedRollup(): number | null {
+        return this.Get('TotalTokensUsedRollup');
+    }
+    set TotalTokensUsedRollup(value: number | null) {
+        this.Set('TotalTokensUsedRollup', value);
+    }
+
+    /**
+    * * Field Name: TotalPromptTokensUsedRollup
+    * * Display Name: Total Prompt Tokens Used Rollup
+    * * SQL Data Type: int
+    * * Description: Total prompt/input tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalPromptTokensUsed. For parent agents, this includes the sum of all descendant agent prompt tokens.
+    */
+    get TotalPromptTokensUsedRollup(): number | null {
+        return this.Get('TotalPromptTokensUsedRollup');
+    }
+    set TotalPromptTokensUsedRollup(value: number | null) {
+        this.Set('TotalPromptTokensUsedRollup', value);
+    }
+
+    /**
+    * * Field Name: TotalCompletionTokensUsedRollup
+    * * Display Name: Total Completion Tokens Used Rollup
+    * * SQL Data Type: int
+    * * Description: Total completion/output tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCompletionTokensUsed. For parent agents, this includes the sum of all descendant agent completion tokens.
+    */
+    get TotalCompletionTokensUsedRollup(): number | null {
+        return this.Get('TotalCompletionTokensUsedRollup');
+    }
+    set TotalCompletionTokensUsedRollup(value: number | null) {
+        this.Set('TotalCompletionTokensUsedRollup', value);
+    }
+
+    /**
+    * * Field Name: TotalCostRollup
+    * * Display Name: Total Cost Rollup
+    * * SQL Data Type: decimal(19, 8)
+    * * Description: Total cost including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCost. For parent agents, this includes the sum of all descendant agent costs. Note: This assumes all costs are in the same currency for accurate rollup.
+    */
+    get TotalCostRollup(): number | null {
+        return this.Get('TotalCostRollup');
+    }
+    set TotalCostRollup(value: number | null) {
+        this.Set('TotalCostRollup', value);
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: Conversation
+    * * Display Name: Conversation
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Conversation(): string | null {
+        return this.Get('Conversation');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
+    }
+}
+
+
+/**
+ * MJ: AI Agent Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentType
+ * * Base View: vwAIAgentTypes
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Types')
+export class AIAgentTypeEntity extends BaseEntity<AIAgentTypeEntityType> {
+    /**
+    * Loads the MJ: AI Agent Types record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier for the agent type
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique name of the agent type (e.g., "Base", "CustomerSupport", "DataAnalysis"). Used for programmatic identification and factory instantiation.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of the agent type, its purpose, and typical use cases
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: SystemPromptID
+    * * Display Name: System Prompt ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: Reference to the AI Prompt that contains the system-level instructions for all agents of this type. This prompt will be blended with individual agent prompts.
+    */
+    get SystemPromptID(): string | null {
+        return this.Get('SystemPromptID');
+    }
+    set SystemPromptID(value: string | null) {
+        this.Set('SystemPromptID', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Is Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Indicates whether this agent type is available for use. Inactive types cannot be assigned to new agents.
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: AgentPromptPlaceholder
+    * * Display Name: Agent Prompt Placeholder
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The placeholder name used in the system prompt template where the agent prompt result should be injected. For example, if the system prompt contains "{{ agentPrompt }}", this field should contain "agentPrompt". This enables proper hierarchical prompt execution where the agent type's system prompt acts as the parent and the agent's specific prompt acts as the child.
+    */
+    get AgentPromptPlaceholder(): string | null {
+        return this.Get('AgentPromptPlaceholder');
+    }
+    set AgentPromptPlaceholder(value: string | null) {
+        this.Set('AgentPromptPlaceholder', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The class name used by the MemberJunction class factory to instantiate the specific agent type implementation. For example, "LoopAgentType" for a looping agent pattern. If not specified, defaults to using the agent type Name for the DriverClass lookup key.
+    */
+    get DriverClass(): string | null {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string | null) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: SystemPrompt
+    * * Display Name: System Prompt
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SystemPrompt(): string | null {
+        return this.Get('SystemPrompt');
+    }
+}
+
+
+/**
  * MJ: AI Configuration Params - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIConfigurationParam
@@ -30049,6 +31767,9 @@ export class AIConfigurationParamEntity extends BaseEntity<AIConfigurationParamE
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -30193,6 +31914,9 @@ export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType>
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -30323,6 +32047,602 @@ export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType>
 
 
 /**
+ * MJ: AI Model Costs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIModelCost
+ * * Base View: vwAIModelCosts
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Model Costs')
+export class AIModelCostEntity extends BaseEntity<AIModelCostEntityType> {
+    /**
+    * Loads the MJ: AI Model Costs record from the database
+    * @param ID: string - primary key value to load the MJ: AI Model Costs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIModelCostEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Model Costs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Currency: This rule ensures that the currency code consists of exactly three uppercase letters. For example, 'USD', 'EUR', or 'JPY' are valid, but anything with lowercase letters or a different length is not allowed.
+    * * InputPricePerUnit: This rule ensures that the input price per unit cannot be negative. It must be zero or greater.
+    * * OutputPricePerUnit: This rule ensures that the output price per unit cannot be negative. It must be zero or greater.
+    * * Table-Level: This rule ensures that the end date must be after the start date if both are specified. If either the start date or end date is missing, any value is allowed.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateCurrencyIsThreeUppercaseLetters(result);
+        this.ValidateInputPricePerUnitNonNegative(result);
+        this.ValidateOutputPricePerUnitNonNegative(result);
+        this.ValidateEndedAtAfterStartedAt(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the currency code consists of exactly three uppercase letters. For example, 'USD', 'EUR', or 'JPY' are valid, but anything with lowercase letters or a different length is not allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCurrencyIsThreeUppercaseLetters(result: ValidationResult) {
+    	if (typeof this.Currency !== "string" || this.Currency.length !== 3 || this.Currency !== this.Currency.toUpperCase()) {
+    		result.Errors.push(new ValidationErrorInfo("Currency", "Currency code must be exactly three uppercase letters (e.g., 'USD').", this.Currency, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the input price per unit cannot be negative. It must be zero or greater.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateInputPricePerUnitNonNegative(result: ValidationResult) {
+    	if (this.InputPricePerUnit < 0) {
+    		result.Errors.push(new ValidationErrorInfo("InputPricePerUnit", "Input price per unit cannot be negative.", this.InputPricePerUnit, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the output price per unit cannot be negative. It must be zero or greater.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateOutputPricePerUnitNonNegative(result: ValidationResult) {
+    	if (this.OutputPricePerUnit < 0) {
+    		result.Errors.push(new ValidationErrorInfo("OutputPricePerUnit", "Output price per unit must be zero or a positive value.", this.OutputPricePerUnit, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the end date must be after the start date if both are specified. If either the start date or end date is missing, any value is allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEndedAtAfterStartedAt(result: ValidationResult) {
+    	if (this.EndedAt !== null && this.StartedAt !== null) {
+    		if (this.EndedAt <= this.StartedAt) {
+    			result.Errors.push(new ValidationErrorInfo("EndedAt", "The end date must be after the start date when both are specified.", this.EndedAt, ValidationErrorType.Failure));
+    		}
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ModelID
+    * * Display Name: Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    */
+    get ModelID(): string {
+        return this.Get('ModelID');
+    }
+    set ModelID(value: string) {
+        this.Set('ModelID', value);
+    }
+
+    /**
+    * * Field Name: VendorID
+    * * Display Name: Vendor ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
+    */
+    get VendorID(): string {
+        return this.Get('VendorID');
+    }
+    set VendorID(value: string) {
+        this.Set('VendorID', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: Date and time with timezone when this pricing became effective. NULL disables temporal tracking. Defaults to current UTC time when record is created
+    */
+    get StartedAt(): Date | null {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date | null) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: EndedAt
+    * * Display Name: Ended At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Date and time with timezone when this pricing expired or will expire. NULL indicates currently active pricing
+    */
+    get EndedAt(): Date | null {
+        return this.Get('EndedAt');
+    }
+    set EndedAt(value: Date | null) {
+        this.Set('EndedAt', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Expired
+    *   * Invalid
+    * * Description: Current status of this pricing record. Active=currently in use, Pending=scheduled for future, Expired=no longer valid, Invalid=data error
+    */
+    get Status(): 'Active' | 'Pending' | 'Expired' | 'Invalid' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Pending' | 'Expired' | 'Invalid') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Currency
+    * * Display Name: Currency
+    * * SQL Data Type: nchar(3)
+    * * Description: ISO 4217 three-letter currency code (e.g., USD, EUR, GBP) in uppercase
+    */
+    get Currency(): string {
+        return this.Get('Currency');
+    }
+    set Currency(value: string) {
+        this.Set('Currency', value);
+    }
+
+    /**
+    * * Field Name: PriceTypeID
+    * * Display Name: Price Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Model Price Types (vwAIModelPriceTypes.ID)
+    */
+    get PriceTypeID(): string {
+        return this.Get('PriceTypeID');
+    }
+    set PriceTypeID(value: string) {
+        this.Set('PriceTypeID', value);
+    }
+
+    /**
+    * * Field Name: InputPricePerUnit
+    * * Display Name: Input Price Per Unit
+    * * SQL Data Type: decimal(18, 8)
+    * * Description: Price per unit for input tokens/requests. Must be non-negative. Precision allows for micro-pricing scenarios
+    */
+    get InputPricePerUnit(): number {
+        return this.Get('InputPricePerUnit');
+    }
+    set InputPricePerUnit(value: number) {
+        this.Set('InputPricePerUnit', value);
+    }
+
+    /**
+    * * Field Name: OutputPricePerUnit
+    * * Display Name: Output Price Per Unit
+    * * SQL Data Type: decimal(18, 8)
+    * * Description: Price per unit for output tokens/responses. Must be non-negative. Often higher than input pricing
+    */
+    get OutputPricePerUnit(): number {
+        return this.Get('OutputPricePerUnit');
+    }
+    set OutputPricePerUnit(value: number) {
+        this.Set('OutputPricePerUnit', value);
+    }
+
+    /**
+    * * Field Name: UnitTypeID
+    * * Display Name: Unit Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Model Price Unit Types (vwAIModelPriceUnitTypes.ID)
+    */
+    get UnitTypeID(): string {
+        return this.Get('UnitTypeID');
+    }
+    set UnitTypeID(value: string) {
+        this.Set('UnitTypeID', value);
+    }
+
+    /**
+    * * Field Name: ProcessingType
+    * * Display Name: Processing Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Realtime
+    *   * Batch
+    * * Description: Processing method that affects pricing. Realtime=immediate response, Batch=delayed processing often with discounts
+    */
+    get ProcessingType(): 'Realtime' | 'Batch' {
+        return this.Get('ProcessingType');
+    }
+    set ProcessingType(value: 'Realtime' | 'Batch') {
+        this.Set('ProcessingType', value);
+    }
+
+    /**
+    * * Field Name: Comments
+    * * Display Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional notes about pricing context, source, special conditions, or vendor-specific details
+    */
+    get Comments(): string | null {
+        return this.Get('Comments');
+    }
+    set Comments(value: string | null) {
+        this.Set('Comments', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Model
+    * * Display Name: Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Model(): string {
+        return this.Get('Model');
+    }
+
+    /**
+    * * Field Name: Vendor
+    * * Display Name: Vendor
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Vendor(): string {
+        return this.Get('Vendor');
+    }
+
+    /**
+    * * Field Name: PriceType
+    * * Display Name: Price Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get PriceType(): string {
+        return this.Get('PriceType');
+    }
+
+    /**
+    * * Field Name: UnitType
+    * * Display Name: Unit Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get UnitType(): string {
+        return this.Get('UnitType');
+    }
+}
+
+
+/**
+ * MJ: AI Model Price Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIModelPriceType
+ * * Base View: vwAIModelPriceTypes
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Model Price Types')
+export class AIModelPriceTypeEntity extends BaseEntity<AIModelPriceTypeEntityType> {
+    /**
+    * Loads the MJ: AI Model Price Types record from the database
+    * @param ID: string - primary key value to load the MJ: AI Model Price Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIModelPriceTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Model Price Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Name: This rule ensures that the Name field cannot be empty or consist only of spaces; it must contain at least one non-space character.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateNameNotEmptyOrWhitespace(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the Name field cannot be empty or consist only of spaces; it must contain at least one non-space character.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateNameNotEmptyOrWhitespace(result: ValidationResult) {
+    	if (!this.Name || this.Name.trim().length === 0) {
+    		result.Errors.push(new ValidationErrorInfo("Name", "The Name field cannot be empty or just spaces.", this.Name, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Short, descriptive name for the price type (e.g., "Tokens", "Minutes", "Characters")
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of what this price type represents and how it is measured
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: AI Model Price Unit Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIModelPriceUnitType
+ * * Base View: vwAIModelPriceUnitTypes
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Model Price Unit Types')
+export class AIModelPriceUnitTypeEntity extends BaseEntity<AIModelPriceUnitTypeEntityType> {
+    /**
+    * Loads the MJ: AI Model Price Unit Types record from the database
+    * @param ID: string - primary key value to load the MJ: AI Model Price Unit Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIModelPriceUnitTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Model Price Unit Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Name: This rule ensures that the Name field cannot be empty or contain only spaces; it must have at least one non-space character.
+    * * DriverClass: This rule ensures that the DriverClass field cannot be empty or consist only of spaces. The value must contain at least one character when leading and trailing spaces are ignored.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateNameNotEmptyOrWhitespace(result);
+        this.ValidateDriverClassNotEmpty(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the Name field cannot be empty or contain only spaces; it must have at least one non-space character.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateNameNotEmptyOrWhitespace(result: ValidationResult) {
+    	if (!this.Name || this.Name.trim().length === 0) {
+    		result.Errors.push(new ValidationErrorInfo("Name", "The Name field must not be empty or contain only spaces.", this.Name, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the DriverClass field cannot be empty or consist only of spaces. The value must contain at least one character when leading and trailing spaces are ignored.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDriverClassNotEmpty(result: ValidationResult) {
+    	if (this.DriverClass === null || this.DriverClass.trim().length === 0) {
+    		result.Errors.push(new ValidationErrorInfo("DriverClass", "DriverClass must not be empty or only spaces.", this.DriverClass, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Display name for the pricing unit (e.g., "Per 1M Tokens", "Per 1K Tokens", "Per Minute")
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed explanation of the unit scale and any special considerations for this pricing unit
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Fully qualified class name that handles cost calculations and unit normalization for this pricing unit (e.g., "TokenPer1M", "TokenPer1K")
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
  * MJ: AI Model Vendors - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIModelVendor
@@ -30413,6 +32733,9 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -30769,6 +33092,9 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: PromptID
@@ -31022,30 +33348,18 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
 
     /**
     * Validate() method override for MJ: AI Prompt Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Table-Level: This rule ensures that if the 'CompletedAt' field has a value, it must be on or after the 'RunAt' field. Otherwise, if 'CompletedAt' is empty, there is no restriction.
-    * * Table-Level: This rule ensures that either both TokensPrompt and TokensCompletion are missing, or TokensUsed is missing, or, if all values are present, the value of TokensUsed equals the sum of TokensPrompt and TokensCompletion.  
+    * * Table-Level: This rule ensures that either both TokensPrompt and TokensCompletion are missing, or TokensUsed is missing, or, if all values are present, the value of TokensUsed equals the sum of TokensPrompt and TokensCompletion.
+    * * Table-Level: This rule ensures that if the 'CompletedAt' field has a value, it must be on or after the 'RunAt' field. Otherwise, if 'CompletedAt' is empty, there is no restriction.  
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateCompletedAtIsNullOrAfterRunAt(result);
         this.ValidateTokensUsedSumMatchesPromptAndCompletion(result);
+        this.ValidateCompletedAtIsNullOrAfterRunAt(result);
 
         return result;
-    }
-
-    /**
-    * This rule ensures that if the 'CompletedAt' field has a value, it must be on or after the 'RunAt' field. Otherwise, if 'CompletedAt' is empty, there is no restriction.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateCompletedAtIsNullOrAfterRunAt(result: ValidationResult) {
-    	if (this.CompletedAt !== null && this.CompletedAt < this.RunAt) {
-    		result.Errors.push(new ValidationErrorInfo("CompletedAt", "Completed date and time, if present, must not be earlier than the run start date and time.", this.CompletedAt, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -31066,6 +33380,18 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     }
 
     /**
+    * This rule ensures that if the 'CompletedAt' field has a value, it must be on or after the 'RunAt' field. Otherwise, if 'CompletedAt' is empty, there is no restriction.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompletedAtIsNullOrAfterRunAt(result: ValidationResult) {
+    	if (this.CompletedAt !== null && this.CompletedAt < this.RunAt) {
+    		result.Errors.push(new ValidationErrorInfo("CompletedAt", "Completed date and time, if present, must not be earlier than the run start date and time.", this.CompletedAt, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -31073,6 +33399,9 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -31148,9 +33477,9 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     /**
     * * Field Name: RunAt
     * * Display Name: Run At
-    * * SQL Data Type: datetime2
-    * * Default Value: getutcdate()
-    * * Description: When the prompt execution started.
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: When the prompt run started, with timezone offset information.
     */
     get RunAt(): Date {
         return this.Get('RunAt');
@@ -31162,8 +33491,8 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     /**
     * * Field Name: CompletedAt
     * * Display Name: Completed At
-    * * SQL Data Type: datetime2
-    * * Description: When the prompt execution finished. NULL indicates a pending or interrupted execution.
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the prompt run completed, with timezone offset information.
     */
     get CompletedAt(): Date | null {
         return this.Get('CompletedAt');
@@ -31254,7 +33583,7 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     * * Field Name: TotalCost
     * * Display Name: Total Cost
     * * SQL Data Type: decimal(18, 6)
-    * * Description: Estimated cost of this execution in USD.
+    * * Description: Total cost including this execution and all child/grandchild executions. For leaf nodes (no children), this equals Cost. For parent nodes, this includes the sum of all descendant costs. Note: This assumes all costs are in the same currency for accurate rollup. Currency conversions should be handled at the application layer if needed.
     */
     get TotalCost(): number | null {
         return this.Get('TotalCost');
@@ -31358,6 +33687,85 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     }
 
     /**
+    * * Field Name: AgentRunID
+    * * Display Name: Agent Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: Optional reference to the AIAgentRun that initiated this prompt execution. Links prompt runs to their parent agent runs for comprehensive execution tracking.
+    */
+    get AgentRunID(): string | null {
+        return this.Get('AgentRunID');
+    }
+    set AgentRunID(value: string | null) {
+        this.Set('AgentRunID', value);
+    }
+
+    /**
+    * * Field Name: Cost
+    * * Display Name: Cost
+    * * SQL Data Type: decimal(19, 8)
+    * * Description: The cost of this specific prompt execution as reported by the AI provider. This does not include costs from child executions. The currency is specified in CostCurrency field.
+    */
+    get Cost(): number | null {
+        return this.Get('Cost');
+    }
+    set Cost(value: number | null) {
+        this.Set('Cost', value);
+    }
+
+    /**
+    * * Field Name: CostCurrency
+    * * Display Name: Cost Currency
+    * * SQL Data Type: nvarchar(10)
+    * * Description: ISO 4217 currency code for the Cost field (e.g., USD, EUR, GBP). Different AI providers may use different currencies.
+    */
+    get CostCurrency(): string | null {
+        return this.Get('CostCurrency');
+    }
+    set CostCurrency(value: string | null) {
+        this.Set('CostCurrency', value);
+    }
+
+    /**
+    * * Field Name: TokensUsedRollup
+    * * Display Name: Tokens Used Rollup
+    * * SQL Data Type: int
+    * * Description: Total tokens used including this execution and all child/grandchild executions. This provides a complete view of token usage for hierarchical prompt trees. Calculated as TokensPromptRollup + TokensCompletionRollup.
+    */
+    get TokensUsedRollup(): number | null {
+        return this.Get('TokensUsedRollup');
+    }
+    set TokensUsedRollup(value: number | null) {
+        this.Set('TokensUsedRollup', value);
+    }
+
+    /**
+    * * Field Name: TokensPromptRollup
+    * * Display Name: Tokens Prompt Rollup
+    * * SQL Data Type: int
+    * * Description: Total prompt/input tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensPrompt. For parent nodes, this includes the sum of all descendant prompt tokens.
+    */
+    get TokensPromptRollup(): number | null {
+        return this.Get('TokensPromptRollup');
+    }
+    set TokensPromptRollup(value: number | null) {
+        this.Set('TokensPromptRollup', value);
+    }
+
+    /**
+    * * Field Name: TokensCompletionRollup
+    * * Display Name: Tokens Completion Rollup
+    * * SQL Data Type: int
+    * * Description: Total completion/output tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensCompletion. For parent nodes, this includes the sum of all descendant completion tokens.
+    */
+    get TokensCompletionRollup(): number | null {
+        return this.Get('TokensCompletionRollup');
+    }
+    set TokensCompletionRollup(value: number | null) {
+        this.Set('TokensCompletionRollup', value);
+    }
+
+    /**
     * * Field Name: Prompt
     * * Display Name: Prompt
     * * SQL Data Type: nvarchar(255)
@@ -31440,6 +33848,9 @@ export class AIVendorTypeDefinitionEntity extends BaseEntity<AIVendorTypeDefinit
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -31553,6 +33964,9 @@ export class AIVendorTypeEntity extends BaseEntity<AIVendorTypeEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -31693,6 +34107,9 @@ export class AIVendorEntity extends BaseEntity<AIVendorEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -31778,6 +34195,9 @@ export class ArtifactTypeEntity extends BaseEntity<ArtifactTypeEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -31892,6 +34312,9 @@ export class ConversationArtifactPermissionEntity extends BaseEntity<Conversatio
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -32034,6 +34457,9 @@ export class ConversationArtifactVersionEntity extends BaseEntity<ConversationAr
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: ConversationArtifactID
@@ -32169,6 +34595,9 @@ export class ConversationArtifactEntity extends BaseEntity<ConversationArtifactE
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -32364,6 +34793,9 @@ export class DashboardUserPreferenceEntity extends BaseEntity<DashboardUserPrefe
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: UserID
@@ -32524,6 +34956,9 @@ export class DashboardUserStateEntity extends BaseEntity<DashboardUserStateEntit
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: DashboardID
@@ -32643,6 +35078,9 @@ export class ReportUserStateEntity extends BaseEntity<ReportUserStateEntityType>
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -32787,6 +35225,9 @@ export class ReportVersionEntity extends BaseEntity<ReportVersionEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -32961,6 +35402,9 @@ export class OutputDeliveryTypeEntity extends BaseEntity<OutputDeliveryTypeEntit
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -33069,6 +35513,9 @@ export class OutputFormatTypeEntity extends BaseEntity<OutputFormatTypeEntityTyp
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -33191,6 +35638,9 @@ export class OutputTriggerTypeEntity extends BaseEntity<OutputTriggerTypeEntityT
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -33276,6 +35726,9 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -33490,6 +35943,9 @@ export class QueryCategoryEntity extends BaseEntity<QueryCategoryEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -33621,6 +36077,9 @@ export class QueryEntityEntity extends BaseEntity<QueryEntityEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: QueryID
@@ -33727,6 +36186,9 @@ export class QueryFieldEntity extends BaseEntity<QueryFieldEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -33957,6 +36419,9 @@ export class QueryPermissionEntity extends BaseEntity<QueryPermissionEntityType>
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: QueryID
@@ -34073,6 +36538,9 @@ export class QueueTaskEntity extends BaseEntity<QueueTaskEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -34271,6 +36739,9 @@ export class QueueTypeEntity extends BaseEntity<QueueTypeEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -34405,6 +36876,9 @@ export class QueueEntity extends BaseEntity<QueueEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -34710,6 +37184,9 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: RecommendationID
@@ -34833,6 +37310,9 @@ export class RecommendationProviderEntity extends BaseEntity<RecommendationProvi
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -34930,6 +37410,9 @@ export class RecommendationRunEntity extends BaseEntity<RecommendationRunEntityT
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -35107,6 +37590,9 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: RecommendationRunID
@@ -35228,6 +37714,9 @@ export class RecordChangeReplayRunEntity extends BaseEntity<RecordChangeReplayRu
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -35368,6 +37857,9 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -35664,6 +38156,9 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: RecordMergeLogID
@@ -35791,6 +38286,9 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -36016,6 +38514,9 @@ export class ReportCategoryEntity extends BaseEntity<ReportCategoryEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -36145,6 +38646,9 @@ export class ReportSnapshotEntity extends BaseEntity<ReportSnapshotEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: ReportID
@@ -36261,6 +38765,9 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -36605,6 +39112,9 @@ export class ResourceLinkEntity extends BaseEntity<ResourceLinkEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: UserID
@@ -36766,6 +39276,9 @@ export class ResourcePermissionEntity extends BaseEntity<ResourcePermissionEntit
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -37013,6 +39526,9 @@ export class ResourceTypeEntity extends BaseEntity<ResourceTypeEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -37167,6 +39683,9 @@ export class RoleEntity extends BaseEntity<RoleEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -37288,6 +39807,9 @@ export class RowLevelSecurityFilterEntity extends BaseEntity<RowLevelSecurityFil
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -37384,6 +39906,9 @@ export class ScheduledActionParamEntity extends BaseEntity<ScheduledActionParamE
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -37530,6 +40055,9 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -37846,6 +40374,9 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: SchemaName
@@ -37967,6 +40498,9 @@ export class SkillEntity extends BaseEntity<SkillEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -38073,6 +40607,9 @@ export class TaggedItemEntity extends BaseEntity<TaggedItemEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -38204,6 +40741,9 @@ export class TagEntity extends BaseEntity<TagEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -38323,6 +40863,9 @@ export class TemplateCategoryEntity extends BaseEntity<TemplateCategoryEntityTyp
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -38456,6 +40999,9 @@ export class TemplateContentTypeEntity extends BaseEntity<TemplateContentTypeEnt
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -38567,6 +41113,9 @@ export class TemplateContentEntity extends BaseEntity<TemplateContentEntityType>
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -38713,6 +41262,9 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -38958,6 +41510,9 @@ export class TemplateEntity extends BaseEntity<TemplateEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -39141,6 +41696,9 @@ export class UserApplicationEntityEntity extends BaseEntity<UserApplicationEntit
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: UserApplicationID
@@ -39265,6 +41823,9 @@ export class UserApplicationEntity extends BaseEntity<UserApplicationEntityType>
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -39396,6 +41957,9 @@ export class UserFavoriteEntity extends BaseEntity<UserFavoriteEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: UserID
@@ -39520,6 +42084,9 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -39709,6 +42276,9 @@ export class UserRecordLogEntity extends BaseEntity<UserRecordLogEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -39902,6 +42472,9 @@ export class UserRoleEntity extends BaseEntity<UserRoleEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: UserID
@@ -40006,6 +42579,9 @@ export class UserViewCategoryEntity extends BaseEntity<UserViewCategoryEntityTyp
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -40170,6 +42746,9 @@ export class UserViewRunDetailEntity extends BaseEntity<UserViewRunDetailEntityT
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: UserViewRunID
@@ -40285,6 +42864,9 @@ export class UserViewRunEntity extends BaseEntity<UserViewRunEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -40402,6 +42984,9 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -40741,6 +43326,9 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -40993,6 +43581,9 @@ export class VectorDatabaseEntity extends BaseEntity<VectorDatabaseEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -41101,6 +43692,9 @@ export class VectorIndexEntity extends BaseEntity<VectorIndexEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -41242,6 +43836,9 @@ export class VersionInstallationEntity extends BaseEntity<VersionInstallationEnt
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -41424,6 +44021,9 @@ export class WorkflowEngineEntity extends BaseEntity<WorkflowEngineEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -41541,6 +44141,9 @@ export class WorkflowRunEntity extends BaseEntity<WorkflowRunEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -41709,6 +44312,9 @@ export class WorkflowEntity extends BaseEntity<WorkflowEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**
@@ -41889,6 +44495,9 @@ export class WorkspaceItemEntity extends BaseEntity<WorkspaceItemEntityType> {
     get ID(): string {
         return this.Get('ID');
     }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
 
     /**
     * * Field Name: Name
@@ -42054,6 +44663,9 @@ export class WorkspaceEntity extends BaseEntity<WorkspaceEntityType> {
     */
     get ID(): string {
         return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
     }
 
     /**

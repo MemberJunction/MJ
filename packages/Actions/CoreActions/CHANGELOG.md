@@ -1,5 +1,97 @@
 # Change Log - @memberjunction/core-actions
 
+## 2.50.0
+
+### Patch Changes
+
+- @memberjunction/ai-vector-sync@2.50.0
+- @memberjunction/actions@2.50.0
+- @memberjunction/communication-engine@2.50.0
+- @memberjunction/content-autotagging@2.50.0
+- @memberjunction/external-change-detection@2.50.0
+- @memberjunction/core@2.50.0
+- @memberjunction/core-entities@2.50.0
+- @memberjunction/global@2.50.0
+
+## 2.49.0
+
+### Minor Changes
+
+- b5d9fbd: Actions system improvements/metadata
+- 62cf1b6: Removed TypeORM which resulted in changes to nearly every package
+
+### Patch Changes
+
+- Updated dependencies [2f974e2]
+- Updated dependencies [cc52ced]
+- Updated dependencies [ca3365f]
+- Updated dependencies [b5d9fbd]
+- Updated dependencies [db17ed7]
+- Updated dependencies [62cf1b6]
+  - @memberjunction/core-entities@2.49.0
+  - @memberjunction/core@2.49.0
+  - @memberjunction/global@2.49.0
+  - @memberjunction/actions@2.49.0
+  - @memberjunction/ai-vector-sync@2.49.0
+  - @memberjunction/communication-engine@2.49.0
+  - @memberjunction/content-autotagging@2.49.0
+  - @memberjunction/external-change-detection@2.49.0
+
+## 2.48.0
+
+### Patch Changes
+
+- Updated dependencies [bb01fcf]
+- Updated dependencies [031e724]
+  - @memberjunction/core@2.48.0
+  - @memberjunction/core-entities@2.48.0
+  - @memberjunction/ai-vector-sync@2.48.0
+  - @memberjunction/actions@2.48.0
+  - @memberjunction/communication-engine@2.48.0
+  - @memberjunction/content-autotagging@2.48.0
+  - @memberjunction/external-change-detection@2.48.0
+  - @memberjunction/global@2.48.0
+
+## 2.47.0
+
+### Patch Changes
+
+- @memberjunction/external-change-detection@2.47.0
+- @memberjunction/ai-vector-sync@2.47.0
+- @memberjunction/actions@2.47.0
+- @memberjunction/content-autotagging@2.47.0
+- @memberjunction/communication-engine@2.47.0
+- @memberjunction/core@2.47.0
+- @memberjunction/core-entities@2.47.0
+- @memberjunction/global@2.47.0
+
+## 2.46.0
+
+### Patch Changes
+
+- @memberjunction/ai-vector-sync@2.46.0
+- @memberjunction/actions@2.46.0
+- @memberjunction/communication-engine@2.46.0
+- @memberjunction/content-autotagging@2.46.0
+- @memberjunction/external-change-detection@2.46.0
+- @memberjunction/core@2.46.0
+- @memberjunction/core-entities@2.46.0
+- @memberjunction/global@2.46.0
+
+## 2.45.0
+
+### Patch Changes
+
+- Updated dependencies [556ee8d]
+  - @memberjunction/core-entities@2.45.0
+  - @memberjunction/ai-vector-sync@2.45.0
+  - @memberjunction/actions@2.45.0
+  - @memberjunction/content-autotagging@2.45.0
+  - @memberjunction/communication-engine@2.45.0
+  - @memberjunction/external-change-detection@2.45.0
+  - @memberjunction/core@2.45.0
+  - @memberjunction/global@2.45.0
+
 ## 2.44.0
 
 ### Patch Changes

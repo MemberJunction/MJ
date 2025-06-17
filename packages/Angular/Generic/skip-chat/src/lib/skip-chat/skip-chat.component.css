@@ -124,7 +124,7 @@
 .conversation-wrapper {
     display: flex;
     flex-direction: column;
-    position: relative; /* Add this line if the wrapper needs to be a reference point */
+    position: relative; /* This ensures child absolute elements position relative to this container */
     background-color: #f9f9f9;
     height: 100%; /* Ensure it takes full height */
     max-height: 100%; /* Don't exceed parent container height */
@@ -428,6 +428,16 @@
     border-radius: 12px;
     margin-left: 3px;
 }
+
+/* Stop button styling */
+.button-area > button.stop-button {
+    background-color: #dc3545;
+    color: white;
+}
+
+.button-area > button.stop-button:hover {
+    background-color: #c82333;
+}
 /* .input-area > button:first-of-type {
     margin-left: -40px;
 }
@@ -493,9 +503,9 @@
 }
   
 .scroll-to-bottom-icon {
-    position: fixed;
+    position: fixed; /* Fixed positioning to float over content */
     bottom: 120px; /* Position relative to the viewport */
-    left: 50%; /* Start at the exact horizontal center */
+    /* left position will be set dynamically via inline style */
     transform: translateX(-50%); /* Shift it back by half its width to center it */
     z-index: 1000; /* Ensure it stays on top */
     background-color: white; /* Circle background color */

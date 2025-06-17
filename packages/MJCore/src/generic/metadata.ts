@@ -176,8 +176,8 @@ export class Metadata {
      * @param primaryKey 
      * @returns 
      */
-    public async GetRecordFavoriteStatus(userId: string, entityName: string, primaryKey: CompositeKey): Promise<boolean> {
-        return await Metadata.Provider.GetRecordFavoriteStatus(userId, entityName, primaryKey);
+    public async GetRecordFavoriteStatus(userId: string, entityName: string, primaryKey: CompositeKey, contextUser?: UserInfo): Promise<boolean> {
+        return await Metadata.Provider.GetRecordFavoriteStatus(userId, entityName, primaryKey, contextUser);
     }
 
     /**
@@ -297,6 +297,15 @@ export class Metadata {
      * @returns - a newly created instance of a sub-class of BaseEntity. Remember you still to call Load() or NewRecord() to get going from there.
      */
     public async GetEntityObject<T extends BaseEntity>(entityName: string, contextUser: UserInfo = null): Promise<T> {
+        // validate that entityName is not null, undefined and IS a string > 0 length
+        if (!entityName || typeof entityName !== 'string' || entityName.trim().length === 0) {
+            throw new Error('GetEntityObject: entityName must be a non-empty string');
+        }
+        // validate that contextUser is either null/undefined or a UserInfo object
+        if (contextUser && !(contextUser instanceof UserInfo)) {
+            throw new Error('GetEntityObject: contextUser must be a UserInfo object or null/undefined');
+        }
+        
         return await Metadata.Provider.GetEntityObject(entityName, contextUser);
     }
 
@@ -308,13 +317,13 @@ export class Metadata {
      * @param primaryKey
      * @returns the name of the record
      */
-    public async GetEntityRecordName(entityName: string, primaryKey: CompositeKey): Promise<string> {
+    public async GetEntityRecordName(entityName: string, primaryKey: CompositeKey, contextUser?: UserInfo): Promise<string> {
         let result = primaryKey.Validate();
         if(!result.IsValid){
             throw new Error(result.ErrorMessage);
         }
         
-        return await Metadata.Provider.GetEntityRecordName(entityName, primaryKey);
+        return await Metadata.Provider.GetEntityRecordName(entityName, primaryKey, contextUser);
     }
 
     /**
@@ -322,7 +331,7 @@ export class Metadata {
      * @param info 
      * @returns an array of EntityRecordNameResult objects
      */
-    public async GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]> {
+    public async GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]> {
         // valiate to make sure we don't have any null primary keys being sent in
         for (let i = 0; i < info.length; i++) {
             if (!info[i].CompositeKey.KeyValuePairs || info[i].CompositeKey.KeyValuePairs.length == 0) {
@@ -338,7 +347,7 @@ export class Metadata {
             }
 
         }
-        return await Metadata.Provider.GetEntityRecordNames(info);          
+        return await Metadata.Provider.GetEntityRecordNames(info, contextUser);          
     }
 
     /**
@@ -378,16 +387,16 @@ export class Metadata {
      * @param datasetName 
      * @param itemFilters 
      */
-    public async GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetStatusResultType> {
-        return Metadata.Provider.GetDatasetStatusByName(datasetName, itemFilters);
+    public async GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetStatusResultType> {
+        return Metadata.Provider.GetDatasetStatusByName(datasetName, itemFilters, contextUser);
     }
     /**
      * Always retrieves data from the server - this method does NOT check cache. To use cached local values if available, call GetAndCacheDatasetByName() instead
      * @param datasetName 
      * @param itemFilters 
      */
-    public async GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetResultType> {
-        return Metadata.Provider.GetDatasetByName(datasetName, itemFilters);
+    public async GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetResultType> {
+        return Metadata.Provider.GetDatasetByName(datasetName, itemFilters, contextUser);
     }
 
     /**
@@ -396,8 +405,8 @@ export class Metadata {
      * @param datasetName 
      * @param itemFilters 
      */
-    public async GetAndCacheDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetResultType>  {
-        return Metadata.Provider.GetAndCacheDatasetByName(datasetName, itemFilters);
+    public async GetAndCacheDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetResultType>  {
+        return Metadata.Provider.GetAndCacheDatasetByName(datasetName, itemFilters, contextUser);
     }
 
     /**

@@ -6,6 +6,7 @@ import { expressMiddleware } from '@apollo/server/express4';
 import { mergeSchemas } from '@graphql-tools/schema';
 import { Metadata } from '@memberjunction/core';
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { extendConnectionPoolWithQuery } from './util.js';
 import { default as BodyParser } from 'body-parser';
 import compression from 'compression'; // Add compression middleware
 import cors from 'cors';
@@ -18,13 +19,13 @@ import { sep } from 'node:path';
 import 'reflect-metadata';
 import { ReplaySubject } from 'rxjs';
 import { BuildSchemaOptions, buildSchemaSync, GraphQLTimestamp } from 'type-graphql';
-import { DataSource } from 'typeorm';
+import sql from 'mssql';
 import { WebSocketServer } from 'ws';
 import buildApolloServer from './apolloServer/index.js';
 import { configInfo, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions } from './config.js';
 import { contextFunction, getUserPayload } from './context.js';
 import { requireSystemUserDirective, publicDirective } from './directives/index.js';
-import orm from './orm.js';
+import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 
 import { LoadActionEntityServer } from '@memberjunction/actions';
@@ -32,6 +33,9 @@ LoadActionEntityServer(); // prevent tree shaking for this dynamic module
 
 import { LoadGeneratedActions } from '@memberjunction/core-actions';
 LoadGeneratedActions(); // prevent tree shaking for this dynamic module
+
+import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
+LoadCoreEntitiesServerSubClasses(); // prevent tree shaking for this dynamic module
 
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 
@@ -42,10 +46,7 @@ export * from 'type-graphql';
 export { NewUserBase } from './auth/newUsers.js';
 export { configInfo } from './config.js';
 export * from './directives/index.js';
-export * from './entitySubclasses/userViewEntity.server.js';
 export * from './entitySubclasses/entityPermissions.server.js';
-export * from './entitySubclasses/DuplicateRunEntity.server.js';
-export * from './entitySubclasses/reportEntity.server.js';
 export * from './types.js';
 export { TokenExpiredError, getSystemUser } from './auth/index.js';
 
@@ -54,6 +55,7 @@ export * from './generic/ResolverBase.js';
 export * from './generic/RunViewResolver.js';
 export * from './resolvers/RunTemplateResolver.js';
 export * from './resolvers/RunAIPromptResolver.js';
+export * from './resolvers/RunAIAgentResolver.js';
 export * from './generic/KeyValuePairInput.js';
 export * from './generic/KeyInputOutputTypes.js';
 export * from './generic/DeleteOptionsInput.js';
@@ -64,6 +66,7 @@ export * from './resolvers/DatasetResolver.js';
 export * from './resolvers/EntityRecordNameResolver.js';
 export * from './resolvers/MergeRecordsResolver.js';
 export * from './resolvers/ReportResolver.js';
+export * from './resolvers/SqlLoggingConfigResolver.js';
 export * from './resolvers/SyncRolesUsersResolver.js';
 export * from './resolvers/SyncDataResolver.js';
 export * from './resolvers/GetDataResolver.js';
@@ -105,31 +108,31 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
     console.log({ combinedResolverPaths, paths, cwd: process.cwd() });
   }
 
-  const dataSource = new DataSource(orm(paths));
+  const pool = new sql.ConnectionPool(createMSSQLConfig());
   const setupComplete$ = new ReplaySubject(1);
-  await dataSource.initialize();
+  await pool.connect();
 
-  const config = new SQLServerProviderConfigData(dataSource, '', mj_core_schema, cacheRefreshInterval);
+  const config = new SQLServerProviderConfigData(pool, mj_core_schema, cacheRefreshInterval);
   await setupSQLServerClient(config); // datasource is already initialized, so we can setup the client right away
   const md = new Metadata();
   console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
 
-  const dataSources = [new DataSourceInfo({dataSource, type: 'Read-Write', host: dbHost, port: dbPort, database: dbDatabase, userName: dbUsername})];
+  const dataSources = [new DataSourceInfo({dataSource: pool, type: 'Read-Write', host: dbHost, port: dbPort, database: dbDatabase, userName: dbUsername})];
   
   // Establish a second read-only connection to the database if dbReadOnlyUsername and dbReadOnlyPassword exist
-  let readOnlyDataSource: DataSource | null = null;
+  let readOnlyPool: sql.ConnectionPool | null = null;
   if (configInfo.dbReadOnlyUsername && configInfo.dbReadOnlyPassword) {
     const readOnlyConfig = {
-      ...orm(paths),
-      username: configInfo.dbReadOnlyUsername,
+      ...createMSSQLConfig(),
+      user: configInfo.dbReadOnlyUsername,
       password: configInfo.dbReadOnlyPassword,
     };
-    readOnlyDataSource = new DataSource(readOnlyConfig);
-    await readOnlyDataSource.initialize();
+    readOnlyPool = new sql.ConnectionPool(readOnlyConfig);
+    await readOnlyPool.connect();
 
-    // since we created a read-only data source, add it to the list of data sources
-    dataSources.push(new DataSourceInfo({dataSource: readOnlyDataSource, type: 'Read-Only', host: dbHost, port: dbPort, database: dbDatabase, userName: configInfo.dbReadOnlyUsername}));
-    console.log('Read-only Data Source has been initialized.');
+    // since we created a read-only pool, add it to the list of data sources
+    dataSources.push(new DataSourceInfo({dataSource: readOnlyPool, type: 'Read-Only', host: dbHost, port: dbPort, database: dbDatabase, userName: configInfo.dbReadOnlyUsername}));
+    console.log('Read-only Connection Pool has been initialized.');
   }
 
   setupComplete$.next(true);
@@ -224,7 +227,7 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
     expressMiddleware(apolloServer, {
       context: contextFunction({ 
                                  setupComplete$, 
-                                 dataSource, // default read-write data source
+                                 dataSource: extendConnectionPoolWithQuery(pool), // default read-write data source
                                  dataSources // all data source
                                }),
     })
@@ -288,5 +291,6 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
   }
 
   await new Promise<void>((resolve) => httpServer.listen({ port: graphqlPort }, resolve));
+  console.log(`📦 Connected to database: ${dbHost}:${dbPort}/${dbDatabase}`);
   console.log(`🚀 Server ready at http://localhost:${graphqlPort}/`);
 };

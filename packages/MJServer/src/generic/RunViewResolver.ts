@@ -463,7 +463,9 @@ export class RunViewResolver extends ResolverBase {
       const rawData = await super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
       if (rawData === null) return null;
 
-      const entityId = await dataSource.query(`SELECT EntityID from [${this.MJCoreSchema}].vwUserViews WHERE Name='${input.ViewName}'`);
+      const request = dataSource.request();
+      const entityIdResult = await request.query(`SELECT EntityID from [${this.MJCoreSchema}].vwUserViews WHERE Name='${input.ViewName}'`);
+      const entityId = entityIdResult.recordset;
       const returnData = this.processRawData(rawData.Results, entityId[0].EntityID);
       return {
         Results: returnData,
@@ -488,7 +490,9 @@ export class RunViewResolver extends ResolverBase {
       const rawData = await super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
       if (rawData === null) return null;
 
-      const entityId = await dataSource.query(`SELECT EntityID from [${this.MJCoreSchema}].vwUserViews WHERE ID=${input.ViewID}`);
+      const request = dataSource.request();
+      const entityIdResult = await request.query(`SELECT EntityID from [${this.MJCoreSchema}].vwUserViews WHERE ID=${input.ViewID}`);
+      const entityId = entityIdResult.recordset;
       const returnData = this.processRawData(rawData.Results, entityId[0].EntityID);
       return {
         Results: returnData,
@@ -513,7 +517,9 @@ export class RunViewResolver extends ResolverBase {
       const rawData = await super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
       if (rawData === null) return null;
 
-      const entityId = await dataSource.query(`SELECT ID from [${this.MJCoreSchema}].vwEntities WHERE Name='${input.EntityName}'`);
+      const request = dataSource.request();
+      const entityIdResult = await request.query(`SELECT ID from [${this.MJCoreSchema}].vwEntities WHERE Name='${input.EntityName}'`);
+      const entityId = entityIdResult.recordset;
       const returnData = this.processRawData(rawData.Results, entityId[0].EntityID);
       return {
         Results: returnData,
@@ -542,9 +548,11 @@ export class RunViewResolver extends ResolverBase {
 
       let results: RunViewGenericResult[] = [];
       for (const [index, data] of rawData.entries()) {
-        const entityId = await dataSource.query(
+        const request = dataSource.request();
+        const entityIdResult = await request.query(
           `SELECT TOP 1 ID from [${this.MJCoreSchema}].vwEntities WHERE Name='${input[index].EntityName}'`
         );
+        const entityId = entityIdResult.recordset;
         const returnData: any[] = this.processRawData(data.Results, entityId[0].ID);
 
         results.push({

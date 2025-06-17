@@ -7,6 +7,9 @@ import { ___codeGenAPIPort, ___codeGenAPISubmissionDelay, ___codeGenAPIURL } fro
 /**
  * Server-side only class that extends the entity permissions object to watch for changes to entity permissions, build a queue of entities that have been changed, and then from time to time, submit
  * them to an API server that will execute the underlying permission changes at the database level.
+ * 
+ * This class is within the memberjunction/server package because it is closely coupled to other aspects of what
+ * happens in the server. That's why it is not in the core-entities-server package.
  */
 @RegisterClass(BaseEntity, 'Entity Permissions')
 export class EntityPermissionsEntity_Server extends EntityPermissionEntity {

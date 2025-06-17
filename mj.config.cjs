@@ -214,6 +214,16 @@ const codegenConfig = {
     convertCoreSchemaToFlywayMigrationFile: true,
     omitRecurringScriptsFromLog: true,
   },
+  forceRegeneration: {
+    enabled: false,  // Set to true to force regeneration even without schema changes
+    baseViews: false,
+    spCreate: false,  // Set this to true to regenerate all spCreate procedures
+    spUpdate: false,
+    spDelete: false,
+    allStoredProcedures: false,  // Overrides individual SP flags when true
+    indexes: false,
+    fullTextSearch: false,
+  },
 };
 
 /** @type {MJServerConfig} */
@@ -262,24 +272,27 @@ const mjServerConfig = {
     apiKey: process.env.ASK_SKIP_API_KEY,  
     organizationInfo: process.env.ASK_SKIP_ORGANIZATION_INFO,
     entitiesToSend: {
-      excludeSchemas: ['__mj'],
+      excludeSchemas: [],
       includeEntitiesFromExcludedSchemas: [
-        'Entities',
-        'Entity Fields',
-        'Content Items',
-        'Content Item Tags',
-        'Content Item Attributes',
-        'Content Types',
-        'Content Type Attributes',
-        'Content File Types',
-        'Content Sources',
-        'Content Source Types',
-        'Content Source Params',
-        'Content Source Type Params',
-        'Content Process Runs',
       ],
     },
-  }  
+  },
+  sqlLogging: {
+    enabled: true,  // Master switch for SQL logging capability
+    defaultOptions: {
+      formatAsMigration: false,
+      statementTypes: 'both', // 'queries' | 'mutations' | 'both'
+      batchSeparator: 'GO',
+      prettyPrint: true,
+      logRecordChangeMetadata: false,
+      retainEmptyLogFiles: false,
+      verboseOutput: false // Set to true to enable debug console output for SQL logging
+    },
+    allowedLogDirectory: './logs/sql', // Restrict where logs can be written
+    maxActiveSessions: 5, // Limit concurrent logging sessions
+    autoCleanupEmptyFiles: true,
+    sessionTimeout: 3600000 // 1 hour in ms, auto-close sessions after this
+  }
 };
 
 /** @type {MCPServerConfig} */

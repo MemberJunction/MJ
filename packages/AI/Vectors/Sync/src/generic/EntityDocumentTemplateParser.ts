@@ -8,7 +8,6 @@ import { EntityDocumentTemplateParserBase } from "./EntityDocumenTemplateParserB
  * If you wish to override functionality you can subclass it and then use the @RegisterClass decorator to register the sub-class of EntityDocumentTemplateParser with a priority of 1 or above to 
  * then be used instead of the default implementation.
  */
-@RegisterClass(EntityDocumentTemplateParser)
 export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBase {
 
     /** Convenience method to get an instance of the class and uses the ClassFactory so we can create sub-classes if they are registered with higher priorities than the base class */

@@ -1,0 +1,31 @@
+{
+  "fields": {
+    "Name": "Example Greeting Prompt",
+    "Description": "A simple example prompt to demonstrate the sync tool",
+    "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+    "TemplateText": "@file:greeting.prompt.md",
+    "Status": "Active"
+  },
+  "relatedEntities": {
+    "MJ: AI Prompt Models": [
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:AI Models.Name=GPT 4.1",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+          "Priority": 1,
+          "Status": "Active"
+        }
+      },
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:AI Models.Name=Claude 4 Sonnet",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+          "Priority": 2,
+          "Status": "Active"
+        }
+      }
+    ]
+  }
+}

@@ -9,6 +9,7 @@
       "moduleResolution": "node",
       "sourceMap": true,
       "outDir": "dist",
+      "skipLibCheck": true
     },
     "include": ["src/**/*", "test.ts"],
     "exclude": ["node_modules", "**/*.spec.ts"]

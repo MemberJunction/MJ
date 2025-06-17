@@ -38,7 +38,8 @@
     .actions-navigation {
       margin-bottom: 1rem;
       border-radius: 0.5rem;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
     }
 
     .tab-content {
@@ -99,18 +100,77 @@
 // Navigation styling
 :host ::ng-deep {
   .k-bottom-nav {
+    background-color: var(--kendo-color-surface);
+    border: 1px solid var(--kendo-color-border);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    
     .k-bottom-nav-item {
       transition: all 0.2s ease;
+      position: relative;
+      color: var(--kendo-color-on-surface);
+      padding: 0.75rem 1rem;
+      
+      // Add more visible text and icon
+      .k-bottom-nav-item-icon {
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+        
+        i {
+          color: var(--kendo-color-subtle);
+        }
+      }
+      
+      .k-bottom-nav-item-text {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--kendo-color-on-surface);
+      }
       
       &:hover {
         background-color: var(--kendo-color-base-hover);
+        transform: translateY(-2px);
+        
+        .k-bottom-nav-item-icon i {
+          color: var(--kendo-color-primary);
+        }
       }
       
       &.k-state-selected {
-        background-color: var(--kendo-color-primary);
-        color: var(--kendo-color-on-primary);
+        background-color: var(--kendo-color-primary-subtle);
+        color: var(--kendo-color-primary);
+        
+        .k-bottom-nav-item-icon i {
+          color: var(--kendo-color-primary);
+        }
+        
+        .k-bottom-nav-item-text {
+          color: var(--kendo-color-primary);
+          font-weight: 700;
+        }
+        
+        // Add bottom indicator for selected state
+        &::after {
+          content: '';
+          position: absolute;
+          bottom: 0;
+          left: 10%;
+          right: 10%;
+          height: 4px;
+          background-color: var(--kendo-color-primary);
+          border-radius: 4px 4px 0 0;
+          animation: slideIn 0.2s ease;
+        }
       }
     }
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
   }
 }
 

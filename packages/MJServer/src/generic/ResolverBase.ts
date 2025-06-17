@@ -14,10 +14,10 @@ import {
   UserInfo,
 } from '@memberjunction/core';
 import { AuditLogEntity, UserViewEntity } from '@memberjunction/core-entities';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { SQLServerDataProvider, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { PubSubEngine } from 'type-graphql';
 import { GraphQLError } from 'graphql';
-import { DataSource } from 'typeorm';
+import sql from 'mssql';
 import { httpTransport, CloudEvent, emitterFor } from 'cloudevents';
 
 import { RunViewGenericParams, UserPayload } from '../types.js';
@@ -70,7 +70,7 @@ export class ResolverBase {
     return dataObject;
   }
 
-  protected ArrayMapFieldNamesToCodeNames(entityName: string, dataObjectArray: []) {
+  protected ArrayMapFieldNamesToCodeNames(entityName: string, dataObjectArray: any[]) {
     // iterate through the array and call MapFieldNamesToCodeNames for each element
     if (dataObjectArray && dataObjectArray.length > 0) {
       dataObjectArray.forEach((element) => {
@@ -80,32 +80,33 @@ export class ResolverBase {
     return dataObjectArray;
   }
 
-  protected async findBy(dataSource: DataSource, entity: string, params: any) {
+  protected async findBy(dataSource: sql.ConnectionPool, entity: string, params: any, contextUser: UserInfo) {
     // build the SQL query based on the params passed in
     const md = new Metadata();
     const e = md.Entities.find((e) => e.Name === entity);
     if (!e) throw new Error(`Entity ${entity} not found in metadata`);
     // now build a SQL string using the entityInfo and using the properties in the params object
-    let sql = `SELECT * FROM ${e.SchemaName}.${e.BaseView} WHERE `;
+    let sqlQuery = `SELECT * FROM ${e.SchemaName}.${e.BaseView} WHERE `;
     const keys = Object.keys(params);
     keys.forEach((k, i) => {
-      if (i > 0) sql += ' AND ';
+      if (i > 0) sqlQuery += ' AND ';
       // look up the field in the entityInfo to see if it needs quotes
       const field = e.Fields.find((f) => f.Name === k);
       if (!field) throw new Error(`Field ${k} not found in entity ${entity}`);
       const quotes = field.NeedsQuotes ? "'" : '';
-      sql += `${k} = ${quotes}${params[k]}${quotes}`;
+      sqlQuery += `${k} = ${quotes}${params[k]}${quotes}`;
     });
 
     // ok, now we have a SQL string, run it and return the results
-    const result = await dataSource.query(sql);
+    // use the SQLServerDataProvider
+    const result = await SQLServerDataProvider.ExecuteSQLWithPool(dataSource, sqlQuery, undefined, contextUser);
     return result;
   }
 
-  async RunViewByNameGeneric(viewInput: RunViewByNameInput, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
+  async RunViewByNameGeneric(viewInput: RunViewByNameInput, dataSource: sql.ConnectionPool, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
       const viewInfo: UserViewEntity = this.safeFirstArrayElement(
-        await this.findBy(dataSource, 'User Views', { Name: viewInput.ViewName })
+        await this.findBy(dataSource, 'User Views', { Name: viewInput.ViewName }, userPayload.userRecord)
       );
       return this.RunViewGenericInternal(
         viewInfo,
@@ -131,9 +132,9 @@ export class ResolverBase {
     }
   }
 
-  async RunViewByIDGeneric(viewInput: RunViewByIDInput, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
+  async RunViewByIDGeneric(viewInput: RunViewByIDInput, dataSource: sql.ConnectionPool, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
-      const viewInfo: UserViewEntity = this.safeFirstArrayElement(await this.findBy(dataSource, 'User Views', { ID: viewInput.ViewID }));
+      const viewInfo: UserViewEntity = this.safeFirstArrayElement(await this.findBy(dataSource, 'User Views', { ID: viewInput.ViewID }, userPayload.userRecord));
       return this.RunViewGenericInternal(
         viewInfo,
         dataSource,
@@ -158,7 +159,7 @@ export class ResolverBase {
     }
   }
 
-  async RunDynamicViewGeneric(viewInput: RunDynamicViewInput, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
+  async RunDynamicViewGeneric(viewInput: RunDynamicViewInput, dataSource: sql.ConnectionPool, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
       const md = new Metadata();
       const entity = md.Entities.find((e) => e.Name === viewInput.EntityName);
@@ -197,7 +198,7 @@ export class ResolverBase {
 
   async RunViewsGeneric(
     viewInputs: (RunViewByNameInput & RunViewByIDInput & RunDynamicViewInput)[],
-    dataSource: DataSource,
+    dataSource: sql.ConnectionPool,
     userPayload: UserPayload,
     pubSub: PubSubEngine
   ) {
@@ -208,9 +209,9 @@ export class ResolverBase {
         let viewInfo: UserViewEntity | null = null;
 
         if (viewInput.ViewName) {
-          viewInfo = this.safeFirstArrayElement(await this.findBy(dataSource, 'User Views', { Name: viewInput.ViewName }));
+          viewInfo = this.safeFirstArrayElement(await this.findBy(dataSource, 'User Views', { Name: viewInput.ViewName }, userPayload.userRecord));
         } else if (viewInput.ViewID) {
-          viewInfo = this.safeFirstArrayElement(await this.findBy(dataSource, 'User Views', { ID: viewInput.ViewID }));
+          viewInfo = this.safeFirstArrayElement(await this.findBy(dataSource, 'User Views', { ID: viewInput.ViewID }, userPayload.userRecord));
         } else if (viewInput.EntityName) {
           md = md || new Metadata();
           const entity = md.Entities.find((e) => e.Name === viewInput.EntityName);
@@ -332,7 +333,7 @@ export class ResolverBase {
    */
   protected async RunViewGenericInternal(
     viewInfo: UserViewEntity,
-    dataSource: DataSource,
+    dataSource: sql.ConnectionPool,
     extraFilter: string,
     orderBy: string,
     userSearchString: string,
@@ -611,7 +612,14 @@ export class ResolverBase {
     return UserCache.Users.find((u) => u.Email.toLowerCase().trim() === email.toLowerCase().trim());
   }
   protected GetUserFromPayload(userPayload: UserPayload): UserInfo | undefined {
-    if (!userPayload || !userPayload.email) return undefined;
+    if (!userPayload) 
+      return undefined;
+
+    if (userPayload.userRecord)
+      return userPayload.userRecord; // if we have a user record, use that directly
+
+    if (!userPayload.email) 
+      return undefined;
 
     const md = new Metadata();
     return UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload.email.toLowerCase().trim());
@@ -660,7 +668,7 @@ export class ResolverBase {
     }
   }
 
-  protected async CreateRecord(entityName: string, input: any, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
+  protected async CreateRecord(entityName: string, input: any, dataSource: sql.ConnectionPool, userPayload: UserPayload, pubSub: PubSubEngine) {
     if (await this.BeforeCreate(dataSource, input)) {
       // fire event and proceed if it wasn't cancelled
       const entityObject = await new Metadata().GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
@@ -680,12 +688,12 @@ export class ResolverBase {
   }
 
   // Before/After CREATE Event Hooks for Sub-Classes to Override
-  protected async BeforeCreate(dataSource: DataSource, input: any): Promise<boolean> {
+  protected async BeforeCreate(dataSource: sql.ConnectionPool, input: any): Promise<boolean> {
     return true;
   }
-  protected async AfterCreate(dataSource: DataSource, input: any) {}
+  protected async AfterCreate(dataSource: sql.ConnectionPool, input: any) {}
 
-  protected async UpdateRecord(entityName: string, input: any, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
+  protected async UpdateRecord(entityName: string, input: any, dataSource: sql.ConnectionPool, userPayload: UserPayload, pubSub: PubSubEngine) {
     if (await this.BeforeUpdate(dataSource, input)) {
       // fire event and proceed if it wasn't cancelled
       const md = new Metadata();
@@ -893,7 +901,7 @@ export class ResolverBase {
     entityName: string,
     key: CompositeKey,
     options: DeleteOptionsInput,
-    dataSource: DataSource,
+    dataSource: sql.ConnectionPool,
     userPayload: UserPayload,
     pubSub: PubSubEngine
   ) {
@@ -921,14 +929,14 @@ export class ResolverBase {
   }
 
   // Before/After DELETE Event Hooks for Sub-Classes to Override
-  protected async BeforeDelete(dataSource: DataSource, key: CompositeKey): Promise<boolean> {
+  protected async BeforeDelete(dataSource: sql.ConnectionPool, key: CompositeKey): Promise<boolean> {
     return true;
   }
-  protected async AfterDelete(dataSource: DataSource, key: CompositeKey) {}
+  protected async AfterDelete(dataSource: sql.ConnectionPool, key: CompositeKey) {}
 
   // Before/After UPDATE Event Hooks for Sub-Classes to Override
-  protected async BeforeUpdate(dataSource: DataSource, input: any): Promise<boolean> {
+  protected async BeforeUpdate(dataSource: sql.ConnectionPool, input: any): Promise<boolean> {
     return true;
   }
-  protected async AfterUpdate(dataSource: DataSource, input: any) {}
+  protected async AfterUpdate(dataSource: sql.ConnectionPool, input: any) {}
 }

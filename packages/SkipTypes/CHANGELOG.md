@@ -1,5 +1,79 @@
 # Change Log - @memberjunction/skip-types
 
+## 2.50.0
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.50.0
+- @memberjunction/data-context@2.50.0
+
+## 2.49.0
+
+### Minor Changes
+
+- 62cf1b6: Removed TypeORM which resulted in changes to nearly every package
+
+### Patch Changes
+
+- Updated dependencies [2f974e2]
+- Updated dependencies [cc52ced]
+- Updated dependencies [ca3365f]
+- Updated dependencies [db17ed7]
+- Updated dependencies [62cf1b6]
+  - @memberjunction/core-entities@2.49.0
+  - @memberjunction/data-context@2.49.0
+
+## 2.48.0
+
+### Patch Changes
+
+- e49a91a: rename types and clean up skip for more generalized use as a "component" generator
+- 5c72641: feat(skip-types): Enhance ComponentSpec types with comprehensive requirements support
+
+  - Enhanced ComponentSpec interface with new optional properties:
+    - `functionalRequirements`: Documents business requirements and user stories
+    - `dataRequirements`: Specifies data sources, schemas, and integration needs
+    - `technicalDesign`: Provides implementation details and architecture decisions
+  - Added supporting type definitions:
+    - `FunctionalRequirements`: Includes goals, user stories, acceptance criteria, and edge cases
+    - `DataRequirements`: Covers data sources, schemas, transformations, and validation rules
+    - `TechnicalDesign`: Contains architecture details, implementation notes, dependencies, and performance considerations
+
+  These enhancements support better documentation of component requirements and design decisions, enable structured metadata for automated tooling and code generation, and facilitate collaboration between designers, developers, and stakeholders while supporting AI-assisted development with clear, structured requirements.
+
+  All changes are backward compatible as all new properties are optional.
+
+- Updated dependencies [031e724]
+  - @memberjunction/core-entities@2.48.0
+  - @memberjunction/data-context@2.48.0
+
+## 2.47.0
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.47.0
+- @memberjunction/data-context@2.47.0
+
+## 2.46.0
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.46.0
+- @memberjunction/data-context@2.46.0
+
+## 2.45.0
+
+### Patch Changes
+
+- 96c06dd: furhter changes
+- 253de13: Tweaks to Skip Types and propogate changes
+- 63f57f1: Updates to Angular component and utilities added to Skip Types package
+- eff73f8: Reorganized package internals to be more maintainbable, refactored the HTML report types to support new generation and React based component design.
+- bbd9064: various improvements
+- Updated dependencies [556ee8d]
+  - @memberjunction/core-entities@2.45.0
+  - @memberjunction/data-context@2.45.0
+
 ## 2.44.0
 
 ### Patch Changes

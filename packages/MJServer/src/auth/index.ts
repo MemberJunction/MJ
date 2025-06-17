@@ -2,7 +2,7 @@ import { JwtHeader, SigningKeyCallback } from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
 import { auth0Domain, auth0WebClientID, configInfo, tenantID, webClientID } from '../config.js';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
-import { DataSource } from 'typeorm';
+import sql from 'mssql';
 import { Metadata, RoleInfo, UserInfo } from '@memberjunction/core';
 import { NewUserBase } from './newUsers.js';
 import { MJGlobal } from '@memberjunction/global';
@@ -28,7 +28,7 @@ const issuers = {
   auth0: `https://${auth0Domain}/`,
 };
 
-const refreshUserCache = async (dataSource?: DataSource) => {
+const refreshUserCache = async (dataSource?: sql.ConnectionPool) => {
   const startTime: number = Date.now();
   await UserCache.Instance.Refresh(dataSource);
   const endTime: number = Date.now();
@@ -105,7 +105,7 @@ export const getSigningKeys = (issuer: string) => (header: JwtHeader, cb: Signin
     .catch((err) => console.error(err));
 };
 
-export const getSystemUser = async (dataSource?: DataSource, attemptCacheUpdateIfNeeded: boolean = true): Promise<UserInfo> => {
+export const getSystemUser = async (dataSource?: sql.ConnectionPool, attemptCacheUpdateIfNeeded: boolean = true): Promise<UserInfo> => {
   const systemUser = UserCache.Instance.Users.find((u) => u.ID.toLowerCase() === SYSTEM_USER_ID.toLowerCase());
   if (!systemUser) {
     if (dataSource && attemptCacheUpdateIfNeeded) {
@@ -124,7 +124,7 @@ export const verifyUserRecord = async (
   firstName?: string,
   lastName?: string,
   requestDomain?: string,
-  dataSource?: DataSource,
+  dataSource?: sql.ConnectionPool,
   attemptCacheUpdateIfNeeded: boolean = true
 ): Promise<UserInfo | undefined> => {
   if (!email) return undefined;

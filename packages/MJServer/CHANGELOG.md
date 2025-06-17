@@ -1,5 +1,236 @@
 # Change Log - @memberjunction/server
 
+## 2.50.0
+
+### Minor Changes
+
+- 099e4bb: Add missing dependency and add migration to filter constraint
+
+### Patch Changes
+
+- @memberjunction/ai-agents@2.50.0
+- @memberjunction/ai@2.50.0
+- @memberjunction/aiengine@2.50.0
+- @memberjunction/ai-prompts@2.50.0
+- @memberjunction/ai-mistral@2.50.0
+- @memberjunction/ai-openai@2.50.0
+- @memberjunction/ai-vectors-pinecone@2.50.0
+- @memberjunction/core-actions@2.50.0
+- @memberjunction/actions@2.50.0
+- @memberjunction/entity-communications-server@2.50.0
+- @memberjunction/doc-utils@2.50.0
+- @memberjunction/external-change-detection@2.50.0
+- @memberjunction/graphql-dataprovider@2.50.0
+- @memberjunction/core@2.50.0
+- @memberjunction/core-entities@2.50.0
+- @memberjunction/core-entities-server@2.50.0
+- @memberjunction/data-context@2.50.0
+- @memberjunction/data-context-server@2.50.0
+- @memberjunction/global@2.50.0
+- @memberjunction/queue@2.50.0
+- @memberjunction/storage@2.50.0
+- @memberjunction/sqlserver-dataprovider@2.50.0
+- @memberjunction/skip-types@2.50.0
+- @memberjunction/templates@2.50.0
+
+## 2.49.0
+
+### Minor Changes
+
+- 62cf1b6: Removed TypeORM which resulted in changes to nearly every package
+
+### Patch Changes
+
+- Updated dependencies [2f974e2]
+- Updated dependencies [cc52ced]
+- Updated dependencies [ca3365f]
+- Updated dependencies [b5d9fbd]
+- Updated dependencies [db17ed7]
+- Updated dependencies [62cf1b6]
+  - @memberjunction/core-entities@2.49.0
+  - @memberjunction/core@2.49.0
+  - @memberjunction/core-entities-server@2.49.0
+  - @memberjunction/global@2.49.0
+  - @memberjunction/sqlserver-dataprovider@2.49.0
+  - @memberjunction/core-actions@2.49.0
+  - @memberjunction/actions@2.49.0
+  - @memberjunction/ai@2.49.0
+  - @memberjunction/aiengine@2.49.0
+  - @memberjunction/ai-prompts@2.49.0
+  - @memberjunction/ai-mistral@2.49.0
+  - @memberjunction/ai-openai@2.49.0
+  - @memberjunction/ai-vectors-pinecone@2.49.0
+  - @memberjunction/entity-communications-server@2.49.0
+  - @memberjunction/doc-utils@2.49.0
+  - @memberjunction/external-change-detection@2.49.0
+  - @memberjunction/graphql-dataprovider@2.49.0
+  - @memberjunction/data-context@2.49.0
+  - @memberjunction/data-context-server@2.49.0
+  - @memberjunction/queue@2.49.0
+  - @memberjunction/storage@2.49.0
+  - @memberjunction/skip-types@2.49.0
+  - @memberjunction/templates@2.49.0
+
+## 2.48.0
+
+### Minor Changes
+
+- bb01fcf: bug fixes but bumping minor version here since we have a migration in this PR
+- 031e724: Implement agent architecture separation of concerns
+
+  - **NEW**: Add BaseAgent class for domain-specific prompt execution
+  - **NEW**: Add ConductorAgent for autonomous orchestration decisions and action planning
+  - **NEW**: Add AgentRunner class to coordinate BaseAgent + ConductorAgent interactions
+  - **NEW**: Add AgentFactory with `GetConductorAgent()` and `GetAgentRunner()` methods using MJGlobal
+    class factory
+  - **NEW**: Add comprehensive execution tracking with AIAgentRun and AIAgentRunStep entities
+  - **NEW**: Support parallel and sequential action execution with proper ordering
+  - **NEW**: Structured JSON response format for deterministic decision parsing
+  - **NEW**: Database persistence for execution history and step tracking
+  - **NEW**: Cancellation and progress monitoring support
+  - **NEW**: Context compression for long conversations
+  - **NEW**: Template rendering with data context
+
+  This implements clean separation of concerns:
+
+  - BaseAgent: Domain-specific execution only (~500 lines)
+  - ConductorAgent: Orchestration decisions with structured responses
+  - AgentRunner: Coordination layer providing unified user interface
+
+  Includes comprehensive TypeScript typing and MemberJunction framework integration.
+
+### Patch Changes
+
+- Updated dependencies [e49a91a]
+- Updated dependencies [bb01fcf]
+- Updated dependencies [031e724]
+- Updated dependencies [5c72641]
+  - @memberjunction/skip-types@2.48.0
+  - @memberjunction/core@2.48.0
+  - @memberjunction/ai-prompts@2.48.0
+  - @memberjunction/core-entities@2.48.0
+  - @memberjunction/core-entities-server@2.48.0
+  - @memberjunction/aiengine@2.48.0
+  - @memberjunction/ai-vectors-pinecone@2.48.0
+  - @memberjunction/core-actions@2.48.0
+  - @memberjunction/actions@2.48.0
+  - @memberjunction/entity-communications-server@2.48.0
+  - @memberjunction/doc-utils@2.48.0
+  - @memberjunction/external-change-detection@2.48.0
+  - @memberjunction/graphql-dataprovider@2.48.0
+  - @memberjunction/data-context@2.48.0
+  - @memberjunction/queue@2.48.0
+  - @memberjunction/storage@2.48.0
+  - @memberjunction/sqlserver-dataprovider@2.48.0
+  - @memberjunction/templates@2.48.0
+  - @memberjunction/data-context-server@2.48.0
+  - @memberjunction/ai@2.48.0
+  - @memberjunction/ai-mistral@2.48.0
+  - @memberjunction/ai-openai@2.48.0
+  - @memberjunction/global@2.48.0
+
+## 2.47.0
+
+### Patch Changes
+
+- Updated dependencies [3621e2f]
+- Updated dependencies [3f31192]
+- Updated dependencies [4c4751c]
+  - @memberjunction/ai-prompts@2.47.0
+  - @memberjunction/sqlserver-dataprovider@2.47.0
+  - @memberjunction/external-change-detection@2.47.0
+  - @memberjunction/aiengine@2.47.0
+  - @memberjunction/core-actions@2.47.0
+  - @memberjunction/ai-vectors-pinecone@2.47.0
+  - @memberjunction/actions@2.47.0
+  - @memberjunction/core-entities-server@2.47.0
+  - @memberjunction/queue@2.47.0
+  - @memberjunction/templates@2.47.0
+  - @memberjunction/entity-communications-server@2.47.0
+  - @memberjunction/ai@2.47.0
+  - @memberjunction/ai-mistral@2.47.0
+  - @memberjunction/ai-openai@2.47.0
+  - @memberjunction/doc-utils@2.47.0
+  - @memberjunction/graphql-dataprovider@2.47.0
+  - @memberjunction/core@2.47.0
+  - @memberjunction/core-entities@2.47.0
+  - @memberjunction/data-context@2.47.0
+  - @memberjunction/data-context-server@2.47.0
+  - @memberjunction/global@2.47.0
+  - @memberjunction/storage@2.47.0
+  - @memberjunction/skip-types@2.47.0
+
+## 2.46.0
+
+### Patch Changes
+
+- 49d9436: minor bug fix
+- Updated dependencies [fa98215]
+  - @memberjunction/core-entities-server@2.46.0
+  - @memberjunction/ai@2.46.0
+  - @memberjunction/aiengine@2.46.0
+  - @memberjunction/ai-prompts@2.46.0
+  - @memberjunction/ai-mistral@2.46.0
+  - @memberjunction/ai-openai@2.46.0
+  - @memberjunction/ai-vectors-pinecone@2.46.0
+  - @memberjunction/core-actions@2.46.0
+  - @memberjunction/actions@2.46.0
+  - @memberjunction/entity-communications-server@2.46.0
+  - @memberjunction/doc-utils@2.46.0
+  - @memberjunction/external-change-detection@2.46.0
+  - @memberjunction/graphql-dataprovider@2.46.0
+  - @memberjunction/core@2.46.0
+  - @memberjunction/core-entities@2.46.0
+  - @memberjunction/data-context@2.46.0
+  - @memberjunction/data-context-server@2.46.0
+  - @memberjunction/global@2.46.0
+  - @memberjunction/queue@2.46.0
+  - @memberjunction/storage@2.46.0
+  - @memberjunction/sqlserver-dataprovider@2.46.0
+  - @memberjunction/skip-types@2.46.0
+  - @memberjunction/templates@2.46.0
+
+## 2.45.0
+
+### Minor Changes
+
+- 556ee8d: Add AI Agent framework database entities and enhanced agent execution support
+
+  New entity classes generated for AIAgentType, AIAgentRun, and AIAgentRunStep tables. Enhanced AIAgent and AIPromptRun entities with new foreign key relationships. Updated DataContextItem entity with CodeName property for improved code generation. These changes provide the foundational data layer for the AI Agent execution framework with hierarchical agent support, execution tracking, and pause/resume capabilities.
+
+### Patch Changes
+
+- 253de13: Tweaks to Skip Types and propogate changes
+- Updated dependencies [96c06dd]
+- Updated dependencies [253de13]
+- Updated dependencies [21d456d]
+- Updated dependencies [63f57f1]
+- Updated dependencies [eff73f8]
+- Updated dependencies [bbd9064]
+- Updated dependencies [556ee8d]
+  - @memberjunction/skip-types@2.45.0
+  - @memberjunction/ai@2.45.0
+  - @memberjunction/aiengine@2.45.0
+  - @memberjunction/ai-prompts@2.45.0
+  - @memberjunction/core-entities@2.45.0
+  - @memberjunction/ai-mistral@2.45.0
+  - @memberjunction/ai-openai@2.45.0
+  - @memberjunction/actions@2.45.0
+  - @memberjunction/queue@2.45.0
+  - @memberjunction/sqlserver-dataprovider@2.45.0
+  - @memberjunction/templates@2.45.0
+  - @memberjunction/ai-vectors-pinecone@2.45.0
+  - @memberjunction/core-actions@2.45.0
+  - @memberjunction/entity-communications-server@2.45.0
+  - @memberjunction/doc-utils@2.45.0
+  - @memberjunction/external-change-detection@2.45.0
+  - @memberjunction/graphql-dataprovider@2.45.0
+  - @memberjunction/data-context@2.45.0
+  - @memberjunction/storage@2.45.0
+  - @memberjunction/data-context-server@2.45.0
+  - @memberjunction/core@2.45.0
+  - @memberjunction/global@2.45.0
+
 ## 2.44.0
 
 ### Minor Changes

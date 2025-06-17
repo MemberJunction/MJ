@@ -1,5 +1,201 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 2.50.0
+
+### Patch Changes
+
+- @memberjunction/ng-ask-skip@2.50.0
+- @memberjunction/ng-auth-services@2.50.0
+- @memberjunction/ng-base-forms@2.50.0
+- @memberjunction/ng-compare-records@2.50.0
+- @memberjunction/ng-dashboards@2.50.0
+- @memberjunction/ng-entity-form-dialog@2.50.0
+- @memberjunction/ng-explorer-settings@2.50.0
+- @memberjunction/ng-record-changes@2.50.0
+- @memberjunction/ng-shared@2.50.0
+- @memberjunction/ng-user-view-grid@2.50.0
+- @memberjunction/ng-user-view-properties@2.50.0
+- @memberjunction/ng-container-directives@2.50.0
+- @memberjunction/ng-file-storage@2.50.0
+- @memberjunction/ng-query-grid@2.50.0
+- @memberjunction/ng-record-selector@2.50.0
+- @memberjunction/ng-resource-permissions@2.50.0
+- @memberjunction/ng-skip-chat@2.50.0
+- @memberjunction/ng-tabstrip@2.50.0
+- @memberjunction/communication-types@2.50.0
+- @memberjunction/entity-communications-client@2.50.0
+- @memberjunction/core@2.50.0
+- @memberjunction/core-entities@2.50.0
+- @memberjunction/global@2.50.0
+- @memberjunction/templates-base-types@2.50.0
+
+## 2.49.0
+
+### Minor Changes
+
+- b5d9fbd: Actions system improvements/metadata
+- db17ed7: Further Updates
+- 62cf1b6: Removed TypeORM which resulted in changes to nearly every package
+
+### Patch Changes
+
+- Updated dependencies [2f974e2]
+- Updated dependencies [cc52ced]
+- Updated dependencies [ca3365f]
+- Updated dependencies [b5d9fbd]
+- Updated dependencies [db17ed7]
+- Updated dependencies [62cf1b6]
+  - @memberjunction/core-entities@2.49.0
+  - @memberjunction/core@2.49.0
+  - @memberjunction/global@2.49.0
+  - @memberjunction/ng-dashboards@2.49.0
+  - @memberjunction/ng-ask-skip@2.49.0
+  - @memberjunction/ng-auth-services@2.49.0
+  - @memberjunction/ng-base-forms@2.49.0
+  - @memberjunction/ng-compare-records@2.49.0
+  - @memberjunction/ng-entity-form-dialog@2.49.0
+  - @memberjunction/ng-explorer-settings@2.49.0
+  - @memberjunction/ng-record-changes@2.49.0
+  - @memberjunction/ng-shared@2.49.0
+  - @memberjunction/ng-user-view-grid@2.49.0
+  - @memberjunction/ng-user-view-properties@2.49.0
+  - @memberjunction/ng-container-directives@2.49.0
+  - @memberjunction/ng-file-storage@2.49.0
+  - @memberjunction/ng-query-grid@2.49.0
+  - @memberjunction/ng-record-selector@2.49.0
+  - @memberjunction/ng-resource-permissions@2.49.0
+  - @memberjunction/ng-skip-chat@2.49.0
+  - @memberjunction/ng-tabstrip@2.49.0
+  - @memberjunction/communication-types@2.49.0
+  - @memberjunction/entity-communications-client@2.49.0
+  - @memberjunction/templates-base-types@2.49.0
+
+## 2.48.0
+
+### Patch Changes
+
+- Updated dependencies [e49a91a]
+- Updated dependencies [bb01fcf]
+- Updated dependencies [031e724]
+  - @memberjunction/ng-ask-skip@2.48.0
+  - @memberjunction/ng-skip-chat@2.48.0
+  - @memberjunction/core@2.48.0
+  - @memberjunction/core-entities@2.48.0
+  - @memberjunction/ng-auth-services@2.48.0
+  - @memberjunction/ng-base-forms@2.48.0
+  - @memberjunction/ng-compare-records@2.48.0
+  - @memberjunction/ng-dashboards@2.48.0
+  - @memberjunction/ng-entity-form-dialog@2.48.0
+  - @memberjunction/ng-explorer-settings@2.48.0
+  - @memberjunction/ng-record-changes@2.48.0
+  - @memberjunction/ng-shared@2.48.0
+  - @memberjunction/ng-user-view-grid@2.48.0
+  - @memberjunction/ng-user-view-properties@2.48.0
+  - @memberjunction/ng-container-directives@2.48.0
+  - @memberjunction/ng-file-storage@2.48.0
+  - @memberjunction/ng-query-grid@2.48.0
+  - @memberjunction/ng-record-selector@2.48.0
+  - @memberjunction/ng-resource-permissions@2.48.0
+  - @memberjunction/communication-types@2.48.0
+  - @memberjunction/entity-communications-client@2.48.0
+  - @memberjunction/templates-base-types@2.48.0
+  - @memberjunction/ng-tabstrip@2.48.0
+  - @memberjunction/global@2.48.0
+
+## 2.47.0
+
+### Patch Changes
+
+- @memberjunction/ng-ask-skip@2.47.0
+- @memberjunction/ng-auth-services@2.47.0
+- @memberjunction/ng-base-forms@2.47.0
+- @memberjunction/ng-compare-records@2.47.0
+- @memberjunction/ng-dashboards@2.47.0
+- @memberjunction/ng-entity-form-dialog@2.47.0
+- @memberjunction/ng-explorer-settings@2.47.0
+- @memberjunction/ng-record-changes@2.47.0
+- @memberjunction/ng-shared@2.47.0
+- @memberjunction/ng-user-view-grid@2.47.0
+- @memberjunction/ng-user-view-properties@2.47.0
+- @memberjunction/ng-container-directives@2.47.0
+- @memberjunction/ng-file-storage@2.47.0
+- @memberjunction/ng-query-grid@2.47.0
+- @memberjunction/ng-record-selector@2.47.0
+- @memberjunction/ng-resource-permissions@2.47.0
+- @memberjunction/ng-skip-chat@2.47.0
+- @memberjunction/ng-tabstrip@2.47.0
+- @memberjunction/communication-types@2.47.0
+- @memberjunction/entity-communications-client@2.47.0
+- @memberjunction/core@2.47.0
+- @memberjunction/core-entities@2.47.0
+- @memberjunction/global@2.47.0
+- @memberjunction/templates-base-types@2.47.0
+
+## 2.46.0
+
+### Patch Changes
+
+- @memberjunction/ng-ask-skip@2.46.0
+- @memberjunction/ng-auth-services@2.46.0
+- @memberjunction/ng-base-forms@2.46.0
+- @memberjunction/ng-compare-records@2.46.0
+- @memberjunction/ng-dashboards@2.46.0
+- @memberjunction/ng-entity-form-dialog@2.46.0
+- @memberjunction/ng-explorer-settings@2.46.0
+- @memberjunction/ng-record-changes@2.46.0
+- @memberjunction/ng-shared@2.46.0
+- @memberjunction/ng-user-view-grid@2.46.0
+- @memberjunction/ng-user-view-properties@2.46.0
+- @memberjunction/ng-container-directives@2.46.0
+- @memberjunction/ng-file-storage@2.46.0
+- @memberjunction/ng-query-grid@2.46.0
+- @memberjunction/ng-record-selector@2.46.0
+- @memberjunction/ng-resource-permissions@2.46.0
+- @memberjunction/ng-skip-chat@2.46.0
+- @memberjunction/ng-tabstrip@2.46.0
+- @memberjunction/communication-types@2.46.0
+- @memberjunction/entity-communications-client@2.46.0
+- @memberjunction/core@2.46.0
+- @memberjunction/core-entities@2.46.0
+- @memberjunction/global@2.46.0
+- @memberjunction/templates-base-types@2.46.0
+
+## 2.45.0
+
+### Patch Changes
+
+- Updated dependencies [5f23c1f]
+- Updated dependencies [96c06dd]
+- Updated dependencies [253de13]
+- Updated dependencies [63f57f1]
+- Updated dependencies [bbd9064]
+- Updated dependencies [556ee8d]
+- Updated dependencies [00bb82c]
+  - @memberjunction/ng-skip-chat@2.45.0
+  - @memberjunction/core-entities@2.45.0
+  - @memberjunction/ng-ask-skip@2.45.0
+  - @memberjunction/ng-compare-records@2.45.0
+  - @memberjunction/ng-dashboards@2.45.0
+  - @memberjunction/ng-entity-form-dialog@2.45.0
+  - @memberjunction/ng-explorer-settings@2.45.0
+  - @memberjunction/ng-shared@2.45.0
+  - @memberjunction/ng-user-view-grid@2.45.0
+  - @memberjunction/ng-user-view-properties@2.45.0
+  - @memberjunction/ng-file-storage@2.45.0
+  - @memberjunction/ng-query-grid@2.45.0
+  - @memberjunction/ng-record-selector@2.45.0
+  - @memberjunction/ng-resource-permissions@2.45.0
+  - @memberjunction/communication-types@2.45.0
+  - @memberjunction/entity-communications-client@2.45.0
+  - @memberjunction/templates-base-types@2.45.0
+  - @memberjunction/ng-record-changes@2.45.0
+  - @memberjunction/ng-base-forms@2.45.0
+  - @memberjunction/ng-auth-services@2.45.0
+  - @memberjunction/ng-container-directives@2.45.0
+  - @memberjunction/ng-tabstrip@2.45.0
+  - @memberjunction/core@2.45.0
+  - @memberjunction/global@2.45.0
+
 ## 2.44.0
 
 ### Minor Changes

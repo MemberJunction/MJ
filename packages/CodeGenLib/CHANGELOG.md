@@ -1,5 +1,126 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.50.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.50.0
+- @memberjunction/aiengine@2.50.0
+- @memberjunction/ai-anthropic@2.50.0
+- @memberjunction/ai-groq@2.50.0
+- @memberjunction/ai-mistral@2.50.0
+- @memberjunction/ai-openai@2.50.0
+- @memberjunction/actions@2.50.0
+- @memberjunction/core@2.50.0
+- @memberjunction/core-entities@2.50.0
+- @memberjunction/global@2.50.0
+- @memberjunction/sqlserver-dataprovider@2.50.0
+
+## 2.49.0
+
+### Minor Changes
+
+- 72cbb2c: Fix code gen field sequencing issues re: migrations, see commit
+- 62cf1b6: Removed TypeORM which resulted in changes to nearly every package
+
+### Patch Changes
+
+- Updated dependencies [2f974e2]
+- Updated dependencies [cc52ced]
+- Updated dependencies [ca3365f]
+- Updated dependencies [b5d9fbd]
+- Updated dependencies [db17ed7]
+- Updated dependencies [62cf1b6]
+  - @memberjunction/core-entities@2.49.0
+  - @memberjunction/core@2.49.0
+  - @memberjunction/global@2.49.0
+  - @memberjunction/sqlserver-dataprovider@2.49.0
+  - @memberjunction/actions@2.49.0
+  - @memberjunction/ai@2.49.0
+  - @memberjunction/aiengine@2.49.0
+  - @memberjunction/ai-anthropic@2.49.0
+  - @memberjunction/ai-groq@2.49.0
+  - @memberjunction/ai-mistral@2.49.0
+  - @memberjunction/ai-openai@2.49.0
+
+## 2.48.0
+
+### Patch Changes
+
+- Updated dependencies [bb01fcf]
+- Updated dependencies [031e724]
+  - @memberjunction/core@2.48.0
+  - @memberjunction/core-entities@2.48.0
+  - @memberjunction/aiengine@2.48.0
+  - @memberjunction/actions@2.48.0
+  - @memberjunction/sqlserver-dataprovider@2.48.0
+  - @memberjunction/ai@2.48.0
+  - @memberjunction/ai-anthropic@2.48.0
+  - @memberjunction/ai-groq@2.48.0
+  - @memberjunction/ai-mistral@2.48.0
+  - @memberjunction/ai-openai@2.48.0
+  - @memberjunction/global@2.48.0
+
+## 2.47.0
+
+### Minor Changes
+
+- 6e60efe: Clean up code gen bugs and AIEngineBase
+
+### Patch Changes
+
+- 31afe2a: Fix CodeGen view refresh failure when foreign key columns are dropped
+  Enhanced the `recompileAllBaseViews()` function to automatically detect and recover from view refresh
+  failures. When `sp_refreshview` fails due to dropped foreign key columns, the system now falls back
+  to regenerating the view definition using current schema, preventing cascading CodeGen failures and
+  metadata corruption.
+- Updated dependencies [3f31192]
+  - @memberjunction/sqlserver-dataprovider@2.47.0
+  - @memberjunction/aiengine@2.47.0
+  - @memberjunction/actions@2.47.0
+  - @memberjunction/ai@2.47.0
+  - @memberjunction/ai-anthropic@2.47.0
+  - @memberjunction/ai-groq@2.47.0
+  - @memberjunction/ai-mistral@2.47.0
+  - @memberjunction/ai-openai@2.47.0
+  - @memberjunction/core@2.47.0
+  - @memberjunction/core-entities@2.47.0
+  - @memberjunction/global@2.47.0
+
+## 2.46.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.46.0
+- @memberjunction/aiengine@2.46.0
+- @memberjunction/ai-anthropic@2.46.0
+- @memberjunction/ai-groq@2.46.0
+- @memberjunction/ai-mistral@2.46.0
+- @memberjunction/ai-openai@2.46.0
+- @memberjunction/actions@2.46.0
+- @memberjunction/core@2.46.0
+- @memberjunction/core-entities@2.46.0
+- @memberjunction/global@2.46.0
+- @memberjunction/sqlserver-dataprovider@2.46.0
+
+## 2.45.0
+
+### Patch Changes
+
+- Updated dependencies [21d456d]
+- Updated dependencies [556ee8d]
+  - @memberjunction/ai@2.45.0
+  - @memberjunction/aiengine@2.45.0
+  - @memberjunction/core-entities@2.45.0
+  - @memberjunction/ai-anthropic@2.45.0
+  - @memberjunction/ai-groq@2.45.0
+  - @memberjunction/ai-mistral@2.45.0
+  - @memberjunction/ai-openai@2.45.0
+  - @memberjunction/actions@2.45.0
+  - @memberjunction/sqlserver-dataprovider@2.45.0
+  - @memberjunction/core@2.45.0
+  - @memberjunction/global@2.45.0
+
 ## 2.44.0
 
 ### Patch Changes

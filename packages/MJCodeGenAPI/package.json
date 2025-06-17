@@ -20,11 +20,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "2.44.0",
-    "@memberjunction/global": "2.44.0",
-    "@memberjunction/core-entities": "2.44.0",
-    "@memberjunction/sqlserver-dataprovider": "2.44.0",
-    "@memberjunction/codegen-lib": "2.44.0",
+    "@memberjunction/core": "2.50.0",
+    "@memberjunction/global": "2.50.0",
+    "@memberjunction/core-entities": "2.50.0",
+    "@memberjunction/sqlserver-dataprovider": "2.50.0",
+    "@memberjunction/codegen-lib": "2.50.0",
     "@types/axios": "^0.14.0",
     "@types/mssql": "^9.1.5",
     "axios": "^1.6.7",
@@ -36,7 +36,6 @@
     "reflect-metadata": "0.2.2",
     "rxjs": "^7.8.1",
     "ts-node-dev": "^2.0.0",
-    "typeorm": "^0.3.20",
     "typescript": "^5.4.5"
   },
   "devDependencies": {

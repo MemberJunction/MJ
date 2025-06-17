@@ -22,6 +22,12 @@ const databaseSettingsInfoSchema = z.object({
   metadataCacheRefreshInterval: z.number(),
   dbReadOnlyUsername: z.string().optional(),
   dbReadOnlyPassword: z.string().optional(),
+  connectionPool: z.object({
+    max: z.number().optional().default(50),
+    min: z.number().optional().default(5),
+    idleTimeoutMillis: z.number().optional().default(30000),
+    acquireTimeoutMillis: z.number().optional().default(30000),
+  }).optional().default({}),
 });
  
 const viewingSystemInfoSchema = z.object({
@@ -78,12 +84,31 @@ const askSkipInfoSchema = z.object({
   learningCycleIntervalInMinutes: z.coerce.number().optional(),
 });
 
+const sqlLoggingOptionsSchema = z.object({
+  formatAsMigration: z.boolean().optional().default(false),
+  statementTypes: z.enum(['queries', 'mutations', 'both']).optional().default('both'),
+  batchSeparator: z.string().optional().default('GO'),
+  prettyPrint: z.boolean().optional().default(true),
+  logRecordChangeMetadata: z.boolean().optional().default(false),
+  retainEmptyLogFiles: z.boolean().optional().default(false),
+});
+
+const sqlLoggingSchema = z.object({
+  enabled: z.boolean().optional().default(false),
+  defaultOptions: sqlLoggingOptionsSchema.optional().default({}),
+  allowedLogDirectory: z.string().optional().default('./logs/sql'),
+  maxActiveSessions: z.number().optional().default(5),
+  autoCleanupEmptyFiles: z.boolean().optional().default(true),
+  sessionTimeout: z.number().optional().default(3600000), // 1 hour
+});
+
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
   databaseSettings: databaseSettingsInfoSchema,
   viewingSystem: viewingSystemInfoSchema.optional(),
   restApiOptions: restApiOptionsSchema.optional().default({}),
   askSkip: askSkipInfoSchema.optional(),
+  sqlLogging: sqlLoggingSchema.optional(),
 
   apiKey: z.string().optional(),
   baseUrl: z.string().optional(),
@@ -125,6 +150,8 @@ export type DatabaseSettingsInfo = z.infer<typeof databaseSettingsInfoSchema>;
 export type ViewingSystemSettingsInfo = z.infer<typeof viewingSystemInfoSchema>;
 export type RESTApiOptions = z.infer<typeof restApiOptionsSchema>;
 export type AskSkipInfo = z.infer<typeof askSkipInfoSchema>;
+export type SqlLoggingOptions = z.infer<typeof sqlLoggingOptionsSchema>;
+export type SqlLoggingInfo = z.infer<typeof sqlLoggingSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
 export const configInfo: ConfigInfo = loadConfig();
@@ -155,6 +182,7 @@ export const {
   mjCoreSchema: mj_core_schema,
   dbReadOnlyUsername,
   dbReadOnlyPassword,
+  restApiOptions: RESTApiOptions,
 } = configInfo;
 
 export function loadConfig() {

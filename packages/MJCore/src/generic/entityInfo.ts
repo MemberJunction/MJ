@@ -665,6 +665,38 @@ export class EntityFieldInfo extends BaseInfo {
             throw new Error(exceptionString);
         }
     }    
+
+    /**
+     * Readonly array of SQL Server date/time functions that return the current date/time
+     */
+    private static readonly SQL_CURRENT_DATE_FUNCTIONS: readonly string[] = [
+        'getdate()',
+        'getutcdate()', 
+        'sysdatetimeoffset()',
+        'current_timestamp',
+        'sysdatetime()',
+        'sysutcdatetime()'
+    ] as const;
+
+    /**
+     * Checks if a default value is a SQL Server function that returns the current date/time
+     * @param defaultValue - The default value to check
+     * @returns true if the default value is a SQL current date/time function, false otherwise
+     */
+    public static IsDefaultValueSQLCurrentDateFunction(defaultValue: string | null | undefined): boolean {
+        if (!defaultValue) {
+            return false;
+        }
+
+        // Trim and lowercase the value for comparison
+        const normalizedValue = defaultValue.trim().toLowerCase();
+        
+        // Check if the normalized value contains any of our known current date functions
+        // Using includes() because the value might be wrapped in parentheses like (getdate())
+        return EntityFieldInfo.SQL_CURRENT_DATE_FUNCTIONS.some(func => 
+            normalizedValue.includes(func)
+        );
+    }
 }
 
 

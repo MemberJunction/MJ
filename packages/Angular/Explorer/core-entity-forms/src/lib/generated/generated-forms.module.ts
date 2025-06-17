@@ -131,8 +131,14 @@ import { ListCategoryFormComponent, LoadListCategoryFormComponent } from "./Enti
 import { ListDetailFormComponent, LoadListDetailFormComponent } from "./Entities/ListDetail/listdetail.form.component";
 import { ListFormComponent, LoadListFormComponent } from "./Entities/List/list.form.component";
 import { AIAgentPromptFormComponent, LoadAIAgentPromptFormComponent } from "./Entities/AIAgentPrompt/aiagentprompt.form.component";
+import { AIAgentRunStepFormComponent, LoadAIAgentRunStepFormComponent } from "./Entities/AIAgentRunStep/aiagentrunstep.form.component";
+import { AIAgentRunFormComponent, LoadAIAgentRunFormComponent } from "./Entities/AIAgentRun/aiagentrun.form.component";
+import { AIAgentTypeFormComponent, LoadAIAgentTypeFormComponent } from "./Entities/AIAgentType/aiagenttype.form.component";
 import { AIConfigurationParamFormComponent, LoadAIConfigurationParamFormComponent } from "./Entities/AIConfigurationParam/aiconfigurationparam.form.component";
 import { AIConfigurationFormComponent, LoadAIConfigurationFormComponent } from "./Entities/AIConfiguration/aiconfiguration.form.component";
+import { AIModelCostFormComponent, LoadAIModelCostFormComponent } from "./Entities/AIModelCost/aimodelcost.form.component";
+import { AIModelPriceTypeFormComponent, LoadAIModelPriceTypeFormComponent } from "./Entities/AIModelPriceType/aimodelpricetype.form.component";
+import { AIModelPriceUnitTypeFormComponent, LoadAIModelPriceUnitTypeFormComponent } from "./Entities/AIModelPriceUnitType/aimodelpriceunittype.form.component";
 import { AIModelVendorFormComponent, LoadAIModelVendorFormComponent } from "./Entities/AIModelVendor/aimodelvendor.form.component";
 import { AIPromptModelFormComponent, LoadAIPromptModelFormComponent } from "./Entities/AIPromptModel/aipromptmodel.form.component";
 import { AIPromptRunFormComponent, LoadAIPromptRunFormComponent } from "./Entities/AIPromptRun/aipromptrun.form.component";
@@ -316,8 +322,14 @@ import { ListCategoryDetailsComponent, LoadListCategoryDetailsComponent } from "
 import { ListDetailDetailsComponent, LoadListDetailDetailsComponent } from "./Entities/ListDetail/sections/details.component"
 import { ListDetailsComponent, LoadListDetailsComponent } from "./Entities/List/sections/details.component"
 import { AIAgentPromptDetailsComponent, LoadAIAgentPromptDetailsComponent } from "./Entities/AIAgentPrompt/sections/details.component"
+import { AIAgentRunStepDetailsComponent, LoadAIAgentRunStepDetailsComponent } from "./Entities/AIAgentRunStep/sections/details.component"
+import { AIAgentRunDetailsComponent, LoadAIAgentRunDetailsComponent } from "./Entities/AIAgentRun/sections/details.component"
+import { AIAgentTypeDetailsComponent, LoadAIAgentTypeDetailsComponent } from "./Entities/AIAgentType/sections/details.component"
 import { AIConfigurationParamDetailsComponent, LoadAIConfigurationParamDetailsComponent } from "./Entities/AIConfigurationParam/sections/details.component"
 import { AIConfigurationDetailsComponent, LoadAIConfigurationDetailsComponent } from "./Entities/AIConfiguration/sections/details.component"
+import { AIModelCostDetailsComponent, LoadAIModelCostDetailsComponent } from "./Entities/AIModelCost/sections/details.component"
+import { AIModelPriceTypeDetailsComponent, LoadAIModelPriceTypeDetailsComponent } from "./Entities/AIModelPriceType/sections/details.component"
+import { AIModelPriceUnitTypeDetailsComponent, LoadAIModelPriceUnitTypeDetailsComponent } from "./Entities/AIModelPriceUnitType/sections/details.component"
 import { AIModelVendorDetailsComponent, LoadAIModelVendorDetailsComponent } from "./Entities/AIModelVendor/sections/details.component"
 import { AIPromptModelDetailsComponent, LoadAIPromptModelDetailsComponent } from "./Entities/AIPromptModel/sections/details.component"
 import { AIPromptRunDetailsComponent, LoadAIPromptRunDetailsComponent } from "./Entities/AIPromptRun/sections/details.component"
@@ -629,21 +641,21 @@ declarations: [
     ListDetailFormComponent,
     ListFormComponent,
     AIAgentPromptFormComponent,
+    AIAgentRunStepFormComponent,
+    AIAgentRunFormComponent,
+    AIAgentTypeFormComponent,
     AIConfigurationParamFormComponent,
     AIConfigurationFormComponent,
+    AIModelCostFormComponent,
+    AIModelPriceTypeFormComponent,
+    AIModelPriceUnitTypeFormComponent,
     AIModelVendorFormComponent,
     AIPromptModelFormComponent,
     AIPromptRunFormComponent,
     AIVendorTypeDefinitionFormComponent,
     AIVendorTypeFormComponent,
     AIVendorFormComponent,
-    ArtifactTypeFormComponent,
-    ConversationArtifactPermissionFormComponent,
-    ConversationArtifactVersionFormComponent,
-    ConversationArtifactFormComponent,
-    DashboardUserPreferenceFormComponent,
-    DashboardUserStateFormComponent,
-    ReportUserStateFormComponent],
+    ArtifactTypeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -670,6 +682,12 @@ export class GeneratedForms_SubModule_5 { }
 
 @NgModule({
 declarations: [
+    ConversationArtifactPermissionFormComponent,
+    ConversationArtifactVersionFormComponent,
+    ConversationArtifactFormComponent,
+    DashboardUserPreferenceFormComponent,
+    DashboardUserStateFormComponent,
+    ReportUserStateFormComponent,
     ReportVersionFormComponent,
     OutputDeliveryTypeFormComponent,
     OutputFormatTypeFormComponent,
@@ -683,13 +701,7 @@ declarations: [
     QueueTypeFormComponent,
     QueueFormComponent,
     RecommendationItemFormComponent,
-    RecommendationProviderFormComponent,
-    RecommendationRunFormComponent,
-    RecommendationFormComponent,
-    RecordChangeReplayRunFormComponent,
-    RecordChangeFormComponent,
-    RecordMergeDeletionLogFormComponent,
-    RecordMergeLogFormComponent],
+    RecommendationProviderFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -716,6 +728,12 @@ export class GeneratedForms_SubModule_6 { }
 
 @NgModule({
 declarations: [
+    RecommendationRunFormComponent,
+    RecommendationFormComponent,
+    RecordChangeReplayRunFormComponent,
+    RecordChangeFormComponent,
+    RecordMergeDeletionLogFormComponent,
+    RecordMergeLogFormComponent,
     ReportCategoryFormComponent,
     ReportSnapshotFormComponent,
     ReportFormComponent,
@@ -729,13 +747,7 @@ declarations: [
     SchemaInfoFormComponent,
     SkillFormComponent,
     TaggedItemFormComponent,
-    TagFormComponent,
-    TemplateCategoryFormComponent,
-    TemplateContentTypeFormComponent,
-    TemplateContentFormComponent,
-    TemplateParamFormComponent,
-    TemplateFormComponent,
-    UserApplicationEntityFormComponent],
+    TagFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -762,6 +774,12 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
+    TemplateCategoryFormComponent,
+    TemplateContentTypeFormComponent,
+    TemplateContentFormComponent,
+    TemplateParamFormComponent,
+    TemplateFormComponent,
+    UserApplicationEntityFormComponent,
     UserApplicationFormComponent,
     UserFavoriteFormComponent,
     UserNotificationFormComponent,
@@ -775,13 +793,7 @@ declarations: [
     VectorDatabaseFormComponent,
     VectorIndexFormComponent,
     VersionInstallationFormComponent,
-    WorkflowEngineFormComponent,
-    WorkflowRunFormComponent,
-    WorkflowFormComponent,
-    WorkspaceItemFormComponent,
-    WorkspaceFormComponent,
-    ActionAuthorizationDetailsComponent,
-    ActionCategoryDetailsComponent],
+    WorkflowEngineFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -808,6 +820,12 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    WorkflowRunFormComponent,
+    WorkflowFormComponent,
+    WorkspaceItemFormComponent,
+    WorkspaceFormComponent,
+    ActionAuthorizationDetailsComponent,
+    ActionCategoryDetailsComponent,
     ActionContextTypeDetailsComponent,
     ActionContextDetailsComponent,
     ActionExecutionLogDetailsComponent,
@@ -821,13 +839,7 @@ declarations: [
     AIActionDetailsComponent,
     AIAgentActionDetailsComponent,
     AIAgentLearningCycleDetailsComponent,
-    AIAgentModelDetailsComponent,
-    AIAgentNoteTypeDetailsComponent,
-    AIAgentNoteDetailsComponent,
-    AIAgentRequestDetailsComponent,
-    AIAgentDetailsComponent,
-    AIModelActionDetailsComponent,
-    AIModelTypeDetailsComponent],
+    AIAgentModelDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -842,7 +854,8 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule
+    ComboBoxModule,
+    UserViewGridModule
 ],
 exports: [
 ]
@@ -853,6 +866,12 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    AIAgentNoteTypeDetailsComponent,
+    AIAgentNoteDetailsComponent,
+    AIAgentRequestDetailsComponent,
+    AIAgentDetailsComponent,
+    AIModelActionDetailsComponent,
+    AIModelTypeDetailsComponent,
     AIModelDetailsComponent,
     AIPromptCategoryDetailsComponent,
     AIPromptTypeDetailsComponent,
@@ -866,13 +885,7 @@ declarations: [
     AuthorizationRoleDetailsComponent,
     AuthorizationDetailsComponent,
     CommunicationBaseMessageTypeDetailsComponent,
-    CommunicationLogDetailsComponent,
-    CommunicationProviderMessageTypeDetailsComponent,
-    CommunicationProviderDetailsComponent,
-    CommunicationRunDetailsComponent,
-    CompanyDetailsComponent,
-    CompanyIntegrationRecordMapDetailsComponent,
-    CompanyIntegrationRunAPILogDetailsComponent],
+    CommunicationLogDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -898,6 +911,12 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    CommunicationProviderMessageTypeDetailsComponent,
+    CommunicationProviderDetailsComponent,
+    CommunicationRunDetailsComponent,
+    CompanyDetailsComponent,
+    CompanyIntegrationRecordMapDetailsComponent,
+    CompanyIntegrationRunAPILogDetailsComponent,
     CompanyIntegrationRunDetailDetailsComponent,
     CompanyIntegrationRunDetailsComponent,
     CompanyIntegrationDetailsComponent,
@@ -911,13 +930,7 @@ declarations: [
     ContentSourceTypeDetailsComponent,
     ContentSourceDetailsComponent,
     ContentTypeAttributeDetailsComponent,
-    ContentTypeDetailsComponent,
-    ConversationDetailDetailsComponent,
-    ConversationDetailsComponent,
-    DashboardCategoryDetailsComponent,
-    DashboardDetailsComponent,
-    DataContextItemDetailsComponent,
-    DataContextDetailsComponent],
+    ContentTypeDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -943,6 +956,12 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
+    ConversationDetailDetailsComponent,
+    ConversationDetailsComponent,
+    DashboardCategoryDetailsComponent,
+    DashboardDetailsComponent,
+    DataContextItemDetailsComponent,
+    DataContextDetailsComponent,
     DatasetItemDetailsComponent,
     DatasetDetailsComponent,
     DuplicateRunDetailMatchDetailsComponent,
@@ -956,13 +975,7 @@ declarations: [
     EntityTopComponent,
     EntityAuditComponent,
     EntityAPIComponent,
-    EntityDBComponent,
-    EntityUIComponent,
-    EntityActionFilterDetailsComponent,
-    EntityActionInvocationTypeDetailsComponent,
-    EntityActionInvocationDetailsComponent,
-    EntityActionParamDetailsComponent,
-    EntityActionDetailsComponent],
+    EntityDBComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -988,6 +1001,12 @@ export class GeneratedForms_SubModule_12 { }
 
 @NgModule({
 declarations: [
+    EntityUIComponent,
+    EntityActionFilterDetailsComponent,
+    EntityActionInvocationTypeDetailsComponent,
+    EntityActionInvocationDetailsComponent,
+    EntityActionParamDetailsComponent,
+    EntityActionDetailsComponent,
     EntityAIActionDetailsComponent,
     EntityCommunicationFieldDetailsComponent,
     EntityCommunicationMessageTypeDetailsComponent,
@@ -1001,13 +1020,7 @@ declarations: [
     EntityRecordDocumentDetailsComponent,
     EntityRelationshipDisplayComponentDetailsComponent,
     EntityRelationshipDetailsComponent,
-    EntitySettingDetailsComponent,
-    ErrorLogDetailsComponent,
-    ExplorerNavigationItemDetailsComponent,
-    FileCategoryDetailsComponent,
-    FileEntityRecordLinkDetailsComponent,
-    FileStorageProviderDetailsComponent,
-    FileDetailsComponent],
+    EntitySettingDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1033,6 +1046,12 @@ export class GeneratedForms_SubModule_13 { }
 
 @NgModule({
 declarations: [
+    ErrorLogDetailsComponent,
+    ExplorerNavigationItemDetailsComponent,
+    FileCategoryDetailsComponent,
+    FileEntityRecordLinkDetailsComponent,
+    FileStorageProviderDetailsComponent,
+    FileDetailsComponent,
     GeneratedCodeCategoryDetailsComponent,
     GeneratedCodeDetailsComponent,
     IntegrationURLFormatDetailsComponent,
@@ -1043,16 +1062,10 @@ declarations: [
     ListDetailDetailsComponent,
     ListDetailsComponent,
     AIAgentPromptDetailsComponent,
-    AIConfigurationParamDetailsComponent,
-    AIConfigurationDetailsComponent,
-    AIModelVendorDetailsComponent,
-    AIPromptModelDetailsComponent,
-    AIPromptRunDetailsComponent,
-    AIVendorTypeDefinitionDetailsComponent,
-    AIVendorTypeDetailsComponent,
-    AIVendorDetailsComponent,
-    ArtifactTypeDetailsComponent,
-    ConversationArtifactPermissionDetailsComponent],
+    AIAgentRunStepDetailsComponent,
+    AIAgentRunDetailsComponent,
+    AIAgentTypeDetailsComponent,
+    AIConfigurationParamDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1078,6 +1091,18 @@ export class GeneratedForms_SubModule_14 { }
 
 @NgModule({
 declarations: [
+    AIConfigurationDetailsComponent,
+    AIModelCostDetailsComponent,
+    AIModelPriceTypeDetailsComponent,
+    AIModelPriceUnitTypeDetailsComponent,
+    AIModelVendorDetailsComponent,
+    AIPromptModelDetailsComponent,
+    AIPromptRunDetailsComponent,
+    AIVendorTypeDefinitionDetailsComponent,
+    AIVendorTypeDetailsComponent,
+    AIVendorDetailsComponent,
+    ArtifactTypeDetailsComponent,
+    ConversationArtifactPermissionDetailsComponent,
     ConversationArtifactVersionDetailsComponent,
     ConversationArtifactDetailsComponent,
     DashboardUserPreferenceDetailsComponent,
@@ -1085,19 +1110,7 @@ declarations: [
     ReportUserStateDetailsComponent,
     ReportVersionDetailsComponent,
     OutputDeliveryTypeDetailsComponent,
-    OutputFormatTypeDetailsComponent,
-    OutputTriggerTypeDetailsComponent,
-    QueryDetailsComponent,
-    QueryCategoryDetailsComponent,
-    QueryEntityDetailsComponent,
-    QueryFieldDetailsComponent,
-    QueryPermissionDetailsComponent,
-    QueueTaskDetailsComponent,
-    QueueTypeDetailsComponent,
-    QueueDetailsComponent,
-    RecommendationItemDetailsComponent,
-    RecommendationProviderDetailsComponent,
-    RecommendationRunDetailsComponent],
+    OutputFormatTypeDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1123,6 +1136,18 @@ export class GeneratedForms_SubModule_15 { }
 
 @NgModule({
 declarations: [
+    OutputTriggerTypeDetailsComponent,
+    QueryDetailsComponent,
+    QueryCategoryDetailsComponent,
+    QueryEntityDetailsComponent,
+    QueryFieldDetailsComponent,
+    QueryPermissionDetailsComponent,
+    QueueTaskDetailsComponent,
+    QueueTypeDetailsComponent,
+    QueueDetailsComponent,
+    RecommendationItemDetailsComponent,
+    RecommendationProviderDetailsComponent,
+    RecommendationRunDetailsComponent,
     RecommendationDetailsComponent,
     RecordChangeReplayRunDetailsComponent,
     RecordChangeDetailsComponent,
@@ -1130,19 +1155,7 @@ declarations: [
     RecordMergeLogDetailsComponent,
     ReportCategoryDetailsComponent,
     ReportSnapshotDetailsComponent,
-    ReportDetailsComponent,
-    ResourceLinkDetailsComponent,
-    ResourcePermissionDetailsComponent,
-    ResourceTypeDetailsComponent,
-    RoleDetailsComponent,
-    RowLevelSecurityFilterDetailsComponent,
-    ScheduledActionParamDetailsComponent,
-    ScheduledActionDetailsComponent,
-    SchemaInfoDetailsComponent,
-    SkillDetailsComponent,
-    TaggedItemDetailsComponent,
-    TagDetailsComponent,
-    TemplateCategoryDetailsComponent],
+    ReportDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1168,6 +1181,18 @@ export class GeneratedForms_SubModule_16 { }
 
 @NgModule({
 declarations: [
+    ResourceLinkDetailsComponent,
+    ResourcePermissionDetailsComponent,
+    ResourceTypeDetailsComponent,
+    RoleDetailsComponent,
+    RowLevelSecurityFilterDetailsComponent,
+    ScheduledActionParamDetailsComponent,
+    ScheduledActionDetailsComponent,
+    SchemaInfoDetailsComponent,
+    SkillDetailsComponent,
+    TaggedItemDetailsComponent,
+    TagDetailsComponent,
+    TemplateCategoryDetailsComponent,
     TemplateContentTypeDetailsComponent,
     TemplateContentDetailsComponent,
     TemplateParamDetailsComponent,
@@ -1175,19 +1200,7 @@ declarations: [
     UserApplicationEntityDetailsComponent,
     UserApplicationDetailsComponent,
     UserFavoriteDetailsComponent,
-    UserNotificationDetailsComponent,
-    UserRecordLogDetailsComponent,
-    UserRoleDetailsComponent,
-    UserViewCategoryDetailsComponent,
-    UserViewRunDetailDetailsComponent,
-    UserViewRunDetailsComponent,
-    UserViewDetailsComponent,
-    UserDetailsComponent,
-    VectorDatabaseDetailsComponent,
-    VectorIndexDetailsComponent,
-    VersionInstallationDetailsComponent,
-    WorkflowEngineDetailsComponent,
-    WorkflowRunDetailsComponent],
+    UserNotificationDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1213,6 +1226,18 @@ export class GeneratedForms_SubModule_17 { }
 
 @NgModule({
 declarations: [
+    UserRecordLogDetailsComponent,
+    UserRoleDetailsComponent,
+    UserViewCategoryDetailsComponent,
+    UserViewRunDetailDetailsComponent,
+    UserViewRunDetailsComponent,
+    UserViewDetailsComponent,
+    UserDetailsComponent,
+    VectorDatabaseDetailsComponent,
+    VectorIndexDetailsComponent,
+    VersionInstallationDetailsComponent,
+    WorkflowEngineDetailsComponent,
+    WorkflowRunDetailsComponent,
     WorkflowDetailsComponent,
     WorkspaceItemDetailsComponent,
     WorkspaceDetailsComponent],
@@ -1377,8 +1402,14 @@ export function LoadCoreGeneratedForms() {
     LoadListDetailFormComponent();
     LoadListFormComponent();
     LoadAIAgentPromptFormComponent();
+    LoadAIAgentRunStepFormComponent();
+    LoadAIAgentRunFormComponent();
+    LoadAIAgentTypeFormComponent();
     LoadAIConfigurationParamFormComponent();
     LoadAIConfigurationFormComponent();
+    LoadAIModelCostFormComponent();
+    LoadAIModelPriceTypeFormComponent();
+    LoadAIModelPriceUnitTypeFormComponent();
     LoadAIModelVendorFormComponent();
     LoadAIPromptModelFormComponent();
     LoadAIPromptRunFormComponent();
@@ -1562,8 +1593,14 @@ export function LoadCoreGeneratedForms() {
     LoadListDetailDetailsComponent();
     LoadListDetailsComponent();
     LoadAIAgentPromptDetailsComponent();
+    LoadAIAgentRunStepDetailsComponent();
+    LoadAIAgentRunDetailsComponent();
+    LoadAIAgentTypeDetailsComponent();
     LoadAIConfigurationParamDetailsComponent();
     LoadAIConfigurationDetailsComponent();
+    LoadAIModelCostDetailsComponent();
+    LoadAIModelPriceTypeDetailsComponent();
+    LoadAIModelPriceUnitTypeDetailsComponent();
     LoadAIModelVendorDetailsComponent();
     LoadAIPromptModelDetailsComponent();
     LoadAIPromptRunDetailsComponent();

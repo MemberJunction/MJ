@@ -15,6 +15,7 @@ The `@memberjunction/server` library provides a comprehensive API server for Mem
 - **Extensible Architecture**: Support for custom resolvers and entity subclasses
 - **AI Integration**: Built-in support for AI operations and learning cycle scheduling
 - **Security Features**: Entity-level and schema-level access control for REST API
+- **SQL Logging**: Runtime SQL logging configuration and session management for debugging
 
 ## Installation
 
@@ -279,6 +280,129 @@ scheduler.start(60); // Run every 60 minutes
 - `RunAIPromptResolver`: Execute AI prompts
 - `AskSkipResolver`: Handle Skip AI queries
 
+### SQL Logging Resolver
+
+- `SqlLoggingConfigResolver`: Manage SQL logging configuration and sessions
+
+## SQL Logging Management
+
+The server includes a comprehensive SQL logging management system that allows Owner-level users to control SQL statement capture in real-time.
+
+### Key Features
+
+- **Owner-only Access**: SQL logging requires `Type = 'Owner'` privileges
+- **Session Management**: Create, monitor, and stop multiple concurrent logging sessions
+- **User Filtering**: Capture SQL statements from specific users only
+- **Multiple Formats**: Standard SQL logs or migration-ready files
+- **Real-time Control**: Start/stop sessions via GraphQL API
+- **Automatic Cleanup**: Sessions auto-expire and clean up empty files
+
+### GraphQL Operations
+
+#### Query Configuration
+
+```graphql
+query {
+  sqlLoggingConfig {
+    enabled
+    activeSessionCount
+    maxActiveSessions
+    allowedLogDirectory
+    sessionTimeout
+    defaultOptions {
+      prettyPrint
+      statementTypes
+      formatAsMigration
+      logRecordChangeMetadata
+    }
+  }
+}
+```
+
+#### List Active Sessions
+
+```graphql
+query {
+  activeSqlLoggingSessions {
+    id
+    sessionName
+    filePath
+    startTime
+    statementCount
+    filterByUserId
+    options {
+      prettyPrint
+      statementTypes
+      formatAsMigration
+    }
+  }
+}
+```
+
+#### Start a New Session
+
+```graphql
+mutation {
+  startSqlLogging(input: {
+    fileName: "debug-session.sql"
+    filterToCurrentUser: true
+    options: {
+      sessionName: "Debug Session"
+      prettyPrint: true
+      statementTypes: "both"
+      formatAsMigration: false
+    }
+  }) {
+    id
+    filePath
+    sessionName
+    startTime
+  }
+}
+```
+
+#### Stop Sessions
+
+```graphql
+# Stop specific session
+mutation {
+  stopSqlLogging(sessionId: "session-id-here")
+}
+
+# Stop all sessions
+mutation {
+  stopAllSqlLogging
+}
+```
+
+### Security Requirements
+
+All SQL logging operations require:
+1. **Authentication**: Valid user session or API key
+2. **Authorization**: User must have `Type = 'Owner'` in the Users table
+3. **Configuration**: SQL logging must be enabled in server config
+
+### Configuration
+
+SQL logging is configured in `mj.config.cjs`:
+
+```javascript
+sqlLogging: {
+  enabled: true,  // Master switch
+  allowedLogDirectory: './logs/sql',
+  maxActiveSessions: 5,
+  sessionTimeout: 3600000, // 1 hour
+  autoCleanupEmptyFiles: true,
+  defaultOptions: {
+    formatAsMigration: false,
+    statementTypes: 'both',
+    prettyPrint: true,
+    logRecordChangeMetadata: false,
+    retainEmptyLogFiles: false
+  }
+}
+```
+
 ## Security Configuration
 
 ### Authentication Providers
@@ -332,6 +456,14 @@ The server includes custom GraphQL directives:
 - `@RequireSystemUser`: Requires system user permissions
 - `@Public`: Makes endpoints publicly accessible
 
+### SQL Logging Integration
+
+The server integrates with the SQLServerDataProvider's logging capabilities:
+- Session management through GraphQL resolvers
+- Owner-level access control validation
+- Real-time session monitoring and control
+- Integration with MemberJunction Explorer UI
+
 ### WebSocket Configuration
 
 For real-time subscriptions:
@@ -351,6 +483,7 @@ const webSocketServer = new WebSocketServer({
 2. **Database Connection**: Verify connection string and credentials
 3. **Module Loading**: Check resolver paths are correct and accessible
 4. **Transaction Errors**: Review mutation logic for proper error handling
+5. **SQL Logging Access**: Ensure user has Owner privileges and logging is enabled in config
 
 ### Debug Mode
 

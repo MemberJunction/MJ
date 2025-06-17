@@ -9,3 +9,4 @@ export * from './generic/embed.types';
 export * from './generic/baseEmbeddings'; 
 export * from './generic/baseAudio';
 export * from './generic/baseVideo';
+export * from './generic/prompt.types';

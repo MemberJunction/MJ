@@ -1,20 +1,21 @@
 
 import { dbDatabase, dbHost, dbPassword, dbPort, dbUsername } from '../config';
-import { DataSource } from 'typeorm';
-import { SqlServerConnectionOptions } from 'typeorm/driver/sqlserver/SqlServerConnectionOptions';
+import * as sql from 'mssql';
 
-const orm: SqlServerConnectionOptions = {
-  type: 'mssql',
-  logging: false,
-  host: dbHost,
+const config: sql.config = {
+  server: dbHost,
   port: dbPort,
-  username: dbUsername,
+  user: dbUsername,
   password: dbPassword,
   database: dbDatabase,
-  synchronize: false,
-  requestTimeout: 45000
+  requestTimeout: 45000,
+  options: {
+    encrypt: true,
+    enableArithAbort: true,
+    trustServerCertificate: true
+  }
 };
 
-const AppDataSource = new DataSource(orm)
+const pool = new sql.ConnectionPool(config);
 
-export default AppDataSource;
+export default pool;

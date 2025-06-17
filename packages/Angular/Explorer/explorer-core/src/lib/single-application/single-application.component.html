@@ -1,5 +1,16 @@
-@if (app) {
+@if (loading) {
+    <div class="loading-container" style="display: flex; justify-content: center; align-items: center; height: 200px;">
+        <div class="spinner-border" role="status">
+            <span class="sr-only">Loading...</span>
+        </div>
+    </div>
+} @else if (app) {
     <mj-tabbed-dashboard [ApplicationID]="app.ID">
         <mj-application-view/>
     </mj-tabbed-dashboard>
+} @else if (appName) {
+    <div class="alert alert-warning m-3">
+        <i class="fa-solid fa-exclamation-triangle"></i>
+        Application '{{ appName }}' not found. Please check the URL or contact your administrator.
+    </div>
 }

@@ -100,3 +100,20 @@
     margin: 0 -8px;
     padding: 8px;
 }
+
+/* Execution History Table Styles */
+.history-row {
+    transition: background 0.2s;
+}
+
+.history-row:not(.even-row) {
+    background: #f8f9fa;
+}
+
+.history-row.even-row {
+    background: white;
+}
+
+.history-row:hover {
+    background: #e9ecef !important;
+}

@@ -11,8 +11,8 @@ import { EntityFilterPanelComponent } from './EntityAdmin/components/entity-filt
 import { EntityDetailsComponent } from './EntityAdmin/components/entity-details.component';
 import { ERDDiagramComponent } from './EntityAdmin/components/erd-diagram.component';
 import { AIDashboardComponent } from './AI/ai-dashboard.component';
-import { ModelManagementComponent } from './AI/components/models/model-management.component';
-import { PromptManagementComponent } from './AI/components/prompts/prompt-management.component';
+import { ModelManagementV2Component } from './AI/components/models/model-management-v2.component';
+import { PromptManagementV2Component } from './AI/components/prompts/prompt-management-v2.component';
 import { PromptFilterPanelComponent } from './AI/components/prompts/prompt-filter-panel.component';
 import { AgentConfigurationComponent } from './AI/components/agents/agent-configuration.component';
 import { AgentFilterPanelComponent } from './AI/components/agents/agent-filter-panel.component';
@@ -37,6 +37,12 @@ import { TreeViewModule } from '@progress/kendo-angular-treeview';
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { ModelPromptPriorityMatrixComponent } from './AI/components/prompts/model-prompt-priority-matrix.component';
 import { PromptVersionControlComponent } from './AI/components/prompts/prompt-version-control.component';
+// AI Instrumentation Components
+import { KPICardComponent } from './AI/components/widgets/kpi-card.component';
+import { LiveExecutionWidgetComponent } from './AI/components/widgets/live-execution-widget.component';
+import { TimeSeriesChartComponent } from './AI/components/charts/time-series-chart.component';
+import { PerformanceHeatmapComponent } from './AI/components/charts/performance-heatmap.component';
+import { AIInstrumentationService } from './AI/services/ai-instrumentation.service';
 @NgModule({
   declarations: [
     EntityAdminDashboardComponent,
@@ -45,8 +51,8 @@ import { PromptVersionControlComponent } from './AI/components/prompts/prompt-ve
     EntityDetailsComponent,
     ERDDiagramComponent,
     AIDashboardComponent,
-    ModelManagementComponent,
-    PromptManagementComponent,
+    ModelManagementV2Component,
+    PromptManagementV2Component,
     PromptFilterPanelComponent,
     AgentConfigurationComponent,
     AgentFilterPanelComponent,
@@ -65,7 +71,12 @@ import { PromptVersionControlComponent } from './AI/components/prompts/prompt-ve
     ExecutionsListViewComponent,
     CategoriesListViewComponent,
     ModelPromptPriorityMatrixComponent,
-    PromptVersionControlComponent
+    PromptVersionControlComponent,
+    // AI Instrumentation Components
+    KPICardComponent,
+    LiveExecutionWidgetComponent,
+    TimeSeriesChartComponent,
+    PerformanceHeatmapComponent
   ],
   imports: [
     CommonModule,
@@ -79,6 +90,9 @@ import { PromptVersionControlComponent } from './AI/components/prompts/prompt-ve
     CodeEditorModule,
     TreeViewModule,
     ButtonsModule
+  ],
+  providers: [
+    AIInstrumentationService
   ],
   exports: [
     EntityAdminDashboardComponent,

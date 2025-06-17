@@ -29,6 +29,7 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   @Input() agentId: string | null = null;
   @Output() close = new EventEmitter<void>();
   @Output() openAgent = new EventEmitter<string>();
+  @Output() openEntityRecord = new EventEmitter<{entityName: string, recordId: string}>();
 
   @ViewChild('hierarchyChart', { static: false }) hierarchyChartRef!: ElementRef;
 
@@ -116,18 +117,11 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   private buildHierarchy(): void {
     if (!this.currentAgent) return;
 
-    console.log('Building hierarchy for agent:', this.currentAgent.Name, 'ID:', this.currentAgent.ID);
-    console.log('All agents:', this.allAgents.length);
-
     // Find the root of the hierarchy that contains our current agent
     const rootAgent = this.findRootAgent(this.currentAgent);
-    console.log('Root agent found:', rootAgent.Name);
     
     this.hierarchyData = this.buildHierarchyTree(rootAgent);
     this.selectedNode = this.findNodeInHierarchy(this.hierarchyData, this.currentAgent.ID);
-    
-    console.log('Hierarchy data:', this.hierarchyData);
-    console.log('Selected node:', this.selectedNode);
   }
 
   private findRootAgent(agent: AIAgentEntity): AIAgentEntity {
@@ -529,5 +523,11 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
   public getChildCount(): number {
     return this.selectedNode?.children?.length || 0;
+  }
+
+  public openCurrentAgentRecord(): void {
+    if (this.currentAgent) {
+      this.openEntityRecord.emit({ entityName: 'AI Agents', recordId: this.currentAgent.ID });
+    }
   }
 }

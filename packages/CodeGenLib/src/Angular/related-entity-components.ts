@@ -3,22 +3,30 @@ import { TypeTablesCache } from "@memberjunction/core-entities";
 import { MJGlobal } from "@memberjunction/global";
 
 /**
- * Represents info on an Angular class that is used in the generated code
+ * Represents metadata about an Angular component that is used in the generated code.
+ * This includes all the necessary information for importing and using the component
+ * in generated Angular modules and templates.
  */
 export class AngularComponentInfo {
     /**
-     * The typescript class name for the component
+     * The TypeScript class name for the component
      */
     public ClassName: string;
+    
     /**
-     * The name of the module so it can be properly imported by the generated module
+     * The name of the Angular module that exports this component,
+     * used for proper import statements in the generated module
      */
     public ModuleName: string; 
+    
     /**
-     * The Angular selector name for the component
+     * The Angular selector name for the component (e.g., 'mj-user-grid')
      */
     public AngularSelectorName: string;
 
+    /**
+     * Constructs a new AngularComponentInfo with empty default values
+     */
     public constructor() {
         this.ClassName = "";
         this.ModuleName = "";
@@ -27,30 +35,43 @@ export class AngularComponentInfo {
 }
 
 /**
- * Classes that generate Angular code must return this type
+ * Result object returned by Angular code generation classes.
+ * Contains the generated template, optional TypeScript code, and metadata
+ * about the generation process.
  */
 export class GenerationResult {
     /**
-     * Was the generation successful?
+     * Indicates whether the generation process completed successfully
      */
     Success: boolean;
+    
     /**
-     * If generation was not successful, this will contain the error message
+     * If generation failed, contains the error message describing what went wrong
      */
     ErrorMessage?: string;
+    
     /**
-     * This is the HTML/Angular template code that will be used by the caller in generating the final Angular component
+     * The generated HTML/Angular template code that will be embedded
+     * in the final Angular component template
      */
     TemplateOutput: string;
+    
     /**
-     * Optional, TypeScript code that will be injected into the class definition for the Angular component. This is useful for adding additional methods or properties to the component
+     * Optional TypeScript code that will be injected into the class definition
+     * of the Angular component. Useful for adding additional methods, properties,
+     * or lifecycle hooks to the component.
      */
     CodeOutput?: string;
+    
     /**
-     * A reference to the component that generated the output. Useful for accessing the properties of the component later on for imports/etc
+     * Reference to the generator component that produced this output.
+     * Used for accessing component properties later for imports and module configuration.
      */
     Component: RelatedEntityDisplayComponentGeneratorBase | null;
 
+    /**
+     * Constructs a new GenerationResult with default failure state
+     */
     public constructor() {
         this.Success = false;
         this.TemplateOutput = "";
@@ -59,23 +80,32 @@ export class GenerationResult {
 }
 
 /**
- * Properties needed for the Generate() method to execute
+ * Input parameters required for the Generate() method of component generators.
+ * Contains all the context needed to generate appropriate Angular templates
+ * for related entity components.
  */
 export class GenerationInput {
     /**
-     * The entity that is the primary entity
+     * The primary entity that owns the relationship
      */
     Entity: EntityInfo | null;
+    
     /**
-     * Relationship Information for this component
+     * Metadata about the relationship between the primary entity and related entity,
+     * including display configuration and join information
      */
     RelationshipInfo: EntityRelationshipInfo | null;
+    
     /**
-     * The name of the tab on a multi-tabbed interface, this is often provided but not mandatory. Use it if it makes sense for your component and 
-     * it is most commonly used to defer loading by using the IsCurrentTab() method from the BaseFormComponent that all of the generated components inherit from
+     * The name of the tab in a multi-tabbed interface. Optional but useful
+     * for deferred loading using the IsCurrentTab() method from BaseFormComponent.
+     * Allows components to optimize rendering by only loading data when the tab is active.
      */
     TabName: string;
 
+    /**
+     * Constructs a new GenerationInput with null/empty default values
+     */
     public constructor() {
         this.Entity = null;
         this.RelationshipInfo = null;
@@ -85,61 +115,84 @@ export class GenerationInput {
 
 
 /**
- * Base class that all sub-classes of RelatedEntityDisplayComponentConfigBase use to define a derived class that will defined the shape
- * of their configuration object.
+ * Base class for all component configuration classes. Subclasses extend this
+ * to define the shape and properties of their specific configuration objects.
+ * These configurations are typically stored as JSON in the database and
+ * deserialized into strongly-typed objects.
  */
 export class ComponentConfigBase {
 
 }
 
 /**
- * Base Class that is responsible for generating the Angular template code for the related entity display component.
+ * Abstract base class responsible for generating Angular template code for related entity display components.
+ * Each subclass handles a specific type of related entity display (e.g., UserViewGrid, JoinGrid, Timeline).
  * 
- * The built-in functionality within the {@link BaseFormComponent} can be used in the Angular template without any changes since the generated code will be injected
- * into the Angular template of a sub-class of {@link BaseFormComponent}. If you need additional code to be added to the sub-class on the TypeScript side, you can
- * provide that in the optional `CodeOutput` property of the `GenerationResult` object that is returned by the `Generate` method.
+ * The generated templates are injected into Angular forms that extend BaseFormComponent, so all
+ * BaseFormComponent methods and properties are available in the generated templates:
  * 
- * Some of the commonly used methods/properties of the {@link BaseFormComponent} that can be used in the Angular template are below. Check out the documentation in the `@memberjunction/ng-base-forms` package and the
- * {@link BaseFormComponent} class for more details.
+ * **Commonly used BaseFormComponent methods/properties:**
+ * - `BuildRelationshipViewParamsByEntityName()` - Creates view parameters for related entities
+ * - `NewRecordValues()` - Provides default values for new related records
+ * - `IsCurrentTab()` - Checks if the current tab is active (useful for deferred loading)
+ * - `GridEditMode()` - Determines if grids should be in edit mode
+ * - `GridBottomMargin()` - Provides consistent bottom margin for grids
  * 
- * * {@link BaseFormComponent#BuildRelationshipViewParamsByEntityName BuildRelationshipViewParamsByEntityName}
- * * {@link BaseFormComponent#NewRecordValues NewRecordValues}
- * * {@link BaseFormComponent#IsCurrentTab IsCurrentTab}
- * * {@link BaseFormComponent#GridEditMode GridEditMode}
- * * {@link BaseFormComponent#GridBottomMargin GridBottomMargin}
+ * **Implementation Pattern:**
+ * 1. Extend this class
+ * 2. Register with `@RegisterClass(RelatedEntityDisplayComponentGeneratorBase, "YourComponentName")`
+ * 3. Implement all abstract methods
+ * 4. Define a configuration class extending ComponentConfigBase
+ * 5. Generate appropriate Angular templates in the Generate() method
  * 
- * @see {@link BaseFormComponent}
+ * @see BaseFormComponent
  */
 export abstract class RelatedEntityDisplayComponentGeneratorBase {
     /**
-     * The subclass provides the package import path which can be local or from a repository such as @memberjunction/ng-user-view-grid as an example
+     * Returns the NPM package import path for the Angular components used by this generator.
+     * Can be a local import path or an external package (e.g., '@memberjunction/ng-user-view-grid')
+     * @returns The import path string
      */
     public abstract get ImportPath(): string;
+    
     /**
-     * The subclass must define 1 or more AngularClassInfo objects that represent the Angular classes that are being used in the generated code
+     * Returns one or more AngularComponentInfo objects that represent the Angular classes
+     * used in the generated code. This information is used to generate proper import statements
+     * and module declarations.
+     * @returns Array of AngularComponentInfo objects
      */
     public abstract get ImportItems(): AngularComponentInfo[];
 
     /**
-     * The subclass must implement this method to generate the Angular template code for the related entity display component
-     * @param entity The entity that is the primary entity
-     * @param relatedEntity The entity that is the related entity
+     * Generates the Angular template code for the related entity display component.
+     * This is the core method that each subclass must implement to create the appropriate
+     * Angular template based on the entity relationship and configuration.
+     * @param input Contains the entity, relationship info, and tab context needed for generation
+     * @returns Promise resolving to the generation result with template and optional code
      */
     public abstract Generate(input: GenerationInput): Promise<GenerationResult>;
 
 
 
     /**
-     * Helper method that will return the name of the foreign key in the specified entity
-     * that links to the related entity
+     * Helper method that returns the name of the foreign key field in the specified entity
+     * that links to the related entity. Useful for building relationship queries and joins.
+     * @param entityName The name of the entity containing the foreign key
+     * @param relatedEntityName The name of the entity being referenced
+     * @returns The name of the foreign key field
+     * @throws Error if the foreign key field cannot be found
      */
     protected GetForeignKeyName(entityName: string, relatedEntityName: string): string {
         const f = this.GetForeignKey(entityName, relatedEntityName);
         return f.Name;
     }
     /**
-     * Helper method that will return the EntityFieldInfo object for the foreign key in the specified entity
-     * that links to the related entity
+     * Helper method that returns the EntityFieldInfo object for the foreign key field
+     * in the specified entity that links to the related entity. Provides full field metadata.
+     * @param entityName The name of the entity containing the foreign key
+     * @param relatedEntityName The name of the entity being referenced
+     * @returns The EntityFieldInfo object for the foreign key field
+     * @throws Error if the entity or foreign key field cannot be found
      */
     protected GetForeignKey(entityName: string, relatedEntityName: string): EntityFieldInfo {
         // find a foreign key field that links the entity to the related entity
@@ -157,10 +210,14 @@ export abstract class RelatedEntityDisplayComponentGeneratorBase {
     }
 
     /**
-     * Use this method to dynamically instantiate the correct RelatedEntityDisplayComponentGeneratorBase subclass based on the relationshipInfo provided
-     * @param relationshipInfo The relationship info that contains the info needed to get the right component
-     * @param contextUser Context user for any needed database interaction
-     * @param params Provide any number of additional parameters that should be passed along to the constructor of the component
+     * Factory method that dynamically instantiates the correct RelatedEntityDisplayComponentGeneratorBase
+     * subclass based on the relationship configuration. Uses the MemberJunction class factory
+     * to resolve and create the appropriate component generator.
+     * @param relationshipInfo The relationship metadata containing display component configuration
+     * @param contextUser User context for database interactions and permission checking
+     * @param params Additional parameters passed to the component constructor
+     * @returns Promise resolving to the appropriate component generator instance
+     * @throws Error if the specified display component cannot be found or instantiated
      */
     public static async GetComponent(relationshipInfo: EntityRelationshipInfo, contextUser: UserInfo, ...params: any[]): Promise<RelatedEntityDisplayComponentGeneratorBase> {
         let key = "UserViewGrid"; // default key/name of component
@@ -193,7 +250,16 @@ export abstract class RelatedEntityDisplayComponentGeneratorBase {
         }
     }
 
+    /**
+     * Internal cache map storing component instances by their key/name to avoid
+     * recreating the same component multiple times during code generation
+     */
     private static _componentInstanceMap: Map<string, RelatedEntityDisplayComponentGeneratorBase> = new Map<string, RelatedEntityDisplayComponentGeneratorBase>();
 
+    /**
+     * Returns the configuration type class used by this component generator.
+     * Each subclass should return their specific configuration class type.
+     * @returns The ComponentConfigBase subclass used for configuration
+     */
     public abstract get ConfigType(): ComponentConfigBase;
 }

@@ -1,5 +1,68 @@
 # Change Log - @memberjunction/ai-vectors-pinecone
 
+## 2.50.0
+
+### Patch Changes
+
+- @memberjunction/aiengine@2.50.0
+- @memberjunction/ai-vectors@2.50.0
+- @memberjunction/core@2.50.0
+- @memberjunction/global@2.50.0
+
+## 2.49.0
+
+### Minor Changes
+
+- 62cf1b6: Removed TypeORM which resulted in changes to nearly every package
+
+### Patch Changes
+
+- Updated dependencies [cc52ced]
+- Updated dependencies [db17ed7]
+- Updated dependencies [62cf1b6]
+  - @memberjunction/core@2.49.0
+  - @memberjunction/global@2.49.0
+  - @memberjunction/aiengine@2.49.0
+  - @memberjunction/ai-vectors@2.49.0
+
+## 2.48.0
+
+### Patch Changes
+
+- Updated dependencies [bb01fcf]
+  - @memberjunction/core@2.48.0
+  - @memberjunction/aiengine@2.48.0
+  - @memberjunction/ai-vectors@2.48.0
+  - @memberjunction/global@2.48.0
+
+## 2.47.0
+
+### Patch Changes
+
+- @memberjunction/aiengine@2.47.0
+- @memberjunction/ai-vectors@2.47.0
+- @memberjunction/core@2.47.0
+- @memberjunction/global@2.47.0
+
+## 2.46.0
+
+### Patch Changes
+
+- @memberjunction/aiengine@2.46.0
+- @memberjunction/ai-vectors@2.46.0
+- @memberjunction/core@2.46.0
+- @memberjunction/global@2.46.0
+
+## 2.45.0
+
+### Patch Changes
+
+- Updated dependencies [21d456d]
+  - @memberjunction/aiengine@2.45.0
+  - @memberjunction/ai-vectors@2.45.0
+  - @memberjunction/core@2.45.0
+  - @memberjunction/global@2.45.0
+
 ## 2.44.0
 
 ### Patch Changes

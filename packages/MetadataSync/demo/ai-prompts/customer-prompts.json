@@ -1,0 +1,36 @@
+[
+  {
+    "fields": {
+      "Name": "Customer Welcome",
+      "Description": "Initial greeting for new customers",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Customer Experience",
+      "TemplateText": "Welcome to our service! I'm here to help you get started. What brings you here today?",
+      "Status": "Active",
+      "ResponseFormat": "Unstructured",
+      "ModelTypeID": "@lookup:AI Model Types.Name=Language",
+      "SelectionStrategy": "RoundRobin",
+      "PowerPreference": "Low",
+      "PromptRole": "Assistant",
+      "PromptPosition": "First"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Customer Support Triage",
+      "Description": "Categorize and route customer support requests",
+      "TypeID": "@lookup:AI Prompt Types.Name=Analysis",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Customer Experience",
+      "TemplateText": "Analyze the following customer request and categorize it as: Technical Issue, Billing Question, Feature Request, or General Inquiry. Provide a brief summary and suggested department for routing.",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "ModelTypeID": "@lookup:AI Model Types.Name=Language",
+      "SelectionStrategy": "PowerBased",
+      "PowerPreference": "Medium",
+      "OutputType": "object",
+      "OutputExample": "{ \"category\": \"string\", \"summary\": \"string\", \"department\": \"string\", \"urgency\": \"low|medium|high\" }",
+      "PromptRole": "System",
+      "PromptPosition": "First"
+    }
+  }
+]

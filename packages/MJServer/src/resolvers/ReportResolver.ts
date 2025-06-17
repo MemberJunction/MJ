@@ -6,6 +6,7 @@ import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { z } from 'zod';
+import mssql from 'mssql';
 
 @ObjectType()
 export class RunReportResultType {
@@ -90,9 +91,10 @@ export class ReportResolverExtended {
                    WHERE
                       cd.ID='${ConversationDetailID}'`;
 
-      const result = await dataSource.query(sql);
-      if (!result || result.length === 0) throw new Error('Unable to retrieve converation details');
-      const skipData = <SkipAPIAnalysisCompleteResponse>JSON.parse(result[0].Message);
+      const request = new mssql.Request(dataSource);
+      const result = await request.query(sql);
+      if (!result || !result.recordset || result.recordset.length === 0) throw new Error('Unable to retrieve converation details');
+      const skipData = <SkipAPIAnalysisCompleteResponse>JSON.parse(result.recordset[0].Message);
 
       const report = await md.GetEntityObject<ReportEntity>('Reports', u);
       report.NewRecord();

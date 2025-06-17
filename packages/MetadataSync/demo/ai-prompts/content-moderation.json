@@ -1,0 +1,73 @@
+{
+  "fields": {
+    "Name": "Content Moderation Pipeline",
+    "Description": "Multi-model content moderation system with escalation logic",
+    "TypeID": "@lookup:AI Prompt Types.Name=Moderation",
+    "CategoryID": "@lookup:AI Prompt Categories.Name=Safety & Compliance?create&Description=Prompts for content moderation and safety checks",
+    "TemplateText": "@file:content-moderation.prompt.md",
+    "Status": "Active",
+    "ResponseFormat": "JSON",
+    "AIModelTypeID": "@lookup:AI Model Types.Name=Language",
+    "MinPowerRank": 5,
+    "SelectionStrategy": "Specific",
+    "PowerPreference": "Lowest",
+    "ParallelizationMode": "None",
+    "OutputType": "object",
+    "OutputExample": "{ \"safe\": true, \"categories\": { \"violence\": 0.1, \"adult\": 0.05, \"hate\": 0.0 }, \"reasoning\": \"string\", \"action\": \"approve|flag|block\" }",
+    "ValidationBehavior": "Strict",
+    "MaxRetries": 2,
+    "RetryDelayMS": 1000,
+    "RetryStrategy": "Fixed",
+    "EnableCaching": true,
+    "CacheTTLSeconds": 300,
+    "CacheMatchType": "Exact",
+    "CacheMustMatchModel": true,
+    "CacheMustMatchVendor": true,
+    "PromptRole": "System",
+    "PromptPosition": "First"
+  },
+  "relatedEntities": {
+    "MJ: AI Prompt Models": [
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:AI Models.Name=GPT 4 Lite",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+          "Priority": 1,
+          "Status": "Active",
+          "MaxTokens": 500,
+          "Temperature": 0.1,
+          "TopP": 0.7,
+          "Notes": "Primary fast model for initial content screening"
+        }
+      },
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:AI Models.Name=Claude 4.5 Haiku",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+          "Priority": 2,
+          "Status": "Active",
+          "MaxTokens": 1000,
+          "Temperature": 0.2,
+          "TopP": 0.8,
+          "ConfigData": "{ \"moderationLevel\": \"strict\", \"returnExplanation\": true }",
+          "Notes": "Secondary model for edge cases and when primary is unavailable"
+        }
+      },
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:AI Models.Name=Llama Guard 3",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=Meta",
+          "Priority": 3,
+          "Status": "Active",
+          "MaxTokens": 800,
+          "Temperature": 0.0,
+          "TopP": 1.0,
+          "Notes": "Specialized safety model for final verification on flagged content"
+        }
+      }
+    ]
+  }
+}

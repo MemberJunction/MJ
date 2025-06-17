@@ -1,0 +1,38 @@
+{
+  "entity": "AI Agents",
+  "filePattern": "*.json",
+  "pull": {
+    "filter": "Status = 'Active'",
+    "relatedEntities": {
+      "AI Agents": {
+        "entity": "AI Agents",
+        "foreignKey": "ParentID",
+        "recursive": true,
+        "maxDepth": 5,
+        "filter": "Status = 'Active'",
+        "lookupFields": {
+          "CategoryID": {
+            "entity": "AI Agent Categories",
+            "field": "Name"
+          },
+          "ModelID": {
+            "entity": "AI Models", 
+            "field": "Name"
+          }
+        },
+        "excludeFields": ["InternalNotes", "TempData"]
+      }
+    },
+    "lookupFields": {
+      "CategoryID": {
+        "entity": "AI Agent Categories",
+        "field": "Name"
+      },
+      "ModelID": {
+        "entity": "AI Models",
+        "field": "Name"
+      }
+    },
+    "excludeFields": ["InternalNotes", "TempData"]
+  }
+}

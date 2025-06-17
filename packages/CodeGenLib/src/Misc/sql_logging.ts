@@ -1,4 +1,4 @@
-import { DataSource } from "typeorm";
+import * as sql from 'mssql';
 import { configInfo, mj_core_schema, SQLOutputConfig } from "../Config/config";
 import { logError, logStatus } from "./status_logging";
 import * as fs from 'fs';
@@ -121,9 +121,10 @@ export class SQLLogging {
     * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
     * @returns - The result of the query execution.
     */
-    public static async LogSQLAndExecute(ds: DataSource, query: string, description?: string, isRecurringScript: boolean = false): Promise<any> {
+    public static async LogSQLAndExecute(ds: sql.ConnectionPool, query: string, description?: string, isRecurringScript: boolean = false): Promise<any> {
         SQLLogging.appendToSQLLogFile(query, description, isRecurringScript);
-        return await ds.query(query);
+        const result = await ds.request().query(query);
+        return result.recordset;
     }
 
     protected static getFileLength(filePath: string): number {

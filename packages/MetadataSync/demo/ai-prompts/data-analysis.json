@@ -1,0 +1,63 @@
+{
+  "fields": {
+    "Name": "Parallel Data Analysis Prompt",
+    "Description": "Advanced prompt demonstrating parallel processing capabilities for analyzing multiple data sources simultaneously",
+    "TypeID": "@lookup:AI Prompt Types.Name=Analysis",
+    "CategoryID": "@lookup:AI Prompt Categories.Name=Data Analytics?create&Description=Prompts for data analysis and insights",
+    "TemplateText": "@file:data-analysis.prompt.md",
+    "Status": "Active",
+    "ResponseFormat": "JSON",
+    "AIModelTypeID": "@lookup:AI Model Types.Name=Language",
+    "MinPowerRank": 7,
+    "SelectionStrategy": "ByPower",
+    "PowerPreference": "Balanced",
+    "ParallelizationMode": "StaticCount",
+    "ParallelCount": 3,
+    "OutputType": "object",
+    "OutputExample": "{ \"summary\": \"string\", \"insights\": [\"string\"], \"recommendations\": [\"string\"], \"confidence\": 0.95 }",
+    "ValidationBehavior": "Strict",
+    "MaxRetries": 3,
+    "RetryDelayMS": 2000,
+    "RetryStrategy": "Exponential",
+    "EnableCaching": true,
+    "CacheTTLSeconds": 3600,
+    "CacheMatchType": "Vector",
+    "CacheSimilarityThreshold": 0.85,
+    "CacheMustMatchModel": false,
+    "CacheMustMatchVendor": false,
+    "PromptRole": "SystemOrUser",
+    "PromptPosition": "First"
+  },
+  "relatedEntities": {
+    "MJ: AI Prompt Models": [
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:AI Models.Name=GPT 4.1",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+          "Priority": 1,
+          "Status": "Active",
+          "MaxTokens": 4096,
+          "Temperature": 0.7,
+          "TopP": 0.9,
+          "TopK": 50,
+          "FrequencyPenalty": 0.0,
+          "PresencePenalty": 0.0
+        }
+      },
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:AI Models.Name=Claude 4 Sonnet",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+          "Priority": 2,
+          "Status": "Active",
+          "MaxTokens": 4000,
+          "Temperature": 0.6,
+          "TopP": 0.95,
+          "Notes": "Fallback model for cost efficiency on smaller datasets"
+        }
+      }
+    ]
+  }
+}

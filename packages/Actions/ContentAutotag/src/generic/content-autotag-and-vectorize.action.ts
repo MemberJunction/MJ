@@ -11,7 +11,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from "@memberjunctio
  *  * Vectorize: Bit, if set to true, will vectorize the content. 
  *  * EntityNames: Comma separated list of entity names to vectorize.
 */
-@RegisterClass(BaseAction, "Autotag And Vectorize Content")
+@RegisterClass(BaseAction, "__AutotagAndVectorizeContent")
 export class AutotagAndVectorizeContentAction extends VectorizeEntityAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         const autotagParam: ActionParam | undefined = params.Params.find(p => p.Name === 'Autotag');

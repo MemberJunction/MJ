@@ -1,5 +1,6 @@
 import { MJGlobal } from ".";
 import { MJEventType } from "./interface";
+import { v4 } from 'uuid';
 
 /**
  * The Global Object Store is a place to store global objects that need to be shared across the application. Depending on the execution environment, this could be the window object in a browser, or the global object in a node environment, or something else in other contexts. The key here is that in some cases static variables are not truly shared
@@ -523,4 +524,12 @@ export function InvokeManualResize(delay: number = 50, component: any = null) {
         component: component || this
       })
     }, delay ); // give the tabstrip time to render
+}
+
+/**
+ * Generates a version 4 UUID (Universally Unique Identifier) using the uuid library.
+ * @returns the generated UUID as a string.
+ */
+export function uuidv4(): string {
+    return v4();
 }

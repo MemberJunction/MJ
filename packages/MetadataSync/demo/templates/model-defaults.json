@@ -1,0 +1,7 @@
+{
+  "FrequencyPenalty": 0.0,
+  "PresencePenalty": 0.0,
+  "StopSequences": null,
+  "ConfigData": null,
+  "ResponseTimeout": 60000
+}

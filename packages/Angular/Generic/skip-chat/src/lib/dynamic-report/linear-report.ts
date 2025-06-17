@@ -49,4 +49,13 @@ export class SkipDynamicLinearReportComponent extends SkipDynamicReportBase {
     }
     this.confirmCreateReportDialogOpen = false;
   }
+
+  /**
+   * Handle create report request from a specific option in the HTML report
+   */
+  public handleCreateReportForOption(optionIndex: number): void {
+    // For now, we'll use the same create report logic
+    // In the future, we might want to pass the option index to create reports based on specific options
+    this.askCreateReport();
+  }
 }

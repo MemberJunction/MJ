@@ -1,5 +1,131 @@
 # Change Log - @memberjunction/ng-skip-chat
 
+## 2.50.0
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@2.50.0
+- @memberjunction/ng-code-editor@2.50.0
+- @memberjunction/ng-container-directives@2.50.0
+- @memberjunction/ng-data-context@2.50.0
+- @memberjunction/ng-notifications@2.50.0
+- @memberjunction/ng-resource-permissions@2.50.0
+- @memberjunction/graphql-dataprovider@2.50.0
+- @memberjunction/core@2.50.0
+- @memberjunction/core-entities@2.50.0
+- @memberjunction/data-context@2.50.0
+- @memberjunction/global@2.50.0
+- @memberjunction/skip-types@2.50.0
+
+## 2.49.0
+
+### Minor Changes
+
+- 62cf1b6: Removed TypeORM which resulted in changes to nearly every package
+
+### Patch Changes
+
+- Updated dependencies [2f974e2]
+- Updated dependencies [cc52ced]
+- Updated dependencies [ca3365f]
+- Updated dependencies [db17ed7]
+- Updated dependencies [62cf1b6]
+  - @memberjunction/core-entities@2.49.0
+  - @memberjunction/core@2.49.0
+  - @memberjunction/global@2.49.0
+  - @memberjunction/ng-base-types@2.49.0
+  - @memberjunction/ng-code-editor@2.49.0
+  - @memberjunction/ng-container-directives@2.49.0
+  - @memberjunction/ng-data-context@2.49.0
+  - @memberjunction/ng-notifications@2.49.0
+  - @memberjunction/ng-resource-permissions@2.49.0
+  - @memberjunction/graphql-dataprovider@2.49.0
+  - @memberjunction/data-context@2.49.0
+  - @memberjunction/skip-types@2.49.0
+
+## 2.48.0
+
+### Patch Changes
+
+- e49a91a: rename types and clean up skip for more generalized use as a "component" generator
+- Updated dependencies [e49a91a]
+- Updated dependencies [bb01fcf]
+- Updated dependencies [031e724]
+- Updated dependencies [5c72641]
+  - @memberjunction/skip-types@2.48.0
+  - @memberjunction/core@2.48.0
+  - @memberjunction/core-entities@2.48.0
+  - @memberjunction/ng-base-types@2.48.0
+  - @memberjunction/ng-code-editor@2.48.0
+  - @memberjunction/ng-container-directives@2.48.0
+  - @memberjunction/ng-data-context@2.48.0
+  - @memberjunction/ng-notifications@2.48.0
+  - @memberjunction/ng-resource-permissions@2.48.0
+  - @memberjunction/graphql-dataprovider@2.48.0
+  - @memberjunction/data-context@2.48.0
+  - @memberjunction/global@2.48.0
+
+## 2.47.0
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@2.47.0
+- @memberjunction/ng-container-directives@2.47.0
+- @memberjunction/ng-data-context@2.47.0
+- @memberjunction/ng-notifications@2.47.0
+- @memberjunction/ng-resource-permissions@2.47.0
+- @memberjunction/graphql-dataprovider@2.47.0
+- @memberjunction/core@2.47.0
+- @memberjunction/core-entities@2.47.0
+- @memberjunction/data-context@2.47.0
+- @memberjunction/global@2.47.0
+- @memberjunction/skip-types@2.47.0
+
+## 2.46.0
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@2.46.0
+- @memberjunction/ng-container-directives@2.46.0
+- @memberjunction/ng-data-context@2.46.0
+- @memberjunction/ng-notifications@2.46.0
+- @memberjunction/ng-resource-permissions@2.46.0
+- @memberjunction/graphql-dataprovider@2.46.0
+- @memberjunction/core@2.46.0
+- @memberjunction/core-entities@2.46.0
+- @memberjunction/data-context@2.46.0
+- @memberjunction/global@2.46.0
+- @memberjunction/skip-types@2.46.0
+
+## 2.45.0
+
+### Patch Changes
+
+- 5f23c1f: Auto display artifact when new version is received. Update skip chat UI to toggle between all functional html report options returned by Skip
+- 96c06dd: furhter changes
+- 253de13: Tweaks to Skip Types and propogate changes
+- 63f57f1: Updates to Angular component and utilities added to Skip Types package
+- bbd9064: various improvements
+- 00bb82c: various maintenance
+- Updated dependencies [96c06dd]
+- Updated dependencies [253de13]
+- Updated dependencies [63f57f1]
+- Updated dependencies [eff73f8]
+- Updated dependencies [bbd9064]
+- Updated dependencies [556ee8d]
+- Updated dependencies [00bb82c]
+  - @memberjunction/skip-types@2.45.0
+  - @memberjunction/ng-data-context@2.45.0
+  - @memberjunction/core-entities@2.45.0
+  - @memberjunction/ng-base-types@2.45.0
+  - @memberjunction/ng-notifications@2.45.0
+  - @memberjunction/ng-resource-permissions@2.45.0
+  - @memberjunction/graphql-dataprovider@2.45.0
+  - @memberjunction/data-context@2.45.0
+  - @memberjunction/ng-container-directives@2.45.0
+  - @memberjunction/core@2.45.0
+  - @memberjunction/global@2.45.0
+
 ## 2.44.0
 
 ### Patch Changes

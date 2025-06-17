@@ -1,9 +1,10 @@
-import { Component, AfterViewInit, OnDestroy } from '@angular/core';
+import { Component, AfterViewInit, OnDestroy, ViewChild } from '@angular/core';
 import { BaseDashboard } from '../generic/base-dashboard';
 import { RegisterClass } from '@memberjunction/global';
 import { CompositeKey } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
+import { SharedService } from '@memberjunction/ng-shared';
 
 interface AIDashboardState {
   activeTab: string;
@@ -23,33 +24,38 @@ interface AIDashboardState {
 export class AIDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
   
   public isLoading = false;
-  public activeTab = 'models'; // Default tab
+  public activeTab = 'monitoring'; // Default tab changed to monitoring
   public selectedIndex = 0; // Track selected navigation index
   
   // Component states
+  public modelManagementState: any = null;
   public promptManagementState: any = null;
   public agentConfigurationState: any = null;
   public systemConfigurationState: any = null;
+  public executionMonitoringState: any = null;
   
-  // Navigation items for bottom navigation
-  public navigationItems: string[] = ['models', 'prompts', 'agents', 'monitoring', 'config'];
+  // Track which tabs have been visited for lazy loading
+  private visitedTabs = new Set<string>();
+  
+  // Navigation items for bottom navigation - reordered with monitoring first
+  public navigationItems: string[] = ['monitoring', 'prompts', 'agents', 'models', 'config'];
   
   public get navigationConfig() {
     return [
-      { text: 'Models', icon: 'fa-solid fa-microchip', selected: this.activeTab === 'models' },
+      { text: 'Monitor', icon: 'fa-solid fa-chart-line', selected: this.activeTab === 'monitoring' },
       { text: 'Prompts', icon: 'fa-solid fa-comment-dots', selected: this.activeTab === 'prompts' },
       { text: 'Agents', icon: 'fa-solid fa-robot', selected: this.activeTab === 'agents' },
-      { text: 'Monitor', icon: 'fa-solid fa-chart-line', selected: this.activeTab === 'monitoring' },
+      { text: 'Models', icon: 'fa-solid fa-microchip', selected: this.activeTab === 'models' },
       { text: 'Config', icon: 'fa-solid fa-cogs', selected: this.activeTab === 'config' }
     ];
   }
 
   public get navigationConfigForKendo() {
     return [
-      { text: 'Models', icon: 'gear', selected: this.activeTab === 'models' },
+      { text: 'Monitor', icon: 'chart-line', selected: this.activeTab === 'monitoring' },
       { text: 'Prompts', icon: 'comment', selected: this.activeTab === 'prompts' },
       { text: 'Agents', icon: 'user', selected: this.activeTab === 'agents' },
-      { text: 'Monitor', icon: 'chart-line', selected: this.activeTab === 'monitoring' },
+      { text: 'Models', icon: 'gear', selected: this.activeTab === 'models' },
       { text: 'Config', icon: 'cog', selected: this.activeTab === 'config' }
     ];
   }
@@ -63,6 +69,8 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
 
   ngAfterViewInit(): void {
     // Initialize the dashboard after view init
+    // Mark the initial tab as visited
+    this.visitedTabs.add(this.activeTab);
     this.emitStateChange();
   }
 
@@ -71,10 +79,24 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
   }
 
   public onTabChange(tabId: string): void {
-    console.log('AI Dashboard: Tab changed to:', tabId);
     this.activeTab = tabId;
-    this.selectedIndex = this.navigationItems.indexOf(tabId);
+    const index = this.navigationItems.indexOf(tabId);
+    
+    // Defer selectedIndex update to avoid change detection issues
+    setTimeout(() => {
+      this.selectedIndex = index >= 0 ? index : 0;
+      
+      // Invoke manual resize after tab change to fix rendering issues
+      // TODO: Remove this when resize issues are properly fixed
+      SharedService.Instance.InvokeManualResize();
+    }, 100); // Give a bit more time for the DOM to update
+    
+    this.visitedTabs.add(tabId); // Mark tab as visited
     this.emitStateChange();
+  }
+  
+  public hasVisited(tabId: string): boolean {
+    return this.visitedTabs.has(tabId);
   }
 
   public onNavigationChange(event: any): void {
@@ -84,7 +106,12 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
       this.selectedIndex = index;
       this.activeTab = this.navigationItems[index];
       this.emitStateChange();
-      console.log('AI Dashboard: Switched to tab:', this.activeTab, 'index:', index);
+      
+      // Invoke manual resize after navigation change
+      // TODO: Remove this when resize issues are properly fixed
+      setTimeout(() => {
+        SharedService.Instance.InvokeManualResize();
+      }, 100);
     }
   }
 
@@ -100,16 +127,21 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
   private emitStateChange(): void {
     const state: AIDashboardState = {
       activeTab: this.activeTab,
-      modelManagementState: {},
+      modelManagementState: this.modelManagementState || {},
       promptManagementState: this.promptManagementState || {},
       agentConfigurationState: this.agentConfigurationState || {},
-      executionMonitoringState: {},
+      executionMonitoringState: this.executionMonitoringState || {},
       systemConfigurationState: this.systemConfigurationState || {}
     };
 
     this.stateChangeSubject.next(state);
   }
   
+  public onModelManagementStateChange(state: any): void {
+    this.modelManagementState = state;
+    this.emitStateChange();
+  }
+
   public onPromptManagementStateChange(state: any): void {
     this.promptManagementState = state;
     this.emitStateChange();
@@ -124,13 +156,45 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
     this.systemConfigurationState = state;
     this.emitStateChange();
   }
+  
+  public onExecutionMonitoringStateChange(state: any): void {
+    this.executionMonitoringState = state;
+    this.emitStateChange();
+  }
 
   public loadUserState(state: Partial<AIDashboardState>): void {
     if (state.activeTab) {
       this.activeTab = state.activeTab;
-      this.selectedIndex = this.navigationItems.indexOf(state.activeTab);
+      const index = this.navigationItems.indexOf(state.activeTab);
+      
+      // Defer selectedIndex update to avoid change detection issues
+      setTimeout(() => {
+        // Ensure we don't set selectedIndex to -1
+        this.selectedIndex = index >= 0 ? index : 0;
+      });
+      
+      // Mark the tab as visited
+      this.visitedTabs.add(state.activeTab);
     }
-    // Load sub-component states as they're implemented
+    
+    // Store component states for when they're rendered
+    if (state.modelManagementState) {
+      this.modelManagementState = state.modelManagementState;
+    }
+    if (state.executionMonitoringState) {
+      this.executionMonitoringState = state.executionMonitoringState;
+    }
+    if (state.promptManagementState) {
+      this.promptManagementState = state.promptManagementState;
+    }
+    if (state.agentConfigurationState) {
+      this.agentConfigurationState = state.agentConfigurationState;
+    }
+    if (state.systemConfigurationState) {
+      this.systemConfigurationState = state.systemConfigurationState;
+    }
+    
+    // No need for manual change detection with default strategy
   }
 
   // Handle entity record opening from sub-components
@@ -161,12 +225,23 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
 
   loadData(): void {
     // Load any initial data needed for the AI dashboard
-    // This can be expanded to load configuration data, recent activities, etc.
+    // Check if we have user state in the Config and apply it
+    if (this.Config?.userState) {
+      // Wrap in setTimeout to avoid ExpressionChangedAfterItHasBeenCheckedError
+      setTimeout(() => {
+        if (this.Config?.userState) {
+          this.loadUserState(this.Config.userState);
+        }
+      }, 0);
+    }
+    
+    // Emit loading complete event
+    this.LoadingComplete.emit();
   }
 
   public getCurrentTabLabel(): string {
     const tabIndex = this.navigationItems.indexOf(this.activeTab);
-    const labels = ['Models', 'Prompts', 'Agents', 'Monitor', 'Config'];
+    const labels = ['Monitor', 'Prompts', 'Agents', 'Models', 'Config'];
     return tabIndex >= 0 ? labels[tabIndex] : 'AI Administration';
   }
 }

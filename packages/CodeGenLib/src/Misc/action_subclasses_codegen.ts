@@ -12,7 +12,6 @@ import { ActionEntityExtended } from '@memberjunction/actions-base';
 /**
  * Base class for generating entity sub-classes, you can sub-class this class to modify/extend your own entity sub-class generator logic
  */
-@RegisterClass(ActionSubClassGeneratorBase)
 export class ActionSubClassGeneratorBase {
 
     protected getAllActionLibrariesAndUsedItems(actions: ActionEntityExtended[]) {

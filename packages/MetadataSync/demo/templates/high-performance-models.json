@@ -1,0 +1,30 @@
+[
+  {
+    "fields": {
+      "PromptID": "@parent:ID",
+      "ModelID": "@lookup:AI Models.Name=GPT 4o",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "Priority": 1,
+      "Status": "Active",
+      "MaxTokens": 4000,
+      "Temperature": 0.3,
+      "TopP": 0.8,
+      "@template": "../templates/model-defaults.json",
+      "Notes": "High-performance model for complex tasks"
+    }
+  },
+  {
+    "fields": {
+      "PromptID": "@parent:ID",
+      "ModelID": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+      "Priority": 2,
+      "Status": "Active",
+      "MaxTokens": 4000,
+      "Temperature": 0.2,
+      "TopP": 0.85,
+      "@template": "../templates/model-defaults.json",
+      "Notes": "High-quality alternative model"
+    }
+  }
+]

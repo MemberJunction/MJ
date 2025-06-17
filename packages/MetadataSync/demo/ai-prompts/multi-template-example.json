@@ -1,0 +1,19 @@
+{
+  "fields": {
+    "Name": "Customer Service Excellence Bot",
+    "Description": "Demonstrates multiple template merging",
+    "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+    "@template": [
+      "../templates/standard-prompt-settings.json",
+      "../templates/customer-service-defaults.json"
+    ],
+    "TemplateText": "You are a friendly and helpful customer service representative. How may I assist you today?",
+    "Temperature": 0.9,
+    "Status": "Active",
+    "PromptRole": "Assistant",
+    "PromptPosition": "First"
+  },
+  "relatedEntities": {
+    "MJ: AI Prompt Models": "@template:../templates/standard-ai-models.json"
+  }
+}

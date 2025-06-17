@@ -1,0 +1,19 @@
+{
+  "fields": {
+    "Name": "Template-Based Analysis Prompt",
+    "Description": "Example showing how to use templates for reusable configurations",
+    "TypeID": "@lookup:AI Prompt Types.Name=Analysis",
+    "CategoryID": "@lookup:AI Prompt Categories.Name=Business Intelligence",
+    "@template": "../templates/standard-prompt-settings.json",
+    "TemplateText": "@file:template-example.prompt.md",
+    "MinPowerRank": 7,
+    "SelectionStrategy": "PowerBased",
+    "PowerPreference": "High",
+    "OutputExample": "{ \"analysis\": \"string\", \"confidence\": 0.95, \"recommendations\": [] }",
+    "PromptRole": "System",
+    "PromptPosition": "First"
+  },
+  "relatedEntities": {
+    "MJ: AI Prompt Models": "@template:../templates/high-performance-models.json"
+  }
+}

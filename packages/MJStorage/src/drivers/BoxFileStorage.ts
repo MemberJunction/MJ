@@ -18,6 +18,20 @@ interface BoxItem {
   modified_at?: string;
 }
 
+// Define types for Box API responses
+interface BoxTokenResponse {
+  access_token: string;
+  expires_in: number;
+  refresh_token?: string;
+  token_type: string;
+}
+
+interface BoxErrorResponse {
+  message?: string;
+  error?: string;
+  error_description?: string;
+}
+
 /**
  * FileStorageBase implementation for Box.com cloud storage
  * 
@@ -195,13 +209,13 @@ export class BoxFileStorage extends FileStorageBase {
         throw new Error(`Failed to get access token: ${response.status} ${response.statusText}`);
       }
       
-      const tokenData = await response.json();
+      const tokenData = await response.json() as BoxTokenResponse;
       const { access_token, expires_in } = tokenData;
       this._accessToken = access_token;
       this._tokenExpiresAt = Date.now() + (expires_in * 1000) - 60000; // Subtract 1 minute for safety
     } catch (error) {
       console.error('Error getting Box access token', error);
-      throw new Error('Failed to authenticate with Box: ' + error.message);
+      throw new Error('Failed to authenticate with Box: ' + (error instanceof Error ? error.message : String(error)));
     }
   }
 
@@ -261,7 +275,7 @@ export class BoxFileStorage extends FileStorageBase {
           throw new Error(`Failed to refresh token: ${response.status} ${response.statusText}`);
         }
         
-        const data = await response.json();
+        const data = await response.json() as BoxTokenResponse;
         this._accessToken = data.access_token;
         this._refreshToken = data.refresh_token || this._refreshToken;
         this._tokenExpiresAt = Date.now() + (data.expires_in * 1000) - 60000; // Subtract 1 minute for safety
@@ -280,7 +294,7 @@ export class BoxFileStorage extends FileStorageBase {
         return this._accessToken;
       } catch (error) {
         console.error('Error getting new access token via client credentials', error);
-        throw new Error('Failed to authenticate with Box: ' + error.message);
+        throw new Error('Failed to authenticate with Box: ' + (error instanceof Error ? error.message : String(error)));
       }
     }
     
@@ -357,7 +371,8 @@ export class BoxFileStorage extends FileStorageBase {
     
     if (!response.ok) {
       console.error('Box API error', { status: response.status, data });
-      throw new Error(`Box API error: ${response.status} - ${data.message || JSON.stringify(data)}`);
+      const errorData = data as BoxErrorResponse;
+      throw new Error(`Box API error: ${response.status} - ${errorData.message || errorData.error_description || errorData.error || JSON.stringify(data)}`);
     }
     
     return data;

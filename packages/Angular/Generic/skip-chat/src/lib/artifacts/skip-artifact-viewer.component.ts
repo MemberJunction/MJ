@@ -36,6 +36,18 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
    */
   @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();
   
+  /**
+   * Event that emits the artifact info for display in parent components
+   */
+  @Output() ArtifactInfoChanged = new EventEmitter<{
+    title: string;
+    type: string;
+    date: Date | null;
+    version: string;
+    versionList?: Array<{ID: string, Version: string | number, __mj_CreatedAt: Date}>;
+    selectedVersionId?: string;
+  }>();
+  
   public isLoading: boolean = false;
   public artifact: ConversationArtifactEntity | null = null;
   public artifactVersion: ConversationArtifactVersionEntity | null = null;
@@ -45,6 +57,7 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
   public error: string | null = null;
   public artifactVersions: ConversationArtifactVersionEntity[] = [];
   public selectedVersionId: string = '';
+  public showVersionDropdown: boolean = false;
   private reportComponentRef: ComponentRef<any> | null = null;
   private conversationDetailRecord: ConversationDetailEntity | null = null;
 
@@ -134,6 +147,9 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
         throw new Error('No artifact versions found');
       }
       
+      // Emit artifact info for parent components
+      this.emitArtifactInfo();
+      
       // Create the report component after a short delay to ensure Angular has time to initialize the view
       this.isLoading = false;
       this.cdRef.detectChanges(); // Trigger change detection to update the view
@@ -203,6 +219,9 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
 
         // Load the selected version
         this.loadSpecificArtifactVersion(this.selectedVersionId);
+        
+        // Emit updated artifact info
+        this.emitArtifactInfo();
 
         this.isLoading = false;
         this.cdRef.detectChanges(); // Trigger change detection to update the view
@@ -396,6 +415,50 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
 
   public get isHtml(): boolean {
     return this.contentType.includes('html');
+  }
+
+  /**
+   * Toggles the version dropdown menu
+   */
+  public toggleVersionDropdown(): void {
+    this.showVersionDropdown = !this.showVersionDropdown;
+  }
+
+  /**
+   * Selects a version and closes the dropdown
+   */
+  public selectVersion(versionId: string): void {
+    this.selectedVersionId = versionId;
+    this.showVersionDropdown = false;
+    this.onVersionChange();
+  }
+
+  /**
+   * Gets the current version number for display
+   */
+  public getCurrentVersionNumber(): string {
+    if (!this.artifactVersion) return '1';
+    return String(this.artifactVersion.Version || '1');
+  }
+
+  /**
+   * Emits the current artifact info to parent components
+   */
+  private emitArtifactInfo(): void {
+    if (this.artifact) {
+      this.ArtifactInfoChanged.emit({
+        title: this.artifactTitle,
+        type: this.artifactTypeName,
+        date: this.artifactVersion?.__mj_CreatedAt || null,
+        version: this.getCurrentVersionNumber(),
+        versionList: this.artifactVersions.map(v => ({
+          ID: v.ID,
+          Version: v.Version,
+          __mj_CreatedAt: v.__mj_CreatedAt
+        })),
+        selectedVersionId: this.artifactVersion?.ID || ''
+      });
+    }
   }
 
   public get isPlainText(): boolean {

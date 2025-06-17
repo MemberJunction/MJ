@@ -3,26 +3,30 @@ import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEnt
          AIModelActionEntity, AIModelEntity, AIModelEntityExtended, AIPromptCategoryEntity, AIPromptEntity, 
          AIPromptModelEntity, AIPromptTypeEntity, AIResultCacheEntity, AIVendorTypeDefinitionEntity, 
          ArtifactTypeEntity, EntityAIActionEntity, VectorDatabaseEntity,
-         AIPromptCategoryEntityExtended, AIAgentEntityExtended } from "@memberjunction/core-entities";
+         AIPromptCategoryEntityExtended, AIAgentEntityExtended, 
+         AIAgentPromptEntity,
+         AIAgentTypeEntity,
+         AIVendorEntity,
+         AIModelVendorEntity} from "@memberjunction/core-entities";
  
 // this class handles execution of AI Actions
 export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _models: AIModelEntityExtended[] = [];
     private _vectorDatabases: VectorDatabaseEntity[] = [];
-    private _actions: AIActionEntity[] = [];
-    private _entityActions: EntityAIActionEntity[] = [];
-    private _modelActions: AIModelActionEntity[] = [];
     private _prompts: AIPromptEntity[] = [];
     private _promptModels: AIPromptModelEntity[] = [];
     private _promptTypes: AIPromptTypeEntity[] = [];
     private _promptCategories: AIPromptCategoryEntityExtended[] = [];
     private _agentActions: AIAgentActionEntity[] = [];
-    private _agentModels: AIAgentModelEntity[] = [];
+    private _agentPrompts: AIAgentPromptEntity[] = [];
     private _agentNoteTypes: AIAgentNoteTypeEntity[] = [];
     private _agentNotes: AIAgentNoteEntity[] = [];
     private _agents: AIAgentEntityExtended[] = [];
+    private _agentTypes: AIAgentTypeEntity[] = [];
     private _artifactTypes: ArtifactTypeEntity[] = [];
     private _vendorTypeDefinitions: AIVendorTypeDefinitionEntity[] = [];
+    private _vendors: AIVendorEntity[] = [];
+    private _modelVendors: AIModelVendorEntity[] = [];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const params = [
@@ -51,24 +55,8 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 EntityName: 'Vector Databases'
             },
             {
-                PropertyName: '_actions',
-                EntityName: 'AI Actions'
-            },
-            {
-                PropertyName: '_entityActions',
-                EntityName: 'Entity AI Actions'
-            },
-            {
-                PropertyName: '_modelActions',
-                EntityName: 'AI Model Actions'
-            },
-            {
                 PropertyName: '_agentActions',
                 EntityName: 'AI Agent Actions'
-            },
-            {
-                PropertyName: '_agentModels',
-                EntityName: 'AI Agent Models'
             },
             {
                 PropertyName: '_agentNoteTypes',
@@ -83,13 +71,29 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 EntityName: 'AI Agents'
             },
             {
+                PropertyName: '_agentTypes',
+                EntityName: 'MJ: AI Agent Types'
+            },
+            {
                 PropertyName: '_artifactTypes',
                 EntityName: 'MJ: Artifact Types'
             },
             {
                 PropertyName: '_vendorTypeDefinitions',
                 EntityName: 'MJ: AI Vendor Type Definitions'
-            }
+            }, 
+            {
+                PropertyName: '_vendors',
+                EntityName: 'MJ: AI Vendors'
+            }, 
+            {
+                PropertyName: '_modelVendors',
+                EntityName: 'MJ: AI Model Vendors'
+            }, 
+            {
+                PropertyName: '_agentPrompts',
+                EntityName: 'MJ: AI Agent Prompts'
+            }            
         ];
         return await this.Load(params, provider, forceRefresh, contextUser);
     }
@@ -114,16 +118,17 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 agent.Actions.push(action);
             });
 
-            this._agentModels.filter((model: AIAgentModelEntity) => {
-                return model.AgentID === agent.ID;
-            }).forEach((model: AIAgentModelEntity) => {
-                agent.Models.push(model);
-            });
-
             this._agentNotes.filter((note: AIAgentNoteEntity) => {
                 return note.AgentID === agent.ID;
             }).forEach((note: AIAgentNoteEntity) => {
                 agent.Notes.push(note);
+            });
+        }
+
+        for (const model of this._models) {
+            this._modelVendors.filter(mv => mv.ModelID === model.ID)
+            .forEach((mv: AIModelVendorEntity) => {
+                model.ModelVendors.push(mv);
             });
         }
     }
@@ -165,6 +170,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this._agents;
     }
 
+    public get AgentTypes(): AIAgentTypeEntity[] {
+        return this._agentTypes;
+    }
+
     public GetAgentByName(agentName: string): AIAgentEntityExtended {
         return this._agents.find(a => a.Name.trim().toLowerCase() === agentName.trim().toLowerCase());
     }
@@ -173,9 +182,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this._agentActions;
     }
 
-    public get AgentModels(): AIAgentModelEntity[] {
-        return this._agentModels;
+    public get AgentPrompts(): AIAgentPromptEntity[] {
+        return this._agentPrompts;
     }
+
 
     public get AgentNoteTypes(): AIAgentNoteTypeEntity[] {
         return this._agentNoteTypes;
@@ -191,6 +201,14 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get VendorTypeDefinitions(): AIVendorTypeDefinitionEntity[] {
         return this._vendorTypeDefinitions;
+    }
+
+    public get Vendors(): AIVendorEntity[] {
+        return this._vendors;
+    }
+
+    public get ModelVendors(): AIModelVendorEntity[] {
+        return this._modelVendors;
     }
 
     public get Prompts(): AIPromptEntity[] {
@@ -228,22 +246,25 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this._vectorDatabases;
     }
 
+    /**
+     * @deprecated AI Model Actions are deprecated. Returns an empty array.
+     */
     public get ModelActions(): AIModelActionEntity[] {
-        return this._modelActions;
+        return [];
     }
 
     /**
-     * @deprecated AI Actions are deprecated.  
+     * @deprecated AI Actions are deprecated. Returns an empty array.
      */
     public get Actions(): AIActionEntity[] {
-        return this._actions;
+        return [];
     }
 
     /**
-     * @deprecated Entity AI Actions are deprecated. 
+     * @deprecated Entity AI Actions are deprecated. Returns an empty array.
      */
     public get EntityAIActions(): EntityAIActionEntity[] {
-        return this._entityActions;
+        return [];
     }
 
     public static get Instance(): AIEngineBase {

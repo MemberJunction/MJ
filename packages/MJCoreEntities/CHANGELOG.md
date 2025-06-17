@@ -1,5 +1,90 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.50.0
+
+### Patch Changes
+
+- @memberjunction/core@2.50.0
+- @memberjunction/global@2.50.0
+
+## 2.49.0
+
+### Minor Changes
+
+- 2f974e2: AI Model Costs Schema
+- cc52ced: Significant changes all around
+- db17ed7: Further Updates
+- 62cf1b6: Removed TypeORM which resulted in changes to nearly every package
+
+### Patch Changes
+
+- ca3365f: Use BaseEntity from MJ Core instead of typeorm
+- Updated dependencies [cc52ced]
+- Updated dependencies [db17ed7]
+- Updated dependencies [62cf1b6]
+  - @memberjunction/core@2.49.0
+  - @memberjunction/global@2.49.0
+
+## 2.48.0
+
+### Minor Changes
+
+- 031e724: Implement agent architecture separation of concerns
+
+  - **NEW**: Add BaseAgent class for domain-specific prompt execution
+  - **NEW**: Add ConductorAgent for autonomous orchestration decisions and action planning
+  - **NEW**: Add AgentRunner class to coordinate BaseAgent + ConductorAgent interactions
+  - **NEW**: Add AgentFactory with `GetConductorAgent()` and `GetAgentRunner()` methods using MJGlobal
+    class factory
+  - **NEW**: Add comprehensive execution tracking with AIAgentRun and AIAgentRunStep entities
+  - **NEW**: Support parallel and sequential action execution with proper ordering
+  - **NEW**: Structured JSON response format for deterministic decision parsing
+  - **NEW**: Database persistence for execution history and step tracking
+  - **NEW**: Cancellation and progress monitoring support
+  - **NEW**: Context compression for long conversations
+  - **NEW**: Template rendering with data context
+
+  This implements clean separation of concerns:
+
+  - BaseAgent: Domain-specific execution only (~500 lines)
+  - ConductorAgent: Orchestration decisions with structured responses
+  - AgentRunner: Coordination layer providing unified user interface
+
+  Includes comprehensive TypeScript typing and MemberJunction framework integration.
+
+### Patch Changes
+
+- Updated dependencies [bb01fcf]
+  - @memberjunction/core@2.48.0
+  - @memberjunction/global@2.48.0
+
+## 2.47.0
+
+### Patch Changes
+
+- @memberjunction/core@2.47.0
+- @memberjunction/global@2.47.0
+
+## 2.46.0
+
+### Patch Changes
+
+- @memberjunction/core@2.46.0
+- @memberjunction/global@2.46.0
+
+## 2.45.0
+
+### Minor Changes
+
+- 556ee8d: Add AI Agent framework database entities and enhanced agent execution support
+
+  New entity classes generated for AIAgentType, AIAgentRun, and AIAgentRunStep tables. Enhanced AIAgent and AIPromptRun entities with new foreign key relationships. Updated DataContextItem entity with CodeName property for improved code generation. These changes provide the foundational data layer for the AI Agent execution framework with hierarchical agent support, execution tracking, and pause/resume capabilities.
+
+### Patch Changes
+
+- @memberjunction/core@2.45.0
+- @memberjunction/global@2.45.0
+
 ## 2.44.0
 
 ### Minor Changes

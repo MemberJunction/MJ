@@ -233,10 +233,9 @@ export class EntityField {
                             this.Value = temp;
                     }
                     catch (e) {
-                        // if we get here, that means the default value is not a valid date, so we need to check to see if the date is a getdate() or getutcdate() type default
-                        // use includes() below because it is possible that the value is wrapped in parenthesis, like (getdate()) and that is still valid.
-                        if (fieldInfo.DefaultValue.trim().toLowerCase().includes("getdate()") || fieldInfo.DefaultValue.trim().toLowerCase().includes("getutcdate()")) {
-                            // we have a getdate() or getutcdate() type default, leave the field alone if its a special date field as the server (i.e. database) will handle
+                        // if we get here, that means the default value is not a valid date, so we need to check to see if it's a SQL current date function
+                        if (EntityFieldInfo.IsDefaultValueSQLCurrentDateFunction(fieldInfo.DefaultValue)) {
+                            // we have a SQL current date function default, leave the field alone if its a special date field as the server (i.e. database) will handle
                             //setting the value, otherwise set the value to the current date
                             if(fieldInfo.IsSpecialDateField){
                                 this.Value = null;
@@ -411,6 +410,7 @@ export abstract class BaseEntity<T = unknown> {
     private _eventSubject: Subject<BaseEntityEvent>;
     private _resultHistory: BaseEntityResult[] = [];
     private _provider: IEntityDataProvider | null = null;
+    private _everSaved: boolean = false;
 
     constructor(Entity: EntityInfo, Provider: IEntityDataProvider | null = null) {
         this._eventSubject = new Subject<BaseEntityEvent>();
@@ -508,7 +508,7 @@ export abstract class BaseEntity<T = unknown> {
      * Returns true if the record has been saved to the database, false otherwise. This is a useful property to check to determine if the record is a "New Record" or an existing one.
      */
     get IsSaved(): boolean {
-        return this.PrimaryKey.HasValue;
+        return this._everSaved;
     }
 
     /**
@@ -862,6 +862,7 @@ export abstract class BaseEntity<T = unknown> {
      */
     public NewRecord(newValues?: FieldValueCollection) : boolean {
         this.init();
+        this._everSaved = false; // Reset save state for new record
         if (newValues) {
             newValues.KeyValuePairs.filter(kv => kv.Value !== null && kv.Value !== undefined).forEach(kv => {
                 this.Set(kv.FieldName, kv.Value);
@@ -1012,6 +1013,7 @@ export abstract class BaseEntity<T = unknown> {
         if (data) {
             this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
             this.SetMany(data, false, true); // set the new values from the data returned from the save, this will also reset the old values
+            this._everSaved = true; // Mark as saved after successful save
             const result = this.LatestResult;
             if (result)
                 result.NewValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} }); // set the latest values here
@@ -1161,6 +1163,7 @@ export abstract class BaseEntity<T = unknown> {
                 }
             }
             this._recordLoaded = true;
+            this._everSaved = true; // Mark as saved since we loaded from database
             this._compositeKey = CompositeKey; // set the composite key to the one we just loaded
 
             return true;
@@ -1180,6 +1183,25 @@ export abstract class BaseEntity<T = unknown> {
      */
     public LoadFromData(data: any, replaceOldValues: boolean = false) : boolean {
         this.SetMany(data, true);
+        // now, check to see if we have the primary key set, if so, we should consider ourselves
+        // loaded from the database and set the _recordLoaded flag to true along with the _everSaved flag
+        if (this.PrimaryKeys && this.PrimaryKeys.length > 0) {
+            // chck each pkey's value to make sur it is set
+            this._recordLoaded = true; // all primary keys are set, so we are loaded
+            this._everSaved = true; // Mark as saved since we loaded from data
+            for (let pkey of this.PrimaryKeys) {
+                if (pkey.Value === null || pkey.Value === undefined) {
+                    this._recordLoaded = false;
+                    this._everSaved = false; // if any primary key is not set, we cannot consider ourselves loaded
+                }
+            }
+        }
+        else {
+            // this is an error state as every entity must have > 0 primary keys defined
+            LogError(`BaseEntity.LoadFromData() called on ${this.EntityInfo.Name} with no primary keys defined. This is an error state and should not happen.`);
+            this._recordLoaded = false;
+            this._everSaved = false; // Mark as NOT saved since we loaded from data without primary keys
+        }
         return true;
     }
 

@@ -1,6 +1,6 @@
+import { BaseEntity } from "@memberjunction/core";
 import { AIAgentActionEntity, AIAgentEntity, AIAgentModelEntity, AIAgentNoteEntity } from "../generated/entity_subclasses";
 import { RegisterClass } from "@memberjunction/global";
-import { BaseEntity } from "typeorm";
 
 @RegisterClass(BaseEntity, "AI Agents")
 export class AIAgentEntityExtended extends AIAgentEntity {

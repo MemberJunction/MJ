@@ -1,5 +1,22 @@
 # Change Log - @memberjunction/global
 
+## 2.50.0
+
+## 2.49.0
+
+### Minor Changes
+
+- cc52ced: Significant changes all around
+- 62cf1b6: Removed TypeORM which resulted in changes to nearly every package
+
+## 2.48.0
+
+## 2.47.0
+
+## 2.46.0
+
+## 2.45.0
+
 ## 2.44.0
 
 ## 2.43.0

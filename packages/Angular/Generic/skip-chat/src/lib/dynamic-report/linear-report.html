@@ -1,22 +1,13 @@
 @if(SkipData) {
     <div style="display: flex; flex-direction: column; height: 100%;">
         <!-- Report Controls -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <div style="display: flex; align-items: center;">
-                @if (matchingReportID !== null) {
+        @if (matchingReportID !== null) {
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <div style="display: flex; align-items: center;">
                     <div class="report-link" (click)="clickMatchingReport()">Report: {{matchingReportName}}</div>
-                }
+                </div>
             </div>
-            @if (ShowCreateReportButton && !matchingReportID) {
-                <button kendoButton 
-                        (click)="askCreateReport()" 
-                        [disabled]="IsCreatingReport"
-                        class="create-report-button">
-                    <span class="fa-solid fa-file-plus"></span>
-                    Create Report
-                </button>
-            }
-        </div>
+        }
 
         <!-- Main Report Content -->
         <div style="flex: 1; min-height: 0; overflow: hidden;">
@@ -37,28 +28,37 @@
                 </skip-dynamic-grid>  
             }
             @else if (IsHTML) {
-                <skip-dynamic-html-report
-                    #theHtmlReport 
+                <skip-dynamic-ui-component
+                    #theUIComponent 
                     [SkipData]="SkipData"
+                    [ShowCreateReportButton]="ShowCreateReportButton"
+                    [matchingReportID]="matchingReportID"
                     (DrillDownEvent)="HandleDrillDownEvent($event)"
+                    (CreateReportRequested)="handleCreateReportForOption($event)"
                     style="display:block; height: 100%;">
-                </skip-dynamic-html-report>  
+                </skip-dynamic-ui-component>  
             }
         </div>
 
         <!-- Bottom Bar with Explanation -->
         @if (SkipData.userExplanation || SkipData.analysis) {
-            <div style="border-top: 1px solid #e0e0e0; padding: 10px; background-color: #f8f9fa; display: flex; gap: 20px; align-items: flex-start;">
+            <div style="border-top: 2px solid #e0e0e0; background-color: #f8f9fa;">
                 @if (SkipData.userExplanation) {
-                    <div style="flex: 1;">
-                        <strong style="color: #666;">Explanation:</strong>
-                        <span style="margin-left: 5px;">{{SkipData.userExplanation}}</span>
+                    <div style="padding: 15px 20px; border-bottom: 1px solid #e0e0e0;">
+                        <div style="display: flex; align-items: flex-start; gap: 10px;">
+                            <strong style="color: #333; font-size: 14px; min-width: 90px;">Explanation:</strong>
+                            <div style="color: #555; line-height: 1.5;">{{SkipData.userExplanation}}</div>
+                        </div>
                     </div>
                 }
                 @if (SkipData.analysis) {
-                    <div style="flex: 1;">
-                        <strong style="color: #666;">Analysis:</strong>
-                        <markdown [data]="SkipData.analysis" style="display: inline; margin-left: 5px;"></markdown>
+                    <div style="padding: 15px 20px; max-height: 300px; overflow-y: auto;">
+                        <div style="margin-bottom: 10px;">
+                            <strong style="color: #333; font-size: 14px;">Analysis:</strong>
+                        </div>
+                        <div style="padding-left: 10px; border-left: 3px solid #007bff; margin-left: 5px;">
+                            <markdown [data]="SkipData.analysis" style="display: block; color: #444; line-height: 1.6;"></markdown>
+                        </div>
                     </div>
                 }
             </div>
