@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ExecutionStatus, CancellationReason, ModelInfo, JudgeMetadata, ValidationAttempt, AIPromptRunResult } from '@memberjunction/ai';
 import { LogError, LogStatus, Metadata, UserInfo, ValidationResult, ValidationErrorInfo, ValidationErrorType, RunView } from '@memberjunction/core';
 import { CleanJSON, MJGlobal } from '@memberjunction/global';
 import { AIModelEntityExtended, AIPromptEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
@@ -15,13 +15,7 @@ import {
     ExecutionStreamingCallback, 
     TemplateMessageRole,
     ChildPromptParam,
-    AIPromptParams,
-    ExecutionStatus,
-    CancellationReason,
-    ModelInfo,
-    JudgeMetadata,
-    ValidationAttempt,
-    AIPromptRunResult
+    AIPromptParams
 } from './types';
 
 // Re-export types that other modules need
@@ -832,36 +826,27 @@ export class AIPromptRunner {
       await AIEngine.Instance.Config(false, contextUser);
 
       // Resolve vendor ID to vendor name if provided
-      let vendorName: string | undefined;
-      if (vendorId) {
-        try {
-          const rv = new RunView();
-          const vendorResult = await rv.RunView({
-            EntityName: 'AI Vendors',
-            ExtraFilter: `ID='${vendorId}'`,
-            ResultType: 'entity_object',
-          });
-
-          if (vendorResult.Results && vendorResult.Results.length > 0) {
-            vendorName = vendorResult.Results[0].Name;
-          } else {
-            LogError(`Vendor with ID ${vendorId} not found`);
-            // Continue without vendor filtering rather than fail
-          }
-        } catch (error) {
-          LogError(`Error loading vendor ${vendorId}: ${error.message}`);
-          // Continue without vendor filtering rather than fail
-        }
-      }
+      // use metadata cache
+      const vendorName: string | undefined = AIEngine.Instance.Vendors.find((v) => v.ID === vendorId)?.Name;      
 
       // If explicit model is specified, validate it from cached models
       if (explicitModelId) {
         const model = AIEngine.Instance.Models.find((m) => m.ID === explicitModelId && (!vendorName || m.Vendor === vendorName));
-        if (model && model.IsActive) {
-          return model;
+        if (!model) {
+          throw new Error(`Specified model ${explicitModelId} not found in available models`);
         }
-        // If explicit model not found or inactive, log warning but continue with normal selection
-        LogError(`Explicit model ${explicitModelId} not found, inactive, or not from specified vendor, using prompt model selection`);
+        if (!model.IsActive) {
+          throw new Error(`Specified model ${model.Name} (${explicitModelId}) is not active`);
+        }
+        
+        // Check if model type is compatible with prompt's model type requirement
+        if (prompt.AIModelTypeID && model.AIModelTypeID !== prompt.AIModelTypeID) {
+          const modelType = AIEngine.Instance.ModelTypes.find(mt => mt.ID === model.AIModelTypeID);
+          const promptModelType = AIEngine.Instance.ModelTypes.find(mt => mt.ID === prompt.AIModelTypeID);
+          throw new Error(`Specified model ${model.Name} is of type ${modelType?.Name || 'unknown'} but prompt ${prompt.Name} requires model type ${promptModelType?.Name || 'unknown'}`);
+        }
+        
+        return model;
       }
 
       // Get prompt-specific model associations from AIPromptModels
@@ -886,18 +871,18 @@ export class AIPromptRunner {
           const bPriority = promptModels.find((pm) => pm.ModelID === b.ID)?.Priority || 0;
           return bPriority - aPriority;
         });
-      } else {
-        // Fallback to automatic model selection based on prompt configuration
-        const minPowerRank = prompt.MinPowerRank || 0;
+      } 
+      else {
+        // If no prompt-specific models, use all active models that match AIModelTypeID and vendor
         candidateModels = AIEngine.Instance.Models.filter(
           (m) =>
             m.IsActive &&
-            m.PowerRank >= minPowerRank &&
             (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID) &&
             (!vendorName || m.Vendor === vendorName),
         );
-
-        // Sort by power rank based on preference
+      }
+      // Sort by power rank based on preference
+      if (prompt.SelectionStrategy === 'ByPower') {
         switch (prompt.PowerPreference) {
           case 'Highest':
             candidateModels.sort((a, b) => b.PowerRank - a.PowerRank);
@@ -913,6 +898,26 @@ export class AIPromptRunner {
             break;
         }
       }
+      else if (prompt.SelectionStrategy === 'Specific') {
+        // rank based on the priority in the AIPromptModels
+        candidateModels.sort((a, b) => {
+          // get the row from promptModels that match the model ID
+          const aPriority = promptModels.find((pm) => pm.ModelID === a.ID)?.Priority || 0;
+          const bPriority = promptModels.find((pm) => pm.ModelID === b.ID)?.Priority || 0;
+          return bPriority - aPriority; // Use the highest priority first
+        });
+      }
+      else {
+        // default ranking order
+        const minPowerRank = prompt.MinPowerRank || 0;
+        candidateModels = AIEngine.Instance.Models.filter(
+          (m) =>
+            m.IsActive &&
+            m.PowerRank >= minPowerRank &&
+            (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID) &&
+            (!vendorName || m.Vendor === vendorName),
+        );
+      }      
 
       if (candidateModels.length === 0) {
         LogError(`No suitable models found for prompt ${prompt.Name}`);
@@ -1043,6 +1048,8 @@ export class AIPromptRunner {
       // Prepare chat parameters
       const params = new ChatParams();
       params.model = model.APIName;
+      params.responseFormat = 'JSON';
+      params.temperature = 0.7; // Default temperature if not specified
       params.cancellationToken = cancellationToken;
 
       // Build message array with rendered prompt and conversation messages
@@ -1194,7 +1201,7 @@ export class AIPromptRunner {
         // Validation failed, check if we should retry
         if (prompt.ValidationBehavior === 'Strict' && attempt < maxRetries) {
           lastError = new Error(`Validation failed: ${validationErrors?.map(e => e.Message).join('; ')}`);
-          LogStatus(`❌ Validation failed on attempt ${attempt + 1}, will retry (Strict mode)`);
+          LogStatus(`⚠️ Validation failed on attempt ${attempt + 1}, will retry (Strict mode)`);
           continue; // Retry
         } else {
           // Either not strict mode or no more retries, return what we have
@@ -1341,15 +1348,82 @@ export class AIPromptRunner {
       type: 'object',
       properties: {},
       required: [],
-      additionalProperties: false,
+      additionalProperties: true, // Allow additional properties for flexibility with examples
     };
 
+    // Check if this entire object appears to be a placeholder/example
+    const isPlaceholderObject = this.isObjectLikelyPlaceholder(example);
+
     for (const [key, value] of Object.entries(example)) {
-      schema.properties[key] = this.generateSchemaForValue(value);
-      schema.required.push(key);
+      // For placeholder objects, generate very permissive schemas
+      if (isPlaceholderObject) {
+        // Don't define specific properties for placeholder objects
+        // Just indicate it should be an object with any properties
+        schema.properties = {};
+        schema.required = [];
+        break;
+      }
+      
+      // Check if the key ends with '?' to indicate optional property (TypeScript style)
+      const isOptional = key.endsWith('?');
+      const cleanKey = isOptional ? key.slice(0, -1) : key;
+      
+      schema.properties[cleanKey] = this.generateSchemaForValue(value);
+      
+      // Don't make fields required if:
+      // 1. They're marked as optional with '?'
+      // 2. They look like placeholder/example values
+      const isPlaceholder = this.isLikelyPlaceholder(cleanKey, value);
+      if (!isOptional && !isPlaceholder) {
+        schema.required.push(cleanKey);
+      }
     }
 
     return schema;
+  }
+
+  /**
+   * Detects if a key/value pair looks like a placeholder or example value
+   */
+  private isLikelyPlaceholder(key: string, value: unknown): boolean {
+    // Check if key contains common placeholder patterns
+    const placeholderKeyPatterns = /^(param|example|placeholder|sample|dummy|test)/i;
+    if (placeholderKeyPatterns.test(key)) {
+      return true;
+    }
+
+    // Check if string value contains common placeholder text
+    if (typeof value === 'string') {
+      const placeholderValuePatterns = /(goes here|placeholder|example|sample value|value\d+|UUID|your .* here|insert .* here)/i;
+      if (placeholderValuePatterns.test(value)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Detects if an entire object looks like it contains only placeholder/example data
+   */
+  private isObjectLikelyPlaceholder(obj: unknown): boolean {
+    if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) {
+      return false;
+    }
+
+    const entries = Object.entries(obj);
+    
+    // If object has placeholder-like keys (param1, param2, etc)
+    const hasPlaceholderKeys = entries.some(([key]) => 
+      /^(param\d+|key\d+|value\d+|example\d+|placeholder\d+)$/i.test(key)
+    );
+
+    // If all values are simple placeholders
+    const allValuesArePlaceholders = entries.every(([key, value]) => 
+      this.isLikelyPlaceholder(key, value)
+    );
+
+    return hasPlaceholderKeys || allValuesArePlaceholders;
   }
 
   /**
@@ -1373,9 +1447,10 @@ export class AIPromptRunner {
             return {
               type: 'array',
               items: this.generateSchemaForValue(value[0]),
+              minItems: 0, // Don't require minimum items for example arrays
             };
           } else {
-            return { type: 'array' };
+            return { type: 'array', minItems: 0 };
           }
         } else {
           return this.generateSchemaFromExample(value);
@@ -1574,10 +1649,14 @@ export class AIPromptRunner {
       if (validationErrors.length === 0) {
         LogStatus(`✅ Schema validation passed for prompt ${promptId}`);
       } else {
-        LogStatus(`❌ Schema validation found ${validationErrors.length} errors for prompt ${promptId}:`);
+        LogStatus(`⚠️ Schema validation found ${validationErrors.length} potential issues for prompt ${promptId}:`);
         validationErrors.forEach((error, index) => {
           LogStatus(`   ${index + 1}. ${error.Source}: ${error.Message}`);
         });
+        // Log additional context to help with debugging
+        LogStatus(`   Note: The schema was generated from OutputExample. Consider:`);
+        LogStatus(`   - Mark optional properties with '?' suffix (e.g., "subAgent?": {...})`)
+        LogStatus(`   - Example values like "param1", "value1" are treated as placeholders`);
       }
 
     } catch (error) {

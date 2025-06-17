@@ -10,8 +10,9 @@
  * @since 2.49.0
  */
 
-export * from './LoopAgentType';
+export * from './base-agent-type';
+export * from './loop-agent-type';
 
 // Ensure classes are loaded and registered with the ClassFactory
-import { LoadLoopAgentType } from './LoopAgentType';
+import { LoadLoopAgentType } from './loop-agent-type';
 LoadLoopAgentType();

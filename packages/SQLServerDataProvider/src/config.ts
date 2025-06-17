@@ -1,5 +1,6 @@
 import { BaseEntity, Metadata, RunView, LogError, LogStatus, RunReport, RunQuery, SetProvider } from "@memberjunction/core";
-import { SQLServerDataProvider, SQLServerProviderConfigData } from "./SQLServerDataProvider";
+import { SQLServerDataProvider } from "./SQLServerDataProvider";
+import { SQLServerProviderConfigData } from "./types";
 import * as sql from 'mssql';
 import { UserCache } from "./UserCache";
 

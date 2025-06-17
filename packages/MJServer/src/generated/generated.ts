@@ -12,7 +12,7 @@ import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver
             AppContext, KeyValuePairInput, DeleteOptionsInput, GraphQLTimestamp as Timestamp,
             GetReadOnlyDataSource, GetReadWriteDataSource } from '@memberjunction/server';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
-import { Metadata, EntityPermissionType, CompositeKey } from '@memberjunction/core'
+import { Metadata, EntityPermissionType, CompositeKey, UserInfo } from '@memberjunction/core'
 
 import { MaxLength } from 'class-validator';
 import { mj_core_schema } from '../config.js';
@@ -253,7 +253,7 @@ export class ScheduledActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Scheduled Actions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Scheduled Actions', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -263,7 +263,7 @@ export class ScheduledActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Scheduled Action Params', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActionParams] WHERE [ScheduledActionID]='${scheduledaction_.ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Action Params', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Scheduled Action Params', rows);
         return result;
     }
@@ -446,7 +446,7 @@ export class ScheduledActionParamResolver extends ResolverBase {
         this.CheckUserReadPermissions('Scheduled Action Params', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActionParams] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Action Params', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Scheduled Action Params', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -657,7 +657,7 @@ export class ExplorerNavigationItemResolver extends ResolverBase {
         this.CheckUserReadPermissions('Explorer Navigation Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwExplorerNavigationItems] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Explorer Navigation Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Explorer Navigation Items', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -823,7 +823,7 @@ export class GeneratedCodeCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Generated Code Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwGeneratedCodeCategories] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Generated Code Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Generated Code Categories', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -833,7 +833,7 @@ export class GeneratedCodeCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Generated Code Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwGeneratedCodeCategories] WHERE [ParentID]='${generatedcodecategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Generated Code Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Generated Code Categories', rows);
         return result;
     }
@@ -843,7 +843,7 @@ export class GeneratedCodeCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Generated Codes', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwGeneratedCodes] WHERE [CategoryID]='${generatedcodecategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Generated Codes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Generated Codes', rows);
         return result;
     }
@@ -1016,7 +1016,7 @@ export class AIAgentModelResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Agent Models', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentModels] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Models', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('AI Agent Models', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -1165,7 +1165,7 @@ export class AIAgentNoteTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Agent Note Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNoteTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Note Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('AI Agent Note Types', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -1175,7 +1175,7 @@ export class AIAgentNoteTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Agent Notes', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNotes] WHERE [AgentNoteTypeID]='${aiagentnotetype_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Notes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Notes', rows);
         return result;
     }
@@ -1501,7 +1501,7 @@ export class AIAgentRunResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('MJ: AI Agent Runs', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -1511,7 +1511,7 @@ export class AIAgentRunResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Agent Run Steps', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRunSteps] WHERE [AgentRunID]='${aiagentrun_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Agent Run Steps', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Run Steps', rows);
         return result;
     }
@@ -1521,7 +1521,7 @@ export class AIAgentRunResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [ParentRunID]='${aiagentrun_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows);
         return result;
     }
@@ -1531,7 +1531,7 @@ export class AIAgentRunResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [AgentRunID]='${aiagentrun_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
         return result;
     }
@@ -1695,7 +1695,7 @@ export class AIVendorResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Vendors', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIVendors] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Vendors', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('MJ: AI Vendors', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -1705,7 +1705,7 @@ export class AIVendorResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptModels] WHERE [VendorID]='${aivendor_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Prompt Models', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Models', rows);
         return result;
     }
@@ -1715,7 +1715,7 @@ export class AIVendorResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Result Cache', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [VendorID]='${aivendor_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Result Cache', rows);
         return result;
     }
@@ -1725,7 +1725,7 @@ export class AIVendorResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Model Costs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelCosts] WHERE [VendorID]='${aivendor_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Model Costs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Model Costs', rows);
         return result;
     }
@@ -1735,7 +1735,7 @@ export class AIVendorResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Model Vendors', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelVendors] WHERE [VendorID]='${aivendor_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Model Vendors', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Model Vendors', rows);
         return result;
     }
@@ -1745,7 +1745,7 @@ export class AIVendorResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [VendorID]='${aivendor_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
         return result;
     }
@@ -1755,7 +1755,7 @@ export class AIVendorResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Vendor Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIVendorTypes] WHERE [VendorID]='${aivendor_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Vendor Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Vendor Types', rows);
         return result;
     }
@@ -1963,7 +1963,7 @@ export class AIConfigurationResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Configurations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIConfigurations] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Configurations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('MJ: AI Configurations', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -1973,7 +1973,7 @@ export class AIConfigurationResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Configuration Params', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIConfigurationParams] WHERE [ConfigurationID]='${aiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Configuration Params', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Configuration Params', rows);
         return result;
     }
@@ -1983,7 +1983,7 @@ export class AIConfigurationResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Agent Prompts', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentPrompts] WHERE [ConfigurationID]='${aiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Agent Prompts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Prompts', rows);
         return result;
     }
@@ -1993,7 +1993,7 @@ export class AIConfigurationResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptModels] WHERE [ConfigurationID]='${aiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Prompt Models', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Models', rows);
         return result;
     }
@@ -2003,7 +2003,7 @@ export class AIConfigurationResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Result Cache', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [ConfigurationID]='${aiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Result Cache', rows);
         return result;
     }
@@ -2013,7 +2013,7 @@ export class AIConfigurationResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [ConfigurationID]='${aiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
         return result;
     }
@@ -2316,7 +2316,7 @@ export class AIAgentResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Agents', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgents] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Agents', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('AI Agents', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -2326,7 +2326,7 @@ export class AIAgentResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Agent Requests', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRequests] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Requests', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Requests', rows);
         return result;
     }
@@ -2336,7 +2336,7 @@ export class AIAgentResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Agent Learning Cycles', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentLearningCycles] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Learning Cycles', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Learning Cycles', rows);
         return result;
     }
@@ -2346,7 +2346,7 @@ export class AIAgentResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Agent Models', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentModels] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Models', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Models', rows);
         return result;
     }
@@ -2356,7 +2356,7 @@ export class AIAgentResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Agent Actions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentActions] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Actions', rows);
         return result;
     }
@@ -2366,7 +2366,7 @@ export class AIAgentResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Agent Prompts', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentPrompts] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Agent Prompts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Prompts', rows);
         return result;
     }
@@ -2376,7 +2376,7 @@ export class AIAgentResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows);
         return result;
     }
@@ -2386,7 +2386,7 @@ export class AIAgentResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Agent Notes', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNotes] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Notes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Notes', rows);
         return result;
     }
@@ -2396,7 +2396,7 @@ export class AIAgentResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Result Cache', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Result Cache', rows);
         return result;
     }
@@ -2406,7 +2406,7 @@ export class AIAgentResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
         return result;
     }
@@ -2416,7 +2416,7 @@ export class AIAgentResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Agents', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgents] WHERE [ParentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agents', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agents', rows);
         return result;
     }
@@ -2676,7 +2676,7 @@ export class AIModelCostResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Model Costs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelCosts] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Model Costs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('MJ: AI Model Costs', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -2925,7 +2925,7 @@ export class AIPromptModelResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptModels] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Prompt Models', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('MJ: AI Prompt Models', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -3117,7 +3117,7 @@ export class AIAgentTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Agent Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Agent Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('MJ: AI Agent Types', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -3127,7 +3127,7 @@ export class AIAgentTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Agents', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgents] WHERE [TypeID]='${aiagenttype_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agents', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agents', rows);
         return result;
     }
@@ -3315,7 +3315,7 @@ export class AIAgentNoteResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Agent Notes', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNotes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Notes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('AI Agent Notes', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -3480,7 +3480,7 @@ export class AIAgentActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Agent Actions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentActions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('AI Agent Actions', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -3629,7 +3629,7 @@ export class AIModelPriceTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Model Price Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelPriceTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Model Price Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('MJ: AI Model Price Types', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -3639,7 +3639,7 @@ export class AIModelPriceTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Model Costs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelCosts] WHERE [PriceTypeID]='${aimodelpricetype_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Model Costs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Model Costs', rows);
         return result;
     }
@@ -4119,7 +4119,7 @@ export class AIPromptResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Prompts', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPrompts] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('AI Prompts', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -4129,7 +4129,7 @@ export class AIPromptResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Result Cache', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [AIPromptID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Result Cache', rows);
         return result;
     }
@@ -4139,7 +4139,7 @@ export class AIPromptResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Agent Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentTypes] WHERE [SystemPromptID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Agent Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Types', rows);
         return result;
     }
@@ -4149,7 +4149,7 @@ export class AIPromptResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Configurations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIConfigurations] WHERE [DefaultPromptForContextCompressionID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Configurations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Configurations', rows);
         return result;
     }
@@ -4159,7 +4159,7 @@ export class AIPromptResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Configurations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIConfigurations] WHERE [DefaultPromptForContextSummarizationID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Configurations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Configurations', rows);
         return result;
     }
@@ -4169,7 +4169,7 @@ export class AIPromptResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Prompts', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPrompts] WHERE [ResultSelectorPromptID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Prompts', rows);
         return result;
     }
@@ -4179,7 +4179,7 @@ export class AIPromptResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptModels] WHERE [PromptID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Prompt Models', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Models', rows);
         return result;
     }
@@ -4189,7 +4189,7 @@ export class AIPromptResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Agent Prompts', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentPrompts] WHERE [PromptID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Agent Prompts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Prompts', rows);
         return result;
     }
@@ -4199,7 +4199,7 @@ export class AIPromptResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [PromptID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
         return result;
     }
@@ -4209,7 +4209,7 @@ export class AIPromptResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Agents', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgents] WHERE [ContextCompressionPromptID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agents', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agents', rows);
         return result;
     }
@@ -4473,7 +4473,7 @@ export class AIResultCacheResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Result Cache', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('AI Result Cache', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -4639,7 +4639,7 @@ export class AIPromptCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Prompt Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptCategories] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompt Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('AI Prompt Categories', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -4649,7 +4649,7 @@ export class AIPromptCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Prompts', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPrompts] WHERE [CategoryID]='${aipromptcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Prompts', rows);
         return result;
     }
@@ -4659,7 +4659,7 @@ export class AIPromptCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Prompt Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptCategories] WHERE [ParentID]='${aipromptcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompt Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Prompt Categories', rows);
         return result;
     }
@@ -4808,7 +4808,7 @@ export class AIPromptTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Prompt Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompt Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('AI Prompt Types', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -4818,7 +4818,7 @@ export class AIPromptTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Prompts', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPrompts] WHERE [TypeID]='${aiprompttype_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Prompts', rows);
         return result;
     }
@@ -5004,7 +5004,7 @@ export class CompanyResolver extends ResolverBase {
         this.CheckUserReadPermissions('Companies', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanies] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Companies', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Companies', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -5014,7 +5014,7 @@ export class CompanyResolver extends ResolverBase {
         this.CheckUserReadPermissions('Companies', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanies]` + this.getRowLevelSecurityWhereClause('Companies', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Companies', rows);
         return result;
     }
@@ -5024,7 +5024,7 @@ export class CompanyResolver extends ResolverBase {
         this.CheckUserReadPermissions('Workflows', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkflows] WHERE [CompanyName]='${company_.ID}' ` + this.getRowLevelSecurityWhereClause('Workflows', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Workflows', rows);
         return result;
     }
@@ -5034,7 +5034,7 @@ export class CompanyResolver extends ResolverBase {
         this.CheckUserReadPermissions('Company Integrations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrations] WHERE [CompanyName]='${company_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integrations', rows);
         return result;
     }
@@ -5044,7 +5044,7 @@ export class CompanyResolver extends ResolverBase {
         this.CheckUserReadPermissions('Employees', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployees] WHERE [CompanyID]='${company_.ID}' ` + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Employees', rows);
         return result;
     }
@@ -5289,7 +5289,7 @@ export class EmployeeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Employees', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployees] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Employees', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -5299,7 +5299,7 @@ export class EmployeeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Employees', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployees]` + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Employees', rows);
         return result;
     }
@@ -5309,7 +5309,7 @@ export class EmployeeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Users', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUsers] WHERE [EmployeeID]='${employee_.ID}' ` + this.getRowLevelSecurityWhereClause('Users', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Users', rows);
         return result;
     }
@@ -5319,7 +5319,7 @@ export class EmployeeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Employee Skills', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeSkills] WHERE [EmployeeID]='${employee_.ID}' ` + this.getRowLevelSecurityWhereClause('Employee Skills', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Skills', rows);
         return result;
     }
@@ -5329,7 +5329,7 @@ export class EmployeeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Employee Company Integrations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeCompanyIntegrations] WHERE [EmployeeID]='${employee_.ID}' ` + this.getRowLevelSecurityWhereClause('Employee Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Company Integrations', rows);
         return result;
     }
@@ -5339,7 +5339,7 @@ export class EmployeeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Employees', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployees] WHERE [SupervisorID]='${employee_.ID}' ` + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Employees', rows);
         return result;
     }
@@ -5349,7 +5349,7 @@ export class EmployeeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Employee Roles', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeRoles] WHERE [EmployeeID]='${employee_.ID}' ` + this.getRowLevelSecurityWhereClause('Employee Roles', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Roles', rows);
         return result;
     }
@@ -5518,7 +5518,7 @@ export class UserFavoriteResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('User Favorites', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserFavorites] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('User Favorites', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('User Favorites', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -5662,7 +5662,7 @@ export class EmployeeCompanyIntegrationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Employee Company Integrations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeCompanyIntegrations] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Employee Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Employee Company Integrations', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -5780,7 +5780,7 @@ export class EmployeeRoleResolver extends ResolverBase {
         this.CheckUserReadPermissions('Employee Roles', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeRoles] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Employee Roles', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Employee Roles', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -5905,7 +5905,7 @@ export class EmployeeSkillResolver extends ResolverBase {
         this.CheckUserReadPermissions('Employee Skills', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeSkills] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Employee Skills', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Employee Skills', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -6079,7 +6079,7 @@ export class RoleResolver extends ResolverBase {
         this.CheckUserReadPermissions('Roles', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRoles] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Roles', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Roles', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -6089,7 +6089,7 @@ export class RoleResolver extends ResolverBase {
         this.CheckUserReadPermissions('Roles', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRoles]` + this.getRowLevelSecurityWhereClause('Roles', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Roles', rows);
         return result;
     }
@@ -6099,7 +6099,7 @@ export class RoleResolver extends ResolverBase {
         this.CheckUserReadPermissions('User Roles', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserRoles] WHERE [RoleName]='${role_.ID}' ` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('User Roles', rows);
         return result;
     }
@@ -6109,7 +6109,7 @@ export class RoleResolver extends ResolverBase {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuthorizationRoles] WHERE [RoleName]='${role_.ID}' ` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Authorization Roles', rows);
         return result;
     }
@@ -6119,7 +6119,7 @@ export class RoleResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityPermissions] WHERE [RoleName]='${role_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Permissions', rows);
         return result;
     }
@@ -6129,7 +6129,7 @@ export class RoleResolver extends ResolverBase {
         this.CheckUserReadPermissions('Query Permissions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryPermissions] WHERE [RoleName]='${role_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Permissions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Query Permissions', rows);
         return result;
     }
@@ -6139,7 +6139,7 @@ export class RoleResolver extends ResolverBase {
         this.CheckUserReadPermissions('Employee Roles', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeRoles] WHERE [RoleID]='${role_.ID}' ` + this.getRowLevelSecurityWhereClause('Employee Roles', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Roles', rows);
         return result;
     }
@@ -6149,7 +6149,7 @@ export class RoleResolver extends ResolverBase {
         this.CheckUserReadPermissions('Resource Permissions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourcePermissions] WHERE [RoleID]='${role_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Permissions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Resource Permissions', rows);
         return result;
     }
@@ -6271,7 +6271,7 @@ export class SkillResolver extends ResolverBase {
         this.CheckUserReadPermissions('Skills', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwSkills] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Skills', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Skills', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -6281,7 +6281,7 @@ export class SkillResolver extends ResolverBase {
         this.CheckUserReadPermissions('Skills', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwSkills]` + this.getRowLevelSecurityWhereClause('Skills', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Skills', rows);
         return result;
     }
@@ -6291,7 +6291,7 @@ export class SkillResolver extends ResolverBase {
         this.CheckUserReadPermissions('Employee Skills', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeSkills] WHERE [SkillID]='${skill_.ID}' ` + this.getRowLevelSecurityWhereClause('Employee Skills', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Skills', rows);
         return result;
     }
@@ -6301,7 +6301,7 @@ export class SkillResolver extends ResolverBase {
         this.CheckUserReadPermissions('Skills', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwSkills] WHERE [ParentID]='${skill_.ID}' ` + this.getRowLevelSecurityWhereClause('Skills', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Skills', rows);
         return result;
     }
@@ -6430,7 +6430,7 @@ export class IntegrationURLFormatResolver extends ResolverBase {
         this.CheckUserReadPermissions('Integration URL Formats', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwIntegrationURLFormats] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Integration URL Formats', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -6440,7 +6440,7 @@ export class IntegrationURLFormatResolver extends ResolverBase {
         this.CheckUserReadPermissions('Integration URL Formats', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwIntegrationURLFormats]` + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Integration URL Formats', rows);
         return result;
     }
@@ -6603,7 +6603,7 @@ export class IntegrationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Integrations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwIntegrations] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Integrations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Integrations', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -6613,7 +6613,7 @@ export class IntegrationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Integrations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwIntegrations]` + this.getRowLevelSecurityWhereClause('Integrations', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Integrations', rows);
         return result;
     }
@@ -6623,7 +6623,7 @@ export class IntegrationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Integration URL Formats', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwIntegrationURLFormats] WHERE [IntegrationID]='${integration_.ID}' ` + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Integration URL Formats', rows);
         return result;
     }
@@ -6633,7 +6633,7 @@ export class IntegrationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Company Integrations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrations] WHERE [IntegrationName]='${integration_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integrations', rows);
         return result;
     }
@@ -6643,7 +6643,7 @@ export class IntegrationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Record Changes', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChanges] WHERE [IntegrationID]='${integration_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Record Changes', rows);
         return result;
     }
@@ -6872,7 +6872,7 @@ export class CompanyIntegrationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Company Integrations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrations] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Company Integrations', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -6882,7 +6882,7 @@ export class CompanyIntegrationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Company Integration Record Maps', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRecordMaps] WHERE [CompanyIntegrationID]='${companyintegration_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Record Maps', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Record Maps', rows);
         return result;
     }
@@ -6892,7 +6892,7 @@ export class CompanyIntegrationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Lists', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLists] WHERE [CompanyIntegrationID]='${companyintegration_.ID}' ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Lists', rows);
         return result;
     }
@@ -6902,7 +6902,7 @@ export class CompanyIntegrationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Company Integration Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRuns] WHERE [CompanyIntegrationID]='${companyintegration_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Runs', rows);
         return result;
     }
@@ -6912,7 +6912,7 @@ export class CompanyIntegrationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Employee Company Integrations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeCompanyIntegrations] WHERE [CompanyIntegrationID]='${companyintegration_.ID}' ` + this.getRowLevelSecurityWhereClause('Employee Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Company Integrations', rows);
         return result;
     }
@@ -7401,7 +7401,7 @@ export class EntityFieldResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Fields', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityFields] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Fields', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Entity Fields', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -7411,7 +7411,7 @@ export class EntityFieldResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Fields', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityFields]` + this.getRowLevelSecurityWhereClause('Entity Fields', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Fields', rows);
         return result;
     }
@@ -7421,7 +7421,7 @@ export class EntityFieldResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Field Values', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityFieldValues] WHERE [EntityFieldID]='${entityfield_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Field Values', rows);
         return result;
     }
@@ -8169,7 +8169,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Entities', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntities] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entities', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Entities', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -8179,7 +8179,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Entities', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntities]` + this.getRowLevelSecurityWhereClause('Entities', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entities', rows);
         return result;
     }
@@ -8189,7 +8189,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogs] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Logs', rows);
         return result;
     }
@@ -8199,7 +8199,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Template Params', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateParams] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Template Params', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Template Params', rows);
         return result;
     }
@@ -8209,7 +8209,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Dataset Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDatasetItems] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Dataset Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Dataset Items', rows);
         return result;
     }
@@ -8219,7 +8219,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Users', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUsers] WHERE [LinkedEntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Users', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Users', rows);
         return result;
     }
@@ -8229,7 +8229,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Company Integration Record Maps', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRecordMaps] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Record Maps', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Record Maps', rows);
         return result;
     }
@@ -8239,7 +8239,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Entities', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntities] WHERE [ParentID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entities', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entities', rows);
         return result;
     }
@@ -8249,7 +8249,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('User View Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewCategories] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('User View Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('User View Categories', rows);
         return result;
     }
@@ -8259,7 +8259,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityAIActions] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', rows);
         return result;
     }
@@ -8269,7 +8269,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Entity Actions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActions] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Actions', rows);
         return result;
     }
@@ -8279,7 +8279,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Conversations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversations] WHERE [LinkedEntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Conversations', rows);
         return result;
     }
@@ -8289,7 +8289,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Duplicate Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRuns] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Runs', rows);
         return result;
     }
@@ -8299,7 +8299,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Tagged Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTaggedItems] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Tagged Items', rows);
         return result;
     }
@@ -8309,7 +8309,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Record Merge Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordMergeLogs] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Record Merge Logs', rows);
         return result;
     }
@@ -8319,7 +8319,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('User Application Entities', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserApplicationEntities] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('User Application Entities', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('User Application Entities', rows);
         return result;
     }
@@ -8329,7 +8329,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Query Fields', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryFields] WHERE [SourceEntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Fields', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Query Fields', rows);
         return result;
     }
@@ -8339,7 +8339,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('User Views', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViews] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('User Views', rows);
         return result;
     }
@@ -8349,7 +8349,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Recommendation Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationItems] WHERE [DestinationEntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Recommendation Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Recommendation Items', rows);
         return result;
     }
@@ -8359,7 +8359,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityPermissions] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Permissions', rows);
         return result;
     }
@@ -8369,7 +8369,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Lists', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLists] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Lists', rows);
         return result;
     }
@@ -8379,7 +8379,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('User Record Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserRecordLogs] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('User Record Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('User Record Logs', rows);
         return result;
     }
@@ -8389,7 +8389,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Entity Documents', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocuments] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Documents', rows);
         return result;
     }
@@ -8399,7 +8399,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Recommendations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendations] WHERE [SourceEntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Recommendations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Recommendations', rows);
         return result;
     }
@@ -8409,7 +8409,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('File Entity Record Links', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFileEntityRecordLinks] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('File Entity Record Links', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('File Entity Record Links', rows);
         return result;
     }
@@ -8419,7 +8419,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Entity Settings', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntitySettings] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Settings', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Settings', rows);
         return result;
     }
@@ -8429,7 +8429,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRelationships] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Relationships', rows);
         return result;
     }
@@ -8439,7 +8439,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Company Integration Run Details', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRunDetails] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Run Details', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Run Details', rows);
         return result;
     }
@@ -8449,7 +8449,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Data Context Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDataContextItems] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Data Context Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Data Context Items', rows);
         return result;
     }
@@ -8459,7 +8459,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Integration URL Formats', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwIntegrationURLFormats] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Integration URL Formats', rows);
         return result;
     }
@@ -8469,7 +8469,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Entity Fields', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityFields] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Fields', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Fields', rows);
         return result;
     }
@@ -8479,7 +8479,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('User Favorites', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserFavorites] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('User Favorites', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('User Favorites', rows);
         return result;
     }
@@ -8489,7 +8489,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Entity Communication Message Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityCommunicationMessageTypes] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Communication Message Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Communication Message Types', rows);
         return result;
     }
@@ -8499,7 +8499,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Entity Record Documents', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRecordDocuments] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Record Documents', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Record Documents', rows);
         return result;
     }
@@ -8509,7 +8509,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Record Changes', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChanges] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Record Changes', rows);
         return result;
     }
@@ -8519,7 +8519,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Application Entities', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwApplicationEntities] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Application Entities', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Application Entities', rows);
         return result;
     }
@@ -8529,7 +8529,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Resource Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceTypes] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Resource Types', rows);
         return result;
     }
@@ -8539,7 +8539,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Query Entities', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryEntities] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Entities', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Query Entities', rows);
         return result;
     }
@@ -8549,7 +8549,7 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Generated Codes', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwGeneratedCodes] WHERE [LinkedEntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Generated Codes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Generated Codes', rows);
         return result;
     }
@@ -8935,7 +8935,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Users', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUsers] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Users', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Users', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -8945,7 +8945,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Users', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUsers]` + this.getRowLevelSecurityWhereClause('Users', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Users', rows);
         return result;
     }
@@ -8955,7 +8955,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Recommendation Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationRuns] WHERE [RunByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Recommendation Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Recommendation Runs', rows);
         return result;
     }
@@ -8965,7 +8965,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('User Applications', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserApplications] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('User Applications', rows);
         return result;
     }
@@ -8975,7 +8975,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Dashboards', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboards] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Dashboards', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Dashboards', rows);
         return result;
     }
@@ -8985,7 +8985,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Record Changes', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChanges] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Record Changes', rows);
         return result;
     }
@@ -8995,7 +8995,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Reports', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', rows);
         return result;
     }
@@ -9005,7 +9005,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Dashboard Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Dashboard Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Dashboard Categories', rows);
         return result;
     }
@@ -9015,7 +9015,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Actions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActions] WHERE [CodeApprovedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Actions', rows);
         return result;
     }
@@ -9025,7 +9025,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Query Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Query Categories', rows);
         return result;
     }
@@ -9035,7 +9035,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('User View Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User View Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('User View Categories', rows);
         return result;
     }
@@ -9045,7 +9045,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Data Contexts', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDataContexts] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Data Contexts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Data Contexts', rows);
         return result;
     }
@@ -9055,7 +9055,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Record Merge Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordMergeLogs] WHERE [InitiatedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Record Merge Logs', rows);
         return result;
     }
@@ -9065,7 +9065,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Company Integration Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRuns] WHERE [RunByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Runs', rows);
         return result;
     }
@@ -9075,7 +9075,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Report Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Report Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Report Categories', rows);
         return result;
     }
@@ -9085,7 +9085,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Record Change Replay Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChangeReplayRuns] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Change Replay Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Record Change Replay Runs', rows);
         return result;
     }
@@ -9095,7 +9095,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('User Roles', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserRoles] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('User Roles', rows);
         return result;
     }
@@ -9105,7 +9105,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('User View Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewRuns] WHERE [RunByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('User View Runs', rows);
         return result;
     }
@@ -9115,7 +9115,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Workspaces', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkspaces] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Workspaces', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Workspaces', rows);
         return result;
     }
@@ -9125,7 +9125,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Conversations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversations] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Conversations', rows);
         return result;
     }
@@ -9135,7 +9135,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Lists', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLists] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Lists', rows);
         return result;
     }
@@ -9145,7 +9145,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Communication Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationRuns] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Communication Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Communication Runs', rows);
         return result;
     }
@@ -9155,7 +9155,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Action Execution Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionExecutionLogs] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Action Execution Logs', rows);
         return result;
     }
@@ -9165,7 +9165,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogs] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Logs', rows);
         return result;
     }
@@ -9175,7 +9175,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Report Snapshots', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportSnapshots] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Report Snapshots', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Report Snapshots', rows);
         return result;
     }
@@ -9185,7 +9185,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('User Views', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViews] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('User Views', rows);
         return result;
     }
@@ -9195,7 +9195,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Template Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Template Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Template Categories', rows);
         return result;
     }
@@ -9205,7 +9205,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Duplicate Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRuns] WHERE [StartedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Runs', rows);
         return result;
     }
@@ -9215,7 +9215,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('User Record Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserRecordLogs] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User Record Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('User Record Logs', rows);
         return result;
     }
@@ -9225,7 +9225,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('User Notifications', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserNotifications] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User Notifications', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('User Notifications', rows);
         return result;
     }
@@ -9235,7 +9235,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Templates', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplates] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Templates', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Templates', rows);
         return result;
     }
@@ -9245,7 +9245,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('User Favorites', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserFavorites] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User Favorites', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('User Favorites', rows);
         return result;
     }
@@ -9255,7 +9255,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Resource Links', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceLinks] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Links', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Resource Links', rows);
         return result;
     }
@@ -9265,7 +9265,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('List Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('List Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('List Categories', rows);
         return result;
     }
@@ -9275,7 +9275,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Scheduled Actions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActions] WHERE [CreatedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Scheduled Actions', rows);
         return result;
     }
@@ -9285,7 +9285,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('AI Agent Requests', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRequests] WHERE [ResponseByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Requests', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Requests', rows);
         return result;
     }
@@ -9295,7 +9295,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('MJ: Dashboard User Preferences', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserPreferences] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Dashboard User Preferences', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User Preferences', rows);
         return result;
     }
@@ -9305,7 +9305,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('MJ: Report User States', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportUserStates] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Report User States', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Report User States', rows);
         return result;
     }
@@ -9315,7 +9315,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('AI Agent Notes', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNotes] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Notes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Notes', rows);
         return result;
     }
@@ -9325,7 +9325,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('MJ: Dashboard User States', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserStates] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Dashboard User States', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User States', rows);
         return result;
     }
@@ -9335,7 +9335,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Resource Permissions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourcePermissions] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Permissions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Resource Permissions', rows);
         return result;
     }
@@ -9345,7 +9345,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('AI Agent Requests', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRequests] WHERE [RequestForUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Requests', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Requests', rows);
         return result;
     }
@@ -9355,7 +9355,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Conversation Details', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationDetails] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Conversation Details', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Conversation Details', rows);
         return result;
     }
@@ -9365,7 +9365,7 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows);
         return result;
     }
@@ -9717,7 +9717,7 @@ export class EntityRelationshipResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRelationships] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Entity Relationships', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -9727,7 +9727,7 @@ export class EntityRelationshipResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRelationships]` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Relationships', rows);
         return result;
     }
@@ -9909,7 +9909,7 @@ export class UserRecordLogResolver extends ResolverBase {
         this.CheckUserReadPermissions('User Record Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserRecordLogs] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('User Record Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('User Record Logs', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -10218,7 +10218,7 @@ export class UserViewResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('User Views', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViews] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('User Views', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -10228,7 +10228,7 @@ export class UserViewResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('User Views', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViews]` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('User Views', rows);
         return result;
     }
@@ -10238,7 +10238,7 @@ export class UserViewResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Data Context Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDataContextItems] WHERE [ViewID]='${userview_.ID}' ` + this.getRowLevelSecurityWhereClause('Data Context Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Data Context Items', rows);
         return result;
     }
@@ -10248,7 +10248,7 @@ export class UserViewResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('User View Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewRuns] WHERE [UserViewID]='${userview_.ID}' ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('User View Runs', rows);
         return result;
     }
@@ -10258,7 +10258,7 @@ export class UserViewResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRelationships] WHERE [DisplayUserViewGUID]='${userview_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Relationships', rows);
         return result;
     }
@@ -10492,7 +10492,7 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
         this.CheckUserReadPermissions('Company Integration Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRuns] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Company Integration Runs', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -10502,7 +10502,7 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
         this.CheckUserReadPermissions('Error Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwErrorLogs] WHERE [CompanyIntegrationRunID]='${companyintegrationrun_.ID}' ` + this.getRowLevelSecurityWhereClause('Error Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Error Logs', rows);
         return result;
     }
@@ -10512,7 +10512,7 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
         this.CheckUserReadPermissions('Company Integration Run Details', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRunDetails] WHERE [CompanyIntegrationRunID]='${companyintegrationrun_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Run Details', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Run Details', rows);
         return result;
     }
@@ -10522,7 +10522,7 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
         this.CheckUserReadPermissions('Company Integration Run API Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRunAPILogs] WHERE [CompanyIntegrationRunID]='${companyintegrationrun_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Run API Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Run API Logs', rows);
         return result;
     }
@@ -10716,7 +10716,7 @@ export class CompanyIntegrationRunDetailResolver extends ResolverBase {
         this.CheckUserReadPermissions('Company Integration Run Details', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRunDetails] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Run Details', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Company Integration Run Details', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -10726,7 +10726,7 @@ export class CompanyIntegrationRunDetailResolver extends ResolverBase {
         this.CheckUserReadPermissions('Error Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwErrorLogs] WHERE [CompanyIntegrationRunDetailID]='${companyintegrationrundetail_.ID}' ` + this.getRowLevelSecurityWhereClause('Error Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Error Logs', rows);
         return result;
     }
@@ -10924,7 +10924,7 @@ export class ErrorLogResolver extends ResolverBase {
         this.CheckUserReadPermissions('Error Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwErrorLogs] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Error Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Error Logs', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -11106,7 +11106,7 @@ export class ApplicationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Applications', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwApplications] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Applications', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Applications', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -11116,7 +11116,7 @@ export class ApplicationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Applications', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwApplications]` + this.getRowLevelSecurityWhereClause('Applications', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Applications', rows);
         return result;
     }
@@ -11126,7 +11126,7 @@ export class ApplicationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Application Settings', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwApplicationSettings] WHERE [ApplicationID]='${application_.ID}' ` + this.getRowLevelSecurityWhereClause('Application Settings', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Application Settings', rows);
         return result;
     }
@@ -11136,7 +11136,7 @@ export class ApplicationResolver extends ResolverBase {
         this.CheckUserReadPermissions('User Applications', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserApplications] WHERE [ApplicationID]='${application_.ID}' ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('User Applications', rows);
         return result;
     }
@@ -11146,7 +11146,7 @@ export class ApplicationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Application Entities', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwApplicationEntities] WHERE [ApplicationID]='${application_.ID}' ` + this.getRowLevelSecurityWhereClause('Application Entities', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Application Entities', rows);
         return result;
     }
@@ -11156,7 +11156,7 @@ export class ApplicationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Dashboards', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboards] WHERE [ApplicationID]='${application_.ID}' ` + this.getRowLevelSecurityWhereClause('Dashboards', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Dashboards', rows);
         return result;
     }
@@ -11166,7 +11166,7 @@ export class ApplicationResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: Dashboard User Preferences', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserPreferences] WHERE [ApplicationID]='${application_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Dashboard User Preferences', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User Preferences', rows);
         return result;
     }
@@ -11352,7 +11352,7 @@ export class ApplicationEntityResolver extends ResolverBase {
         this.CheckUserReadPermissions('Application Entities', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwApplicationEntities] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Application Entities', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Application Entities', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -11603,7 +11603,7 @@ export class EntityPermissionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityPermissions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Entity Permissions', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -11613,7 +11613,7 @@ export class EntityPermissionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityPermissions]` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Permissions', rows);
         return result;
     }
@@ -11781,7 +11781,7 @@ export class UserApplicationEntityResolver extends ResolverBase {
         this.CheckUserReadPermissions('User Application Entities', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserApplicationEntities] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('User Application Entities', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('User Application Entities', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -11957,7 +11957,7 @@ export class UserApplicationResolver extends ResolverBase {
         this.CheckUserReadPermissions('User Applications', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserApplications] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('User Applications', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -11967,7 +11967,7 @@ export class UserApplicationResolver extends ResolverBase {
         this.CheckUserReadPermissions('User Application Entities', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserApplicationEntities] WHERE [UserApplicationID]='${userapplication_.ID}' ` + this.getRowLevelSecurityWhereClause('User Application Entities', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('User Application Entities', rows);
         return result;
     }
@@ -12151,7 +12151,7 @@ export class CompanyIntegrationRunAPILogResolver extends ResolverBase {
         this.CheckUserReadPermissions('Company Integration Run API Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRunAPILogs] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Run API Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Company Integration Run API Logs', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -12358,7 +12358,7 @@ export class ListResolver extends ResolverBase {
         this.CheckUserReadPermissions('Lists', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLists] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Lists', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -12368,7 +12368,7 @@ export class ListResolver extends ResolverBase {
         this.CheckUserReadPermissions('List Details', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListDetails] WHERE [ListID]='${list_.ID}' ` + this.getRowLevelSecurityWhereClause('List Details', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('List Details', rows);
         return result;
     }
@@ -12378,7 +12378,7 @@ export class ListResolver extends ResolverBase {
         this.CheckUserReadPermissions('Duplicate Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRuns] WHERE [SourceListID]='${list_.ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Runs', rows);
         return result;
     }
@@ -12557,7 +12557,7 @@ export class ListDetailResolver extends ResolverBase {
         this.CheckUserReadPermissions('List Details', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListDetails] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('List Details', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('List Details', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -12725,7 +12725,7 @@ export class UserViewRunResolver extends ResolverBase {
         this.CheckUserReadPermissions('User View Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewRuns] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('User View Runs', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -12735,7 +12735,7 @@ export class UserViewRunResolver extends ResolverBase {
         this.CheckUserReadPermissions('User View Run Details', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewRunDetails] WHERE [UserViewRunID]='${userviewrun_.ID}' ` + this.getRowLevelSecurityWhereClause('User View Run Details', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('User View Run Details', rows);
         return result;
     }
@@ -12883,7 +12883,7 @@ export class UserViewRunDetailResolver extends ResolverBase {
         this.CheckUserReadPermissions('User View Run Details', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewRunDetails] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('User View Run Details', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('User View Run Details', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -13042,7 +13042,7 @@ export class WorkflowRunResolver extends ResolverBase {
         this.CheckUserReadPermissions('Workflow Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkflowRuns] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Workflow Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Workflow Runs', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -13204,7 +13204,7 @@ export class WorkflowResolver extends ResolverBase {
         this.CheckUserReadPermissions('Workflows', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkflows] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Workflows', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Workflows', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -13214,7 +13214,7 @@ export class WorkflowResolver extends ResolverBase {
         this.CheckUserReadPermissions('Reports', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [OutputWorkflowID]='${workflow_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', rows);
         return result;
     }
@@ -13224,7 +13224,7 @@ export class WorkflowResolver extends ResolverBase {
         this.CheckUserReadPermissions('Workflow Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkflowRuns] WHERE [WorkflowName]='${workflow_.ID}' ` + this.getRowLevelSecurityWhereClause('Workflow Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Workflow Runs', rows);
         return result;
     }
@@ -13354,7 +13354,7 @@ export class WorkflowEngineResolver extends ResolverBase {
         this.CheckUserReadPermissions('Workflow Engines', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkflowEngines] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Workflow Engines', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Workflow Engines', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -13364,7 +13364,7 @@ export class WorkflowEngineResolver extends ResolverBase {
         this.CheckUserReadPermissions('Workflows', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkflows] WHERE [WorkflowEngineName]='${workflowengine_.ID}' ` + this.getRowLevelSecurityWhereClause('Workflows', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Workflows', rows);
         return result;
     }
@@ -13628,7 +13628,7 @@ export class RecordChangeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Record Changes', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChanges] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Record Changes', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -13757,7 +13757,7 @@ export class UserRoleResolver extends ResolverBase {
         this.CheckUserReadPermissions('User Roles', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserRoles] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('User Roles', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -13767,7 +13767,7 @@ export class UserRoleResolver extends ResolverBase {
         this.CheckUserReadPermissions('User Roles', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserRoles]` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('User Roles', rows);
         return result;
     }
@@ -13874,7 +13874,7 @@ export class RowLevelSecurityFilterResolver extends ResolverBase {
         this.CheckUserReadPermissions('Row Level Security Filters', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRowLevelSecurityFilters] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Row Level Security Filters', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Row Level Security Filters', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -13884,7 +13884,7 @@ export class RowLevelSecurityFilterResolver extends ResolverBase {
         this.CheckUserReadPermissions('Row Level Security Filters', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRowLevelSecurityFilters]` + this.getRowLevelSecurityWhereClause('Row Level Security Filters', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Row Level Security Filters', rows);
         return result;
     }
@@ -13894,7 +13894,7 @@ export class RowLevelSecurityFilterResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityPermissions] WHERE [ReadRLSFilterID]='${rowlevelsecurityfilter_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Permissions', rows);
         return result;
     }
@@ -14088,7 +14088,7 @@ export class AuditLogResolver extends ResolverBase {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogs] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Audit Logs', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -14221,7 +14221,7 @@ export class AuthorizationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Authorizations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuthorizations] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Authorizations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Authorizations', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -14231,7 +14231,7 @@ export class AuthorizationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Authorizations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuthorizations]` + this.getRowLevelSecurityWhereClause('Authorizations', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Authorizations', rows);
         return result;
     }
@@ -14241,7 +14241,7 @@ export class AuthorizationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuthorizationRoles] WHERE [AuthorizationID]='${authorization_.ID}' ` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Authorization Roles', rows);
         return result;
     }
@@ -14251,7 +14251,7 @@ export class AuthorizationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Action Authorizations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [AuthorizationID]='${authorization_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Action Authorizations', rows);
         return result;
     }
@@ -14261,7 +14261,7 @@ export class AuthorizationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Authorizations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuthorizations] WHERE [ParentID]='${authorization_.ID}' ` + this.getRowLevelSecurityWhereClause('Authorizations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Authorizations', rows);
         return result;
     }
@@ -14271,7 +14271,7 @@ export class AuthorizationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogs] WHERE [AuthorizationName]='${authorization_.ID}' ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Logs', rows);
         return result;
     }
@@ -14281,7 +14281,7 @@ export class AuthorizationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Audit Log Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogTypes] WHERE [AuthorizationName]='${authorization_.ID}' ` + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Log Types', rows);
         return result;
     }
@@ -14378,7 +14378,7 @@ export class AuthorizationRoleResolver extends ResolverBase {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuthorizationRoles] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Authorization Roles', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -14388,7 +14388,7 @@ export class AuthorizationRoleResolver extends ResolverBase {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuthorizationRoles]` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Authorization Roles', rows);
         return result;
     }
@@ -14494,7 +14494,7 @@ export class AuditLogTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Audit Log Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Audit Log Types', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -14504,7 +14504,7 @@ export class AuditLogTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Audit Log Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogTypes]` + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Log Types', rows);
         return result;
     }
@@ -14514,7 +14514,7 @@ export class AuditLogTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Audit Log Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogTypes] WHERE [ParentID]='${auditlogtype_.ID}' ` + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Log Types', rows);
         return result;
     }
@@ -14524,7 +14524,7 @@ export class AuditLogTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogs] WHERE [AuditLogTypeName]='${auditlogtype_.ID}' ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Logs', rows);
         return result;
     }
@@ -14659,7 +14659,7 @@ export class EntityFieldValueResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Field Values', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityFieldValues] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Entity Field Values', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -14669,7 +14669,7 @@ export class EntityFieldValueResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Field Values', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityFieldValues]` + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Field Values', rows);
         return result;
     }
@@ -14922,7 +14922,7 @@ export class AIModelResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Models', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModels] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Models', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('AI Models', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -14932,7 +14932,7 @@ export class AIModelResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Models', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModels]` + this.getRowLevelSecurityWhereClause('AI Models', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Models', rows);
         return result;
     }
@@ -14942,7 +14942,7 @@ export class AIModelResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Actions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIActions] WHERE [DefaultModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Actions', rows);
         return result;
     }
@@ -14952,7 +14952,7 @@ export class AIModelResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Documents', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocuments] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Documents', rows);
         return result;
     }
@@ -14962,7 +14962,7 @@ export class AIModelResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelActions] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Model Actions', rows);
         return result;
     }
@@ -14972,7 +14972,7 @@ export class AIModelResolver extends ResolverBase {
         this.CheckUserReadPermissions('Vector Indexes', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwVectorIndexes] WHERE [EmbeddingModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Vector Indexes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Vector Indexes', rows);
         return result;
     }
@@ -14982,7 +14982,7 @@ export class AIModelResolver extends ResolverBase {
         this.CheckUserReadPermissions('Content Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentTypes] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Content Types', rows);
         return result;
     }
@@ -14992,7 +14992,7 @@ export class AIModelResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Result Cache', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Result Cache', rows);
         return result;
     }
@@ -15002,7 +15002,7 @@ export class AIModelResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityAIActions] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', rows);
         return result;
     }
@@ -15012,7 +15012,7 @@ export class AIModelResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Model Vendors', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelVendors] WHERE [ModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Model Vendors', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Model Vendors', rows);
         return result;
     }
@@ -15022,7 +15022,7 @@ export class AIModelResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Agent Models', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentModels] WHERE [ModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Models', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Models', rows);
         return result;
     }
@@ -15032,7 +15032,7 @@ export class AIModelResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Model Costs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelCosts] WHERE [ModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Model Costs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Model Costs', rows);
         return result;
     }
@@ -15042,7 +15042,7 @@ export class AIModelResolver extends ResolverBase {
         this.CheckUserReadPermissions('Generated Codes', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwGeneratedCodes] WHERE [GeneratedByModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Generated Codes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Generated Codes', rows);
         return result;
     }
@@ -15052,7 +15052,7 @@ export class AIModelResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptModels] WHERE [ModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Prompt Models', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Models', rows);
         return result;
     }
@@ -15062,7 +15062,7 @@ export class AIModelResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [ModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
         return result;
     }
@@ -15246,7 +15246,7 @@ export class AIActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Actions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIActions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('AI Actions', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -15256,7 +15256,7 @@ export class AIActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Actions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIActions]` + this.getRowLevelSecurityWhereClause('AI Actions', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Actions', rows);
         return result;
     }
@@ -15266,7 +15266,7 @@ export class AIActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelActions] WHERE [AIActionID]='${aiaction_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Model Actions', rows);
         return result;
     }
@@ -15276,7 +15276,7 @@ export class AIActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityAIActions] WHERE [AIActionID]='${aiaction_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', rows);
         return result;
     }
@@ -15440,7 +15440,7 @@ export class AIModelActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelActions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('AI Model Actions', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -15450,7 +15450,7 @@ export class AIModelActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelActions]` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Model Actions', rows);
         return result;
     }
@@ -15709,7 +15709,7 @@ export class EntityAIActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityAIActions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Entity AI Actions', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -15719,7 +15719,7 @@ export class EntityAIActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityAIActions]` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', rows);
         return result;
     }
@@ -15871,7 +15871,7 @@ export class AIModelTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Model Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Model Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('AI Model Types', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -15881,7 +15881,7 @@ export class AIModelTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Model Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelTypes]` + this.getRowLevelSecurityWhereClause('AI Model Types', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Model Types', rows);
         return result;
     }
@@ -15891,7 +15891,7 @@ export class AIModelTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Models', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModels] WHERE [AIModelTypeID]='${aimodeltype_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Models', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Models', rows);
         return result;
     }
@@ -15901,7 +15901,7 @@ export class AIModelTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Prompts', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPrompts] WHERE [AIModelTypeID]='${aimodeltype_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Prompts', rows);
         return result;
     }
@@ -16026,7 +16026,7 @@ export class QueueTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Queue Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueueTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Queue Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Queue Types', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -16036,7 +16036,7 @@ export class QueueTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Queues', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueues] WHERE [QueueTypeID]='${queuetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Queues', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Queues', rows);
         return result;
     }
@@ -16300,7 +16300,7 @@ export class QueueResolver extends ResolverBase {
         this.CheckUserReadPermissions('Queues', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueues] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Queues', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Queues', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -16310,7 +16310,7 @@ export class QueueResolver extends ResolverBase {
         this.CheckUserReadPermissions('Queue Tasks', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueueTasks] WHERE [QueueID]='${queue_.ID}' ` + this.getRowLevelSecurityWhereClause('Queue Tasks', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Queue Tasks', rows);
         return result;
     }
@@ -16519,7 +16519,7 @@ export class QueueTaskResolver extends ResolverBase {
         this.CheckUserReadPermissions('Queue Tasks', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueueTasks] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Queue Tasks', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Queue Tasks', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -16764,7 +16764,7 @@ export class DashboardResolver extends ResolverBase {
         this.CheckUserReadPermissions('Dashboards', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboards] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Dashboards', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Dashboards', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -16774,7 +16774,7 @@ export class DashboardResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: Dashboard User States', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserStates] WHERE [DashboardID]='${dashboard_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Dashboard User States', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User States', rows);
         return result;
     }
@@ -16784,7 +16784,7 @@ export class DashboardResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: Dashboard User Preferences', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserPreferences] WHERE [DashboardID]='${dashboard_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Dashboard User Preferences', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User Preferences', rows);
         return result;
     }
@@ -16898,7 +16898,7 @@ export class OutputTriggerTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Output Trigger Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOutputTriggerTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Output Trigger Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Output Trigger Types', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -16908,7 +16908,7 @@ export class OutputTriggerTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Reports', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [OutputTriggerTypeID]='${outputtriggertype_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', rows);
         return result;
     }
@@ -16998,7 +16998,7 @@ export class OutputFormatTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Output Format Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOutputFormatTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Output Format Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Output Format Types', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -17008,7 +17008,7 @@ export class OutputFormatTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Reports', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [OutputFormatTypeID]='${outputformattype_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', rows);
         return result;
     }
@@ -17095,7 +17095,7 @@ export class OutputDeliveryTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Output Delivery Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOutputDeliveryTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Output Delivery Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Output Delivery Types', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -17105,7 +17105,7 @@ export class OutputDeliveryTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Reports', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [OutputDeliveryTypeID]='${outputdeliverytype_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', rows);
         return result;
     }
@@ -17403,7 +17403,7 @@ export class ReportResolver extends ResolverBase {
         this.CheckUserReadPermissions('Reports', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Reports', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -17413,7 +17413,7 @@ export class ReportResolver extends ResolverBase {
         this.CheckUserReadPermissions('Report Snapshots', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportSnapshots] WHERE [ReportID]='${report_.ID}' ` + this.getRowLevelSecurityWhereClause('Report Snapshots', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Report Snapshots', rows);
         return result;
     }
@@ -17423,7 +17423,7 @@ export class ReportResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: Report Versions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportVersions] WHERE [ReportID]='${report_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Report Versions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Report Versions', rows);
         return result;
     }
@@ -17433,7 +17433,7 @@ export class ReportResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: Report User States', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportUserStates] WHERE [ReportID]='${report_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Report User States', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Report User States', rows);
         return result;
     }
@@ -17597,7 +17597,7 @@ export class ReportSnapshotResolver extends ResolverBase {
         this.CheckUserReadPermissions('Report Snapshots', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportSnapshots] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Report Snapshots', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Report Snapshots', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -17744,7 +17744,7 @@ export class ResourceTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Resource Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Resource Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Resource Types', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -17754,7 +17754,7 @@ export class ResourceTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Workspace Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkspaceItems] WHERE [ResourceTypeID]='${resourcetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Workspace Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Workspace Items', rows);
         return result;
     }
@@ -17764,7 +17764,7 @@ export class ResourceTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('User Notifications', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserNotifications] WHERE [ResourceTypeID]='${resourcetype_.ID}' ` + this.getRowLevelSecurityWhereClause('User Notifications', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('User Notifications', rows);
         return result;
     }
@@ -17774,7 +17774,7 @@ export class ResourceTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Resource Links', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceLinks] WHERE [ResourceTypeID]='${resourcetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Links', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Resource Links', rows);
         return result;
     }
@@ -17784,7 +17784,7 @@ export class ResourceTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Resource Permissions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourcePermissions] WHERE [ResourceTypeID]='${resourcetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Permissions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Resource Permissions', rows);
         return result;
     }
@@ -17886,7 +17886,7 @@ export class TagResolver extends ResolverBase {
         this.CheckUserReadPermissions('Tags', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTags] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Tags', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Tags', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -17896,7 +17896,7 @@ export class TagResolver extends ResolverBase {
         this.CheckUserReadPermissions('Tags', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTags] WHERE [ParentID]='${tag_.ID}' ` + this.getRowLevelSecurityWhereClause('Tags', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Tags', rows);
         return result;
     }
@@ -17906,7 +17906,7 @@ export class TagResolver extends ResolverBase {
         this.CheckUserReadPermissions('Tagged Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTaggedItems] WHERE [TagID]='${tag_.ID}' ` + this.getRowLevelSecurityWhereClause('Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Tagged Items', rows);
         return result;
     }
@@ -18003,7 +18003,7 @@ export class TaggedItemResolver extends ResolverBase {
         this.CheckUserReadPermissions('Tagged Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTaggedItems] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Tagged Items', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -18139,7 +18139,7 @@ export class WorkspaceResolver extends ResolverBase {
         this.CheckUserReadPermissions('Workspaces', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkspaces] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Workspaces', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Workspaces', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -18149,7 +18149,7 @@ export class WorkspaceResolver extends ResolverBase {
         this.CheckUserReadPermissions('Workspace Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkspaceItems] WHERE [WorkSpaceID]='${workspace_.ID}' ` + this.getRowLevelSecurityWhereClause('Workspace Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Workspace Items', rows);
         return result;
     }
@@ -18351,7 +18351,7 @@ export class WorkspaceItemResolver extends ResolverBase {
         this.CheckUserReadPermissions('Workspace Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkspaceItems] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Workspace Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Workspace Items', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -18465,7 +18465,7 @@ export class DatasetResolver extends ResolverBase {
         this.CheckUserReadPermissions('Datasets', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDatasets] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Datasets', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Datasets', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -18475,7 +18475,7 @@ export class DatasetResolver extends ResolverBase {
         this.CheckUserReadPermissions('Dataset Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDatasetItems] WHERE [DatasetName]='${dataset_.ID}' ` + this.getRowLevelSecurityWhereClause('Dataset Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Dataset Items', rows);
         return result;
     }
@@ -18588,7 +18588,7 @@ export class DatasetItemResolver extends ResolverBase {
         this.CheckUserReadPermissions('Dataset Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDatasetItems] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Dataset Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Dataset Items', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -18835,7 +18835,7 @@ export class ConversationDetailResolver extends ResolverBase {
         this.CheckUserReadPermissions('Conversation Details', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationDetails] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Conversation Details', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Conversation Details', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -18845,7 +18845,7 @@ export class ConversationDetailResolver extends ResolverBase {
         this.CheckUserReadPermissions('Reports', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [ConversationDetailID]='${conversationdetail_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', rows);
         return result;
     }
@@ -19094,7 +19094,7 @@ export class ConversationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Conversations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversations] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Conversations', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -19104,7 +19104,7 @@ export class ConversationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Conversation Details', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationDetails] WHERE [ConversationID]='${conversation_.ID}' ` + this.getRowLevelSecurityWhereClause('Conversation Details', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Conversation Details', rows);
         return result;
     }
@@ -19114,7 +19114,7 @@ export class ConversationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Reports', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [ConversationID]='${conversation_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', rows);
         return result;
     }
@@ -19124,7 +19124,7 @@ export class ConversationResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: Conversation Artifacts', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifacts] WHERE [ConversationID]='${conversation_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Conversation Artifacts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifacts', rows);
         return result;
     }
@@ -19134,7 +19134,7 @@ export class ConversationResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [ConversationID]='${conversation_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows);
         return result;
     }
@@ -19346,7 +19346,7 @@ export class UserNotificationResolver extends ResolverBase {
         this.CheckUserReadPermissions('User Notifications', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserNotifications] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('User Notifications', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('User Notifications', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -19510,7 +19510,7 @@ export class SchemaInfoResolver extends ResolverBase {
         this.CheckUserReadPermissions('Schema Info', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwSchemaInfos] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Schema Info', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Schema Info', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -19674,7 +19674,7 @@ export class CompanyIntegrationRecordMapResolver extends ResolverBase {
         this.CheckUserReadPermissions('Company Integration Record Maps', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRecordMaps] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Record Maps', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Company Integration Record Maps', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -19910,7 +19910,7 @@ export class RecordMergeLogResolver extends ResolverBase {
         this.CheckUserReadPermissions('Record Merge Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordMergeLogs] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Record Merge Logs', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -19920,7 +19920,7 @@ export class RecordMergeLogResolver extends ResolverBase {
         this.CheckUserReadPermissions('Record Merge Deletion Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordMergeDeletionLogs] WHERE [RecordMergeLogID]='${recordmergelog_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Merge Deletion Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Record Merge Deletion Logs', rows);
         return result;
     }
@@ -19930,7 +19930,7 @@ export class RecordMergeLogResolver extends ResolverBase {
         this.CheckUserReadPermissions('Duplicate Run Detail Matches', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRunDetailMatches] WHERE [RecordMergeLogID]='${recordmergelog_.ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Run Detail Matches', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Run Detail Matches', rows);
         return result;
     }
@@ -20089,7 +20089,7 @@ export class RecordMergeDeletionLogResolver extends ResolverBase {
         this.CheckUserReadPermissions('Record Merge Deletion Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordMergeDeletionLogs] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Record Merge Deletion Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Record Merge Deletion Logs', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -20331,7 +20331,7 @@ export class QueryFieldResolver extends ResolverBase {
         this.CheckUserReadPermissions('Query Fields', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryFields] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Query Fields', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Query Fields', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -20511,7 +20511,7 @@ export class QueryCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Query Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryCategories] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Query Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Query Categories', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -20521,7 +20521,7 @@ export class QueryCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Query Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryCategories] WHERE [ParentID]='${querycategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Query Categories', rows);
         return result;
     }
@@ -20531,7 +20531,7 @@ export class QueryCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Queries', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueries] WHERE [CategoryID]='${querycategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Queries', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Queries', rows);
         return result;
     }
@@ -20776,7 +20776,7 @@ export class QueryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Queries', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueries] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Queries', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Queries', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -20786,7 +20786,7 @@ export class QueryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Query Fields', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryFields] WHERE [QueryID]='${query_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Fields', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Query Fields', rows);
         return result;
     }
@@ -20796,7 +20796,7 @@ export class QueryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Data Context Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDataContextItems] WHERE [QueryID]='${query_.ID}' ` + this.getRowLevelSecurityWhereClause('Data Context Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Data Context Items', rows);
         return result;
     }
@@ -20806,7 +20806,7 @@ export class QueryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Query Permissions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryPermissions] WHERE [QueryID]='${query_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Permissions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Query Permissions', rows);
         return result;
     }
@@ -20816,7 +20816,7 @@ export class QueryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Query Entities', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryEntities] WHERE [QueryID]='${query_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Entities', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Query Entities', rows);
         return result;
     }
@@ -20971,7 +20971,7 @@ export class QueryPermissionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Query Permissions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryPermissions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Query Permissions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Query Permissions', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -21148,7 +21148,7 @@ export class VectorIndexResolver extends ResolverBase {
         this.CheckUserReadPermissions('Vector Indexes', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwVectorIndexes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Vector Indexes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Vector Indexes', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -21158,7 +21158,7 @@ export class VectorIndexResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Record Documents', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRecordDocuments] WHERE [VectorIndexID]='${vectorindex_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Record Documents', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Record Documents', rows);
         return result;
     }
@@ -21307,7 +21307,7 @@ export class EntityDocumentTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Document Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocumentTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Document Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Entity Document Types', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -21317,7 +21317,7 @@ export class EntityDocumentTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Documents', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocuments] WHERE [TypeID]='${entitydocumenttype_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Documents', rows);
         return result;
     }
@@ -21488,7 +21488,7 @@ export class EntityDocumentRunResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Document Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocumentRuns] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Document Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Entity Document Runs', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -21653,7 +21653,7 @@ export class VectorDatabaseResolver extends ResolverBase {
         this.CheckUserReadPermissions('Vector Databases', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwVectorDatabases] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Vector Databases', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Vector Databases', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -21663,7 +21663,7 @@ export class VectorDatabaseResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Documents', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocuments] WHERE [ID]='${vectordatabase_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Documents', rows);
         return result;
     }
@@ -21673,7 +21673,7 @@ export class VectorDatabaseResolver extends ResolverBase {
         this.CheckUserReadPermissions('Vector Indexes', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwVectorIndexes] WHERE [VectorDatabaseID]='${vectordatabase_.ID}' ` + this.getRowLevelSecurityWhereClause('Vector Indexes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Vector Indexes', rows);
         return result;
     }
@@ -21890,7 +21890,7 @@ export class EntityRecordDocumentResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Record Documents', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRecordDocuments] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Record Documents', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Entity Record Documents', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -22127,7 +22127,7 @@ export class EntityDocumentResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Documents', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocuments] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Entity Documents', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -22137,7 +22137,7 @@ export class EntityDocumentResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Document Settings', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocumentSettings] WHERE [EntityDocumentID]='${entitydocument_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Document Settings', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Document Settings', rows);
         return result;
     }
@@ -22147,7 +22147,7 @@ export class EntityDocumentResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Document Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocumentRuns] WHERE [EntityDocumentID]='${entitydocument_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Document Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Document Runs', rows);
         return result;
     }
@@ -22157,7 +22157,7 @@ export class EntityDocumentResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Record Documents', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRecordDocuments] WHERE [EntityDocumentID]='${entitydocument_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Record Documents', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Record Documents', rows);
         return result;
     }
@@ -22400,7 +22400,7 @@ export class DataContextItemResolver extends ResolverBase {
         this.CheckUserReadPermissions('Data Context Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDataContextItems] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Data Context Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Data Context Items', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -22579,7 +22579,7 @@ export class DataContextResolver extends ResolverBase {
         this.CheckUserReadPermissions('Data Contexts', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDataContexts] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Data Contexts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Data Contexts', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -22589,7 +22589,7 @@ export class DataContextResolver extends ResolverBase {
         this.CheckUserReadPermissions('Reports', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [DataContextID]='${datacontext_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', rows);
         return result;
     }
@@ -22599,7 +22599,7 @@ export class DataContextResolver extends ResolverBase {
         this.CheckUserReadPermissions('Data Context Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDataContextItems] WHERE [DataContextID]='${datacontext_.ID}' ` + this.getRowLevelSecurityWhereClause('Data Context Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Data Context Items', rows);
         return result;
     }
@@ -22609,7 +22609,7 @@ export class DataContextResolver extends ResolverBase {
         this.CheckUserReadPermissions('Conversations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversations] WHERE [DataContextID]='${datacontext_.ID}' ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Conversations', rows);
         return result;
     }
@@ -22803,7 +22803,7 @@ export class UserViewCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('User View Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewCategories] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('User View Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('User View Categories', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -22813,7 +22813,7 @@ export class UserViewCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('User View Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewCategories] WHERE [ParentID]='${userviewcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('User View Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('User View Categories', rows);
         return result;
     }
@@ -22823,7 +22823,7 @@ export class UserViewCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('User Views', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViews] WHERE [CategoryID]='${userviewcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('User Views', rows);
         return result;
     }
@@ -23003,7 +23003,7 @@ export class DashboardCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Dashboard Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardCategories] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Dashboard Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Dashboard Categories', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -23013,7 +23013,7 @@ export class DashboardCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Dashboard Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardCategories] WHERE [ParentID]='${dashboardcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Dashboard Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Dashboard Categories', rows);
         return result;
     }
@@ -23023,7 +23023,7 @@ export class DashboardCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Dashboards', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboards] WHERE [CategoryID]='${dashboardcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Dashboards', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Dashboards', rows);
         return result;
     }
@@ -23203,7 +23203,7 @@ export class ReportCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Report Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportCategories] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Report Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Report Categories', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -23213,7 +23213,7 @@ export class ReportCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Report Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportCategories] WHERE [ParentID]='${reportcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Report Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Report Categories', rows);
         return result;
     }
@@ -23223,7 +23223,7 @@ export class ReportCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Reports', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [CategoryID]='${reportcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', rows);
         return result;
     }
@@ -23410,7 +23410,7 @@ export class FileStorageProviderResolver extends ResolverBase {
         this.CheckUserReadPermissions('File Storage Providers', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFileStorageProviders] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('File Storage Providers', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('File Storage Providers', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -23420,7 +23420,7 @@ export class FileStorageProviderResolver extends ResolverBase {
         this.CheckUserReadPermissions('Files', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFiles] WHERE [ProviderID]='${filestorageprovider_.ID}' ` + this.getRowLevelSecurityWhereClause('Files', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Files', rows);
         return result;
     }
@@ -23627,7 +23627,7 @@ export class FileResolver extends ResolverBase {
         this.CheckUserReadPermissions('Files', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFiles] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Files', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Files', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -23637,7 +23637,7 @@ export class FileResolver extends ResolverBase {
         this.CheckUserReadPermissions('File Entity Record Links', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFileEntityRecordLinks] WHERE [FileID]='${file_.ID}' ` + this.getRowLevelSecurityWhereClause('File Entity Record Links', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('File Entity Record Links', rows);
         return result;
     }
@@ -23803,7 +23803,7 @@ export class FileCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('File Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFileCategories] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('File Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('File Categories', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -23813,7 +23813,7 @@ export class FileCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Files', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFiles] WHERE [CategoryID]='${filecategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Files', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Files', rows);
         return result;
     }
@@ -23823,7 +23823,7 @@ export class FileCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('File Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFileCategories] WHERE [ParentID]='${filecategory_.ID}' ` + this.getRowLevelSecurityWhereClause('File Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('File Categories', rows);
         return result;
     }
@@ -23988,7 +23988,7 @@ export class FileEntityRecordLinkResolver extends ResolverBase {
         this.CheckUserReadPermissions('File Entity Record Links', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFileEntityRecordLinks] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('File Entity Record Links', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('File Entity Record Links', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -24194,7 +24194,7 @@ export class VersionInstallationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Version Installations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwVersionInstallations] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Version Installations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Version Installations', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -24413,7 +24413,7 @@ export class DuplicateRunDetailMatchResolver extends ResolverBase {
         this.CheckUserReadPermissions('Duplicate Run Detail Matches', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRunDetailMatches] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Run Detail Matches', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Duplicate Run Detail Matches', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -24575,7 +24575,7 @@ export class EntityDocumentSettingResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Document Settings', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocumentSettings] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Document Settings', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Entity Document Settings', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -24744,7 +24744,7 @@ export class EntitySettingResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Settings', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntitySettings] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Settings', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Entity Settings', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -24988,7 +24988,7 @@ export class DuplicateRunResolver extends ResolverBase {
         this.CheckUserReadPermissions('Duplicate Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRuns] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Duplicate Runs', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -24998,7 +24998,7 @@ export class DuplicateRunResolver extends ResolverBase {
         this.CheckUserReadPermissions('Duplicate Run Details', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRunDetails] WHERE [DuplicateRunID]='${duplicaterun_.ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Run Details', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Run Details', rows);
         return result;
     }
@@ -25188,7 +25188,7 @@ export class DuplicateRunDetailResolver extends ResolverBase {
         this.CheckUserReadPermissions('Duplicate Run Details', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRunDetails] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Run Details', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Duplicate Run Details', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -25198,7 +25198,7 @@ export class DuplicateRunDetailResolver extends ResolverBase {
         this.CheckUserReadPermissions('Duplicate Run Detail Matches', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRunDetailMatches] WHERE [DuplicateRunDetailID]='${duplicaterundetail_.ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Run Detail Matches', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Run Detail Matches', rows);
         return result;
     }
@@ -25360,7 +25360,7 @@ export class ApplicationSettingResolver extends ResolverBase {
         this.CheckUserReadPermissions('Application Settings', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwApplicationSettings] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Application Settings', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Application Settings', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -25536,7 +25536,7 @@ export class ActionCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Action Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionCategories] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Action Categories', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -25546,7 +25546,7 @@ export class ActionCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Action Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionCategories] WHERE [ParentID]='${actioncategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Action Categories', rows);
         return result;
     }
@@ -25556,7 +25556,7 @@ export class ActionCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Actions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActions] WHERE [CategoryID]='${actioncategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Actions', rows);
         return result;
     }
@@ -25730,7 +25730,7 @@ export class EntityActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Actions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Entity Actions', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -25740,7 +25740,7 @@ export class EntityActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Action Invocations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionInvocations] WHERE [EntityActionID]='${entityaction_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Invocations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Invocations', rows);
         return result;
     }
@@ -25750,7 +25750,7 @@ export class EntityActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Action Filters', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionFilters] WHERE [EntityActionID]='${entityaction_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Filters', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Filters', rows);
         return result;
     }
@@ -25760,7 +25760,7 @@ export class EntityActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Action Params', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionParams] WHERE [EntityActionID]='${entityaction_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Params', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Params', rows);
         return result;
     }
@@ -25921,7 +25921,7 @@ export class EntityActionInvocationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Action Invocations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionInvocations] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Invocations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Entity Action Invocations', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -26085,7 +26085,7 @@ export class ActionAuthorizationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Action Authorizations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Action Authorizations', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -26243,7 +26243,7 @@ export class EntityActionInvocationTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Action Invocation Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionInvocationTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Invocation Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Entity Action Invocation Types', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -26253,7 +26253,7 @@ export class EntityActionInvocationTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Action Invocations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionInvocations] WHERE [InvocationTypeID]='${entityactioninvocationtype_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Invocations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Invocations', rows);
         return result;
     }
@@ -26576,7 +26576,7 @@ export class ActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Actions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Actions', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -26586,7 +26586,7 @@ export class ActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Action Params', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionParams] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Params', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Action Params', rows);
         return result;
     }
@@ -26596,7 +26596,7 @@ export class ActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Action Libraries', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Action Libraries', rows);
         return result;
     }
@@ -26606,7 +26606,7 @@ export class ActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Scheduled Actions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActions] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Scheduled Actions', rows);
         return result;
     }
@@ -26616,7 +26616,7 @@ export class ActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Action Result Codes', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionResultCodes] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Result Codes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Action Result Codes', rows);
         return result;
     }
@@ -26626,7 +26626,7 @@ export class ActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Agent Actions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentActions] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Actions', rows);
         return result;
     }
@@ -26636,7 +26636,7 @@ export class ActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Action Contexts', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContexts] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Contexts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Action Contexts', rows);
         return result;
     }
@@ -26646,7 +26646,7 @@ export class ActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Actions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActions] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Actions', rows);
         return result;
     }
@@ -26656,7 +26656,7 @@ export class ActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Action Execution Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionExecutionLogs] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Action Execution Logs', rows);
         return result;
     }
@@ -26666,7 +26666,7 @@ export class ActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Action Authorizations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Action Authorizations', rows);
         return result;
     }
@@ -26832,7 +26832,7 @@ export class EntityActionFilterResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Action Filters', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionFilters] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Filters', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Entity Action Filters', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -26998,7 +26998,7 @@ export class ActionFilterResolver extends ResolverBase {
         this.CheckUserReadPermissions('Action Filters', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionFilters] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Filters', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Action Filters', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -27008,7 +27008,7 @@ export class ActionFilterResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Action Filters', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionFilters] WHERE [ActionFilterID]='${actionfilter_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Filters', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Filters', rows);
         return result;
     }
@@ -27157,7 +27157,7 @@ export class ActionContextTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Action Context Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContextTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Context Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Action Context Types', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -27167,7 +27167,7 @@ export class ActionContextTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Action Contexts', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContexts] WHERE [ContextTypeID]='${actioncontexttype_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Contexts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Action Contexts', rows);
         return result;
     }
@@ -27336,7 +27336,7 @@ export class ActionResultCodeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Action Result Codes', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionResultCodes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Result Codes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Action Result Codes', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -27501,7 +27501,7 @@ export class ActionContextResolver extends ResolverBase {
         this.CheckUserReadPermissions('Action Contexts', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContexts] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Contexts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Action Contexts', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -27548,12 +27548,12 @@ export class ActionExecutionLog_ {
     @MaxLength(16)
     ActionID: string;
         
-    @Field({description: `Timestamp of when the action started execution.`}) 
-    @MaxLength(8)
+    @Field({description: `Timestamp when the action execution started (timezone-aware)`}) 
+    @MaxLength(10)
     StartedAt: Date;
         
-    @Field({nullable: true, description: `Timestamp of when the action ended execution.`}) 
-    @MaxLength(8)
+    @Field({nullable: true, description: `Timestamp when the action execution ended (timezone-aware)`}) 
+    @MaxLength(10)
     EndedAt?: Date;
         
     @Field({nullable: true}) 
@@ -27577,6 +27577,9 @@ export class ActionExecutionLog_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true, description: `JSON-formatted output data or response from the action execution`}) 
+    Message?: string;
         
     @Field() 
     @MaxLength(850)
@@ -27616,6 +27619,9 @@ export class CreateActionExecutionLogInput {
 
     @Field(() => Int, { nullable: true })
     RetentionPeriod: number | null;
+
+    @Field({ nullable: true })
+    Message: string | null;
 }
     
 
@@ -27647,6 +27653,9 @@ export class UpdateActionExecutionLogInput {
 
     @Field(() => Int, { nullable: true })
     RetentionPeriod?: number | null;
+
+    @Field({ nullable: true })
+    Message?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -27704,7 +27713,7 @@ export class ActionExecutionLogResolver extends ResolverBase {
         this.CheckUserReadPermissions('Action Execution Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionExecutionLogs] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Action Execution Logs', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -27917,7 +27926,7 @@ export class ActionParamResolver extends ResolverBase {
         this.CheckUserReadPermissions('Action Params', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionParams] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Params', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Action Params', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -27927,7 +27936,7 @@ export class ActionParamResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Action Params', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionParams] WHERE [ActionParamID]='${actionparam_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Params', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Params', rows);
         return result;
     }
@@ -27937,7 +27946,7 @@ export class ActionParamResolver extends ResolverBase {
         this.CheckUserReadPermissions('Scheduled Action Params', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActionParams] WHERE [ActionParamID]='${actionparam_.ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Action Params', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Scheduled Action Params', rows);
         return result;
     }
@@ -28101,7 +28110,7 @@ export class ActionLibraryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Action Libraries', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Action Libraries', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -28281,7 +28290,7 @@ export class LibraryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Libraries', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLibraries] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Libraries', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Libraries', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -28291,7 +28300,7 @@ export class LibraryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Action Libraries', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [LibraryID]='${library_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Action Libraries', rows);
         return result;
     }
@@ -28301,7 +28310,7 @@ export class LibraryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Library Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLibraryItems] WHERE [LibraryID]='${library_.ID}' ` + this.getRowLevelSecurityWhereClause('Library Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Library Items', rows);
         return result;
     }
@@ -28481,7 +28490,7 @@ export class ListCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('List Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListCategories] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('List Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('List Categories', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -28491,7 +28500,7 @@ export class ListCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('List Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListCategories] WHERE [ParentID]='${listcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('List Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('List Categories', rows);
         return result;
     }
@@ -28501,7 +28510,7 @@ export class ListCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Lists', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLists] WHERE [CategoryID]='${listcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Lists', rows);
         return result;
     }
@@ -28708,7 +28717,7 @@ export class CommunicationProviderResolver extends ResolverBase {
         this.CheckUserReadPermissions('Communication Providers', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationProviders] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Communication Providers', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Communication Providers', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -28718,7 +28727,7 @@ export class CommunicationProviderResolver extends ResolverBase {
         this.CheckUserReadPermissions('Communication Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationLogs] WHERE [CommunicationProviderID]='${communicationprovider_.ID}' ` + this.getRowLevelSecurityWhereClause('Communication Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Communication Logs', rows);
         return result;
     }
@@ -28728,7 +28737,7 @@ export class CommunicationProviderResolver extends ResolverBase {
         this.CheckUserReadPermissions('Communication Provider Message Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationProviderMessageTypes] WHERE [CommunicationProviderID]='${communicationprovider_.ID}' ` + this.getRowLevelSecurityWhereClause('Communication Provider Message Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Communication Provider Message Types', rows);
         return result;
     }
@@ -28930,7 +28939,7 @@ export class CommunicationRunResolver extends ResolverBase {
         this.CheckUserReadPermissions('Communication Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationRuns] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Communication Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Communication Runs', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -28940,7 +28949,7 @@ export class CommunicationRunResolver extends ResolverBase {
         this.CheckUserReadPermissions('Communication Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationLogs] WHERE [CommunicationRunID]='${communicationrun_.ID}' ` + this.getRowLevelSecurityWhereClause('Communication Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Communication Logs', rows);
         return result;
     }
@@ -29120,7 +29129,7 @@ export class CommunicationProviderMessageTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Communication Provider Message Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationProviderMessageTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Communication Provider Message Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Communication Provider Message Types', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -29130,7 +29139,7 @@ export class CommunicationProviderMessageTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Communication Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationLogs] WHERE [CommunicationProviderMessageTypeID]='${communicationprovidermessagetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Communication Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Communication Logs', rows);
         return result;
     }
@@ -29343,7 +29352,7 @@ export class CommunicationLogResolver extends ResolverBase {
         this.CheckUserReadPermissions('Communication Logs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationLogs] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Communication Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Communication Logs', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -29515,7 +29524,7 @@ export class CommunicationBaseMessageTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Communication Base Message Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationBaseMessageTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Communication Base Message Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Communication Base Message Types', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -29525,7 +29534,7 @@ export class CommunicationBaseMessageTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Communication Provider Message Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationProviderMessageTypes] WHERE [CommunicationBaseMessageTypeID]='${communicationbasemessagetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Communication Provider Message Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Communication Provider Message Types', rows);
         return result;
     }
@@ -29535,7 +29544,7 @@ export class CommunicationBaseMessageTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Communication Message Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityCommunicationMessageTypes] WHERE [BaseMessageTypeID]='${communicationbasemessagetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Communication Message Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Communication Message Types', rows);
         return result;
     }
@@ -29759,7 +29768,7 @@ export class TemplateResolver extends ResolverBase {
         this.CheckUserReadPermissions('Templates', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplates] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Templates', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Templates', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -29769,7 +29778,7 @@ export class TemplateResolver extends ResolverBase {
         this.CheckUserReadPermissions('Template Contents', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateContents] WHERE [TemplateID]='${template_.ID}' ` + this.getRowLevelSecurityWhereClause('Template Contents', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Template Contents', rows);
         return result;
     }
@@ -29779,7 +29788,7 @@ export class TemplateResolver extends ResolverBase {
         this.CheckUserReadPermissions('Template Params', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateParams] WHERE [TemplateID]='${template_.ID}' ` + this.getRowLevelSecurityWhereClause('Template Params', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Template Params', rows);
         return result;
     }
@@ -29789,7 +29798,7 @@ export class TemplateResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Prompts', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPrompts] WHERE [TemplateID]='${template_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Prompts', rows);
         return result;
     }
@@ -29799,7 +29808,7 @@ export class TemplateResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Documents', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocuments] WHERE [TemplateID]='${template_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Documents', rows);
         return result;
     }
@@ -29979,7 +29988,7 @@ export class TemplateCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Template Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateCategories] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Template Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Template Categories', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -29989,7 +29998,7 @@ export class TemplateCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Templates', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplates] WHERE [CategoryID]='${templatecategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Templates', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Templates', rows);
         return result;
     }
@@ -29999,7 +30008,7 @@ export class TemplateCategoryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Template Categories', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateCategories] WHERE [ParentID]='${templatecategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Template Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Template Categories', rows);
         return result;
     }
@@ -30181,7 +30190,7 @@ export class TemplateContentResolver extends ResolverBase {
         this.CheckUserReadPermissions('Template Contents', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateContents] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Template Contents', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Template Contents', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -30431,7 +30440,7 @@ export class TemplateParamResolver extends ResolverBase {
         this.CheckUserReadPermissions('Template Params', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateParams] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Template Params', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Template Params', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -30590,7 +30599,7 @@ export class TemplateContentTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Template Content Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateContentTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Template Content Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Template Content Types', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -30600,7 +30609,7 @@ export class TemplateContentTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Template Contents', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateContents] WHERE [TypeID]='${templatecontenttype_.ID}' ` + this.getRowLevelSecurityWhereClause('Template Contents', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Template Contents', rows);
         return result;
     }
@@ -30763,7 +30772,7 @@ export class RecommendationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Recommendations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendations] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Recommendations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Recommendations', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -30773,7 +30782,7 @@ export class RecommendationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Recommendation Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationItems] WHERE [RecommendationID]='${recommendation_.ID}' ` + this.getRowLevelSecurityWhereClause('Recommendation Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Recommendation Items', rows);
         return result;
     }
@@ -30915,7 +30924,7 @@ export class RecommendationProviderResolver extends ResolverBase {
         this.CheckUserReadPermissions('Recommendation Providers', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationProviders] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Recommendation Providers', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Recommendation Providers', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -30925,7 +30934,7 @@ export class RecommendationProviderResolver extends ResolverBase {
         this.CheckUserReadPermissions('Recommendation Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationRuns] WHERE [RecommendationProviderID]='${recommendationprovider_.ID}' ` + this.getRowLevelSecurityWhereClause('Recommendation Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Recommendation Runs', rows);
         return result;
     }
@@ -31122,7 +31131,7 @@ export class RecommendationRunResolver extends ResolverBase {
         this.CheckUserReadPermissions('Recommendation Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationRuns] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Recommendation Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Recommendation Runs', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -31132,7 +31141,7 @@ export class RecommendationRunResolver extends ResolverBase {
         this.CheckUserReadPermissions('Recommendations', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendations] WHERE [RecommendationRunID]='${recommendationrun_.ID}' ` + this.getRowLevelSecurityWhereClause('Recommendations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Recommendations', rows);
         return result;
     }
@@ -31295,7 +31304,7 @@ export class RecommendationItemResolver extends ResolverBase {
         this.CheckUserReadPermissions('Recommendation Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationItems] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Recommendation Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Recommendation Items', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -31455,7 +31464,7 @@ export class EntityCommunicationMessageTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Communication Message Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityCommunicationMessageTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Communication Message Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Entity Communication Message Types', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -31465,7 +31474,7 @@ export class EntityCommunicationMessageTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Communication Fields', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityCommunicationFields] WHERE [EntityCommunicationMessageTypeID]='${entitycommunicationmessagetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Communication Fields', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Communication Fields', rows);
         return result;
     }
@@ -31621,7 +31630,7 @@ export class EntityCommunicationFieldResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Communication Fields', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityCommunicationFields] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Communication Fields', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Entity Communication Fields', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -31795,7 +31804,7 @@ export class RecordChangeReplayRunResolver extends ResolverBase {
         this.CheckUserReadPermissions('Record Change Replay Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChangeReplayRuns] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Record Change Replay Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Record Change Replay Runs', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -31805,7 +31814,7 @@ export class RecordChangeReplayRunResolver extends ResolverBase {
         this.CheckUserReadPermissions('Record Changes', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChanges] WHERE [ReplayRunID]='${recordchangereplayrun_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Record Changes', rows);
         return result;
     }
@@ -31959,7 +31968,7 @@ export class LibraryItemResolver extends ResolverBase {
         this.CheckUserReadPermissions('Library Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLibraryItems] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Library Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Library Items', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -32118,7 +32127,7 @@ export class EntityRelationshipDisplayComponentResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Relationship Display Components', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRelationshipDisplayComponents] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Relationship Display Components', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Entity Relationship Display Components', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -32128,7 +32137,7 @@ export class EntityRelationshipDisplayComponentResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRelationships] WHERE [DisplayComponentID]='${entityrelationshipdisplaycomponent_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Relationships', rows);
         return result;
     }
@@ -32300,7 +32309,7 @@ export class EntityActionParamResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Action Params', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionParams] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Params', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Entity Action Params', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -32529,7 +32538,7 @@ export class ResourcePermissionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Resource Permissions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourcePermissions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Resource Permissions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Resource Permissions', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -32704,7 +32713,7 @@ export class ResourceLinkResolver extends ResolverBase {
         this.CheckUserReadPermissions('Resource Links', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceLinks] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Resource Links', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Resource Links', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -32884,7 +32893,7 @@ export class ConversationArtifactVersionResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: Conversation Artifact Versions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactVersions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Conversation Artifact Versions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('MJ: Conversation Artifact Versions', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -32894,7 +32903,7 @@ export class ConversationArtifactVersionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Conversation Details', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationDetails] WHERE [ArtifactVersionID]='${conversationartifactversion_.ID}' ` + this.getRowLevelSecurityWhereClause('Conversation Details', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Conversation Details', rows);
         return result;
     }
@@ -33120,7 +33129,7 @@ export class AIAgentRequestResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Agent Requests', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRequests] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Requests', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('AI Agent Requests', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -33384,7 +33393,7 @@ export class AIModelVendorResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Model Vendors', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelVendors] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Model Vendors', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('MJ: AI Model Vendors', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -33536,7 +33545,7 @@ export class AIVendorTypeDefinitionResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Vendor Type Definitions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIVendorTypeDefinitions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Vendor Type Definitions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('MJ: AI Vendor Type Definitions', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -33546,7 +33555,7 @@ export class AIVendorTypeDefinitionResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Model Vendors', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelVendors] WHERE [TypeID]='${aivendortypedefinition_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Model Vendors', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Model Vendors', rows);
         return result;
     }
@@ -33556,7 +33565,7 @@ export class AIVendorTypeDefinitionResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Vendor Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIVendorTypes] WHERE [TypeID]='${aivendortypedefinition_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Vendor Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Vendor Types', rows);
         return result;
     }
@@ -33720,7 +33729,7 @@ export class ReportUserStateResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: Report User States', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportUserStates] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Report User States', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('MJ: Report User States', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -33875,7 +33884,7 @@ export class QueryEntityResolver extends ResolverBase {
         this.CheckUserReadPermissions('Query Entities', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryEntities] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Query Entities', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Query Entities', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -34039,7 +34048,7 @@ export class DashboardUserStateResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: Dashboard User States', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserStates] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Dashboard User States', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('MJ: Dashboard User States', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -34207,7 +34216,7 @@ export class ArtifactTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: Artifact Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwArtifactTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Artifact Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('MJ: Artifact Types', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -34217,7 +34226,7 @@ export class ArtifactTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: Conversation Artifacts', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifacts] WHERE [ArtifactTypeID]='${artifacttype_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Conversation Artifacts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifacts', rows);
         return result;
     }
@@ -34391,7 +34400,7 @@ export class AIVendorTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Vendor Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIVendorTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Vendor Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('MJ: AI Vendor Types', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -34593,7 +34602,7 @@ export class ConversationArtifactResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: Conversation Artifacts', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifacts] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Conversation Artifacts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('MJ: Conversation Artifacts', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -34603,7 +34612,7 @@ export class ConversationArtifactResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: Conversation Artifact Permissions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactPermissions] WHERE [ConversationArtifactID]='${conversationartifact_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Conversation Artifact Permissions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifact Permissions', rows);
         return result;
     }
@@ -34613,7 +34622,7 @@ export class ConversationArtifactResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: Conversation Artifact Versions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactVersions] WHERE [ConversationArtifactID]='${conversationartifact_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Conversation Artifact Versions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifact Versions', rows);
         return result;
     }
@@ -34623,7 +34632,7 @@ export class ConversationArtifactResolver extends ResolverBase {
         this.CheckUserReadPermissions('Conversation Details', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationDetails] WHERE [ArtifactID]='${conversationartifact_.ID}' ` + this.getRowLevelSecurityWhereClause('Conversation Details', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Conversation Details', rows);
         return result;
     }
@@ -34839,7 +34848,7 @@ export class AIAgentPromptResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Agent Prompts', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentPrompts] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Agent Prompts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('MJ: AI Agent Prompts', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -35027,7 +35036,7 @@ export class DashboardUserPreferenceResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: Dashboard User Preferences', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserPreferences] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Dashboard User Preferences', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('MJ: Dashboard User Preferences', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -35207,7 +35216,7 @@ export class ContentProcessRunResolver extends ResolverBase {
         this.CheckUserReadPermissions('Content Process Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentProcessRuns] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Content Process Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Content Process Runs', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -35405,7 +35414,7 @@ export class ContentSourceResolver extends ResolverBase {
         this.CheckUserReadPermissions('Content Sources', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentSources] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Content Sources', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Content Sources', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -35415,7 +35424,7 @@ export class ContentSourceResolver extends ResolverBase {
         this.CheckUserReadPermissions('Content Process Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentProcessRuns] WHERE [SourceID]='${contentsource_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Process Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Content Process Runs', rows);
         return result;
     }
@@ -35425,7 +35434,7 @@ export class ContentSourceResolver extends ResolverBase {
         this.CheckUserReadPermissions('Content Source Params', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentSourceParams] WHERE [ContentSourceID]='${contentsource_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Source Params', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Content Source Params', rows);
         return result;
     }
@@ -35435,7 +35444,7 @@ export class ContentSourceResolver extends ResolverBase {
         this.CheckUserReadPermissions('Content Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentItems] WHERE [ContentSourceID]='${contentsource_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Content Items', rows);
         return result;
     }
@@ -35595,7 +35604,7 @@ export class ContentSourceParamResolver extends ResolverBase {
         this.CheckUserReadPermissions('Content Source Params', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentSourceParams] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Content Source Params', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Content Source Params', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -35748,7 +35757,7 @@ export class ContentSourceTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Content Source Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentSourceTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Content Source Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Content Source Types', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -35758,7 +35767,7 @@ export class ContentSourceTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Content Sources', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentSources] WHERE [ContentSourceTypeID]='${contentsourcetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Sources', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Content Sources', rows);
         return result;
     }
@@ -35768,7 +35777,7 @@ export class ContentSourceTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Content Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentItems] WHERE [ContentSourceTypeID]='${contentsourcetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Content Items', rows);
         return result;
     }
@@ -35942,7 +35951,7 @@ export class ContentSourceTypeParamResolver extends ResolverBase {
         this.CheckUserReadPermissions('Content Source Type Params', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentSourceTypeParams] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Content Source Type Params', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Content Source Type Params', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -36126,7 +36135,7 @@ export class ContentTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Content Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Content Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Content Types', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -36136,7 +36145,7 @@ export class ContentTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Content Sources', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentSources] WHERE [ContentTypeID]='${contenttype_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Sources', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Content Sources', rows);
         return result;
     }
@@ -36146,7 +36155,7 @@ export class ContentTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Content Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentItems] WHERE [ContentTypeID]='${contenttype_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Content Items', rows);
         return result;
     }
@@ -36311,7 +36320,7 @@ export class ContentTypeAttributeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Content Type Attributes', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentTypeAttributes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Content Type Attributes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Content Type Attributes', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -36464,7 +36473,7 @@ export class ContentFileTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Content File Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentFileTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Content File Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Content File Types', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -36474,7 +36483,7 @@ export class ContentFileTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Content Sources', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentSources] WHERE [ContentFileTypeID]='${contentfiletype_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Sources', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Content Sources', rows);
         return result;
     }
@@ -36484,7 +36493,7 @@ export class ContentFileTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Content Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentItems] WHERE [ContentFileTypeID]='${contentfiletype_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Content Items', rows);
         return result;
     }
@@ -36721,7 +36730,7 @@ export class ContentItemResolver extends ResolverBase {
         this.CheckUserReadPermissions('Content Items', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentItems] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Content Items', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Content Items', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -36731,7 +36740,7 @@ export class ContentItemResolver extends ResolverBase {
         this.CheckUserReadPermissions('Content Item Attributes', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentItemAttributes] WHERE [ContentItemID]='${contentitem_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Item Attributes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Content Item Attributes', rows);
         return result;
     }
@@ -36741,7 +36750,7 @@ export class ContentItemResolver extends ResolverBase {
         this.CheckUserReadPermissions('Content Item Tags', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentItemTags] WHERE [ItemID]='${contentitem_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Item Tags', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Content Item Tags', rows);
         return result;
     }
@@ -36901,7 +36910,7 @@ export class ContentItemAttributeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Content Item Attributes', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentItemAttributes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Content Item Attributes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Content Item Attributes', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -37052,7 +37061,7 @@ export class ContentItemTagResolver extends ResolverBase {
         this.CheckUserReadPermissions('Content Item Tags', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentItemTags] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Content Item Tags', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Content Item Tags', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -37297,7 +37306,7 @@ export class GeneratedCodeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Generated Codes', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwGeneratedCodes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Generated Codes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Generated Codes', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -37686,7 +37695,7 @@ export class AIPromptRunResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -37696,7 +37705,7 @@ export class AIPromptRunResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [ParentID]='${aipromptrun_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
         return result;
     }
@@ -37706,7 +37715,7 @@ export class AIPromptRunResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Result Cache', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [PromptRunID]='${aipromptrun_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Result Cache', rows);
         return result;
     }
@@ -37948,7 +37957,7 @@ export class AIAgentRunStepResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Agent Run Steps', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRunSteps] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Agent Run Steps', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('MJ: AI Agent Run Steps', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -38109,7 +38118,7 @@ export class ConversationArtifactPermissionResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: Conversation Artifact Permissions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactPermissions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Conversation Artifact Permissions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('MJ: Conversation Artifact Permissions', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -38268,7 +38277,7 @@ export class AIModelPriceUnitTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Model Price Unit Types', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelPriceUnitTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Model Price Unit Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('MJ: AI Model Price Unit Types', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -38278,7 +38287,7 @@ export class AIModelPriceUnitTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Model Costs', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelCosts] WHERE [UnitTypeID]='${aimodelpriceunittype_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Model Costs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Model Costs', rows);
         return result;
     }
@@ -38458,7 +38467,7 @@ export class AIAgentLearningCycleResolver extends ResolverBase {
         this.CheckUserReadPermissions('AI Agent Learning Cycles', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentLearningCycles] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Learning Cycles', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('AI Agent Learning Cycles', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -38645,7 +38654,7 @@ export class ReportVersionResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: Report Versions', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportVersions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Report Versions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('MJ: Report Versions', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }
@@ -38824,7 +38833,7 @@ export class AIConfigurationParamResolver extends ResolverBase {
         this.CheckUserReadPermissions('MJ: AI Configuration Params', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIConfigurationParams] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Configuration Params', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL);
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('MJ: AI Configuration Params', rows && rows.length > 0 ? rows[0] : {})
         return result;
     }

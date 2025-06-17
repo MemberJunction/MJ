@@ -1,9 +1,8 @@
 /**
  * @fileoverview Type definitions for the MemberJunction AI Agent framework.
  * 
- * This module contains all type definitions used throughout the AI Agent system,
- * providing strongly-typed interfaces for agent execution, context data, and
- * communication between agents and the underlying prompt execution engine.
+ * This module contains server-specific type definitions used for agent execution,
+ * including callback types and internal context structures.
  * 
  * @module @memberjunction/ai-agents
  * @author MemberJunction.com
@@ -15,35 +14,58 @@ import { AIAgentEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 
 /**
+ * Callback function type for agent execution progress updates
+ */
+export type AgentExecutionProgressCallback = (progress: {
+    /** Current step in the agent execution process */
+    step: 'initialization' | 'validation' | 'prompt_execution' | 'action_execution' | 'subagent_execution' | 'decision_processing' | 'finalization';
+    /** Progress percentage (0-100) */
+    percentage: number;
+    /** Human-readable status message */
+    message: string;
+    /** Additional metadata about the current step */
+    metadata?: Record<string, unknown>;
+}) => void;
+
+/**
+ * Callback function type for streaming content updates during agent execution
+ */
+export type AgentExecutionStreamingCallback = (chunk: {
+    /** The content chunk received */
+    content: string;
+    /** Whether this is the final chunk */
+    isComplete: boolean;
+    /** Which step is producing this content */
+    stepType?: 'prompt' | 'action' | 'subagent' | 'chat';
+    /** Specific step entity ID producing this content */
+    stepEntityId?: string;
+    /** Model name producing this content (for prompt steps) */
+    modelName?: string;
+}) => void;
+
+/**
  * Parameters required to execute an AI Agent.
  * 
  * @interface ExecuteAgentParams
  * @property {AIAgentEntity} agent - The agent entity to execute, containing all metadata and configuration
  * @property {ChatMessage[]} conversationMessages - Array of chat messages representing the conversation history
  * @property {UserInfo} [contextUser] - Optional user context for permission checking and personalization
+ * @property {AbortSignal} [cancellationToken] - Optional cancellation token to abort the agent execution
+ * @property {AgentExecutionProgressCallback} [onProgress] - Optional callback for receiving execution progress updates
+ * @property {AgentExecutionStreamingCallback} [onStreaming] - Optional callback for receiving streaming content updates
+ * @property {string[]} [parentAgentHierarchy] - Optional parent agent hierarchy for sub-agent execution
+ * @property {number} [parentDepth] - Optional parent depth for sub-agent execution
  */
 export type ExecuteAgentParams = {
     agent: AIAgentEntity;
     conversationMessages: ChatMessage[];
     contextUser?: UserInfo;
+    cancellationToken?: AbortSignal;
+    onProgress?: AgentExecutionProgressCallback;
+    onStreaming?: AgentExecutionStreamingCallback;
+    parentAgentHierarchy?: string[];
+    parentDepth?: number;
 }
-
-/**
- * Result returned from executing an AI Agent.
- * 
- * @interface ExecuteAgentResult
- * @property {BaseAgentNextStep['step']} nextStep - The determined next step after execution (success, failed, retry, sub-agent, action)
- * @property {any} [returnValue] - Optional return value from the agent execution, type depends on agent implementation
- * @property {string} [rawResult] - Optional raw text result from the underlying LLM execution
- * @property {string} [errorMessage] - Error message if execution failed
- */
-export type ExecuteAgentResult = {
-    nextStep: BaseAgentNextStep['step'];
-    returnValue?: any;
-    rawResult?: string;
-    errorMessage?: string;
-}
-
 
 /**
  * Context data provided to agent prompts during execution.
@@ -70,36 +92,45 @@ export type AgentContextData = {
 }
 
 /**
- * Represents the next step determination from an agent type.
+ * Configuration loaded for agent execution.
  * 
- * Agent types analyze the output of prompt execution and determine what should
- * happen next in the agent workflow. This type encapsulates that decision along
- * with any necessary context for the determined action.
- * 
- * @interface BaseAgentNextStep
- * @property {'success' | 'failed' | 'retry' | 'sub-agent' | 'action'} step - The determined next step
- *   - 'success': The agent has completed its task successfully
- *   - 'failed': The agent has failed to complete its task
- *   - 'retry': The agent should retry the last step by running it again
- *   - 'sub-agent': The agent should spawn a sub-agent to handle a specific task
- *   - 'action': The agent should perform a specific action using the Actions framework
- * @property {any} [returnValue] - Optional value to return with the step determination
- * @property {string} [errorMessage] - Error message when step is 'failed'
- * @property {string} [retryReason] - Reason for retry when step is 'retry'
- * @property {string} [retryInstructions] - Instructions for the retry attempt
- * @property {string} [subAgentName] - Name/ID of the sub-agent to execute when step is 'sub-agent'
- * @property {Record<string, unknown>} [subAgentInstructions] - Instructions/parameters for the sub-agent
- * @property {string} [actionName] - Name/ID of the action to execute when step is 'action'
- * @property {Record<string, unknown>} [actionParameters] - Parameters to pass to the action
+ * @interface AgentConfiguration
+ * @property {boolean} success - Whether configuration was loaded successfully
+ * @property {string} [errorMessage] - Error message if configuration failed
+ * @property {any} [agentType] - The loaded agent type entity
+ * @property {any} [systemPrompt] - The loaded system prompt entity
+ * @property {any} [childPrompt] - The loaded child prompt entity
  */
-export type BaseAgentNextStep = {
-    step: 'success' | 'failed' | 'retry' | 'sub-agent' | 'action';
-    returnValue?: any;
+export type AgentConfiguration = {
+    success: boolean;
     errorMessage?: string;
-    retryReason?: string;
-    retryInstructions?: string;
-    subAgentName?: string;
-    subAgentInstructions?: Record<string, unknown>;
-    actionName?: string;
-    actionParameters?: Record<string, unknown>;
+    agentType?: any;
+    systemPrompt?: any;
+    childPrompt?: any;
+}
+
+/**
+ * Context maintained throughout an agent run.
+ * 
+ * This context tracks the current execution state, parent relationships for
+ * nested sub-agent calls, agent hierarchy for streaming messages, and any 
+ * persistent state needed across steps.
+ * 
+ * @interface AgentRunContext
+ * @property {number} currentStepIndex - Current position in the execution chain (0-based)
+ * @property {string[]} parentRunStack - Stack of parent run IDs for nested sub-agent calls
+ * @property {string[]} agentHierarchy - Stack of agent names for hierarchical message display (e.g., ["Marketing Agent", "Copywriter Agent"])
+ * @property {number} depth - Current nesting depth (0 = root agent, 1 = first sub-agent, etc.)
+ * @property {string} [conversationId] - Optional conversation ID linking multiple agent runs
+ * @property {string} [userId] - Optional user ID for context and permissions
+ * @property {Record<string, any>} agentState - Any persistent state maintained across steps
+ */
+export type AgentRunContext = {
+    currentStepIndex: number;
+    parentRunStack: string[];
+    agentHierarchy: string[];
+    depth: number;
+    conversationId?: string;
+    userId?: string;
+    agentState: Record<string, any>;
 }

@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
-import { Observable, BehaviorSubject, combineLatest, interval as rxInterval } from 'rxjs';
-import { map, switchMap, startWith, shareReplay } from 'rxjs/operators';
-import { RunView } from '@memberjunction/core';
+import { Observable, BehaviorSubject, from, combineLatest } from 'rxjs';
+import { map, switchMap, shareReplay, tap } from 'rxjs/operators';
+import { RunView, Metadata } from '@memberjunction/core';
 import { AIPromptRunEntity, AIAgentRunEntity, AIAgentRunStepEntity, AIModelEntity, AIAgentEntity, AIPromptEntity } from '@memberjunction/core-entities';
 
 export interface DashboardKPIs {
@@ -68,65 +68,87 @@ export interface ChartData {
   providedIn: 'root'
 })
 export class AIInstrumentationService {
-  private readonly _refreshInterval$ = new BehaviorSubject<number>(30000); // 30 seconds default
   private readonly _dateRange$ = new BehaviorSubject<{ start: Date; end: Date }>({
     start: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
     end: new Date()
   });
+  
+  private readonly _refreshTrigger$ = new BehaviorSubject<number>(0);
+  private readonly _isLoading$ = new BehaviorSubject<boolean>(false);
+  private readonly metadata = new Metadata();
+  
+  // Expose loading state as observable
+  readonly isLoading$ = this._isLoading$.asObservable();
 
   constructor() {}
 
-  // Main data streams
-  readonly kpis$ = this.createRefreshableStream(() => this.loadKPIs());
-  readonly trends$ = this.createRefreshableStream(() => this.loadTrends());
-  readonly liveExecutions$ = this.createRefreshableStream(() => this.loadLiveExecutions());
-  readonly chartData$ = this.createRefreshableStream(() => this.loadChartData());
-
-  setRefreshInterval(intervalMs: number): void {
-    this._refreshInterval$.next(intervalMs);
+  // Main data streams - trigger on refresh or date range change
+  readonly kpis$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
+    tap(() => this._isLoading$.next(true)),
+    switchMap(() => from(this.loadKPIs())),
+    tap(() => this.checkLoadingComplete()),
+    shareReplay(1)
+  );
+  
+  readonly trends$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
+    tap(() => this._isLoading$.next(true)),
+    switchMap(() => from(this.loadTrends())),
+    tap(() => this.checkLoadingComplete()),
+    shareReplay(1)
+  );
+  
+  readonly liveExecutions$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
+    tap(() => this._isLoading$.next(true)),
+    switchMap(() => from(this.loadLiveExecutions())),
+    tap(() => this.checkLoadingComplete()),
+    shareReplay(1)
+  );
+  
+  readonly chartData$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
+    tap(() => this._isLoading$.next(true)),
+    switchMap(() => from(this.loadChartData())),
+    tap(() => this.checkLoadingComplete()),
+    shareReplay(1)
+  );
+  
+  private loadingCount = 0;
+  
+  private checkLoadingComplete(): void {
+    // Simple mechanism to track when all streams have completed
+    setTimeout(() => {
+      this._isLoading$.next(false);
+    }, 100);
   }
 
   setDateRange(start: Date, end: Date): void {
     this._dateRange$.next({ start, end });
+    // No need to manually refresh - streams now react to date range changes
   }
-
-  private createRefreshableStream<T>(loadFn: () => Promise<T>): Observable<T> {
-    return combineLatest([
-      this._refreshInterval$,
-      this._dateRange$
-    ]).pipe(
-      switchMap(([interval]) => 
-        interval > 0 
-          ? rxInterval(interval).pipe(startWith(0))
-          : [0]
-      ),
-      switchMap(() => loadFn()),
-      shareReplay(1)
-    );
+  
+  refresh(): void {
+    this._refreshTrigger$.next(this._refreshTrigger$.value + 1);
   }
 
   private async loadKPIs(): Promise<DashboardKPIs> {
     const { start, end } = this._dateRange$.value;
-    const dateFilter = `RunAt >= '${start.toISOString()}' AND RunAt <= '${end.toISOString()}'`;
+    const rv = new RunView();
+    
+    // Use RunViews to batch the queries
+    const [promptResults, agentResults] = await rv.RunViews<any>([
+      {
+        EntityName: 'MJ: AI Prompt Runs',
+        ExtraFilter: `RunAt >= '${start.toISOString()}' AND RunAt <= '${end.toISOString()}'`,
+        ResultType: 'entity_object'
+      },
+      {
+        EntityName: 'MJ: AI Agent Runs',
+        ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
+        ResultType: 'entity_object'
+      }
+    ]);
 
-    // Load prompt executions
-    const promptRv = new RunView();
-    const promptResults = await promptRv.RunView<AIPromptRunEntity>({
-      EntityName: 'MJ: AI Prompt Runs',
-      ExtraFilter: dateFilter,
-      ResultType: 'entity_object'
-    });
-
-    // Load agent executions  
-    const agentRv = new RunView();
-    const agentResults = await agentRv.RunView<AIAgentRunEntity>({
-      EntityName: 'MJ: AI Agent Runs',
-      ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
-      ResultType: 'entity_object'
-    });
-
-    const promptRuns = promptResults.Results;
-    const agentRuns = agentResults.Results;
+    const promptRuns = promptResults.Results as AIPromptRunEntity[];
+    const agentRuns = agentResults.Results as AIAgentRunEntity[];
 
     // Calculate KPIs
     const totalExecutions = promptRuns.length + agentRuns.length;
@@ -164,30 +186,53 @@ export class AIInstrumentationService {
     const { start, end } = this._dateRange$.value;
     const hourlyBuckets = this.createHourlyBuckets(start, end);
     
+    // Calculate bucket size based on the number of buckets
+    const duration = end.getTime() - start.getTime();
+    const hours = duration / (1000 * 60 * 60);
+    let bucketSizeMs: number;
+    if (hours <= 24) {
+      bucketSizeMs = 60 * 60 * 1000; // 1 hour
+    } else if (hours <= 24 * 7) {
+      bucketSizeMs = 4 * 60 * 60 * 1000; // 4 hours
+    } else {
+      bucketSizeMs = 24 * 60 * 60 * 1000; // 24 hours
+    }
+    
+    // Load all data in a single query instead of per-bucket
+    const rv = new RunView();
+    const [promptResults, agentResults] = await rv.RunViews<any>([
+      {
+        EntityName: 'MJ: AI Prompt Runs',
+        ExtraFilter: `RunAt >= '${start.toISOString()}' AND RunAt <= '${end.toISOString()}'`,
+        ResultType: 'entity_object'
+      },
+      {
+        EntityName: 'MJ: AI Agent Runs', 
+        ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
+        ResultType: 'entity_object'
+      }
+    ]);
+
+    const allPromptRuns = promptResults.Results as AIPromptRunEntity[];
+    const allAgentRuns = agentResults.Results as AIAgentRunEntity[];
+    
+    // Now aggregate data into buckets on the client side
     const trends: TrendData[] = [];
     
     for (const bucket of hourlyBuckets) {
       const bucketStart = bucket;
-      const bucketEnd = new Date(bucket.getTime() + 60 * 60 * 1000);
+      const bucketEnd = new Date(bucket.getTime() + bucketSizeMs);
       
-      const promptFilter = `RunAt >= '${bucketStart.toISOString()}' AND RunAt < '${bucketEnd.toISOString()}'`;
-      const agentFilter = `StartedAt >= '${bucketStart.toISOString()}' AND StartedAt < '${bucketEnd.toISOString()}'`;
-
-      const [promptResults, agentResults] = await Promise.all([
-        new RunView().RunView<AIPromptRunEntity>({
-          EntityName: 'MJ: AI Prompt Runs',
-          ExtraFilter: promptFilter,
-          ResultType: 'entity_object'
-        }),
-        new RunView().RunView<AIAgentRunEntity>({
-          EntityName: 'MJ: AI Agent Runs', 
-          ExtraFilter: agentFilter,
-          ResultType: 'entity_object'
-        })
-      ]);
-
-      const promptRuns = promptResults.Results;
-      const agentRuns = agentResults.Results;
+      // Filter runs for this bucket
+      const promptRuns = allPromptRuns.filter(r => {
+        const runAt = new Date(r.RunAt);
+        return runAt >= bucketStart && runAt < bucketEnd;
+      });
+      
+      const agentRuns = allAgentRuns.filter(r => {
+        const startedAt = new Date(r.StartedAt);
+        return startedAt >= bucketStart && startedAt < bucketEnd;
+      });
 
       trends.push({
         timestamp: bucket,
@@ -206,24 +251,29 @@ export class AIInstrumentationService {
     const now = new Date();
     const recentTime = new Date(now.getTime() - 5 * 60 * 1000);
     
-    const [promptResults, agentResults] = await Promise.all([
-      new RunView().RunView<AIPromptRunEntity>({
+    const rv = new RunView();
+    const [promptResults, agentResults] = await rv.RunViews<any>([
+      {
         EntityName: 'MJ: AI Prompt Runs',
         ExtraFilter: `RunAt >= '${recentTime.toISOString()}'`,
         OrderBy: 'RunAt DESC',
         ResultType: 'entity_object'
-      }),
-      new RunView().RunView<AIAgentRunEntity>({
+      },
+      {
         EntityName: 'MJ: AI Agent Runs',
         ExtraFilter: `StartedAt >= '${recentTime.toISOString()}'`,
         OrderBy: 'StartedAt DESC', 
         ResultType: 'entity_object'
-      })
+      }
     ]);
+
+    const promptRuns = promptResults.Results as AIPromptRunEntity[];
+    const agentRuns = agentResults.Results as AIAgentRunEntity[];
 
     const liveExecutions: LiveExecution[] = [];
 
-    for (const run of promptResults.Results) {
+    // Process prompt runs - they already have the prompt name in the Prompt field
+    for (const run of promptRuns) {
       const isRunning = !run.CompletedAt && run.Success !== false;
       const duration = run.CompletedAt ? 
         new Date(run.CompletedAt).getTime() - new Date(run.RunAt).getTime() : 
@@ -232,7 +282,7 @@ export class AIInstrumentationService {
       liveExecutions.push({
         id: run.ID,
         type: 'prompt',
-        name: await this.getPromptName(run.PromptID),
+        name: run.Prompt || 'Unnamed Prompt', // Use the Prompt field directly
         status: isRunning ? 'running' : (run.Success ? 'completed' : 'failed'),
         startTime: new Date(run.RunAt),
         duration: duration,
@@ -242,7 +292,8 @@ export class AIInstrumentationService {
       });
     }
 
-    for (const run of agentResults.Results) {
+    // Process agent runs - they already have the agent name in the Agent field
+    for (const run of agentRuns) {
       const isRunning = run.Status === 'Running';
       const duration = run.CompletedAt ? 
         new Date(run.CompletedAt).getTime() - new Date(run.StartedAt).getTime() : 
@@ -251,7 +302,7 @@ export class AIInstrumentationService {
       liveExecutions.push({
         id: run.ID,
         type: 'agent',
-        name: await this.getAgentName(run.AgentID),
+        name: run.Agent || 'Unnamed Agent', // Use the Agent field directly
         status: run.Status.toLowerCase() as 'running' | 'completed' | 'failed',
         startTime: new Date(run.StartedAt),
         duration: duration,
@@ -350,51 +401,45 @@ export class AIInstrumentationService {
   private createHourlyBuckets(start: Date, end: Date): Date[] {
     const buckets: Date[] = [];
     const current = new Date(start);
-    current.setMinutes(0, 0, 0);
+    const duration = end.getTime() - start.getTime();
+    const hours = duration / (1000 * 60 * 60);
+    
+    // Determine bucket size based on duration
+    let bucketSize: number;
+    if (hours <= 24) {
+      // For up to 24 hours, use hourly buckets
+      bucketSize = 1;
+      current.setMinutes(0, 0, 0);
+    } else if (hours <= 24 * 7) {
+      // For up to 7 days, use 4-hour buckets
+      bucketSize = 4;
+      current.setHours(Math.floor(current.getHours() / 4) * 4, 0, 0, 0);
+    } else {
+      // For more than 7 days, use daily buckets
+      bucketSize = 24;
+      current.setHours(0, 0, 0, 0);
+    }
     
     while (current < end) {
       buckets.push(new Date(current));
-      current.setHours(current.getHours() + 1);
+      current.setHours(current.getHours() + bucketSize);
     }
     
     return buckets;
   }
 
-  private async getPromptName(promptId: string): Promise<string> {
-    try {
-      const rv = new RunView();
-      const result = await rv.RunView<AIPromptEntity>({
-        EntityName: 'AI Prompts',
-        ExtraFilter: `ID = '${promptId}'`,
-        ResultType: 'entity_object'
-      });
-      return result.Results[0]?.Name || 'Unknown Prompt';
-    } catch {
-      return 'Unknown Prompt';
-    }
-  }
 
-  private async getAgentName(agentId: string): Promise<string> {
-    try {
-      const rv = new RunView();
-      const result = await rv.RunView<AIAgentEntity>({
-        EntityName: 'AI Agents',
-        ExtraFilter: `ID = '${agentId}'`,
-        ResultType: 'entity_object'
-      });
-      return result.Results[0]?.Name || 'Unknown Agent';
-    } catch {
-      return 'Unknown Agent';
-    }
-  }
 
   private async getTopModel(promptRuns: AIPromptRunEntity[]): Promise<string> {
     const modelCounts = new Map<string, number>();
+    const modelNames = new Map<string, string>();
     
+    // Count models and track their names from the Model field
     for (const run of promptRuns) {
-      if (run.ModelID) {
+      if (run.ModelID && run.Model) {
         const count = modelCounts.get(run.ModelID) || 0;
         modelCounts.set(run.ModelID, count + 1);
+        modelNames.set(run.ModelID, run.Model);
       }
     }
 
@@ -403,25 +448,20 @@ export class AIInstrumentationService {
     const topModelId = Array.from(modelCounts.entries())
       .sort(([,a], [,b]) => b - a)[0][0];
 
-    try {
-      const rv = new RunView();
-      const result = await rv.RunView<AIModelEntity>({
-        EntityName: 'AI Models',
-        ExtraFilter: `ID = '${topModelId}'`,
-        ResultType: 'entity_object'
-      });
-      return result.Results[0]?.Name || 'Unknown Model';
-    } catch {
-      return 'Unknown Model';
-    }
+    return modelNames.get(topModelId) || 'Unknown Model';
   }
 
   private async getTopAgent(agentRuns: AIAgentRunEntity[]): Promise<string> {
     const agentCounts = new Map<string, number>();
+    const agentNames = new Map<string, string>();
     
+    // Count agents and track their names from the Agent field
     for (const run of agentRuns) {
-      const count = agentCounts.get(run.AgentID) || 0;
-      agentCounts.set(run.AgentID, count + 1);
+      if (run.AgentID && run.Agent) {
+        const count = agentCounts.get(run.AgentID) || 0;
+        agentCounts.set(run.AgentID, count + 1);
+        agentNames.set(run.AgentID, run.Agent);
+      }
     }
 
     if (agentCounts.size === 0) return 'N/A';
@@ -429,25 +469,15 @@ export class AIInstrumentationService {
     const topAgentId = Array.from(agentCounts.entries())
       .sort(([,a], [,b]) => b - a)[0][0];
 
-    try {
-      const rv = new RunView();
-      const result = await rv.RunView<AIAgentEntity>({
-        EntityName: 'AI Agents',
-        ExtraFilter: `ID = '${topAgentId}'`,
-        ResultType: 'entity_object'
-      });
-      return result.Results[0]?.Name || 'Unknown Agent';
-    } catch {
-      return 'Unknown Agent';
-    }
+    return agentNames.get(topAgentId) || 'Unknown Agent';
   }
 
   private async analyzeCostByModel(promptRuns: AIPromptRunEntity[]): Promise<{ model: string; cost: number; tokens: number }[]> {
-    const modelStats = new Map<string, { cost: number; tokens: number }>();
+    const modelStats = new Map<string, { cost: number; tokens: number; name: string }>();
 
     for (const run of promptRuns) {
-      if (run.ModelID) {
-        const existing = modelStats.get(run.ModelID) || { cost: 0, tokens: 0 };
+      if (run.ModelID && run.Model) {
+        const existing = modelStats.get(run.ModelID) || { cost: 0, tokens: 0, name: run.Model };
         existing.cost += run.Cost || 0;
         existing.tokens += run.TokensUsed || 0;
         modelStats.set(run.ModelID, existing);
@@ -456,9 +486,8 @@ export class AIInstrumentationService {
 
     const results = [];
     for (const [modelId, stats] of modelStats.entries()) {
-      const modelName = await this.getModelName(modelId);
       results.push({
-        model: modelName,
+        model: stats.name,
         cost: stats.cost,
         tokens: stats.tokens
       });
@@ -468,12 +497,18 @@ export class AIInstrumentationService {
   }
 
   private async analyzePerformanceMatrix(promptRuns: AIPromptRunEntity[]): Promise<{ agent: string; model: string; avgTime: number; successRate: number }[]> {
-    const combinations = new Map<string, { times: number[]; successes: number; total: number }>();
+    const combinations = new Map<string, { times: number[]; successes: number; total: number; agentName: string; modelName: string }>();
 
     for (const run of promptRuns) {
       if (run.AgentID && run.ModelID && run.ExecutionTimeMS) {
         const key = `${run.AgentID}:${run.ModelID}`;
-        const existing = combinations.get(key) || { times: [], successes: 0, total: 0 };
+        const existing = combinations.get(key) || { 
+          times: [], 
+          successes: 0, 
+          total: 0,
+          agentName: run.Agent || 'Unknown Agent',
+          modelName: run.Model || 'Unknown Model'
+        };
         
         existing.times.push(run.ExecutionTimeMS);
         existing.total += 1;
@@ -485,13 +520,9 @@ export class AIInstrumentationService {
 
     const results = [];
     for (const [key, data] of combinations.entries()) {
-      const [agentId, modelId] = key.split(':');
-      const agentName = await this.getAgentName(agentId);
-      const modelName = await this.getModelName(modelId);
-      
       results.push({
-        agent: agentName,
-        model: modelName,
+        agent: data.agentName,
+        model: data.modelName,
         avgTime: data.times.reduce((sum, time) => sum + time, 0) / data.times.length,
         successRate: data.successes / data.total
       });
@@ -501,11 +532,11 @@ export class AIInstrumentationService {
   }
 
   private async analyzeTokenEfficiency(promptRuns: AIPromptRunEntity[]): Promise<{ inputTokens: number; outputTokens: number; cost: number; model: string }[]> {
-    const modelEfficiency = new Map<string, { input: number; output: number; cost: number }>();
+    const modelEfficiency = new Map<string, { input: number; output: number; cost: number; name: string }>();
 
     for (const run of promptRuns) {
-      if (run.ModelID && run.TokensPrompt && run.TokensCompletion) {
-        const existing = modelEfficiency.get(run.ModelID) || { input: 0, output: 0, cost: 0 };
+      if (run.ModelID && run.Model && run.TokensPrompt && run.TokensCompletion) {
+        const existing = modelEfficiency.get(run.ModelID) || { input: 0, output: 0, cost: 0, name: run.Model };
         existing.input += run.TokensPrompt;
         existing.output += run.TokensCompletion;
         existing.cost += run.Cost || 0;
@@ -515,31 +546,17 @@ export class AIInstrumentationService {
 
     const results = [];
     for (const [modelId, data] of modelEfficiency.entries()) {
-      const modelName = await this.getModelName(modelId);
       results.push({
         inputTokens: data.input,
         outputTokens: data.output,
         cost: data.cost,
-        model: modelName
+        model: data.name
       });
     }
 
     return results;
   }
 
-  private async getModelName(modelId: string): Promise<string> {
-    try {
-      const rv = new RunView();
-      const result = await rv.RunView<AIModelEntity>({
-        EntityName: 'AI Models',
-        ExtraFilter: `ID = '${modelId}'`,
-        ResultType: 'entity_object'
-      });
-      return result.Results[0]?.Name || 'Unknown Model';
-    } catch {
-      return 'Unknown Model';
-    }
-  }
 
   async getExecutionDetails(executionId: string, type: 'prompt' | 'agent'): Promise<ExecutionDetails | null> {
     try {
@@ -578,7 +595,7 @@ export class AIInstrumentationService {
     return {
       id: run.ID,
       type: 'prompt',
-      name: await this.getPromptName(run.PromptID),
+      name: run.Prompt || 'Unnamed Prompt',
       status: run.Success ? 'completed' : 'failed',
       startTime: new Date(run.RunAt),
       endTime: run.CompletedAt ? new Date(run.CompletedAt) : undefined,
@@ -588,7 +605,7 @@ export class AIInstrumentationService {
       errorMessage: run.ErrorMessage || undefined,
       parentId: run.ParentID || undefined,
       children,
-      model: run.ModelID ? await this.getModelName(run.ModelID) : undefined
+      model: run.Model || undefined
     };
   }
 
@@ -616,7 +633,7 @@ export class AIInstrumentationService {
     return {
       id: run.ID,
       type: 'agent',
-      name: await this.getAgentName(run.AgentID),
+      name: run.Agent || 'Unnamed Agent',
       status: run.Status.toLowerCase(),
       startTime: new Date(run.StartedAt),
       endTime: run.CompletedAt ? new Date(run.CompletedAt) : undefined,

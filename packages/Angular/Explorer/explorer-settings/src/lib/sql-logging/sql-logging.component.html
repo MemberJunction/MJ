@@ -1,0 +1,328 @@
+<div class="sql-logging-container">
+  <!-- Action Buttons -->
+  <div class="action-buttons">
+    <button class="btn-secondary" (click)="loadActiveSessions()" [disabled]="loading">
+      <i class="fa-solid fa-refresh" [class.fa-spin]="loading"></i>
+      Refresh
+    </button>
+    @if (isOwner && configEnabled) {
+      <button 
+        class="btn-primary"
+        [disabled]="loading || activeSessions.length >= (sqlLoggingConfig?.maxActiveSessions || 5)"
+        (click)="openStartSessionDialog()"
+        title="Start SQL logging session"
+      >
+        <i class="fa-solid fa-play"></i>
+        Start New Session
+      </button>
+    }
+  </div>
+
+  <!-- Stats Cards -->
+  @if (isOwner && configEnabled) {
+    <div class="stats-grid" style="display: flex">
+      <div class="stat-card">
+        <div class="stat-icon stat-icon-status">
+          <i class="fa-solid fa-power-off"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ configEnabled ? 'Enabled' : 'Disabled' }}</div>
+          <div class="stat-label">Status</div>
+        </div>
+      </div>
+      
+      <div class="stat-card">
+        <div class="stat-icon stat-icon-active">
+          <i class="fa-solid fa-play-circle"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ activeSessions.length }}</div>
+          <div class="stat-label">Active Sessions</div>
+        </div>
+      </div>
+      
+      <div class="stat-card">
+        <div class="stat-icon stat-icon-limit">
+          <i class="fa-solid fa-gauge-high"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ sqlLoggingConfig?.maxActiveSessions || 5 }}</div>
+          <div class="stat-label">Max Sessions</div>
+        </div>
+      </div>
+      
+      <div class="stat-card">
+        <div class="stat-icon stat-icon-total">
+          <i class="fa-solid fa-database"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ getTotalStatementCount() }}</div>
+          <div class="stat-label">Total Statements</div>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Loading State -->
+  @if (loading && !activeSessions.length) {
+    <div class="loading-container">
+      <div class="loading-spinner">
+        <div class="spinner-ring"></div>
+        <div class="spinner-ring"></div>
+        <div class="spinner-ring"></div>
+      </div>
+      <div class="loading-text">Loading SQL logging configuration...</div>
+    </div>
+  }
+
+  <!-- Content Area -->
+  @if (!loading || activeSessions.length > 0) {
+    <div class="content-area">
+      @if (!isOwner) {
+        <!-- Not authorized -->
+        <div class="empty-state">
+          <i class="fa-solid fa-lock empty-icon"></i>
+          <p class="empty-text">Access Denied</p>
+          <p class="empty-subtext">SQL logging requires Owner privileges. Please contact your system administrator for access.</p>
+          <button 
+            class="btn-secondary"
+            (click)="refreshUserPermissions()"
+            style="margin-top: 1rem"
+          >
+            <i class="fa-solid fa-sync"></i>
+            Refresh Permissions
+          </button>
+        </div>
+      } @else if (!configEnabled) {
+        <!-- Not enabled in config -->
+        <div class="empty-state">
+          <i class="fa-solid fa-exclamation-triangle empty-icon warning"></i>
+          <p class="empty-text">SQL Logging Disabled</p>
+          <p class="empty-subtext">SQL logging is not enabled in the server configuration.</p>
+          <div class="info-box">
+            <h4>To enable SQL logging:</h4>
+            <ol>
+              <li>Set <code>sqlLogging.enabled = true</code> in mj.config.cjs</li>
+              <li>Restart the MJ API server</li>
+              <li>Refresh this page</li>
+            </ol>
+          </div>
+        </div>
+      } @else if (activeSessions.length === 0) {
+        <!-- No active sessions -->
+        <div class="empty-state">
+          <i class="fa-solid fa-file-code empty-icon"></i>
+          <p class="empty-text">No Active Sessions</p>
+          <p class="empty-subtext">Start a new SQL logging session to begin capturing SQL statements.</p>
+          <button 
+            class="btn-primary"
+            (click)="openStartSessionDialog()"
+            style="margin-top: 1rem"
+          >
+            <i class="fa-solid fa-play"></i>
+            Start New Session
+          </button>
+        </div>
+      } @else {
+        <!-- Sessions layout -->
+        <div class="sessions-layout">
+          <!-- Sessions panel -->
+          <div class="sessions-panel">
+            <div class="panel-header">
+              <h3 class="panel-title">Active Sessions</h3>
+              @if (activeSessions.length > 0) {
+                <button 
+                  class="btn-danger btn-small"
+                  (click)="stopAllSessions()"
+                  [disabled]="loading"
+                  title="Stop all sessions"
+                >
+                  <i class="fa-solid fa-stop"></i>
+                  Stop All
+                </button>
+              }
+            </div>
+            <div class="sessions-list">
+              @for (session of activeSessions; track session.id) {
+                <div 
+                  class="session-card" 
+                  [class.selected]="selectedSession?.id === session.id"
+                  (click)="selectSession(session)"
+                >
+                  <div class="session-header">
+                    <div class="session-info">
+                      <h4 class="session-title">{{ session.sessionName }}</h4>
+                      <div class="session-meta">
+                        <span class="meta-item">
+                          <i class="fa-solid fa-clock"></i>
+                          {{ getSessionDuration(session.startTime) }}
+                        </span>
+                        <span class="meta-item">
+                          <i class="fa-solid fa-database"></i>
+                          {{ session.statementCount }} statements
+                        </span>
+                      </div>
+                    </div>
+                    <button 
+                      class="action-btn action-btn-danger"
+                      (click)="stopSession(session, $event)"
+                      title="Stop session"
+                    >
+                      <i class="fa-solid fa-stop"></i>
+                    </button>
+                  </div>
+                  <div class="session-badges">
+                    @if (session.filterByUserId) {
+                      <span class="badge badge-user">
+                        <i class="fa-solid fa-user"></i>
+                        User Filtered
+                      </span>
+                    }
+                    @if (session.options?.formatAsMigration) {
+                      <span class="badge badge-migration">
+                        <i class="fa-solid fa-code-branch"></i>
+                        Migration
+                      </span>
+                    }
+                    <span class="badge badge-type">
+                      {{ session.options?.statementTypes || 'both' }}
+                    </span>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+          
+          <!-- Log viewer panel -->
+          <div class="log-viewer-panel">
+            @if (selectedSession) {
+              <div class="panel-header">
+                <h3 class="panel-title">{{ selectedSession.sessionName }}</h3>
+                <div class="panel-actions">
+                  <label class="checkbox-label">
+                    <input 
+                      type="checkbox" 
+                      [(ngModel)]="autoRefresh"
+                    />
+                    Auto-refresh
+                  </label>
+                  <button 
+                    class="action-btn"
+                    (click)="loadSessionLog(selectedSession)"
+                    title="Refresh log"
+                  >
+                    <i class="fa-solid fa-sync" [class.fa-spin]="loading"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="log-content">
+                <mj-code-editor
+                  [value]="logContent"
+                  [readonly]="true"
+                  [disabled]="true"
+                  [language]="'sql'"
+                  [setup]="'basic'"
+                  [lineWrapping]="true"
+                  [highlightWhitespace]="false"
+                  style="height: 100%;"
+                ></mj-code-editor>
+              </div>
+            } @else {
+              <div class="empty-state">
+                <i class="fa-solid fa-arrow-left empty-icon"></i>
+                <p class="empty-text">Select a Session</p>
+                <p class="empty-subtext">Choose a session from the list to view its SQL log.</p>
+              </div>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Start Session Dialog -->
+  @if (showStartSessionDialog) {
+    <div class="modal-backdrop" (click)="showStartSessionDialog = false">
+      <div class="modal-dialog modal-large" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3 class="modal-title">
+            <i class="fa-solid fa-play"></i>
+            Start SQL Logging Session
+          </h3>
+          <button class="modal-close" (click)="showStartSessionDialog = false">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Session Name</label>
+            <input 
+              type="text"
+              class="form-input" 
+              [(ngModel)]="newSessionOptions.sessionName"
+              placeholder="Enter a descriptive name for this session"
+            />
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">File Name</label>
+            <input 
+              type="text"
+              class="form-input" 
+              [(ngModel)]="newSessionOptions.fileName"
+              placeholder="sql-log-2024-01-01.sql"
+            />
+            <div class="form-hint">The SQL log will be saved to this file</div>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">Statement Types</label>
+            <select
+              class="form-select"
+              [(ngModel)]="newSessionOptions.statementTypes"
+            >
+              @for (option of statementTypeOptions; track option.value) {
+                <option [value]="option.value">{{ option.text }}</option>
+              }
+            </select>
+          </div>
+          
+          <div class="form-checkboxes">
+            <label class="checkbox-label">
+              <input 
+                type="checkbox" 
+                [(ngModel)]="newSessionOptions.filterToCurrentUser"
+              />
+              Filter to my SQL statements only
+            </label>
+            
+            <label class="checkbox-label">
+              <input 
+                type="checkbox" 
+                [(ngModel)]="newSessionOptions.formatAsMigration"
+              />
+              Format as migration file
+            </label>
+            
+            <label class="checkbox-label">
+              <input 
+                type="checkbox" 
+                [(ngModel)]="newSessionOptions.prettyPrint"
+              />
+              Pretty print SQL statements
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="showStartSessionDialog = false">
+            Cancel
+          </button>
+          <button class="btn-primary" (click)="startNewSession()" [disabled]="loading">
+            <i class="fa-solid fa-play"></i>
+            Start Session
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

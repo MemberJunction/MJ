@@ -1,0 +1,568 @@
+// =====================================================
+// MemberJunction Settings Mixins
+// Professional, reusable styling patterns
+// =====================================================
+
+@import 'variables';
+
+// =====================================================
+// CARD SYSTEM - Elevation-based cards
+// =====================================================
+
+@mixin card-base {
+  background: $background-card;
+  border-radius: $radius-lg;
+  border: 1px solid $border-light;
+  overflow: hidden;
+  transition: $transition-normal;
+}
+
+@mixin card-elevated {
+  @include card-base;
+  box-shadow: $shadow-1;
+  
+  &:hover {
+    box-shadow: $shadow-2;
+    transform: translateY(-1px);
+  }
+}
+
+@mixin card-floating {
+  @include card-base;
+  box-shadow: $shadow-2;
+  
+  &:hover {
+    box-shadow: $shadow-3;
+    transform: translateY(-2px);
+  }
+}
+
+@mixin card-content {
+  padding: $card-padding;
+}
+
+@mixin card-content-sm {
+  padding: $card-padding-sm;
+}
+
+@mixin card-content-lg {
+  padding: $card-padding-lg;
+}
+
+// =====================================================
+// HEADER SYSTEM - Consistent page headers
+// =====================================================
+
+@mixin dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: $space-md;
+  padding: $space-lg 0 $space-md 0;
+  
+  .header-info {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: $space-md;
+    
+    h1, h2, h3 {
+      margin: 0;
+      font-weight: $font-weight-semibold;
+      color: $text-primary;
+      font-size: $font-size-xxl;
+      line-height: $line-height-tight;
+    }
+    
+    h2 {
+      font-size: $font-size-xl;
+    }
+    
+    h3 {
+      font-size: $font-size-lg;
+    }
+  }
+  
+  .header-controls {
+    display: flex;
+    gap: $space-sm;
+    align-items: center;
+  }
+}
+
+@mixin section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: $space-md;
+  padding-bottom: $space-sm;
+  border-bottom: 1px solid $border-light;
+  
+  h3, h4 {
+    margin: 0;
+    font-weight: $font-weight-medium;
+    color: $text-primary;
+    font-size: $font-size-lg;
+  }
+  
+  h4 {
+    font-size: $font-size-md;
+  }
+}
+
+// =====================================================
+// BUTTON SYSTEM - Modern, accessible buttons
+// =====================================================
+
+@mixin btn-base {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: $space-xs;
+  padding: 0 $space-md;
+  height: $button-height;
+  border-radius: $radius-md;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  transition: $transition-fast;
+  border: 1px solid transparent;
+  outline: none;
+  white-space: nowrap;
+  
+  &:focus {
+    outline: 2px solid $primary-blue-border;
+    outline-offset: 2px;
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+  
+  i {
+    font-size: $font-size-md;
+  }
+}
+
+@mixin btn-primary {
+  @include btn-base;
+  background: $primary-blue;
+  color: $text-white;
+  border-color: $primary-blue;
+  
+  &:hover:not(:disabled) {
+    background: $primary-blue-dark;
+    border-color: $primary-blue-dark;
+    box-shadow: $shadow-hover;
+    transform: translateY(-1px);
+  }
+  
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+@mixin btn-secondary {
+  @include btn-base;
+  background: $white;
+  color: $text-primary;
+  border-color: $border-medium;
+  
+  &:hover:not(:disabled) {
+    background: $background-light;
+    border-color: $primary-blue;
+    color: $primary-blue;
+    box-shadow: $shadow-1;
+  }
+}
+
+@mixin btn-ghost {
+  @include btn-base;
+  background: transparent;
+  color: $text-secondary;
+  border-color: transparent;
+  
+  &:hover:not(:disabled) {
+    background: $background-light;
+    color: $primary-blue;
+  }
+}
+
+@mixin btn-danger {
+  @include btn-base;
+  background: $error-red;
+  color: $text-white;
+  border-color: $error-red;
+  
+  &:hover:not(:disabled) {
+    background: darken($error-red, 10%);
+    border-color: darken($error-red, 10%);
+    box-shadow: 0 2px 8px rgba($error-red, 0.3);
+    transform: translateY(-1px);
+  }
+}
+
+@mixin btn-sm {
+  height: $button-height-sm;
+  padding: 0 $space-sm;
+  font-size: $font-size-xs;
+  
+  i {
+    font-size: $font-size-sm;
+  }
+}
+
+@mixin btn-lg {
+  height: $button-height-lg;
+  padding: 0 $space-lg;
+  font-size: $font-size-md;
+  
+  i {
+    font-size: $font-size-lg;
+  }
+}
+
+// =====================================================
+// BADGE SYSTEM - Status indicators
+// =====================================================
+
+@mixin badge-base {
+  display: inline-flex;
+  align-items: center;
+  gap: $space-xs;
+  padding: 0 $space-sm;
+  height: $badge-height;
+  border-radius: $radius-xl;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+@mixin badge-success {
+  @include badge-base;
+  background: rgba($success-green, 0.1);
+  color: darken($success-green, 10%);
+  border: 1px solid rgba($success-green, 0.2);
+}
+
+@mixin badge-warning {
+  @include badge-base;
+  background: rgba($warning-amber, 0.1);
+  color: darken($warning-amber, 30%);
+  border: 1px solid rgba($warning-amber, 0.2);
+}
+
+@mixin badge-error {
+  @include badge-base;
+  background: rgba($error-red, 0.1);
+  color: darken($error-red, 10%);
+  border: 1px solid rgba($error-red, 0.2);
+}
+
+@mixin badge-info {
+  @include badge-base;
+  background: $primary-blue-subtle;
+  color: $primary-blue-dark;
+  border: 1px solid $primary-blue-border;
+}
+
+@mixin badge-neutral {
+  @include badge-base;
+  background: rgba($text-muted, 0.1);
+  color: $text-secondary;
+  border: 1px solid rgba($text-muted, 0.2);
+}
+
+// =====================================================
+// NAVIGATION SYSTEM - Sidebar navigation
+// =====================================================
+
+@mixin nav-container {
+  width: $sidebar-width;
+  min-width: $sidebar-width;
+  max-width: $sidebar-width;
+  background: $white;
+  border-right: 1px solid $border-light;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  box-shadow: $shadow-1;
+}
+
+@mixin nav-item {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  padding: $space-sm $space-md;
+  margin: 0 $space-sm $space-xs $space-sm;
+  border-radius: $radius-md;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-normal;
+  color: $text-secondary;
+  text-decoration: none;
+  cursor: pointer;
+  transition: $transition-fast;
+  position: relative;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 0;
+    background: $primary-blue;
+    border-radius: 0 2px 2px 0;
+    transition: height $transition-fast;
+  }
+  
+  &:hover {
+    background: $background-light;
+    color: $primary-blue;
+    transform: translateX(2px);
+  }
+  
+  &.active {
+    background: $primary-blue-subtle;
+    color: $primary-blue;
+    font-weight: $font-weight-medium;
+    
+    &::before {
+      height: 24px;
+    }
+  }
+  
+  i {
+    font-size: $font-size-md;
+    width: 18px;
+    text-align: center;
+  }
+}
+
+// =====================================================
+// FORM SYSTEM - Modern form inputs
+// =====================================================
+
+@mixin form-field {
+  margin-bottom: $space-md;
+  
+  .field-label {
+    display: block;
+    margin-bottom: $space-xs;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $text-primary;
+  }
+  
+  .field-hint {
+    margin-top: $space-xs;
+    font-size: $font-size-xs;
+    color: $text-muted;
+  }
+  
+  .field-error {
+    margin-top: $space-xs;
+    font-size: $font-size-xs;
+    color: $error-red;
+  }
+}
+
+@mixin input-base {
+  width: 100%;
+  height: $input-height;
+  padding: 0 $space-sm;
+  border: 1px solid $border-light;
+  border-radius: $radius-md;
+  font-size: $font-size-sm;
+  font-family: $font-family-primary;
+  background: $white;
+  color: $text-primary;
+  transition: $transition-fast;
+  outline: none;
+  
+  &::placeholder {
+    color: $text-muted;
+  }
+  
+  &:focus {
+    border-color: $primary-blue;
+    box-shadow: 0 0 0 3px $primary-blue-border;
+  }
+  
+  &:disabled {
+    background: $background-light;
+    color: $text-disabled;
+    cursor: not-allowed;
+  }
+}
+
+// =====================================================
+// STATUS SYSTEM - Live status indicators
+// =====================================================
+
+@mixin status-bar {
+  display: flex;
+  gap: $space-lg;
+  padding: $space-md;
+  background: $background-lighter;
+  border: 1px solid $border-light;
+  border-radius: $radius-md;
+  margin-bottom: $space-md;
+  
+  .status-item {
+    display: flex;
+    align-items: center;
+    gap: $space-xs;
+    font-size: $font-size-sm;
+    
+    .status-label {
+      color: $text-secondary;
+      font-weight: $font-weight-medium;
+    }
+    
+    .status-value {
+      color: $text-primary;
+      font-weight: $font-weight-semibold;
+      
+      &.text-success {
+        color: $success-green;
+      }
+      
+      &.text-warning {
+        color: $warning-amber;
+      }
+      
+      &.text-danger {
+        color: $error-red;
+      }
+    }
+  }
+}
+
+// =====================================================
+// UTILITY MIXINS - Common patterns
+// =====================================================
+
+@mixin flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@mixin flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+@mixin truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@mixin loading-shimmer {
+  background: linear-gradient(90deg, 
+    $background-light 25%, 
+    rgba($primary-blue, 0.1) 50%, 
+    $background-light 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+// =====================================================
+// GRID SYSTEM - Responsive layouts
+// =====================================================
+
+@mixin grid-container {
+  display: grid;
+  gap: $space-md;
+}
+
+@mixin grid-2-col {
+  @include grid-container;
+  grid-template-columns: 1fr 1fr;
+}
+
+@mixin grid-3-col {
+  @include grid-container;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+@mixin grid-auto-fit($min-width: 300px) {
+  @include grid-container;
+  grid-template-columns: repeat(auto-fit, minmax($min-width, 1fr));
+}
+
+// =====================================================
+// BUTTON MIXINS - For component use
+// =====================================================
+
+@mixin button-base {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.625rem 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  i {
+    font-size: 0.875rem;
+  }
+}
+
+// =====================================================
+// CONTAINER SYSTEM - Proper height constraints
+// =====================================================
+
+@mixin scrollable-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+@mixin scrollable-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  position: relative;
+}
+
+@mixin fixed-header {
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: inherit;
+}

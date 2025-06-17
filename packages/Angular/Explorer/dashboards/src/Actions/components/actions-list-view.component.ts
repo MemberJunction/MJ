@@ -70,10 +70,44 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
     try {
       this.isLoading = true;
       
-      const [actions, categories] = await Promise.all([
-        this.loadActions(),
-        this.loadCategories()
+      const rv = new RunView();
+      console.log('Loading Actions list data...');
+      
+      const [actionsResult, categoriesResult] = await rv.RunViews([
+        {
+          EntityName: 'Actions',
+          ExtraFilter: '',
+          OrderBy: 'Name',
+          UserSearchString: '',
+          IgnoreMaxRows: false,
+          MaxRows: 1000,
+          ResultType: 'entity_object'
+        },
+        {
+          EntityName: 'Action Categories',
+          ExtraFilter: '',
+          OrderBy: 'Name',
+          UserSearchString: '',
+          IgnoreMaxRows: false,
+          MaxRows: 1000,
+          ResultType: 'entity_object'
+        }
       ]);
+      
+      console.log('Actions list result:', actionsResult);
+      console.log('Categories list result:', categoriesResult);
+      
+      if (!actionsResult.Success || !categoriesResult.Success) {
+        const errors = [];
+        if (!actionsResult.Success) errors.push('Actions: ' + actionsResult.ErrorMessage);
+        if (!categoriesResult.Success) errors.push('Categories: ' + categoriesResult.ErrorMessage);
+        throw new Error('Failed to load data: ' + errors.join(', '));
+      }
+      
+      const actions = (actionsResult.Results || []) as ActionEntity[];
+      const categories = (categoriesResult.Results || []) as ActionCategoryEntity[];
+      
+      console.log(`Loaded ${actions.length} actions and ${categories.length} categories in list view`);
 
       this.actions = actions;
       this.populateCategoriesMap(categories);
@@ -81,47 +115,13 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
       this.applyFilters();
 
     } catch (error) {
+      console.error('Error loading actions list data:', error);
       LogError('Failed to load actions list data', undefined, error);
     } finally {
       this.isLoading = false;
     }
   }
 
-  private async loadActions(): Promise<ActionEntity[]> {
-    const rv = new RunView();
-    const result = await rv.RunView({
-      EntityName: 'Actions',
-      ExtraFilter: '',
-      OrderBy: 'Name',
-      UserSearchString: '',
-      IgnoreMaxRows: false,
-      MaxRows: 1000
-    });
-    
-    if (result && result.Success && result.Results) {
-      return result.Results as ActionEntity[];
-    } else {
-      throw new Error('Failed to load actions');
-    }
-  }
-
-  private async loadCategories(): Promise<ActionCategoryEntity[]> {
-    const rv = new RunView();
-    const result = await rv.RunView({
-      EntityName: 'Action Categories',
-      ExtraFilter: '',
-      OrderBy: 'Name',
-      UserSearchString: '',
-      IgnoreMaxRows: false,
-      MaxRows: 1000
-    });
-    
-    if (result && result.Success && result.Results) {
-      return result.Results as ActionCategoryEntity[];
-    } else {
-      throw new Error('Failed to load action categories');
-    }
-  }
 
   private populateCategoriesMap(categories: ActionCategoryEntity[]): void {
     this.categories.clear();
@@ -142,6 +142,7 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
 
   private applyFilters(): void {
     let filtered = [...this.actions];
+    console.log('Applying filters to', this.actions.length, 'actions');
 
     // Apply search filter
     const searchTerm = this.searchTerm$.value.toLowerCase();
@@ -171,6 +172,7 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
     }
 
     this.filteredActions = filtered;
+    console.log('Filtered to', this.filteredActions.length, 'actions');
   }
 
   public onSearchChange(searchTerm: string): void {

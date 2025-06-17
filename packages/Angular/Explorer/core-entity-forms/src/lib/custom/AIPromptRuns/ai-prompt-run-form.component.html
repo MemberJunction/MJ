@@ -1,0 +1,433 @@
+<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
+    @if (record) {
+        <form class="record-form" #form="ngForm" mjFillContainer>
+            <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+            <!-- Header Section -->
+            <div class="prompt-run-header">
+                <div class="header-content">
+                    <div class="run-overview">
+                        <div class="run-icon-wrapper" [style.background-color]="getStatusColor() + '20'">
+                            <i [class]="'fa-solid ' + getStatusIcon()" [style.color]="getStatusColor()"></i>
+                        </div>
+                        <div class="run-info">
+                            <h1 class="run-title">
+                                Prompt Run
+                                @if (record.ID) {
+                                    <span class="run-id">#{{ record.ID.substring(0, 8) }}</span>
+                                }
+                            </h1>
+                            <div class="run-meta">
+                                <span class="status-badge" [style.background-color]="getStatusColor()">
+                                    <i [class]="'fa-solid ' + getStatusIcon()"></i>
+                                    {{ getStatusText() }}
+                                </span>
+                                @if (record.RunType) {
+                                    <span class="run-type-badge" [style.color]="getRunTypeColor(record.RunType)">
+                                        <i [class]="'fa-solid ' + getRunTypeIcon(record.RunType)"></i>
+                                        {{ record.RunType }}
+                                    </span>
+                                }
+                                @if (prompt) {
+                                    <span class="prompt-name" (click)="navigateToEntity('AI Prompts', prompt.ID)" title="View Prompt">
+                                        <i class="fa-solid fa-comment-dots"></i>
+                                        {{ prompt.Name }}
+                                    </span>
+                                }
+                                @if (model) {
+                                    <span class="model-name" (click)="navigateToEntity('AI Models', model.ID)" title="View Model">
+                                        <i class="fa-solid fa-microchip"></i>
+                                        {{ model.Name }}
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div class="run-actions">
+                        <kendo-button fillMode="outline" size="small" (click)="refreshData()" title="Refresh data">
+                            <i class="fa-solid fa-refresh"></i>
+                        </kendo-button>
+                    </div>
+                </div>
+                
+                <!-- Key Metrics Bar -->
+                <div class="metrics-bar">
+                    <div class="metric-item">
+                        <i class="fa-solid fa-clock"></i>
+                        <div class="metric-content">
+                            <div class="metric-label">Duration</div>
+                            <div class="metric-value">{{ formatDuration(record.ExecutionTimeMS) }}</div>
+                        </div>
+                    </div>
+                    <div class="metric-item">
+                        <i class="fa-solid fa-coins"></i>
+                        <div class="metric-content">
+                            <div class="metric-label">Total Tokens</div>
+                            <div class="metric-value">{{ formatTokens(record.TokensUsed) }}</div>
+                        </div>
+                    </div>
+                    <div class="metric-item">
+                        <i class="fa-solid fa-dollar-sign"></i>
+                        <div class="metric-content">
+                            <div class="metric-label">Cost</div>
+                            <div class="metric-value">{{ formatCost(record.TotalCost || record.Cost) }}</div>
+                        </div>
+                    </div>
+                    @if (record.RunAt) {
+                        <div class="metric-item">
+                            <i class="fa-solid fa-calendar"></i>
+                            <div class="metric-content">
+                                <div class="metric-label">Started</div>
+                                <div class="metric-value">{{ record.RunAt | date:'short' }}</div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Main Content with Expansion Panels -->
+            <div class="form-content">
+                <kendo-panelbar>
+                    
+                    <!-- Input Messages Panel -->
+                    <kendo-panelbar-item [expanded]="messagesExpanded">
+                        <ng-template kendoPanelBarItemTitle>
+                            <span class="panel-title">
+                                <i class="fa-solid fa-comment-dots"></i>
+                                Input Messages
+                                @if (record.Messages && record.Messages.trim() !== '') {
+                                    <span class="panel-badge">JSON</span>
+                                }
+                            </span>
+                        </ng-template>
+                        <ng-template kendoPanelBarContent>
+                            <div class="panel-content">
+                                @if (record.Messages && record.Messages.trim() !== '') {
+                                    <div class="json-editor-container">
+                                        <div class="json-toolbar">
+                                            <kendo-button 
+                                                fillMode="flat" 
+                                                size="small"
+                                                (click)="copyToClipboard(formattedMessages, 'Messages')"
+                                                title="Copy JSON">
+                                                <i class="fa-solid fa-copy"></i> Copy
+                                            </kendo-button>
+                                        </div>
+                                        <mj-code-editor 
+                                            [(ngModel)]="formattedMessages"
+                                            name="formattedMessages"
+                                            [readonly]="true"
+                                            [language]="'json'"
+                                            [lineWrapping]="true"
+                                            style="height: 400px; width: 100%;">
+                                        </mj-code-editor>
+                                    </div>
+                                } @else {
+                                    <div class="empty-state">
+                                        <i class="fa-solid fa-comment-slash"></i>
+                                        <p>No input messages recorded</p>
+                                    </div>
+                                }
+                            </div>
+                        </ng-template>
+                    </kendo-panelbar-item>
+                    
+                    <!-- Result Panel -->
+                    <kendo-panelbar-item [expanded]="resultExpanded">
+                        <ng-template kendoPanelBarItemTitle>
+                            <span class="panel-title">
+                                <i class="fa-solid fa-square-check"></i>
+                                Result
+                                @if (record.Result && record.Result.trim() !== '') {
+                                    <span class="panel-badge">JSON</span>
+                                }
+                                @if (record.ErrorMessage) {
+                                    <span class="panel-badge error">Error</span>
+                                }
+                            </span>
+                        </ng-template>
+                        <ng-template kendoPanelBarContent>
+                            <div class="panel-content">
+                                @if (record.ErrorMessage) {
+                                    <div class="error-message">
+                                        <i class="fa-solid fa-exclamation-triangle"></i>
+                                        <div class="error-content">
+                                            <h4>Error Message</h4>
+                                            <p>{{ record.ErrorMessage }}</p>
+                                        </div>
+                                    </div>
+                                }
+                                
+                                @if (record.Result && record.Result.trim() !== '') {
+                                    <div class="json-editor-container">
+                                        <div class="json-toolbar">
+                                            <kendo-button 
+                                                fillMode="flat" 
+                                                size="small"
+                                                (click)="copyToClipboard(formattedResult, 'Result')"
+                                                title="Copy JSON">
+                                                <i class="fa-solid fa-copy"></i> Copy
+                                            </kendo-button>
+                                        </div>
+                                        <mj-code-editor 
+                                            [(ngModel)]="formattedResult"
+                                            name="formattedResult"
+                                            [readonly]="true"
+                                            [language]="'json'"
+                                            [lineWrapping]="true"
+                                            style="height: 400px; width: 100%;">
+                                        </mj-code-editor>
+                                    </div>
+                                } @else if (!record.ErrorMessage) {
+                                    <div class="empty-state">
+                                        <i class="fa-solid fa-inbox"></i>
+                                        <p>No result data recorded</p>
+                                    </div>
+                                }
+                            </div>
+                        </ng-template>
+                    </kendo-panelbar-item>
+                    
+                    <!-- Token Usage & Metrics Panel -->
+                    <kendo-panelbar-item [expanded]="metricsExpanded">
+                        <ng-template kendoPanelBarItemTitle>
+                            <span class="panel-title">
+                                <i class="fa-solid fa-chart-line"></i>
+                                Token Usage & Metrics
+                            </span>
+                        </ng-template>
+                        <ng-template kendoPanelBarContent>
+                            <div class="panel-content">
+                                <div class="metrics-grid">
+                                    <div class="metric-card">
+                                        <div class="metric-header">
+                                            <i class="fa-solid fa-message"></i>
+                                            <h4>Prompt Tokens</h4>
+                                        </div>
+                                        <div class="metric-value large">{{ formatTokens(record.TokensPrompt) }}</div>
+                                        @if (record.TokensPromptRollup && record.TokensPromptRollup !== record.TokensPrompt) {
+                                            <div class="metric-rollup">
+                                                <span>Rollup: {{ formatTokens(record.TokensPromptRollup) }}</span>
+                                            </div>
+                                        }
+                                    </div>
+                                    
+                                    <div class="metric-card">
+                                        <div class="metric-header">
+                                            <i class="fa-solid fa-reply"></i>
+                                            <h4>Completion Tokens</h4>
+                                        </div>
+                                        <div class="metric-value large">{{ formatTokens(record.TokensCompletion) }}</div>
+                                        @if (record.TokensCompletionRollup && record.TokensCompletionRollup !== record.TokensCompletion) {
+                                            <div class="metric-rollup">
+                                                <span>Rollup: {{ formatTokens(record.TokensCompletionRollup) }}</span>
+                                            </div>
+                                        }
+                                    </div>
+                                    
+                                    <div class="metric-card">
+                                        <div class="metric-header">
+                                            <i class="fa-solid fa-coins"></i>
+                                            <h4>Total Tokens</h4>
+                                        </div>
+                                        <div class="metric-value large">{{ formatTokens(record.TokensUsed) }}</div>
+                                        @if (record.TokensUsedRollup && record.TokensUsedRollup !== record.TokensUsed) {
+                                            <div class="metric-rollup">
+                                                <span>Rollup: {{ formatTokens(record.TokensUsedRollup) }}</span>
+                                            </div>
+                                        }
+                                    </div>
+                                    
+                                    <div class="metric-card">
+                                        <div class="metric-header">
+                                            <i class="fa-solid fa-dollar-sign"></i>
+                                            <h4>Cost</h4>
+                                        </div>
+                                        <div class="metric-value large">{{ formatCost(record.Cost) }}</div>
+                                        @if (record.TotalCost && record.TotalCost !== record.Cost) {
+                                            <div class="metric-rollup">
+                                                <span>Total: {{ formatCost(record.TotalCost) }}</span>
+                                            </div>
+                                        }
+                                        @if (record.CostCurrency) {
+                                            <div class="metric-currency">{{ record.CostCurrency }}</div>
+                                        }
+                                    </div>
+                                </div>
+                                
+                                <!-- Additional Metrics -->
+                                <div class="additional-metrics">
+                                    @if (record.ExecutionOrder !== null) {
+                                        <div class="metric-row">
+                                            <span class="metric-label">Execution Order:</span>
+                                            <span class="metric-value">{{ record.ExecutionOrder }}</span>
+                                        </div>
+                                    }
+                                    @if (record.ConfigurationID) {
+                                        <div class="metric-row">
+                                            <span class="metric-label">Configuration:</span>
+                                            <span class="metric-value">{{ record.Configuration }}</span>
+                                        </div>
+                                    }
+                                    @if (record.AgentID) {
+                                        <div class="metric-row">
+                                            <span class="metric-label">Agent:</span>
+                                            <span class="metric-value link" (click)="navigateToEntity('AI Agents', record.AgentID)">
+                                                {{ record.Agent }}
+                                                <i class="fa-solid fa-external-link"></i>
+                                            </span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </ng-template>
+                    </kendo-panelbar-item>
+                    
+                    <!-- Hierarchy Panel (for parent/child relationships) -->
+                    @if (record.ParentID || childRuns.length > 0) {
+                        <kendo-panelbar-item [expanded]="hierarchyExpanded">
+                            <ng-template kendoPanelBarItemTitle>
+                                <span class="panel-title">
+                                    <i class="fa-solid fa-sitemap"></i>
+                                    Run Hierarchy
+                                    @if (childRuns.length > 0) {
+                                        <span class="panel-count">({{ childRuns.length }} children)</span>
+                                    }
+                                </span>
+                            </ng-template>
+                            <ng-template kendoPanelBarContent>
+                                <div class="panel-content">
+                                    @if (parentRun) {
+                                        <div class="parent-run-section">
+                                            <h4><i class="fa-solid fa-level-up-alt"></i> Parent Run</h4>
+                                            <div class="run-item parent" (click)="navigateToEntity('MJ: AI Prompt Runs', parentRun.ID)">
+                                                <div class="run-item-icon" [style.background-color]="getStatusColor() + '20'">
+                                                    <i [class]="'fa-solid ' + getRunTypeIcon(parentRun.RunType)"></i>
+                                                </div>
+                                                <div class="run-item-content">
+                                                    <div class="run-item-title">
+                                                        Parent Run #{{ parentRun.ID.substring(0, 8) }}
+                                                        <span class="run-item-type">{{ parentRun.RunType }}</span>
+                                                    </div>
+                                                    <div class="run-item-meta">
+                                                        <span><i class="fa-solid fa-clock"></i> {{ formatDuration(parentRun.ExecutionTimeMS) }}</span>
+                                                        <span><i class="fa-solid fa-coins"></i> {{ formatTokens(parentRun.TokensUsed) }}</span>
+                                                        <span><i class="fa-solid fa-calendar"></i> {{ parentRun.RunAt | date:'short' }}</span>
+                                                    </div>
+                                                </div>
+                                                <i class="fa-solid fa-external-link"></i>
+                                            </div>
+                                        </div>
+                                    }
+                                    
+                                    @if (childRuns.length > 0) {
+                                        <div class="child-runs-section">
+                                            <h4><i class="fa-solid fa-level-down-alt"></i> Child Runs</h4>
+                                            <div class="runs-list">
+                                                @for (childRun of childRuns; track childRun.ID) {
+                                                    <div class="run-item child" (click)="navigateToEntity('MJ: AI Prompt Runs', childRun.ID)">
+                                                        <div class="run-item-icon" [style.background-color]="getStatusColor() + '20'">
+                                                            <i [class]="'fa-solid ' + getRunTypeIcon(childRun.RunType)"></i>
+                                                        </div>
+                                                        <div class="run-item-content">
+                                                            <div class="run-item-title">
+                                                                Child Run #{{ childRun.ID.substring(0, 8) }}
+                                                                @if (childRun.ExecutionOrder !== null) {
+                                                                    <span class="execution-order">#{{ childRun.ExecutionOrder }}</span>
+                                                                }
+                                                                <span class="run-item-type">{{ childRun.RunType }}</span>
+                                                            </div>
+                                                            <div class="run-item-meta">
+                                                                <span class="status-indicator" [style.color]="getStatusColor()">
+                                                                    <i [class]="'fa-solid ' + getStatusIcon()"></i>
+                                                                    {{ childRun.Success ? 'Success' : childRun.ErrorMessage ? 'Failed' : 'Running' }}
+                                                                </span>
+                                                                <span><i class="fa-solid fa-clock"></i> {{ formatDuration(childRun.ExecutionTimeMS) }}</span>
+                                                                <span><i class="fa-solid fa-coins"></i> {{ formatTokens(childRun.TokensUsed) }}</span>
+                                                            </div>
+                                                        </div>
+                                                        <i class="fa-solid fa-external-link"></i>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </ng-template>
+                        </kendo-panelbar-item>
+                    }
+                    
+                    <!-- Additional Details Panel -->
+                    <kendo-panelbar-item [expanded]="false">
+                        <ng-template kendoPanelBarItemTitle>
+                            <span class="panel-title">
+                                <i class="fa-solid fa-info-circle"></i>
+                                Additional Details
+                            </span>
+                        </ng-template>
+                        <ng-template kendoPanelBarContent>
+                            <div class="panel-content">
+                                <div class="detail-fields-grid">
+                                    @if (record.VendorID) {
+                                        <div class="detail-field">
+                                            <label>Vendor</label>
+                                            <div class="detail-value clickable" (click)="navigateToEntity('MJ: AI Vendors', record.VendorID)" title="View Vendor">
+                                                <i class="fa-solid fa-building"></i>
+                                                {{ record.Vendor || 'Unknown' }}
+                                                <i class="fa-solid fa-external-link"></i>
+                                            </div>
+                                        </div>
+                                    }
+                                    
+                                    @if (record.AgentID) {
+                                        <div class="detail-field">
+                                            <label>Agent</label>
+                                            <div class="detail-value clickable" (click)="navigateToEntity('AI Agents', record.AgentID)" title="View Agent">
+                                                <i class="fa-solid fa-robot"></i>
+                                                {{ record.Agent || 'Unknown' }}
+                                                <i class="fa-solid fa-external-link"></i>
+                                            </div>
+                                        </div>
+                                    }
+                                    
+                                    @if (record.ConfigurationID) {
+                                        <div class="detail-field">
+                                            <label>Configuration</label>
+                                            <div class="detail-value">
+                                                <i class="fa-solid fa-cog"></i>
+                                                {{ record.Configuration || 'Unknown' }}
+                                            </div>
+                                        </div>
+                                    }
+                                    
+                                    @if (record.RunAt) {
+                                        <div class="detail-field">
+                                            <label>Started At</label>
+                                            <div class="detail-value">
+                                                <i class="fa-solid fa-clock"></i>
+                                                {{ record.RunAt | date:'medium' }}
+                                            </div>
+                                        </div>
+                                    }
+                                    
+                                    @if (record.CompletedAt) {
+                                        <div class="detail-field">
+                                            <label>Completed At</label>
+                                            <div class="detail-value">
+                                                <i class="fa-solid fa-check-circle"></i>
+                                                {{ record.CompletedAt | date:'medium' }}
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </ng-template>
+                    </kendo-panelbar-item>
+                    
+                </kendo-panelbar>
+            </div>
+        </form>
+    }
+</div>

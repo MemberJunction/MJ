@@ -30,6 +30,7 @@
     "@memberjunction/templates-base-types": "2.50.0",
     "@memberjunction/ng-container-directives": "2.50.0",
     "@memberjunction/ng-notifications": "2.50.0",
+    "@memberjunction/ng-shared": "2.50.0",
     "@progress/kendo-angular-dropdowns": "16.2.0",
     "@progress/kendo-angular-navigation": "16.2.0",
     "@progress/kendo-angular-inputs": "16.2.0",

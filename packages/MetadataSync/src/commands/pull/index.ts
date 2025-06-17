@@ -19,9 +19,10 @@ import ora from 'ora-classic';
 import { loadMJConfig, loadEntityConfig, RelatedEntityConfig } from '../../config';
 import { SyncEngine, RecordData } from '../../lib/sync-engine';
 import { RunView, Metadata, EntityInfo } from '@memberjunction/core';
-import { getSystemUser, initializeProvider, cleanupProvider } from '../../lib/provider-utils';
+import { getSystemUser, initializeProvider } from '../../lib/provider-utils';
 import { configManager } from '../../lib/config-manager';
 import { getSyncEngine, resetSyncEngine } from '../../lib/singleton-manager';
+import chalk from 'chalk';
 
 /**
  * Pull metadata records from database to local files
@@ -55,6 +56,7 @@ export default class Pull extends Command {
     'dry-run': Flags.boolean({ description: 'Show what would be pulled without actually pulling' }),
     'multi-file': Flags.string({ description: 'Create a single file with multiple records (provide filename)' }),
     verbose: Flags.boolean({ char: 'v', description: 'Show detailed output' }),
+    'no-validate': Flags.boolean({ description: 'Skip validation before pull' }),
   };
   
   async run(): Promise<void> {
@@ -79,7 +81,47 @@ export default class Pull extends Command {
       const syncEngine = await getSyncEngine(getSystemUser());
       
       // Show success after all initialization is complete
-      spinner.succeed('Configuration and metadata loaded');
+      if (flags.verbose) {
+        spinner.succeed('Configuration and metadata loaded');
+      } else {
+        spinner.stop();
+      }
+      
+      // Run validation unless disabled
+      if (!flags['no-validate']) {
+        const { ValidationService } = await import('../../services/ValidationService');
+        const { FormattingService } = await import('../../services/FormattingService');
+        
+        spinner.start('Validating metadata...');
+        const validator = new ValidationService({ verbose: flags.verbose });
+        const formatter = new FormattingService();
+        
+        const validationResult = await validator.validateDirectory(configManager.getOriginalCwd());
+        spinner.stop();
+        
+        if (!validationResult.isValid || validationResult.warnings.length > 0) {
+          // Show validation results
+          this.log('\n' + formatter.formatValidationResult(validationResult, flags.verbose));
+          
+          if (!validationResult.isValid) {
+            // Ask for confirmation
+            const shouldContinue = await select({
+              message: 'Validation failed with errors. Do you want to continue anyway?',
+              choices: [
+                { name: 'No, fix the errors first', value: false },
+                { name: 'Yes, continue anyway', value: true }
+              ],
+              default: false
+            });
+            
+            if (!shouldContinue) {
+              this.error('Pull cancelled due to validation errors.');
+            }
+          }
+        } else {
+          this.log(chalk.green('✓ Validation passed'));
+        }
+      }
       
       let targetDir: string;
       let entityConfig: any;
@@ -125,8 +167,8 @@ export default class Pull extends Command {
         }
       }
       
-      // Show configuration notice only if relevant
-      if (entityConfig.pull?.appendRecordsToExistingFile && entityConfig.pull?.newFileName) {
+      // Show configuration notice only if relevant and in verbose mode
+      if (flags.verbose && entityConfig.pull?.appendRecordsToExistingFile && entityConfig.pull?.newFileName) {
         const targetFile = path.join(targetDir, entityConfig.pull.newFileName.endsWith('.json') 
           ? entityConfig.pull.newFileName 
           : `${entityConfig.pull.newFileName}.json`);
@@ -195,9 +237,15 @@ export default class Pull extends Command {
           const computedFields = fieldsToExternalize.filter(f => !metadataFieldNames.includes(f));
           
           if (computedFields.length > 0) {
-            spinner.start(`Waiting 5 seconds for async property loading in ${flags.entity} (${computedFields.join(', ')})...`);
+            if (flags.verbose) {
+              spinner.start(`Waiting 5 seconds for async property loading in ${flags.entity} (${computedFields.join(', ')})...`);
+            }
             await new Promise(resolve => setTimeout(resolve, 5000));
-            spinner.succeed('Async property loading wait complete');
+            if (flags.verbose) {
+              spinner.succeed('Async property loading wait complete');
+            } else {
+              spinner.stop();
+            }
           }
         }
       }
@@ -244,11 +292,13 @@ export default class Pull extends Command {
           const fileName = flags['multi-file'].endsWith('.json') ? flags['multi-file'] : `${flags['multi-file']}.json`;
           const filePath = path.join(targetDir, fileName);
           await fs.writeJson(filePath, allRecords, { spaces: 2 });
-          spinner.succeed(`Pulled ${processed} records to ${filePath}`);
+          spinner.succeed(`Pulled ${processed} records to ${path.basename(filePath)}`);
         }
       } else {
         // Smart update logic for single-file-per-record
-        spinner.text = 'Scanning for existing files...';
+        if (flags.verbose) {
+          spinner.text = 'Scanning for existing files...';
+        }
         
         // Find existing files
         const filePattern = entityConfig.pull?.filePattern || entityConfig.filePattern || '*.json';
@@ -475,11 +525,11 @@ export default class Pull extends Command {
       
       this.error(error as Error);
     } finally {
-      // Clean up database connection and reset singletons
-      await cleanupProvider();
+      // Reset singletons
       resetSyncEngine();
       
       // Exit process to prevent background MJ tasks from throwing errors
+      // We don't explicitly close the connection - let the process termination handle it
       process.exit(0);
     }
   }
@@ -1281,7 +1331,9 @@ export default class Pull extends Command {
           const computedFields = fieldsToExternalize.filter(f => !metadataFieldNames.includes(f));
           
           if (computedFields.length > 0) {
-            console.log(`Waiting 5 seconds for async property loading in related entity ${config.entity} (${computedFields.join(', ')})...`);
+            if (flags?.verbose) {
+              console.log(`Waiting 5 seconds for async property loading in related entity ${config.entity} (${computedFields.join(', ')})...`);
+            }
             await new Promise(resolve => setTimeout(resolve, 5000));
           }
         }

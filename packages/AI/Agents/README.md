@@ -14,6 +14,8 @@ The MemberJunction AI Agents package provides a comprehensive framework for crea
 - **🔧 Factory Pattern**: Enhanced AgentFactory for dynamic agent instantiation and extensibility
 - **🔐 Metadata-Driven**: Database-driven configuration for agents, types, and prompts
 - **📊 Analytics**: Hierarchical execution logging with performance tracking across agent workflows
+- **📡 Streaming Support**: Real-time streaming of execution progress and AI model responses
+- **🛑 Cancellation Support**: Graceful cancellation of long-running operations with AbortSignal
 
 ## Installation
 
@@ -21,12 +23,25 @@ The MemberJunction AI Agents package provides a comprehensive framework for crea
 npm install @memberjunction/ai-agents
 ```
 
+### Type Organization Update (2025)
+
+As part of improving code organization and reducing circular dependencies:
+- **This package** now contains all agent-specific types:
+  - Agent execution types (`AgentExecutionParams`, `AgentExecutionResult`, etc.)
+  - Agent runner types (`AgentRunnerParams`, `AgentRunnerResult`)
+  - Conductor types (`ConductorDecisionInput`, `ConductorDecisionResponse`)
+  - Progress and streaming callbacks
+- **Base AI types** are imported from `@memberjunction/ai` (Core)
+- **Prompt types** are imported from `@memberjunction/ai-prompts`
+- **Engine types** (agent type definitions) are imported from `@memberjunction/aiengine`
+
 ## Requirements
 
 - Node.js 16+
 - MemberJunction Core libraries
+- [@memberjunction/ai](../Core/README.md) for base AI types and interfaces
 - [@memberjunction/ai-prompts](../Prompts/README.md) for advanced prompt management
-- [@memberjunction/aiengine](../Engine/README.md) for AI model orchestration
+- [@memberjunction/aiengine](../Engine/README.md) for AI model orchestration and agent type definitions
 
 ## Core Architecture
 
@@ -206,6 +221,583 @@ const result = await runner.Run({
 
 // Compression is applied automatically by BaseAgent based on agent configuration
 // The agent run record tracks the compression activity
+```
+
+### Streaming and Progress Tracking
+
+The AI Agents framework supports real-time streaming of execution progress and AI model responses:
+
+```typescript
+import { AgentRunner } from '@memberjunction/ai-agents';
+
+const runner = new AgentRunner();
+
+// Execute with streaming and progress callbacks
+const result = await runner.RunAgent({
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: user,
+    
+    // Progress callback for execution status updates
+    onProgress: (progress) => {
+        console.log(`[${progress.percentage}%] ${progress.step}: ${progress.message}`);
+        
+        // Progress steps include:
+        // - initialization: Setting up the agent
+        // - validation: Validating agent configuration
+        // - prompt_execution: Executing AI prompts
+        // - action_execution: Running actions
+        // - subagent_execution: Running sub-agents
+        // - decision_processing: Processing next steps
+        // - finalization: Completing execution
+    },
+    
+    // Streaming callback for real-time AI responses
+    onStreaming: (chunk) => {
+        process.stdout.write(chunk.content);
+        
+        if (chunk.isComplete) {
+            console.log('\n--- Stream complete ---');
+        }
+        
+        // Additional metadata available:
+        // - chunk.stepType: 'prompt', 'action', 'subagent', or 'chat'
+        // - chunk.stepEntityId: ID of the step being executed
+        // - chunk.modelName: AI model producing the content (for prompts)
+    }
+});
+```
+
+### Cancellation Support
+
+Long-running agent operations can be cancelled gracefully using AbortSignal:
+
+```typescript
+import { AgentRunner } from '@memberjunction/ai-agents';
+
+const runner = new AgentRunner();
+const controller = new AbortController();
+
+// Set up cancellation after 30 seconds
+setTimeout(() => {
+    console.log('Cancelling agent execution...');
+    controller.abort();
+}, 30000);
+
+try {
+    const result = await runner.RunAgent({
+        agent: myAgent,
+        conversationMessages: messages,
+        contextUser: user,
+        cancellationToken: controller.signal,
+        onProgress: (progress) => {
+            console.log(`Progress: ${progress.message}`);
+        }
+    });
+    
+    if (result.cancelled) {
+        console.log('Execution was cancelled:', result.cancellationReason);
+    }
+} catch (error) {
+    if (controller.signal.aborted) {
+        console.log('Operation cancelled by user');
+    } else {
+        console.error('Execution error:', error);
+    }
+}
+
+// Cancellation is checked at multiple points:
+// - Before starting execution
+// - After initialization
+// - Before each execution step
+// - After prompt/action/sub-agent completion
+// The agent run is properly marked as 'Cancelled' in the database
+```
+
+## Extending BaseAgent
+
+The BaseAgent class provides a flexible execution pipeline that can be extended and customized through protected methods. This allows subclasses to override specific parts of the execution flow while maintaining the overall architecture.
+
+### Execution Pipeline Overview
+
+The BaseAgent execution pipeline consists of the following overridable methods:
+
+1. **`initializeEngines()`** - Initialize AI and Action engines
+2. **`validateAgent()`** - Validate agent readiness
+3. **`loadAgentConfiguration()`** - Load agent type and prompts
+4. **`preparePromptParams()`** - Prepare hierarchical prompt parameters
+5. **`executePrompt()`** - Execute the configured prompts
+6. **`processNextStep()`** - Process agent type decisions
+7. **`handleActionResults()`** - Handle action execution and recursion
+8. **`handleSubAgentResult()`** - Handle sub-agent execution and recursion
+9. **`createActionResultMessage()`** - Format action results as chat messages
+10. **`createSubAgentResultMessage()`** - Format sub-agent results as chat messages
+
+### Creating Custom Agent Classes
+
+```typescript
+import { BaseAgent, ExecuteAgentParams, ExecuteAgentResult } from '@memberjunction/ai-agents';
+import { AIPromptParams } from '@memberjunction/ai-prompts';
+
+export class CustomAnalysisAgent extends BaseAgent {
+    // Override initialization to add custom setup
+    protected async initializeEngines(contextUser?: UserInfo): Promise<void> {
+        await super.initializeEngines(contextUser);
+        
+        // Add custom initialization
+        await this.initializeAnalysisTools();
+    }
+    
+    // Override validation to add custom checks
+    protected async validateAgent(agent: AIAgentEntity): Promise<ExecuteAgentResult | null> {
+        const baseValidation = await super.validateAgent(agent);
+        if (baseValidation) return baseValidation;
+        
+        // Add custom validation
+        if (!this.hasRequiredPermissions(agent)) {
+            return {
+                nextStep: 'failed',
+                errorMessage: 'Agent lacks required analysis permissions'
+            };
+        }
+        
+        return null;
+    }
+    
+    // Override prompt preparation to inject custom data
+    protected async preparePromptParams(
+        agentType: AIAgentTypeEntity,
+        systemPrompt: any,
+        childPrompt: any,
+        params: ExecuteAgentParams
+    ): Promise<AIPromptParams> {
+        const promptParams = await super.preparePromptParams(agentType, systemPrompt, childPrompt, params);
+        
+        // Add custom context data
+        promptParams.data = {
+            ...promptParams.data,
+            analysisContext: await this.gatherAnalysisContext(),
+            historicalData: await this.loadHistoricalData()
+        };
+        
+        return promptParams;
+    }
+    
+    // Override action result formatting
+    protected createActionResultMessage(actions: AgentAction[], results: any[]): ChatMessage {
+        // Custom formatting for analysis results
+        const analysisResults = results.map((result, index) => {
+            return {
+                action: actions[index].name,
+                success: result.Success,
+                analysisScore: result.Params?.find(p => p.Name === 'score')?.Value,
+                insights: result.Params?.find(p => p.Name === 'insights')?.Value
+            };
+        });
+        
+        return {
+            role: 'user',
+            content: `Analysis completed:\n${JSON.stringify(analysisResults, null, 2)}`
+        };
+    }
+}
+```
+
+### Selective Method Overriding
+
+You can override just the methods you need to customize:
+
+```typescript
+export class StreamingAgent extends BaseAgent {
+    // Only override prompt execution to add streaming
+    protected async executePrompt(promptParams: AIPromptParams): Promise<any> {
+        // Add streaming configuration
+        promptParams.streaming = true;
+        promptParams.streamingCallback = (chunk) => {
+            this.handleStreamingChunk(chunk);
+        };
+        
+        return await super.executePrompt(promptParams);
+    }
+    
+    private handleStreamingChunk(chunk: string): void {
+        // Process streaming response chunks
+        console.log('Streaming:', chunk);
+    }
+}
+```
+
+### Customizing Recursion Behavior
+
+Override the action/sub-agent handling methods to customize recursion:
+
+```typescript
+export class BatchProcessingAgent extends BaseAgent {
+    protected async handleActionResults(
+        params: ExecuteAgentParams,
+        nextStep: any,
+        promptResult: any
+    ): Promise<ExecuteAgentResult> {
+        // Execute actions
+        const actionResults = await this.ExecuteActions(nextStep.actions, params.contextUser);
+        
+        // Batch results instead of immediate recursion
+        if (this.shouldBatchResults(actionResults)) {
+            this.batchedResults.push(...actionResults);
+            
+            // Continue without recursion if batching
+            return {
+                nextStep: 'retry',
+                returnValue: { batching: true, count: this.batchedResults.length }
+            };
+        }
+        
+        // Otherwise use default recursion behavior
+        return await super.handleActionResults(params, nextStep, promptResult);
+    }
+}
+```
+
+### Advanced Pipeline Customization
+
+For complex scenarios, you can completely override the Execute method while still using the helper methods:
+
+```typescript
+export class MultiStageAgent extends BaseAgent {
+    public async Execute(params: ExecuteAgentParams): Promise<ExecuteAgentResult> {
+        // Stage 1: Initial analysis
+        const stage1Result = await this.executeStage1(params);
+        if (stage1Result.nextStep === 'failed') return stage1Result;
+        
+        // Stage 2: Deep processing based on stage 1
+        const stage2Params = this.prepareStage2Params(params, stage1Result);
+        const stage2Result = await this.executeStage2(stage2Params);
+        if (stage2Result.nextStep === 'failed') return stage2Result;
+        
+        // Stage 3: Synthesis and final execution
+        return await this.executeFinalStage(params, stage1Result, stage2Result);
+    }
+    
+    private async executeStage1(params: ExecuteAgentParams): Promise<ExecuteAgentResult> {
+        // Use base methods for configuration loading
+        const config = await this.loadAgentConfiguration(params.agent);
+        if (!config.success) {
+            return { nextStep: 'failed', errorMessage: config.errorMessage };
+        }
+        
+        // Custom stage 1 logic...
+    }
+}
+```
+
+### Best Practices for Extending BaseAgent
+
+1. **Always call super methods** when overriding unless completely replacing functionality
+2. **Maintain the contract** - return the expected types from overridden methods
+3. **Use protected methods** for extensibility rather than duplicating logic
+4. **Document overrides** clearly in your subclass
+5. **Test thoroughly** - ensure your overrides work with the recursion logic
+6. **Handle errors gracefully** - follow the error result pattern
+7. **Preserve metadata** - pass through rawResult and other metadata
+
+### Common Extension Patterns
+
+#### Adding Pre/Post Processing
+```typescript
+protected async executePrompt(promptParams: AIPromptParams): Promise<any> {
+    // Pre-processing
+    await this.beforePromptExecution(promptParams);
+    
+    // Execute
+    const result = await super.executePrompt(promptParams);
+    
+    // Post-processing
+    await this.afterPromptExecution(result);
+    
+    return result;
+}
+```
+
+#### Custom Context Injection
+```typescript
+protected async preparePromptParams(...args): Promise<AIPromptParams> {
+    const params = await super.preparePromptParams(...args);
+    
+    // Inject custom context
+    params.data.customContext = await this.loadCustomContext();
+    params.conversationMessages = this.preprocessMessages(params.conversationMessages);
+    
+    return params;
+}
+```
+
+#### Conditional Execution Flow
+```typescript
+protected async processNextStep(
+    params: ExecuteAgentParams,
+    agentType: AIAgentTypeEntity,
+    promptResult: any
+): Promise<ExecuteAgentResult> {
+    // Check for special conditions
+    if (this.shouldUseAlternativeFlow(promptResult)) {
+        return await this.executeAlternativeFlow(params, promptResult);
+    }
+    
+    // Otherwise use default flow
+    return await super.processNextStep(params, agentType, promptResult);
+}
+```
+
+## Enhanced Execution Result Structure
+
+The AI Agents framework now provides comprehensive execution tracking through the enhanced `ExecuteAgentResult` type. This structure gives complete visibility into every step of agent execution, including all prompts, actions, sub-agents, and decisions made along the way.
+
+### ExecuteAgentResult
+
+The main result structure returned from agent execution:
+
+```typescript
+interface ExecuteAgentResult {
+    // Core execution outcome
+    success: boolean;                    // Whether the overall execution was successful
+    finalStep: BaseAgentNextStep['step']; // The final step type that terminated execution
+    returnValue?: any;                   // Optional return value from the agent
+    errorMessage?: string;               // Error message if execution failed
+    
+    // Tracking and history
+    agentRun: AIAgentRunEntity;          // Database entity tracking this execution
+    executionChain: ExecutionChainStep[]; // Complete chain of execution steps
+}
+```
+
+### ExecutionChainStep
+
+Each step in the execution chain captures:
+
+```typescript
+interface ExecutionChainStep {
+    stepEntity: AIAgentRunStepEntity;    // Database entity for this step
+    executionType: 'prompt' | 'action' | 'sub-agent' | 'decision' | 'chat' | 'validation';
+    executionResult: StepExecutionResult; // The actual result (varies by type)
+    nextStepDecision: NextStepDecision;   // What was decided after this step
+    startTime: Date;                      // When the step started
+    endTime?: Date;                       // When the step completed
+    durationMs?: number;                  // Execution duration in milliseconds
+}
+```
+
+### Step Execution Results
+
+Different execution types have specialized result structures:
+
+#### PromptExecutionResult
+```typescript
+{
+    type: 'prompt';
+    promptId: string;
+    promptName: string;
+    result: AIPromptRunResult;  // Native result from @memberjunction/ai-prompts
+}
+```
+
+#### ActionExecutionResult
+```typescript
+{
+    type: 'action';
+    actionId: string;
+    actionName: string;
+    result: ActionResult | ActionResultSimple;  // Native result from @memberjunction/actions
+}
+```
+
+#### SubAgentExecutionResult
+```typescript
+{
+    type: 'sub-agent';
+    subAgentId: string;
+    subAgentName: string;
+    result: ExecuteAgentResult;  // Recursive - full execution result of sub-agent
+}
+```
+
+### Usage Example
+
+```typescript
+const runner = new AgentRunner();
+const result = await runner.RunAgent({
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: user
+});
+
+// Access execution outcome
+console.log(`Success: ${result.success}`);
+console.log(`Final step: ${result.finalStep}`);
+console.log(`Return value:`, result.returnValue);
+
+// Access the agent run record
+console.log(`Agent run ID: ${result.agentRun.ID}`);
+console.log(`Started at: ${result.agentRun.StartedAt}`);
+console.log(`Duration: ${result.agentRun.CompletedAt - result.agentRun.StartedAt}ms`);
+
+// Analyze the execution chain
+result.executionChain.forEach((step, index) => {
+    console.log(`\nStep ${index + 1}: ${step.executionType}`);
+    console.log(`  Name: ${step.stepEntity.StepName}`);
+    console.log(`  Duration: ${step.durationMs}ms`);
+    console.log(`  Success: ${step.stepEntity.Success}`);
+    
+    // Access type-specific results
+    switch (step.executionResult.type) {
+        case 'prompt':
+            console.log(`  Prompt: ${step.executionResult.promptName}`);
+            console.log(`  Tokens used: ${step.executionResult.result.tokensUsed}`);
+            break;
+        case 'action':
+            console.log(`  Action: ${step.executionResult.actionName}`);
+            console.log(`  Result: ${step.executionResult.result.Success}`);
+            break;
+        case 'sub-agent':
+            console.log(`  Sub-agent: ${step.executionResult.subAgentName}`);
+            console.log(`  Sub-steps: ${step.executionResult.result.executionChain.length}`);
+            break;
+    }
+    
+    // Show what was decided next
+    console.log(`  Next decision: ${step.nextStepDecision.decision}`);
+    console.log(`  Reasoning: ${step.nextStepDecision.reasoning}`);
+});
+
+// Visualize the execution flow
+const executionFlow = result.executionChain
+    .map(step => `${step.executionType} → ${step.nextStepDecision.decision}`)
+    .join(' → ');
+console.log(`\nExecution flow: ${executionFlow}`);
+```
+
+### Database Persistence
+
+All execution data is automatically persisted to the database:
+
+- **AIAgentRun**: Tracks the overall agent execution
+  - Links to parent runs for sub-agent tracking
+  - Stores final results and state
+  - Tracks timing and success status
+
+- **AIAgentRunStep**: Tracks individual execution steps
+  - Links to the parent run
+  - Stores step-specific data (input/output)
+  - Tracks step timing and success
+
+This enables:
+- Historical analysis of agent behavior
+- Performance optimization based on real data
+- Debugging complex agent interactions
+- Compliance and audit trails
+
+### Analyzing Sub-Agent Execution
+
+Sub-agent results are fully recursive, allowing deep analysis:
+
+```typescript
+function analyzeExecutionDepth(result: ExecuteAgentResult, depth = 0): void {
+    const indent = '  '.repeat(depth);
+    console.log(`${indent}Agent: ${result.agentRun.AgentID}`);
+    console.log(`${indent}Steps: ${result.executionChain.length}`);
+    
+    // Find sub-agent executions
+    const subAgentSteps = result.executionChain.filter(
+        step => step.executionType === 'sub-agent'
+    ) as Array<{ executionResult: SubAgentExecutionResult }>;
+    
+    // Recursively analyze sub-agents
+    for (const step of subAgentSteps) {
+        analyzeExecutionDepth(step.executionResult.result, depth + 1);
+    }
+}
+
+// Analyze the entire execution tree
+analyzeExecutionDepth(result);
+```
+
+### Performance Analysis
+
+Use the execution chain for performance optimization:
+
+```typescript
+// Calculate time spent in each type of operation
+const timingAnalysis = result.executionChain.reduce((acc, step) => {
+    const type = step.executionType;
+    acc[type] = (acc[type] || 0) + (step.durationMs || 0);
+    return acc;
+}, {} as Record<string, number>);
+
+console.log('Time spent by operation type:', timingAnalysis);
+
+// Find slowest steps
+const slowestSteps = result.executionChain
+    .filter(step => step.durationMs)
+    .sort((a, b) => b.durationMs! - a.durationMs!)
+    .slice(0, 5);
+
+console.log('Top 5 slowest steps:', slowestSteps.map(s => ({
+    name: s.stepEntity.StepName,
+    duration: s.durationMs,
+    type: s.executionType
+})));
+```
+
+## Type Exports
+
+The Agents package exports comprehensive types for agent operations:
+
+### Core Agent Types
+- `AgentExecutionParams` - Parameters for agent execution
+- `AgentExecutionResult` - Result from agent execution
+- `BaseAgentNextStep` - Next step decision structure
+- `ExecutionChainStep` - Individual step in execution chain
+
+### Agent Runner Types
+- `AgentRunnerParams` - Parameters for AgentRunner
+- `AgentRunnerResult` - Enhanced result with decision history
+- `AgentProgressUpdate` - Progress tracking structure
+- `AgentStreamingUpdate` - Streaming content structure
+
+### Conductor Types
+- `ConductorDecisionInput` - Input for conductor decisions
+- `ConductorDecisionResponse` - Structured decision response
+- `ExecutionStep` - Individual execution plan step
+- `ConductorDecisionType` - Decision type enumeration
+
+### Factory and Interface Types
+- `IAgentFactory` - Factory interface for agent creation
+- `BaseAgent` - Base class for all agents
+- `ConductorAgent` - Specialized conductor agent class
+
+## Import Examples
+
+```typescript
+// Import main classes
+import { BaseAgent, ConductorAgent, AgentRunner } from '@memberjunction/ai-agents';
+import { GetAgentFactory } from '@memberjunction/ai-agents';
+
+// Import types
+import { 
+  AgentExecutionParams, 
+  AgentExecutionResult,
+  AgentRunnerParams,
+  AgentRunnerResult,
+  ConductorDecisionResponse 
+} from '@memberjunction/ai-agents';
+
+// Import base AI types from Core
+import { ChatMessage, ChatResult } from '@memberjunction/ai';
+
+// Import prompt types when needed
+import { AIPromptParams, AIPromptRunResult } from '@memberjunction/ai-prompts';
+
+// Import entity types
+import { AIAgentEntity, AIAgentTypeEntity } from '@memberjunction/core-entities';
 ```
 
 ## API Reference
@@ -396,8 +988,8 @@ await agentPrompt.Save();
 - `@memberjunction/core`: ^2.43.0 - MemberJunction core library
 - `@memberjunction/global`: ^2.43.0 - MemberJunction global utilities
 - `@memberjunction/core-entities`: ^2.43.0 - MemberJunction entity definitions
-- `@memberjunction/ai`: ^2.43.0 - Base AI functionality
-- `@memberjunction/aiengine`: ^2.43.0 - AI model orchestration
+- `@memberjunction/ai`: ^2.43.0 - Base AI types and interfaces (imported for core types)
+- `@memberjunction/aiengine`: ^2.43.0 - AI model orchestration and agent type definitions
 - `@memberjunction/ai-prompts`: ^2.43.0 - Advanced prompt management
 - `@memberjunction/templates`: ^2.43.0 - Template rendering support
 - `rxjs`: ^7.8.1 - Reactive programming support

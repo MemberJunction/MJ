@@ -193,9 +193,9 @@ export class EntityRecordNameResult  {
  }
 
 export interface ILocalStorageProvider {
-    getItem(key: string): Promise<string | null>;
-    setItem(key: string, value: string): Promise<void>;
-    remove(key: string): Promise<void>;
+    GetItem(key: string): Promise<string | null>;
+    SetItem(key: string, value: string): Promise<void>;
+    Remove(key: string): Promise<void>;
 }
 
 export interface IMetadataProvider {
@@ -288,16 +288,16 @@ export interface IMetadataProvider {
      * @param CompositeKey 
      * @returns the name of the record
      */
-    GetEntityRecordName(entityName: string, compositeKey: CompositeKey): Promise<string>
+    GetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): Promise<string>
 
     /**
      * Returns one or more record names using the same logic as GetEntityRecordName, but for multiple records at once - more efficient to use this method if you need to get multiple record names at once
      * @param info 
      * @returns an array of EntityRecordNameResult objects
      */
-    GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]>
+    GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]>
 
-    GetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey): Promise<boolean>
+    GetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo): Promise<boolean>
 
     SetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void>
 
@@ -322,13 +322,13 @@ export interface IMetadataProvider {
      * @param datasetName 
      * @param itemFilters 
      */
-    GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetResultType>;
+    GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetResultType>;
     /**
      * Retrieves the date status information for a dataset and all its items from the server. This method will match the datasetName and itemFilters to the server's dataset and item filters to determine a match
      * @param datasetName 
      * @param itemFilters 
      */
-    GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetStatusResultType>;
+    GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetStatusResultType>;
 
     /**
      * Gets a database by name, if required, and caches it in a format available to the client (e.g. IndexedDB, LocalStorage, File, etc). The cache method is Provider specific
@@ -336,7 +336,7 @@ export interface IMetadataProvider {
      * @param datasetName 
      * @param itemFilters 
      */
-    GetAndCacheDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetResultType>  
+    GetAndCacheDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetResultType>  
 
     /**
      * Returns the timestamp of the local cached version of a given datasetName or null if there is no local cache for the 

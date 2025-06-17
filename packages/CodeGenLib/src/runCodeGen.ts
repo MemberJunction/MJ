@@ -74,7 +74,7 @@ export class RunCodeGenBase {
         ****************************************************************************************/
     startSpinner('Initializing database connection...');
     const pool = await MSSQLConnection(); // get the MSSQL connection pool
-    const config = new SQLServerProviderConfigData(pool, '', mj_core_schema(), 0);
+    const config = new SQLServerProviderConfigData(pool, mj_core_schema());
     const sqlServerProvider: SQLServerDataProvider = await setupSQLServerClient(config);
     succeedSpinner('Database connection initialized');
     return sqlServerProvider;

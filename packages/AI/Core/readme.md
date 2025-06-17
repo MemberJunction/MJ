@@ -6,6 +6,17 @@ The MemberJunction AI Core package provides a comprehensive abstraction layer fo
 
 This package serves as the foundation for all AI capabilities in the MemberJunction ecosystem. It defines abstract base classes and interfaces that are implemented by provider-specific packages, enabling seamless integration with various AI services while maintaining a consistent API.
 
+### Type Organization Update (2025)
+
+As part of a major type reorganization to improve code organization and reduce circular dependencies:
+- **Core Package** now contains:
+  - Base AI model abstractions (`BaseModel`, `BaseLLM`, `BaseEmbeddings`, etc.)
+  - Core AI result types (`BaseResult`, `ChatResult`, `ModelUsage`, etc.)
+  - Common interfaces and types used across all AI packages
+- **Agent-specific types** have moved to `@memberjunction/ai-agents`
+- **Prompt-specific types** remain in `@memberjunction/ai-prompts`
+- **Engine-specific types** (like agent type definitions) are in `@memberjunction/aiengine`
+
 ## Standalone Usage
 
 **IMPORTANT**: This package can be used completely independently from the rest of the MemberJunction framework:
@@ -538,10 +549,52 @@ The BaseLLM class uses a template method pattern for handling streaming:
 
 This architecture allows for a clean separation between common streaming logic and provider-specific implementations.
 
+## Import Examples
+
+```typescript
+// Import base model classes
+import { BaseLLM, BaseEmbeddings, BaseAudioGenerator } from '@memberjunction/ai';
+
+// Import result types
+import { ChatResult, ModelUsage, BaseResult } from '@memberjunction/ai';
+
+// Import parameter types
+import { ChatParams, ChatMessage, StreamingChatCallbacks } from '@memberjunction/ai';
+
+// Import utility classes
+import { AIAPIKeys, GetAIAPIKey } from '@memberjunction/ai';
+```
+
 ## Dependencies
 
 - `@memberjunction/global` - MemberJunction global utilities including class factory
 - `rxjs` - Reactive extensions for JavaScript
+
+## Type Exports
+
+The Core package exports fundamental types used throughout the AI ecosystem:
+
+### Base Model Classes
+- `BaseModel` - Foundation class for all AI models
+- `BaseLLM` - Base class for language models
+- `BaseEmbeddings` - Base class for embedding models
+- `BaseAudioGenerator` - Base class for audio models
+- `BaseVideoGenerator` - Base class for video models
+- `BaseDiffusion` - Base class for image generation models
+
+### Core Result Types
+- `BaseResult` - Base result structure for all AI operations
+- `ChatResult` - Result from chat completions
+- `ModelUsage` - Token/resource usage tracking
+- `SummarizeResult` - Text summarization results
+- `ClassifyResult` - Text classification results
+- `EmbeddingResult` - Embedding generation results
+
+### Common Interfaces
+- `ChatMessage` - Message structure for conversations
+- `ChatParams` - Parameters for chat operations
+- `StreamingChatCallbacks` - Callbacks for streaming responses
+- `ParallelChatCompletionsCallbacks` - Callbacks for parallel execution
 
 ## API Reference
 

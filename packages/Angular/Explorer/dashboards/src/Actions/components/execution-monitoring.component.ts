@@ -102,10 +102,34 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
     try {
       this.isLoading = true;
       
-      const [executions, actions] = await Promise.all([
-        this.loadExecutions(),
-        this.loadActions()
+      const rv = new RunView();
+      const [executionsResult, actionsResult] = await rv.RunViews([
+        {
+          EntityName: 'Action Execution Logs',
+          ExtraFilter: '',
+          OrderBy: 'StartedAt DESC',
+          UserSearchString: '',
+          IgnoreMaxRows: false,
+          MaxRows: 5000,
+          ResultType: 'entity_object'
+        },
+        {
+          EntityName: 'Actions',
+          ExtraFilter: '',
+          OrderBy: 'Name',
+          UserSearchString: '',
+          IgnoreMaxRows: false,
+          MaxRows: 1000,
+          ResultType: 'entity_object'
+        }
       ]);
+      
+      if (!executionsResult.Success || !actionsResult.Success) {
+        throw new Error('Failed to load data');
+      }
+      
+      const executions = executionsResult.Results as ActionExecutionLogEntity[];
+      const actions = actionsResult.Results as ActionEntity[];
 
       this.executions = executions;
       this.populateActionsMap(actions);
@@ -121,41 +145,6 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
     }
   }
 
-  private async loadExecutions(): Promise<ActionExecutionLogEntity[]> {
-    const rv = new RunView();
-    const result = await rv.RunView({
-      EntityName: 'Action Execution Logs',
-      ExtraFilter: '',
-      OrderBy: 'StartedAt DESC',
-      UserSearchString: '',
-      IgnoreMaxRows: false,
-      MaxRows: 5000
-    });
-    
-    if (result && result.Success && result.Results) {
-      return result.Results as ActionExecutionLogEntity[];
-    } else {
-      throw new Error('Failed to load action execution logs');
-    }
-  }
-
-  private async loadActions(): Promise<ActionEntity[]> {
-    const rv = new RunView();
-    const result = await rv.RunView({
-      EntityName: 'Actions',
-      ExtraFilter: '',
-      OrderBy: 'Name',
-      UserSearchString: '',
-      IgnoreMaxRows: false,
-      MaxRows: 1000
-    });
-    
-    if (result && result.Success && result.Results) {
-      return result.Results as ActionEntity[];
-    } else {
-      throw new Error('Failed to load actions');
-    }
-  }
 
   private populateActionsMap(actions: ActionEntity[]): void {
     this.actions.clear();

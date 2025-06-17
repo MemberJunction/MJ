@@ -420,8 +420,8 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
       .attr('class', 'axis axis-x')
       .attr('transform', `translate(0,${this.height})`)
       .call(d3.axisBottom(xScale)
-        .ticks(6)
-        .tickFormat(d3.timeFormat('%H:%M') as any));
+        .ticks(this.getOptimalTickCount())
+        .tickFormat(this.getTimeFormat() as any));
 
     if (this.config.useDualAxis !== false) {
       // Dual Y-axis mode
@@ -693,6 +693,61 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
       this.hiddenMetrics.add(metric);
     }
     this.updateChart();
+  }
+  
+  private getTimeFormat(): (date: Date) => string {
+    if (this.data.length < 2) {
+      return d3.timeFormat('%H:%M');
+    }
+    
+    // Calculate the time span of the data
+    const firstDate = this.data[0].timestamp;
+    const lastDate = this.data[this.data.length - 1].timestamp;
+    const timeDiff = lastDate.getTime() - firstDate.getTime();
+    const hours = timeDiff / (1000 * 60 * 60);
+    const days = hours / 24;
+    
+    // Choose format based on time span
+    if (hours <= 24) {
+      // For up to 24 hours, show hours and minutes
+      return d3.timeFormat('%H:%M');
+    } else if (days <= 7) {
+      // For up to 7 days, show day and time
+      return d3.timeFormat('%a %H:%M'); // e.g., "Mon 14:00"
+    } else if (days <= 30) {
+      // For up to 30 days, show month/day
+      return d3.timeFormat('%m/%d'); // e.g., "06/13"
+    } else {
+      // For longer periods, show month/day/year
+      return d3.timeFormat('%m/%d/%y'); // e.g., "06/13/25"
+    }
+  }
+  
+  private getOptimalTickCount(): number {
+    if (this.data.length < 2) {
+      return 6;
+    }
+    
+    // Calculate the time span of the data
+    const firstDate = this.data[0].timestamp;
+    const lastDate = this.data[this.data.length - 1].timestamp;
+    const timeDiff = lastDate.getTime() - firstDate.getTime();
+    const hours = timeDiff / (1000 * 60 * 60);
+    const days = hours / 24;
+    
+    // Adjust tick count based on time span and chart width
+    const pixelsPerTick = 100; // Minimum pixels between ticks
+    const maxTicks = Math.floor(this.width / pixelsPerTick);
+    
+    if (days <= 1) {
+      return Math.min(8, maxTicks); // Show more ticks for hourly data
+    } else if (days <= 7) {
+      return Math.min(7, maxTicks); // One per day for weekly view
+    } else if (days <= 30) {
+      return Math.min(6, maxTicks); // Fewer ticks for monthly view
+    } else {
+      return Math.min(5, maxTicks); // Even fewer for longer periods
+    }
   }
 
 }

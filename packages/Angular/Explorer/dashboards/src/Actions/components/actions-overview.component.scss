@@ -285,44 +285,86 @@
         gap: 0.75rem;
 
         .execution-item {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          padding: 1rem;
           border: 1px solid var(--kendo-color-border);
           border-radius: 0.5rem;
-          cursor: pointer;
           transition: all 0.2s ease;
+          margin-bottom: 0.5rem;
 
-          &:hover {
-            background: var(--kendo-color-base-hover);
+          &.expanded {
             border-color: var(--kendo-color-primary);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
           }
 
-          .execution-time {
-            font-size: 0.75rem;
-            color: var(--kendo-color-subtle);
-            font-weight: 600;
-            min-width: 80px;
-          }
+          .execution-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            cursor: pointer;
 
-          .execution-info {
-            flex: 1;
-
-            .execution-action {
-              font-weight: 600;
-              margin-bottom: 0.25rem;
-              font-size: 0.875rem;
+            &:hover {
+              background: var(--kendo-color-base-hover);
             }
 
-            .execution-user {
+            .execution-time {
               font-size: 0.75rem;
               color: var(--kendo-color-subtle);
+              font-weight: 600;
+              min-width: 80px;
+            }
+
+            .execution-info {
+              flex: 1;
+
+              .execution-action {
+                font-weight: 600;
+                margin-bottom: 0.25rem;
+                font-size: 0.875rem;
+              }
+
+              .execution-user {
+                font-size: 0.75rem;
+                color: var(--kendo-color-subtle);
+              }
+            }
+
+            .execution-result {
+              flex-shrink: 0;
+            }
+
+            .execution-expand-icon {
+              color: var(--kendo-color-subtle);
+              font-size: 0.75rem;
+              margin-left: 0.5rem;
             }
           }
 
-          .execution-result {
-            flex-shrink: 0;
+          .execution-details {
+            padding: 1rem;
+            background: var(--kendo-color-base-subtle);
+            border-top: 1px solid var(--kendo-color-border);
+
+            .params-section {
+              margin-bottom: 1rem;
+
+              h5 {
+                margin: 0 0 0.5rem 0;
+                font-size: 0.875rem;
+                color: var(--kendo-color-subtle);
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+
+                i {
+                  font-size: 0.75rem;
+                }
+              }
+            }
+
+            .execution-actions {
+              display: flex;
+              justify-content: flex-end;
+            }
           }
         }
       }

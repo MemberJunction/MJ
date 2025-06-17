@@ -276,7 +276,23 @@ const mjServerConfig = {
       includeEntitiesFromExcludedSchemas: [
       ],
     },
-  }  
+  },
+  sqlLogging: {
+    enabled: true,  // Master switch for SQL logging capability
+    defaultOptions: {
+      formatAsMigration: false,
+      statementTypes: 'both', // 'queries' | 'mutations' | 'both'
+      batchSeparator: 'GO',
+      prettyPrint: true,
+      logRecordChangeMetadata: false,
+      retainEmptyLogFiles: false,
+      verboseOutput: false // Set to true to enable debug console output for SQL logging
+    },
+    allowedLogDirectory: './logs/sql', // Restrict where logs can be written
+    maxActiveSessions: 5, // Limit concurrent logging sessions
+    autoCleanupEmptyFiles: true,
+    sessionTimeout: 3600000 // 1 hour in ms, auto-close sessions after this
+  }
 };
 
 /** @type {MCPServerConfig} */

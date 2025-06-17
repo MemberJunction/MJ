@@ -5,11 +5,15 @@ import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEnt
          ArtifactTypeEntity, EntityAIActionEntity, VectorDatabaseEntity,
          AIPromptCategoryEntityExtended, AIAgentEntityExtended, 
          AIAgentPromptEntity,
-         AIAgentTypeEntity} from "@memberjunction/core-entities";
+         AIAgentTypeEntity,
+         AIVendorEntity,
+         AIModelVendorEntity,
+         AIModelTypeEntity} from "@memberjunction/core-entities";
  
 // this class handles execution of AI Actions
 export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _models: AIModelEntityExtended[] = [];
+    private _modelTypes: AIModelTypeEntity[] = [];
     private _vectorDatabases: VectorDatabaseEntity[] = [];
     private _prompts: AIPromptEntity[] = [];
     private _promptModels: AIPromptModelEntity[] = [];
@@ -23,12 +27,18 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentTypes: AIAgentTypeEntity[] = [];
     private _artifactTypes: ArtifactTypeEntity[] = [];
     private _vendorTypeDefinitions: AIVendorTypeDefinitionEntity[] = [];
+    private _vendors: AIVendorEntity[] = [];
+    private _modelVendors: AIModelVendorEntity[] = [];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const params = [
             {
                 PropertyName: '_models',
                 EntityName: 'AI Models'
+            },
+            {
+                PropertyName: '_modelTypes',
+                EntityName: 'AI Model Types'
             },
             {
                 PropertyName: '_prompts',
@@ -79,9 +89,17 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 EntityName: 'MJ: AI Vendor Type Definitions'
             }, 
             {
+                PropertyName: '_vendors',
+                EntityName: 'MJ: AI Vendors'
+            }, 
+            {
+                PropertyName: '_modelVendors',
+                EntityName: 'MJ: AI Model Vendors'
+            }, 
+            {
                 PropertyName: '_agentPrompts',
                 EntityName: 'MJ: AI Agent Prompts'
-            }
+            }            
         ];
         return await this.Load(params, provider, forceRefresh, contextUser);
     }
@@ -110,6 +128,13 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 return note.AgentID === agent.ID;
             }).forEach((note: AIAgentNoteEntity) => {
                 agent.Notes.push(note);
+            });
+        }
+
+        for (const model of this._models) {
+            this._modelVendors.filter(mv => mv.ModelID === model.ID)
+            .forEach((mv: AIModelVendorEntity) => {
+                model.ModelVendors.push(mv);
             });
         }
     }
@@ -182,6 +207,18 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get VendorTypeDefinitions(): AIVendorTypeDefinitionEntity[] {
         return this._vendorTypeDefinitions;
+    }
+
+    public get Vendors(): AIVendorEntity[] {
+        return this._vendors;
+    }
+
+    public get ModelVendors(): AIModelVendorEntity[] {
+        return this._modelVendors;
+    }
+
+    public get ModelTypes(): AIModelTypeEntity[] {
+        return this._modelTypes;
     }
 
     public get Prompts(): AIPromptEntity[] {

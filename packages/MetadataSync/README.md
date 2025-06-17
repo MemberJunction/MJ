@@ -806,6 +806,18 @@ Templates can reference other templates:
 ## CLI Commands
 
 ```bash
+# Validate all metadata files
+mj-sync validate
+
+# Validate a specific directory
+mj-sync validate --dir="./metadata"
+
+# Validate with detailed output
+mj-sync validate --verbose
+
+# Validate with JSON output for CI/CD
+mj-sync validate --format=json
+
 # Initialize a directory for metadata sync
 mj-sync init
 
@@ -838,8 +850,12 @@ mj-sync status
 # Watch for changes and auto-push
 mj-sync watch
 
-# CI/CD mode (push with no prompts)
+# CI/CD mode (push with no prompts, fails on validation errors)
 mj-sync push --ci
+
+# Push/Pull without validation
+mj-sync push --no-validate
+mj-sync pull --entity="AI Prompts" --no-validate
 ```
 
 ## Configuration
@@ -1450,12 +1466,417 @@ Processing AI Prompts in demo/ai-prompts
 - No hardcoded assumptions about entity structure
 - Proper database connection cleanup
 
+## Validation System
+
+The MetadataSync tool includes a comprehensive validation system that checks your metadata files for correctness before pushing to the database. This helps catch errors early and ensures data integrity.
+
+### Validation Features
+
+#### Automatic Validation
+By default, validation runs automatically before push and pull operations:
+```bash
+# These commands validate first, then proceed if valid
+mj-sync push
+mj-sync pull --entity="AI Prompts"
+```
+
+#### Manual Validation
+Run validation without performing any sync operations:
+```bash
+# Validate current directory
+mj-sync validate
+
+# Validate specific directory
+mj-sync validate --dir="./metadata"
+
+# Verbose output shows all files checked
+mj-sync validate --verbose
+```
+
+#### CI/CD Integration
+Get JSON output for automated pipelines:
+```bash
+# JSON output for parsing
+mj-sync validate --format=json
+
+# In CI mode, validation failures cause immediate exit
+mj-sync push --ci
+```
+
+#### Validation During Push
+
+**Important:** The `push` command automatically validates your metadata before pushing to the database:
+- ❌ **Push stops on any validation errors** - You cannot push invalid metadata
+- 🛑 **In CI mode** - Push fails immediately without prompts
+- 💬 **In interactive mode** - You'll be asked if you want to continue despite errors
+- ✅ **Clean validation** - Push proceeds automatically
+
+#### Skip Validation
+For emergency fixes or when you know validation will fail:
+```bash
+# Skip validation checks (USE WITH CAUTION!)
+mj-sync push --no-validate
+mj-sync pull --entity="AI Prompts" --no-validate
+```
+
+⚠️ **Warning:** Using `--no-validate` may push invalid metadata to your database, potentially breaking your application. Only use this flag when absolutely necessary.
+
+### What Gets Validated
+
+#### Entity Validation
+- ✓ Entity names exist in database metadata
+- ✓ Entity is accessible to current user
+- ✓ Entity allows data modifications
+
+#### Field Validation
+- ✓ Field names exist on the entity
+- ✓ Virtual properties (getter/setter methods) are automatically detected
+- ✓ Fields are settable (not system fields)
+- ✓ Field values match expected data types
+- ✓ Required fields are checked intelligently:
+  - Skips fields with default values
+  - Skips computed/virtual fields (e.g., `Action` derived from `ActionID`)
+  - Skips fields when related virtual property is used (e.g., `TemplateID` when `TemplateText` is provided)
+  - Skips ReadOnly and AutoUpdateOnly fields
+- ✓ Foreign key relationships are valid
+
+#### Reference Validation
+- ✓ `@file:` references point to existing files
+- ✓ `@lookup:` references find matching records
+- ✓ `@template:` references load valid JSON
+- ✓ `@parent:` and `@root:` have proper context
+- ✓ Circular references are detected
+
+#### Best Practice Checks
+- ⚠️ Deep nesting (>10 levels) generates warnings
+- ⚠️ Missing required fields are flagged
+- ⚠️ Large file sizes trigger performance warnings
+- ⚠️ Naming convention violations
+
+#### Dependency Order Validation
+- ✓ Entities are processed in dependency order
+- ✓ Parent entities exist before children
+- ✓ Circular dependencies are detected
+- ✓ Suggests corrected directory order
+
+### Validation Output
+
+#### Human-Readable Format (Default)
+```
+════════════════════════════════════════════════════════════
+║                    Validation Report                     ║
+════════════════════════════════════════════════════════════
+
+┌────────────────────────────────────────────────┐
+│ Files:          4                              │
+│ Entities:       29                             │
+│ Errors:         2                              │
+│ Warnings:       5                              │
+├────────────────────────────────────────────────┤
+│ Errors by Type:                                │
+│   field:        1                              │
+│   reference:    1                              │
+├────────────────────────────────────────────────┤
+│ Warnings by Type:                              │
+│   bestpractice: 3                              │
+│   nesting:      2                              │
+└────────────────────────────────────────────────┘
+
+Errors
+
+1. Field "Status" does not exist on entity "Templates"
+   Entity: Templates
+   Field: Status
+   File: ./metadata/templates/.my-template.json
+   → Suggestion: Check spelling of 'Status'. Run 'mj-sync list-entities' to see available entities.
+
+2. File not found: ./shared/footer.html
+   Entity: Templates
+   Field: FooterHTML
+   File: ./metadata/templates/.my-template.json
+   → Suggestion: Ensure file './shared/footer.html' exists and path is relative to the metadata directory.
+```
+
+#### JSON Format (CI/CD)
+```json
+{
+  "isValid": false,
+  "summary": {
+    "totalFiles": 4,
+    "totalEntities": 29,
+    "totalErrors": 2,
+    "totalWarnings": 5,
+    "errorsByType": {
+      "field": 1,
+      "reference": 1
+    },
+    "warningsByType": {
+      "bestpractice": 3,
+      "nesting": 2
+    }
+  },
+  "errors": [
+    {
+      "type": "field",
+      "entity": "Templates",
+      "field": "Status",
+      "file": "./metadata/templates/.my-template.json",
+      "message": "Field \"Status\" does not exist on entity \"Templates\"",
+      "suggestion": "Check spelling of 'Status'. Run 'mj-sync list-entities' to see available entities."
+    }
+  ],
+  "warnings": [...]
+}
+```
+
+### Virtual Properties Support
+
+Some MemberJunction entities include virtual properties - getter/setter methods that aren't database fields but provide convenient access to related data. The validation system automatically detects these properties.
+
+#### Example: TemplateText Virtual Property
+The `Templates` entity includes a `TemplateText` virtual property that:
+- Automatically manages `Template` and `TemplateContent` records
+- Isn't a database field but appears as a property on the entity class
+- Can be used in metadata files just like regular fields
+
+```json
+{
+  "fields": {
+    "Name": "My Template",
+    "TemplateText": "@file:template.html"  // Virtual property - works!
+  }
+}
+```
+
+The validator checks both database metadata AND entity class properties, ensuring virtual properties are properly recognized.
+
+### Intelligent Required Field Validation
+
+The validator intelligently handles required fields to avoid false warnings:
+
+#### Fields with Default Values
+Required fields that have database defaults are not flagged:
+```json
+{
+  "fields": {
+    "Name": "My Entity"
+    // CreatedAt is required but has default value - no warning
+  }
+}
+```
+
+#### Computed/Virtual Fields
+Fields that are computed from other fields are skipped:
+```json
+{
+  "fields": {
+    "ActionID": "123-456-789"
+    // Action field is computed from ActionID - no warning
+  }
+}
+```
+
+#### Virtual Property Relationships
+When using virtual properties, related required fields are skipped:
+```json
+{
+  "fields": {
+    "Name": "My Prompt",
+    "TemplateText": "@file:template.md"
+    // TemplateID and Template are not required when TemplateText is used
+  }
+}
+```
+
+### Common Validation Errors
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `Field "X" does not exist` | Typo or wrong entity | Check entity definition in generated files |
+| `Entity "X" not found` | Wrong entity name | Use exact entity name from database |
+| `File not found` | Bad @file: reference | Check file path is relative and exists |
+| `Lookup not found` | No matching record | Verify lookup value or use ?create |
+| `Circular dependency` | A→B→A references | Restructure to avoid cycles |
+| `Required field missing` | Missing required field | Add field with appropriate value |
+
+### Validation Configuration
+
+Control validation behavior in your workflow:
+
+```json
+{
+  "push": {
+    "validateBeforePush": true  // Default: true
+  },
+  "pull": {
+    "validateBeforePull": false  // Default: false
+  }
+}
+```
+
+### Best Practices
+
+1. **Run validation during development**: `mj-sync validate` frequently
+2. **Fix errors before warnings**: Errors block operations, warnings don't
+3. **Use verbose mode** to understand issues: `mj-sync validate -v`
+4. **Include in CI/CD**: Parse JSON output for automated checks
+5. **Don't skip validation** unless absolutely necessary
+
+## Troubleshooting
+
+### Validation Errors
+
+If validation fails:
+
+1. **Read the error message carefully** - It includes specific details
+2. **Check the suggestion** - Most errors include how to fix them
+3. **Use verbose mode** for more context: `mj-sync validate -v`
+4. **Verify entity definitions** in generated entity files
+5. **Check file paths** are relative to the metadata directory
+
+### Performance Issues
+
+For large metadata sets:
+
+1. **Disable best practice checks**: `mj-sync validate --no-best-practices`
+2. **Validate specific directories**: `mj-sync validate --dir="./prompts"`
+3. **Reduce nesting depth warning**: `mj-sync validate --max-depth=20`
+
+## Programmatic Usage
+
+### Using ValidationService in Your Code
+
+The MetadataSync validation can be used programmatically in any Node.js project:
+
+```typescript
+import { ValidationService, FormattingService } from '@memberjunction/metadata-sync';
+import { ValidationOptions } from '@memberjunction/metadata-sync/dist/types/validation';
+
+// Initialize validation options
+const options: ValidationOptions = {
+    verbose: false,
+    outputFormat: 'human',
+    maxNestingDepth: 10,
+    checkBestPractices: true
+};
+
+// Create validator instance
+const validator = new ValidationService(options);
+
+// Validate a directory
+const result = await validator.validateDirectory('/path/to/metadata');
+
+// Check results
+if (result.isValid) {
+    console.log('Validation passed!');
+} else {
+    console.log(`Found ${result.errors.length} errors`);
+    
+    // Format results for display
+    const formatter = new FormattingService();
+    
+    // Get human-readable output
+    const humanOutput = formatter.formatValidationResult(result, true);
+    console.log(humanOutput);
+    
+    // Get JSON output
+    const jsonOutput = formatter.formatValidationResultAsJson(result);
+    
+    // Get beautiful markdown report
+    const markdownReport = formatter.formatValidationResultAsMarkdown(result);
+}
+```
+
+### ValidationResult Structure
+
+The validation service returns a structured object with complete details:
+
+```typescript
+interface ValidationResult {
+    isValid: boolean;
+    errors: ValidationError[];
+    warnings: ValidationWarning[];
+    summary: {
+        totalFiles: number;
+        totalEntities: number;
+        totalErrors: number;
+        totalWarnings: number;
+        fileResults: Map<string, FileValidationResult>;
+    };
+}
+
+interface ValidationError {
+    type: 'entity' | 'field' | 'reference' | 'circular' | 'dependency' | 'nesting' | 'bestpractice';
+    severity: 'error' | 'warning';
+    entity?: string;
+    field?: string;
+    file: string;
+    message: string;
+    suggestion?: string;
+    details?: any;
+}
+```
+
+### Integration Example
+
+```typescript
+import { ValidationService } from '@memberjunction/metadata-sync';
+
+export async function validateBeforeDeploy(metadataPath: string): Promise<boolean> {
+    const validator = new ValidationService({
+        checkBestPractices: true,
+        maxNestingDepth: 10
+    });
+    
+    const result = await validator.validateDirectory(metadataPath);
+    
+    if (!result.isValid) {
+        // Log errors to your monitoring system
+        result.errors.forEach(error => {
+            logger.error('Metadata validation error', {
+                type: error.type,
+                entity: error.entity,
+                field: error.field,
+                file: error.file,
+                message: error.message
+            });
+        });
+        
+        // Optionally save report
+        const report = new FormattingService().formatValidationResultAsMarkdown(result);
+        await fs.writeFile('validation-report.md', report);
+        
+        return false;
+    }
+    
+    return true;
+}
+```
+
+### CI/CD Integration
+
+```yaml
+# Example GitHub Actions workflow
+- name: Validate Metadata
+  run: |
+    npm install @memberjunction/metadata-sync
+    npx mj-sync validate --dir=./metadata --format=json > validation-results.json
+    
+- name: Check Validation Results
+  run: |
+    if [ $(jq '.isValid' validation-results.json) = "false" ]; then
+      echo "Metadata validation failed!"
+      jq '.errors' validation-results.json
+      exit 1
+    fi
+```
+
 ## Future Enhancements
 
 - Plugin system for custom entity handlers
 - Merge conflict resolution UI
 - Bulk operations across entities
-- Metadata validation rules
+- Extended validation rules
 - Schema migration support
 - Team collaboration features
 - Bidirectional sync for related entities

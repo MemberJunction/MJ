@@ -111,23 +111,11 @@
                     <!-- Right: Action Buttons -->
                     <div class="action-buttons" style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
                         <div style="display: flex; gap: 8px;">
-                            @if (record.ID && canExecute) {
-                                <kendo-button themeColor="primary" size="large"
-                                            (click)="executeAIPrompt()"
-                                            title="Execute this AI prompt">
-                                    <i class="fa-solid fa-play"></i> Execute Prompt
-                                </kendo-button>
-                            } @else if (record.ID && !canExecute) {
-                                <kendo-button themeColor="primary" size="large" [disabled]="true"
-                                            title="Prompt must be Active and have a Template to execute">
-                                    <i class="fa-solid fa-exclamation-triangle"></i> Cannot Execute
-                                </kendo-button>
-                            }
-                            
                             @if (record.ID) {
-                                <kendo-button fillMode="outline" themeColor="info"
-                                            title="View execution history">
-                                    <i class="fa-solid fa-history"></i> History
+                                <kendo-button themeColor="primary" size="large"
+                                            (click)="openTestHarness()"
+                                            title="Run AI Prompt Test Harness">
+                                    <i class="fa-solid fa-play"></i> Run
                                 </kendo-button>
                             }
                         </div>
@@ -189,7 +177,7 @@
                                     </kendo-button>
                                 </div>
                             </div>
-                        } @else if (!template) {
+                        } @else if (templateNotFoundInDatabase) {
                             <div class="invalid-template-state" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; color: #dc3545;">
                                 <i class="fa-solid fa-exclamation-triangle" style="font-size: 64px; margin-bottom: 20px; opacity: 0.7;"></i>
                                 <h5 style="margin-bottom: 12px;">Template Not Found</h5>
@@ -238,6 +226,10 @@
                                         {{ promptModels.length }}
                                     </span>
                                 }
+                                <span style="color: #6c757d; font-size: 0.8em; font-weight: normal; margin-left: 8px;">
+                                    <i class="fa-solid fa-info-circle" title="Models are tried in order from top to bottom. The first available model will be used."></i>
+                                    Priority order (first available model will be used)
+                                </span>
                             </span>
                         </ng-template>
                         
@@ -263,9 +255,18 @@
                                             }
                                         </div>
                                     } @else {
+                                        <!-- Priority explanation for multiple models -->
+                                        @if (promptModels.length > 1) {
+                                            <div style="padding: 12px 16px; background: #e3f2fd; border-bottom: 1px solid #bbdefb; color: #1565c0; font-size: 0.85em;">
+                                                <i class="fa-solid fa-info-circle" style="margin-right: 6px;"></i>
+                                                Models are tried in priority order (1, 2, 3...). The first available model that meets requirements will be used for execution.
+                                            </div>
+                                        }
                                         <!-- Column Headers -->
                                         <div class="model-header" style="display: grid; grid-template-columns: 40px 2fr 1fr 1fr 60px; gap: 12px; padding: 12px 16px; background: #e9ecef; font-weight: 600; font-size: 0.85em; color: #495057; border-bottom: 1px solid #dee2e6;">
-                                            <div></div>
+                                            <div title="Priority order - models are tried from top to bottom">
+                                                <i class="fa-solid fa-sort" style="color: #6c757d;"></i>
+                                            </div>
                                             <div>AI Model <span style="color: #dc3545;">*</span></div>
                                             <div>Vendor</div>
                                             <div>Created</div>
@@ -274,16 +275,23 @@
                                         
                                         @for (model of promptModels; track model.ID || $index; let i = $index) {
                                             <div class="model-row" 
-                                                 [style.background]="!model.ModelID ? '#fff3cd' : 'white'"
+                                                 [draggable]="EditMode"
+                                                 (dragstart)="onDragStart($event, i)"
+                                                 (dragover)="onDragOver($event)"
+                                                 (drop)="onDrop($event, i)"
+                                                 (dragend)="onDragEnd($event)"
+                                                 [style.background]="!model.ModelID ? '#fff3cd' : (draggedIndex === i ? '#e3f2fd' : 'white')"
                                                  [style.border-left]="!model.ModelID ? '3px solid #ffc107' : 'none'"
-                                                 style="display: grid; grid-template-columns: 40px 2fr 1fr 1fr 60px; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #e9ecef; align-items: start;">
+                                                 [style.opacity]="draggedIndex === i ? '0.5' : '1'"
+                                                 style="display: grid; grid-template-columns: 40px 2fr 1fr 1fr 60px; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #e9ecef; align-items: start; transition: background 0.2s, opacity 0.2s;">
                                                 
-                                                <!-- Drag Handle -->
-                                                <div class="drag-handle" style="display: flex; align-items: center; justify-content: center; cursor: move; color: #6c757d;">
+                                                <!-- Drag Handle / Priority -->
+                                                <div class="drag-handle" style="display: flex; flex-direction: column; align-items: center; justify-content: center; color: #6c757d;">
                                                     @if (EditMode) {
-                                                        <i class="fa-solid fa-grip-vertical" title="Drag to reorder"></i>
+                                                        <i class="fa-solid fa-grip-vertical" title="Drag to reorder priority" style="cursor: move;"></i>
+                                                        <span style="font-size: 0.7em; margin-top: 2px;">#{{ i + 1 }}</span>
                                                     } @else {
-                                                        <span style="font-size: 0.8em; color: #6c757d;">{{ i + 1 }}</span>
+                                                        <span style="font-size: 0.9em; font-weight: 600;" title="Priority {{ i + 1 }} - Lower numbers are tried first">#{{ i + 1 }}</span>
                                                     }
                                                 </div>
                                                 
@@ -646,19 +654,148 @@
                             <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
                                 <i class="fa-solid fa-history" style="color: #6c757d;"></i>
                                 Execution History
+                                @if (executionHistory.length > 0) {
+                                    <span style="color: #6c757d; font-weight: normal;">({{ executionHistory.length }})</span>
+                                }
                             </span>
                         </ng-template>
                         
-                        <!-- Direct Content Projection -->
-                        <div style="padding: 16px 0;">
-                            <mj-user-view-grid 
-                                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Runs','PromptID')"  
-                                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs')"
-                                [AllowLoad]="true"
-                                [EditMode]="GridEditMode()"  
-                                [BottomMargin]="0"
-                                style="height: 300px;">
-                            </mj-user-view-grid>
+                        <!-- Custom Execution History Viewer -->
+                        <div style="padding: 16px;">
+                            @if (isLoadingHistory) {
+                                <div style="text-align: center; padding: 40px; color: #6c757d;">
+                                    <i class="fa-solid fa-spinner fa-spin" style="font-size: 2em; margin-bottom: 12px;"></i>
+                                    <p>Loading execution history...</p>
+                                </div>
+                            } @else if (executionHistory.length === 0) {
+                                <div style="text-align: center; padding: 40px; color: #6c757d;">
+                                    <i class="fa-solid fa-history" style="font-size: 3em; margin-bottom: 12px; opacity: 0.3;"></i>
+                                    <p>No execution history yet</p>
+                                    <p style="font-size: 0.9em;">Run this prompt to see execution history here</p>
+                                </div>
+                            } @else {
+                                <!-- Sort Controls -->
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                                    <div style="color: #6c757d; font-size: 0.9em;">
+                                        Showing {{ executionHistory.length }} executions
+                                    </div>
+                                    <div style="display: flex; gap: 8px; align-items: center;">
+                                        <span style="color: #6c757d; font-size: 0.85em;">Sort by:</span>
+                                        <kendo-buttongroup selection="single">
+                                            <button kendoButton 
+                                                    [selected]="historySortField === 'runAt'"
+                                                    (click)="changeHistorySort('runAt')"
+                                                    size="small">
+                                                Date
+                                                @if (historySortField === 'runAt') {
+                                                    <i [class]="'fa-solid fa-sort-' + (historySortDirection === 'asc' ? 'up' : 'down')" 
+                                                       style="margin-left: 4px; font-size: 0.8em;"></i>
+                                                }
+                                            </button>
+                                            <button kendoButton 
+                                                    [selected]="historySortField === 'executionTime'"
+                                                    (click)="changeHistorySort('executionTime')"
+                                                    size="small">
+                                                Duration
+                                                @if (historySortField === 'executionTime') {
+                                                    <i [class]="'fa-solid fa-sort-' + (historySortDirection === 'asc' ? 'up' : 'down')" 
+                                                       style="margin-left: 4px; font-size: 0.8em;"></i>
+                                                }
+                                            </button>
+                                            <button kendoButton 
+                                                    [selected]="historySortField === 'tokens'"
+                                                    (click)="changeHistorySort('tokens')"
+                                                    size="small">
+                                                Tokens
+                                                @if (historySortField === 'tokens') {
+                                                    <i [class]="'fa-solid fa-sort-' + (historySortDirection === 'asc' ? 'up' : 'down')" 
+                                                       style="margin-left: 4px; font-size: 0.8em;"></i>
+                                                }
+                                            </button>
+                                            <button kendoButton 
+                                                    [selected]="historySortField === 'cost'"
+                                                    (click)="changeHistorySort('cost')"
+                                                    size="small">
+                                                Cost
+                                                @if (historySortField === 'cost') {
+                                                    <i [class]="'fa-solid fa-sort-' + (historySortDirection === 'asc' ? 'up' : 'down')" 
+                                                       style="margin-left: 4px; font-size: 0.8em;"></i>
+                                                }
+                                            </button>
+                                        </kendo-buttongroup>
+                                    </div>
+                                </div>
+                                
+                                <!-- Execution History Table -->
+                                <div style="border: 1px solid #e9ecef; border-radius: 8px; overflow: hidden;">
+                                    <table style="width: 100%; border-collapse: collapse;">
+                                        <thead>
+                                            <tr style="background: #f8f9fa; border-bottom: 2px solid #e9ecef;">
+                                                <th style="padding: 12px; text-align: left; font-weight: 600; color: #495057;">Status</th>
+                                                <th style="padding: 12px; text-align: left; font-weight: 600; color: #495057;">Date & Time</th>
+                                                <th style="padding: 12px; text-align: left; font-weight: 600; color: #495057;">Model</th>
+                                                <th style="padding: 12px; text-align: left; font-weight: 600; color: #495057;">Duration</th>
+                                                <th style="padding: 12px; text-align: right; font-weight: 600; color: #495057;">Tokens</th>
+                                                <th style="padding: 12px; text-align: right; font-weight: 600; color: #495057;">Cost</th>
+                                                <th style="padding: 12px; text-align: center; font-weight: 600; color: #495057;">Type</th>
+                                                <th style="padding: 12px; text-align: center; font-weight: 600; color: #495057;">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @for (run of executionHistory; track run.ID; let i = $index) {
+                                                <tr class="history-row"
+                                                    [class.even-row]="i % 2 === 0"
+                                                    style="border-bottom: 1px solid #f1f3f5;">
+                                                    <td style="padding: 12px;">
+                                                        <span style="display: flex; align-items: center; gap: 6px;">
+                                                            <i [class]="'fa-solid ' + getExecutionStatusIcon(run.Success)" 
+                                                               [style.color]="getExecutionStatusColor(run.Success)"></i>
+                                                            <span [style.color]="getExecutionStatusColor(run.Success)" style="font-weight: 500;">
+                                                                {{ run.Success === true ? 'Success' : run.Success === false ? 'Failed' : 'Running' }}
+                                                            </span>
+                                                        </span>
+                                                    </td>
+                                                    <td style="padding: 12px; color: #495057;">
+                                                        {{ run.RunAt | date:'short' }}
+                                                    </td>
+                                                    <td style="padding: 12px; color: #495057;">
+                                                        <span style="display: flex; align-items: center; gap: 6px;">
+                                                            <i class="fa-solid fa-microchip" style="color: #6c757d;"></i>
+                                                            {{ run.Model || 'Unknown' }}
+                                                        </span>
+                                                    </td>
+                                                    <td style="padding: 12px; color: #495057;">
+                                                        {{ formatDuration(run.ExecutionTimeMS) }}
+                                                    </td>
+                                                    <td style="padding: 12px; text-align: right; color: #495057;">
+                                                        {{ formatTokens(run.TokensUsed) }}
+                                                    </td>
+                                                    <td style="padding: 12px; text-align: right; color: #495057;">
+                                                        {{ formatCost(run.TotalCost || run.Cost) }}
+                                                    </td>
+                                                    <td style="padding: 12px; text-align: center;">
+                                                        @if (run.RunType) {
+                                                            <span style="padding: 4px 8px; border-radius: 12px; background: #e9ecef; 
+                                                                       color: #495057; font-size: 0.85em; font-weight: 500;">
+                                                                {{ run.RunType }}
+                                                            </span>
+                                                        }
+                                                    </td>
+                                                    <td style="padding: 12px; text-align: center;">
+                                                        <kendo-button 
+                                                            fillMode="flat"
+                                                            size="small"
+                                                            (click)="navigateToPromptRun(run.ID)"
+                                                            title="View details">
+                                                            <i class="fa-solid fa-external-link"></i>
+                                                        </kendo-button>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
                         </div>
                     </kendo-expansionpanel>
                 }
@@ -742,4 +879,25 @@
         [aiPrompt]="record"
         [(isVisible)]="showExecutionDialog">
     </mj-ai-prompt-execution-dialog>
+    
+    <!-- AI Prompt Test Harness -->
+    @if (showTestHarness) {
+        <kendo-window 
+            [width]="1200" 
+            [height]="800" 
+            [minWidth]="800"
+            [minHeight]="600"
+            [draggable]="true"
+            [resizable]="true"
+            [state]="'default'"
+            (close)="onTestHarnessVisibilityChanged(false)"
+            title="Run AI Prompt - {{ record.Name || 'Untitled' }}">
+            <mj-ai-test-harness
+                [entity]="record"
+                [mode]="'prompt'"
+                [isVisible]="showTestHarness"
+                (visibilityChange)="onTestHarnessVisibilityChanged($event)">
+            </mj-ai-test-harness>
+        </kendo-window>
+    }
 </div>

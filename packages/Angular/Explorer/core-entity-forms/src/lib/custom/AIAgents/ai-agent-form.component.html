@@ -2,155 +2,517 @@
     <form *ngIf="record" class="record-form" #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-        <!-- Main Content Area -->
-        <div class="agent-main-area" style="display: flex; flex-direction: column; height: 100%; overflow-y: auto;">
-            
-            <!-- Header Section -->
-            <div class="agent-header" style="flex-shrink: 0; padding: 20px; background: #f8f9fa; border-bottom: 2px solid #e9ecef;">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
-                    
-                    <!-- Left: Agent Info -->
-                    <div style="flex: 1; min-width: 0;">
-                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-                            <i class="fa-solid fa-robot" style="color: #17a2b8; font-size: 1.4em;"></i>
-                            @if (EditMode) {
-                                <kendo-textbox [(ngModel)]="record.Name" 
-                                              name="agentName"
-                                              placeholder="Enter agent name..."
-                                              style="font-size: 1.2em; font-weight: 600; min-width: 300px; flex: 1;">
-                                </kendo-textbox>
-                            } @else {
-                                <h4 style="margin: 0; color: #495057; font-weight: 600; flex: 1;">{{ record.Name || 'Untitled AI Agent' }}</h4>
-                                <span class="status-badge" [style.background-color]="getStatusBadgeColor()" 
-                                      style="color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.75em; font-weight: 500;">
+        <!-- Compact Header with Agent Overview -->
+        <div class="agent-header">
+            <div class="agent-header-content">
+                <div class="agent-overview">
+                    <div class="agent-icon-wrapper">
+                        <i class="fa-solid fa-robot"></i>
+                    </div>
+                    <div class="agent-info">
+                        @if (EditMode) {
+                            <kendo-textbox [(ngModel)]="record.Name" 
+                                          name="agentName"
+                                          placeholder="Enter agent name..."
+                                          class="agent-name-input">
+                            </kendo-textbox>
+                        } @else {
+                            <h1 class="agent-name">{{ record.Name || 'Untitled AI Agent' }}</h1>
+                        }
+                        <div class="agent-meta">
+                            @if (record.Status) {
+                                <span class="status-badge" [style.background-color]="getStatusBadgeColor()">
+                                    <i class="fa-solid fa-circle"></i>
                                     {{ record.Status }}
                                 </span>
                             }
+                            @if (record.ExecutionMode) {
+                                <span class="execution-mode">
+                                    <i [class]="getExecutionModeIcon(record.ExecutionMode)"></i>
+                                    {{ record.ExecutionMode }}
+                                </span>
+                            }
+                            @if (record.Parent) {
+                                <span class="parent-agent">
+                                    <i class="fa-solid fa-sitemap"></i>
+                                    Child of {{ record.Parent }}
+                                </span>
+                            }
                         </div>
-                        
-                        <!-- Status Editor when in edit mode -->
-                        @if (EditMode) {
-                            <div style="display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap;">
-                                <div>
-                                    <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #495057; font-size: 0.9em;">Status</label>
-                                    <kendo-dropdownlist [(ngModel)]="record.Status"
-                                                       name="agentStatus"
-                                                       [data]="[{text: 'Active', value: 'Active'}, {text: 'Pending', value: 'Pending'}, {text: 'Disabled', value: 'Disabled'}]"
-                                                       textField="text"
-                                                       valueField="value"
-                                                       [valuePrimitive]="true"
-                                                       style="width: 150px;">
-                                    </kendo-dropdownlist>
-                                </div>
-                            </div>
-                        }
-                        
-                        <!-- Description -->
-                        @if (record.Description) {
-                            <p style="margin: 8px 0 0 0; color: #6c757d; line-height: 1.4; max-width: 600px;">
-                                {{ record.Description }}
-                            </p>
-                        }
                     </div>
-                    
-                    <!-- Right: Action Buttons -->
-                    <div class="action-buttons" style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
-                        <div style="display: flex; gap: 8px;">
-                            @if (record.ID && canExecute) {
-                                <kendo-button themeColor="info" size="large"
-                                            (click)="executeAIAgent()"
-                                            title="Execute this AI agent">
-                                    <i class="fa-solid fa-play"></i> Execute Agent
-                                </kendo-button>
-                            } @else if (record.ID && !canExecute) {
-                                <kendo-button themeColor="info" size="large" [disabled]="true"
-                                            title="Agent must be Active to execute">
-                                    <i class="fa-solid fa-exclamation-triangle"></i> Cannot Execute
-                                </kendo-button>
-                            }
-                            
-                            @if (record.ID) {
-                                <kendo-button fillMode="outline" themeColor="info"
-                                            title="View execution history">
-                                    <i class="fa-solid fa-history"></i> History
-                                </kendo-button>
-                            }
-                        </div>
-                        
-                        @if (!canExecute && record.ID) {
-                            <div style="font-size: 0.75em; color: #dc3545; text-align: right; max-width: 200px;">
-                                @if (record.Status !== 'Active') {
-                                    • Agent must be Active<br>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="agent-actions">
+                    @if (record.ID) {
+                        <kendo-button themeColor="primary" size="large"
+                                    (click)="openTestHarness()"
+                                    [disabled]="record.Status !== 'Active'"
+                                    title="Run this AI agent">
+                            <i class="fa-solid fa-play"></i>
+                            Run
+                        </kendo-button>
+                    }
+                    <kendo-button fillMode="outline" size="small" (click)="refreshRelatedData()" title="Refresh all data">
+                        <i class="fa-solid fa-refresh"></i>
+                    </kendo-button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Single Pane Layout with Expander Panels -->
+        <div class="form-content">
+            <kendo-panelbar>
+
+                <!-- Prompts (High Priority - Expanded by default for existing agents) -->
+                @if (record.ID) {
+                    <kendo-panelbar-item [expanded]="true">
+                        <ng-template kendoPanelBarItemTitle>
+                            <i class="fa-solid fa-comments"></i> Prompts{{ promptCount > 0 ? ' (' + promptCount + ')' : '' }}
+                        </ng-template>
+                        <ng-template kendoPanelBarContent>
+                            <div class="panel-content">
+                                <div class="section-header">
+                                    <div class="header-actions">
+                                        @if (EditMode) {
+                                            <kendo-button themeColor="primary" size="small" (click)="addPrompt()">
+                                                <i class="fa-solid fa-plus"></i> Add Prompt
+                                            </kendo-button>
+                                        }
+                                    </div>
+                                </div>
+                                
+                                @if (promptCount === 0) {
+                                    <div class="empty-state">
+                                        <i class="fa-solid fa-comments"></i>
+                                        <h4>No Prompts Configured</h4>
+                                        <p>Add prompts to define how this agent processes requests and generates responses.</p>
+                                        @if (EditMode) {
+                                            <kendo-button themeColor="primary" (click)="addPrompt()">
+                                                <i class="fa-solid fa-plus"></i> Create First Prompt
+                                            </kendo-button>
+                                        }
+                                    </div>
+                                } @else {
+                                    <div class="entity-list">
+                                        @for (prompt of agentPrompts; track prompt.ID) {
+                                            <div class="entity-item prompt-item" (click)="navigateToEntity('AI Prompts', prompt.ID)">
+                                                <div class="item-icon">
+                                                    <i class="fa-solid fa-comment-dots"></i>
+                                                </div>
+                                                <div class="item-content">
+                                                    <div class="item-title">{{ prompt.Type || 'System Prompt' }}</div>
+                                                    @if (prompt.TemplateText) {
+                                                        <div class="item-preview">{{ prompt.TemplateText.substring(0, 120) }}{{ prompt.TemplateText.length > 120 ? '...' : '' }}</div>
+                                                    }
+                                                    <div class="item-meta">
+                                                        @if (prompt.PromptRole) {
+                                                            <span class="meta-tag">{{ prompt.PromptRole }}</span>
+                                                        }
+                                                    </div>
+                                                </div>
+                                                <div class="item-actions">
+                                                    @if (EditMode) {
+                                                        <kendo-button 
+                                                            fillMode="flat" 
+                                                            themeColor="error" 
+                                                            size="small"
+                                                            (click)="removePrompt(prompt, $event)"
+                                                            title="Remove prompt">
+                                                            <i class="fa-solid fa-trash"></i>
+                                                        </kendo-button>
+                                                    }
+                                                    <i class="fa-solid fa-external-link"></i>
+                                                </div>
+                                            </div>
+                                        }
+                                        @if (promptCount > agentPrompts.length) {
+                                            <div class="view-more-item" (click)="navigateToEntity('AI Prompts', '')">
+                                                <span>View all {{ promptCount }} prompts...</span>
+                                            </div>
+                                        }
+                                    </div>
                                 }
                             </div>
-                        }
-                    </div>
-                </div>
-            </div>
-
-            <!-- Main Form Content -->
-            <div class="form-content" style="flex: 1; padding: 20px;">
-                <!-- Use the generated form's default content -->
-                <ng-content></ng-content>
-                
-                <!-- Generated form fields will be inserted here by the base component -->
-                <div class="generated-fields">
-                    <!-- The base component will render all the standard fields here -->
-                </div>
-                
-                @if (record.IsSaved) {
-                    <!-- Agent Execution History -->
-                    <kendo-expansionpanel [expanded]="false" style="margin-top: 20px;">
-                        <ng-template kendoExpansionPanelTitleDirective>
-                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                                <i class="fa-solid fa-history" style="color: #6c757d;"></i>
-                                Execution History
-                            </span>
                         </ng-template>
-                        
-                        <div style="padding: 16px 0;">
-                            <mj-user-view-grid 
-                                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Runs','AgentID')"  
-                                [NewRecordValues]="NewRecordValues('MJ: AI Agent Runs')"
-                                [AllowLoad]="true"
-                                [EditMode]="GridEditMode()"  
-                                [BottomMargin]="0"
-                                style="height: 300px;">
-                            </mj-user-view-grid>
-                        </div>
-                    </kendo-expansionpanel>
-                    
-                    <!-- Agent Prompts -->
-                    <kendo-expansionpanel [expanded]="false" style="margin-top: 20px;">
-                        <ng-template kendoExpansionPanelTitleDirective>
-                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                                <i class="fa-solid fa-comments" style="color: #6c757d;"></i>
-                                Agent Prompts
-                            </span>
-                        </ng-template>
-                        
-                        <div style="padding: 16px 0;">
-                            <mj-user-view-grid 
-                                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Prompts','AgentID')"  
-                                [NewRecordValues]="NewRecordValues('MJ: AI Agent Prompts')"
-                                [AllowLoad]="true"
-                                [EditMode]="GridEditMode()"  
-                                [BottomMargin]="0"
-                                style="height: 300px;">
-                            </mj-user-view-grid>
-                        </div>
-                    </kendo-expansionpanel>
+                    </kendo-panelbar-item>
                 }
-            </div>
+
+                <!-- Actions (High Priority - Expanded by default for existing agents) -->
+                @if (record.ID) {
+                    <kendo-panelbar-item [expanded]="actionCount > 0">
+                        <ng-template kendoPanelBarItemTitle>
+                            <i class="fa-solid fa-bolt"></i> Actions{{ actionCount > 0 ? ' (' + actionCount + ')' : '' }}
+                        </ng-template>
+                        <ng-template kendoPanelBarContent>
+                            <div class="panel-content">
+                                <div class="section-header">
+                                    <div class="header-actions">
+                                        @if (EditMode) {
+                                            <kendo-button themeColor="primary" size="small" (click)="configureActions()">
+                                                <i class="fa-solid fa-plus"></i> Add Action
+                                            </kendo-button>
+                                        }
+                                    </div>
+                                </div>
+                                
+                                @if (actionCount === 0) {
+                                    <div class="empty-state">
+                                        <i class="fa-solid fa-bolt"></i>
+                                        <h4>No Actions Configured</h4>
+                                        <p>Add actions to enable this agent to perform specific tasks and operations.</p>
+                                        @if (EditMode) {
+                                            <kendo-button themeColor="primary" (click)="configureActions()">
+                                                <i class="fa-solid fa-plus"></i> Configure First Action
+                                            </kendo-button>
+                                        }
+                                    </div>
+                                } @else {
+                                    <div class="entity-list">
+                                        @for (action of agentActions; track action.ID) {
+                                            <div class="entity-item action-item" (click)="navigateToEntity('Actions', action.ID)">
+                                                <div class="item-icon">
+                                                    <i class="fa-solid fa-bolt"></i>
+                                                </div>
+                                                <div class="item-content">
+                                                    <div class="item-title">{{ action.Name || 'Untitled Action' }}</div>
+                                                    @if (action.Description) {
+                                                        <div class="item-preview">{{ action.Description }}</div>
+                                                    }
+                                                    <div class="item-meta">
+                                                        @if (action.Type) {
+                                                            <span class="meta-tag">{{ action.Type }}</span>
+                                                        }
+                                                        <span class="status-tag" [class.active]="action.Status==='Active'" [class.inactive]="action.Status!=='Active'">
+                                                            <i class="fa-solid" [class.fa-check-circle]="action.Status==='Active'" [class.fa-times-circle]="action.Status!=='Active'"></i>
+                                                            {{ action.Status }}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div class="item-actions">
+                                                    @if (EditMode) {
+                                                        <kendo-button 
+                                                            fillMode="flat" 
+                                                            themeColor="error" 
+                                                            size="small"
+                                                            (click)="removeAction(action, $event)"
+                                                            title="Remove action">
+                                                            <i class="fa-solid fa-trash"></i>
+                                                        </kendo-button>
+                                                    }
+                                                    <i class="fa-solid fa-external-link"></i>
+                                                </div>
+                                            </div>
+                                        }
+                                        @if (actionCount > agentActions.length) {
+                                            <div class="view-more-item" (click)="navigateToEntity('AI Agent Actions', '')">
+                                                <span>View all {{ actionCount }} actions...</span>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </ng-template>
+                    </kendo-panelbar-item>
+                }
+
+                <!-- Sub-Agents (High Priority - Expanded by default for existing agents) -->
+                @if (record.ID) {
+                    <kendo-panelbar-item [expanded]="subAgentCount > 0">
+                        <ng-template kendoPanelBarItemTitle>
+                            <i class="fa-solid fa-sitemap"></i> Sub-Agents{{ subAgentCount > 0 ? ' (' + subAgentCount + ')' : '' }}
+                        </ng-template>
+                        <ng-template kendoPanelBarContent>
+                            <div class="panel-content">
+                                <div class="section-header">
+                                    <div class="section-description">
+                                        Manage hierarchical relationships with child agents that work under this agent.
+                                    </div>
+                                    <div class="header-actions">
+                                        @if (EditMode) {
+                                            <kendo-button themeColor="primary" size="small" (click)="createSubAgent()">
+                                                <i class="fa-solid fa-plus"></i> Add Sub-Agent
+                                            </kendo-button>
+                                        }
+                                    </div>
+                                </div>
+                                
+                                @if (subAgentCount === 0) {
+                                    <div class="empty-state">
+                                        <i class="fa-solid fa-sitemap"></i>
+                                        <h4>No Sub-Agents</h4>
+                                        <p>Create sub-agents to build a hierarchical structure for complex workflows.</p>
+                                        @if (EditMode) {
+                                            <kendo-button themeColor="primary" (click)="createSubAgent()">
+                                                <i class="fa-solid fa-plus"></i> Create First Sub-Agent
+                                            </kendo-button>
+                                        }
+                                    </div>
+                                } @else {
+                                    <div class="entity-list">
+                                        @for (subAgent of subAgents; track subAgent.ID) {
+                                            <div class="entity-item sub-agent-item" (click)="navigateToEntity('AI Agents', subAgent.ID)">
+                                                <div class="item-icon">
+                                                    <i class="fa-solid fa-robot"></i>
+                                                </div>
+                                                <div class="item-content">
+                                                    <div class="item-title">{{ subAgent.Name || 'Untitled Sub-Agent' }}</div>
+                                                    @if (subAgent.Description) {
+                                                        <div class="item-preview">{{ subAgent.Description }}</div>
+                                                    }
+                                                    <div class="item-meta">
+                                                        @if (subAgent.Status) {
+                                                            <span class="status-tag" [style.background-color]="getStatusBadgeColor()">
+                                                                {{ subAgent.Status }}
+                                                            </span>
+                                                        }
+                                                        @if (subAgent.ExecutionMode) {
+                                                            <span class="meta-tag">{{ subAgent.ExecutionMode }}</span>
+                                                        }
+                                                    </div>
+                                                </div>
+                                                <div class="item-actions">
+                                                    <i class="fa-solid fa-external-link"></i>
+                                                </div>
+                                            </div>
+                                        }
+                                        @if (subAgentCount > subAgents.length) {
+                                            <div class="view-more-item" (click)="navigateToEntity('AI Agents', '')">
+                                                <span>View all {{ subAgentCount }} sub-agents...</span>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </ng-template>
+                    </kendo-panelbar-item>
+                }
+
+
+                <!-- Learning & Analytics -->
+                @if (record.ID) {
+                    <kendo-panelbar-item [expanded]="false">
+                        <ng-template kendoPanelBarItemTitle>
+                            <i class="fa-solid fa-brain"></i> Learning Cycles{{ learningCycleCount > 0 ? ' (' + learningCycleCount + ')' : '' }}
+                        </ng-template>
+                        <ng-template kendoPanelBarContent>
+                            <div class="panel-content">
+                                <div class="section-header">
+                                    <div class="section-description">
+                                        Monitor and manage learning cycles, training sessions, and performance analytics.
+                                    </div>
+                                </div>
+                                
+                                @if (learningCycleCount === 0) {
+                                    <div class="empty-state">
+                                        <i class="fa-solid fa-brain"></i>
+                                        <h4>No Learning Cycles</h4>
+                                        <p>Learning cycles will appear here as the agent processes requests and improves over time.</p>
+                                    </div>
+                                } @else {
+                                    <div class="entity-list">
+                                        @for (cycle of learningCycles; track cycle.ID) {
+                                            <div class="entity-item learning-item" (click)="navigateToEntity('AI Agent Learning Cycles', cycle.ID)">
+                                                <div class="item-icon">
+                                                    <i class="fa-solid fa-brain"></i>
+                                                </div>
+                                                <div class="item-content">
+                                                    <div class="item-title">Learning Cycle {{ cycle.ID.substring(0, 8) }}</div>
+                                                    <div class="item-meta">
+                                                        @if (cycle.StartedAt) {
+                                                            <span class="meta-tag">
+                                                                <i class="fa-solid fa-calendar"></i>
+                                                                {{ cycle.StartedAt | date:'short' }}
+                                                            </span>
+                                                        }
+                                                        @if (cycle.Status) {
+                                                            <span class="status-tag">{{ cycle.Status }}</span>
+                                                        }
+                                                    </div>
+                                                </div>
+                                                <div class="item-actions">
+                                                    <i class="fa-solid fa-external-link"></i>
+                                                </div>
+                                            </div>
+                                        }
+                                        @if (learningCycleCount > learningCycles.length) {
+                                            <div class="view-more-item" (click)="navigateToEntity('AI Agent Learning Cycles', '')">
+                                                <span>View all {{ learningCycleCount }} cycles...</span>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </ng-template>
+                    </kendo-panelbar-item>
+                }
+
+                <!-- Notes & Documentation -->
+                @if (record.ID) {
+                    <kendo-panelbar-item [expanded]="false">
+                        <ng-template kendoPanelBarItemTitle>
+                            <i class="fa-solid fa-sticky-note"></i> Notes{{ noteCount > 0 ? ' (' + noteCount + ')' : '' }}
+                        </ng-template>
+                        <ng-template kendoPanelBarContent>
+                            <div class="panel-content">
+                                <div class="section-header">
+                                    <div class="section-description">
+                                        Manage notes, documentation, and annotations for this agent.
+                                    </div>
+                                    <div class="header-actions">
+                                        @if (EditMode) {
+                                            <kendo-button themeColor="primary" size="small" (click)="addNote()">
+                                                <i class="fa-solid fa-plus"></i> Add Note
+                                            </kendo-button>
+                                        }
+                                    </div>
+                                </div>
+                                
+                                @if (noteCount === 0) {
+                                    <div class="empty-state">
+                                        <i class="fa-solid fa-sticky-note"></i>
+                                        <h4>No Notes</h4>
+                                        <p>Add notes to document important information, observations, or instructions for this agent.</p>
+                                        @if (EditMode) {
+                                            <kendo-button themeColor="primary" (click)="addNote()">
+                                                <i class="fa-solid fa-plus"></i> Create First Note
+                                            </kendo-button>
+                                        }
+                                    </div>
+                                } @else {
+                                    <div class="entity-list">
+                                        @for (note of agentNotes; track note.ID) {
+                                            <div class="entity-item note-item" (click)="navigateToEntity('AI Agent Notes', note.ID)">
+                                                <div class="item-icon">
+                                                    <i class="fa-solid fa-sticky-note"></i>
+                                                </div>
+                                                <div class="item-content">
+                                                    <div class="item-title">{{ note.Type || 'Note' }}</div>
+                                                    @if (note.Note) {
+                                                        <div class="item-preview">{{ note.Note.substring(0, 100) }}{{ note.Note.length > 100 ? '...' : '' }}</div>
+                                                    }
+                                                    <div class="item-meta">
+                                                        @if (note.__mj_CreatedAt) {
+                                                            <span class="meta-tag">
+                                                                <i class="fa-solid fa-calendar"></i>
+                                                                {{ note.__mj_CreatedAt | date:'short' }}
+                                                            </span>
+                                                        }
+                                                    </div>
+                                                </div>
+                                                <div class="item-actions">
+                                                    <i class="fa-solid fa-external-link"></i>
+                                                </div>
+                                            </div>
+                                        }
+                                        @if (noteCount > agentNotes.length) {
+                                            <div class="view-more-item" (click)="navigateToEntity('AI Agent Notes', '')">
+                                                <span>View all {{ noteCount }} notes...</span>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </ng-template>
+                    </kendo-panelbar-item>
+                }
+
+                <!-- Requests & History -->
+                @if (record.ID) {
+                    <kendo-panelbar-item [expanded]="false">
+                        <ng-template kendoPanelBarItemTitle>
+                            <i class="fa-solid fa-history"></i> Execution History{{ executionHistoryCount > 0 ? ' (' + executionHistoryCount + ')' : '' }}
+                        </ng-template>
+                        <ng-template kendoPanelBarContent>
+                            <div class="panel-content">
+                                <div class="section-header">
+                                    <div class="section-description">
+                                        Review execution history, requests, and performance metrics for this agent.
+                                    </div>
+                                </div>
+                                
+                                @if (executionHistoryCount === 0) {
+                                    <div class="empty-state">
+                                        <i class="fa-solid fa-history"></i>
+                                        <h4>No Execution History</h4>
+                                        <p>This agent hasn't been executed yet. Use the Test Agent button to run the agent and see execution history here.</p>
+                                    </div>
+                                } @else {
+                                    <div class="timeline-list">
+                                        @for (execution of recentExecutions; track execution.ID) {
+                                            <div class="timeline-item" (click)="navigateToEntity('AI Agent Runs', execution.ID)">
+                                                <div class="timeline-marker" [style.background-color]="getExecutionStatusColor(execution.Status)">
+                                                    <i [class]="getExecutionStatusIcon(execution.Status)"></i>
+                                                </div>
+                                                <div class="timeline-content">
+                                                    <div class="timeline-title">
+                                                        Execution #{{ execution.ID.substring(0, 8) }}
+                                                        <span class="timeline-date">{{ execution.__mj_CreatedAt | date:'MMM d, h:mm a' }}</span>
+                                                    </div>
+                                                    <div class="timeline-meta">
+                                                        <span class="status-badge" [style.background-color]="getExecutionStatusColor(execution.Status)">
+                                                            {{ execution.Status || 'Unknown' }}
+                                                        </span>
+                                                        @if (execution.CompletedAt) {
+                                                            <span class="execution-time">
+                                                                <i class="fa-solid fa-stopwatch"></i>
+                                                                {{ formatExecutionTimeFromDates(execution.StartedAt, execution.CompletedAt) }}
+                                                            </span>
+                                                        }
+                                                    </div>
+                                                    @if (execution.Result) {
+                                                        <div class="timeline-preview">{{ execution.Result.substring(0, 120) }}{{ execution.Result.length > 120 ? '...' : '' }}</div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                        @if (executionHistoryCount > recentExecutions.length) {
+                                            <div class="view-more-item" (click)="navigateToEntity('AI Agent Runs', '')">
+                                                <span>View all {{ executionHistoryCount }} executions...</span>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </ng-template>
+                    </kendo-panelbar-item>
+                }
+
+                <!-- Details (Core Configuration - Last Panel) -->
+                <kendo-panelbar-item [expanded]="false" title="Details">
+                    <ng-template kendoPanelBarItemTitle>
+                        <i class="fa-solid fa-info-circle"></i> Details
+                    </ng-template>
+                    <ng-template kendoPanelBarContent>
+                        <div class="panel-content">
+                            <div class="form-fields-grid">
+                                <ng-content></ng-content>
+                            </div>
+                        </div>
+                    </ng-template>
+                </kendo-panelbar-item>
+
+            </kendo-panelbar>
         </div>
     </form>
 
-    <!-- AI Agent Execution Dialog -->
-    @if (showExecutionDialog) {
-        <mj-ai-agent-execution-dialog 
-            [aiAgent]="record"
-            [isVisible]="showExecutionDialog"
-            (visibilityChange)="onExecutionDialogClosed()">
-        </mj-ai-agent-execution-dialog>
+    <!-- AI Agent Test Harness -->
+    @if (showTestHarness) {
+        <kendo-window 
+            [width]="1200" 
+            [height]="800" 
+            [minWidth]="800"
+            [minHeight]="600"
+            [draggable]="true"
+            [resizable]="true"
+            [state]="'default'"
+            (close)="onTestHarnessVisibilityChanged(false)"
+            title="Run AI Agent - {{ record.Name || 'Untitled' }}">
+            <mj-ai-test-harness
+                [aiAgent]="record"
+                [isVisible]="showTestHarness"
+                (visibilityChange)="onTestHarnessVisibilityChanged($event)">
+            </mj-ai-test-harness>
+        </kendo-window>
     }
 </div>

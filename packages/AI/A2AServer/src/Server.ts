@@ -108,7 +108,7 @@ export async function initializeA2AServer() {
         await pool.connect();
         
         // Setup SQL Server client
-        const config = new SQLServerProviderConfigData(pool, '', configInfo.mjCoreSchema);
+        const config = new SQLServerProviderConfigData(pool, configInfo.mjCoreSchema);
         await setupSQLServerClient(config);
         console.log("Database connection setup completed.");
 

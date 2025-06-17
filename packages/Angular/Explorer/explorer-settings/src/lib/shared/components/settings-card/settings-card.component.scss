@@ -1,0 +1,129 @@
+// =====================================================
+// Settings Card Component - Reusable card layout
+// =====================================================
+
+@import '../../styles/shared-settings';
+
+:host {
+  display: block;
+  width: 100%;
+}
+
+.settings-card {
+  @include card-elevated;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  
+  &.settings-card-floating {
+    @include card-floating;
+  }
+  
+  &.settings-card-sm {
+    @include card-content-sm;
+  }
+  
+  &.settings-card-lg {
+    @include card-content-lg;
+  }
+}
+
+.card-header {
+  @include section-header;
+  flex-shrink: 0;
+  padding: $space-lg $space-lg $space-md $space-lg;
+  margin: 0;
+  
+  .header-content {
+    flex: 1;
+    
+    .card-title {
+      margin: 0;
+      font-size: $font-size-lg;
+      font-weight: $font-weight-semibold;
+      color: $text-primary;
+      line-height: $line-height-tight;
+    }
+    
+    .card-subtitle {
+      margin: $space-xs 0 0 0;
+      font-size: $font-size-sm;
+      color: $text-secondary;
+      line-height: $line-height-normal;
+    }
+  }
+  
+  .header-actions {
+    flex-shrink: 0;
+    display: flex;
+    gap: $space-sm;
+    align-items: flex-start;
+  }
+}
+
+.card-content {
+  flex: 1;
+  min-height: 0;
+  padding: 0 $space-lg $space-lg $space-lg;
+  
+  &.no-padding {
+    padding: 0;
+  }
+}
+
+.card-footer {
+  flex-shrink: 0;
+  padding: $space-md $space-lg $space-lg $space-lg;
+  border-top: 1px solid $border-light;
+  background: $background-light;
+  border-radius: 0 0 $radius-lg $radius-lg;
+}
+
+// Size variants
+.settings-card-sm {
+  .card-header {
+    padding: $space-md $space-md $space-sm $space-md;
+    
+    .card-title {
+      font-size: $font-size-md;
+    }
+    
+    .card-subtitle {
+      font-size: $font-size-xs;
+    }
+  }
+  
+  .card-content {
+    padding: 0 $space-md $space-md $space-md;
+    
+    &.no-padding {
+      padding: 0;
+    }
+  }
+  
+  .card-footer {
+    padding: $space-sm $space-md $space-md $space-md;
+  }
+}
+
+.settings-card-lg {
+  .card-header {
+    padding: $space-xl $space-xl $space-lg $space-xl;
+    
+    .card-title {
+      font-size: $font-size-xl;
+    }
+  }
+  
+  .card-content {
+    padding: 0 $space-xl $space-xl $space-xl;
+    
+    &.no-padding {
+      padding: 0;
+    }
+  }
+  
+  .card-footer {
+    padding: $space-lg $space-xl $space-xl $space-xl;
+  }
+}
