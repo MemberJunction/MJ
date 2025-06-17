@@ -1,5 +1,28 @@
 # Execution Monitor Issues - Task List
 
+## Remaining Issue
+
+### Indentation Not Working Properly
+**Problem**: 
+- Node indentation is not applied until after the node is expanded
+- Appears to be a timing issue where node.depth isn't being properly detected by Angular's style binding on initial render
+- The margin-left style binding `[style.margin-left.px]="node.depth > 0 ? node.depth * 20 : 0"` doesn't apply until after user interaction
+
+**Attempted Fixes**:
+- Changed from spread operator to Object.assign for updating nodes
+- Added markForCheck() and detectChanges() calls
+- Verified depth is being set correctly in the data
+- Issue persists - likely related to Angular change detection timing
+
+**Next Steps**:
+- May need to use a different approach for applying indentation
+- Consider using CSS classes instead of inline styles
+- Investigate Angular's OnPush change detection strategy interaction with dynamic components
+
+---
+
+## Completed Issues
+
 ## Issue #1 & #4: Spinner/Current Step Logic (PRIORITY) ✅ FIXED
 **Problem**: 
 - Nodes are being marked as complete (green check) too early - immediately after being added instead of when the next step arrives
@@ -80,15 +103,26 @@
 - Internal processing: fa-brain or fa-microchip
 - Keep existing icons for: validation, prompt, action, decision
 
-## Issue #7: Analyze agent-run-example.json
+## Issue #7: Analyze agent-run-example.json ✅ ANALYZED
 **Problem**: 
 - Suspected inefficiencies and redundancy in BaseAgent execution model
 
-**Analysis Needed**:
-- Review the updated JSON file
-- Identify patterns of redundancy
-- Look for unnecessary steps or duplicated work
-- Suggest optimizations to the execution flow
+**Analysis Complete**:
+- Created detailed analysis in `/packages/AI/Agents/agent-execution-analysis.md`
+- Key findings:
+  1. Duplicate prompt execution is intended behavior (for processing action results)
+  2. Excessive sub-agent delegation depth causing overhead
+  3. Redundant web searches between agents
+  4. Non-sequential step numbers indicate complex flow
+  5. Multiple initialization/finalization steps add overhead
+  6. Every agent performs validation separately
+
+**Recommendations**:
+- Implement lighter "results processing" prompts
+- Add caching layer for action results
+- Optimize agent coordination and planning
+- Create specialized agent types for common patterns
+- Estimated impact: 40-60% token reduction, 30-50% faster execution
 
 ## Issue #8: Indentation Still Not Working
 **Problem**:

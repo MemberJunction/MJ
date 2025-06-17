@@ -1649,7 +1649,9 @@ export class BaseAgent {
             content: resultsMessage
         });
         
-        // Return to continue processing - no need for retryInstructions anymore
+        // After actions complete, we need to process the results
+        // The retry step is used to re-execute the prompt with the action results
+        // This allows the agent to analyze the results and determine what to do next
         return {
             terminate: false,
             nextStep: {
