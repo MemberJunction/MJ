@@ -109,11 +109,14 @@ export type AgentConfiguration = {
  * Context maintained throughout an agent run.
  * 
  * This context tracks the current execution state, parent relationships for
- * nested sub-agent calls, and any persistent state needed across steps.
+ * nested sub-agent calls, agent hierarchy for streaming messages, and any 
+ * persistent state needed across steps.
  * 
  * @interface AgentRunContext
  * @property {number} currentStepIndex - Current position in the execution chain (0-based)
  * @property {string[]} parentRunStack - Stack of parent run IDs for nested sub-agent calls
+ * @property {string[]} agentHierarchy - Stack of agent names for hierarchical message display (e.g., ["Marketing Agent", "Copywriter Agent"])
+ * @property {number} depth - Current nesting depth (0 = root agent, 1 = first sub-agent, etc.)
  * @property {string} [conversationId] - Optional conversation ID linking multiple agent runs
  * @property {string} [userId] - Optional user ID for context and permissions
  * @property {Record<string, any>} agentState - Any persistent state maintained across steps
@@ -121,6 +124,8 @@ export type AgentConfiguration = {
 export type AgentRunContext = {
     currentStepIndex: number;
     parentRunStack: string[];
+    agentHierarchy: string[];
+    depth: number;
     conversationId?: string;
     userId?: string;
     agentState: Record<string, any>;

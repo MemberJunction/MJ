@@ -428,9 +428,6 @@ export class BaseAgent {
         return nextStep;
     }
 
-    // Removed handleActionResults and handleSubAgentResult methods as they are now
-    // handled by the main execution loop in Execute() method
-
     /**
      * Creates a chat message containing action execution results.
      * 
@@ -895,6 +892,8 @@ export class BaseAgent {
         this._runContext = {
             currentStepIndex: 0,
             parentRunStack: [],
+            agentHierarchy: [params.agent.Name || 'Unknown Agent'],
+            depth: 0,
             conversationId: undefined, // TODO: Get from conversation context
             userId: params.contextUser?.ID,
             agentState: {}
@@ -992,10 +991,12 @@ export class BaseAgent {
      * @private
      * @param {string} stepType - The type of step
      * @param {string} stepName - Human-readable name for the step
+     * @param {UserInfo} contextUser - User context for the operation
      * @param {string} [targetId] - Optional ID of the target entity
+     * @param {any} [inputData] - Optional input data to capture for this step
      * @returns {Promise<AIAgentRunStepEntity>} - The created step entity
      */
-    private async createStepEntity(stepType: string, stepName: string, contextUser: UserInfo, targetId?: string): Promise<AIAgentRunStepEntity> {
+    private async createStepEntity(stepType: string, stepName: string, contextUser: UserInfo, targetId?: string, inputData?: any): Promise<AIAgentRunStepEntity> {
         const stepEntity = await this._metadata.GetEntityObject<AIAgentRunStepEntity>('MJ: AI Agent Run Steps', contextUser);
         
         stepEntity.AgentRunID = this._agentRun!.ID;
@@ -1005,6 +1006,18 @@ export class BaseAgent {
         stepEntity.TargetID = targetId || null;
         stepEntity.Status = 'Running';
         stepEntity.StartedAt = new Date();
+        
+        // Populate InputData if provided
+        if (inputData) {
+            stepEntity.InputData = JSON.stringify({
+                ...inputData,
+                context: {
+                    agentHierarchy: this._runContext!.agentHierarchy,
+                    depth: this._runContext!.depth,
+                    stepNumber: stepEntity.StepNumber
+                }
+            });
+        }
         
         if (!await stepEntity.Save()) {
             throw new Error(`Failed to create agent run step record: ${JSON.stringify(stepEntity.LatestResult)}`);
@@ -1022,16 +1035,47 @@ export class BaseAgent {
      * @param {AIAgentRunStepEntity} stepEntity - The step entity to finalize
      * @param {boolean} success - Whether the step was successful
      * @param {string} [errorMessage] - Optional error message
+     * @param {any} [outputData] - Optional output data to capture for this step
      */
-    private async finalizeStepEntity(stepEntity: AIAgentRunStepEntity, success: boolean, errorMessage?: string): Promise<void> {
+    private async finalizeStepEntity(stepEntity: AIAgentRunStepEntity, success: boolean, errorMessage?: string, outputData?: any): Promise<void> {
         stepEntity.Status = success ? 'Completed' : 'Failed';
         stepEntity.CompletedAt = new Date();
         stepEntity.Success = success;
         stepEntity.ErrorMessage = errorMessage || null;
         
+        // Populate OutputData if provided
+        if (outputData) {
+            stepEntity.OutputData = JSON.stringify({
+                ...outputData,
+                context: {
+                    success,
+                    durationMs: stepEntity.CompletedAt.getTime() - stepEntity.StartedAt.getTime(),
+                    errorMessage
+                }
+            });
+        }
+        
         if (!await stepEntity.Save()) {
             console.error('Failed to update agent run step record');
         }
+    }
+
+    /**
+     * Formats a message with agent hierarchy for streaming/progress updates.
+     * 
+     * @private
+     * @param {string} baseMessage - The base message to format
+     * @returns {string} - The formatted message with hierarchy breadcrumb
+     */
+    private formatHierarchicalMessage(baseMessage: string): string {
+        if (this._runContext && this._runContext.depth > 0) {
+            // Build breadcrumb from agent hierarchy (skip root agent)
+            const breadcrumb = this._runContext.agentHierarchy
+                .slice(1)
+                .join(' → ');
+            return breadcrumb ? `${breadcrumb}: ${baseMessage}` : baseMessage;
+        }
+        return baseMessage;
     }
 
     /**
@@ -1274,10 +1318,11 @@ export class BaseAgent {
             const shouldTerminate = subAgentRequest.terminateAfter;
             
             // Create next step decision
+            const nextStepType = subAgentResult.returnValue?.step || 'retry'; 
             const nextStepDecision: NextStepDecision = {
                 decision: shouldTerminate ? 'success' : 'retry',
                 reasoning: shouldTerminate ? 'Sub-agent execution completed, terminating as requested' : 'Sub-agent completed, continuing execution',
-                nextStepDetails: shouldTerminate ? { type: 'complete', returnValue: subAgentResult.returnValue } : undefined
+                nextStepDetails: { type: nextStepType, returnValue: subAgentResult.returnValue }
             };
             
             // Add to execution chain
