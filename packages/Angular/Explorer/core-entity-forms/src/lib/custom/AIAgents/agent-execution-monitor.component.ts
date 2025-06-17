@@ -23,6 +23,9 @@ export interface ExecutionTreeNode {
     depth: number;
     tokensUsed?: number;
     cost?: number;
+    detailsMarkdown?: string;
+    detailsExpanded?: boolean;
+    promptCount?: number;
 }
 
 /**
@@ -41,6 +44,7 @@ export interface ExecutionStats {
     totalCost: number;
     stepsByType: Record<string, number>;
     totalDuration?: number;
+    totalPrompts: number;
 }
 
 /**
@@ -153,7 +157,18 @@ export interface ExecutionStats {
                                 </span>
                                 
                                 <!-- Node Name -->
-                                <span class="node-name">{{ node.name }}</span>
+                                <span class="node-name">
+                                    {{ node.name }}
+                                    @if (node.detailsMarkdown) {
+                                        <button class="details-toggle" 
+                                                (click)="toggleDetails(node, $event)"
+                                                [title]="node.detailsExpanded ? 'Hide details' : 'Show details'">
+                                            <i class="fa-solid" 
+                                               [class.fa-chevron-down]="!node.detailsExpanded"
+                                               [class.fa-chevron-up]="node.detailsExpanded"></i>
+                                        </button>
+                                    }
+                                </span>
                                 
                                 <!-- Duration -->
                                 @if (node.duration) {
@@ -172,6 +187,13 @@ export interface ExecutionStats {
                                     </span>
                                 }
                             </div>
+                            
+                            <!-- Markdown Details (when expanded) -->
+                            @if (node.detailsExpanded && node.detailsMarkdown) {
+                                <div class="markdown-details">
+                                    <div class="detail-content markdown" [innerHTML]="formatMarkdown(node.detailsMarkdown)"></div>
+                                </div>
+                            }
                             
                             <!-- Node Details (when expanded) -->
                             @if (node.expanded && (node.inputPreview || node.outputPreview || node.error)) {
@@ -230,6 +252,10 @@ export interface ExecutionStats {
                                 <span class="failed-count">({{ stats.failedSteps }} failed)</span>
                             }
                         </span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Prompts</span>
+                        <span class="stat-value">{{ stats.totalPrompts }}</span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Tokens</span>
@@ -548,6 +574,112 @@ export interface ExecutionStats {
             font-weight: 500;
         }
 
+        /* Details Toggle Button */
+        .details-toggle {
+            margin-left: 8px;
+            padding: 2px 6px;
+            background: transparent;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 10px;
+            color: #666;
+            transition: all 0.2s ease;
+        }
+        
+        .details-toggle:hover {
+            background: #f0f0f0;
+            border-color: #2196f3;
+            color: #2196f3;
+        }
+        
+        /* Markdown Details Section */
+        .markdown-details {
+            margin: 8px 0 8px 44px;
+            padding: 12px;
+            background: #f9fafb;
+            border-left: 3px solid #2196f3;
+            border-radius: 0 4px 4px 0;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        
+        .markdown-details h2 {
+            font-size: 16px;
+            margin: 0 0 8px 0;
+            color: #1a1a1a;
+        }
+        
+        .markdown-details h3 {
+            font-size: 14px;
+            margin: 8px 0 6px 0;
+            color: #333;
+        }
+        
+        .markdown-details h4 {
+            font-size: 13px;
+            margin: 6px 0 4px 0;
+            color: #555;
+        }
+        
+        .markdown-details ul {
+            margin: 4px 0;
+            padding-left: 20px;
+        }
+        
+        .markdown-details li {
+            margin: 2px 0;
+        }
+        
+        .markdown-details code {
+            background: #e8f0fe;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+        }
+        
+        .markdown-details pre {
+            background: #f5f5f5;
+            padding: 8px;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 8px 0;
+        }
+        
+        .markdown-details pre code {
+            background: none;
+            padding: 0;
+        }
+        
+        .markdown-details strong {
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+        
+        .markdown-details em {
+            font-style: italic;
+            color: #555;
+        }
+
+        /* Button styling for execution history toggle */
+        .execution-history-toggle {
+            background: transparent;
+            border: none;
+            padding: 4px 8px;
+            margin-left: 4px;
+            cursor: pointer;
+            color: #666;
+            font-size: 12px;
+            border-radius: 3px;
+            transition: all 0.2s ease;
+        }
+        
+        .execution-history-toggle:hover {
+            background: #e3f2fd;
+            color: #2196f3;
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .monitor-header {
@@ -566,6 +698,11 @@ export interface ExecutionStats {
             .node-metrics {
                 display: none;
             }
+            
+            .markdown-details {
+                margin-left: 20px;
+                font-size: 12px;
+            }
         }
     `]
 })
@@ -582,14 +719,21 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy {
         failedSteps: 0,
         totalTokens: 0,
         totalCost: 0,
-        stepsByType: {}
+        stepsByType: {},
+        totalPrompts: 0
     };
     
     private destroy$ = new Subject<void>();
     private updateSubscription?: Subscription;
     
     ngOnChanges(changes: SimpleChanges): void {
-        if (changes['executionData'] && this.executionData) {
+        if (changes['executionData']) {
+            // Process data even if it's empty/null (for initial setup)
+            this.processExecutionData();
+        }
+        
+        // Handle mode changes
+        if (changes['mode'] && !changes['mode'].firstChange) {
             this.processExecutionData();
         }
     }
@@ -612,18 +756,29 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy {
             this.setupLiveUpdates();
         }
         
-        this.calculateStats();
+        // Only calculate stats if we have data
+        if (this.executionTree.length > 0) {
+            this.calculateStats();
+        }
     }
     
     /**
      * Build tree from historical execution data
      */
     private buildTreeFromHistoricalData(): void {
-        if (!this.executionData) return;
+        if (!this.executionData) {
+            this.executionTree = [];
+            return;
+        }
         
         // Handle executionTree format
         if (this.executionData.executionTree) {
             this.executionTree = this.convertExecutionTree(this.executionData.executionTree);
+        } else if (this.executionData.liveSteps) {
+            // Handle live steps that have been converted to historical
+            this.executionTree = this.convertLiveStepsToTree(this.executionData.liveSteps);
+        } else {
+            this.executionTree = [];
         }
     }
     
@@ -770,17 +925,92 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy {
      * Set up live updates for real-time execution
      */
     private setupLiveUpdates(): void {
-        // This would connect to your real-time update stream
-        // For now, simulating with polling
+        // Handle live streaming data format
+        if (this.executionData && this.executionData.liveSteps) {
+            // Convert live steps format to execution tree format
+            this.executionTree = this.convertLiveStepsToTree(this.executionData.liveSteps);
+        }
+        
+        // Set up interval to monitor for changes
         if (this.mode === 'live') {
-            this.updateSubscription = interval(1000)
+            this.updateSubscription = interval(500)
                 .pipe(takeUntil(this.destroy$))
                 .subscribe(() => {
-                    // Update current step and stats
+                    // Check for new live steps and update tree
+                    if (this.executionData && this.executionData.liveSteps) {
+                        const updatedTree = this.convertLiveStepsToTree(this.executionData.liveSteps);
+                        if (updatedTree.length !== this.executionTree.length) {
+                            this.executionTree = updatedTree;
+                            this.calculateStats();
+                        }
+                    }
                     this.updateCurrentStep();
-                    this.calculateStats();
                 });
         }
+    }
+    
+    /**
+     * Convert live steps format to execution tree format
+     */
+    private convertLiveStepsToTree(liveSteps: any[]): ExecutionTreeNode[] {
+        const treeNodes: ExecutionTreeNode[] = [];
+        const nodeMap = new Map<string, ExecutionTreeNode>();
+        
+        for (const step of liveSteps) {
+            // Parse the step name for markdown content
+            const stepName = step.step?.StepName || 'Processing...';
+            let name = stepName;
+            let detailsMarkdown: string | undefined;
+            
+            // Check if the step name contains markdown (indicated by newlines or markdown syntax)
+            if (stepName.includes('\n') || stepName.includes('**') || stepName.includes('##')) {
+                // Split by newline and use first line as name
+                const lines = stepName.split('\n');
+                name = lines[0].trim();
+                // Rest is markdown details
+                if (lines.length > 1) {
+                    detailsMarkdown = lines.slice(1).join('\n').trim();
+                }
+            }
+            
+            const node: ExecutionTreeNode = {
+                id: step.step?.ID || `live-${Date.now()}-${Math.random()}`,
+                name: name,
+                type: this.mapStepType(step.executionType || step.step?.StepType),
+                status: 'running', // Live steps are always running
+                startTime: step.startTime ? new Date(step.startTime) : new Date(),
+                agentPath: step.agentHierarchy || [],
+                expanded: true, // Auto-expand live nodes
+                depth: step.depth || 0,
+                detailsMarkdown: detailsMarkdown
+            };
+            
+            // Handle hierarchy by depth
+            if (step.depth === 0) {
+                treeNodes.push(node);
+            } else {
+                // Find parent based on depth and agent hierarchy
+                let parent: ExecutionTreeNode | undefined;
+                
+                // Look for a node at depth-1 that could be the parent
+                nodeMap.forEach((candidate) => {
+                    if (candidate.depth === step.depth - 1) {
+                        parent = candidate;
+                    }
+                });
+                
+                if (parent) {
+                    if (!parent.children) {
+                        parent.children = [];
+                    }
+                    parent.children.push(node);
+                }
+            }
+            
+            nodeMap.set(node.id, node);
+        }
+        
+        return treeNodes;
     }
     
     /**
@@ -813,7 +1043,8 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy {
             totalTokens: 0,
             totalCost: 0,
             stepsByType: {},
-            totalDuration: 0
+            totalDuration: 0,
+            totalPrompts: 0
         };
         
         const processNode = (node: ExecutionTreeNode) => {
@@ -827,6 +1058,11 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy {
             if (node.duration) this.stats.totalDuration! += node.duration;
             
             this.stats.stepsByType[node.type] = (this.stats.stepsByType[node.type] || 0) + 1;
+            
+            // Count prompts
+            if (node.type === 'prompt' || node.promptCount) {
+                this.stats.totalPrompts += node.promptCount || 1;
+            }
             
             if (node.children) {
                 node.children.forEach(child => processNode(child));
@@ -868,5 +1104,48 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy {
      */
     getStepTypes(): string[] {
         return Object.keys(this.stats.stepsByType).sort();
+    }
+    
+    /**
+     * Toggle details expansion for a node
+     */
+    toggleDetails(node: ExecutionTreeNode, event: Event): void {
+        event.stopPropagation(); // Prevent triggering node expansion
+        node.detailsExpanded = !node.detailsExpanded;
+    }
+    
+    /**
+     * Format markdown content for display
+     */
+    formatMarkdown(markdown: string): string {
+        // Basic markdown formatting
+        // This is a simple implementation - you might want to use a proper markdown library
+        let html = markdown;
+        
+        // Headers
+        html = html.replace(/^### (.*$)/gim, '<h4>$1</h4>');
+        html = html.replace(/^## (.*$)/gim, '<h3>$1</h3>');
+        html = html.replace(/^# (.*$)/gim, '<h2>$1</h2>');
+        
+        // Bold
+        html = html.replace(/\*\*(.*)\*\*/g, '<strong>$1</strong>');
+        
+        // Italic
+        html = html.replace(/\*(.*)\*/g, '<em>$1</em>');
+        
+        // Line breaks
+        html = html.replace(/\n/g, '<br>');
+        
+        // Lists
+        html = html.replace(/^\* (.+)$/gim, '<li>$1</li>');
+        html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+        
+        // Code blocks
+        html = html.replace(/```(.*?)```/gs, '<pre><code>$1</code></pre>');
+        
+        // Inline code
+        html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+        
+        return html;
     }
 }

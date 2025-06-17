@@ -251,6 +251,8 @@
     flex-direction: column;
     background: white;
     border-right: 1px solid #dee2e6;
+    height: 100%;
+    min-height: 0; /* Important for flexbox children */
 }
 
 /* Messages Container */
@@ -688,6 +690,8 @@
     padding: 16px;
     background: white;
     border-top: 1px solid #dee2e6;
+    flex-shrink: 0; /* Prevent input area from shrinking */
+    margin-top: auto; /* Push to bottom */
 }
 
 .input-container {
@@ -715,6 +719,18 @@
     background: white;
     display: flex;
     flex-direction: column;
+    height: 100%;
+}
+
+/* Kendo Splitter Specific Styles */
+.harness-body kendo-splitter {
+    height: 100%;
+}
+
+.harness-body kendo-splitter-pane {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 /* Sidebar Tabs */
