@@ -150,7 +150,6 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
       this.modelTypes = typeResults.Results;
       
       // Log summary data
-      console.log('Loaded:', this.vendors.length, 'vendors,', this.modelTypes.length, 'model types,', modelResults.Results.length, 'models');
       
       // Create lookup maps
       const vendorMap = new Map(this.vendors.map(v => [v.ID, v.Name]));

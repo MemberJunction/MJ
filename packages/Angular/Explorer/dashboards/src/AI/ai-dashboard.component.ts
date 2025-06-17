@@ -79,13 +79,6 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
   }
 
   public onTabChange(tabId: string): void {
-    console.log('[AIDashboard] Tab change requested', {
-      fromTab: this.activeTab,
-      toTab: tabId,
-      visitedTabs: Array.from(this.visitedTabs),
-      timestamp: new Date().toISOString()
-    });
-    
     this.activeTab = tabId;
     const index = this.navigationItems.indexOf(tabId);
     
@@ -99,23 +92,11 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
     }, 100); // Give a bit more time for the DOM to update
     
     this.visitedTabs.add(tabId); // Mark tab as visited
-    console.log('[AIDashboard] Tab marked as visited', {
-      tabId,
-      allVisitedTabs: Array.from(this.visitedTabs)
-    });
-    
     this.emitStateChange();
   }
   
   public hasVisited(tabId: string): boolean {
-    const visited = this.visitedTabs.has(tabId);
-    console.log('[AIDashboard] Checking if tab visited', {
-      tabId,
-      visited,
-      allVisitedTabs: Array.from(this.visitedTabs),
-      activeTab: this.activeTab
-    });
-    return visited;
+    return this.visitedTabs.has(tabId);
   }
 
   public onNavigationChange(event: any): void {

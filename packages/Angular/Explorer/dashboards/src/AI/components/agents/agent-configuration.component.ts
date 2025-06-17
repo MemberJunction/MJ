@@ -41,12 +41,6 @@ export class AgentConfigurationComponent implements OnInit, OnDestroy {
   constructor() {}
 
   ngOnInit(): void {
-    console.log('[AgentConfig] Component initialized', {
-      hasInitialState: !!this.initialState,
-      initialState: this.initialState,
-      timestamp: new Date().toISOString()
-    });
-    
     if (this.initialState) {
       this.applyInitialState(this.initialState);
     }
@@ -54,10 +48,7 @@ export class AgentConfigurationComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    console.log('[AgentConfig] Component destroyed', {
-      timestamp: new Date().toISOString(),
-      agentCount: this.agents.length
-    });
+    // Clean up if needed
   }
 
   private applyInitialState(state: any): void {
@@ -77,7 +68,6 @@ export class AgentConfigurationComponent implements OnInit, OnDestroy {
 
   private async loadAgents(): Promise<void> {
     try {
-      console.log('[AgentConfig] Starting to load agents...');
       this.isLoading = true;
       const rv = new RunView();
       const result = await rv.RunView({
@@ -87,24 +77,12 @@ export class AgentConfigurationComponent implements OnInit, OnDestroy {
         MaxRows: 1000
       });
       
-      console.log('[AgentConfig] RunView completed', {
-        resultCount: result.Results?.length || 0,
-        hasResults: !!result.Results
-      });
-      
       this.agents = result.Results as AIAgentEntity[];
       this.filteredAgents = [...this.agents];
-      
-      console.log('[AgentConfig] Agents loaded successfully', {
-        totalAgents: this.agents.length,
-        filteredAgents: this.filteredAgents.length,
-        isLoading: this.isLoading
-      });
     } catch (error) {
-      console.error('[AgentConfig] Error loading AI agents:', error);
+      console.error('Error loading AI agents:', error);
     } finally {
       this.isLoading = false;
-      console.log('[AgentConfig] Loading complete, isLoading set to false');
     }
   }
 

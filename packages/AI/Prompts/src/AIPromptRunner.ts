@@ -867,18 +867,18 @@ export class AIPromptRunner {
           const bPriority = promptModels.find((pm) => pm.ModelID === b.ID)?.Priority || 0;
           return bPriority - aPriority;
         });
-      } else {
-        // Fallback to automatic model selection based on prompt configuration
-        const minPowerRank = prompt.MinPowerRank || 0;
+      } 
+      else {
+        // If no prompt-specific models, use all active models that match AIModelTypeID and vendor
         candidateModels = AIEngine.Instance.Models.filter(
           (m) =>
             m.IsActive &&
-            m.PowerRank >= minPowerRank &&
             (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID) &&
             (!vendorName || m.Vendor === vendorName),
         );
-
-        // Sort by power rank based on preference
+      }
+      // Sort by power rank based on preference
+      if (prompt.SelectionStrategy === 'ByPower') {
         switch (prompt.PowerPreference) {
           case 'Highest':
             candidateModels.sort((a, b) => b.PowerRank - a.PowerRank);
@@ -894,6 +894,26 @@ export class AIPromptRunner {
             break;
         }
       }
+      else if (prompt.SelectionStrategy === 'Specific') {
+        // rank based on the priority in the AIPromptModels
+        candidateModels.sort((a, b) => {
+          // get the row from promptModels that match the model ID
+          const aPriority = promptModels.find((pm) => pm.ModelID === a.ID)?.Priority || 0;
+          const bPriority = promptModels.find((pm) => pm.ModelID === b.ID)?.Priority || 0;
+          return bPriority - aPriority; // Use the highest priority first
+        });
+      }
+      else {
+        // default ranking order
+        const minPowerRank = prompt.MinPowerRank || 0;
+        candidateModels = AIEngine.Instance.Models.filter(
+          (m) =>
+            m.IsActive &&
+            m.PowerRank >= minPowerRank &&
+            (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID) &&
+            (!vendorName || m.Vendor === vendorName),
+        );
+      }      
 
       if (candidateModels.length === 0) {
         LogError(`No suitable models found for prompt ${prompt.Name}`);
@@ -1024,6 +1044,8 @@ export class AIPromptRunner {
       // Prepare chat parameters
       const params = new ChatParams();
       params.model = model.APIName;
+      params.responseFormat = 'JSON';
+      params.temperature = 0.7; // Default temperature if not specified
       params.cancellationToken = cancellationToken;
 
       // Build message array with rendered prompt and conversation messages

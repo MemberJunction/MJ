@@ -2336,30 +2336,6 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
         endTime.setHours(23, 59, 59, 999);
       }
       
-      // Debug logging
-      console.log('=== DRILL-DOWN DEBUG START ===');
-      console.log('1. Click Event Details:', {
-        clickedTimestamp: tab.timestamp.toISOString(),
-        clickedDate: tab.timestamp.toLocaleString(),
-        metric: tab.metric,
-        tabId: tab.id
-      });
-      console.log('2. Time Range Calculation:', {
-        selectedTimeRange: this.selectedTimeRange,
-        totalHours: hours,
-        windowSizeMinutes: windowSizeMs / (60 * 1000),
-        windowCondition: hours <= 24 ? '≤24h' : hours <= 24 * 7 ? '≤7d' : '>7d',
-        alignToDay: alignToDay,
-        dayAlignmentNote: alignToDay ? 'Query will capture full day' : 'Query uses exact time window'
-      });
-      console.log('3. Query Window:', {
-        startTime: startTime.toISOString(),
-        startTimeLocal: startTime.toLocaleString(),
-        endTime: endTime.toISOString(),
-        endTimeLocal: endTime.toLocaleString(),
-        windowSpan: `${(endTime.getTime() - startTime.getTime()) / (60 * 60 * 1000)} hours`
-      });
-      
       // Load executions for this time period
       const [promptResults, agentResults] = await Promise.all([
         new RunView().RunView<AIPromptRunEntity>({
@@ -2375,34 +2351,6 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
           ResultType: 'entity_object'
         })
       ]);
-      
-      // Debug logging results
-      console.log('4. Query Results:', {
-        promptRunsFound: promptResults.Results.length,
-        agentRunsFound: agentResults.Results.length,
-        totalFound: promptResults.Results.length + agentResults.Results.length
-      });
-      
-      // Log sample data if found
-      if (promptResults.Results.length > 0) {
-        console.log('5. Sample Prompt Run:', {
-          id: promptResults.Results[0].ID,
-          runAt: promptResults.Results[0].RunAt,
-          runAtLocal: new Date(promptResults.Results[0].RunAt).toLocaleString(),
-          name: promptResults.Results[0].Prompt
-        });
-      }
-      
-      if (agentResults.Results.length > 0) {
-        console.log('6. Sample Agent Run:', {
-          id: agentResults.Results[0].ID,
-          startedAt: agentResults.Results[0].StartedAt,
-          startedAtLocal: new Date(agentResults.Results[0].StartedAt).toLocaleString(),
-          name: agentResults.Results[0].Agent
-        });
-      }
-      
-      console.log('=== DRILL-DOWN DEBUG END ===');
       
       // Convert to ExecutionRecord format
       const executions: ExecutionRecord[] = [];
