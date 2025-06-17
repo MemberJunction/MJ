@@ -13,8 +13,8 @@
 
 import { AIAgentEntity, AIAgentTypeEntity, AIAgentRunEntity, AIAgentRunStepEntity } from '@memberjunction/core-entities';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { AIPromptRunner, AIPromptParams, ChildPromptParam, AIPromptRunResult } from '@memberjunction/ai-prompts';
-import { ChatMessage } from '@memberjunction/ai';
+import { AIPromptRunner, AIPromptParams, ChildPromptParam } from '@memberjunction/ai-prompts';
+import { ChatMessage, AIPromptRunResult } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { MJGlobal } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';

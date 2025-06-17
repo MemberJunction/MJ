@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { AIPromptRunResult } from '@memberjunction/ai-prompts';
+import { AIPromptRunResult } from '@memberjunction/ai';
 import { BaseAgentNextStep } from '@memberjunction/aiengine';
 
 /**
