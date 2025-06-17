@@ -1,6 +1,6 @@
-import { Component, OnInit, OnDestroy, Output, EventEmitter, Input } from '@angular/core';
+import { Component, OnInit, OnDestroy, Output, EventEmitter, Input, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { Observable, Subject, combineLatest } from 'rxjs';
-import { map, takeUntil, startWith, debounceTime } from 'rxjs/operators';
+import { map, takeUntil, startWith, debounceTime, take } from 'rxjs/operators';
 import { 
   AIInstrumentationService, 
   DashboardKPIs, 
@@ -60,8 +60,18 @@ export interface ExecutionMonitoringState {
 
 @Component({
   selector: 'app-execution-monitoring',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="execution-monitoring">
+    <div class="execution-monitoring" [class.loading]="isLoading">
+      <!-- Loading Overlay -->
+      @if (isLoading) {
+        <div class="loading-overlay">
+          <div class="loading-content">
+            <i class="fa-solid fa-spinner fa-spin fa-3x"></i>
+            <p>Loading dashboard data...</p>
+          </div>
+        </div>
+      }
       <!-- Header Controls -->
       <div class="monitoring-header">
         <h2 class="monitoring-title">
@@ -70,20 +80,9 @@ export interface ExecutionMonitoringState {
         </h2>
         
         <div class="monitoring-controls">
-          <div class="refresh-control">
-            <label>Refresh:</label>
-            <select [(ngModel)]="refreshInterval" (change)="onRefreshIntervalChange()">
-              <option [value]="0">Manual</option>
-              <option [value]="10000">10s</option>
-              <option [value]="30000">30s</option>
-              <option [value]="60000">1m</option>
-              <option [value]="300000">5m</option>
-            </select>
-          </div>
-          
           <div class="time-range-control">
             <label>Time Range:</label>
-            <select [(ngModel)]="selectedTimeRange" (change)="onTimeRangeChange()">
+            <select [(ngModel)]="selectedTimeRange" (change)="onTimeRangeChange()" [disabled]="isLoading">
               <option value="1h">Last Hour</option>
               <option value="6h">Last 6 Hours</option>
               <option value="24h">Last 24 Hours</option>
@@ -593,6 +592,47 @@ export interface ExecutionMonitoringState {
       padding: 20px;
       background: #f8f9fa;
       min-height: 100vh;
+      position: relative;
+    }
+    
+    .execution-monitoring.loading {
+      overflow: hidden;
+    }
+    
+    /* Loading Overlay */
+    .loading-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.5);
+      z-index: 999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(1px);
+    }
+    
+    .loading-content {
+      text-align: center;
+      padding: 40px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    }
+    
+    .loading-content i {
+      color: #2196f3;
+      margin-bottom: 20px;
+      display: block;
+    }
+    
+    .loading-content p {
+      margin: 0;
+      font-size: 16px;
+      color: #666;
+      font-weight: 500;
     }
 
     .monitoring-header {
@@ -629,24 +669,32 @@ export interface ExecutionMonitoringState {
       flex-wrap: wrap;
     }
 
-    .refresh-control, .time-range-control {
+    .time-range-control {
       display: flex;
       align-items: center;
       gap: 8px;
       font-size: 12px;
     }
 
-    .refresh-control label, .time-range-control label {
+    .time-range-control label {
       color: #666;
       font-weight: 500;
     }
 
-    .refresh-control select, .time-range-control select {
+    .time-range-control select {
       padding: 6px 12px;
       border: 1px solid #ddd;
       border-radius: 4px;
       font-size: 12px;
       background: white;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .time-range-control select:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      background: #f5f5f5;
     }
 
     .refresh-btn {
@@ -671,6 +719,7 @@ export interface ExecutionMonitoringState {
     .refresh-btn:disabled {
       opacity: 0.6;
       cursor: not-allowed;
+      background: #e0e0e0;
     }
 
     .refresh-btn i.spinning {
@@ -1729,7 +1778,6 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   private stateChangeSubject$ = new Subject<ExecutionMonitoringState>();
 
   // Configuration
-  refreshInterval = 30000; // 30 seconds
   selectedTimeRange = '24h';
   isLoading = false;
 
@@ -1781,13 +1829,22 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   }
 
   constructor(
-    private instrumentationService: AIInstrumentationService
+    private instrumentationService: AIInstrumentationService,
+    private cdr: ChangeDetectorRef
   ) {
     // Initialize data streams
     this.kpis$ = this.instrumentationService.kpis$;
     this.trends$ = this.instrumentationService.trends$;
     this.liveExecutions$ = this.instrumentationService.liveExecutions$;
     this.chartData$ = this.instrumentationService.chartData$;
+
+    // Subscribe to loading state from service
+    this.instrumentationService.isLoading$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(loading => {
+      this.isLoading = loading;
+      this.cdr.markForCheck();
+    });
 
     // Derived streams
     this.kpiCards$ = this.kpis$.pipe(
@@ -1819,7 +1876,6 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
       this.loadUserState(this.initialState);
     } else {
       // Default initialization
-      this.instrumentationService.setRefreshInterval(this.refreshInterval);
       this.setTimeRange(this.selectedTimeRange);
       
       // Initialize with main chart tab
@@ -1831,6 +1887,9 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
           closeable: false
         }
       ];
+    
+      // Trigger initial data load
+      this.instrumentationService.refresh();
     }
     
     // Set up debounced state change emission
@@ -1851,7 +1910,7 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   private getCurrentState(): ExecutionMonitoringState {
     return {
       selectedTimeRange: this.selectedTimeRange,
-      refreshInterval: this.refreshInterval,
+      refreshInterval: 0, // Always manual refresh now
       panelStates: { ...this.panelStates },
       drillDownTabs: this.drillDownTabs.map(tab => ({
         id: tab.id,
@@ -1876,10 +1935,7 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
       this.setTimeRange(state.selectedTimeRange);
     }
     
-    if (state.refreshInterval !== undefined) {
-      this.refreshInterval = state.refreshInterval;
-      this.instrumentationService.setRefreshInterval(this.refreshInterval);
-    }
+    // No longer need to handle refreshInterval since we removed auto-refresh
     
     if (state.panelStates) {
       // Only override if state has explicit panel states, otherwise keep defaults
@@ -1957,21 +2013,24 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
     ];
   }
 
-  onRefreshIntervalChange(): void {
-    this.instrumentationService.setRefreshInterval(this.refreshInterval);
-    this.emitStateChange();
-  }
 
   onTimeRangeChange(): void {
+    // Simply change time range - loading state is managed by the service
     this.setTimeRange(this.selectedTimeRange);
     this.emitStateChange();
   }
 
   private setTimeRange(range: string): void {
+    const { start, end } = this.getTimeRangeFromSelection(range);
+    this.instrumentationService.setDateRange(start, end);
+  }
+  
+  private getTimeRangeFromSelection(range?: string): { start: Date; end: Date } {
     const now = new Date();
+    const selectedRange = range || this.selectedTimeRange;
     let start: Date;
 
-    switch (range) {
+    switch (selectedRange) {
       case '1h':
         start = new Date(now.getTime() - 60 * 60 * 1000);
         break;
@@ -1991,18 +2050,12 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
         start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     }
 
-    this.instrumentationService.setDateRange(start, now);
+    return { start, end: now };
   }
 
   refreshData(): void {
-    this.isLoading = true;
-    // Force refresh by temporarily setting interval to 0 and back
-    const currentInterval = this.refreshInterval;
-    this.instrumentationService.setRefreshInterval(0);
-    setTimeout(() => {
-      this.instrumentationService.setRefreshInterval(currentInterval);
-      this.isLoading = false;
-    }, 100);
+    // Simply trigger refresh - loading state is managed by the service
+    this.instrumentationService.refresh();
   }
 
   onExecutionClick(execution: LiveExecution): void {
@@ -2031,6 +2084,7 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
     if (!this.drillDownTabs.find(tab => tab.id === tabId)) {
       this.drillDownTabs.push(newTab);
       this.emitStateChange(); // Emit state when new tab is added
+      this.cdr.markForCheck();
     }
     
     // Switch to the new tab
@@ -2171,6 +2225,7 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
       window.dispatchEvent(new Event('resize'));
     }, 100);
     this.emitStateChange();
+    this.cdr.markForCheck();
   }
 
   closeTab(event: MouseEvent, tabId: string): void {
@@ -2244,9 +2299,42 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
     this.loadingDrillDown = true;
     
     try {
-      // Create time window around the clicked point (±30 minutes)
-      const startTime = new Date(tab.timestamp.getTime() - 30 * 60 * 1000);
-      const endTime = new Date(tab.timestamp.getTime() + 30 * 60 * 1000);
+      // Determine bucket size based on selected time range
+      const { start, end } = this.getTimeRangeFromSelection();
+      const duration = end.getTime() - start.getTime();
+      const hours = duration / (1000 * 60 * 60);
+      
+      let windowSizeMs: number;
+      let alignToDay = false;
+      
+      if (hours <= 24) {
+        // For up to 24 hours, use 1 hour window (30 min before and after)
+        windowSizeMs = 30 * 60 * 1000;
+      } else if (hours <= 24 * 7) {
+        // For up to 7 days, use full day window
+        // Since data is aggregated into 4-hour buckets, we need to capture the full day
+        windowSizeMs = 12 * 60 * 60 * 1000; // 12 hours before/after = 24 hour window
+        alignToDay = true;
+      } else {
+        // For more than 7 days, use full day window
+        windowSizeMs = 12 * 60 * 60 * 1000; // 12 hours before/after = 24 hour window
+        alignToDay = true;
+      }
+      
+      // Create time window around the clicked point
+      let startTime = new Date(tab.timestamp.getTime() - windowSizeMs);
+      let endTime = new Date(tab.timestamp.getTime() + windowSizeMs);
+      
+      // For day-aligned queries, expand to full day boundaries
+      if (alignToDay) {
+        // Set start to beginning of the day
+        startTime = new Date(tab.timestamp);
+        startTime.setHours(0, 0, 0, 0);
+        
+        // Set end to end of the day
+        endTime = new Date(tab.timestamp);
+        endTime.setHours(23, 59, 59, 999);
+      }
       
       // Load executions for this time period
       const [promptResults, agentResults] = await Promise.all([
@@ -2276,8 +2364,8 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
         executions.push({
           id: run.ID,
           type: 'prompt',
-          name: await this.getPromptName(run.PromptID),
-          model: run.ModelID ? await this.getModelName(run.ModelID) : undefined,
+          name: run.Prompt || 'Unnamed Prompt',
+          model: run.Model || undefined,
           status: run.Success ? 'completed' : (run.Success === false ? 'failed' : 'running'),
           startTime: new Date(run.RunAt),
           endTime: run.CompletedAt ? new Date(run.CompletedAt) : undefined,
@@ -2297,7 +2385,7 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
         executions.push({
           id: run.ID,
           type: 'agent',
-          name: await this.getAgentName(run.AgentID),
+          name: run.Agent || 'Unnamed Agent',
           status: run.Status.toLowerCase(),
           startTime: new Date(run.StartedAt),
           endTime: run.CompletedAt ? new Date(run.CompletedAt) : undefined,
@@ -2313,12 +2401,15 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
       
       // Update tab data
       tab.data = executions;
+      this.cdr.markForCheck();
       
     } catch (error) {
       console.error('Error loading drill-down data:', error);
       tab.data = [];
+      this.cdr.markForCheck();
     } finally {
       this.loadingDrillDown = false;
+      this.cdr.markForCheck();
     }
   }
 
@@ -2358,47 +2449,6 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   }
 
   // Helper methods for drill-down
-  private async getPromptName(promptId: string): Promise<string> {
-    try {
-      const rv = new RunView();
-      const result = await rv.RunView<AIPromptEntity>({
-        EntityName: 'AI Prompts',
-        ExtraFilter: `ID = '${promptId}'`,
-        ResultType: 'entity_object'
-      });
-      return result.Results[0]?.Name || 'Unknown Prompt';
-    } catch {
-      return 'Unknown Prompt';
-    }
-  }
-
-  private async getAgentName(agentId: string): Promise<string> {
-    try {
-      const rv = new RunView();
-      const result = await rv.RunView<AIAgentEntity>({
-        EntityName: 'AI Agents',
-        ExtraFilter: `ID = '${agentId}'`,
-        ResultType: 'entity_object'
-      });
-      return result.Results[0]?.Name || 'Unknown Agent';
-    } catch {
-      return 'Unknown Agent';
-    }
-  }
-
-  private async getModelName(modelId: string): Promise<string> {
-    try {
-      const rv = new RunView();
-      const result = await rv.RunView<AIModelEntity>({
-        EntityName: 'AI Models',
-        ExtraFilter: `ID = '${modelId}'`,
-        ResultType: 'entity_object'
-      });
-      return result.Results[0]?.Name || 'Unknown Model';
-    } catch {
-      return 'Unknown Model';
-    }
-  }
 
   formatTimestamp(timestamp: Date): string {
     return timestamp.toLocaleString();

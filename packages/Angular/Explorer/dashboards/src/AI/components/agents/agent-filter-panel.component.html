@@ -15,7 +15,7 @@
     <div class="filter-group">
       <label class="filter-label">
         <span class="fa-solid fa-search"></span>
-        Search
+        Name
       </label>
       <input 
         type="text"
@@ -24,6 +24,54 @@
         (ngModelChange)="onFilterChange()"
         (input)="onFilterChange()"
         placeholder="Search agents...">
+    </div>
+    
+    <!-- Agent Type Filter -->
+    <div class="filter-group">
+      <label class="filter-label">
+        <span class="fa-solid fa-robot"></span>
+        Type
+      </label>
+      <select 
+        class="filter-select"
+        [(ngModel)]="filters.agentType"
+        (ngModelChange)="onFilterChange()">
+        @for (option of agentTypeOptions; track option.value) {
+          <option [value]="option.value">{{ option.text }}</option>
+        }
+      </select>
+    </div>
+    
+    <!-- Parent Agent Filter -->
+    <div class="filter-group">
+      <label class="filter-label">
+        <span class="fa-solid fa-sitemap"></span>
+        Parent
+      </label>
+      <select 
+        class="filter-select"
+        [(ngModel)]="filters.parentAgent"
+        (ngModelChange)="onFilterChange()">
+        @for (option of parentAgentOptions; track option.value) {
+          <option [value]="option.value">{{ option.text }}</option>
+        }
+      </select>
+    </div>
+    
+    <!-- Status Filter -->
+    <div class="filter-group">
+      <label class="filter-label">
+        <span class="fa-solid fa-toggle-on"></span>
+        Status
+      </label>
+      <select 
+        class="filter-select"
+        [(ngModel)]="filters.status"
+        (ngModelChange)="onFilterChange()">
+        @for (option of statusOptions; track option.value) {
+          <option [value]="option.value">{{ option.text }}</option>
+        }
+      </select>
     </div>
     
     <!-- Execution Mode Filter -->

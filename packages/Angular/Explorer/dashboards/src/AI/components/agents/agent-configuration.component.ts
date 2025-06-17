@@ -1,9 +1,12 @@
-import { Component, Output, EventEmitter, OnInit, Inject, Optional } from '@angular/core';
+import { Component, Output, EventEmitter, OnInit, OnDestroy, Inject, Optional, Input } from '@angular/core';
 import { RunView, CompositeKey } from '@memberjunction/core';
 import { AIAgentEntity } from '@memberjunction/core-entities';
 
 interface AgentFilter {
   searchTerm: string;
+  agentType: string;
+  parentAgent: string;
+  status: string;
   executionMode: string;
   exposeAsAction: string;
 }
@@ -13,7 +16,8 @@ interface AgentFilter {
   templateUrl: './agent-configuration.component.html',
   styleUrls: ['./agent-configuration.component.scss']
 })
-export class AgentConfigurationComponent implements OnInit {
+export class AgentConfigurationComponent implements OnInit, OnDestroy {
+  @Input() initialState: any = null;
   @Output() openEntityRecord = new EventEmitter<{entityName: string, recordId: string}>();
   @Output() stateChange = new EventEmitter<any>();
 
@@ -27,6 +31,9 @@ export class AgentConfigurationComponent implements OnInit {
   
   public currentFilters: AgentFilter = {
     searchTerm: '',
+    agentType: 'all',
+    parentAgent: 'all',
+    status: 'all',
     executionMode: 'all',
     exposeAsAction: 'all'
   };
@@ -34,7 +41,29 @@ export class AgentConfigurationComponent implements OnInit {
   constructor() {}
 
   ngOnInit(): void {
+    if (this.initialState) {
+      this.applyInitialState(this.initialState);
+    }
     this.loadAgents();
+  }
+
+  ngOnDestroy(): void {
+    // Clean up if needed
+  }
+
+  private applyInitialState(state: any): void {
+    if (state.filterPanelVisible !== undefined) {
+      this.filterPanelVisible = state.filterPanelVisible;
+    }
+    if (state.viewMode) {
+      this.viewMode = state.viewMode;
+    }
+    if (state.expandedAgentId) {
+      this.expandedAgentId = state.expandedAgentId;
+    }
+    if (state.currentFilters) {
+      this.currentFilters = { ...this.currentFilters, ...state.currentFilters };
+    }
   }
 
   private async loadAgents(): Promise<void> {
@@ -78,6 +107,9 @@ export class AgentConfigurationComponent implements OnInit {
   public onResetFilters(): void {
     this.currentFilters = {
       searchTerm: '',
+      agentType: 'all',
+      parentAgent: 'all',
+      status: 'all',
       executionMode: 'all',
       exposeAsAction: 'all'
     };
@@ -87,13 +119,37 @@ export class AgentConfigurationComponent implements OnInit {
   private applyFilters(): void {
     let filtered = [...this.agents];
 
-    // Apply search filter
+    // Apply search filter (name contains)
     if (this.currentFilters.searchTerm) {
       const searchTerm = this.currentFilters.searchTerm.toLowerCase();
       filtered = filtered.filter(agent => 
         (agent.Name || '').toLowerCase().includes(searchTerm) ||
         (agent.Description || '').toLowerCase().includes(searchTerm)
       );
+    }
+
+    // Apply agent type filter
+    if (this.currentFilters.agentType !== 'all') {
+      filtered = filtered.filter(agent => agent.TypeID === this.currentFilters.agentType);
+    }
+
+    // Apply parent agent filter
+    if (this.currentFilters.parentAgent !== 'all') {
+      if (this.currentFilters.parentAgent === 'none') {
+        filtered = filtered.filter(agent => !agent.ParentID);
+      } else {
+        filtered = filtered.filter(agent => agent.ParentID === this.currentFilters.parentAgent);
+      }
+    }
+
+    // Apply status filter
+    if (this.currentFilters.status !== 'all') {
+      const wantActive = this.currentFilters.status === 'active';
+      if (wantActive) {
+        filtered = filtered.filter(agent => agent.Status === 'Active');
+      } else {
+        filtered = filtered.filter(agent => agent.Status !== 'Active');
+      }
     }
 
     // Apply execution mode filter
@@ -113,7 +169,10 @@ export class AgentConfigurationComponent implements OnInit {
   private emitStateChange(): void {
     const state = {
       filterPanelVisible: this.filterPanelVisible,
-      filters: this.currentFilters
+      viewMode: this.viewMode,
+      expandedAgentId: this.expandedAgentId,
+      currentFilters: this.currentFilters,
+      agentCount: this.filteredAgents.length
     };
     this.stateChange.emit(state);
   }

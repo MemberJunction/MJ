@@ -17,6 +17,7 @@ export class SingleApplicationComponent implements OnInit {
   public app: ApplicationInfo | undefined;
   public appDescription: string = ''
   public appEntities: ApplicationEntityInfo[] = [];
+  public loading: boolean = false;
 
   ngOnInit(): void {
     this.route.paramMap.subscribe(async (params) => {
@@ -24,14 +25,44 @@ export class SingleApplicationComponent implements OnInit {
       // Perform any necessary actions with the ViewID, such as fetching data
       if (appName) {
         this.appName = appName;
-        const md = new Metadata()
-        this.app = md.Applications.find(a => a.Name == appName)
-        if (this.app)  {
-          this.appDescription = this.app.Description
-          this.appEntities = this.app.ApplicationEntities 
+        this.loading = true;
+        const md = new Metadata();
+        
+        // First check if applications are loaded
+        if (md.Applications && md.Applications.length > 0) {
+          this.findApplication(md, appName);
+          this.loading = false;
+        } else {
+          // If not loaded, wait for metadata to be loaded
+          // This can happen when navigating directly to the URL
+          try {
+            // Get and cache the metadata dataset to ensure applications are loaded
+            const dataset = await md.GetAndCacheDatasetByName('MJ_Metadata');
+            if (dataset && dataset.Success) {
+              // Now try to find the application again
+              this.findApplication(md, appName);
+            } else {
+              console.error('Failed to load metadata dataset');
+            }
+          } catch (error) {
+            console.error('Error loading metadata:', error);
+          } finally {
+            this.loading = false;
+          }
         }
       }
     });    
+  }
+  
+  private findApplication(md: Metadata, appName: string): void {
+    // Find the application - case insensitive comparison
+    this.app = md.Applications.find(a => a.Name.toLowerCase() === appName.toLowerCase());
+    if (this.app) {
+      this.appDescription = this.app.Description;
+      this.appEntities = this.app.ApplicationEntities;
+    } else {
+      console.warn(`Application '${appName}' not found in metadata. Available applications:`, md.Applications.map(a => a.Name));
+    }
   }
 
   entityItemClick(info: ApplicationEntityInfo) {

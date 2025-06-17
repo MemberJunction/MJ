@@ -8,7 +8,6 @@ export * from './lib/custom/custom-forms.module';
 // Export test harness components and service
 export { 
     AITestHarnessComponent,
-    AIAgentRunResult,
     DataContextVariable,
     ConversationMessage as AIAgentConversationMessage,
     SavedConversation

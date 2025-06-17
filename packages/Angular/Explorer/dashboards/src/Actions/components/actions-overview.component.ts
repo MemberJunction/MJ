@@ -89,12 +89,45 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
     try {
       this.isLoading = true;
       
-      // Load all data in parallel
-      const [actions, categories, executions] = await Promise.all([
-        this.loadActions(),
-        this.loadCategories(),
-        this.loadExecutions()
+      // Load all data in a single batch using RunViews
+      const rv = new RunView();
+      const [actionsResult, categoriesResult, executionsResult] = await rv.RunViews([
+        {
+          EntityName: 'Actions',
+          ExtraFilter: '',
+          OrderBy: 'UpdatedAt DESC',
+          UserSearchString: '',
+          IgnoreMaxRows: false,
+          MaxRows: 1000,
+          ResultType: 'entity_object'
+        },
+        {
+          EntityName: 'Action Categories',
+          ExtraFilter: '',
+          OrderBy: 'Name',
+          UserSearchString: '',
+          IgnoreMaxRows: false,
+          MaxRows: 1000,
+          ResultType: 'entity_object'
+        },
+        {
+          EntityName: 'Action Execution Logs',
+          ExtraFilter: '',
+          OrderBy: 'StartedAt DESC',
+          UserSearchString: '',
+          IgnoreMaxRows: false,
+          MaxRows: 1000,
+          ResultType: 'entity_object'
+        }
       ]);
+      
+      if (!actionsResult.Success || !categoriesResult.Success || !executionsResult.Success) {
+        throw new Error('Failed to load data');
+      }
+      
+      const actions = actionsResult.Results as ActionEntity[];
+      const categories = categoriesResult.Results as ActionCategoryEntity[];
+      const executions = executionsResult.Results as ActionExecutionLogEntity[];
 
       this.calculateMetrics(actions, categories, executions);
       this.calculateCategoryStats(actions, categories, executions);
@@ -109,59 +142,6 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
     }
   }
 
-  private async loadActions(): Promise<ActionEntity[]> {
-    const rv = new RunView();
-    const result = await rv.RunView({
-      EntityName: 'Actions',
-      ExtraFilter: '',
-      OrderBy: 'UpdatedAt DESC',
-      UserSearchString: '',
-      IgnoreMaxRows: false,
-      MaxRows: 1000
-    });
-    
-    if (result && result.Success && result.Results) {
-      return result.Results as ActionEntity[];
-    } else {
-      throw new Error('Failed to load actions');
-    }
-  }
-
-  private async loadCategories(): Promise<ActionCategoryEntity[]> {
-    const rv = new RunView();
-    const result = await rv.RunView({
-      EntityName: 'Action Categories',
-      ExtraFilter: '',
-      OrderBy: 'Name',
-      UserSearchString: '',
-      IgnoreMaxRows: false,
-      MaxRows: 1000
-    });
-    
-    if (result && result.Success && result.Results) {
-      return result.Results as ActionCategoryEntity[];
-    } else {
-      throw new Error('Failed to load action categories');
-    }
-  }
-
-  private async loadExecutions(): Promise<ActionExecutionLogEntity[]> {
-    const rv = new RunView();
-    const result = await rv.RunView({
-      EntityName: 'Action Execution Logs',
-      ExtraFilter: '',
-      OrderBy: 'StartedAt DESC',
-      UserSearchString: '',
-      IgnoreMaxRows: false,
-      MaxRows: 1000
-    });
-    
-    if (result && result.Success && result.Results) {
-      return result.Results as ActionExecutionLogEntity[];
-    } else {
-      throw new Error('Failed to load action execution logs');
-    }
-  }
 
   private async loadEntityActions(): Promise<EntityActionEntity[]> {
     const rv = new RunView();

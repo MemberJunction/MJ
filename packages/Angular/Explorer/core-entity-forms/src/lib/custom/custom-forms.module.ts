@@ -29,6 +29,7 @@ import { JoinGridModule } from "@memberjunction/ng-join-grid";
 import { CodeEditorModule } from "@memberjunction/ng-code-editor";
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
 import { EntitySelectorDialogComponent } from "./shared/entity-selector-dialog.component";
+import { AIPromptRunFormComponentExtended } from "./AIPromptRuns/ai-prompt-run-form.component";
 
 @NgModule({
     declarations: [
@@ -43,7 +44,8 @@ import { EntitySelectorDialogComponent } from "./shared/entity-selector-dialog.c
         AIAgentFormComponentExtended,
         AITestHarnessComponent,
         EntitySelectorDialogComponent,
-        AITestHarnessDialogComponent
+        AITestHarnessDialogComponent,
+        AIPromptRunFormComponentExtended
     ],
     imports: [
         CommonModule,
@@ -83,7 +85,8 @@ import { EntitySelectorDialogComponent } from "./shared/entity-selector-dialog.c
         AIPromptFormComponentExtended,
         AIAgentFormComponentExtended,
         AITestHarnessComponent,
-        AITestHarnessDialogComponent
+        AITestHarnessDialogComponent,
+        AIPromptRunFormComponentExtended
     ],
     providers: [
         TestHarnessDialogService
@@ -98,4 +101,6 @@ export function LoadCoreCustomForms() {
     LoadTemplatesFormExtendedComponent();
     LoadAIPromptFormComponentExtended();
     LoadAIAgentFormComponentExtended();
+    // Note: AIPromptRunFormComponentExtended doesn't need a loader function
+    // as it extends the generated form directly
 }

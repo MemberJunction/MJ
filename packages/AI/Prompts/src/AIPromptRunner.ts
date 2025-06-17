@@ -832,27 +832,8 @@ export class AIPromptRunner {
       await AIEngine.Instance.Config(false, contextUser);
 
       // Resolve vendor ID to vendor name if provided
-      let vendorName: string | undefined;
-      if (vendorId) {
-        try {
-          const rv = new RunView();
-          const vendorResult = await rv.RunView({
-            EntityName: 'AI Vendors',
-            ExtraFilter: `ID='${vendorId}'`,
-            ResultType: 'entity_object',
-          });
-
-          if (vendorResult.Results && vendorResult.Results.length > 0) {
-            vendorName = vendorResult.Results[0].Name;
-          } else {
-            LogError(`Vendor with ID ${vendorId} not found`);
-            // Continue without vendor filtering rather than fail
-          }
-        } catch (error) {
-          LogError(`Error loading vendor ${vendorId}: ${error.message}`);
-          // Continue without vendor filtering rather than fail
-        }
-      }
+      // use metadata cache
+      const vendorName: string | undefined = AIEngine.Instance.Vendors.find((v) => v.ID === vendorId)?.Name;      
 
       // If explicit model is specified, validate it from cached models
       if (explicitModelId) {
@@ -886,18 +867,18 @@ export class AIPromptRunner {
           const bPriority = promptModels.find((pm) => pm.ModelID === b.ID)?.Priority || 0;
           return bPriority - aPriority;
         });
-      } else {
-        // Fallback to automatic model selection based on prompt configuration
-        const minPowerRank = prompt.MinPowerRank || 0;
+      } 
+      else {
+        // If no prompt-specific models, use all active models that match AIModelTypeID and vendor
         candidateModels = AIEngine.Instance.Models.filter(
           (m) =>
             m.IsActive &&
-            m.PowerRank >= minPowerRank &&
             (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID) &&
             (!vendorName || m.Vendor === vendorName),
         );
-
-        // Sort by power rank based on preference
+      }
+      // Sort by power rank based on preference
+      if (prompt.SelectionStrategy === 'ByPower') {
         switch (prompt.PowerPreference) {
           case 'Highest':
             candidateModels.sort((a, b) => b.PowerRank - a.PowerRank);
@@ -913,6 +894,26 @@ export class AIPromptRunner {
             break;
         }
       }
+      else if (prompt.SelectionStrategy === 'Specific') {
+        // rank based on the priority in the AIPromptModels
+        candidateModels.sort((a, b) => {
+          // get the row from promptModels that match the model ID
+          const aPriority = promptModels.find((pm) => pm.ModelID === a.ID)?.Priority || 0;
+          const bPriority = promptModels.find((pm) => pm.ModelID === b.ID)?.Priority || 0;
+          return bPriority - aPriority; // Use the highest priority first
+        });
+      }
+      else {
+        // default ranking order
+        const minPowerRank = prompt.MinPowerRank || 0;
+        candidateModels = AIEngine.Instance.Models.filter(
+          (m) =>
+            m.IsActive &&
+            m.PowerRank >= minPowerRank &&
+            (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID) &&
+            (!vendorName || m.Vendor === vendorName),
+        );
+      }      
 
       if (candidateModels.length === 0) {
         LogError(`No suitable models found for prompt ${prompt.Name}`);
@@ -1043,6 +1044,8 @@ export class AIPromptRunner {
       // Prepare chat parameters
       const params = new ChatParams();
       params.model = model.APIName;
+      params.responseFormat = 'JSON';
+      params.temperature = 0.7; // Default temperature if not specified
       params.cancellationToken = cancellationToken;
 
       // Build message array with rendered prompt and conversation messages

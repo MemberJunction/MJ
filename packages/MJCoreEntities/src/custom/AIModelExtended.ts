@@ -1,6 +1,6 @@
 import { BaseEntity, LogError, Metadata } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
-import { AIModelEntity } from "../generated/entity_subclasses";
+import { AIModelEntity, AIModelVendorEntity } from "../generated/entity_subclasses";
 
 @RegisterClass(BaseEntity, 'AI Models')  
 export class AIModelEntityExtended extends AIModelEntity  {
@@ -9,5 +9,14 @@ export class AIModelEntityExtended extends AIModelEntity  {
      */
     public get APINameOrName(): string {
         return this.APIName ? this.APIName : this.Name;
+    }
+
+    private _modelVendors: AIModelVendorEntity[] = [];
+    /**
+     * Helper property to hold the model vendors, this is populated ONLY
+     * when you load an AIModelEntity from the AIEngine
+     */
+    public get ModelVendors(): AIModelVendorEntity[] {
+        return this._modelVendors;
     }
 }

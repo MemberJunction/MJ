@@ -297,6 +297,15 @@ export class Metadata {
      * @returns - a newly created instance of a sub-class of BaseEntity. Remember you still to call Load() or NewRecord() to get going from there.
      */
     public async GetEntityObject<T extends BaseEntity>(entityName: string, contextUser: UserInfo = null): Promise<T> {
+        // validate that entityName is not null, undefined and IS a string > 0 length
+        if (!entityName || typeof entityName !== 'string' || entityName.trim().length === 0) {
+            throw new Error('GetEntityObject: entityName must be a non-empty string');
+        }
+        // validate that contextUser is either null/undefined or a UserInfo object
+        if (contextUser && !(contextUser instanceof UserInfo)) {
+            throw new Error('GetEntityObject: contextUser must be a UserInfo object or null/undefined');
+        }
+        
         return await Metadata.Provider.GetEntityObject(entityName, contextUser);
     }
 
