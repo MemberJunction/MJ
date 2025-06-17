@@ -105,6 +105,12 @@ export class BaseAgent {
      * @private
      */
     private _executionChain: ExecutionChainStep[] = [];
+    
+    /**
+     * All progress steps including intermediate ones for complete execution tracking.
+     * @private
+     */
+    private _allProgressSteps: any[] = [];
 
     /**
      * Sub-agent execution results.
@@ -129,6 +135,27 @@ export class BaseAgent {
         }, contextUser);
         
         return result.Success ? result.Results : [];
+    }
+
+    /**
+     * Wrapper for progress callbacks that captures all progress events.
+     * @private
+     */
+    private wrapProgressCallback(originalCallback?: AgentExecutionProgressCallback): AgentExecutionProgressCallback | undefined {
+        if (!originalCallback) return undefined;
+        
+        return (progress) => {
+            // Capture all progress events
+            this._allProgressSteps.push({
+                ...progress,
+                timestamp: new Date(),
+                agentHierarchy: this._runContext?.agentHierarchy || [],
+                depth: this._runContext?.depth || 0
+            });
+            
+            // Call original callback
+            originalCallback(progress);
+        };
     }
 
     /**
@@ -158,20 +185,26 @@ export class BaseAgent {
      */
     public async Execute(params: ExecuteAgentParams): Promise<ExecuteAgentResult> {
         try {
+            // Wrap the progress callback to capture all events
+            const wrappedParams = {
+                ...params,
+                onProgress: this.wrapProgressCallback(params.onProgress)
+            };
+            
             // Check for cancellation at start
             if (params.cancellationToken?.aborted) {
                 return await this.createCancelledResult('Cancelled before execution started', params.contextUser);
             }
 
             // Report initialization progress
-            params.onProgress?.({
+            wrappedParams.onProgress?.({
                 step: 'initialization',
                 percentage: 0,
                 message: this.formatHierarchicalMessage(`Initializing ${params.agent.Name} agent and preparing execution environment`)
             });
 
             // Initialize execution tracking
-            await this.initializeAgentRun(params);
+            await this.initializeAgentRun(wrappedParams);
 
             // Initialize engines
             await this.initializeEngines(params.contextUser);
@@ -182,7 +215,7 @@ export class BaseAgent {
             }
 
             // Report validation progress
-            params.onProgress?.({
+            wrappedParams.onProgress?.({
                 step: 'validation',
                 percentage: 10,
                 message: this.formatHierarchicalMessage('Validating agent configuration and loading prompts')
@@ -211,7 +244,7 @@ export class BaseAgent {
                 }
 
                 // Execute the current step based on previous decision or initial prompt
-                const stepResult = await this.executeNextStep(params, config, currentNextStep);
+                const stepResult = await this.executeNextStep(wrappedParams, config, currentNextStep);
                 stepCount++;
                 
                 // Check if we should continue or terminate
@@ -224,7 +257,7 @@ export class BaseAgent {
             }
 
             // Report finalization progress
-            params.onProgress?.({
+            wrappedParams.onProgress?.({
                 step: 'finalization',
                 percentage: 95,
                 message: this.formatHierarchicalMessage('Finalizing agent execution')
@@ -902,8 +935,9 @@ export class BaseAgent {
             agentState: {}
         };
 
-        // Reset execution chain
+        // Reset execution chain and progress tracking
         this._executionChain = [];
+        this._allProgressSteps = [];
     }
 
     /**
@@ -1755,14 +1789,68 @@ export class BaseAgent {
     private buildExecutionTree(): ExecutionNode[] {
         const executionTree: ExecutionNode[] = [];
         
-        // Convert execution chain steps to nodes
-        for (let i = 0; i < this._executionChain.length; i++) {
-            const chainStep = this._executionChain[i];
-            const stepEntity = chainStep.stepEntity;
-            
-            // Parse input/output data if available
-            let inputData = null;
-            let outputData = null;
+        // Create a combined list of all events (progress and execution) sorted by time
+        const allEvents: any[] = [];
+        
+        // Add progress events
+        for (const progressStep of this._allProgressSteps) {
+            allEvents.push({
+                type: 'progress',
+                timestamp: progressStep.timestamp,
+                data: progressStep
+            });
+        }
+        
+        // Add execution chain events
+        for (const chainStep of this._executionChain) {
+            allEvents.push({
+                type: 'execution',
+                timestamp: chainStep.startTime,
+                data: chainStep
+            });
+        }
+        
+        // Sort by timestamp
+        allEvents.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+        
+        // Build the tree
+        for (const event of allEvents) {
+            if (event.type === 'progress') {
+                // Create a lightweight node for progress events
+                const progressData = event.data;
+                const progressNode: ExecutionNode = {
+                    step: {
+                        ID: `progress-${event.timestamp.getTime()}`,
+                        StepNumber: executionTree.length + 1,
+                        StepName: progressData.message,
+                        StepType: progressData.step || 'progress',
+                        Status: 'Completed',
+                        StartedAt: event.timestamp,
+                        CompletedAt: event.timestamp
+                    } as any,
+                    inputData: null,
+                    outputData: { 
+                        percentage: progressData.percentage,
+                        metadata: progressData.metadata 
+                    },
+                    executionType: progressData.step || 'progress',
+                    startTime: event.timestamp,
+                    endTime: event.timestamp,
+                    durationMs: 0,
+                    children: [],
+                    depth: progressData.depth || 0,
+                    parentStepId: null,
+                    agentHierarchy: progressData.agentHierarchy || []
+                };
+                executionTree.push(progressNode);
+            } else {
+                // Process execution chain step
+                const chainStep = event.data;
+                const stepEntity = chainStep.stepEntity;
+                
+                // Parse input/output data if available
+                let inputData = null;
+                let outputData = null;
             try {
                 if (stepEntity.InputData) {
                     inputData = JSON.parse(stepEntity.InputData);
@@ -1805,6 +1893,7 @@ export class BaseAgent {
             }
             
             executionTree.push(node);
+            }
         }
         
         return executionTree;

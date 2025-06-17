@@ -1,4 +1,4 @@
-import { Component, Input, OnChanges, SimpleChanges, OnDestroy, ViewChild, ElementRef, AfterViewInit, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
+import { Component, Input, OnChanges, SimpleChanges, OnDestroy, ViewChild, ElementRef, AfterViewInit, ChangeDetectorRef, ChangeDetectionStrategy, ViewContainerRef, ComponentRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subject, interval, Subscription } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -98,21 +98,15 @@ export interface ExecutionStats {
                  [class.has-content]="executionTree.length > 0"
                  (scroll)="onScroll($event)"
                  (click)="onUserInteraction()">
-                @if (executionTree.length === 0) {
-                    <div class="empty-state">
-                        <i class="fa-solid fa-hourglass-start"></i>
-                        <p>Waiting for execution to begin...</p>
-                    </div>
-                } @else {
-                    @for (node of executionTree; track node.id) {
-                        <mj-execution-node 
-                            [node]="node"
-                            (toggleNode)="toggleNode($event)"
-                            (toggleDetails)="handleToggleDetails($event)"
-                            (userInteracted)="onUserInteraction()">
-                        </mj-execution-node>
+                <!-- Always render the container, but show empty state when no data -->
+                <div #executionNodesContainer>
+                    @if (executionTree.length === 0) {
+                        <div class="empty-state">
+                            <i class="fa-solid fa-hourglass-start"></i>
+                            <p>Waiting for execution to begin...</p>
+                        </div>
                     }
-                }
+                </div>
             </div>
 
             <!-- Statistics Footer -->
@@ -159,10 +153,17 @@ export interface ExecutionStats {
         </div>
     `,
     styles: [`
-        .execution-monitor {
+        :host {
             display: flex;
             flex-direction: column;
             height: 100%;
+            overflow: hidden;
+        }
+        
+        .execution-monitor {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
             background: #fff;
             border: 1px solid #e0e0e0;
             border-radius: 8px;
@@ -244,8 +245,9 @@ export interface ExecutionStats {
         .execution-tree {
             flex: 1;
             overflow-y: auto;
+            overflow-x: hidden;
             padding: 16px;
-            min-height: 200px;
+            min-height: 0;
         }
 
         .empty-state {
@@ -586,9 +588,13 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     @Input() autoExpand: boolean = true; // Auto-expand nodes in live mode
     
     @ViewChild('executionTreeContainer') executionTreeContainer!: ElementRef<HTMLDivElement>;
+    @ViewChild('executionNodesContainer', { read: ViewContainerRef }) executionNodesContainer!: ViewContainerRef;
     
     executionTree: ExecutionTreeNode[] = [];
     currentStep: ExecutionTreeNode | null = null;
+    
+    // Track component references for dynamic components
+    private nodeComponentMap = new Map<string, ComponentRef<ExecutionNodeComponent>>();
     stats: ExecutionStats = {
         totalSteps: 0,
         completedSteps: 0,
@@ -606,12 +612,16 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     private lastScrollPosition = 0;
     private scrollThreshold = 50; // pixels from bottom to consider "at bottom"
     
+    // View initialization flag
+    private viewInitialized = false;
+    
     private destroy$ = new Subject<void>();
     private updateSubscription?: Subscription;
     
     constructor(private cdr: ChangeDetectorRef) {}
     
     ngOnChanges(changes: SimpleChanges): void {
+        
         if (changes['executionData']) {
             // Process data even if it's empty/null (for initial setup)
             this.processExecutionData();
@@ -624,9 +634,17 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     }
     
     ngAfterViewInit(): void {
+        this.viewInitialized = true;
+        
+        
         // Initial setup for scroll behavior
         if (this.mode === 'live') {
             this.checkIfUserAtBottom();
+        }
+        
+        // If we have data waiting to be rendered, render it now
+        if (this.executionData && this.executionTree.length === 0) {
+            this.processExecutionData();
         }
     }
     
@@ -634,12 +652,25 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         this.destroy$.next();
         this.destroy$.complete();
         this.updateSubscription?.unsubscribe();
+        this.clearNodeComponents();
+    }
+    
+    /**
+     * Clear all dynamically created components
+     */
+    private clearNodeComponents(): void {
+        this.nodeComponentMap.forEach(ref => ref.destroy());
+        this.nodeComponentMap.clear();
+        if (this.executionNodesContainer) {
+            this.executionNodesContainer.clear();
+        }
     }
     
     /**
      * Process execution data based on mode
      */
     private processExecutionData(): void {
+        
         if (this.mode === 'historical') {
             // Process historical data
             this.buildTreeFromHistoricalData();
@@ -658,17 +689,15 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      * Build tree from historical execution data
      */
     private buildTreeFromHistoricalData(): void {
+        
         if (!this.executionData) {
+            this.clearNodeComponents();
             this.executionTree = [];
             return;
         }
         
-        // Store expanded state before rebuilding
-        const expandedState = new Map<string, boolean>();
-        const detailsExpandedState = new Map<string, boolean>();
-        if (this.executionTree.length > 0) {
-            this.preserveExpandedState(this.executionTree, expandedState, detailsExpandedState);
-        }
+        // Clear existing components for full rebuild
+        this.clearNodeComponents();
         
         // Handle executionTree format
         if (this.executionData.executionTree) {
@@ -683,10 +712,56 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             this.executionTree = [];
         }
         
-        // Restore expanded state if we had any
-        if (expandedState.size > 0 || detailsExpandedState.size > 0) {
-            this.restoreExpandedState(this.executionTree, expandedState, detailsExpandedState);
+        
+        // Render the tree using dynamic components
+        if (this.executionNodesContainer) {
+            this.renderTree();
         }
+    }
+    
+    /**
+     * Render the execution tree using dynamic components
+     */
+    private renderTree(): void {
+        
+        if (!this.executionNodesContainer) {
+            console.warn('📊 Execution Monitor: No container available for rendering');
+            return;
+        }
+        
+        // Clear and recreate all components for historical view
+        this.clearNodeComponents();
+        
+        
+        // Create components for each root node
+        for (const node of this.executionTree) {
+            this.createNodeComponent(node, this.executionNodesContainer);
+        }
+        
+    }
+    
+    /**
+     * Create a component for a node and its children
+     */
+    private createNodeComponent(node: ExecutionTreeNode, container: ViewContainerRef): ComponentRef<ExecutionNodeComponent> {
+        const componentRef = container.createComponent(ExecutionNodeComponent);
+        const instance = componentRef.instance;
+        
+        // Set inputs
+        instance.node = node;
+        
+        // Subscribe to outputs
+        instance.toggleNode.subscribe((n: ExecutionTreeNode) => this.toggleNode(n));
+        instance.toggleDetails.subscribe((e: { node: ExecutionTreeNode, event: Event }) => this.handleToggleDetails(e));
+        instance.userInteracted.subscribe(() => this.onUserInteraction());
+        
+        // Store reference
+        this.nodeComponentMap.set(node.id, componentRef);
+        
+        // Trigger change detection for the new component
+        componentRef.changeDetectorRef.detectChanges();
+        
+        return componentRef;
     }
     
     /**
@@ -818,9 +893,30 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             if (parsed.message) return parsed.message;
             if (parsed.userMessage) return parsed.userMessage;
             
+            // Show action results clearly
+            if (parsed.result) {
+                if (typeof parsed.result === 'object') {
+                    return JSON.stringify(parsed.result, null, 2);
+                }
+                return String(parsed.result);
+            }
+            
+            // Show prompt results
+            if (parsed.promptResult) {
+                const result = parsed.promptResult;
+                let preview = '';
+                if (result.success !== undefined) {
+                    preview += `Success: ${result.success}\n`;
+                }
+                if (result.content) {
+                    preview += `Content: ${typeof result.content === 'string' ? result.content : JSON.stringify(result.content, null, 2)}`;
+                }
+                return preview;
+            }
+            
             // Fallback to stringified preview
             const str = JSON.stringify(parsed, null, 2);
-            return str.length > 200 ? str.substring(0, 200) + '...' : str;
+            return str.length > 500 ? str.substring(0, 500) + '...' : str;
         } catch {
             return typeof data === 'string' ? data : JSON.stringify(data);
         }
@@ -866,6 +962,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      * Set up live updates for real-time execution
      */
     private setupLiveUpdates(): void {
+        
         // Handle live streaming data format
         if (this.executionData && this.executionData.liveSteps) {
             // For initial setup, clear the tree first
@@ -1202,7 +1299,9 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         html = html.replace(urlRegex, (url) => {
             // Ensure the URL has a protocol
             const href = url.startsWith('http') ? url : `https://${url}`;
-            return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color: #2196f3; text-decoration: underline;">${url}</a>`;
+            // Truncate long URLs for display
+            const displayUrl = url.length > 50 ? url.substring(0, 50) + '...' : url;
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color: #2196f3; text-decoration: underline; font-size: inherit;">${displayUrl}</a>`;
         });
         
         // Line breaks
@@ -1225,13 +1324,19 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      * Append new live steps without re-rendering entire tree
      */
     private appendNewLiveSteps(liveSteps: any[]): void {
+        
         if (!liveSteps || liveSteps.length === 0) return;
+        
+        // If view is not initialized yet, wait for it
+        if (!this.viewInitialized || !this.executionNodesContainer) {
+            return;
+        }
         
         // Create a map of existing nodes by ID for quick lookup
         const nodeMap = new Map<string, ExecutionTreeNode>();
         this.buildNodeMap(this.executionTree, nodeMap);
         
-        let hasChanges = false;
+        let hasNewNodes = false;
         
         for (const step of liveSteps) {
             const stepId = step.step?.ID || `live-${Date.now()}-${Math.random()}`;
@@ -1239,46 +1344,72 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             // Check if this node already exists
             const existingNode = nodeMap.get(stepId);
             if (existingNode) {
-                // Update existing node properties
-                const updatedStatus = this.mapStepStatus(step.step?.Status);
-                if (existingNode.status !== updatedStatus) {
-                    existingNode.status = updatedStatus;
-                    hasChanges = true;
-                }
-                
-                if (step.endTime && !existingNode.endTime) {
-                    existingNode.endTime = new Date(step.endTime);
-                    existingNode.duration = step.durationMs;
-                    hasChanges = true;
-                }
-                
-                // Update output data if available
-                if (step.outputData && !existingNode.outputPreview) {
-                    existingNode.outputPreview = this.createPreview(step.outputData);
-                    existingNode.tokensUsed = this.extractTokens(step.outputData);
-                    existingNode.cost = this.extractCost(step.outputData);
-                    hasChanges = true;
+                // Update existing node in the component
+                const componentRef = this.nodeComponentMap.get(stepId);
+                if (componentRef) {
+                    const updatedStatus = step.step?.Status ? 
+                        this.mapStepStatus(step.step.Status) : 
+                        (step.endTime || step.outputData ? 'completed' : existingNode.status);
+                    
+                    if (existingNode.status !== updatedStatus) {
+                        existingNode.status = updatedStatus;
+                    }
+                    
+                    if (step.endTime && !existingNode.endTime) {
+                        existingNode.endTime = new Date(step.endTime);
+                        existingNode.duration = step.durationMs;
+                    }
+                    
+                    // Update output data if available
+                    if (step.outputData && !existingNode.outputPreview) {
+                        existingNode.outputPreview = this.createPreview(step.outputData);
+                        existingNode.tokensUsed = this.extractTokens(step.outputData);
+                        existingNode.cost = this.extractCost(step.outputData);
+                    }
+                    
+                    // Update the component's node reference and trigger change detection
+                    componentRef.instance.node = { ...existingNode };
+                    componentRef.changeDetectorRef.detectChanges();
                 }
             } else {
                 // Create new node
                 const newNode = this.createNodeFromLiveStep(step);
                 
                 if (step.depth === 0) {
+                    // Add to tree and create component
                     this.executionTree.push(newNode);
+                    this.createNodeComponent(newNode, this.executionNodesContainer);
                 } else {
-                    // Find parent based on agent hierarchy or depth
-                    const parentFound = this.appendToParent(this.executionTree, newNode);
-                    if (!parentFound) {
-                        // If no parent found, add as root node
+                    // Find parent and add as child
+                    const parentNode = this.findParentNode(this.executionTree, newNode);
+                    if (parentNode) {
+                        if (!parentNode.children) {
+                            parentNode.children = [];
+                        }
+                        parentNode.children.push(newNode);
+                        
+                        // Update parent component to show new child
+                        const parentComponentRef = this.nodeComponentMap.get(parentNode.id);
+                        if (parentComponentRef) {
+                            parentComponentRef.instance.node = { ...parentNode };
+                            parentComponentRef.changeDetectorRef.detectChanges();
+                        }
+                    } else {
+                        // If no parent found, add as root
                         this.executionTree.push(newNode);
+                        this.createNodeComponent(newNode, this.executionNodesContainer);
                     }
                 }
                 
-                hasChanges = true;
+                hasNewNodes = true;
             }
         }
         
-        if (hasChanges) {
+        if (hasNewNodes) {
+            
+            // Recalculate stats
+            this.calculateStats();
+            
             // Trigger change detection
             this.cdr.markForCheck();
             
@@ -1287,6 +1418,22 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                 this.autoScrollToBottom();
             }, 100);
         }
+    }
+    
+    /**
+     * Find parent node based on depth
+     */
+    private findParentNode(nodes: ExecutionTreeNode[], childNode: ExecutionTreeNode): ExecutionTreeNode | null {
+        for (const node of nodes) {
+            if (node.depth === childNode.depth - 1) {
+                return node;
+            }
+            if (node.children) {
+                const parent = this.findParentNode(node.children, childNode);
+                if (parent) return parent;
+            }
+        }
+        return null;
     }
     
     /**
@@ -1318,12 +1465,23 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             }
         }
         
+        // Determine status based on whether step has completed
+        let status: ExecutionTreeNode['status'] = 'running';
+        if (step.step?.Status) {
+            status = this.mapStepStatus(step.step.Status);
+        } else if (step.endTime || step.outputData) {
+            // If we have end time or output data, the step is completed
+            status = 'completed';
+        }
+        
         return {
             id: step.step?.ID || `live-${Date.now()}-${Math.random()}`,
             name: name,
             type: this.mapStepType(step.executionType || step.step?.StepType),
-            status: 'running', // Live steps start as running
+            status: status,
             startTime: step.startTime ? new Date(step.startTime) : new Date(),
+            endTime: step.endTime ? new Date(step.endTime) : undefined,
+            duration: step.durationMs,
             agentPath: step.agentHierarchy || [],
             expanded: this.mode === 'live' && step.depth < 1, // Only expand top-level in live mode
             depth: step.depth || 0,

@@ -380,9 +380,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     }
 
     private subscribeToEvents() {
-        console.log('🎯 AI Test Harness: Setting up event subscriptions for streaming');
-        
-        // First, set up direct GraphQL subscription for agent execution stream
+        // Set up direct GraphQL subscription for agent execution stream
         const dataProvider = Metadata.Provider as GraphQLDataProvider;
         const _providerPushStatusSub = dataProvider.PushStatusUpdates().subscribe((status: any) => {
             const message = JSON.parse(status.message || '{}');
@@ -390,7 +388,6 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 // Handle different types of streaming messages
                 if (message?.type === 'ExecutionProgress' && message.data?.progress) {
                     const userMsg = message.data.progress.message;
-                    console.log('📡 AI Test Harness: Received execution progress:', userMsg);
                     
                     // Update streaming message content
                     const streamingMessage = this.conversationMessages.find(m => m.isStreaming);
@@ -438,7 +435,6 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                     this.currentExecutionData = { ...this.currentExecutionData };
                 }
                 else if (message?.type === 'StreamingContent' && message.data?.streaming) {
-                    console.log('💬 AI Test Harness: Received streaming content');
                     
                     const streamingMessage = this.conversationMessages.find(m => m.isStreaming);
                     if (streamingMessage) {
@@ -451,11 +447,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                     }
                 }
                 else if (message?.type === 'partial_result' && message.data?.partialResult) {
-                    console.log('📊 AI Test Harness: Received partial result');
                     // Could update execution monitor with partial results
                 }
                 else if (message?.type === 'complete') {
-                    console.log('✅ AI Test Harness: Execution complete');
                     // Switch execution monitor to historical mode with final data
                     this.executionMonitorMode = 'historical';
                 }
@@ -545,7 +539,20 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      * @param tab - The tab to activate
      */
     public selectTab(tab: 'agentVariables' | 'executionMonitor' | 'templateVariables' | 'modelSettings' | 'savedConversations') {
+        
         this.activeTab = tab;
+        
+        // If switching to execution monitor tab, ensure it has the latest data
+        if (tab === 'executionMonitor' && this.conversationMessages.length > 0) {
+            const lastAssistantMessage = this.conversationMessages
+                .filter(m => m.role === 'assistant' && m.executionData)
+                .pop();
+                
+            if (lastAssistantMessage && lastAssistantMessage.executionData) {
+                this.currentExecutionData = lastAssistantMessage.executionData;
+                this.executionMonitorMode = 'historical';
+            }
+        }
     }
 
     /**
@@ -661,6 +668,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         // Initialize execution monitor for live mode
         this.currentExecutionData = { liveSteps: [] };
         this.executionMonitorMode = 'live';
+        
 
         try {
             // Get GraphQL data provider
@@ -692,11 +700,13 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             // Generate a session ID for this execution
             const sessionId = dataProvider.sessionId;
             
-            console.log('🚀 AI Test Harness: Sending agent execution request', {
-                agentId: (this.entity as AIAgentEntity).ID,
-                sessionId: sessionId,
-                messageCount: messages.length
-            });
+            // DEBUG: Log authentication context and request details
+            const authToken = (dataProvider as any)._authToken || (window as any).localStorage?.getItem('mj-auth-token');
+            if (!authToken) {
+                console.warn('🔐 AI Test Harness: No authentication token found in dataProvider or localStorage');
+            } else {
+            }
+            
             
             // Execute the agent
             const query = `
@@ -722,7 +732,21 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             // Start typing animation while we wait for the first real stream
             this.startTypingAnimation(assistantMessage);
 
-            const result = await dataProvider.ExecuteGQL(query, variables);
+            
+            let result;
+            try {
+                result = await dataProvider.ExecuteGQL(query, variables);
+            } catch (gqlError: any) {
+                console.error('❌ AI Test Harness: GraphQL execution failed', {
+                    error: gqlError,
+                    message: gqlError?.message,
+                    networkError: gqlError?.networkError,
+                    graphQLErrors: gqlError?.graphQLErrors,
+                    statusCode: gqlError?.networkError?.statusCode
+                });
+                throw gqlError;
+            }
+            
             const executionResult = result?.RunAIAgent;
 
             // Stop elapsed time counter
@@ -792,6 +816,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 // Store the full result as raw content for debugging/inspection
                 assistantMessage.rawContent = executionResult.payload;
             } else {
+                console.error('❌ AI Test Harness: Execution failed', {
+                    success: executionResult?.success,
+                    errorMessage: executionResult?.errorMessage,
+                    hasPayload: !!executionResult?.payload
+                });
                 assistantMessage.content = 'I encountered an error processing your request.';
                 assistantMessage.error = executionResult?.errorMessage || 'Unknown error occurred';
                 
@@ -813,6 +842,13 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             this.autoSaveConversation();
 
         } catch (error) {
+            console.error('❌ AI Test Harness: Caught error during agent execution', {
+                error: error,
+                message: (error as any)?.message,
+                stack: (error as any)?.stack,
+                type: (error as any)?.constructor?.name
+            });
+            
             // Update assistant message with error
             const lastMessage = this.conversationMessages[this.conversationMessages.length - 1];
             if (lastMessage && lastMessage.role === 'assistant') {
@@ -1121,7 +1157,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 this.messagesContainer.nativeElement.scrollTop = this.messagesContainer.nativeElement.scrollHeight;
             }
         } catch(err) {
-            console.error('Error scrolling to bottom:', err);
+            // Error scrolling to bottom
         }
     }
 
@@ -1151,7 +1187,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 this.savedConversations = [];
             }
         } catch (error) {
-            console.error('Error loading saved conversations:', error);
+            // Error loading saved conversations
             this.savedConversations = [];
         }
     }
@@ -1298,7 +1334,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             const storageKey = this.getStorageKey();
             localStorage.setItem(storageKey, JSON.stringify(this.savedConversations));
         } catch (error) {
-            console.error('Error saving conversations:', error);
+            // Error saving conversations
             throw error;
         }
     }
@@ -1320,7 +1356,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 try {
                     this.saveConversationsToStorage();
                 } catch (error) {
-                    console.error('Error auto-saving conversation:', error);
+                    // Error auto-saving conversation
                 }
             }
         }
@@ -1387,6 +1423,29 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                           typeof value === 'object' ? 'object' : 'string'
                 });
             }
+        }
+        
+        // Load execution data from the last assistant message if available
+        const lastAssistantMessage = this.conversationMessages
+            .filter(m => m.role === 'assistant' && m.executionData)
+            .pop();
+            
+        if (lastAssistantMessage && lastAssistantMessage.executionData) {
+            
+            this.currentExecutionData = lastAssistantMessage.executionData;
+            this.executionMonitorMode = 'historical';
+            
+            // If execution monitor tab is active, ensure it updates
+            if (this.activeTab === 'executionMonitor') {
+                // Force change detection
+                setTimeout(() => {
+                    this.currentExecutionData = { ...lastAssistantMessage.executionData };
+                }, 0);
+            }
+        } else {
+            // Clear execution data if no execution found
+            this.currentExecutionData = null;
+            this.executionMonitorMode = 'historical';
         }
 
         this.scrollNeeded = true;
@@ -1702,7 +1761,6 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 2000
             );
         } catch (error) {
-            console.error('Failed to copy message:', error);
             MJNotificationService.Instance.CreateSimpleNotification(
                 'Failed to copy message',
                 'error',
@@ -1949,10 +2007,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         if (this.currentJsonContent) {
             navigator.clipboard.writeText(this.currentJsonContent).then(() => {
                 // Success - JSON copied
-                console.log('JSON copied to clipboard');
             }).catch((err) => {
                 // Error copying
-                console.error('Failed to copy JSON:', err);
             });
         }
     }

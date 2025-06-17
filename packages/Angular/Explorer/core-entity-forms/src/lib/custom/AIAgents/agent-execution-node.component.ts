@@ -12,12 +12,13 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
              [style.padding-left.px]="node.depth * 24">
             
             <!-- Node Header -->
-            <div class="node-header" (click)="onToggleNode()">
+            <div class="node-header">
                 <!-- Expand/Collapse Icon -->
                 @if (hasExpandableContent()) {
                     <i class="expand-icon fa-solid"
                        [class.fa-chevron-down]="node.expanded"
-                       [class.fa-chevron-right]="!node.expanded"></i>
+                       [class.fa-chevron-right]="!node.expanded"
+                       (click)="onToggleNode($event)"></i>
                 } @else {
                     <span class="expand-spacer"></span>
                 }
@@ -163,7 +164,6 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
             background: #f8f9fa;
             border: 1px solid #e0e0e0;
             border-radius: 6px;
-            cursor: pointer;
             transition: all 0.2s ease;
             user-select: none;
         }
@@ -173,11 +173,28 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
             border-color: #2196f3;
         }
         
-        .expand-icon, .expand-spacer {
-            width: 16px;
+        .expand-icon {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             text-align: center;
             color: #666;
             font-size: 10px;
+            cursor: pointer;
+            border-radius: 3px;
+            transition: all 0.2s ease;
+        }
+        
+        .expand-icon:hover {
+            background: #e0e0e0;
+            color: #333;
+        }
+        
+        .expand-spacer {
+            width: 20px;
+            text-align: center;
         }
         
         .status-icon {
@@ -357,7 +374,10 @@ export class ExecutionNodeComponent {
                !!this.node.detailsMarkdown;
     }
     
-    onToggleNode(): void {
+    onToggleNode(event?: Event): void {
+        if (event) {
+            event.stopPropagation();
+        }
         if (this.hasExpandableContent()) {
             this.toggleNode.emit(this.node);
             this.userInteracted.emit();
