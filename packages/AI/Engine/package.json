@@ -20,7 +20,6 @@
     "@memberjunction/core-entities": "2.50.0",
     "@memberjunction/ai": "2.50.0",
     "@memberjunction/ai-engine-base": "2.50.0",
-    "@memberjunction/ai-prompts": "2.50.0",
     "dotenv": "^16.4.1",
     "rxjs": "^7.8.1"
   },

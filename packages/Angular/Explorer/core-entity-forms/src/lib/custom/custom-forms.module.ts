@@ -30,6 +30,13 @@ import { CodeEditorModule } from "@memberjunction/ng-code-editor";
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
 import { EntitySelectorDialogComponent } from "./shared/entity-selector-dialog.component";
 import { AIPromptRunFormComponentExtended } from "./AIPromptRuns/ai-prompt-run-form.component";
+import { ActionFormComponentExtended } from "./Actions/action-form.component";
+import { ActionTestHarnessComponent } from "./Actions/action-test-harness.component";
+import { ActionTestHarnessDialogComponent } from "./Actions/action-test-harness-dialog.component";
+import { ActionExecutionLogFormComponentExtended } from "./Actions/action-execution-log-form.component";
+import { UsersFormComponentExtended, LoadUsersFormComponentExtended } from "./Users/users-form.component";
+import { AgentExecutionMonitorComponent } from "./AIAgents/agent-execution-monitor.component";
+import { DashboardsFormComponent } from "./Dashboards/dashboards-form.component";
 
 @NgModule({
     declarations: [
@@ -45,10 +52,17 @@ import { AIPromptRunFormComponentExtended } from "./AIPromptRuns/ai-prompt-run-f
         AITestHarnessComponent,
         EntitySelectorDialogComponent,
         AITestHarnessDialogComponent,
-        AIPromptRunFormComponentExtended
+        AIPromptRunFormComponentExtended,
+        ActionFormComponentExtended,
+        ActionTestHarnessComponent,
+        ActionTestHarnessDialogComponent,
+        ActionExecutionLogFormComponentExtended,
+        UsersFormComponentExtended,
+        DashboardsFormComponent,
     ],
     imports: [
         CommonModule,
+        AgentExecutionMonitorComponent,
         FormsModule,
         LayoutModule,
         ExpansionPanelModule,
@@ -86,13 +100,24 @@ import { AIPromptRunFormComponentExtended } from "./AIPromptRuns/ai-prompt-run-f
         AIAgentFormComponentExtended,
         AITestHarnessComponent,
         AITestHarnessDialogComponent,
-        AIPromptRunFormComponentExtended
+        AIPromptRunFormComponentExtended,
+        ActionFormComponentExtended,
+        ActionTestHarnessComponent,
+        ActionTestHarnessDialogComponent,
+        ActionExecutionLogFormComponentExtended,
+        UsersFormComponentExtended,
+        DashboardsFormComponent
     ],
     providers: [
         TestHarnessDialogService
     ]
 })
 export class MemberJunctionCoreEntityFormsModule { }
+
+// Loader function for ActionExecutionLogFormComponentExtended
+export function LoadActionExecutionLogFormComponentExtended() {
+    // This function is called to ensure the form is loaded
+}
 
 export function LoadCoreCustomForms() {
     LoadEntitiesFormComponent()
@@ -101,6 +126,8 @@ export function LoadCoreCustomForms() {
     LoadTemplatesFormExtendedComponent();
     LoadAIPromptFormComponentExtended();
     LoadAIAgentFormComponentExtended();
-    // Note: AIPromptRunFormComponentExtended doesn't need a loader function
-    // as it extends the generated form directly
+    LoadUsersFormComponentExtended();
+    LoadActionExecutionLogFormComponentExtended();
+    // Note: AIPromptRunFormComponentExtended, ActionFormComponentExtended, and DashboardsFormComponent
+    // don't need loader functions as they extend the generated forms directly
 }

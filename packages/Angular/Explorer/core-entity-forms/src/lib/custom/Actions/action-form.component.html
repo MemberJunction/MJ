@@ -1,0 +1,592 @@
+<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
+    @if (record) {
+        <form class="record-form" #form="ngForm" mjFillContainer>
+            <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+            <!-- Main Content Area -->
+            <div class="action-main-area" style="display: flex; flex-direction: column; height: 100%; overflow-y: auto;">
+                
+                <!-- Header Section -->
+                <div class="action-header" style="flex-shrink: 0; padding: 20px; background: #f8f9fa; border-bottom: 2px solid #e9ecef;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
+                        
+                        <!-- Left: Action Info -->
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                                <i [class]="'fa-solid ' + getTypeIcon()" [style.color]="getTypeColor()" style="font-size: 1.4em;"></i>
+                                @if (EditMode) {
+                                    <kendo-textbox [(ngModel)]="record.Name" 
+                                                  name="actionName"
+                                                  placeholder="Enter action name..."
+                                                  style="font-size: 1.2em; font-weight: 600; min-width: 300px; flex: 1;">
+                                    </kendo-textbox>
+                                } @else {
+                                    <h4 style="margin: 0; color: #495057; font-weight: 600; flex: 1;">{{ record.Name || 'Untitled Action' }}</h4>
+                                    <span class="status-badge" [style.background-color]="getStatusColor()" 
+                                          style="color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.75em; font-weight: 500;">
+                                        {{ record.Status }}
+                                    </span>
+                                }
+                            </div>
+                            
+                            <!-- Status and Type Editors when in edit mode -->
+                            @if (EditMode) {
+                                <div style="display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap;">
+                                    <div>
+                                        <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #495057; font-size: 0.9em;">Status</label>
+                                        <kendo-dropdownlist [(ngModel)]="record.Status"
+                                                           name="actionStatus"
+                                                           [data]="[{text: 'Active', value: 'Active'}, {text: 'Pending', value: 'Pending'}, {text: 'Disabled', value: 'Disabled'}]"
+                                                           textField="text"
+                                                           valueField="value"
+                                                           [valuePrimitive]="true"
+                                                           style="width: 150px;">
+                                        </kendo-dropdownlist>
+                                    </div>
+                                    <div>
+                                        <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #495057; font-size: 0.9em;">
+                                            Type <span style="color: #dc3545;">*</span>
+                                        </label>
+                                        <kendo-dropdownlist [(ngModel)]="record.Type"
+                                                           name="actionType"
+                                                           [data]="[{text: 'Generated', value: 'Generated'}, {text: 'Custom', value: 'Custom'}]"
+                                                           textField="text"
+                                                           valueField="value"
+                                                           [valuePrimitive]="true"
+                                                           style="width: 150px;">
+                                        </kendo-dropdownlist>
+                                    </div>
+                                    <div>
+                                        <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #495057; font-size: 0.9em;">
+                                            Category <span style="color: #dc3545;">*</span>
+                                        </label>
+                                        <kendo-dropdownlist [(ngModel)]="record.CategoryID"
+                                                           name="categoryID"
+                                                           [data]="[]"
+                                                           placeholder="Select category..."
+                                                           style="width: 200px;">
+                                        </kendo-dropdownlist>
+                                    </div>
+                                </div>
+                            }
+                            
+                            @if (EditMode) {
+                                <kendo-textarea [(ngModel)]="record.Description" 
+                                               name="actionDescription"
+                                               [rows]="2"
+                                               placeholder="Enter action description..."
+                                               style="width: 100%; max-width: 600px; margin-bottom: 12px;">
+                                </kendo-textarea>
+                            } @else if (record.Description) {
+                                <p style="margin: 0 0 12px 0; color: #6c757d; font-size: 0.9em; line-height: 1.4;">{{ record.Description }}</p>
+                            }
+                            
+                            <!-- Quick Config Row -->
+                            <div class="quick-config" style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                                @if (category) {
+                                    <div class="config-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
+                                        <i class="fa-solid fa-folder" style="color: #6c757d;"></i>
+                                        <span style="color: #6c757d;">Category:</span>
+                                        <span style="color: #495057; font-weight: 500; cursor: pointer;" (click)="navigateToCategory()">
+                                            {{ category.Name }}
+                                            <i class="fa-solid fa-external-link" style="font-size: 0.75em; margin-left: 4px;"></i>
+                                        </span>
+                                    </div>
+                                }
+                                
+                                <div class="config-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
+                                    <i class="fa-solid fa-cube" style="color: #6c757d;"></i>
+                                    <span style="color: #6c757d;">Type:</span>
+                                    <span style="color: #495057; font-weight: 500;">{{ record.Type }}</span>
+                                </div>
+                                
+                                @if (record.Type === 'Generated' && record.CodeApprovalStatus) {
+                                    <div class="config-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
+                                        <i [class]="'fa-solid ' + getApprovalStatusIcon()" [style.color]="getApprovalStatusColor()"></i>
+                                        <span style="color: #6c757d;">Code:</span>
+                                        <span [style.color]="getApprovalStatusColor()" style="font-weight: 500;">{{ record.CodeApprovalStatus }}</span>
+                                    </div>
+                                }
+                                
+                                @if (actionParams.length > 0) {
+                                    <div class="config-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
+                                        <i class="fa-solid fa-sliders" style="color: #6c757d;"></i>
+                                        <span style="color: #495057; font-weight: 500;">{{ actionParams.length }} Parameters</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        
+                        <!-- Right: Action Buttons -->
+                        <div class="action-buttons" style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
+                            <div style="display: flex; gap: 8px;">
+                                @if (record.ID) {
+                                    <kendo-button themeColor="primary" size="large"
+                                                (click)="openTestHarness()"
+                                                title="Open Test Harness"
+                                                [disabled]="record.Status !== 'Active'">
+                                        <i class="fa-solid fa-flask"></i> Test
+                                    </kendo-button>
+                                }
+                                @if (EditMode && record.Type === 'Generated') {
+                                    <kendo-button themeColor="info" size="medium"
+                                                (click)="regenerateCode()"
+                                                title="Regenerate Code">
+                                        <i class="fa-solid fa-robot"></i> Regenerate
+                                    </kendo-button>
+                                }
+                            </div>
+                            
+                            @if (EditMode && record.CodeApprovalStatus === 'Pending' && record.Type === 'Generated') {
+                                <div style="display: flex; gap: 8px;">
+                                    <kendo-button themeColor="success" size="small"
+                                                (click)="approveCode()">
+                                        <i class="fa-solid fa-check"></i> Approve
+                                    </kendo-button>
+                                    <kendo-button themeColor="error" size="small"
+                                                (click)="rejectCode()">
+                                        <i class="fa-solid fa-times"></i> Reject
+                                    </kendo-button>
+                                </div>
+                            }
+                            
+                            @if (!EditMode && record.Status !== 'Active' && record.ID) {
+                                <div style="font-size: 0.75em; color: #dc3545; text-align: right;">
+                                    Action must be Active to execute
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Configuration Sections with Expansion Panels -->
+                <div class="configuration-sections" style="flex: 1; background: white; border-top: 2px solid #e9ecef; padding: 16px; min-height: 0;">
+                    
+                    <!-- Parameters Section (FIRST) -->
+                    <kendo-expansionpanel 
+                        [expanded]="true"
+                        style="margin-bottom: 12px;">
+                        <ng-template kendoExpansionPanelTitleDirective>
+                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                <i class="fa-solid fa-sliders" style="color: #6c757d;"></i>
+                                Parameters
+                                @if (actionParams.length > 0) {
+                                    <span style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                                        {{ actionParams.length }}
+                                    </span>
+                                }
+                            </span>
+                        </ng-template>
+                        
+                        <div style="padding: 16px;">
+                            @if (isLoadingParams) {
+                                <div class="loading-state">
+                                    <i class="fa-solid fa-spinner fa-spin"></i>
+                                    Loading parameters...
+                                </div>
+                            } @else if (actionParams.length === 0) {
+                                <div class="empty-state" style="padding: 30px; text-align: center;">
+                                    <i class="fa-solid fa-sliders" style="font-size: 2em; color: #6c757d; opacity: 0.3;"></i>
+                                    <p style="margin: 12px 0 0 0; color: #6c757d;">No parameters defined</p>
+                                    @if (EditMode && record.IsSaved) {
+                                        <p style="margin: 8px 0 0 0; font-size: 0.85em; color: #6c757d;">Add parameters to define inputs and outputs for this action</p>
+                                    }
+                                </div>
+                            } @else {
+                                <div class="params-flow">
+                                    <!-- Input Parameters -->
+                                    <div class="param-group input-params">
+                                        <h3><i class="fa-solid fa-sign-in-alt"></i> Inputs</h3>
+                                        <div class="param-cards">
+                                            @if (getInputParams().length === 0) {
+                                                <div class="no-params">
+                                                    <p>No input parameters</p>
+                                                </div>
+                                            } @else {
+                                                @for (param of getInputParams(); track param.ID) {
+                                                    <div class="param-card" [class.required]="param.IsRequired">
+                                                        <div class="param-header">
+                                                            <span class="param-name">{{ param.Name }}</span>
+                                                            @if (param.IsRequired) {
+                                                                <span class="required-badge">Required</span>
+                                                            }
+                                                            @if (param.IsArray) {
+                                                                <span class="array-badge">Array</span>
+                                                            }
+                                                        </div>
+                                                        <div class="param-type">{{ param.ValueType }}</div>
+                                                        @if (param.Description) {
+                                                            <div class="param-description">{{ param.Description }}</div>
+                                                        }
+                                                        @if (param.DefaultValue) {
+                                                            <div class="param-default">
+                                                                <span class="default-label">Default:</span>
+                                                                <code>{{ param.DefaultValue }}</code>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
+                                    </div>
+
+                                    <!-- Flow Arrow -->
+                                    <div class="param-flow-arrow">
+                                        <i class="fa-solid fa-arrow-right"></i>
+                                    </div>
+
+                                    <!-- Action Box -->
+                                    <div class="action-box">
+                                        <i class="fa-solid fa-cog"></i>
+                                        <span>{{ record.Name }}</span>
+                                    </div>
+
+                                    <!-- Flow Arrow -->
+                                    <div class="param-flow-arrow">
+                                        <i class="fa-solid fa-arrow-right"></i>
+                                    </div>
+
+                                    <!-- Output Parameters -->
+                                    <div class="param-group output-params">
+                                        <h3><i class="fa-solid fa-sign-out-alt"></i> Outputs</h3>
+                                        <div class="param-cards">
+                                            @if (getOutputParams().length === 0) {
+                                                <div class="no-params">
+                                                    <p>No output parameters</p>
+                                                </div>
+                                            } @else {
+                                                @for (param of getOutputParams(); track param.ID) {
+                                                    <div class="param-card">
+                                                        <div class="param-header">
+                                                            <span class="param-name">{{ param.Name }}</span>
+                                                            @if (param.IsArray) {
+                                                                <span class="array-badge">Array</span>
+                                                            }
+                                                        </div>
+                                                        <div class="param-type">{{ param.ValueType }}</div>
+                                                        @if (param.Description) {
+                                                            <div class="param-description">{{ param.Description }}</div>
+                                                        }
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </kendo-expansionpanel>
+
+                    <!-- Code & Generation Section (Only for Generated type) -->
+                    @if (record.Type === 'Generated') {
+                        <kendo-expansionpanel 
+                            [expanded]="expandedSections.code"
+                            style="margin-bottom: 12px;">
+                            <ng-template kendoExpansionPanelTitleDirective>
+                                <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                    <i class="fa-solid fa-code" style="color: #6c757d;"></i>
+                                    Code & Generation
+                                    @if (record.CodeLocked) {
+                                        <span style="background: #ffc107; color: #856404; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                                            <i class="fa-solid fa-lock"></i> Locked
+                                        </span>
+                                    }
+                                </span>
+                            </ng-template>
+                            
+                            <div style="padding: 16px;">
+                                @if (EditMode) {
+                                    <div class="generation-panel">
+                                        <h3><i class="fa-solid fa-robot"></i> AI Generation</h3>
+                                        <div class="prompt-section">
+                                            <label>User Prompt</label>
+                                            <kendo-textarea [(ngModel)]="record.UserPrompt"
+                                                           name="userPrompt"
+                                                           [rows]="4"
+                                                           placeholder="Describe what this action should do..."
+                                                           style="width: 100%;">
+                                            </kendo-textarea>
+                                        </div>
+                                        <div class="comments-section">
+                                            <label>Internal Comments (not sent to AI)</label>
+                                            <kendo-textarea [(ngModel)]="record.UserComments"
+                                                           name="userComments"
+                                                           [rows]="2"
+                                                           placeholder="Internal notes..."
+                                                           style="width: 100%;">
+                                            </kendo-textarea>
+                                        </div>
+                                        <div class="generation-controls">
+                                            <kendo-switch [(ngModel)]="record.CodeLocked"
+                                                         name="codeLocked">
+                                            </kendo-switch>
+                                            <label style="margin-left: 8px;">Lock Code (prevent regeneration)</label>
+                                        </div>
+                                    </div>
+                                }
+                                
+                                <div class="code-editor-section">
+                                    <div class="code-toolbar">
+                                        <h3><i class="fa-solid fa-file-code"></i> Action Code</h3>
+                                        <div class="code-actions">
+                                            @if (record.CodeComments) {
+                                                <kendo-button fillMode="flat" size="small" (click)="toggleCodeComments()">
+                                                    <i class="fa-solid fa-comment"></i> 
+                                                    {{ showCodeComments ? 'Hide' : 'Show' }} AI Comments
+                                                </kendo-button>
+                                            }
+                                            <kendo-button fillMode="flat" size="small" (click)="copyToClipboard(record.Code || '')">
+                                                <i class="fa-solid fa-copy"></i> Copy
+                                            </kendo-button>
+                                        </div>
+                                    </div>
+                                    <mj-code-editor 
+                                        [(ngModel)]="record.Code"
+                                        name="actionCode"
+                                        [readonly]="!EditMode || record.CodeLocked"
+                                        [language]="codeLanguage"
+                                        [lineWrapping]="true"
+                                        style="height: 400px; width: 100%;">
+                                    </mj-code-editor>
+                                    
+                                    @if (showCodeComments && record.CodeComments) {
+                                        <div class="code-comments">
+                                            <h4><i class="fa-solid fa-robot"></i> AI Explanation</h4>
+                                            <p>{{ record.CodeComments }}</p>
+                                        </div>
+                                    }
+                                    
+                                    @if (EditMode && record.CodeApprovalStatus === 'Rejected') {
+                                        <div class="approval-comments">
+                                            <label>Rejection Comments</label>
+                                            <kendo-textarea [(ngModel)]="record.CodeApprovalComments"
+                                                           name="codeApprovalComments"
+                                                           [rows]="2"
+                                                           placeholder="Explain why the code was rejected..."
+                                                           style="width: 100%;">
+                                            </kendo-textarea>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </kendo-expansionpanel>
+                    }
+
+                    <!-- Result Codes Section -->
+                    <kendo-expansionpanel 
+                        [expanded]="expandedSections.resultCodes"
+                        style="margin-bottom: 12px;">
+                        <ng-template kendoExpansionPanelTitleDirective>
+                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                <i class="fa-solid fa-flag-checkered" style="color: #6c757d;"></i>
+                                Result Codes
+                                @if (resultCodes.length > 0) {
+                                    <span style="background: #28a745; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                                        {{ resultCodes.length }}
+                                    </span>
+                                }
+                            </span>
+                        </ng-template>
+                        
+                        <div style="padding: 16px;">
+                            @if (isLoadingResultCodes) {
+                                <div class="loading-state">
+                                    <i class="fa-solid fa-spinner fa-spin"></i>
+                                    Loading result codes...
+                                </div>
+                            } @else if (resultCodes.length === 0) {
+                                <div class="empty-state" style="padding: 30px; text-align: center;">
+                                    <i class="fa-solid fa-flag-checkered" style="font-size: 2em; color: #6c757d; opacity: 0.3;"></i>
+                                    <p style="margin: 12px 0 0 0; color: #6c757d;">No result codes defined</p>
+                                    @if (EditMode && record.IsSaved) {
+                                        <p style="margin: 8px 0 0 0; font-size: 0.85em; color: #6c757d;">Add result codes to define possible outcomes</p>
+                                    }
+                                </div>
+                            } @else {
+                                <div class="result-codes-grid">
+                                    @for (code of resultCodes; track code.ID) {
+                                        <div class="result-code-card" [class.success]="code.IsSuccess" [class.failure]="!code.IsSuccess">
+                                            <div class="result-icon">
+                                                <i [class]="code.IsSuccess ? 'fa-solid fa-check-circle' : 'fa-solid fa-times-circle'"></i>
+                                            </div>
+                                            <div class="result-content">
+                                                <div class="result-code">{{ code.ResultCode }}</div>
+                                                @if (code.Description) {
+                                                    <div class="result-description">{{ code.Description }}</div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </kendo-expansionpanel>
+
+                    <!-- Execution & Monitoring Section -->
+                    @if (record.IsSaved) {
+                        <kendo-expansionpanel 
+                            [expanded]="expandedSections.execution"
+                            style="margin-bottom: 12px;">
+                            <ng-template kendoExpansionPanelTitleDirective>
+                                <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                    <i class="fa-solid fa-chart-line" style="color: #6c757d;"></i>
+                                    Execution & Monitoring
+                                </span>
+                            </ng-template>
+                            
+                            <div style="padding: 16px;">
+                                @if (isLoadingExecutions) {
+                                    <div class="loading-state">
+                                        <i class="fa-solid fa-spinner fa-spin"></i>
+                                        Loading executions...
+                                    </div>
+                                } @else if (recentExecutions.length === 0) {
+                                    <div class="empty-state" style="padding: 30px; text-align: center;">
+                                        <i class="fa-solid fa-chart-line" style="font-size: 2em; color: #6c757d; opacity: 0.3;"></i>
+                                        <p style="margin: 12px 0 0 0; color: #6c757d;">No executions yet</p>
+                                    </div>
+                                } @else {
+                                    <div class="execution-stats-row">
+                                        <div class="stat-box">
+                                            <i class="fa-solid fa-tachometer-alt"></i>
+                                            <div class="stat-info">
+                                                <div class="stat-label" style="color: #212529;">Avg Duration</div>
+                                                <div class="stat-value" style="color: #212529;">{{ formatDuration(executionStats.avgDuration) }}</div>
+                                            </div>
+                                        </div>
+                                        <div class="stat-box">
+                                            <i class="fa-solid fa-check-circle" [style.color]="getSuccessRateColor()"></i>
+                                            <div class="stat-info">
+                                                <div class="stat-label" style="color: #212529;">Success Rate</div>
+                                                <div class="stat-value" [style.color]="getSuccessRateColor()" style="font-weight: 600;">{{ executionStats.successRate.toFixed(0) }}%</div>
+                                            </div>
+                                        </div>
+                                        <div class="stat-box">
+                                            <i class="fa-solid fa-play-circle"></i>
+                                            <div class="stat-info">
+                                                <div class="stat-label" style="color: #212529;">Total Runs</div>
+                                                <div class="stat-value" style="color: #212529;">{{ executionStats.totalRuns }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <h3 style="margin-top: 24px;"><i class="fa-solid fa-history"></i> Recent Executions</h3>
+                                    <div class="executions-table">
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>Started</th>
+                                                    <th>Duration</th>
+                                                    <th>User</th>
+                                                    <th>Result</th>
+                                                    <th>Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @for (execution of recentExecutions; track execution.ID) {
+                                                    <tr class="execution-row" [class.success]="isExecutionSuccess(execution)">
+                                                        <td>{{ execution.StartedAt | date:'short' }}</td>
+                                                        <td>
+                                                            @if (execution.EndedAt) {
+                                                                {{ formatDuration(getExecutionDuration(execution)) }}
+                                                            } @else {
+                                                                <span class="running">Running...</span>
+                                                            }
+                                                        </td>
+                                                        <td>{{ execution.User }}</td>
+                                                        <td>
+                                                            <span class="result-code" 
+                                                                  [class.success]="isExecutionSuccess(execution)"
+                                                                  [class.failure]="!isExecutionSuccess(execution)">
+                                                                {{ execution.ResultCode }}
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            <kendo-button fillMode="flat" size="small" (click)="navigateToExecution(execution.ID)">
+                                                                <i class="fa-solid fa-external-link"></i>
+                                                            </kendo-button>
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                }
+                            </div>
+                        </kendo-expansionpanel>
+                    }
+
+                    <!-- Related Configuration Section -->
+                    @if (record.IsSaved) {
+                        <kendo-expansionpanel 
+                            [expanded]="expandedSections.configuration"
+                            style="margin-bottom: 12px;">
+                            <ng-template kendoExpansionPanelTitleDirective>
+                                <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                    <i class="fa-solid fa-cogs" style="color: #6c757d;"></i>
+                                    Related Configuration
+                                </span>
+                            </ng-template>
+                            
+                            <div style="padding: 16px;">
+                                <!-- Libraries -->
+                                <div class="config-subsection">
+                                    <h3><i class="fa-solid fa-book"></i> Libraries</h3>
+                                    @if (isLoadingLibraries) {
+                                        <div class="loading-state">
+                                            <i class="fa-solid fa-spinner fa-spin"></i>
+                                            Loading libraries...
+                                        </div>
+                                    } @else if (actionLibraries.length === 0) {
+                                        <div class="empty-state mini">
+                                            <p>No libraries configured</p>
+                                        </div>
+                                    } @else {
+                                        <div class="library-cards">
+                                            @for (lib of libraries; track lib.ID; let i = $index) {
+                                                <div class="library-card" (click)="navigateToLibrary(lib.ID)">
+                                                    <i class="fa-solid fa-book"></i>
+                                                    <div class="library-info">
+                                                        <div class="library-name">{{ lib.Name }}</div>
+                                                        @if (actionLibraries[i].ItemsUsed) {
+                                                            <div class="library-items">{{ actionLibraries[i].ItemsUsed }}</div>
+                                                        }
+                                                    </div>
+                                                    <i class="fa-solid fa-external-link"></i>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+
+                                <!-- Other Related Entities -->
+                                <div class="related-entities-grid">
+                                    <div class="related-entity-link">
+                                        <i class="fa-solid fa-shield-alt"></i>
+                                        <span>Authorizations</span>
+                                        <span class="entity-count">View</span>
+                                    </div>
+                                    <div class="related-entity-link">
+                                        <i class="fa-solid fa-layer-group"></i>
+                                        <span>Contexts</span>
+                                        <span class="entity-count">View</span>
+                                    </div>
+                                    <div class="related-entity-link">
+                                        <i class="fa-solid fa-calendar"></i>
+                                        <span>Scheduled Actions</span>
+                                        <span class="entity-count">View</span>
+                                    </div>
+                                    <div class="related-entity-link">
+                                        <i class="fa-solid fa-cube"></i>
+                                        <span>Entity Actions</span>
+                                        <span class="entity-count">View</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </kendo-expansionpanel>
+                    }
+                </div>
+            </div>
+        </form>
+    }
+</div>

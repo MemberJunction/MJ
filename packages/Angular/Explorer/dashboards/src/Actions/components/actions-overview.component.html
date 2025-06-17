@@ -184,21 +184,48 @@
         @if (recentExecutions.length > 0) {
           <div class="executions-list">
             @for (execution of recentExecutions; track execution.ID) {
-              <div class="execution-item" (click)="openExecution(execution)">
-                <div class="execution-time">
-                  {{ execution.StartedAt | date:'MMM d, HH:mm' }}
+              <div class="execution-item" [class.expanded]="execution.isExpanded">
+                <div class="execution-header" (click)="toggleExecutionExpanded(execution)">
+                  <div class="execution-time">
+                    {{ execution.StartedAt | date:'MMM d, HH:mm' }}
+                  </div>
+                  <div class="execution-info">
+                    <div class="execution-action">{{ execution.Action || 'Action ID: ' + execution.ActionID }}</div>
+                    <div class="execution-user">{{ execution.User || 'User ID: ' + execution.UserID }}</div>
+                  </div>
+                  <div class="execution-result">
+                    <kendo-chip 
+                      [themeColor]="isExecutionSuccess(execution) ? 'success' : 'error'"
+                      [size]="'small'">
+                      {{ execution.ResultCode || 'Unknown' }}
+                    </kendo-chip>
+                  </div>
+                  <div class="execution-expand-icon">
+                    <i [class]="execution.isExpanded ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'"></i>
+                  </div>
                 </div>
-                <div class="execution-info">
-                  <div class="execution-action">Action ID: {{ execution.ActionID }}</div>
-                  <div class="execution-user">User: {{ execution.UserID }}</div>
-                </div>
-                <div class="execution-result">
-                  <kendo-chip 
-                    [themeColor]="execution.ResultCode === 'Success' ? 'success' : 'error'"
-                    [size]="'small'">
-                    {{ execution.ResultCode || 'Unknown' }}
-                  </kendo-chip>
-                </div>
+                @if (execution.isExpanded) {
+                  <div class="execution-details">
+                    <div class="params-section">
+                      <h5><i class="fa-solid fa-sliders"></i> Parameters</h5>
+                      <mj-code-editor 
+                        [ngModel]="formatJsonParams(execution.Params)"
+                        [readonly]="true"
+                        [language]="'json'"
+                        [lineWrapping]="true"
+                        style="height: 150px; width: 100%;">
+                      </mj-code-editor>
+                    </div>
+                    <div class="execution-actions">
+                      <kendo-button 
+                        themeColor="primary" 
+                        size="small"
+                        (click)="openExecution(execution)">
+                        <i class="fa-solid fa-external-link"></i> Open Details
+                      </kendo-button>
+                    </div>
+                  </div>
+                }
               </div>
             }
           </div>
