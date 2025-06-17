@@ -211,13 +211,34 @@ export class ActionTestHarnessComponent implements OnInit {
             const graphQLProvider = Metadata.Provider as GraphQLDataProvider;
             
             // Convert params to ActionParamInput array format
-            const actionParams = this.paramValues.map(paramValue => ({
-                Name: paramValue.param.Name,
-                Value: typeof paramValue.value === 'object' 
-                    ? JSON.stringify(paramValue.value) 
-                    : String(paramValue.value),
-                Type: paramValue.param.ValueType
-            }));
+            const actionParams = this.paramValues.map(paramValue => {
+                // Determine the actual data type for the Type field
+                let dataType = 'string'; // default
+                
+                if (paramValue.param.ValueType === 'Scalar') {
+                    // For scalar, check the actual value type
+                    if (typeof paramValue.value === 'boolean') {
+                        dataType = 'boolean';
+                    } else if (typeof paramValue.value === 'number') {
+                        dataType = 'number';
+                    } else {
+                        dataType = 'string';
+                    }
+                } else if (paramValue.param.ValueType === 'Simple Object') {
+                    dataType = 'object';
+                } else if (paramValue.param.IsArray) {
+                    dataType = 'array';
+                }
+                
+                return {
+                    Name: paramValue.param.Name,
+                    Value: typeof paramValue.value === 'object' 
+                        ? JSON.stringify(paramValue.value) 
+                        : String(paramValue.value),
+                    Type: dataType
+                };
+            });
+            
             
             const variables = {
                 input: {
@@ -227,20 +248,49 @@ export class ActionTestHarnessComponent implements OnInit {
                 }
             };
             
-            const result = await graphQLProvider.ExecuteGQL(query, variables);
+            
+            let result;
+            try {
+                result = await graphQLProvider.ExecuteGQL(query, variables);
+            } catch (gqlError: any) {
+                console.error('❌ Action Test Harness: GraphQL execution failed', {
+                    error: gqlError,
+                    message: gqlError?.message,
+                    networkError: gqlError?.networkError,
+                    graphQLErrors: gqlError?.graphQLErrors,
+                    statusCode: gqlError?.networkError?.statusCode,
+                    response: gqlError?.networkError?.response
+                });
+                throw gqlError;
+            }
             
             this.executionTime = Date.now() - startTime;
             
             if (result?.RunAction) {
                 this.executionResult = result.RunAction;
+                
+                // If result is false/failed, it might still have an error in the data
+                if (!this.executionResult?.Success && this.executionResult?.Message) {
+                    console.warn('⚠️ Action Test Harness: Action failed with message', this.executionResult.Message);
+                }
             } else {
+                console.error('❌ Action Test Harness: No RunAction in result', {
+                    result,
+                    resultType: typeof result,
+                    resultStringified: JSON.stringify(result)
+                });
                 throw new Error('No result returned from action execution');
             }
             
         } catch (error: any) {
             this.executionTime = Date.now() - startTime;
             this.executionError = error.message || 'An unknown error occurred';
-            console.error('Action execution error:', error);
+            console.error('❌ Action Test Harness: Caught error during action execution', {
+                error: error,
+                message: error?.message,
+                stack: error?.stack,
+                type: error?.constructor?.name
+            });
         } finally {
             this.isExecuting = false;
             this.cdr.detectChanges();
@@ -264,8 +314,19 @@ export class ActionTestHarnessComponent implements OnInit {
         const resultText = JSON.stringify(this.executionResult, null, 2);
         navigator.clipboard.writeText(resultText).then(() => {
             // Could add a notification here
-        }).catch(err => {
-            console.error('Failed to copy to clipboard:', err);
+        }).catch(() => {
+            // Failed to copy to clipboard
+        });
+    }
+    
+    public copyResultDataToClipboard() {
+        if (!this.executionResult?.ResultData) return;
+        
+        const resultDataText = this.formatResultData(this.executionResult.ResultData);
+        navigator.clipboard.writeText(resultDataText).then(() => {
+            // Could add a notification here
+        }).catch(() => {
+            // Failed to copy to clipboard
         });
     }
 

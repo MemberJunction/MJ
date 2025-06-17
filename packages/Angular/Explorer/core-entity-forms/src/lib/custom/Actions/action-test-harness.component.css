@@ -303,14 +303,32 @@ textarea.param-input {
 }
 
 .result-message h5 {
-    margin: 0 0 8px 0;
+    margin: 0 0 12px 0;
     color: #495057;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.result-message h5 i {
+    color: #17a2b8;
 }
 
 .result-message p {
     margin: 0;
     color: #6c757d;
     line-height: 1.5;
+}
+
+.result-message .code-editor-container {
+    margin-bottom: 0;
+}
+
+.result-message .code-editor {
+    color: #e8e8e8;
+    background: #2d2d30;
+    max-height: 200px;
+    overflow-y: auto;
 }
 
 /* Result Data */
@@ -321,6 +339,18 @@ textarea.param-input {
 .result-data h5 {
     margin: 0 0 16px 0;
     color: #495057;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.result-data h5 i {
+    color: #6f42c1;
+}
+
+.toggle-view-btn {
+    margin-left: auto;
+    font-size: 0.85em;
 }
 
 .raw-data {
@@ -334,6 +364,68 @@ textarea.param-input {
     overflow-x: auto;
     white-space: pre-wrap;
     word-break: break-word;
+}
+
+/* Code Editor Styles */
+.code-editor-container {
+    background: #1e1e1e;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 16px;
+}
+
+.code-editor-container.compact {
+    margin-bottom: 0;
+}
+
+.code-editor-header {
+    background: #2d2d30;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #3e3e42;
+}
+
+.language-badge {
+    background: #007acc;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 0.75em;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.copy-btn {
+    color: #cccccc;
+    padding: 4px 8px;
+    min-width: auto;
+}
+
+.copy-btn:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.code-editor {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    border: none;
+    border-radius: 0;
+    padding: 16px;
+    margin: 0;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.code-editor.json {
+    /* JSON syntax highlighting simulation */
+    color: #9cdcfe;
 }
 
 /* Output Parameters */
@@ -350,10 +442,17 @@ textarea.param-input {
 }
 
 .output-param label {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 6px;
     margin-bottom: 8px;
     font-weight: 600;
     color: #495057;
+}
+
+.output-param label i {
+    color: #6f42c1;
+    font-size: 0.9em;
 }
 
 .output-value {

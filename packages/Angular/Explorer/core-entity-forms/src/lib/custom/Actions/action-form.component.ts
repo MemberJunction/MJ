@@ -101,7 +101,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
                 await this.category.Load(this.record.CategoryID);
             }
         } catch (error) {
-            console.error('Error loading category:', error);
+            // Error loading category
         }
     }
 
@@ -118,8 +118,6 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             
             if (result.Success) {
                 this.actionParams = result.Results || [];
-                console.log(`Loaded ${this.actionParams.length} action params for action ${this.record.Name}`);
-                
                 // Update cached filtered params - trim and lowercase Type values to handle any whitespace and case
                 this._inputParams = this.actionParams.filter(p => {
                     const type = p.Type?.trim().toLowerCase();
@@ -129,28 +127,14 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
                     const type = p.Type?.trim().toLowerCase();
                     return type === 'output' || type === 'both';
                 });
-                
-                // Log details for debugging params display issue
-                if (this.actionParams.length > 0) {
-                    console.log('Action params details:', this.actionParams.map(p => ({
-                        ID: p.ID,
-                        Name: p.Name,
-                        Type: p.Type,
-                        TypeLength: p.Type?.length,
-                        ValueType: p.ValueType,
-                        IsRequired: p.IsRequired
-                    })));
-                    console.log('Input params count:', this._inputParams.length);
-                    console.log('Output params count:', this._outputParams.length);
-                }
             } else {
-                console.error('Failed to load action params:', result.ErrorMessage);
+                // Failed to load action params
                 this.actionParams = [];
                 this._inputParams = [];
                 this._outputParams = [];
             }
         } catch (error) {
-            console.error('Error loading action params:', error);
+            // Error loading action params
             this.actionParams = [];
             this._inputParams = [];
             this._outputParams = [];
@@ -174,11 +158,11 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             if (result.Success) {
                 this.resultCodes = result.Results || [];
             } else {
-                console.error('Failed to load result codes:', result.ErrorMessage);
+                // Failed to load result codes
                 this.resultCodes = [];
             }
         } catch (error) {
-            console.error('Error loading result codes:', error);
+            // Error loading result codes
             this.resultCodes = [];
         } finally {
             this.isLoadingResultCodes = false;
@@ -200,11 +184,11 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             if (result.Success) {
                 this.recentExecutions = result.Results || [];
             } else {
-                console.error('Failed to load executions:', result.ErrorMessage);
+                // Failed to load executions
                 this.recentExecutions = [];
             }
         } catch (error) {
-            console.error('Error loading executions:', error);
+            // Error loading executions
             this.recentExecutions = [];
         } finally {
             this.isLoadingExecutions = false;
@@ -241,7 +225,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
                 }
             }
         } catch (error) {
-            console.error('Error loading libraries:', error);
+            // Error loading libraries
         } finally {
             this.isLoadingLibraries = false;
         }
@@ -287,7 +271,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
                 this.executionStats.lastRun = new Date(allExecutions[0].StartedAt);
             }
         } catch (error) {
-            console.error('Error loading execution stats:', error);
+            // Error loading execution stats
         }
     }
 
@@ -397,7 +381,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
     // Actions
     openTestHarness() {
         if (!this.record || !this.record.ID || !this.record.IsSaved || this.record.Status !== 'Active') {
-            console.warn('Cannot open test harness: Action must be saved and active');
+            // Cannot open test harness: Action must be saved and active
             return;
         }
         
@@ -449,7 +433,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             await navigator.clipboard.writeText(text);
             // Could add a notification here
         } catch (err) {
-            console.error('Failed to copy:', err);
+            // Failed to copy
         }
     }
 
@@ -627,5 +611,4 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
 // Loader function required for the component to be properly registered
 export function LoadActionFormComponentExtended() {
     // This function is called to ensure the form is loaded and registered
-    console.log('LoadActionFormComponentExtended called');
 }
