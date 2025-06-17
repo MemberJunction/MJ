@@ -1,3 +1,46 @@
-.data-browser-container {
-   padding: 15px;
+.mj-app-icon {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 16px;
+    
+    span {
+        font-size: 3rem;
+        color: var(--mj-blue);
+        transition: var(--transition-time);
+    }
+}
+
+.mj-app-content {
+    text-align: center;
+    
+    h3 {
+        margin: 0 0 8px 0;
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--navy);
+        transition: var(--transition-time);
+    }
+    
+    p {
+        margin: 0;
+        font-size: 0.9rem;
+        color: var(--gray-800);
+        line-height: 1.4;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+}
+
+.mj-card:hover {
+    .mj-app-icon span {
+        color: var(--navy);
+        transform: scale(1.1);
+    }
+    
+    .mj-app-content h3 {
+        color: var(--mj-blue);
+        transform: scale(1.02);
+    }
 }
