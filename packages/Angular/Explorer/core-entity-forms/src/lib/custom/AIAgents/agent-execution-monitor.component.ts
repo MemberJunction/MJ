@@ -1,7 +1,8 @@
-import { Component, Input, OnChanges, SimpleChanges, OnDestroy } from '@angular/core';
+import { Component, Input, OnChanges, SimpleChanges, OnDestroy, ViewChild, ElementRef, AfterViewInit, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subject, interval, Subscription } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { ExecutionNodeComponent } from './agent-execution-node.component';
 
 /**
  * Represents a node in the execution tree with all necessary display information
@@ -66,7 +67,8 @@ export interface ExecutionStats {
 @Component({
     selector: 'mj-agent-execution-monitor',
     standalone: true,
-    imports: [CommonModule],
+    imports: [CommonModule, ExecutionNodeComponent],
+    changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
         <div class="execution-monitor" [class.live-mode]="mode === 'live'">
             <!-- Header -->
@@ -91,7 +93,11 @@ export interface ExecutionStats {
             </div>
 
             <!-- Execution Tree -->
-            <div class="execution-tree" [class.has-content]="executionTree.length > 0">
+            <div class="execution-tree" 
+                 #executionTreeContainer
+                 [class.has-content]="executionTree.length > 0"
+                 (scroll)="onScroll($event)"
+                 (click)="onUserInteraction()">
                 @if (executionTree.length === 0) {
                     <div class="empty-state">
                         <i class="fa-solid fa-hourglass-start"></i>
@@ -99,144 +105,12 @@ export interface ExecutionStats {
                     </div>
                 } @else {
                     @for (node of executionTree; track node.id) {
-                        <div class="tree-node" 
-                             [class.expanded]="node.expanded"
-                             [style.padding-left.px]="node.depth * 24">
-                            
-                            <!-- Node Header -->
-                            <div class="node-header" (click)="toggleNode(node)">
-                                <!-- Expand/Collapse Icon -->
-                                @if (node.children && node.children.length > 0) {
-                                    <i class="expand-icon fa-solid"
-                                       [class.fa-chevron-down]="node.expanded"
-                                       [class.fa-chevron-right]="!node.expanded"></i>
-                                } @else {
-                                    <span class="expand-spacer"></span>
-                                }
-                                
-                                <!-- Status Icon -->
-                                <span class="status-icon" [class]="'status-' + node.status">
-                                    @switch (node.status) {
-                                        @case ('pending') {
-                                            <i class="fa-regular fa-circle"></i>
-                                        }
-                                        @case ('running') {
-                                            <i class="fa-solid fa-spinner fa-spin"></i>
-                                        }
-                                        @case ('completed') {
-                                            <i class="fa-solid fa-check-circle"></i>
-                                        }
-                                        @case ('failed') {
-                                            <i class="fa-solid fa-times-circle"></i>
-                                        }
-                                    }
-                                </span>
-                                
-                                <!-- Type Icon -->
-                                <span class="type-icon" [title]="node.type">
-                                    @switch (node.type) {
-                                        @case ('validation') {
-                                            <i class="fa-solid fa-shield-halved"></i>
-                                        }
-                                        @case ('prompt') {
-                                            <i class="fa-solid fa-comment-dots"></i>
-                                        }
-                                        @case ('action') {
-                                            <i class="fa-solid fa-bolt"></i>
-                                        }
-                                        @case ('sub-agent') {
-                                            <i class="fa-solid fa-robot"></i>
-                                        }
-                                        @case ('decision') {
-                                            <i class="fa-solid fa-code-branch"></i>
-                                        }
-                                        @case ('chat') {
-                                            <i class="fa-solid fa-comments"></i>
-                                        }
-                                    }
-                                </span>
-                                
-                                <!-- Node Name -->
-                                <span class="node-name">
-                                    {{ node.name }}
-                                    @if (node.detailsMarkdown) {
-                                        <button class="details-toggle" 
-                                                (click)="toggleDetails(node, $event)"
-                                                [title]="node.detailsExpanded ? 'Hide details' : 'Show details'">
-                                            <i class="fa-solid" 
-                                               [class.fa-chevron-down]="!node.detailsExpanded"
-                                               [class.fa-chevron-up]="node.detailsExpanded"></i>
-                                        </button>
-                                    }
-                                </span>
-                                
-                                <!-- Duration -->
-                                @if (node.duration) {
-                                    <span class="node-duration">{{ formatDuration(node.duration) }}</span>
-                                }
-                                
-                                <!-- Tokens/Cost -->
-                                @if (node.tokensUsed || node.cost) {
-                                    <span class="node-metrics">
-                                        @if (node.tokensUsed) {
-                                            <span class="tokens">{{ node.tokensUsed }} tokens</span>
-                                        }
-                                        @if (node.cost) {
-                                            <span class="cost">\${{ node.cost.toFixed(4) }}</span>
-                                        }
-                                    </span>
-                                }
-                            </div>
-                            
-                            <!-- Markdown Details (when expanded) -->
-                            @if (node.detailsExpanded && node.detailsMarkdown) {
-                                <div class="markdown-details">
-                                    <div class="detail-content markdown" [innerHTML]="formatMarkdown(node.detailsMarkdown)"></div>
-                                </div>
-                            }
-                            
-                            <!-- Node Details (when expanded) -->
-                            @if (node.expanded && (node.inputPreview || node.outputPreview || node.error)) {
-                                <div class="node-details">
-                                    @if (node.error) {
-                                        <div class="detail-section error">
-                                            <div class="detail-label">
-                                                <i class="fa-solid fa-exclamation-triangle"></i> Error
-                                            </div>
-                                            <div class="detail-content">{{ node.error }}</div>
-                                        </div>
-                                    }
-                                    @if (node.inputPreview) {
-                                        <div class="detail-section">
-                                            <div class="detail-label">
-                                                <i class="fa-solid fa-sign-in-alt"></i> Input
-                                            </div>
-                                            <div class="detail-content">{{ node.inputPreview }}</div>
-                                        </div>
-                                    }
-                                    @if (node.outputPreview) {
-                                        <div class="detail-section">
-                                            <div class="detail-label">
-                                                <i class="fa-solid fa-sign-out-alt"></i> Output
-                                            </div>
-                                            <div class="detail-content">{{ node.outputPreview }}</div>
-                                        </div>
-                                    }
-                                </div>
-                            }
-                            
-                            <!-- Children (when expanded) -->
-                            @if (node.expanded && node.children) {
-                                @for (child of node.children; track child.id) {
-                                    <div class="tree-node" 
-                                         [class.expanded]="child.expanded"
-                                         [style.padding-left.px]="child.depth * 24">
-                                        <!-- Recursive rendering would go here -->
-                                        <!-- For simplicity, showing one level deep -->
-                                    </div>
-                                }
-                            }
-                        </div>
+                        <mj-execution-node 
+                            [node]="node"
+                            (toggleNode)="toggleNode($event)"
+                            (toggleDetails)="handleToggleDetails($event)"
+                            (userInteracted)="onUserInteraction()">
+                        </mj-execution-node>
                     }
                 }
             </div>
@@ -706,10 +580,12 @@ export interface ExecutionStats {
         }
     `]
 })
-export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy {
+export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, AfterViewInit {
     @Input() mode: ExecutionMonitorMode = 'historical';
     @Input() executionData: any = null; // Can be live updates or historical data
     @Input() autoExpand: boolean = true; // Auto-expand nodes in live mode
+    
+    @ViewChild('executionTreeContainer') executionTreeContainer!: ElementRef<HTMLDivElement>;
     
     executionTree: ExecutionTreeNode[] = [];
     currentStep: ExecutionTreeNode | null = null;
@@ -723,8 +599,17 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy {
         totalPrompts: 0
     };
     
+    // User interaction tracking
+    private userHasInteracted = false;
+    private userHasScrolled = false;
+    private isAutoScrolling = false;
+    private lastScrollPosition = 0;
+    private scrollThreshold = 50; // pixels from bottom to consider "at bottom"
+    
     private destroy$ = new Subject<void>();
     private updateSubscription?: Subscription;
+    
+    constructor(private cdr: ChangeDetectorRef) {}
     
     ngOnChanges(changes: SimpleChanges): void {
         if (changes['executionData']) {
@@ -735,6 +620,13 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy {
         // Handle mode changes
         if (changes['mode'] && !changes['mode'].firstChange) {
             this.processExecutionData();
+        }
+    }
+    
+    ngAfterViewInit(): void {
+        // Initial setup for scroll behavior
+        if (this.mode === 'live') {
+            this.checkIfUserAtBottom();
         }
     }
     
@@ -771,14 +663,29 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy {
             return;
         }
         
+        // Store expanded state before rebuilding
+        const expandedState = new Map<string, boolean>();
+        const detailsExpandedState = new Map<string, boolean>();
+        if (this.executionTree.length > 0) {
+            this.preserveExpandedState(this.executionTree, expandedState, detailsExpandedState);
+        }
+        
         // Handle executionTree format
         if (this.executionData.executionTree) {
             this.executionTree = this.convertExecutionTree(this.executionData.executionTree);
         } else if (this.executionData.liveSteps) {
             // Handle live steps that have been converted to historical
             this.executionTree = this.convertLiveStepsToTree(this.executionData.liveSteps);
+        } else if (this.executionData.steps) {
+            // Handle legacy steps format
+            this.executionTree = this.convertLegacySteps(this.executionData.steps);
         } else {
             this.executionTree = [];
+        }
+        
+        // Restore expanded state if we had any
+        if (expandedState.size > 0 || detailsExpandedState.size > 0) {
+            this.restoreExpandedState(this.executionTree, expandedState, detailsExpandedState);
         }
     }
     
@@ -787,9 +694,25 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy {
      */
     private convertExecutionTree(nodes: any[], depth: number = 0): ExecutionTreeNode[] {
         return nodes.map((node, index) => {
+            // Parse the step name for markdown content (same as live steps)
+            const stepName = node.step?.StepName || 'Unknown Step';
+            let name = stepName;
+            let detailsMarkdown: string | undefined;
+            
+            // Check if the step name contains markdown (indicated by newlines or markdown syntax)
+            if (stepName.includes('\n') || stepName.includes('**') || stepName.includes('##')) {
+                // Split by newline and use first line as name
+                const lines = stepName.split('\n');
+                name = lines[0].trim();
+                // Rest is markdown details
+                if (lines.length > 1) {
+                    detailsMarkdown = lines.slice(1).join('\n').trim();
+                }
+            }
+            
             const treeNode: ExecutionTreeNode = {
                 id: node.step?.ID || `node-${Date.now()}-${index}`,
-                name: node.step?.StepName || 'Unknown Step',
+                name: name,
                 type: this.mapStepType(node.executionType || node.step?.StepType),
                 status: this.mapStepStatus(node.step?.Status),
                 startTime: node.startTime ? new Date(node.startTime) : undefined,
@@ -799,10 +722,11 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy {
                 inputPreview: this.createPreview(node.inputData),
                 outputPreview: this.createPreview(node.outputData),
                 error: node.step?.ErrorMessage,
-                expanded: this.autoExpand && depth < 2,
+                expanded: this.mode === 'live' && this.autoExpand && depth < 2,
                 depth: depth,
                 tokensUsed: this.extractTokens(node.outputData),
                 cost: this.extractCost(node.outputData),
+                detailsMarkdown: detailsMarkdown,
                 children: node.children ? this.convertExecutionTree(node.children, depth + 1) : undefined
             };
             
@@ -814,21 +738,38 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy {
      * Convert legacy step format to tree nodes
      */
     private convertLegacySteps(steps: any[]): ExecutionTreeNode[] {
-        return steps.map((step, index) => ({
-            id: step.ID || `step-${index}`,
-            name: step.StepName,
-            type: this.mapStepType(step.StepType),
-            status: this.mapStepStatus(step.Status),
-            startTime: step.StartedAt ? new Date(step.StartedAt) : undefined,
-            endTime: step.CompletedAt ? new Date(step.CompletedAt) : undefined,
-            duration: this.calculateDuration(step.StartedAt, step.CompletedAt),
-            agentPath: [],
-            inputPreview: this.createPreview(step.InputData),
-            outputPreview: this.createPreview(step.OutputData),
-            error: step.ErrorMessage,
-            expanded: false,
-            depth: 0
-        }));
+        return steps.map((step, index) => {
+            // Parse the step name for markdown content
+            const stepName = step.StepName || '';
+            let name = stepName;
+            let detailsMarkdown: string | undefined;
+            
+            // Check if the step name contains markdown
+            if (stepName.includes('\n') || stepName.includes('**') || stepName.includes('##')) {
+                const lines = stepName.split('\n');
+                name = lines[0].trim();
+                if (lines.length > 1) {
+                    detailsMarkdown = lines.slice(1).join('\n').trim();
+                }
+            }
+            
+            return {
+                id: step.ID || `step-${index}`,
+                name: name,
+                type: this.mapStepType(step.StepType),
+                status: this.mapStepStatus(step.Status),
+                startTime: step.StartedAt ? new Date(step.StartedAt) : undefined,
+                endTime: step.CompletedAt ? new Date(step.CompletedAt) : undefined,
+                duration: this.calculateDuration(step.StartedAt, step.CompletedAt),
+                agentPath: [],
+                inputPreview: this.createPreview(step.InputData),
+                outputPreview: this.createPreview(step.OutputData),
+                error: step.ErrorMessage,
+                expanded: false,
+                depth: 0,
+                detailsMarkdown: detailsMarkdown
+            };
+        });
     }
     
     /**
@@ -927,8 +868,10 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy {
     private setupLiveUpdates(): void {
         // Handle live streaming data format
         if (this.executionData && this.executionData.liveSteps) {
-            // Convert live steps format to execution tree format
-            this.executionTree = this.convertLiveStepsToTree(this.executionData.liveSteps);
+            // For initial setup, clear the tree first
+            this.executionTree = [];
+            // Then append all steps
+            this.appendNewLiveSteps(this.executionData.liveSteps);
         }
         
         // Set up interval to monitor for changes
@@ -938,11 +881,9 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy {
                 .subscribe(() => {
                     // Check for new live steps and update tree
                     if (this.executionData && this.executionData.liveSteps) {
-                        const updatedTree = this.convertLiveStepsToTree(this.executionData.liveSteps);
-                        if (updatedTree.length !== this.executionTree.length) {
-                            this.executionTree = updatedTree;
-                            this.calculateStats();
-                        }
+                        // Instead of replacing entire tree, append new nodes
+                        this.appendNewLiveSteps(this.executionData.liveSteps);
+                        this.calculateStats();
                     }
                     this.updateCurrentStep();
                 });
@@ -984,6 +925,8 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy {
                 depth: step.depth || 0,
                 detailsMarkdown: detailsMarkdown
             };
+            // Store in map for hierarchy building
+            nodeMap.set(node.id, node);
             
             // Handle hierarchy by depth
             if (step.depth === 0) {
@@ -1076,9 +1019,117 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy {
      * Toggle node expansion
      */
     toggleNode(node: ExecutionTreeNode): void {
-        if (node.children && node.children.length > 0) {
-            node.expanded = !node.expanded;
+        const nodeInTree = this.findNodeById(this.executionTree, node.id);
+        if (nodeInTree && this.hasExpandableContent(nodeInTree)) {
+            nodeInTree.expanded = !nodeInTree.expanded;
+            this.userHasInteracted = true;
+            this.cdr.markForCheck();
         }
+    }
+    
+    /**
+     * Check if node has expandable content
+     */
+    private hasExpandableContent(node: ExecutionTreeNode): boolean {
+        return !!(node.children && node.children.length > 0) ||
+               node.type === 'sub-agent' || 
+               node.type === 'action' || 
+               !!node.inputPreview || 
+               !!node.outputPreview || 
+               !!node.error || 
+               !!node.detailsMarkdown;
+    }
+    
+    /**
+     * Find a node by ID in the tree
+     */
+    private findNodeById(nodes: ExecutionTreeNode[], id: string): ExecutionTreeNode | null {
+        for (const node of nodes) {
+            if (node.id === id) return node;
+            if (node.children) {
+                const found = this.findNodeById(node.children, id);
+                if (found) return found;
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * Handle scroll events
+     */
+    onScroll(event: Event): void {
+        if (this.isAutoScrolling) {
+            // Ignore scroll events triggered by auto-scrolling
+            return;
+        }
+        
+        const element = event.target as HTMLDivElement;
+        const isAtBottom = this.isScrolledToBottom(element);
+        
+        // If user scrolled up from bottom, mark as user interaction
+        if (!isAtBottom && this.lastScrollPosition !== element.scrollTop) {
+            this.userHasScrolled = true;
+            this.userHasInteracted = true;
+        }
+        
+        // If user scrolled back to bottom, reset interaction flags
+        if (isAtBottom) {
+            this.userHasScrolled = false;
+            this.userHasInteracted = false;
+        }
+        
+        this.lastScrollPosition = element.scrollTop;
+    }
+    
+    /**
+     * Handle user clicks (interaction detection)
+     */
+    onUserInteraction(): void {
+        // This is called when user clicks anywhere in the execution tree
+        // The toggleNode method will set userHasInteracted for specific interactions
+    }
+    
+    /**
+     * Check if scroll is at bottom
+     */
+    private isScrolledToBottom(element: HTMLElement): boolean {
+        const threshold = this.scrollThreshold;
+        return element.scrollHeight - element.scrollTop - element.clientHeight < threshold;
+    }
+    
+    /**
+     * Check if user is at bottom (for initial setup)
+     */
+    private checkIfUserAtBottom(): void {
+        if (!this.executionTreeContainer) return;
+        
+        const element = this.executionTreeContainer.nativeElement;
+        if (this.isScrolledToBottom(element)) {
+            this.userHasScrolled = false;
+        }
+    }
+    
+    /**
+     * Auto-scroll to bottom if user hasn't interacted
+     */
+    private autoScrollToBottom(): void {
+        if (!this.executionTreeContainer || this.userHasInteracted || this.userHasScrolled) {
+            return;
+        }
+        
+        const element = this.executionTreeContainer.nativeElement;
+        this.isAutoScrolling = true;
+        
+        // Use smooth scrolling for better UX
+        element.scrollTo({
+            top: element.scrollHeight,
+            behavior: 'smooth'
+        });
+        
+        // Reset auto-scrolling flag after animation
+        setTimeout(() => {
+            this.isAutoScrolling = false;
+        }, 300);
     }
     
     /**
@@ -1111,7 +1162,19 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy {
      */
     toggleDetails(node: ExecutionTreeNode, event: Event): void {
         event.stopPropagation(); // Prevent triggering node expansion
-        node.detailsExpanded = !node.detailsExpanded;
+        const nodeInTree = this.findNodeById(this.executionTree, node.id);
+        if (nodeInTree) {
+            nodeInTree.detailsExpanded = !nodeInTree.detailsExpanded;
+            this.userHasInteracted = true;
+            this.cdr.markForCheck();
+        }
+    }
+    
+    /**
+     * Handle toggle details event from child component
+     */
+    handleToggleDetails(event: { node: ExecutionTreeNode, event: Event }): void {
+        this.toggleDetails(event.node, event.event);
     }
     
     /**
@@ -1133,6 +1196,15 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy {
         // Italic
         html = html.replace(/\*(.*)\*/g, '<em>$1</em>');
         
+        // Detect and linkify URLs
+        // This regex matches URLs starting with http://, https://, or www.
+        const urlRegex = /(?:https?:\/\/|www\.)[^\s<]+/gi;
+        html = html.replace(urlRegex, (url) => {
+            // Ensure the URL has a protocol
+            const href = url.startsWith('http') ? url : `https://${url}`;
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color: #2196f3; text-decoration: underline;">${url}</a>`;
+        });
+        
         // Line breaks
         html = html.replace(/\n/g, '<br>');
         
@@ -1147,5 +1219,194 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy {
         html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
         
         return html;
+    }
+    
+    /**
+     * Append new live steps without re-rendering entire tree
+     */
+    private appendNewLiveSteps(liveSteps: any[]): void {
+        if (!liveSteps || liveSteps.length === 0) return;
+        
+        // Create a map of existing nodes by ID for quick lookup
+        const nodeMap = new Map<string, ExecutionTreeNode>();
+        this.buildNodeMap(this.executionTree, nodeMap);
+        
+        let hasChanges = false;
+        
+        for (const step of liveSteps) {
+            const stepId = step.step?.ID || `live-${Date.now()}-${Math.random()}`;
+            
+            // Check if this node already exists
+            const existingNode = nodeMap.get(stepId);
+            if (existingNode) {
+                // Update existing node properties
+                const updatedStatus = this.mapStepStatus(step.step?.Status);
+                if (existingNode.status !== updatedStatus) {
+                    existingNode.status = updatedStatus;
+                    hasChanges = true;
+                }
+                
+                if (step.endTime && !existingNode.endTime) {
+                    existingNode.endTime = new Date(step.endTime);
+                    existingNode.duration = step.durationMs;
+                    hasChanges = true;
+                }
+                
+                // Update output data if available
+                if (step.outputData && !existingNode.outputPreview) {
+                    existingNode.outputPreview = this.createPreview(step.outputData);
+                    existingNode.tokensUsed = this.extractTokens(step.outputData);
+                    existingNode.cost = this.extractCost(step.outputData);
+                    hasChanges = true;
+                }
+            } else {
+                // Create new node
+                const newNode = this.createNodeFromLiveStep(step);
+                
+                if (step.depth === 0) {
+                    this.executionTree.push(newNode);
+                } else {
+                    // Find parent based on agent hierarchy or depth
+                    const parentFound = this.appendToParent(this.executionTree, newNode);
+                    if (!parentFound) {
+                        // If no parent found, add as root node
+                        this.executionTree.push(newNode);
+                    }
+                }
+                
+                hasChanges = true;
+            }
+        }
+        
+        if (hasChanges) {
+            // Trigger change detection
+            this.cdr.markForCheck();
+            
+            // Auto-scroll if user hasn't interacted
+            setTimeout(() => {
+                this.autoScrollToBottom();
+            }, 100);
+        }
+    }
+    
+    /**
+     * Build a map of nodes by ID for quick lookup
+     */
+    private buildNodeMap(nodes: ExecutionTreeNode[], map: Map<string, ExecutionTreeNode>): void {
+        for (const node of nodes) {
+            map.set(node.id, node);
+            if (node.children) {
+                this.buildNodeMap(node.children, map);
+            }
+        }
+    }
+    
+    /**
+     * Create a single node from a live step
+     */
+    private createNodeFromLiveStep(step: any): ExecutionTreeNode {
+        const stepName = step.step?.StepName || 'Processing...';
+        let name = stepName;
+        let detailsMarkdown: string | undefined;
+        
+        // Check if the step name contains markdown
+        if (stepName.includes('\n') || stepName.includes('**') || stepName.includes('##')) {
+            const lines = stepName.split('\n');
+            name = lines[0].trim();
+            if (lines.length > 1) {
+                detailsMarkdown = lines.slice(1).join('\n').trim();
+            }
+        }
+        
+        return {
+            id: step.step?.ID || `live-${Date.now()}-${Math.random()}`,
+            name: name,
+            type: this.mapStepType(step.executionType || step.step?.StepType),
+            status: 'running', // Live steps start as running
+            startTime: step.startTime ? new Date(step.startTime) : new Date(),
+            agentPath: step.agentHierarchy || [],
+            expanded: this.mode === 'live' && step.depth < 1, // Only expand top-level in live mode
+            depth: step.depth || 0,
+            detailsMarkdown: detailsMarkdown,
+            inputPreview: this.createPreview(step.inputData),
+            outputPreview: this.createPreview(step.outputData),
+            tokensUsed: this.extractTokens(step.outputData),
+            cost: this.extractCost(step.outputData)
+        };
+    }
+    
+    /**
+     * Collect all node IDs in the tree
+     */
+    private collectNodeIds(nodes: ExecutionTreeNode[], ids: Set<string>): void {
+        for (const node of nodes) {
+            ids.add(node.id);
+            if (node.children) {
+                this.collectNodeIds(node.children, ids);
+            }
+        }
+    }
+    
+    /**
+     * Preserve expanded state of all nodes
+     */
+    private preserveExpandedState(
+        nodes: ExecutionTreeNode[], 
+        expandedState: Map<string, boolean>,
+        detailsExpandedState: Map<string, boolean>
+    ): void {
+        for (const node of nodes) {
+            if (node.expanded !== undefined) {
+                expandedState.set(node.id, node.expanded);
+            }
+            if (node.detailsExpanded !== undefined) {
+                detailsExpandedState.set(node.id, node.detailsExpanded);
+            }
+            if (node.children) {
+                this.preserveExpandedState(node.children, expandedState, detailsExpandedState);
+            }
+        }
+    }
+    
+    /**
+     * Restore expanded state of all nodes
+     */
+    private restoreExpandedState(
+        nodes: ExecutionTreeNode[], 
+        expandedState: Map<string, boolean>,
+        detailsExpandedState: Map<string, boolean>
+    ): void {
+        for (const node of nodes) {
+            const expanded = expandedState.get(node.id);
+            if (expanded !== undefined) {
+                node.expanded = expanded;
+            }
+            const detailsExpanded = detailsExpandedState.get(node.id);
+            if (detailsExpanded !== undefined) {
+                node.detailsExpanded = detailsExpanded;
+            }
+            if (node.children) {
+                this.restoreExpandedState(node.children, expandedState, detailsExpandedState);
+            }
+        }
+    }
+    
+    /**
+     * Append a node to its parent based on depth
+     */
+    private appendToParent(nodes: ExecutionTreeNode[], newNode: ExecutionTreeNode): boolean {
+        for (const node of nodes) {
+            if (node.depth === newNode.depth - 1) {
+                if (!node.children) {
+                    node.children = [];
+                }
+                node.children.push(newNode);
+                return true;
+            }
+            if (node.children && this.appendToParent(node.children, newNode)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

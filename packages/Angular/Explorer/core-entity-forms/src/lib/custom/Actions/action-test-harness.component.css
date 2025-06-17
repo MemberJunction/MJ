@@ -2,8 +2,15 @@
     background: white;
     border-radius: 8px;
     padding: 24px;
-    max-width: 1200px;
-    margin: 0 auto;
+    max-width: 100%;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Ensure all child elements use border-box */
+.action-test-harness * {
+    box-sizing: border-box;
 }
 
 /* Header */
@@ -11,9 +18,11 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 24px;
+    margin-bottom: 20px;
     padding-bottom: 16px;
     border-bottom: 2px solid #e9ecef;
+    flex-wrap: wrap;
+    gap: 12px;
 }
 
 .harness-header h3 {
@@ -31,11 +40,14 @@
 .header-actions {
     display: flex;
     align-items: center;
+    gap: 8px;
 }
 
 /* Parameters Section */
 .parameters-section {
-    margin-bottom: 24px;
+    margin-bottom: 20px;
+    width: 100%;
+    overflow-x: auto;
 }
 
 .parameters-section h4 {
@@ -60,16 +72,19 @@
 
 .params-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-    gap: 20px;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+    width: 100%;
 }
 
 .param-field {
     background: #f8f9fa;
     border: 1px solid #e9ecef;
     border-radius: 6px;
-    padding: 16px;
+    padding: 12px;
     transition: all 0.2s;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .param-field:hover {
@@ -89,10 +104,12 @@
 .param-field label {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     margin-bottom: 8px;
     font-weight: 600;
     color: #495057;
+    flex-wrap: wrap;
+    font-size: 0.95em;
 }
 
 .required-indicator {
@@ -111,8 +128,9 @@
 .value-type {
     margin-left: auto;
     color: #6c757d;
-    font-size: 0.85em;
+    font-size: 0.8em;
     font-weight: 400;
+    white-space: nowrap;
 }
 
 .param-description {
@@ -130,6 +148,8 @@
     font-family: inherit;
     font-size: 0.95em;
     transition: border-color 0.2s;
+    box-sizing: border-box;
+    max-width: 100%;
 }
 
 .param-input:focus {
@@ -175,9 +195,11 @@ textarea.param-input {
     display: flex;
     gap: 12px;
     margin-bottom: 24px;
-    padding: 20px;
+    padding: 16px;
     background: #f8f9fa;
     border-radius: 6px;
+    align-items: center;
+    flex-wrap: wrap;
 }
 
 /* Results Section */
@@ -185,6 +207,7 @@ textarea.param-input {
     border: 2px solid #e9ecef;
     border-radius: 8px;
     overflow: hidden;
+    margin-top: 20px;
 }
 
 .results-header {

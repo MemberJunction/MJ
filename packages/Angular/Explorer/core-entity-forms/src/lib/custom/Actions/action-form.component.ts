@@ -7,7 +7,6 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { ActionFormComponent } from '../../generated/Entities/Action/action.form.component';
 import { DialogService } from '@progress/kendo-angular-dialog';
-import { ActionTestHarnessDialogComponent } from './action-test-harness-dialog.component';
 import { ActionParamDialogComponent } from './action-param-dialog.component';
 
 @RegisterClass(BaseFormComponent, 'Actions')
@@ -49,6 +48,9 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         execution: false,
         configuration: false
     };
+    
+    // Test harness state
+    public showTestHarness = false;
     
     // Execution stats
     public executionStats = {
@@ -118,14 +120,14 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
                 this.actionParams = result.Results || [];
                 console.log(`Loaded ${this.actionParams.length} action params for action ${this.record.Name}`);
                 
-                // Update cached filtered params - trim Type values to handle any whitespace
+                // Update cached filtered params - trim and lowercase Type values to handle any whitespace and case
                 this._inputParams = this.actionParams.filter(p => {
-                    const type = p.Type?.trim();
-                    return type === 'Input' || type === 'Both';
+                    const type = p.Type?.trim().toLowerCase();
+                    return type === 'input' || type === 'both';
                 });
                 this._outputParams = this.actionParams.filter(p => {
-                    const type = p.Type?.trim();
-                    return type === 'Output' || type === 'Both';
+                    const type = p.Type?.trim().toLowerCase();
+                    return type === 'output' || type === 'both';
                 });
                 
                 // Log details for debugging params display issue
@@ -394,25 +396,19 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
 
     // Actions
     openTestHarness() {
-        if (!this.record || !this.record.ID || this.record.Status !== 'Active') {
+        if (!this.record || !this.record.ID || !this.record.IsSaved || this.record.Status !== 'Active') {
+            console.warn('Cannot open test harness: Action must be saved and active');
             return;
         }
         
-        const dialogRef = this.dialogService.open({
-            content: ActionTestHarnessDialogComponent,
-            width: 900,
-            height: 700,
-            appendTo: this.elementRef.nativeElement
-        });
-        
-        // The content.instance should be available immediately after open
-        const componentInstance = dialogRef.content.instance as ActionTestHarnessDialogComponent;
-        if (componentInstance) {
-            componentInstance.action = this.record;
-            componentInstance.actionParams = this.actionParams;
-        } else {
-            console.error('Failed to get Action Test Harness dialog instance');
-        }
+        this.showTestHarness = true;
+    }
+    
+    /**
+     * Event handler for test harness visibility changes
+     */
+    public onTestHarnessVisibilityChanged(isVisible: boolean) {
+        this.showTestHarness = isVisible;
     }
 
     async regenerateCode() {
@@ -561,6 +557,17 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             }
         });
     }
+    
+    onParamClick(param: ActionParamEntity, event: Event) {
+        // Prevent event bubbling if clicking on edit/delete buttons
+        const target = event.target as HTMLElement;
+        if (target.closest('.param-edit-btn') || target.closest('.param-delete-btn')) {
+            return;
+        }
+        
+        // Show the parameter dialog
+        this.editParameter(param);
+    }
 
     async deleteParameter(param: ActionParamEntity) {
         if (!this.EditMode) return;
@@ -588,13 +595,13 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         const activeParams = this.actionParams.filter(p => !this.paramsToDelete || !this.paramsToDelete.includes(p));
         
         this._inputParams = activeParams.filter(p => {
-            const type = p.Type?.trim();
-            return type === 'Input' || type === 'Both';
+            const type = p.Type?.trim().toLowerCase();
+            return type === 'input' || type === 'both';
         });
         
         this._outputParams = activeParams.filter(p => {
-            const type = p.Type?.trim();
-            return type === 'Output' || type === 'Both';
+            const type = p.Type?.trim().toLowerCase();
+            return type === 'output' || type === 'both';
         });
     }
     
@@ -615,4 +622,10 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             }
         }
     }
+}
+
+// Loader function required for the component to be properly registered
+export function LoadActionFormComponentExtended() {
+    // This function is called to ensure the form is loaded and registered
+    console.log('LoadActionFormComponentExtended called');
 }

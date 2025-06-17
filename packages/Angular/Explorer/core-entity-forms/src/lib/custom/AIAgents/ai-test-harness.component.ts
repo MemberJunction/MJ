@@ -741,6 +741,12 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 // Store execution data with the message
                 assistantMessage.executionData = fullResult;
                 
+                // Merge live steps with final result if needed
+                if (this.currentExecutionData && this.currentExecutionData.liveSteps && fullResult) {
+                    // Preserve the live steps we collected during execution
+                    fullResult.liveSteps = this.currentExecutionData.liveSteps;
+                }
+                
                 // Update execution monitor with the new data
                 this.currentExecutionData = fullResult;
                 this.executionMonitorMode = 'historical';

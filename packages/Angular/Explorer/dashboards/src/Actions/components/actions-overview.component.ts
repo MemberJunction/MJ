@@ -25,15 +25,16 @@ interface CategoryStats {
   successRate: number;
 }
 
+interface ExecutionWithExpanded extends ActionExecutionLogEntity {
+  isExpanded?: boolean;
+}
+
+
 @Component({
   selector: 'mj-actions-overview',
   templateUrl: './actions-overview.component.html',
   styleUrls: ['./actions-overview.component.scss']
 })
-interface ExecutionWithExpanded extends ActionExecutionLogEntity {
-  isExpanded?: boolean;
-}
-
 export class ActionsOverviewComponent implements OnInit, OnDestroy {
   @Output() openEntityRecord = new EventEmitter<{entityName: string; recordId: string}>();
   @Output() showActionsListView = new EventEmitter<void>();
@@ -154,7 +155,7 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
       this.calculateMetrics(actions, categories, executions);
       this.calculateCategoryStats(actions, categories, executions);
       this.recentActions = actions.slice(0, 10);
-      this.recentExecutions = executions.slice(0, 10).map(e => ({ ...e, isExpanded: false }));
+      this.recentExecutions = executions.slice(0, 10).map(e => ({ ...e, isExpanded: false } as ExecutionWithExpanded));
       this.topCategories = categories.slice(0, 5);
 
     } catch (error) {

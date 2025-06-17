@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef } from '@angular/core';
 import { ActionEntity, ActionParamEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -24,6 +24,8 @@ interface ActionResult {
 export class ActionTestHarnessComponent implements OnInit {
     @Input() action!: ActionEntity;
     @Input() actionParams: ActionParamEntity[] = [];
+    @Input() isVisible: boolean = false;
+    @Output() visibilityChange = new EventEmitter<boolean>();
 
     public paramValues: ActionParamValue[] = [];
     public isExecuting = false;
@@ -44,7 +46,10 @@ export class ActionTestHarnessComponent implements OnInit {
     private initializeParamValues() {
         // Initialize parameter values with defaults
         this.paramValues = this.actionParams
-            .filter(p => p.Type === 'Input' || p.Type === 'Both')
+            .filter(p => {
+                const type = p.Type?.trim().toLowerCase();
+                return type === 'input' || type === 'both';
+            })
             .sort((a, b) => {
                 // Sort required params first, then by name
                 if (a.IsRequired !== b.IsRequired) {
@@ -202,11 +207,22 @@ export class ActionTestHarnessComponent implements OnInit {
                 }
             `;
             
-            const graphQLProvider = new GraphQLDataProvider();
+            // Get GraphQL data provider from Metadata
+            const graphQLProvider = Metadata.Provider as GraphQLDataProvider;
+            
+            // Convert params to ActionParamInput array format
+            const actionParams = this.paramValues.map(paramValue => ({
+                Name: paramValue.param.Name,
+                Value: typeof paramValue.value === 'object' 
+                    ? JSON.stringify(paramValue.value) 
+                    : String(paramValue.value),
+                Type: paramValue.param.ValueType
+            }));
+            
             const variables = {
                 input: {
                     ActionID: this.action.ID,
-                    Params: JSON.stringify(params),
+                    Params: actionParams,
                     SkipActionLog: this.skipActionLog
                 }
             };

@@ -30,12 +30,13 @@ import { CodeEditorModule } from "@memberjunction/ng-code-editor";
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
 import { EntitySelectorDialogComponent } from "./shared/entity-selector-dialog.component";
 import { AIPromptRunFormComponentExtended } from "./AIPromptRuns/ai-prompt-run-form.component";
-import { ActionFormComponentExtended } from "./Actions/action-form.component";
+import { ActionFormComponentExtended, LoadActionFormComponentExtended } from "./Actions/action-form.component";
 import { ActionTestHarnessComponent } from "./Actions/action-test-harness.component";
 import { ActionTestHarnessDialogComponent } from "./Actions/action-test-harness-dialog.component";
 import { ActionExecutionLogFormComponentExtended } from "./Actions/action-execution-log-form.component";
 import { ActionParamDialogComponent } from "./Actions/action-param-dialog.component";
 import { AgentExecutionMonitorComponent } from "./AIAgents/agent-execution-monitor.component";
+import { ExecutionNodeComponent } from "./AIAgents/agent-execution-node.component";
 
 @NgModule({
     declarations: [
@@ -61,6 +62,7 @@ import { AgentExecutionMonitorComponent } from "./AIAgents/agent-execution-monit
     imports: [
         CommonModule,
         AgentExecutionMonitorComponent,
+        ExecutionNodeComponent,
         FormsModule,
         LayoutModule,
         ExpansionPanelModule,
@@ -104,6 +106,7 @@ import { AgentExecutionMonitorComponent } from "./AIAgents/agent-execution-monit
         ActionTestHarnessComponent,
         ActionTestHarnessDialogComponent,
         ActionExecutionLogFormComponentExtended,
+        ExecutionNodeComponent,
     ],
     providers: [
         TestHarnessDialogService
@@ -124,4 +127,5 @@ export function LoadCoreCustomForms() {
     LoadAIPromptFormComponentExtended();
     LoadAIAgentFormComponentExtended();
     LoadActionExecutionLogFormComponentExtended();
+    LoadActionFormComponentExtended();
 }

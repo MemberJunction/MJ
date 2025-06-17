@@ -123,9 +123,9 @@
                                 @if (record.ID) {
                                     <kendo-button themeColor="primary" size="large"
                                                 (click)="openTestHarness()"
-                                                title="Open Test Harness"
+                                                title="Open Run Harness"
                                                 [disabled]="record.Status !== 'Active'">
-                                        <i class="fa-solid fa-flask"></i> Test
+                                        <i class="fa-solid fa-play"></i> Run
                                     </kendo-button>
                                 }
                                 @if (EditMode && record.Type === 'Generated') {
@@ -213,8 +213,8 @@
                                         <div class="params-grid">
                                             @for (param of getInputParams(); track param.ID) {
                                                 <div class="param-card" [class.required]="param.IsRequired" 
-                                                     [class.clickable]="!EditMode"
-                                                     (click)="!EditMode && editParameter(param)">
+                                                     [class.clickable]="true"
+                                                     (click)="onParamClick(param, $event)">
                                                     <div class="param-header">
                                                         <span class="param-name">{{ param.Name }}</span>
                                                         <div class="param-badges">
@@ -273,8 +273,8 @@
                                         <div class="params-grid">
                                             @for (param of getOutputParams(); track param.ID) {
                                                 <div class="param-card"
-                                                     [class.clickable]="!EditMode"
-                                                     (click)="!EditMode && editParameter(param)">
+                                                     [class.clickable]="true"
+                                                     (click)="onParamClick(param, $event)">
                                                     <div class="param-header">
                                                         <span class="param-name">{{ param.Name }}</span>
                                                         <div class="param-badges">
@@ -337,9 +337,9 @@
                                             <label>User Prompt</label>
                                             <kendo-textarea [(ngModel)]="record.UserPrompt"
                                                            name="userPrompt"
-                                                           [rows]="4"
+                                                           [rows]="8"
                                                            placeholder="Describe what this action should do..."
-                                                           style="width: 100%;">
+                                                           style="width: 100%; min-height: 120px;">
                                             </kendo-textarea>
                                         </div>
                                         <div class="comments-section">
@@ -625,3 +625,24 @@
         </form>
     }
 </div>
+
+<!-- Action Test Harness -->
+@if (showTestHarness) {
+    <kendo-window 
+        [width]="1200" 
+        [height]="800" 
+        [minWidth]="800"
+        [minHeight]="600"
+        [draggable]="true"
+        [resizable]="true"
+        [state]="'default'"
+        (close)="onTestHarnessVisibilityChanged(false)"
+        title="Run Action - {{ record.Name || 'Untitled' }}">
+        <mj-action-test-harness
+            [action]="record"
+            [actionParams]="actionParams"
+            [isVisible]="showTestHarness"
+            (visibilityChange)="onTestHarnessVisibilityChanged($event)">
+        </mj-action-test-harness>
+    </kendo-window>
+}

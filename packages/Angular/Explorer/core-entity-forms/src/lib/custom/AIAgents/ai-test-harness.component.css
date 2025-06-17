@@ -715,7 +715,7 @@
 
 /* Sidebar */
 .sidebar {
-    width: 360px;
+    width: 100%; /* Changed from fixed 360px to 100% */
     background: white;
     display: flex;
     flex-direction: column;
@@ -790,10 +790,13 @@
 .sidebar-content {
     flex: 1;
     overflow-y: auto;
+    width: 100%; /* Ensure content takes full width */
 }
 
 .tab-content {
     padding: 20px;
+    width: 100%; /* Ensure content takes full width */
+    box-sizing: border-box; /* Include padding in width calculation */
 }
 
 .tab-header {
@@ -829,6 +832,7 @@
 /* Variables */
 .variables-list {
     margin-bottom: 16px;
+    width: 100%;
 }
 
 .variable-item {
@@ -836,18 +840,22 @@
     gap: 8px;
     margin-bottom: 12px;
     align-items: center;
+    width: 100%;
 }
 
 .variable-name {
-    width: 120px;
+    width: 30%; /* Changed from fixed width to percentage */
+    min-width: 100px;
 }
 
 .variable-type {
-    width: 90px;
+    width: 25%; /* Changed from fixed width to percentage */
+    min-width: 80px;
 }
 
 .variable-value {
     flex: 1;
+    min-width: 0; /* Allow flex item to shrink below content size */
 }
 
 .remove-button {
