@@ -1,0 +1,521 @@
+<!-- Style Guide Test Component (Pure MJ Design System) -->
+<div class="mj-page-container">
+  <!-- Page Header -->
+  <div class="mj-content-container">
+    <div class="mj-header">
+      <div class="mj-header-title">
+        <i class="fas fa-paint-brush mj-header-icon"></i>
+        <div>
+          <h1>MJ Style Guide Test Component</h1>
+          <div class="mj-header-subtitle">
+            <i class="fas fa-palette"></i>
+            Testing the unified style system
+          </div>
+        </div>
+      </div>
+      <div class="mj-header-actions">
+        <button class="mj-btn mj-btn-secondary" (click)="handleButtonClick('export')">
+          <i class="fas fa-download"></i>
+          Export
+        </button>
+        <button class="mj-btn mj-btn-primary" (click)="handleButtonClick('save')">
+          <i class="fas fa-save"></i>
+          Save Changes
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Typography Section -->
+  <div class="mj-content-container">
+    <h2>Typography Examples</h2>
+    <div class="typography-demo">
+      <h1>Heading 1 - Main page titles</h1>
+      <h2>Heading 2 - Section headers</h2>
+      <h3>Heading 3 - Subsection titles</h3>
+      <h4>Heading 4 - Component titles</h4>
+      <p>Body text - Regular paragraph content with good readability and proper line height for easy reading.</p>
+      <p class="text-muted">Muted text for secondary information</p>
+    </div>
+  </div>
+
+  <!-- Button Examples -->
+  <div class="mj-content-container">
+    <h2>Button System</h2>
+    
+    <div class="mb-3">
+      <h4>Primary Buttons</h4>
+      <div class="button-group">
+        <button class="mj-btn mj-btn-primary">
+          <i class="fas fa-check"></i>
+          Primary Action
+        </button>
+        <button class="mj-btn mj-btn-primary mj-btn-sm">Small Primary</button>
+        <button class="mj-btn mj-btn-primary mj-btn-lg">Large Primary</button>
+        <button class="mj-btn mj-btn-primary" disabled>Disabled</button>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <h4>Secondary & Ghost Buttons</h4>
+      <div class="button-group">
+        <button class="mj-btn mj-btn-secondary">
+          <i class="fas fa-edit"></i>
+          Secondary
+        </button>
+        <button class="mj-btn mj-btn-ghost">
+          <i class="fas fa-times"></i>
+          Cancel
+        </button>
+        <button class="mj-btn mj-btn-icon-only">
+          <i class="fas fa-cog"></i>
+        </button>
+        <button class="mj-btn mj-btn-icon-only">
+          <i class="fas fa-trash"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <h4>Kendo Buttons</h4>
+      <div class="button-group">
+        <button kendoButton [primary]="true">
+          <span class="k-icon k-i-save"></span>
+          Kendo Primary
+        </button>
+        <button kendoButton>Kendo Default</button>
+        <button kendoButton [disabled]="true">Disabled</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Card System -->
+  <div class="mj-content-container">
+    <h2>Card Components</h2>
+    
+    <div class="mj-grid mj-grid-4">
+      <div class="mj-card mj-card-icon" *ngFor="let item of sampleItems" (click)="handleCardClick(item)">
+        <i [class]="'fas ' + item.icon + ' mj-card-icon-large'"></i>
+        <h3>{{item.name}}</h3>
+        <p>{{item.description}}</p>
+        <div class="mj-card-actions">
+          <button class="mj-btn mj-btn-icon-only mj-btn-sm" (click)="$event.stopPropagation(); handleButtonClick('edit')">
+            <i class="fas fa-edit"></i>
+          </button>
+          <button class="mj-btn mj-btn-icon-only mj-btn-sm" (click)="$event.stopPropagation(); handleButtonClick('delete')">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-4">
+      <h4>Standard Cards</h4>
+      <div class="mj-grid mj-grid-3">
+        <div class="mj-card">
+          <div class="mj-card-header">
+            <h4>Card with Header</h4>
+          </div>
+          <div class="mj-card-body">
+            <p>This is a standard card with header, body, and footer sections.</p>
+          </div>
+          <div class="mj-card-footer">
+            <button class="mj-btn mj-btn-ghost mj-btn-sm">Cancel</button>
+            <button class="mj-btn mj-btn-primary mj-btn-sm">Confirm</button>
+          </div>
+        </div>
+
+        <div class="mj-card">
+          <div class="mj-card-body">
+            <h4>Simple Card</h4>
+            <p>A card with just a body section for simpler content display.</p>
+          </div>
+        </div>
+
+        <div class="mj-card">
+          <div class="mj-card-body">
+            <div class="mj-empty-state">
+              <i class="fas fa-inbox mj-empty-icon"></i>
+              <h3>Empty State</h3>
+              <p>No items to display</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Form Elements -->
+  <div class="mj-content-container">
+    <h2>Form Elements</h2>
+    
+    <div class="mj-grid mj-grid-2">
+      <div>
+        <div class="form-group">
+          <label class="form-label">Text Input</label>
+          <input type="text" class="form-control" placeholder="Enter text here">
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Email Input</label>
+          <input type="email" class="form-control" placeholder="user@example.com">
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Kendo TextBox</label>
+          <input kendoTextBox placeholder="Kendo styled input" />
+        </div>
+      </div>
+      
+      <div>
+        <div class="form-group">
+          <label class="form-label">Search Field</label>
+          <div class="mj-search">
+            <i class="fas fa-search mj-search-icon"></i>
+            <input type="text" class="mj-search-input" placeholder="Search items...">
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Textarea</label>
+          <textarea class="form-control" rows="4" placeholder="Enter description"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Enhanced Kendo Dropdown Examples -->
+  <div class="mj-content-container">
+    <h2>Enhanced Kendo Components</h2>
+    
+    <div class="mj-grid mj-grid-3">
+      <div class="form-group">
+        <label class="form-label">Kendo Dropdown</label>
+        <kendo-dropdownlist
+          [data]="['Analytics', 'Reports', 'Settings', 'Users']"
+          [value]="'Analytics'"
+          class="k-dropdown">
+        </kendo-dropdownlist>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">Kendo ComboBox</label>
+        <kendo-combobox
+          [data]="['JavaScript', 'TypeScript', 'Angular', 'React']"
+          [placeholder]="'Select a technology...'"
+          class="k-combobox">
+        </kendo-combobox>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">Kendo MultiSelect</label>
+        <kendo-multiselect
+          [data]="['Design', 'Development', 'Testing', 'Deployment']"
+          [placeholder]="'Select phases...'"
+          class="k-multiselect">
+        </kendo-multiselect>
+      </div>
+    </div>
+
+    <div class="mt-4">
+      <h4>Kendo Date Inputs</h4>
+      <div class="mj-grid mj-grid-3">
+        <div class="form-group">
+          <label class="form-label">Date Picker</label>
+          <kendo-datepicker></kendo-datepicker>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Time Picker</label>
+          <kendo-timepicker></kendo-timepicker>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Date Input</label>
+          <kendo-dateinput></kendo-dateinput>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Kendo Grid Example -->
+  <div class="mj-content-container">
+    <h2>Kendo Grid Example</h2>
+    
+    <kendo-grid [data]="tableData" [height]="300" class="k-grid">
+      <kendo-grid-column field="name" title="Name" [width]="200"></kendo-grid-column>
+      <kendo-grid-column field="email" title="Email" [width]="250"></kendo-grid-column>
+      <kendo-grid-column field="department" title="Department" [width]="150"></kendo-grid-column>
+      <kendo-grid-column field="status" title="Status" [width]="120">
+        <ng-template kendoGridCellTemplate let-dataItem>
+          <span [class]="getStatusBadgeClass(dataItem.status)">{{dataItem.status}}</span>
+        </ng-template>
+      </kendo-grid-column>
+      <kendo-grid-column title="Actions" [width]="150">
+        <ng-template kendoGridCellTemplate>
+          <button class="mj-btn mj-btn-icon-only mj-btn-sm mr-2">
+            <i class="fas fa-edit"></i>
+          </button>
+          <button class="mj-btn mj-btn-icon-only mj-btn-sm">
+            <i class="fas fa-trash"></i>
+          </button>
+        </ng-template>
+      </kendo-grid-column>
+    </kendo-grid>
+  </div>
+
+  <!-- Badges and Status Indicators -->
+  <div class="mj-content-container">
+    <h2>Badges & Status Indicators</h2>
+    
+    <div class="mb-3">
+      <h4>Standard Badges</h4>
+      <div class="badge-group">
+        <span class="badge badge-primary">Primary</span>
+        <span class="badge badge-secondary">Secondary</span>
+        <span class="badge badge-success">Success</span>
+        <span class="badge badge-danger">Danger</span>
+        <span class="badge badge-warning">Warning</span>
+        <span class="badge badge-info">Info</span>
+      </div>
+    </div>
+    
+    <div class="mb-3">
+      <h4>Team Badges</h4>
+      <div class="badge-group">
+        <span class="badge badge-tiger">Tiger Team</span>
+        <span class="badge badge-lemon">Lemon Team</span>
+        <span class="badge badge-organic">Organic Team</span>
+        <span class="badge badge-ocean">Ocean Team</span>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <h4>Kendo Badge</h4>
+      <div class="badge-group">
+        <kendo-badge-container>
+          <span>Messages</span>
+          <kendo-badge themeColor="primary" position="edge">5</kendo-badge>
+        </kendo-badge-container>
+        
+        <kendo-badge-container>
+          <button kendoButton>
+            <span class="k-icon k-i-bell"></span>
+            Notifications
+          </button>
+          <kendo-badge themeColor="error" position="edge">12</kendo-badge>
+        </kendo-badge-container>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Examples -->
+  <div class="mj-content-container">
+    <h2>Modal Components</h2>
+    
+    <div class="button-group">
+      <button class="mj-btn mj-btn-primary" (click)="openModal()">
+        <i class="fas fa-window-maximize"></i>
+        Open Standard Modal
+      </button>
+      <button class="mj-btn mj-btn-secondary" (click)="openConfirmModal()">
+        <i class="fas fa-exclamation-triangle"></i>
+        Open Confirm Dialog
+      </button>
+      <button kendoButton (click)="openKendoDialog()">
+        Open Kendo Dialog
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading and Empty States -->
+  <div class="mj-content-container">
+    <h2>Loading & Empty States</h2>
+    
+    <div class="mj-grid mj-grid-3">
+      <div class="mj-card">
+        <div class="mj-card-body">
+          <div class="mj-loading">
+            <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--mj-blue);"></i>
+          </div>
+        </div>
+      </div>
+      
+      <div class="mj-card">
+        <div class="mj-card-body">
+          <div class="mj-loading">
+            <kendo-loader type="converging-spinner"></kendo-loader>
+          </div>
+        </div>
+      </div>
+      
+      <div class="mj-card">
+        <div class="mj-card-body">
+          <div class="mj-empty-state">
+            <i class="fas fa-folder-open mj-empty-icon"></i>
+            <h3>No Data</h3>
+            <p>Start by adding some items</p>
+            <button class="mj-btn mj-btn-primary mj-btn-sm">
+              <i class="fas fa-plus"></i>
+              Add Item
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Navigation Components -->
+  <div class="mj-content-container">
+    <h2>Navigation Elements</h2>
+    
+    <div class="mb-3">
+      <h4>Breadcrumb</h4>
+      <nav class="mj-breadcrumb">
+        <span class="mj-breadcrumb-item">Home</span>
+        <i class="fas fa-chevron-right mj-breadcrumb-separator"></i>
+        <span class="mj-breadcrumb-item">Components</span>
+        <i class="fas fa-chevron-right mj-breadcrumb-separator"></i>
+        <span class="mj-breadcrumb-item mj-breadcrumb-current">Style Guide</span>
+      </nav>
+    </div>
+    
+    <div>
+      <h4>Toolbar</h4>
+      <div class="mj-toolbar">
+        <h3 class="mj-toolbar-title">Data Management</h3>
+        <div class="mj-toolbar-actions">
+          <div class="mj-search">
+            <i class="fas fa-search mj-search-icon"></i>
+            <input type="text" class="mj-search-input" placeholder="Search...">
+          </div>
+          <button class="mj-btn mj-btn-secondary">
+            <i class="fas fa-filter"></i>
+            Filter
+          </button>
+          <button class="mj-btn mj-btn-primary">
+            <i class="fas fa-plus"></i>
+            Add New
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Progress Indicators -->
+  <div class="mj-content-container">
+    <h2>Progress Indicators</h2>
+    
+    <div class="mb-3">
+      <h4>Kendo Progress Bar</h4>
+      <kendo-progressbar [value]="65" [max]="100"></kendo-progressbar>
+    </div>
+    
+    <div class="mb-3">
+      <h4>Indeterminate Progress</h4>
+      <kendo-progressbar [indeterminate]="true"></kendo-progressbar>
+    </div>
+  </div>
+
+  <!-- Tab Component -->
+  <div class="mj-content-container">
+    <h2>Tab Components</h2>
+    
+    <kendo-tabstrip>
+      <kendo-tabstrip-tab [title]="'Tab 1'" [selected]="true">
+        <ng-template kendoTabContent>
+          <div class="p-3">
+            <h4>First Tab Content</h4>
+            <p>This is the content of the first tab.</p>
+          </div>
+        </ng-template>
+      </kendo-tabstrip-tab>
+      
+      <kendo-tabstrip-tab [title]="'Tab 2'">
+        <ng-template kendoTabContent>
+          <div class="p-3">
+            <h4>Second Tab Content</h4>
+            <p>This is the content of the second tab.</p>
+          </div>
+        </ng-template>
+      </kendo-tabstrip-tab>
+      
+      <kendo-tabstrip-tab [title]="'Tab 3'">
+        <ng-template kendoTabContent>
+          <div class="p-3">
+            <h4>Third Tab Content</h4>
+            <p>This is the content of the third tab.</p>
+          </div>
+        </ng-template>
+      </kendo-tabstrip-tab>
+    </kendo-tabstrip>
+  </div>
+</div>
+
+<!-- Modal Overlay (Standard MJ Modal) -->
+<div class="mj-modal-overlay" *ngIf="isModalOpen" (click)="closeModal()">
+  <div class="mj-modal mj-modal-lg" (click)="$event.stopPropagation()">
+    <div class="mj-modal-header">
+      <h3 class="mj-modal-title">
+        <i class="fas fa-cog mj-modal-icon"></i>
+        Modal Dialog Example
+      </h3>
+      <button class="mj-modal-close" (click)="closeModal()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="mj-modal-body">
+      <p>This is a standard modal dialog with header, body, and footer sections.</p>
+      <div class="form-group">
+        <label class="form-label">Sample Input</label>
+        <input type="text" class="form-control" placeholder="Enter value...">
+      </div>
+    </div>
+    <div class="mj-modal-footer">
+      <button class="mj-btn mj-btn-ghost" (click)="closeModal()">Cancel</button>
+      <button class="mj-btn mj-btn-primary">
+        <i class="fas fa-save"></i>
+        Save Changes
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div class="mj-modal-overlay" *ngIf="isConfirmModalOpen" (click)="closeConfirmModal()">
+  <div class="mj-modal mj-modal-confirm" (click)="$event.stopPropagation()">
+    <div class="mj-modal-header">
+      <h3 class="mj-modal-title">Confirm Action</h3>
+      <button class="mj-modal-close" (click)="closeConfirmModal()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="mj-modal-body">
+      <i class="fas fa-exclamation-triangle mj-modal-confirm-icon warning"></i>
+      <h4>Are you sure?</h4>
+      <p>This action cannot be undone. Please confirm to proceed.</p>
+    </div>
+    <div class="mj-modal-footer">
+      <button class="mj-btn mj-btn-ghost" (click)="closeConfirmModal()">Cancel</button>
+      <button class="mj-btn mj-btn-primary">
+        <i class="fas fa-check"></i>
+        Confirm
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Kendo Dialog -->
+<kendo-dialog title="Kendo Dialog Example" *ngIf="isKendoDialogOpen" (close)="closeKendoDialog()" [minWidth]="450" [width]="600">
+  <p>This is a Kendo UI dialog component with enhanced styling.</p>
+  
+  <div class="form-group">
+    <label class="form-label">Name</label>
+    <input kendoTextBox placeholder="Enter name" />
+  </div>
+  
+  <kendo-dialog-actions>
+    <button kendoButton (click)="closeKendoDialog()">Cancel</button>
+    <button kendoButton [primary]="true" (click)="closeKendoDialog()">Save</button>
+  </kendo-dialog-actions>
+</kendo-dialog>

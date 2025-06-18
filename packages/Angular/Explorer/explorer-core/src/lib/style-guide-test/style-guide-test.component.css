@@ -1,0 +1,135 @@
+/* Style Guide Test Component Styles */
+
+/* Component specific overrides and additions */
+.typography-demo h1,
+.typography-demo h2,
+.typography-demo h3,
+.typography-demo h4 {
+    margin-bottom: 1rem;
+}
+
+.typography-demo p {
+    margin-bottom: 0.5rem;
+}
+
+.button-group {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.badge-group {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* Table styling */
+.table-wrapper {
+    overflow-x: auto;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--gray-700);
+}
+
+.mj-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--white-color);
+}
+
+.mj-table thead {
+    background: linear-gradient(135deg, var(--gray-600) 0%, #e8e8e8 100%);
+}
+
+.mj-table th {
+    padding: 16px 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--navy);
+    border-bottom: 2px solid var(--gray-700);
+}
+
+.mj-table td {
+    padding: 12px;
+    border-bottom: 1px solid var(--gray-600);
+    color: var(--navy);
+    font-size: 14px;
+}
+
+.mj-table tbody tr {
+    transition: all 0.2s ease;
+}
+
+.mj-table tbody tr:hover {
+    background: var(--light-blue);
+    transform: translateX(2px);
+}
+
+/* Utility margin classes used in template */
+.mb-3 {
+    margin-bottom: 1rem;
+}
+
+.mt-4 {
+    margin-top: 1.5rem;
+}
+
+.mr-2 {
+    margin-right: 0.5rem;
+}
+
+/* Ensure Font Awesome icons display properly */
+.fas {
+    font-family: 'Font Awesome 5 Free', 'FontAwesome';
+    font-weight: 900;
+}
+
+.fa-solid {
+    font-family: 'Font Awesome 6 Free', 'FontAwesome';
+    font-weight: 900;
+}
+
+/* Modal backdrop fix for proper display */
+.mj-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(9, 35, 64, 0.6);
+    backdrop-filter: blur(8px);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: modal-overlay-appear 0.3s ease-out;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .button-group {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .button-group .mj-btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .mj-table {
+        font-size: 12px;
+    }
+    
+    .mj-table th,
+    .mj-table td {
+        padding: 8px;
+    }
+}

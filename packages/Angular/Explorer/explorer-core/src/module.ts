@@ -19,6 +19,7 @@ import { ListViewModule } from '@progress/kendo-angular-listview';
 import { SortableModule } from '@progress/kendo-angular-sortable';
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
 import { ProgressBarModule } from "@progress/kendo-angular-progressbar";
+import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 
 // MJ
@@ -86,6 +87,7 @@ import { ResourceBrowserComponent } from './lib/resource-browser/resource-browse
 import { GenericDialogModule } from '@memberjunction/ng-generic-dialog';
 import {SingleListDetailComponent} from './lib/single-list-detail/single-list-detail.component';
 import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource.component';
+import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test.component';
 
 @NgModule({
   declarations: [
@@ -130,7 +132,8 @@ import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource
     SingleListDetailComponent,
     ListDetailResource,
     TabbedDashboardComponent,
-    DashboardPreferencesDialogComponent
+    DashboardPreferencesDialogComponent,
+    StyleGuideTestComponent
   ],
   imports: [
     AppRoutingModule,
@@ -181,6 +184,7 @@ import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource
     ResourcePermissionsModule,
     GenericDialogModule,
     ProgressBarModule,
+    DateInputsModule,
     DragDropModule
   ],
   exports: [
@@ -220,7 +224,8 @@ import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource
     ResourceBrowserComponent,
     ListDetailResource,
     TabbedDashboardComponent,
-    DashboardPreferencesDialogComponent
+    DashboardPreferencesDialogComponent,
+    StyleGuideTestComponent
   ],
   providers: [{ provide: RouteReuseStrategy, useClass: CustomReuseStrategy }],
 })
