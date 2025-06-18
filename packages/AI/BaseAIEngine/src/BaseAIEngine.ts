@@ -7,11 +7,13 @@ import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEnt
          AIAgentPromptEntity,
          AIAgentTypeEntity,
          AIVendorEntity,
-         AIModelVendorEntity} from "@memberjunction/core-entities";
+         AIModelVendorEntity,
+         AIModelTypeEntity} from "@memberjunction/core-entities";
  
 // this class handles execution of AI Actions
 export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _models: AIModelEntityExtended[] = [];
+    private _modelTypes: AIModelTypeEntity[] = [];
     private _vectorDatabases: VectorDatabaseEntity[] = [];
     private _prompts: AIPromptEntity[] = [];
     private _promptModels: AIPromptModelEntity[] = [];
@@ -33,6 +35,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_models',
                 EntityName: 'AI Models'
+            },
+            {
+                PropertyName: '_modelTypes',
+                EntityName: 'AI Model Types'
             },
             {
                 PropertyName: '_prompts',
@@ -209,6 +215,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get ModelVendors(): AIModelVendorEntity[] {
         return this._modelVendors;
+    }
+
+    public get ModelTypes(): AIModelTypeEntity[] {
+        return this._modelTypes;
     }
 
     public get Prompts(): AIPromptEntity[] {

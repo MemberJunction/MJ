@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/ai-gemini
 
+## 2.51.0
+
+### Patch Changes
+
+- Updated dependencies [4a79606]
+- Updated dependencies [faf513c]
+  - @memberjunction/ai@2.51.0
+  - @memberjunction/global@2.51.0
+
 ## 2.50.0
 
 ### Patch Changes

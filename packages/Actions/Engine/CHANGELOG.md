@@ -1,5 +1,25 @@
 # Change Log - @memberjunction/actions
 
+## 2.51.0
+
+### Minor Changes
+
+- 0ddb438: various
+
+### Patch Changes
+
+- Updated dependencies [4a79606]
+- Updated dependencies [faf513c]
+- Updated dependencies [7a9b88e]
+- Updated dependencies [53f8167]
+  - @memberjunction/ai@2.51.0
+  - @memberjunction/aiengine@2.51.0
+  - @memberjunction/core@2.51.0
+  - @memberjunction/core-entities@2.51.0
+  - @memberjunction/actions-base@2.51.0
+  - @memberjunction/doc-utils@2.51.0
+  - @memberjunction/global@2.51.0
+
 ## 2.50.0
 
 ### Patch Changes

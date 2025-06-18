@@ -231,6 +231,26 @@
                             </div>
                         </div>
                         
+                        <!-- Response Format -->
+                        <div class="option-group">
+                            <label style="display: block; font-weight: 500; margin-bottom: 6px; color: #495057; font-size: 0.9em;">
+                                <i class="fa-solid fa-file-alt" style="margin-right: 6px; color: #6c757d;"></i>
+                                Response Format
+                            </label>
+                            <kendo-dropdownlist [(ngModel)]="selectedResponseFormat"
+                                               [data]="responseFormatOptions"
+                                               textField="text"
+                                               valueField="value"
+                                               [valuePrimitive]="true"
+                                               [disabled]="isRunning"
+                                               placeholder="Select format..."
+                                               style="width: 100%;">
+                            </kendo-dropdownlist>
+                            <div style="margin-top: 4px; font-size: 0.75em; color: #6c757d;">
+                                Expected format for AI response (defaults to prompt setting)
+                            </div>
+                        </div>
+                        
                         <!-- Configuration ID -->
                         <div class="option-group">
                             <label style="display: block; font-weight: 500; margin-bottom: 6px; color: #495057; font-size: 0.9em;">

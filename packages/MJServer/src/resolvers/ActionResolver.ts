@@ -2,9 +2,11 @@ import { Resolver, Mutation, Arg, Ctx } from "type-graphql";
 import { ActionEngineServer } from "@memberjunction/actions";
 import { EntityActionEngineServer } from "@memberjunction/actions";
 import { Metadata, UserInfo, BaseEntity, CompositeKey, KeyValuePair, LogError } from "@memberjunction/core";
-import { ActionParam } from "@memberjunction/actions-base";
+import { ActionParam, ActionResult } from "@memberjunction/actions-base";
 import { Field, InputType, ObjectType } from "type-graphql";
 import { KeyValuePairInput } from "../generic/KeyValuePairInput.js";
+import { AppContext } from "../types.js";
+import { CopyScalarsAndArrays } from "@memberjunction/global";
 
 /**
  * Input type for action parameters
@@ -178,11 +180,14 @@ export class ActionResolver {
   @Mutation(() => ActionResultOutput)
   async RunAction(
     @Arg("input") input: RunActionInput,
-    @Ctx() ctx: any
+    @Ctx() ctx: AppContext
   ): Promise<ActionResultOutput> {
     try {
       // Get the user from context
-      const user = this.getUserFromContext(ctx);
+      const user = ctx.userPayload.userRecord;
+      if (!user) {
+        throw new Error("User is not authenticated");
+      }
 
       // Initialize the action engine
       await ActionEngineServer.Instance.Config(false, user);
@@ -265,7 +270,7 @@ export class ActionResolver {
     user: UserInfo, 
     params: ActionParam[], 
     skipActionLog?: boolean
-  ): Promise<any> {
+  ): Promise<ActionResult> {
     return await ActionEngineServer.Instance.RunAction({
       Action: action,
       ContextUser: user,
@@ -281,12 +286,15 @@ export class ActionResolver {
    * @returns The formatted action result
    * @private
    */
-  private createActionResult(result: any): ActionResultOutput {
+  private createActionResult(result: ActionResult): ActionResultOutput {
+    const x =(result.Params || result.RunParams.Params || [])
+              .filter(p => p.Type.trim().toLowerCase() === 'output' ||
+                           p.Type.trim().toLowerCase() === 'both')     ;
     return {
       Success: result.Success,
       Message: result.Message,
       ResultCode: result.Result?.ResultCode,
-      ResultData: result.Result ? JSON.stringify(result.Result) : undefined
+      ResultData: x && x.length > 0 ? JSON.stringify(CopyScalarsAndArrays(x)) : undefined
     };
   }
 
@@ -314,12 +322,14 @@ export class ActionResolver {
   @Mutation(() => ActionResultOutput)
   async RunEntityAction(
     @Arg("input") input: EntityActionInput,
-    @Ctx() ctx: any
+    @Ctx() ctx: AppContext
   ): Promise<ActionResultOutput> {
     try {
-      // Get the user from context
-      const user = this.getUserFromContext(ctx);
-      
+      const user = ctx.userPayload.userRecord;
+      if (!user) {
+        throw new Error("User is not authenticated");
+      }
+
       // Initialize the entity action engine
       await EntityActionEngineServer.Instance.Config(false, user);
 
@@ -350,22 +360,7 @@ export class ActionResolver {
       return this.handleError(e);
     }
   }
-
-  /**
-   * Gets the authenticated user from the GraphQL context
-   * @param ctx The GraphQL context
-   * @returns The authenticated user
-   * @throws Error if user is not authenticated
-   * @private
-   */
-  private getUserFromContext(ctx: any): UserInfo {
-    const user = ctx.user as UserInfo;
-    if (!user) {
-      throw new Error("User not authenticated");
-    }
-    return user;
-  }
-
+ 
   /**
    * Gets an entity action by ID
    * @param actionID The ID of the entity action

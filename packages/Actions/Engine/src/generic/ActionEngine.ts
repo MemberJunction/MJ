@@ -207,6 +207,7 @@ export class ActionEngineServer extends ActionEngineBase {
       logEntity.EndedAt = new Date();
       logEntity.Params = JSON.stringify(params.Params);
       logEntity.ResultCode = result.Result?.ResultCode;
+      logEntity.Message = result.Message;
       
       // save a second time to record the action ending
       const saveResult: boolean = await logEntity.Save();

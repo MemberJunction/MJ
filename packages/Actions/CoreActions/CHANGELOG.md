@@ -1,5 +1,27 @@
 # Change Log - @memberjunction/core-actions
 
+## 2.51.0
+
+### Minor Changes
+
+- 7a9b88e: AI Improvements
+- 53f8167: AI Agent Infra - bump to 2.51.0
+- 0ddb438: various
+
+### Patch Changes
+
+- Updated dependencies [7a9b88e]
+- Updated dependencies [53f8167]
+- Updated dependencies [0ddb438]
+  - @memberjunction/core@2.51.0
+  - @memberjunction/core-entities@2.51.0
+  - @memberjunction/actions@2.51.0
+  - @memberjunction/ai-vector-sync@2.51.0
+  - @memberjunction/content-autotagging@2.51.0
+  - @memberjunction/communication-engine@2.51.0
+  - @memberjunction/external-change-detection@2.51.0
+  - @memberjunction/global@2.51.0
+
 ## 2.50.0
 
 ### Patch Changes

@@ -9,8 +9,20 @@ The MemberJunction AI Engine package provides a comprehensive framework for AI-p
 - **📊 Performance Monitoring**: Basic tracking and analytics for AI operations
 - **🔗 Entity Integration**: Seamless integration with MemberJunction entity system
 - **⚡ Simple Prompt Execution**: Basic prompt execution for quick AI tasks
+- **🏗️ Agent Type System**: Defines agent types and their behavioral characteristics
 
 > **📝 Advanced Prompt Management**: For sophisticated stored prompt management, template rendering, and parallel execution capabilities, see the [@memberjunction/ai-prompts](../Prompts/README.md) package.
+
+### Type Organization Update (2025)
+
+As part of improving code organization:
+- **This package** now contains:
+  - Extended entity classes for AI operations
+  - Agent type definitions and factory interfaces
+  - The new `agent-types.ts` file with agent type classes
+- **Base AI types** are imported from `@memberjunction/ai` (Core)
+- **Agent execution types** are imported from `@memberjunction/ai-agents`
+- **Prompt types** are imported from `@memberjunction/ai-prompts`
 
 ## Installation
 
@@ -22,6 +34,7 @@ npm install @memberjunction/aiengine
 
 - Node.js 16+
 - MemberJunction Core libraries
+- [@memberjunction/ai](../Core/README.md) for base AI types
 - At least one AI model provider (e.g., `@memberjunction/ai-openai`)
 
 ## Core Architecture
@@ -190,6 +203,23 @@ class AIPromptCategoryEntityExtended extends AIPromptCategoryEntity {
 
 The AI Engine automatically extends AI Model entities with additional capabilities from the AI provider system. These extended models include all driver-specific functionality and API integration.
 
+### Agent Type System
+
+The Engine now includes specialized agent type classes in `agent-types.ts`:
+
+```typescript
+// Base agent type - foundation for all agent types
+import { BaseAgentType } from '@memberjunction/aiengine';
+
+// Specialized agent types
+import { LoopAgentType } from '@memberjunction/aiengine';
+
+// Agent types define behavioral characteristics:
+// - System prompts for consistent behavior
+// - Decision-making patterns
+// - Execution flow control
+```
+
 
 ## Advanced Features
 
@@ -267,12 +297,35 @@ const response = await AIEngine.Instance.SimpleLLMCompletion(
 
 For sophisticated parallel execution, template rendering, and stored prompt management, see the [@memberjunction/ai-prompts](../Prompts/README.md) package.
 
+## Import Examples
+
+```typescript
+// Import main AI Engine class
+import { AIEngine } from '@memberjunction/aiengine';
+
+// Import extended entity types
+import { 
+  AIAgentEntityExtended,
+  AIPromptCategoryEntityExtended,
+  AIModelEntityExtended 
+} from '@memberjunction/aiengine';
+
+// Import agent type classes
+import { BaseAgentType, LoopAgentType } from '@memberjunction/aiengine';
+
+// Import base AI types from Core
+import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
+
+// When working with agents, import execution types
+import { AgentExecutionParams, AgentExecutionResult } from '@memberjunction/ai-agents';
+```
+
 ## Dependencies
 
 - `@memberjunction/core`: MemberJunction core library
 - `@memberjunction/global`: MemberJunction global utilities  
 - `@memberjunction/core-entities`: MemberJunction entity definitions
-- `@memberjunction/ai`: AI abstractions and interfaces
+- `@memberjunction/ai`: Base AI types and interfaces (imported for core types)
 - `@memberjunction/templates`: Template engine integration
 - `@memberjunction/templates-base-types`: Template base type definitions
 - `rxjs`: Reactive programming support

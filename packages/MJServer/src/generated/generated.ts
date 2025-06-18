@@ -27548,12 +27548,12 @@ export class ActionExecutionLog_ {
     @MaxLength(16)
     ActionID: string;
         
-    @Field({description: `Timestamp of when the action started execution.`}) 
-    @MaxLength(8)
+    @Field({description: `Timestamp when the action execution started (timezone-aware)`}) 
+    @MaxLength(10)
     StartedAt: Date;
         
-    @Field({nullable: true, description: `Timestamp of when the action ended execution.`}) 
-    @MaxLength(8)
+    @Field({nullable: true, description: `Timestamp when the action execution ended (timezone-aware)`}) 
+    @MaxLength(10)
     EndedAt?: Date;
         
     @Field({nullable: true}) 

@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/actions-apollo
 
+## 2.51.0
+
+### Patch Changes
+
+- Updated dependencies [7a9b88e]
+- Updated dependencies [53f8167]
+- Updated dependencies [0ddb438]
+  - @memberjunction/core@2.51.0
+  - @memberjunction/core-entities@2.51.0
+  - @memberjunction/actions@2.51.0
+  - @memberjunction/global@2.51.0
+
 ## 2.50.0
 
 ### Patch Changes

@@ -1,0 +1,246 @@
+<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
+    @if (record) {
+        <form class="record-form" #form="ngForm" mjFillContainer>
+            <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+            <!-- Main Content Area -->
+            <div class="execution-log-main-area" style="display: flex; flex-direction: column; height: 100%; overflow-y: auto;">
+                
+                <!-- Header Section -->
+                <div class="execution-header" style="flex-shrink: 0; padding: 20px; background: #f8f9fa; border-bottom: 2px solid #e9ecef;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
+                        
+                        <!-- Left: Execution Info -->
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                                <i [class]="'fa-solid ' + getResultCodeIcon()" 
+                                   [style.color]="getResultCodeColor()" 
+                                   style="font-size: 1.4em;"></i>
+                                <h4 style="margin: 0; color: #495057; font-weight: 600;">
+                                    Execution #{{ record.ID }}
+                                </h4>
+                                <span class="result-badge" 
+                                      [style.background-color]="getResultCodeColor()" 
+                                      style="color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.75em; font-weight: 500;">
+                                    {{ record.ResultCode || 'Unknown' }}
+                                </span>
+                            </div>
+                            
+                            <!-- Quick Info Row -->
+                            <div class="quick-info" style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-top: 12px;">
+                                @if (action) {
+                                    <div class="info-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.9em;">
+                                        <i class="fa-solid fa-bolt" style="color: #6c757d;"></i>
+                                        <span style="color: #6c757d;">Action:</span>
+                                        <span style="color: #495057; font-weight: 500; cursor: pointer;" (click)="navigateToAction()">
+                                            {{ action.Name }}
+                                            <i class="fa-solid fa-external-link" style="font-size: 0.75em; margin-left: 4px;"></i>
+                                        </span>
+                                    </div>
+                                }
+                                
+                                @if (user) {
+                                    <div class="info-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.9em;">
+                                        <i class="fa-solid fa-user" style="color: #6c757d;"></i>
+                                        <span style="color: #6c757d;">User:</span>
+                                        <span style="color: #495057; font-weight: 500; cursor: pointer;" (click)="navigateToUser()">
+                                            {{ user.Name }}
+                                            <i class="fa-solid fa-external-link" style="font-size: 0.75em; margin-left: 4px;"></i>
+                                        </span>
+                                    </div>
+                                }
+                                
+                                @if (record.EndedAt) {
+                                    <div class="info-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.9em;">
+                                        <i class="fa-solid fa-clock" style="color: #6c757d;"></i>
+                                        <span style="color: #6c757d;">Duration:</span>
+                                        <span style="color: #495057; font-weight: 500;">{{ formatDuration(getExecutionDuration()) }}</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        
+                        <!-- Right: Timestamps -->
+                        <div class="timestamps" style="text-align: right; font-size: 0.85em; color: #6c757d;">
+                            <div>Started: {{ record.StartedAt | date:'medium' }}</div>
+                            @if (record.EndedAt) {
+                                <div>Ended: {{ record.EndedAt | date:'medium' }}</div>
+                            } @else {
+                                <div style="color: #ffc107; font-weight: 600;">Still Running...</div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Configuration Sections with Expansion Panels -->
+                <div class="configuration-sections" style="flex: 1; background: white; border-top: 2px solid #e9ecef; padding: 16px; min-height: 0;">
+                    
+                    <!-- Execution Details Section -->
+                    <kendo-expansionpanel 
+                        [expanded]="expandedSections.execution"
+                        style="margin-bottom: 12px;">
+                        <ng-template kendoExpansionPanelTitleDirective>
+                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                <i class="fa-solid fa-info-circle" style="color: #6c757d;"></i>
+                                Execution Details
+                            </span>
+                        </ng-template>
+                        
+                        <div style="padding: 16px;">
+                            <div class="details-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+                                <div class="detail-item">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #6c757d; font-size: 0.85em;">Execution ID</label>
+                                    <div style="font-family: monospace; color: #495057;">{{ record.ID }}</div>
+                                </div>
+                                
+                                <div class="detail-item">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #6c757d; font-size: 0.85em;">Action ID</label>
+                                    <div style="font-family: monospace; color: #495057;">{{ record.ActionID }}</div>
+                                </div>
+                                
+                                <div class="detail-item">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #6c757d; font-size: 0.85em;">User ID</label>
+                                    <div style="font-family: monospace; color: #495057;">{{ record.UserID }}</div>
+                                </div>
+                                
+                                <div class="detail-item">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #6c757d; font-size: 0.85em;">Result Code</label>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <i [class]="'fa-solid ' + getResultCodeIcon()" [style.color]="getResultCodeColor()"></i>
+                                        <span style="font-weight: 600;" [style.color]="getResultCodeColor()">{{ record.ResultCode || 'N/A' }}</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="detail-item">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #6c757d; font-size: 0.85em;">Retention Period</label>
+                                    <div>{{ record.RetentionPeriod ? record.RetentionPeriod + ' days' : 'Indefinite' }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </kendo-expansionpanel>
+
+                    <!-- Input Parameters Section -->
+                    <kendo-expansionpanel 
+                        [expanded]="expandedSections.input"
+                        style="margin-bottom: 12px;">
+                        <ng-template kendoExpansionPanelTitleDirective>
+                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                <i class="fa-solid fa-sign-in-alt" style="color: #6c757d;"></i>
+                                Input Parameters
+                                @if (record.Params) {
+                                    <span style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                                        JSON
+                                    </span>
+                                }
+                            </span>
+                        </ng-template>
+                        
+                        <div style="padding: 16px;">
+                            @if (record.Params) {
+                                <div class="json-editor-container">
+                                    <div class="editor-toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                        <h4 style="margin: 0; color: #495057;">Parameters JSON</h4>
+                                        @if (EditMode) {
+                                            <kendo-button fillMode="flat" size="small" (click)="saveParams()">
+                                                <i class="fa-solid fa-save"></i> Save
+                                            </kendo-button>
+                                        }
+                                    </div>
+                                    <mj-code-editor 
+                                        [(ngModel)]="formattedParams"
+                                        name="formattedParams"
+                                        [readonly]="!EditMode"
+                                        [language]="'json'"
+                                        [lineWrapping]="true"
+                                        style="height: 300px; width: 100%;">
+                                    </mj-code-editor>
+                                </div>
+                            } @else {
+                                <div class="empty-state" style="padding: 30px; text-align: center;">
+                                    <i class="fa-solid fa-inbox" style="font-size: 2em; color: #6c757d; opacity: 0.3;"></i>
+                                    <p style="margin: 12px 0 0 0; color: #6c757d;">No input parameters</p>
+                                </div>
+                            }
+                        </div>
+                    </kendo-expansionpanel>
+
+                    <!-- Output/Message Section -->
+                    <kendo-expansionpanel 
+                        [expanded]="expandedSections.output"
+                        style="margin-bottom: 12px;">
+                        <ng-template kendoExpansionPanelTitleDirective>
+                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                <i class="fa-solid fa-sign-out-alt" style="color: #6c757d;"></i>
+                                Output Message
+                                @if (formattedMessage) {
+                                    <span style="background: #28a745; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                                        JSON
+                                    </span>
+                                }
+                            </span>
+                        </ng-template>
+                        
+                        <div style="padding: 16px;">
+                            @if (formattedMessage) {
+                                <div class="json-editor-container">
+                                    <div class="editor-toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                        <h4 style="margin: 0; color: #495057;">Output Message JSON</h4>
+                                        @if (EditMode) {
+                                            <kendo-button fillMode="flat" size="small" (click)="saveMessage()">
+                                                <i class="fa-solid fa-save"></i> Save
+                                            </kendo-button>
+                                        }
+                                    </div>
+                                    <mj-code-editor 
+                                        [(ngModel)]="formattedMessage"
+                                        name="formattedMessage"
+                                        [readonly]="!EditMode"
+                                        [language]="'json'"
+                                        [lineWrapping]="true"
+                                        style="height: 300px; width: 100%;">
+                                    </mj-code-editor>
+                                </div>
+                            } @else {
+                                <div class="empty-state" style="padding: 30px; text-align: center;">
+                                    <i class="fa-solid fa-inbox" style="font-size: 2em; color: #6c757d; opacity: 0.3;"></i>
+                                    <p style="margin: 12px 0 0 0; color: #6c757d;">No output message</p>
+                                    @if (!EditMode) {
+                                        <p style="margin: 8px 0 0 0; font-size: 0.85em; color: #6c757d;">
+                                            Output data will be captured in future executions
+                                        </p>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </kendo-expansionpanel>
+
+                    <!-- Metadata Section -->
+                    <kendo-expansionpanel 
+                        [expanded]="expandedSections.metadata"
+                        style="margin-bottom: 12px;">
+                        <ng-template kendoExpansionPanelTitleDirective>
+                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                <i class="fa-solid fa-database" style="color: #6c757d;"></i>
+                                System Metadata
+                            </span>
+                        </ng-template>
+                        
+                        <div style="padding: 16px;">
+                            <div class="metadata-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+                                <div class="metadata-item">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #6c757d; font-size: 0.85em;">Created At</label>
+                                    <div>{{ record.__mj_CreatedAt | date:'medium' }}</div>
+                                </div>
+                                
+                                <div class="metadata-item">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #6c757d; font-size: 0.85em;">Updated At</label>
+                                    <div>{{ record.__mj_UpdatedAt | date:'medium' }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </kendo-expansionpanel>
+                </div>
+            </div>
+        </form>
+    }
+</div>
