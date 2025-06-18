@@ -521,3 +521,35 @@ When adding new AI models and vendors:
 - Manually create CRUD operations (let CodeGen handle it)
 
 CodeGen ensures that your database schema, TypeScript types, and UI components stay perfectly synchronized, eliminating many common development errors and maintaining consistency across the entire stack.
+
+## Angular Development Best Practices
+
+### Change Detection and ExpressionChangedAfterItHasBeenCheckedError
+When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular components:
+- Add `ChangeDetectorRef` to the component constructor
+- Use `cdr.detectChanges()` after programmatic changes that affect the view
+- Replace `setTimeout` with `Promise.resolve().then()` for microtask timing
+- Common scenarios: clearing inputs, focus management, dynamic content updates
+
+### Kendo UI Component Usage
+- **Deprecated Syntax**: Replace `<kendo-button>` with `<button kendoButton>`
+- **Window/Dialog Positioning**: 
+  - Use `kendoWindowContainer` directive on parent containers
+  - For dynamic windows, inject `ViewContainerRef` in WindowService.open()
+  - Set explicit `top` and `left` values for center positioning
+
+### GraphQL Parameter Types
+- **Numeric Types**: Pay attention to GraphQL scalar types
+  - Use `Int` for integer parameters (topK, seed)
+  - Use `Float` for decimal parameters (temperature, topP)
+  - Match the GraphQL schema exactly to avoid type mismatch errors
+
+### Null Checking Patterns
+- Use `!= null` (not `!== null`) to check for both null and undefined
+- This is especially important for optional parameters that could be either
+- Example: `if (temperature != null)` handles both null and undefined
+
+### Component Organization
+- Group related components in dedicated directories
+- Export shared components (like dialogs) for reuse
+- Maintain clear separation between container and presentational components
