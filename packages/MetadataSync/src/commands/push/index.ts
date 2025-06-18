@@ -681,6 +681,30 @@ export default class Push extends Command {
     
     if (recordData.primaryKey) {
       entity = await syncEngine.loadEntity(entityName, recordData.primaryKey);
+      
+      // Warn if record has primaryKey but wasn't found
+      if (!entity) {
+        const pkDisplay = Object.entries(recordData.primaryKey)
+          .map(([key, value]) => `${key}=${value}`)
+          .join(', ');
+        
+        // Load sync config to check autoCreateMissingRecords setting
+        const syncConfig = await loadSyncConfig(configManager.getOriginalCwd());
+        const autoCreate = syncConfig?.push?.autoCreateMissingRecords ?? false;
+        
+        if (!autoCreate) {
+          const fileRef = lineNumber ? `${fileName}:${lineNumber}` : fileName;
+          this.warn(`⚠️  Record not found: ${entityName} with primaryKey {${pkDisplay}} at ${fileRef}`);
+          this.warn(`   To auto-create missing records, set push.autoCreateMissingRecords=true in .mj-sync.json`);
+          
+          // Skip this record
+          return { isNew: false, wasActuallyUpdated: false, isDuplicate: false };
+        } else {
+          if (verbose) {
+            this.log(`   Auto-creating missing ${entityName} record with primaryKey {${pkDisplay}}`);
+          }
+        }
+      }
     }
     
     if (!entity) {
@@ -881,6 +905,30 @@ export default class Push extends Command {
           
           if (relatedRecord.primaryKey) {
             entity = await syncEngine.loadEntity(entityName, relatedRecord.primaryKey);
+            
+            // Warn if record has primaryKey but wasn't found
+            if (!entity) {
+              const pkDisplay = Object.entries(relatedRecord.primaryKey)
+                .map(([key, value]) => `${key}=${value}`)
+                .join(', ');
+              
+              // Load sync config to check autoCreateMissingRecords setting
+              const syncConfig = await loadSyncConfig(configManager.getOriginalCwd());
+              const autoCreate = syncConfig?.push?.autoCreateMissingRecords ?? false;
+              
+              if (!autoCreate) {
+                const fileRef = parentFilePath ? path.relative(configManager.getOriginalCwd(), parentFilePath) : 'unknown';
+                this.warn(`${indent}⚠️  Related record not found: ${entityName} with primaryKey {${pkDisplay}} at ${fileRef}`);
+                this.warn(`${indent}   To auto-create missing records, set push.autoCreateMissingRecords=true in .mj-sync.json`);
+                
+                // Skip this record
+                continue;
+              } else {
+                if (verbose) {
+                  this.log(`${indent}   Auto-creating missing related ${entityName} record with primaryKey {${pkDisplay}}`);
+                }
+              }
+            }
           }
           
           if (!entity) {
