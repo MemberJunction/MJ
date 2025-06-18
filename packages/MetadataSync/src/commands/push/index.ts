@@ -13,6 +13,7 @@ import { configManager } from '../../lib/config-manager';
 import { getSyncEngine, resetSyncEngine } from '../../lib/singleton-manager';
 import { SQLServerDataProvider, type SqlLoggingSession } from '@memberjunction/sqlserver-dataprovider';
 import { uuidv4 } from '@memberjunction/global';
+import { FileBackupManager } from '../../lib/file-backup-manager';
 
 export default class Push extends Command {
   static description = 'Push local file changes to the database';
@@ -46,6 +47,8 @@ export default class Push extends Command {
     const { flags } = await this.parse(Push);
     const spinner = ora();
     let sqlLogger: SqlLoggingSession | null = null;
+    const fileBackupManager = new FileBackupManager();
+    let hasActiveTransaction = false;
     const startTime = Date.now();
     
     try {
@@ -171,24 +174,67 @@ export default class Push extends Command {
         }
       }
       
+      // Initialize file backup manager (unless in dry-run mode)
+      if (!flags['dry-run']) {
+        await fileBackupManager.initialize();
+        if (flags.verbose) {
+          this.log('📁 File backup manager initialized');
+        }
+      }
+      
       // Start a database transaction for the entire push operation (unless in dry-run mode)
       // IMPORTANT: We start the transaction AFTER metadata loading and validation to avoid
       // transaction conflicts with background refresh operations
       if (!flags['dry-run']) {
         const { getDataProvider } = await import('../../lib/provider-utils');
         const dataProvider = getDataProvider();
+        
+        // Ensure we have SQLServerDataProvider for transaction support
+        if (!(dataProvider instanceof SQLServerDataProvider)) {
+          const errorMsg = 'MetadataSync requires SQLServerDataProvider for transaction support. Current provider does not support transactions.';
+          
+          // Rollback file backups since we're not proceeding
+          try {
+            await fileBackupManager.rollback();
+          } catch (rollbackError) {
+            this.warn(`Failed to rollback file backup initialization: ${rollbackError}`);
+          }
+          
+          this.error(errorMsg);
+        }
+        
         if (dataProvider && typeof dataProvider.BeginTransaction === 'function') {
           try {
             await dataProvider.BeginTransaction();
+            hasActiveTransaction = true;
             if (flags.verbose) {
               this.log('🔄 Transaction started - all changes will be committed or rolled back as a unit');
             }
           } catch (error) {
-            this.warn('Failed to start transaction - changes will be committed individually');
-            this.warn(`Transaction error: ${error instanceof Error ? error.message : String(error)}`);
+            // Transaction start failure is critical - we should not proceed without it
+            const errorMsg = `Failed to start database transaction: ${error instanceof Error ? error.message : String(error)}`;
+            
+            // Rollback file backups since we're not proceeding
+            try {
+              await fileBackupManager.rollback();
+            } catch (rollbackError) {
+              this.warn(`Failed to rollback file backup initialization: ${rollbackError}`);
+            }
+            
+            this.error(errorMsg);
           }
         } else {
-          this.warn('Transaction support not available - changes will be committed individually');
+          // No transaction support is also critical for data integrity
+          const errorMsg = 'Transaction support not available - cannot ensure data integrity';
+          
+          // Rollback file backups since we're not proceeding
+          try {
+            await fileBackupManager.rollback();
+          } catch (rollbackError) {
+            this.warn(`Failed to rollback file backup initialization: ${rollbackError}`);
+          }
+          
+          this.error(errorMsg);
         }
       }
       
@@ -213,7 +259,8 @@ export default class Push extends Command {
           entityConfig,
           syncEngine,
           flags,
-          syncConfig
+          syncConfig,
+          fileBackupManager
         );
         
         totalCreated += result.created;
@@ -236,11 +283,11 @@ export default class Push extends Command {
       }));
       
       // Handle transaction commit/rollback
-      if (!flags['dry-run']) {
+      if (!flags['dry-run'] && hasActiveTransaction) {
         const dataProvider = Metadata.Provider as SQLServerDataProvider;
         
-        // Check if we have an active transaction
-        if (dataProvider ) {
+        // We know we have an active transaction at this point
+        if (dataProvider) {
           let shouldCommit = true;
           
           // If there are any errors, always rollback
@@ -281,21 +328,41 @@ export default class Push extends Command {
             if (shouldCommit) {
               await dataProvider.CommitTransaction();
               this.log('\n✅ All changes committed successfully');
+              
+              // Clean up file backups after successful commit
+              await fileBackupManager.cleanup();
             } else {
               // User chose to rollback or errors/warnings in CI mode
               this.log('\n🔙 Rolling back all changes...');
+              
+              // Rollback database transaction
               await dataProvider.RollbackTransaction();
-              this.log('✅ Rollback completed - no changes were made to the database');
+              
+              // Rollback file changes
+              this.log('🔙 Rolling back file changes...');
+              await fileBackupManager.rollback();
+              
+              this.log('✅ Rollback completed - no changes were made to the database or files');
             }
           } catch (error) {
             // Try to rollback on any error
             this.log('\n❌ Transaction error - attempting to roll back changes');
             try {
               await dataProvider.RollbackTransaction();
-              this.log('✅ Rollback completed');
+              this.log('✅ Database rollback completed');
             } catch (rollbackError) {
-              this.log('❌ Rollback failed: ' + (rollbackError instanceof Error ? rollbackError.message : String(rollbackError)));
+              this.log('❌ Database rollback failed: ' + (rollbackError instanceof Error ? rollbackError.message : String(rollbackError)));
             }
+            
+            // Also rollback file changes
+            try {
+              this.log('🔙 Rolling back file changes...');
+              await fileBackupManager.rollback();
+              this.log('✅ File rollback completed');
+            } catch (fileRollbackError) {
+              this.log('❌ File rollback failed: ' + (fileRollbackError instanceof Error ? fileRollbackError.message : String(fileRollbackError)));
+            }
+            
             throw error;
           }
         }
@@ -309,19 +376,29 @@ export default class Push extends Command {
     } catch (error) {
       spinner.fail('Push failed');
       
-      // Try to rollback the transaction if one is active
+      // Try to rollback the transaction and files if not in dry-run mode
       if (!flags['dry-run']) {
         const { getDataProvider } = await import('../../lib/provider-utils');
         const dataProvider = getDataProvider();
         
-        if (dataProvider && typeof dataProvider.RollbackTransaction === 'function') {
+        // Rollback database transaction if we have one
+        if (hasActiveTransaction && dataProvider && typeof dataProvider.RollbackTransaction === 'function') {
           try {
-            this.log('\n🔙 Rolling back transaction due to error...');
+            this.log('\n🔙 Rolling back database transaction due to error...');
             await dataProvider.RollbackTransaction();
-            this.log('✅ Rollback completed - no changes were made to the database');
+            this.log('✅ Database rollback completed');
           } catch (rollbackError) {
-            this.log('❌ Rollback failed: ' + (rollbackError instanceof Error ? rollbackError.message : String(rollbackError)));
+            this.log('❌ Database rollback failed: ' + (rollbackError instanceof Error ? rollbackError.message : String(rollbackError)));
           }
+        }
+        
+        // Rollback file changes
+        try {
+          this.log('🔙 Rolling back file changes...');
+          await fileBackupManager.rollback();
+          this.log('✅ File rollback completed - all files restored to original state');
+        } catch (fileRollbackError) {
+          this.log('❌ File rollback failed: ' + (fileRollbackError instanceof Error ? fileRollbackError.message : String(fileRollbackError)));
         }
       }
       
@@ -381,7 +458,8 @@ export default class Push extends Command {
     entityConfig: any,
     syncEngine: SyncEngine,
     flags: any,
-    syncConfig: any
+    syncConfig: any,
+    fileBackupManager?: FileBackupManager
   ): Promise<{ created: number; updated: number; errors: number }> {
     const result = { created: 0, updated: 0, errors: 0 };
     
@@ -399,7 +477,7 @@ export default class Push extends Command {
     }
     
     // First, process all JSON files in this directory
-    await this.processJsonFiles(jsonFiles, entityDir, entityConfig, syncEngine, flags, result);
+    await this.processJsonFiles(jsonFiles, entityDir, entityConfig, syncEngine, flags, result, fileBackupManager);
     
     // Then, recursively process subdirectories
     const entries = await fs.readdir(entityDir, { withFileTypes: true });
@@ -435,7 +513,8 @@ export default class Push extends Command {
           subEntityConfig,
           syncEngine,
           flags,
-          syncConfig
+          syncConfig,
+          fileBackupManager
         );
         
         result.created += subResult.created;
@@ -453,7 +532,8 @@ export default class Push extends Command {
     entityConfig: any,
     syncEngine: SyncEngine,
     flags: any,
-    result: { created: number; updated: number; errors: number }
+    result: { created: number; updated: number; errors: number },
+    fileBackupManager?: FileBackupManager
   ): Promise<void> {
     if (jsonFiles.length === 0) {
       return;
@@ -467,6 +547,12 @@ export default class Push extends Command {
     for (const file of jsonFiles) {
       try {
         const filePath = path.join(entityDir, file);
+        
+        // Backup the file before any modifications (unless dry-run)
+        if (!flags['dry-run'] && fileBackupManager) {
+          await fileBackupManager.backupFile(filePath);
+        }
+        
         const fileContent = await fs.readJson(filePath);
         
         // Process templates in the loaded content
@@ -494,7 +580,8 @@ export default class Push extends Command {
             syncEngine,
             flags['dry-run'],
             flags.verbose,
-            isArray ? i : undefined
+            isArray ? i : undefined,
+            fileBackupManager
           );
           
           if (!flags['dry-run']) {
@@ -538,7 +625,8 @@ export default class Push extends Command {
     syncEngine: SyncEngine,
     dryRun: boolean,
     verbose: boolean = false,
-    arrayIndex?: number
+    arrayIndex?: number,
+    fileBackupManager?: FileBackupManager
   ): Promise<boolean> {
     // Load or create entity
     let entity: BaseEntity | null = null;
@@ -633,7 +721,8 @@ export default class Push extends Command {
         entity, // root is same as parent for top level
         baseDir,
         syncEngine,
-        verbose
+        verbose,
+        fileBackupManager
       );
     }
     
@@ -673,6 +762,7 @@ export default class Push extends Command {
     baseDir: string,
     syncEngine: SyncEngine,
     verbose: boolean = false,
+    fileBackupManager?: FileBackupManager,
     indentLevel: number = 1
   ): Promise<void> {
     const indent = '  '.repeat(indentLevel);
@@ -791,6 +881,7 @@ export default class Push extends Command {
               baseDir,
               syncEngine,
               verbose,
+              fileBackupManager,
               indentLevel + 1
             );
           }
