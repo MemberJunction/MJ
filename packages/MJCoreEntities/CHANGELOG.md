@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.51.0
+
+### Minor Changes
+
+- 7a9b88e: AI Improvements
+- 53f8167: AI Agent Infra - bump to 2.51.0
+
+### Patch Changes
+
+- Updated dependencies [7a9b88e]
+  - @memberjunction/core@2.51.0
+  - @memberjunction/global@2.51.0
+
 ## 2.50.0
 
 ### Patch Changes
