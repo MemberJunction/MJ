@@ -14,6 +14,8 @@ export * from './EntityAdmin/entity-admin-dashboard.component';
 export * from './AI/ai-dashboard.component';
 export * from './Actions';
 
+export * from './Actions/index';
+
 // Module
 export * from './module';
 
