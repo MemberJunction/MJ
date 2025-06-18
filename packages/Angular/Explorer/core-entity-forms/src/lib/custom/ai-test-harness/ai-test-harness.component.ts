@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, ElementRef, AfterViewChecked, SecurityContext, ViewContainerRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, ElementRef, AfterViewChecked, SecurityContext, ViewContainerRef, ChangeDetectorRef } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 import { WindowService, WindowRef, WindowCloseResult } from '@progress/kendo-angular-dialog';
@@ -147,11 +147,13 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      * @param sanitizer - Angular DomSanitizer for safe HTML rendering of formatted content
      * @param windowService - Kendo WindowService for creating modal windows
      * @param viewContainerRef - Angular ViewContainerRef for window positioning
+     * @param cdr - Angular ChangeDetectorRef for managing change detection
      */
     constructor(
         private sanitizer: DomSanitizer,
         private windowService: WindowService,
-        private viewContainerRef: ViewContainerRef
+        private viewContainerRef: ViewContainerRef,
+        private cdr: ChangeDetectorRef
     ) {}
     
     /** The mode of operation - either 'agent' or 'prompt' */
@@ -429,11 +431,12 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         }
         
         // Auto-focus message input when dialog first becomes visible
+        // Use Promise.resolve to schedule this after current change detection cycle
         if (this.isVisible && !this._hasFocused && this.messageInput) {
             this._hasFocused = true;
-            setTimeout(() => {
+            Promise.resolve().then(() => {
                 this.messageInput?.focus();
-            }, 100);
+            });
         }
     }
 
@@ -991,11 +994,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         };
         this.conversationMessages.push(userMessage);
         
-        // Clear input after change detection to avoid ExpressionChangedAfterItHasBeenCheckedError
+        // Clear input and update change detection
         const messageToSend = this.currentUserMessage;
-        setTimeout(() => {
-            this.currentUserMessage = '';
-        }, 0);
+        this.currentUserMessage = '';
+        this.cdr.detectChanges();
         
         // Scroll to bottom
         this.scrollNeeded = true;
@@ -1074,14 +1076,6 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
 
             // Generate a session ID for this execution
             const sessionId = dataProvider.sessionId;
-            
-            // DEBUG: Log authentication context and request details
-            const authToken = (dataProvider as any)._authToken || (window as any).localStorage?.getItem('mj-auth-token');
-            if (!authToken) {
-                console.warn('🔐 AI Test Harness: No authentication token found in dataProvider or localStorage');
-            } else {
-            }
-            
             
             // Execute the agent
             const query = `

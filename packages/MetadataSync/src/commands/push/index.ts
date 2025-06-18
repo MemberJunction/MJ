@@ -20,7 +20,7 @@ export default class Push extends Command {
   
   private warnings: string[] = [];
   private errors: string[] = [];
-  private processedRecords: Map<string, { filePath: string; arrayIndex?: number }> = new Map();
+  private processedRecords: Map<string, { filePath: string; arrayIndex?: number; lineNumber?: number }> = new Map();
   
   static examples = [
     `<%= config.bin %> <%= command.id %>`,
@@ -267,6 +267,13 @@ export default class Push extends Command {
           syncConfig,
           fileBackupManager
         );
+        
+        // Show per-directory summary
+        const dirName = path.relative(process.cwd(), entityDir) || '.';
+        const dirTotal = result.created + result.updated + result.unchanged;
+        if (dirTotal > 0) {
+          this.log(`  ${dirName}: ${dirTotal} records (${result.created} created, ${result.updated} updated, ${result.unchanged} unchanged)`);
+        }
         
         totalCreated += result.created;
         totalUpdated += result.updated;
@@ -561,7 +568,8 @@ export default class Push extends Command {
           await fileBackupManager.backupFile(filePath);
         }
         
-        const fileContent = await fs.readJson(filePath);
+        // Parse JSON with line number tracking
+        const { content: fileContent, lineNumbers } = await this.parseJsonWithLineNumbers(filePath);
         
         // Process templates in the loaded content
         const processedContent = await syncEngine.processTemplates(fileContent, entityDir);
@@ -579,6 +587,7 @@ export default class Push extends Command {
           const recordData = records[i];
           
           // Process the record
+          const recordLineNumber = lineNumbers.get(i); // Get line number for this array index
           const pushResult = await this.pushRecord(
             recordData,
             entityConfig.entity,
@@ -589,7 +598,8 @@ export default class Push extends Command {
             flags['dry-run'],
             flags.verbose,
             isArray ? i : undefined,
-            fileBackupManager
+            fileBackupManager,
+            recordLineNumber
           );
           
           if (!flags['dry-run']) {
@@ -646,7 +656,8 @@ export default class Push extends Command {
     dryRun: boolean,
     verbose: boolean = false,
     arrayIndex?: number,
-    fileBackupManager?: FileBackupManager
+    fileBackupManager?: FileBackupManager,
+    lineNumber?: number
   ): Promise<{ isNew: boolean; wasActuallyUpdated: boolean; isDuplicate: boolean; relatedStats?: { created: number; updated: number; unchanged: number } }> {
     // Load or create entity
     let entity: BaseEntity | null = null;
@@ -723,7 +734,7 @@ export default class Push extends Command {
     let isDuplicate = false;
     if (!isNew && entity) {
       const fullFilePath = path.join(baseDir, fileName);
-      isDuplicate = this.checkAndTrackRecord(entityName, entity, fullFilePath, arrayIndex);
+      isDuplicate = this.checkAndTrackRecord(entityName, entity, fullFilePath, arrayIndex, lineNumber);
     }
     
     // Check if the record is dirty before saving
@@ -806,7 +817,7 @@ export default class Push extends Command {
       
       // Track the new record now that we have its primary key
       const fullFilePath = path.join(baseDir, fileName);
-      this.checkAndTrackRecord(entityName, entity, fullFilePath, arrayIndex);
+      this.checkAndTrackRecord(entityName, entity, fullFilePath, arrayIndex, lineNumber);
     }
     
     // Always update sync metadata
@@ -1059,7 +1070,8 @@ export default class Push extends Command {
     entityName: string, 
     entity: BaseEntity, 
     filePath?: string,
-    arrayIndex?: number
+    arrayIndex?: number,
+    lineNumber?: number
   ): boolean {
     const recordKey = this.generateRecordKey(entityName, entity);
     
@@ -1070,8 +1082,12 @@ export default class Push extends Command {
         .join(', ') || 'unknown';
       
       // Format file location with clickable link for VSCode
-      const currentLocation = this.formatFileLocation(filePath, arrayIndex);
-      const originalLocation = this.formatFileLocation(existing.filePath, existing.arrayIndex);
+      // Create maps with just the line numbers we have
+      const currentLineMap = lineNumber ? new Map([[arrayIndex || 0, lineNumber]]) : undefined;
+      const originalLineMap = existing.lineNumber ? new Map([[existing.arrayIndex || 0, existing.lineNumber]]) : undefined;
+      
+      const currentLocation = this.formatFileLocation(filePath, arrayIndex, currentLineMap);
+      const originalLocation = this.formatFileLocation(existing.filePath, existing.arrayIndex, originalLineMap);
       
       this.warn(`⚠️  Duplicate record detected for ${entityName} (${primaryKeyDisplay})`);
       this.warn(`   Current location:  ${currentLocation}`);
@@ -1084,15 +1100,67 @@ export default class Push extends Command {
     // Track the record with its source location
     this.processedRecords.set(recordKey, {
       filePath: filePath || 'unknown',
-      arrayIndex
+      arrayIndex,
+      lineNumber
     });
     return false; // not duplicate
   }
   
   /**
+   * Parse JSON file and track line numbers for array elements
+   */
+  private async parseJsonWithLineNumbers(filePath: string): Promise<{
+    content: any;
+    lineNumbers: Map<number, number>; // arrayIndex -> lineNumber
+  }> {
+    const fileText = await fs.readFile(filePath, 'utf-8');
+    const lines = fileText.split('\n');
+    const lineNumbers = new Map<number, number>();
+    
+    // Parse the JSON
+    const content = JSON.parse(fileText);
+    
+    // If it's an array, try to find where each element starts
+    if (Array.isArray(content)) {
+      let inString = false;
+      let bracketDepth = 0;
+      let currentIndex = -1;
+      
+      for (let lineNum = 0; lineNum < lines.length; lineNum++) {
+        const line = lines[lineNum];
+        
+        // Simple tracking of string boundaries and bracket depth
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          const prevChar = i > 0 ? line[i - 1] : '';
+          
+          if (char === '"' && prevChar !== '\\') {
+            inString = !inString;
+          }
+          
+          if (!inString) {
+            if (char === '{') {
+              bracketDepth++;
+              // If we're at depth 1 in the main array, this is a new object
+              if (bracketDepth === 1 && line.trim().startsWith('{')) {
+                currentIndex++;
+                lineNumbers.set(currentIndex, lineNum + 1); // 1-based line numbers
+              }
+            } else if (char === '}') {
+              bracketDepth--;
+            }
+          }
+        }
+      }
+    }
+    
+    return { content, lineNumbers };
+  }
+  
+  /**
    * Format file location with clickable link for VSCode
    */
-  private formatFileLocation(filePath?: string, arrayIndex?: number): string {
+  private formatFileLocation(filePath?: string, arrayIndex?: number, lineNumbers?: Map<number, number>): string {
     if (!filePath || filePath === 'unknown') {
       return 'unknown';
     }
@@ -1100,12 +1168,12 @@ export default class Push extends Command {
     // Get absolute path for better VSCode integration
     const absolutePath = path.resolve(filePath);
     
-    // For array files, we'll try to estimate the line number
-    // In JSON arrays, each record typically starts ~15-20 lines apart
-    // First record usually starts around line 2-3
+    // Try to get actual line number from our tracking
     let lineNumber = 1;
-    if (arrayIndex !== undefined) {
-      // More accurate estimation: first record at line 2, then ~15 lines per record
+    if (arrayIndex !== undefined && lineNumbers && lineNumbers.has(arrayIndex)) {
+      lineNumber = lineNumbers.get(arrayIndex)!;
+    } else if (arrayIndex !== undefined) {
+      // Fallback estimation if we don't have actual line numbers
       lineNumber = 2 + (arrayIndex * 15);
     }
     
