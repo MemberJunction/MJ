@@ -61,6 +61,9 @@ export class Metadata {
      * @param entityName 
      */
     public EntityByName(entityName: string): EntityInfo {
+        if (!entityName || typeof entityName !== 'string' || entityName.trim().length === 0) {
+            throw new Error('EntityByName: entityName must be a non-empty string');
+        }
         return this.Entities.find(e => e.Name.toLowerCase().trim() === entityName.toLowerCase().trim());
     }
     /**
