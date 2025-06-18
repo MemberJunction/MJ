@@ -376,23 +376,28 @@
                                         </kendo-dropdownlist>
                                     </div>
                                     
-                                    @if (availableVendors.length > 1) {
-                                        <div class="setting-group">
-                                            <label>AI Vendor</label>
-                                            <kendo-dropdownlist 
-                                                [(ngModel)]="selectedVendorId"
-                                                [data]="availableVendors"
-                                                textField="Name"
-                                                valueField="ID"
-                                                [valuePrimitive]="true"
-                                                placeholder="Select a vendor..."
-                                                class="vendor-selector">
-                                            </kendo-dropdownlist>
-                                            <div class="setting-help">
+                                    <div class="setting-group">
+                                        <label>AI Vendor</label>
+                                        <kendo-dropdownlist 
+                                            [(ngModel)]="selectedVendorId"
+                                            [data]="availableVendors"
+                                            textField="Name"
+                                            valueField="ID"
+                                            [valuePrimitive]="true"
+                                            [disabled]="availableVendors.length <= 1 || !selectedModelId"
+                                            placeholder="Select a vendor..."
+                                            class="vendor-selector">
+                                        </kendo-dropdownlist>
+                                        <div class="setting-help">
+                                            @if (!selectedModelId) {
+                                                Using default vendor for the default model
+                                            } @else if (availableVendors.length <= 1) {
+                                                Only one vendor available for this model
+                                            } @else {
                                                 Select the inference provider for this model
-                                            </div>
+                                            }
                                         </div>
-                                    }
+                                    </div>
                                     
                                     <div class="setting-group">
                                         <label>Response Format</label>

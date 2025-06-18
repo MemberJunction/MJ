@@ -1050,13 +1050,15 @@
 
 /* JSON Dialog Styles */
 .json-dialog-window {
-    /* Center the dialog on screen */
+    /* Center the dialog on screen with higher z-index to appear above prompt window */
     ::ng-deep .k-window {
         position: fixed !important;
         top: 50% !important;
         left: 50% !important;
         transform: translate(-50%, -50%) !important;
         margin: 0 !important;
+        z-index: 10002 !important; /* Ensure it appears above other dialogs */
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2) !important; /* Add shadow for depth */
     }
     
     ::ng-deep .k-window-content {

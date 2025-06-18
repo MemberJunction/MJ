@@ -227,6 +227,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /** Available AI vendors for the selected model */
     public availableVendors: any[] = [];
     
+    /** Default model for the prompt (cached for display) */
+    private defaultModelName: string = '';
+    
     /** Maximum tokens for prompt execution */
     public maxTokens: number | null = null;
     
@@ -543,16 +546,138 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         // Sort models by name
         filteredModels.sort((a, b) => a.Name.localeCompare(b.Name));
         
-        // Add a blank option at the beginning
+        // Determine the default model for this prompt
+        if (this.entity && 'AIModelTypeID' in this.entity) {
+            const prompt = this.entity as AIPromptEntity;
+            this.defaultModelName = await this.getDefaultModelName(prompt);
+        }
+        
+        // Add a blank option at the beginning with the default model name
         this.availableModels = [
-            { ID: '', Name: '-- Use Default Model --' },
+            { ID: '', Name: this.defaultModelName ? `-- Default: ${this.defaultModelName} --` : '-- Use Default Model --' },
             ...filteredModels
         ];
         
         // Don't auto-select a model - let the dropdown show the blank option
         this.selectedModelId = '';
-        this.selectedVendorId = '';
-        this.availableVendors = [];
+        
+        // If we have a default model, load its default vendor
+        if (this.defaultModelName) {
+            await this.loadDefaultVendor();
+        } else {
+            this.selectedVendorId = '';
+            this.availableVendors = [];
+        }
+    }
+    
+    /** Default model object for the prompt (cached for vendor lookup) */
+    private defaultModel: any = null;
+    
+    /**
+     * Gets the default model name for a prompt based on its configuration
+     */
+    private async getDefaultModelName(prompt: AIPromptEntity): Promise<string> {
+        try {
+            // Get prompt-specific model associations
+            const promptModels = AIEngineBase.Instance.PromptModels.filter(
+                pm => pm.PromptID === prompt.ID && 
+                      (pm.Status === 'Active' || pm.Status === 'Preview')
+            );
+            
+            let defaultModel: any = null;
+            
+            if (promptModels.length > 0) {
+                // Sort by priority (higher priority first)
+                promptModels.sort((a, b) => (b.Priority || 0) - (a.Priority || 0));
+                
+                // Find the first active model
+                for (const pm of promptModels) {
+                    const model = AIEngineBase.Instance.Models.find(m => m.ID === pm.ModelID && m.IsActive);
+                    if (model) {
+                        defaultModel = model;
+                        break;
+                    }
+                }
+            }
+            
+            // If no prompt-specific model, use selection strategy
+            if (!defaultModel) {
+                const candidates = AIEngineBase.Instance.Models.filter(
+                    m => m.IsActive && 
+                         (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID)
+                );
+                
+                if (candidates.length > 0) {
+                    // Apply selection strategy
+                    if (prompt.SelectionStrategy === 'ByPower') {
+                        candidates.sort((a, b) => {
+                            switch (prompt.PowerPreference) {
+                                case 'Lowest':
+                                    return (a.PowerRank || 0) - (b.PowerRank || 0);
+                                case 'Highest':
+                                case 'Balanced':
+                                default:
+                                    return (b.PowerRank || 0) - (a.PowerRank || 0);
+                            }
+                        });
+                    }
+                    defaultModel = candidates[0];
+                }
+            }
+            
+            // Cache the default model object for vendor lookup
+            this.defaultModel = defaultModel;
+            
+            return defaultModel ? defaultModel.Name : '';
+        } catch (error) {
+            console.error('Error getting default model name:', error);
+            return '';
+        }
+    }
+    
+    /**
+     * Loads the vendors for the default model
+     */
+    private async loadDefaultVendor() {
+        try {
+            if (!this.defaultModel) {
+                this.availableVendors = [];
+                return;
+            }
+            
+            // Get vendors that offer this model - same logic as loadVendorsForModel
+            const modelVendors = AIEngineBase.Instance.ModelVendors.filter(
+                mv => mv.ModelID === this.defaultModel.ID && 
+                      mv.Status === 'Active' &&
+                      mv.Type?.trim().toLowerCase() === 'inference provider'
+            );
+            
+            // Map to vendor objects with priority from ModelVendor
+            const vendorObjects: any[] = [];
+            for (const mv of modelVendors) {
+                const vendor = AIEngineBase.Instance.Vendors.find(v => v.ID === mv.VendorID);
+                if (vendor) {
+                    vendorObjects.push({
+                        ID: vendor.ID,
+                        Name: vendor.Name,
+                        Priority: mv.Priority || 999 // Use ModelVendor priority
+                    });
+                }
+            }
+            
+            // Sort by priority (lower number = higher priority)
+            vendorObjects.sort((a, b) => a.Priority - b.Priority);
+            
+            this.availableVendors = vendorObjects;
+            
+            // Select the highest priority vendor
+            if (vendorObjects.length > 0) {
+                this.selectedVendorId = vendorObjects[0].ID;
+            }
+        } catch (error) {
+            console.error('Error loading default vendor:', error);
+            this.availableVendors = [];
+        }
     }
     
     /**
@@ -563,6 +688,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         this.availableVendors = [];
         
         if (!this.selectedModelId) {
+            // When default model is selected, load default vendor
+            if (this.defaultModelName) {
+                this.loadDefaultVendor();
+            }
             return;
         }
         
@@ -626,21 +755,20 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         if (this.mode === 'prompt' && this.entity && this.isPromptEntity(this.entity)) {
             const prompt = this.entity as AIPromptEntity;
             
-            // TODO: Uncomment after CodeGen runs with new AIPrompt columns
             // Load default values from prompt entity
-            // if (prompt.Temperature != null) this.advancedParams.temperature = prompt.Temperature;
-            // if (prompt.TopP != null) this.advancedParams.topP = prompt.TopP;
-            // if (prompt.TopK != null) this.advancedParams.topK = prompt.TopK;
-            // if (prompt.MinP != null) this.advancedParams.minP = prompt.MinP;
-            // if (prompt.FrequencyPenalty != null) this.advancedParams.frequencyPenalty = prompt.FrequencyPenalty;
-            // if (prompt.PresencePenalty != null) this.advancedParams.presencePenalty = prompt.PresencePenalty;
-            // if (prompt.Seed != null) this.advancedParams.seed = prompt.Seed;
-            // if (prompt.StopSequences) {
-            //     this.stopSequencesText = prompt.StopSequences;
-            //     this.advancedParams.stopSequences = prompt.StopSequences.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
-            // }
-            // if (prompt.IncludeLogProbs != null) this.advancedParams.includeLogProbs = prompt.IncludeLogProbs;
-            // if (prompt.TopLogProbs != null) this.advancedParams.topLogProbs = prompt.TopLogProbs;
+            if (prompt.Temperature != null) this.advancedParams.temperature = prompt.Temperature;
+            if (prompt.TopP != null) this.advancedParams.topP = prompt.TopP;
+            if (prompt.TopK != null) this.advancedParams.topK = prompt.TopK;
+            if (prompt.MinP != null) this.advancedParams.minP = prompt.MinP;
+            if (prompt.FrequencyPenalty != null) this.advancedParams.frequencyPenalty = prompt.FrequencyPenalty;
+            if (prompt.PresencePenalty != null) this.advancedParams.presencePenalty = prompt.PresencePenalty;
+            if (prompt.Seed != null) this.advancedParams.seed = prompt.Seed;
+            if (prompt.StopSequences) {
+                this.stopSequencesText = prompt.StopSequences;
+                this.advancedParams.stopSequences = prompt.StopSequences.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+            }
+            if (prompt.IncludeLogProbs != null) this.advancedParams.includeLogProbs = prompt.IncludeLogProbs;
+            if (prompt.TopLogProbs != null) this.advancedParams.topLogProbs = prompt.TopLogProbs;
         }
     }
     

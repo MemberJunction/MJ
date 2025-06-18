@@ -1104,20 +1104,19 @@ export class AIPromptRunner {
 
       // Apply defaults from prompt entity first (if they exist)
       // These can be overridden by additionalParameters
-      // TODO: Uncomment after CodeGen runs with new AIPrompt columns
-      // if (prompt.Temperature != null) chatParams.temperature = prompt.Temperature;
-      // if (prompt.TopP != null) chatParams.topP = prompt.TopP;
-      // if (prompt.TopK != null) chatParams.topK = prompt.TopK;
-      // if (prompt.MinP != null) chatParams.minP = prompt.MinP;
-      // if (prompt.FrequencyPenalty != null) chatParams.frequencyPenalty = prompt.FrequencyPenalty;
-      // if (prompt.PresencePenalty != null) chatParams.presencePenalty = prompt.PresencePenalty;
-      // if (prompt.Seed != null) chatParams.seed = prompt.Seed;
-      // if (prompt.StopSequences) {
-      //   // Parse comma-delimited stop sequences
-      //   chatParams.stopSequences = prompt.StopSequences.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
-      // }
-      // if (prompt.IncludeLogProbs != null) chatParams.includeLogProbs = prompt.IncludeLogProbs;
-      // if (prompt.TopLogProbs != null) chatParams.topLogProbs = prompt.TopLogProbs;
+      if (prompt.Temperature != null) chatParams.temperature = prompt.Temperature;
+      if (prompt.TopP != null) chatParams.topP = prompt.TopP;
+      if (prompt.TopK != null) chatParams.topK = prompt.TopK;
+      if (prompt.MinP != null) chatParams.minP = prompt.MinP;
+      if (prompt.FrequencyPenalty != null) chatParams.frequencyPenalty = prompt.FrequencyPenalty;
+      if (prompt.PresencePenalty != null) chatParams.presencePenalty = prompt.PresencePenalty;
+      if (prompt.Seed != null) chatParams.seed = prompt.Seed;
+      if (prompt.StopSequences) {
+        // Parse comma-delimited stop sequences
+        chatParams.stopSequences = prompt.StopSequences.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+      }
+      if (prompt.IncludeLogProbs != null) chatParams.includeLogProbs = prompt.IncludeLogProbs;
+      if (prompt.TopLogProbs != null) chatParams.topLogProbs = prompt.TopLogProbs;
 
       // Apply additional parameters if provided (these override prompt defaults)
       if (params.additionalParameters) {
