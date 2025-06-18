@@ -831,26 +831,10 @@
     position: relative;
 }
 
-.tab-header .reset-button {
+.tab-header .custom-button.icon-only {
     position: absolute;
     top: 0;
     right: 0;
-    padding: 6px 12px;
-    font-size: 13px;
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.tab-header .reset-button:hover {
-    background: #e9ecef;
-    border-color: #adb5bd;
-}
-
-.tab-header .reset-button i {
-    margin-right: 4px;
 }
 
 .tab-header h4 {

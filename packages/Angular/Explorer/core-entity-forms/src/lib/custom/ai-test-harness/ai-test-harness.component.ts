@@ -773,11 +773,31 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     }
     
     /**
-     * Resets advanced parameters to the prompt defaults
+     * Resets all model settings to the prompt defaults
      */
     public resetToPromptDefaults() {
-        if (this.mode === 'prompt') {
-            // Reset to null first
+        if (this.mode === 'prompt' && this.entity && this.isPromptEntity(this.entity)) {
+            const prompt = this.entity as AIPromptEntity;
+            
+            // Reset model selection to default
+            this.selectedModelId = '';
+            
+            // Reset vendor - will be loaded by loadDefaultVendor
+            this.selectedVendorId = '';
+            
+            // Reset response format to prompt's setting
+            const format = this.responseFormatOptions.find(f => 
+                f.value.trim().toLowerCase() === prompt.ResponseFormat.trim().toLowerCase()
+            );
+            this.selectedResponseFormat = format || this.responseFormatOptions[0];
+            
+            // Reset max tokens
+            this.maxTokens = null;
+            
+            // Reset skip validation
+            this.skipValidation = false;
+            
+            // Reset advanced parameters
             this.advancedParams = {
                 temperature: null,
                 topP: null,
@@ -792,8 +812,13 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             };
             this.stopSequencesText = '';
             
-            // Then load prompt defaults
+            // Reload prompt defaults for advanced params
             this.loadPromptDefaults();
+            
+            // Reload default vendor for the default model
+            if (this.defaultModelName) {
+                this.loadDefaultVendor();
+            }
         }
     }
 
