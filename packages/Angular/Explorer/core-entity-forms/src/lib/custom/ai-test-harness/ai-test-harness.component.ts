@@ -1,6 +1,7 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, ElementRef, AfterViewChecked, SecurityContext } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, ElementRef, AfterViewChecked, SecurityContext, ViewContainerRef } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
+import { WindowService, WindowRef, WindowCloseResult } from '@progress/kendo-angular-dialog';
 import { AIAgentEntity, AIPromptEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -144,9 +145,13 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /**
      * Creates a new AI Test Harness component instance.
      * @param sanitizer - Angular DomSanitizer for safe HTML rendering of formatted content
+     * @param windowService - Kendo WindowService for creating modal windows
+     * @param viewContainerRef - Angular ViewContainerRef for window positioning
      */
     constructor(
-        private sanitizer: DomSanitizer
+        private sanitizer: DomSanitizer,
+        private windowService: WindowService,
+        private viewContainerRef: ViewContainerRef
     ) {}
     
     /** The mode of operation - either 'agent' or 'prompt' */
@@ -289,6 +294,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     
     /** Current JSON content to display in the dialog */
     public currentJsonContent: string = '';
+    
+    /** Reference to the JSON window when open */
+    private jsonWindowRef: WindowRef | null = null;
     
     // === Execution Monitor Properties ===
     /** Mode for the execution monitor component */
@@ -2089,6 +2097,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     public showRawJsonDialog(message: ConversationMessage) {
         if (message.rawContent) {
+            // Close any existing window
+            if (this.jsonWindowRef) {
+                this.jsonWindowRef.close();
+            }
+
             try {
                 // Try to parse and format the JSON
                 const parsed = JSON.parse(message.rawContent);
@@ -2106,7 +2119,39 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 // If not valid JSON, show as-is
                 this.currentJsonContent = message.rawContent;
             }
-            this.showJsonDialog = true;
+
+            // Import the JsonViewerWindowComponent dynamically
+            import('./json-viewer-window.component').then(({ JsonViewerWindowComponent }) => {
+                // Create the window using WindowService
+                // Calculate center position accounting for scroll
+                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+                const centerTop = Math.max(50, (window.innerHeight - 700) / 2 + scrollTop);
+                const centerLeft = Math.max(50, (window.innerWidth - 900) / 2 + scrollLeft);
+
+                this.jsonWindowRef = this.windowService.open({
+                    title: 'Raw JSON Response',
+                    content: JsonViewerWindowComponent,
+                    width: 900,
+                    height: 700,
+                    minWidth: 600,
+                    minHeight: 400,
+                    resizable: true,
+                    draggable: true,
+                    top: centerTop,
+                    left: centerLeft
+                });
+
+                // Pass the JSON content to the component
+                const windowContent = this.jsonWindowRef.content.instance;
+                windowContent.jsonContent = this.currentJsonContent;
+
+                // Handle window close
+                this.jsonWindowRef.result.subscribe((result: WindowCloseResult) => {
+                    this.jsonWindowRef = null;
+                    this.currentJsonContent = '';
+                });
+            });
         }
     }
     
@@ -2409,9 +2454,12 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      * Closes the JSON dialog
      */
     public closeJsonDialog() {
+        if (this.jsonWindowRef) {
+            this.jsonWindowRef.close();
+            this.jsonWindowRef = null;
+        }
         this.showJsonDialog = false;
         this.currentJsonContent = '';
-        this.currentJsonMessage = null;
     }
     
     /**

@@ -120,6 +120,7 @@ export class FormattingService {
             skipped: number;
             errors: number;
             duration: number;
+            unchanged?: number;
         }
     ): string {
         const lines: string[] = [];
@@ -127,12 +128,15 @@ export class FormattingService {
         lines.push(this.formatHeader(`${operation.charAt(0).toUpperCase() + operation.slice(1)} Summary`));
         lines.push('');
         
-        const total = stats.created + stats.updated + stats.deleted + stats.skipped;
+        const total = stats.created + stats.updated + stats.deleted + stats.skipped + (stats.unchanged || 0);
         
         lines.push(chalk.bold('Operation Statistics:'));
         lines.push('');
         lines.push(`  ${chalk.green(this.symbols.success)} Created: ${chalk.green(stats.created)}`);
         lines.push(`  ${chalk.blue(this.symbols.info)} Updated: ${chalk.blue(stats.updated)}`);
+        if (stats.unchanged !== undefined) {
+            lines.push(`  ${chalk.gray('-')} Unchanged: ${chalk.gray(stats.unchanged)}`);
+        }
         lines.push(`  ${chalk.red(this.symbols.error)} Deleted: ${chalk.red(stats.deleted)}`);
         lines.push(`  ${chalk.gray('-')} Skipped: ${chalk.gray(stats.skipped)}`);
         lines.push('');

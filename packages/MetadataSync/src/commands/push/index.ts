@@ -20,6 +20,7 @@ export default class Push extends Command {
   
   private warnings: string[] = [];
   private errors: string[] = [];
+  private processedRecords: Map<string, { filePath: string; arrayIndex?: number }> = new Map();
   
   static examples = [
     `<%= config.bin %> <%= command.id %>`,
@@ -50,6 +51,9 @@ export default class Push extends Command {
     const fileBackupManager = new FileBackupManager();
     let hasActiveTransaction = false;
     const startTime = Date.now();
+    
+    // Reset the processed records tracking for this push operation
+    this.processedRecords.clear();
     
     try {
       // Load configurations
@@ -241,6 +245,7 @@ export default class Push extends Command {
       // Process each entity directory
       let totalCreated = 0;
       let totalUpdated = 0;
+      let totalUnchanged = 0;
       let totalErrors = 0;
       
       for (const entityDir of entityDirs) {
@@ -265,6 +270,7 @@ export default class Push extends Command {
         
         totalCreated += result.created;
         totalUpdated += result.updated;
+        totalUnchanged += result.unchanged;
         totalErrors += result.errors;
       }
       
@@ -276,6 +282,7 @@ export default class Push extends Command {
       this.log('\n' + formatter.formatSyncSummary('push', {
         created: totalCreated,
         updated: totalUpdated,
+        unchanged: totalUnchanged,
         deleted: 0,
         skipped: 0,
         errors: totalErrors,
@@ -460,8 +467,8 @@ export default class Push extends Command {
     flags: any,
     syncConfig: any,
     fileBackupManager?: FileBackupManager
-  ): Promise<{ created: number; updated: number; errors: number }> {
-    const result = { created: 0, updated: 0, errors: 0 };
+  ): Promise<{ created: number; updated: number; unchanged: number; errors: number }> {
+    const result = { created: 0, updated: 0, unchanged: 0, errors: 0 };
     
     // Find files matching the configured pattern
     const pattern = entityConfig.filePattern || '*.json';
@@ -519,6 +526,7 @@ export default class Push extends Command {
         
         result.created += subResult.created;
         result.updated += subResult.updated;
+        result.unchanged += subResult.unchanged;
         result.errors += subResult.errors;
       }
     }
@@ -532,7 +540,7 @@ export default class Push extends Command {
     entityConfig: any,
     syncEngine: SyncEngine,
     flags: any,
-    result: { created: number; updated: number; errors: number },
+    result: { created: number; updated: number; unchanged: number; errors: number },
     fileBackupManager?: FileBackupManager
   ): Promise<void> {
     if (jsonFiles.length === 0) {
@@ -571,7 +579,7 @@ export default class Push extends Command {
           const recordData = records[i];
           
           // Process the record
-          const isNew = await this.pushRecord(
+          const pushResult = await this.pushRecord(
             recordData,
             entityConfig.entity,
             path.dirname(filePath),
@@ -585,14 +593,26 @@ export default class Push extends Command {
           );
           
           if (!flags['dry-run']) {
-            if (isNew) {
-              result.created++;
-            } else {
-              result.updated++;
+            // Don't count duplicates in stats
+            if (!pushResult.isDuplicate) {
+              if (pushResult.isNew) {
+                result.created++;
+              } else if (pushResult.wasActuallyUpdated) {
+                result.updated++;
+              } else {
+                result.unchanged++;
+              }
+            }
+            
+            // Add related entity stats
+            if (pushResult.relatedStats) {
+              result.created += pushResult.relatedStats.created;
+              result.updated += pushResult.relatedStats.updated;
+              result.unchanged += pushResult.relatedStats.unchanged;
             }
           }
           
-          spinner.text = `Processing records (${result.created + result.updated + result.errors}/${totalRecords})`;
+          spinner.text = `Processing records (${result.created + result.updated + result.unchanged + result.errors}/${totalRecords})`;
         }
         
         // Write back the entire file if it's an array
@@ -627,7 +647,7 @@ export default class Push extends Command {
     verbose: boolean = false,
     arrayIndex?: number,
     fileBackupManager?: FileBackupManager
-  ): Promise<boolean> {
+  ): Promise<{ isNew: boolean; wasActuallyUpdated: boolean; isDuplicate: boolean; relatedStats?: { created: number; updated: number; unchanged: number } }> {
     // Load or create entity
     let entity: BaseEntity | null = null;
     let isNew = false;
@@ -696,7 +716,49 @@ export default class Push extends Command {
     
     if (dryRun) {
       this.log(`Would ${isNew ? 'create' : 'update'} ${entityName} record`);
-      return isNew;
+      return { isNew, wasActuallyUpdated: true, isDuplicate: false, relatedStats: undefined };
+    }
+    
+    // Check for duplicate processing (but only for existing records that were loaded)
+    let isDuplicate = false;
+    if (!isNew && entity) {
+      const fullFilePath = path.join(baseDir, fileName);
+      isDuplicate = this.checkAndTrackRecord(entityName, entity, fullFilePath, arrayIndex);
+    }
+    
+    // Check if the record is dirty before saving
+    let wasActuallyUpdated = false;
+    if (!isNew && entity.Dirty) {
+      // Record is dirty, get the changes
+      const changes = entity.GetChangesSinceLastSave();
+      const changeKeys = Object.keys(changes);
+      if (changeKeys.length > 0) {
+        wasActuallyUpdated = true;
+        
+        // Get primary key info for display
+        const entityInfo = syncEngine.getEntityInfo(entityName);
+        const primaryKeyDisplay: string[] = [];
+        if (entityInfo) {
+          for (const pk of entityInfo.PrimaryKeys) {
+            primaryKeyDisplay.push(`${pk.Name}: ${entity.Get(pk.Name)}`);
+          }
+        }
+        
+        this.log(''); // Add newline before update output
+        this.log(`📝 Updating ${entityName} record:`);
+        if (primaryKeyDisplay.length > 0) {
+          this.log(`   Primary Key: ${primaryKeyDisplay.join(', ')}`);
+        }
+        this.log(`   Changes:`);
+        for (const fieldName of changeKeys) {
+          const field = entity.GetFieldByName(fieldName);
+          const oldValue = field ? field.OldValue : undefined;
+          const newValue = (changes as any)[fieldName];
+          this.log(`     ${fieldName}: ${oldValue} → ${newValue}`);
+        }
+      }
+    } else if (isNew) {
+      wasActuallyUpdated = true;
     }
     
     // Save the record
@@ -714,15 +776,20 @@ export default class Push extends Command {
     }
     
     // Process related entities after saving parent
+    let relatedStats;
     if (recordData.relatedEntities && !dryRun) {
-      await this.processRelatedEntities(
+      const fullFilePath = path.join(baseDir, fileName);
+      relatedStats = await this.processRelatedEntities(
         recordData.relatedEntities,
         entity,
         entity, // root is same as parent for top level
         baseDir,
         syncEngine,
         verbose,
-        fileBackupManager
+        fileBackupManager,
+        1, // indentLevel
+        fullFilePath,
+        arrayIndex
       );
     }
     
@@ -736,6 +803,10 @@ export default class Push extends Command {
         }
         recordData.primaryKey = newPrimaryKey;
       }
+      
+      // Track the new record now that we have its primary key
+      const fullFilePath = path.join(baseDir, fileName);
+      this.checkAndTrackRecord(entityName, entity, fullFilePath, arrayIndex);
     }
     
     // Always update sync metadata
@@ -752,7 +823,7 @@ export default class Push extends Command {
       await fs.writeJson(filePath, recordData, { spaces: 2 });
     }
     
-    return isNew;
+    return { isNew, wasActuallyUpdated, isDuplicate, relatedStats };
   }
   
   private async processRelatedEntities(
@@ -763,9 +834,12 @@ export default class Push extends Command {
     syncEngine: SyncEngine,
     verbose: boolean = false,
     fileBackupManager?: FileBackupManager,
-    indentLevel: number = 1
-  ): Promise<void> {
+    indentLevel: number = 1,
+    parentFilePath?: string,
+    parentArrayIndex?: number
+  ): Promise<{ created: number; updated: number; unchanged: number }> {
     const indent = '  '.repeat(indentLevel);
+    const stats = { created: 0, updated: 0, unchanged: 0 };
     
     for (const [entityName, records] of Object.entries(relatedEntities)) {
       if (verbose) {
@@ -836,6 +910,49 @@ export default class Push extends Command {
             }
           }
           
+          // Check for duplicate processing (but only for existing records that were loaded)
+          let isDuplicate = false;
+          if (!isNew && entity) {
+            // Use parent file path for related entities since they're defined in the parent's file
+            const relatedFilePath = parentFilePath || path.join(baseDir, 'unknown');
+            isDuplicate = this.checkAndTrackRecord(entityName, entity, relatedFilePath, parentArrayIndex);
+          }
+          
+          // Check if the record is dirty before saving
+          let wasActuallyUpdated = false;
+          if (!isNew && entity.Dirty) {
+            // Record is dirty, get the changes
+            const changes = entity.GetChangesSinceLastSave();
+            const changeKeys = Object.keys(changes);
+            if (changeKeys.length > 0) {
+              wasActuallyUpdated = true;
+              
+              // Get primary key info for display
+              const entityInfo = syncEngine.getEntityInfo(entityName);
+              const primaryKeyDisplay: string[] = [];
+              if (entityInfo) {
+                for (const pk of entityInfo.PrimaryKeys) {
+                  primaryKeyDisplay.push(`${pk.Name}: ${entity.Get(pk.Name)}`);
+                }
+              }
+              
+              this.log(''); // Add newline before update output
+              this.log(`${indent}📝 Updating related ${entityName} record:`);
+              if (primaryKeyDisplay.length > 0) {
+                this.log(`${indent}   Primary Key: ${primaryKeyDisplay.join(', ')}`);
+              }
+              this.log(`${indent}   Changes:`);
+              for (const fieldName of changeKeys) {
+                const field = entity.GetFieldByName(fieldName);
+                const oldValue = field ? field.OldValue : undefined;
+                const newValue = (changes as any)[fieldName];
+                this.log(`${indent}     ${fieldName}: ${oldValue} → ${newValue}`);
+              }
+            }
+          } else if (isNew) {
+            wasActuallyUpdated = true;
+          }
+          
           // Save the related entity
           const saved = await entity.Save();
           if (!saved) {
@@ -850,8 +967,21 @@ export default class Push extends Command {
             throw new Error(`Failed to save related ${entityName}: ${errors}`);
           }
           
-          if (verbose) {
+          // Update stats - don't count duplicates
+          if (!isDuplicate) {
+            if (isNew) {
+              stats.created++;
+            } else if (wasActuallyUpdated) {
+              stats.updated++;
+            } else {
+              stats.unchanged++;
+            }
+          }
+          
+          if (verbose && wasActuallyUpdated) {
             this.log(`${indent}  ✓ ${isNew ? 'Created' : 'Updated'} ${entityName} record`);
+          } else if (verbose && !wasActuallyUpdated) {
+            this.log(`${indent}  - No changes to ${entityName} record`);
           }
           
           // Update the related record with primary key and sync metadata
@@ -863,6 +993,10 @@ export default class Push extends Command {
               for (const pk of entityInfo.PrimaryKeys) {
                 relatedRecord.primaryKey[pk.Name] = entity.Get(pk.Name);
               }
+              
+              // Track the new related entity now that we have its primary key
+              const relatedFilePath = parentFilePath || path.join(baseDir, 'unknown');
+              this.checkAndTrackRecord(entityName, entity, relatedFilePath, parentArrayIndex);
             }
             
             // Always update sync metadata
@@ -874,7 +1008,7 @@ export default class Push extends Command {
           
           // Process nested related entities if any
           if (relatedRecord.relatedEntities) {
-            await this.processRelatedEntities(
+            const nestedStats = await this.processRelatedEntities(
               relatedRecord.relatedEntities,
               entity,
               rootEntity,
@@ -882,13 +1016,101 @@ export default class Push extends Command {
               syncEngine,
               verbose,
               fileBackupManager,
-              indentLevel + 1
+              indentLevel + 1,
+              parentFilePath,
+              parentArrayIndex
             );
+            
+            // Accumulate nested stats
+            stats.created += nestedStats.created;
+            stats.updated += nestedStats.updated;
+            stats.unchanged += nestedStats.unchanged;
           }
         } catch (error) {
           throw new Error(`Failed to process related ${entityName}: ${error}`);
         }
       }
     }
+    
+    return stats;
+  }
+  
+  /**
+   * Generate a unique tracking key for a record based on entity name and primary key values
+   */
+  private generateRecordKey(entityName: string, entity: BaseEntity): string {
+    const entityInfo = entity.EntityInfo;
+    const primaryKeyValues: string[] = [];
+    
+    if (entityInfo && entityInfo.PrimaryKeys.length > 0) {
+      for (const pk of entityInfo.PrimaryKeys) {
+        const value = entity.Get(pk.Name);
+        primaryKeyValues.push(`${pk.Name}:${value}`);
+      }
+    }
+    
+    return `${entityName}|${primaryKeyValues.join('|')}`;
+  }
+  
+  /**
+   * Check if a record has already been processed and warn if duplicate
+   */
+  private checkAndTrackRecord(
+    entityName: string, 
+    entity: BaseEntity, 
+    filePath?: string,
+    arrayIndex?: number
+  ): boolean {
+    const recordKey = this.generateRecordKey(entityName, entity);
+    
+    const existing = this.processedRecords.get(recordKey);
+    if (existing) {
+      const primaryKeyDisplay = entity.EntityInfo?.PrimaryKeys
+        .map(pk => `${pk.Name}: ${entity.Get(pk.Name)}`)
+        .join(', ') || 'unknown';
+      
+      // Format file location with clickable link for VSCode
+      const currentLocation = this.formatFileLocation(filePath, arrayIndex);
+      const originalLocation = this.formatFileLocation(existing.filePath, existing.arrayIndex);
+      
+      this.warn(`⚠️  Duplicate record detected for ${entityName} (${primaryKeyDisplay})`);
+      this.warn(`   Current location:  ${currentLocation}`);
+      this.warn(`   Original location: ${originalLocation}`);
+      this.warn(`   The duplicate update will proceed, but you should review your data for unintended duplicates.`);
+      
+      return true; // is duplicate
+    }
+    
+    // Track the record with its source location
+    this.processedRecords.set(recordKey, {
+      filePath: filePath || 'unknown',
+      arrayIndex
+    });
+    return false; // not duplicate
+  }
+  
+  /**
+   * Format file location with clickable link for VSCode
+   */
+  private formatFileLocation(filePath?: string, arrayIndex?: number): string {
+    if (!filePath || filePath === 'unknown') {
+      return 'unknown';
+    }
+    
+    // Get absolute path for better VSCode integration
+    const absolutePath = path.resolve(filePath);
+    
+    // For array files, we'll try to estimate the line number
+    // In JSON arrays, each record typically starts ~15-20 lines apart
+    // First record usually starts around line 2-3
+    let lineNumber = 1;
+    if (arrayIndex !== undefined) {
+      // More accurate estimation: first record at line 2, then ~15 lines per record
+      lineNumber = 2 + (arrayIndex * 15);
+    }
+    
+    // Create clickable file path for VSCode - format: file:line
+    // VSCode will make this clickable in the terminal
+    return `${absolutePath}:${lineNumber}`;
   }
 }

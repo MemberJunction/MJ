@@ -788,35 +788,3 @@
         </kendo-dialog>
     }
 
-    <!-- JSON Display Dialog -->
-    @if (showJsonDialog) {
-        <kendo-window 
-            [title]="'Raw JSON Response'" 
-            [width]="900" 
-            [height]="700"
-            [minWidth]="600"
-            [minHeight]="400"
-            [resizable]="true"
-            [draggable]="true"
-            [state]="'default'"
-            [keepContent]="true"
-            (close)="closeJsonDialog()"
-            class="json-dialog-window">
-            <div class="json-dialog-content">
-                <div class="json-dialog-header">
-                    <button class="custom-button icon-only" (click)="copyJsonContent()" title="Copy JSON">
-                        <i class="fa-solid fa-copy"></i>
-                    </button>
-                </div>
-                <div class="json-dialog-body">
-                    <mj-code-editor 
-                        [(ngModel)]="currentJsonContent"
-                        [readonly]="true"
-                        [language]="'json'"
-                        [lineWrapping]="true"
-                        style="height: 100%; width: 100%;">
-                    </mj-code-editor>
-                </div>
-            </div>
-        </kendo-window>
-    }

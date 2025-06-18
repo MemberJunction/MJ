@@ -36,6 +36,7 @@ import { ActionExecutionLogFormComponentExtended } from "./Actions/action-execut
 import { ActionParamDialogComponent } from "./Actions/action-param-dialog.component";
 import { AgentExecutionMonitorComponent } from "./ai-test-harness/agent-execution-monitor.component";
 import { ExecutionNodeComponent } from "./ai-test-harness/agent-execution-node.component";
+import { JsonViewerWindowComponent } from "./ai-test-harness/json-viewer-window.component";
 
 @NgModule({
     declarations: [
@@ -56,6 +57,7 @@ import { ExecutionNodeComponent } from "./ai-test-harness/agent-execution-node.c
         ActionTestHarnessDialogComponent,
         ActionExecutionLogFormComponentExtended,
         ActionParamDialogComponent,
+        JsonViewerWindowComponent,
     ],
     imports: [
         CommonModule,
