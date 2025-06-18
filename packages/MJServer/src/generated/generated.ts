@@ -37443,6 +37443,40 @@ export class AIPromptRun_ {
     @Field(() => Int, {nullable: true, description: `Total completion/output tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensCompletion. For parent nodes, this includes the sum of all descendant completion tokens.`}) 
     TokensCompletionRollup?: number;
         
+    @Field(() => Float, {nullable: true, description: `The temperature parameter used for this prompt run, controlling randomness in the output (0.0 = deterministic, 2.0 = very random)`}) 
+    Temperature?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Top-p (nucleus) sampling parameter used for this run. Considers tokens with cumulative probability up to this value (0-1)`}) 
+    TopP?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Top-k sampling parameter used for this run. Limits sampling to the top K most likely tokens`}) 
+    TopK?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Minimum probability threshold used for token sampling (0-1). Tokens below this probability are filtered out`}) 
+    MinP?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Frequency penalty parameter used (-2.0 to 2.0). Positive values reduce repetition of tokens based on their frequency in the output`}) 
+    FrequencyPenalty?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Presence penalty parameter used (-2.0 to 2.0). Positive values encourage the model to talk about new topics`}) 
+    PresencePenalty?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Random seed used for reproducible outputs. When set, the same seed with identical inputs should produce the same output`}) 
+    Seed?: number;
+        
+    @Field({nullable: true, description: `JSON array of stop sequences used. The model stops generating when any of these sequences are encountered`}) 
+    StopSequences?: string;
+        
+    @Field({nullable: true, description: `The response format requested for this run (e.g., 'JSON', 'Text', 'Markdown')`}) 
+    @MaxLength(100)
+    ResponseFormat?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: `Whether log probabilities were requested for this run`}) 
+    LogProbs?: boolean;
+        
+    @Field(() => Int, {nullable: true, description: `Number of top log probabilities requested per token (if LogProbs is true)`}) 
+    TopLogProbs?: number;
+        
     @Field() 
     @MaxLength(510)
     Prompt: string;
@@ -37553,6 +37587,39 @@ export class CreateAIPromptRunInput {
 
     @Field(() => Int, { nullable: true })
     TokensCompletionRollup: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Temperature: number | null;
+
+    @Field(() => Float, { nullable: true })
+    TopP: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TopK: number | null;
+
+    @Field(() => Float, { nullable: true })
+    MinP: number | null;
+
+    @Field(() => Float, { nullable: true })
+    FrequencyPenalty: number | null;
+
+    @Field(() => Float, { nullable: true })
+    PresencePenalty: number | null;
+
+    @Field(() => Int, { nullable: true })
+    Seed: number | null;
+
+    @Field({ nullable: true })
+    StopSequences: string | null;
+
+    @Field({ nullable: true })
+    ResponseFormat: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    LogProbs: boolean | null;
+
+    @Field(() => Int, { nullable: true })
+    TopLogProbs: number | null;
 }
     
 
@@ -37638,6 +37705,39 @@ export class UpdateAIPromptRunInput {
 
     @Field(() => Int, { nullable: true })
     TokensCompletionRollup?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Temperature?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    TopP?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TopK?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    MinP?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    FrequencyPenalty?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    PresencePenalty?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    Seed?: number | null;
+
+    @Field({ nullable: true })
+    StopSequences?: string | null;
+
+    @Field({ nullable: true })
+    ResponseFormat?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    LogProbs?: boolean | null;
+
+    @Field(() => Int, { nullable: true })
+    TopLogProbs?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

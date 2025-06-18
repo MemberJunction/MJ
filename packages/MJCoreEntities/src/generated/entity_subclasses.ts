@@ -8116,6 +8116,61 @@ export const AIPromptRunSchema = z.object({
         * * Display Name: Tokens Completion Rollup
         * * SQL Data Type: int
     * * Description: Total completion/output tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensCompletion. For parent nodes, this includes the sum of all descendant completion tokens.`),
+    Temperature: z.number().nullable().describe(`
+        * * Field Name: Temperature
+        * * Display Name: Temperature
+        * * SQL Data Type: decimal(3, 2)
+    * * Description: The temperature parameter used for this prompt run, controlling randomness in the output (0.0 = deterministic, 2.0 = very random)`),
+    TopP: z.number().nullable().describe(`
+        * * Field Name: TopP
+        * * Display Name: Top P
+        * * SQL Data Type: decimal(3, 2)
+    * * Description: Top-p (nucleus) sampling parameter used for this run. Considers tokens with cumulative probability up to this value (0-1)`),
+    TopK: z.number().nullable().describe(`
+        * * Field Name: TopK
+        * * Display Name: Top K
+        * * SQL Data Type: int
+    * * Description: Top-k sampling parameter used for this run. Limits sampling to the top K most likely tokens`),
+    MinP: z.number().nullable().describe(`
+        * * Field Name: MinP
+        * * Display Name: Min P
+        * * SQL Data Type: decimal(3, 2)
+    * * Description: Minimum probability threshold used for token sampling (0-1). Tokens below this probability are filtered out`),
+    FrequencyPenalty: z.number().nullable().describe(`
+        * * Field Name: FrequencyPenalty
+        * * Display Name: Frequency Penalty
+        * * SQL Data Type: decimal(3, 2)
+    * * Description: Frequency penalty parameter used (-2.0 to 2.0). Positive values reduce repetition of tokens based on their frequency in the output`),
+    PresencePenalty: z.number().nullable().describe(`
+        * * Field Name: PresencePenalty
+        * * Display Name: Presence Penalty
+        * * SQL Data Type: decimal(3, 2)
+    * * Description: Presence penalty parameter used (-2.0 to 2.0). Positive values encourage the model to talk about new topics`),
+    Seed: z.number().nullable().describe(`
+        * * Field Name: Seed
+        * * Display Name: Seed
+        * * SQL Data Type: int
+    * * Description: Random seed used for reproducible outputs. When set, the same seed with identical inputs should produce the same output`),
+    StopSequences: z.string().nullable().describe(`
+        * * Field Name: StopSequences
+        * * Display Name: Stop Sequences
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of stop sequences used. The model stops generating when any of these sequences are encountered`),
+    ResponseFormat: z.string().nullable().describe(`
+        * * Field Name: ResponseFormat
+        * * Display Name: Response Format
+        * * SQL Data Type: nvarchar(50)
+    * * Description: The response format requested for this run (e.g., 'JSON', 'Text', 'Markdown')`),
+    LogProbs: z.boolean().nullable().describe(`
+        * * Field Name: LogProbs
+        * * Display Name: Log Probs
+        * * SQL Data Type: bit
+    * * Description: Whether log probabilities were requested for this run`),
+    TopLogProbs: z.number().nullable().describe(`
+        * * Field Name: TopLogProbs
+        * * Display Name: Top Log Probs
+        * * SQL Data Type: int
+    * * Description: Number of top log probabilities requested per token (if LogProbs is true)`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -33763,6 +33818,149 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     }
     set TokensCompletionRollup(value: number | null) {
         this.Set('TokensCompletionRollup', value);
+    }
+
+    /**
+    * * Field Name: Temperature
+    * * Display Name: Temperature
+    * * SQL Data Type: decimal(3, 2)
+    * * Description: The temperature parameter used for this prompt run, controlling randomness in the output (0.0 = deterministic, 2.0 = very random)
+    */
+    get Temperature(): number | null {
+        return this.Get('Temperature');
+    }
+    set Temperature(value: number | null) {
+        this.Set('Temperature', value);
+    }
+
+    /**
+    * * Field Name: TopP
+    * * Display Name: Top P
+    * * SQL Data Type: decimal(3, 2)
+    * * Description: Top-p (nucleus) sampling parameter used for this run. Considers tokens with cumulative probability up to this value (0-1)
+    */
+    get TopP(): number | null {
+        return this.Get('TopP');
+    }
+    set TopP(value: number | null) {
+        this.Set('TopP', value);
+    }
+
+    /**
+    * * Field Name: TopK
+    * * Display Name: Top K
+    * * SQL Data Type: int
+    * * Description: Top-k sampling parameter used for this run. Limits sampling to the top K most likely tokens
+    */
+    get TopK(): number | null {
+        return this.Get('TopK');
+    }
+    set TopK(value: number | null) {
+        this.Set('TopK', value);
+    }
+
+    /**
+    * * Field Name: MinP
+    * * Display Name: Min P
+    * * SQL Data Type: decimal(3, 2)
+    * * Description: Minimum probability threshold used for token sampling (0-1). Tokens below this probability are filtered out
+    */
+    get MinP(): number | null {
+        return this.Get('MinP');
+    }
+    set MinP(value: number | null) {
+        this.Set('MinP', value);
+    }
+
+    /**
+    * * Field Name: FrequencyPenalty
+    * * Display Name: Frequency Penalty
+    * * SQL Data Type: decimal(3, 2)
+    * * Description: Frequency penalty parameter used (-2.0 to 2.0). Positive values reduce repetition of tokens based on their frequency in the output
+    */
+    get FrequencyPenalty(): number | null {
+        return this.Get('FrequencyPenalty');
+    }
+    set FrequencyPenalty(value: number | null) {
+        this.Set('FrequencyPenalty', value);
+    }
+
+    /**
+    * * Field Name: PresencePenalty
+    * * Display Name: Presence Penalty
+    * * SQL Data Type: decimal(3, 2)
+    * * Description: Presence penalty parameter used (-2.0 to 2.0). Positive values encourage the model to talk about new topics
+    */
+    get PresencePenalty(): number | null {
+        return this.Get('PresencePenalty');
+    }
+    set PresencePenalty(value: number | null) {
+        this.Set('PresencePenalty', value);
+    }
+
+    /**
+    * * Field Name: Seed
+    * * Display Name: Seed
+    * * SQL Data Type: int
+    * * Description: Random seed used for reproducible outputs. When set, the same seed with identical inputs should produce the same output
+    */
+    get Seed(): number | null {
+        return this.Get('Seed');
+    }
+    set Seed(value: number | null) {
+        this.Set('Seed', value);
+    }
+
+    /**
+    * * Field Name: StopSequences
+    * * Display Name: Stop Sequences
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of stop sequences used. The model stops generating when any of these sequences are encountered
+    */
+    get StopSequences(): string | null {
+        return this.Get('StopSequences');
+    }
+    set StopSequences(value: string | null) {
+        this.Set('StopSequences', value);
+    }
+
+    /**
+    * * Field Name: ResponseFormat
+    * * Display Name: Response Format
+    * * SQL Data Type: nvarchar(50)
+    * * Description: The response format requested for this run (e.g., 'JSON', 'Text', 'Markdown')
+    */
+    get ResponseFormat(): string | null {
+        return this.Get('ResponseFormat');
+    }
+    set ResponseFormat(value: string | null) {
+        this.Set('ResponseFormat', value);
+    }
+
+    /**
+    * * Field Name: LogProbs
+    * * Display Name: Log Probs
+    * * SQL Data Type: bit
+    * * Description: Whether log probabilities were requested for this run
+    */
+    get LogProbs(): boolean | null {
+        return this.Get('LogProbs');
+    }
+    set LogProbs(value: boolean | null) {
+        this.Set('LogProbs', value);
+    }
+
+    /**
+    * * Field Name: TopLogProbs
+    * * Display Name: Top Log Probs
+    * * SQL Data Type: int
+    * * Description: Number of top log probabilities requested per token (if LogProbs is true)
+    */
+    get TopLogProbs(): number | null {
+        return this.Get('TopLogProbs');
+    }
+    set TopLogProbs(value: number | null) {
+        this.Set('TopLogProbs', value);
     }
 
     /**
