@@ -1,7 +1,126 @@
+/* ===================================
+   LIST VIEW COMPONENT - STANDARDIZED
+   =================================== */
+
+:host {
+    @extend .mj-page-container;
+    display: block;
+}
+
+/* Loading State */
+.mj-loading {
+    min-height: 400px;
+}
+
+/* Dialog Styles */
+.mj-dialog .k-window-content {
+    padding: 0;
+}
+
+.mj-dialog-content {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.mj-form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.mj-form-field .k-label {
+    color: var(--navy);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.mj-form-input {
+    width: 100%;
+}
+
+.mj-form-input .k-input,
+.mj-form-input .k-textbox,
+.mj-form-input .k-textarea {
+    border-radius: var(--border-radius);
+    border: 1px solid var(--gray-700);
+    padding: 12px 16px;
+    font-size: 16px;
+    transition: var(--transition-time);
+    background: var(--white-color);
+}
+
+.mj-form-input .k-input:focus,
+.mj-form-input .k-textbox:focus,
+.mj-form-input .k-textarea:focus {
+    border-color: var(--mj-blue);
+    box-shadow: 0 0 0 2px rgba(0, 118, 182, 0.2);
+    outline: none;
+}
+
+.mj-form-input .k-dropdown {
+    border-radius: var(--border-radius);
+    border: 1px solid var(--gray-700);
+    transition: var(--transition-time);
+}
+
+.mj-form-input .k-dropdown:focus-within {
+    border-color: var(--mj-blue);
+    box-shadow: 0 0 0 2px rgba(0, 118, 182, 0.2);
+}
+
+/* Dialog Actions */
+.popup-actions-btn {
+    padding: 16px 24px;
+    border-top: 1px solid var(--gray-700);
+    background: var(--gray-600);
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.popup-actions-btn .cancel-btn {
+    @extend .mj-btn-primary;
+    min-width: 100px;
+}
+
+.popup-actions-btn .yes-btn {
+    @extend .mj-btn-secondary;
+    min-width: 100px;
+}
+
+/* Utility Classes */
 .margin-bottom-20 {
-  margin-bottom: 20px;
+    margin-bottom: 20px;
 }
 
 .margin-top-10 {
     margin-top: 10px;
+}
+
+/* ===================================
+   RESPONSIVE DESIGN
+   =================================== */
+
+@media (max-width: 768px) {
+    .popup-actions-btn {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .popup-actions-btn button {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .mj-dialog-content {
+        padding: 16px;
+        gap: 16px;
+    }
+    
+    .popup-actions-btn {
+        padding: 12px 16px;
+    }
 }

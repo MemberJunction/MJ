@@ -1,76 +1,296 @@
+/* ===================================
+   USER NOTIFICATIONS COMPONENT - STANDARDIZED
+   =================================== */
+
 .notification-list-wrap {
-  height: 800px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  border: solid 1px lightgray;
+    @extend .mj-content-container;
+    height: 800px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0;
 }
 
-.k-listview {
-  font-family: sans-serif;
-  border: 0;
-}
-.product {
-  width: 100%;
-}
+/* Header Section */
 .header {
-  display: flex;
-  background-color: lightgray;
-  padding: 12px;
-  height: 24px;
-}
-
-.header button { /*buttons within the header*/
-  margin-right: 10px; 
+    @extend .mj-toolbar;
+    background: var(--gray-600);
+    border-bottom: 1px solid var(--gray-700);
+    padding: 16px 20px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
 .title {
-  flex: 1;
-  font-size: 22px;
-  font-weight: bold;
-}
-.filter-input {
-  width: 200px;
-}
-.radio-label {
-  cursor: pointer;
-  margin-right: 10px;
+    @extend .mj-toolbar-title;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--navy);
+    margin: 0;
 }
 
+.header-actions {
+    @extend .mj-toolbar-actions;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+/* Filter Controls */
+.filter-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.radio-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.radio-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: var(--border-radius);
+    transition: var(--transition-time);
+}
+
+.radio-option:hover {
+    background: var(--gray-700);
+}
+
+.radio-option input[type="radio"] {
+    margin: 0;
+    cursor: pointer;
+}
+
+.radio-label {
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--navy);
+    user-select: none;
+}
+
+.filter-input {
+    @extend .mj-search;
+    width: 200px;
+    max-width: 200px;
+}
+
+/* Action Buttons */
+.header button {
+    @extend .mj-btn-secondary;
+    @extend .mj-btn-sm;
+}
+
+.header button:first-of-type {
+    @extend .mj-btn-primary;
+}
+
+/* Notification List */
+.k-listview {
+    font-family: inherit;
+    border: 0;
+    background: transparent;
+}
+
+/* Notification Item */
 .notification-wrap {
-  padding-left: 10px;
-  padding-right: 10px;
-  padding-top: 10px;
-  padding-bottom: 10px;
-  border-bottom: dashed 1px lightgray;
-  background-color: white;
+    padding: 20px;
+    border-bottom: 1px solid var(--gray-700);
+    background: var(--white-color);
+    transition: var(--transition-time);
+    position: relative;
+}
+
+.notification-wrap:last-child {
+    border-bottom: none;
+}
+
+.notification-wrap:hover {
+    background: var(--gray-600);
 }
 
 .notification-wrap-unread {
-  background-color: aliceblue;
+    background: var(--light-blue);
+    border-left: 4px solid var(--mj-blue);
+}
+
+.notification-wrap-unread:hover {
+    background: rgba(170, 231, 253, 0.7);
 }
 
 .notification-wrap-clickable {
-  cursor: pointer;
+    cursor: pointer;
 }
 
+.notification-wrap-clickable:hover {
+    transform: translateX(2px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Notification Content */
 .notification-title {
-  font-size: 16px;
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--navy);
+    margin-bottom: 8px;
+    line-height: 1.4;
+    transition: var(--transition-time);
 }
-.notification-wrap-clickable > .notification-title {
-  color: blue;
-  text-decoration: underline;
+
+.notification-wrap-clickable .notification-title {
+    color: var(--mj-blue);
+    text-decoration: underline;
 }
+
 .notification-title-unread {
-  font-weight: bold;
+    font-weight: 600;
+    color: var(--navy);
 }
 
 .notification-body {
-  font-size: 14px;
+    margin-bottom: 12px;
 }
 
 .notification-date {
-  margin-left: 1px;
-  font-size: 12px;
-  color: gray;
-  font-style: italic;
+    font-size: 12px;
+    color: var(--gray-800);
+    font-style: italic;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.notification-date::before {
+    content: "📅";
+    font-size: 10px;
+}
+
+.notification-message {
+    font-size: 14px;
+    color: var(--gray-900);
+    line-height: 1.5;
+}
+
+/* Notification Actions */
+.notification-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.notification-actions button {
+    @extend .mj-btn-ghost;
+    @extend .mj-btn-sm;
+}
+
+/* Empty State */
+.empty-notifications {
+    @extend .mj-empty-state;
+    min-height: 300px;
+    margin: 40px 20px;
+}
+
+.empty-notifications i {
+    font-size: 4rem;
+    color: var(--gray-800);
+    opacity: 0.4;
+    margin-bottom: 20px;
+}
+
+.empty-notifications h3 {
+    color: var(--navy);
+    margin-bottom: 12px;
+}
+
+.empty-notifications p {
+    color: var(--gray-800);
+    margin-bottom: 0;
+}
+
+/* Status Indicators */
+.notification-status {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--mj-blue);
+    opacity: 0;
+    transition: var(--transition-time);
+}
+
+.notification-wrap-unread .notification-status {
+    opacity: 1;
+}
+
+/* ===================================
+   RESPONSIVE DESIGN
+   =================================== */
+
+@media (max-width: 768px) {
+    .header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 16px;
+    }
+    
+    .header-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+    
+    .filter-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+    
+    .radio-group {
+        justify-content: center;
+    }
+    
+    .filter-input {
+        max-width: none;
+        width: 100%;
+    }
+    
+    .notification-wrap {
+        padding: 16px;
+    }
+    
+    .notification-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+
+@media (max-width: 480px) {
+    .notification-list-wrap {
+        height: calc(100vh - 120px);
+    }
+    
+    .header {
+        padding: 12px 16px;
+    }
+    
+    .radio-group {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .radio-option {
+        justify-content: center;
+        padding: 8px;
+    }
 }

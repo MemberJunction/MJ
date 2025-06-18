@@ -1,7 +1,11 @@
-@if(showLoader){
-    <kendo-loader type="converging-spinner"></kendo-loader>
+<!-- Loading State -->
+@if(showLoader) {
+    <div class="mj-loading">
+        <kendo-loader type="converging-spinner"></kendo-loader>
+    </div>
 }
 @else {
+    <!-- Resource Browser -->
     <mj-resource-browser
         #resourceBrowserLists
         ResourceTypeName="Lists"
@@ -18,58 +22,84 @@
         (NavigateToParentEvent)="navigateToParentFolder()"
     />
 }
+
+<!-- Create List Dialog -->
 <kendo-dialog
-title="Create New List"
-*ngIf="showCreateDialog"
-(close)="toggleCreateDialog(false)"
-[minWidth]="250"
-[width]="650"
-[height]="400"
->
-    @if(showCreateLoader){
-        <kendo-loader type="converging-spinner"></kendo-loader>
-    }
-    @else {
-        <div class="col-xs-12 col-sm-6 example-col">
-            <div class="margin-bottom-20">
-                <kendo-label text="Name">
+    title="Create New List"
+    *ngIf="showCreateDialog"
+    (close)="toggleCreateDialog(false)"
+    [minWidth]="400"
+    [width]="600"
+    [height]="500"
+    class="mj-dialog">
+    
+    <div class="mj-dialog-content">
+        @if(showCreateLoader) {
+            <div class="mj-loading">
+                <kendo-loader type="converging-spinner"></kendo-loader>
+            </div>
+        }
+        @else {
+            <!-- List Name Field -->
+            <div class="mj-form-field">
+                <kendo-label text="List Name">
                     <kendo-textbox  
-                        class="margin-top-10"
-                        placeholder="Enter List Name" 
-                        [(ngModel)]="listName">
+                        class="mj-form-input"
+                        placeholder="Enter a descriptive name for your list" 
+                        [(ngModel)]="listName"
+                        required>
                     </kendo-textbox>
                 </kendo-label>
             </div>
-            <div class="margin-bottom-20">
+
+            <!-- Description Field -->
+            <div class="mj-form-field">
                 <kendo-label text="Description">
                     <kendo-textarea
-                        class="margin-top-10"
-                        placeholder="Enter Description"
+                        class="mj-form-input"
+                        placeholder="Describe what this list will be used for"
                         [rows]="3"
                         resizable="vertical"
-                        [(ngModel)]="listDescription"
-                    ></kendo-textarea>
+                        [(ngModel)]="listDescription">
+                    </kendo-textarea>
                 </kendo-label>
             </div>
-            <div class="margin-bottom-20">
-                <kendo-label text="Select an Entity">
+
+            <!-- Entity Selection -->
+            <div class="mj-form-field">
+                <kendo-label text="Base Entity">
                     <kendo-dropdownlist 
-                        class="margin-top-10"
+                        class="mj-form-input"
                         [data]="entityNames"
                         [filterable]="true"
+                        placeholder="Select the entity for this list"
                         (filterChange)="onFilterChange($event)"
                         (selectionChange)="onSelectionChange($event)"
-                    />
+                        required>
+                    </kendo-dropdownlist>
                 </kendo-label>
+                <small style="color: var(--gray-800); font-size: 12px; margin-top: 4px;">
+                    Choose the entity that will provide the data for this list
+                </small>
             </div>
-        </div>
-    }
+        }
+    </div>
+    
+    <!-- Dialog Actions -->
     <kendo-dialog-actions class="popup-actions-btn">
-        <button class="cancel-btn" (click)="createList()" [disabled]="!listName || !selectedEntity || showCreateLoader" kendoButton themeColor="info">
-          Create
+        <button class="cancel-btn" 
+                (click)="createList()" 
+                [disabled]="!listName || !selectedEntity || showCreateLoader" 
+                kendoButton>
+            <i class="fa-solid fa-plus"></i>
+            Create List
         </button>
-        <button  class="yes-btn" (click)="toggleCreateDialog(false)" [disabled]="showCreateLoader" kendoButton fillMode="outline" themeColor="info">
-          Cancel
+        <button class="yes-btn" 
+                (click)="toggleCreateDialog(false)" 
+                [disabled]="showCreateLoader" 
+                kendoButton>
+            <i class="fa-solid fa-times"></i>
+            Cancel
         </button>
     </kendo-dialog-actions>
 </kendo-dialog>
