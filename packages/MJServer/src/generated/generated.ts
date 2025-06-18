@@ -3804,6 +3804,37 @@ export class AIPrompt_ {
     @MaxLength(40)
     PromptPosition: string;
         
+    @Field(() => Float, {nullable: true, description: `Default temperature setting for this prompt. Controls randomness in the output. 0 = more focused and deterministic, 2 = more random and creative. Can be overridden at runtime.`}) 
+    Temperature?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Default TopP (nucleus sampling) for this prompt. Only consider tokens with cumulative probability up to this value. 1 = consider all tokens. Can be overridden at runtime.`}) 
+    TopP?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Default TopK sampling for this prompt. Only sample from the top K tokens. Lower values reduce randomness. Can be overridden at runtime.`}) 
+    TopK?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Default MinP (minimum probability) for this prompt. Tokens with probability below this threshold are filtered out. Can be overridden at runtime.`}) 
+    MinP?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Default frequency penalty for this prompt. Penalizes tokens based on their frequency in the text. Positive values decrease likelihood of repetition. Can be overridden at runtime.`}) 
+    FrequencyPenalty?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Default presence penalty for this prompt. Penalizes tokens that have appeared in the text. Positive values increase topic diversity. Can be overridden at runtime.`}) 
+    PresencePenalty?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Default random seed for this prompt. Used for deterministic generation. Same seed produces same output. Can be overridden at runtime.`}) 
+    Seed?: number;
+        
+    @Field({nullable: true, description: `Default stop sequences for this prompt. Comma-delimited list of sequences that will stop generation when encountered. Can be overridden at runtime.`}) 
+    @MaxLength(2000)
+    StopSequences?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: `Default setting for including log probabilities in the response. Can be overridden at runtime.`}) 
+    IncludeLogProbs?: boolean;
+        
+    @Field(() => Int, {nullable: true, description: `Default number of top log probabilities to include when IncludeLogProbs is true. Can be overridden at runtime.`}) 
+    TopLogProbs?: number;
+        
     @Field() 
     @MaxLength(510)
     Template: string;
@@ -3956,6 +3987,36 @@ export class CreateAIPromptInput {
 
     @Field({ nullable: true })
     PromptPosition?: string;
+
+    @Field(() => Float, { nullable: true })
+    Temperature: number | null;
+
+    @Field(() => Float, { nullable: true })
+    TopP: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TopK: number | null;
+
+    @Field(() => Float, { nullable: true })
+    MinP: number | null;
+
+    @Field(() => Float, { nullable: true })
+    FrequencyPenalty: number | null;
+
+    @Field(() => Float, { nullable: true })
+    PresencePenalty: number | null;
+
+    @Field(() => Int, { nullable: true })
+    Seed: number | null;
+
+    @Field({ nullable: true })
+    StopSequences: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IncludeLogProbs?: boolean | null;
+
+    @Field(() => Int, { nullable: true })
+    TopLogProbs: number | null;
 }
     
 
@@ -4062,6 +4123,36 @@ export class UpdateAIPromptInput {
 
     @Field({ nullable: true })
     PromptPosition?: string;
+
+    @Field(() => Float, { nullable: true })
+    Temperature?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    TopP?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TopK?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    MinP?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    FrequencyPenalty?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    PresencePenalty?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    Seed?: number | null;
+
+    @Field({ nullable: true })
+    StopSequences?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IncludeLogProbs?: boolean | null;
+
+    @Field(() => Int, { nullable: true })
+    TopLogProbs?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

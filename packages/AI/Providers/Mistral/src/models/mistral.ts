@@ -45,6 +45,36 @@ export class MistralLLM extends BaseLLM {
             maxTokens: params.maxOutputTokens,
             responseFormat: responseFormat
         };
+
+        // Add temperature if specified
+        if (params.temperature != null) {
+            params_obj.temperature = params.temperature;
+        }
+
+        // Add supported parameters
+        if (params.topP != null) {
+            params_obj.topP = params.topP;
+        }
+        if (params.topK != null) {
+            params_obj.topK = params.topK;
+        }
+        if (params.seed != null) {
+            params_obj.randomSeed = params.seed; // Mistral uses randomSeed instead of seed
+        }
+        if (params.stopSequences != null && params.stopSequences.length > 0) {
+            params_obj.stop = params.stopSequences;
+        }
+
+        // Mistral doesn't support these parameters - warn if provided
+        if (params.frequencyPenalty != null) {
+            console.warn('Mistral provider does not support frequencyPenalty parameter, ignoring');
+        }
+        if (params.presencePenalty != null) {
+            console.warn('Mistral provider does not support presencePenalty parameter, ignoring');
+        }
+        if (params.minP != null) {
+            console.warn('Mistral provider does not support minP parameter, ignoring');
+        }
         
         // Note: Mistral doesn't have a direct equivalent to effortLevel/reasoning_effort as of current API version
         // If/when Mistral adds this functionality, it should be added here
@@ -108,6 +138,36 @@ export class MistralLLM extends BaseLLM {
             maxTokens: params.maxOutputTokens,
             responseFormat: responseFormat,
         };
+
+        // Add temperature if specified
+        if (params.temperature != null) {
+            (params_obj as any).temperature = params.temperature;
+        }
+
+        // Add supported parameters
+        if (params.topP != null) {
+            (params_obj as any).topP = params.topP;
+        }
+        if (params.topK != null) {
+            (params_obj as any).topK = params.topK;
+        }
+        if (params.seed != null) {
+            (params_obj as any).randomSeed = params.seed; // Mistral uses randomSeed instead of seed
+        }
+        if (params.stopSequences != null && params.stopSequences.length > 0) {
+            (params_obj as any).stop = params.stopSequences;
+        }
+
+        // Mistral doesn't support these parameters - warn if provided
+        if (params.frequencyPenalty != null) {
+            console.warn('Mistral provider does not support frequencyPenalty parameter, ignoring');
+        }
+        if (params.presencePenalty != null) {
+            console.warn('Mistral provider does not support presencePenalty parameter, ignoring');
+        }
+        if (params.minP != null) {
+            console.warn('Mistral provider does not support minP parameter, ignoring');
+        }
         
         // Note: Mistral doesn't have a direct equivalent to effortLevel/reasoning_effort as of current API version
         // If/when Mistral adds this functionality, it should be added here

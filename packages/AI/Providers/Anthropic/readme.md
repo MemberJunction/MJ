@@ -277,6 +277,24 @@ npm run build
 npm start
 ```
 
+## Supported Parameters
+
+The Anthropic provider supports the following LLM parameters:
+
+**Supported:**
+- `temperature` - Controls randomness in the output (0.0-1.0)
+- `maxOutputTokens` - Maximum number of tokens to generate
+- `topP` - Nucleus sampling threshold (0.0-1.0)
+- `topK` - Limits vocabulary to top K tokens
+- `stopSequences` - Array of sequences where the API will stop generating
+- `responseFormat` - Output format (Text, JSON, Markdown, etc.)
+
+**Not Supported:**
+- `frequencyPenalty` - Not available in Anthropic API
+- `presencePenalty` - Not available in Anthropic API
+- `minP` - Not available in Anthropic API
+- `seed` - Not available in Anthropic API
+
 ## License
 
 ISC

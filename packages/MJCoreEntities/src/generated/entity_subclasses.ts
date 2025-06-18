@@ -1618,6 +1618,57 @@ export const AIPromptSchema = z.object({
     *   * First
     *   * Last
     * * Description: Controls message placement for User and Assistant role prompts: First (beginning of conversation) or Last (end of conversation). Not used for System role prompts which are always first`),
+    Temperature: z.number().nullable().describe(`
+        * * Field Name: Temperature
+        * * Display Name: Temperature
+        * * SQL Data Type: decimal(3, 2)
+    * * Description: Default temperature setting for this prompt. Controls randomness in the output. 0 = more focused and deterministic, 2 = more random and creative. Can be overridden at runtime.`),
+    TopP: z.number().nullable().describe(`
+        * * Field Name: TopP
+        * * Display Name: Top P
+        * * SQL Data Type: decimal(3, 2)
+    * * Description: Default TopP (nucleus sampling) for this prompt. Only consider tokens with cumulative probability up to this value. 1 = consider all tokens. Can be overridden at runtime.`),
+    TopK: z.number().nullable().describe(`
+        * * Field Name: TopK
+        * * Display Name: Top K
+        * * SQL Data Type: int
+    * * Description: Default TopK sampling for this prompt. Only sample from the top K tokens. Lower values reduce randomness. Can be overridden at runtime.`),
+    MinP: z.number().nullable().describe(`
+        * * Field Name: MinP
+        * * Display Name: Min P
+        * * SQL Data Type: decimal(3, 2)
+    * * Description: Default MinP (minimum probability) for this prompt. Tokens with probability below this threshold are filtered out. Can be overridden at runtime.`),
+    FrequencyPenalty: z.number().nullable().describe(`
+        * * Field Name: FrequencyPenalty
+        * * Display Name: Frequency Penalty
+        * * SQL Data Type: decimal(3, 2)
+    * * Description: Default frequency penalty for this prompt. Penalizes tokens based on their frequency in the text. Positive values decrease likelihood of repetition. Can be overridden at runtime.`),
+    PresencePenalty: z.number().nullable().describe(`
+        * * Field Name: PresencePenalty
+        * * Display Name: Presence Penalty
+        * * SQL Data Type: decimal(3, 2)
+    * * Description: Default presence penalty for this prompt. Penalizes tokens that have appeared in the text. Positive values increase topic diversity. Can be overridden at runtime.`),
+    Seed: z.number().nullable().describe(`
+        * * Field Name: Seed
+        * * Display Name: Seed
+        * * SQL Data Type: int
+    * * Description: Default random seed for this prompt. Used for deterministic generation. Same seed produces same output. Can be overridden at runtime.`),
+    StopSequences: z.string().nullable().describe(`
+        * * Field Name: StopSequences
+        * * Display Name: Stop Sequences
+        * * SQL Data Type: nvarchar(1000)
+    * * Description: Default stop sequences for this prompt. Comma-delimited list of sequences that will stop generation when encountered. Can be overridden at runtime.`),
+    IncludeLogProbs: z.boolean().nullable().describe(`
+        * * Field Name: IncludeLogProbs
+        * * Display Name: Include Log Probs
+        * * SQL Data Type: bit
+        * * Default Value: 0
+    * * Description: Default setting for including log probabilities in the response. Can be overridden at runtime.`),
+    TopLogProbs: z.number().nullable().describe(`
+        * * Field Name: TopLogProbs
+        * * Display Name: Top Log Probs
+        * * SQL Data Type: int
+    * * Description: Default number of top log probabilities to include when IncludeLogProbs is true. Can be overridden at runtime.`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template
@@ -16384,6 +16435,137 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     }
     set PromptPosition(value: 'First' | 'Last') {
         this.Set('PromptPosition', value);
+    }
+
+    /**
+    * * Field Name: Temperature
+    * * Display Name: Temperature
+    * * SQL Data Type: decimal(3, 2)
+    * * Description: Default temperature setting for this prompt. Controls randomness in the output. 0 = more focused and deterministic, 2 = more random and creative. Can be overridden at runtime.
+    */
+    get Temperature(): number | null {
+        return this.Get('Temperature');
+    }
+    set Temperature(value: number | null) {
+        this.Set('Temperature', value);
+    }
+
+    /**
+    * * Field Name: TopP
+    * * Display Name: Top P
+    * * SQL Data Type: decimal(3, 2)
+    * * Description: Default TopP (nucleus sampling) for this prompt. Only consider tokens with cumulative probability up to this value. 1 = consider all tokens. Can be overridden at runtime.
+    */
+    get TopP(): number | null {
+        return this.Get('TopP');
+    }
+    set TopP(value: number | null) {
+        this.Set('TopP', value);
+    }
+
+    /**
+    * * Field Name: TopK
+    * * Display Name: Top K
+    * * SQL Data Type: int
+    * * Description: Default TopK sampling for this prompt. Only sample from the top K tokens. Lower values reduce randomness. Can be overridden at runtime.
+    */
+    get TopK(): number | null {
+        return this.Get('TopK');
+    }
+    set TopK(value: number | null) {
+        this.Set('TopK', value);
+    }
+
+    /**
+    * * Field Name: MinP
+    * * Display Name: Min P
+    * * SQL Data Type: decimal(3, 2)
+    * * Description: Default MinP (minimum probability) for this prompt. Tokens with probability below this threshold are filtered out. Can be overridden at runtime.
+    */
+    get MinP(): number | null {
+        return this.Get('MinP');
+    }
+    set MinP(value: number | null) {
+        this.Set('MinP', value);
+    }
+
+    /**
+    * * Field Name: FrequencyPenalty
+    * * Display Name: Frequency Penalty
+    * * SQL Data Type: decimal(3, 2)
+    * * Description: Default frequency penalty for this prompt. Penalizes tokens based on their frequency in the text. Positive values decrease likelihood of repetition. Can be overridden at runtime.
+    */
+    get FrequencyPenalty(): number | null {
+        return this.Get('FrequencyPenalty');
+    }
+    set FrequencyPenalty(value: number | null) {
+        this.Set('FrequencyPenalty', value);
+    }
+
+    /**
+    * * Field Name: PresencePenalty
+    * * Display Name: Presence Penalty
+    * * SQL Data Type: decimal(3, 2)
+    * * Description: Default presence penalty for this prompt. Penalizes tokens that have appeared in the text. Positive values increase topic diversity. Can be overridden at runtime.
+    */
+    get PresencePenalty(): number | null {
+        return this.Get('PresencePenalty');
+    }
+    set PresencePenalty(value: number | null) {
+        this.Set('PresencePenalty', value);
+    }
+
+    /**
+    * * Field Name: Seed
+    * * Display Name: Seed
+    * * SQL Data Type: int
+    * * Description: Default random seed for this prompt. Used for deterministic generation. Same seed produces same output. Can be overridden at runtime.
+    */
+    get Seed(): number | null {
+        return this.Get('Seed');
+    }
+    set Seed(value: number | null) {
+        this.Set('Seed', value);
+    }
+
+    /**
+    * * Field Name: StopSequences
+    * * Display Name: Stop Sequences
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: Default stop sequences for this prompt. Comma-delimited list of sequences that will stop generation when encountered. Can be overridden at runtime.
+    */
+    get StopSequences(): string | null {
+        return this.Get('StopSequences');
+    }
+    set StopSequences(value: string | null) {
+        this.Set('StopSequences', value);
+    }
+
+    /**
+    * * Field Name: IncludeLogProbs
+    * * Display Name: Include Log Probs
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Default setting for including log probabilities in the response. Can be overridden at runtime.
+    */
+    get IncludeLogProbs(): boolean | null {
+        return this.Get('IncludeLogProbs');
+    }
+    set IncludeLogProbs(value: boolean | null) {
+        this.Set('IncludeLogProbs', value);
+    }
+
+    /**
+    * * Field Name: TopLogProbs
+    * * Display Name: Top Log Probs
+    * * SQL Data Type: int
+    * * Description: Default number of top log probabilities to include when IncludeLogProbs is true. Can be overridden at runtime.
+    */
+    get TopLogProbs(): number | null {
+        return this.Get('TopLogProbs');
+    }
+    set TopLogProbs(value: number | null) {
+        this.Set('TopLogProbs', value);
     }
 
     /**

@@ -46,10 +46,36 @@ export class OpenAILLM extends BaseLLM {
             temperature: params.temperature,
             max_completion_tokens: params.maxOutputTokens,
             logprobs: params.includeLogProbs === true ? true : false,
+            top_logprobs: params.includeLogProbs && params.topLogProbs ? params.topLogProbs : undefined,
         };
         
         if (params.effortLevel) {
             openAIParams.reasoning_effort = params.effortLevel as OpenAI.Chat.Completions.ChatCompletionReasoningEffort;
+        }
+
+        // Add sampling and generation parameters
+        if (params.topP != null) {
+            openAIParams.top_p = params.topP;
+        }
+        if (params.frequencyPenalty != null) {
+            openAIParams.frequency_penalty = params.frequencyPenalty;
+        }
+        if (params.presencePenalty != null) {
+            openAIParams.presence_penalty = params.presencePenalty;
+        }
+        if (params.seed != null) {
+            openAIParams.seed = params.seed;
+        }
+        if (params.stopSequences != null && params.stopSequences.length > 0) {
+            openAIParams.stop = params.stopSequences;
+        }
+
+        // OpenAI doesn't support topK or minP - warn if provided
+        if (params.topK != null) {
+            console.warn('OpenAI provider does not support topK parameter, ignoring');
+        }
+        if (params.minP != null) {
+            console.warn('OpenAI provider does not support minP parameter, ignoring');
         }
 
         switch (params.responseFormat) {
@@ -71,14 +97,15 @@ export class OpenAILLM extends BaseLLM {
 
         return {
             data: {
-                choices: result.choices.map((c: { message: { role: string | number; content: any; }; finish_reason: any; index: any; }) => {
+                choices: result.choices.map((c: any) => {
                     return {
                         message: {
                             role: ChatMessageRole.assistant,
                             content: c.message.content
                         },
                         finish_reason: c.finish_reason,
-                        index: c.index
+                        index: c.index,
+                        logprobs: c.logprobs // Include logprobs if present
                     }
                 }),
                 usage: new ModelUsage(result.usage.prompt_tokens, result.usage.completion_tokens)
@@ -106,10 +133,36 @@ export class OpenAILLM extends BaseLLM {
             max_tokens: params.maxOutputTokens,
             stream: true,
             logprobs: params.includeLogProbs === true ? true : false,
+            top_logprobs: params.includeLogProbs && params.topLogProbs ? params.topLogProbs : undefined,
         };
         
         if (params.effortLevel) {
             openAIParams.reasoning_effort = params.effortLevel as OpenAI.Chat.Completions.ChatCompletionReasoningEffort;
+        }
+
+        // Add sampling and generation parameters
+        if (params.topP != null) {
+            openAIParams.top_p = params.topP;
+        }
+        if (params.frequencyPenalty != null) {
+            openAIParams.frequency_penalty = params.frequencyPenalty;
+        }
+        if (params.presencePenalty != null) {
+            openAIParams.presence_penalty = params.presencePenalty;
+        }
+        if (params.seed != null) {
+            openAIParams.seed = params.seed;
+        }
+        if (params.stopSequences != null && params.stopSequences.length > 0) {
+            openAIParams.stop = params.stopSequences;
+        }
+
+        // OpenAI doesn't support topK or minP - warn if provided
+        if (params.topK != null) {
+            console.warn('OpenAI provider does not support topK parameter, ignoring');
+        }
+        if (params.minP != null) {
+            console.warn('OpenAI provider does not support minP parameter, ignoring');
         }
         
         // Set response format if specified

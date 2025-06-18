@@ -19,11 +19,10 @@ import { EntityActionExtendedFormComponent, LoadEntityActionExtendedFormComponen
 import { TemplatesFormExtendedComponent, LoadTemplatesFormExtendedComponent } from "./Templates/templates-form.component";
 import { TemplateParamDialogComponent } from "./Templates/template-param-dialog.component";
 import { TemplateEditorComponent } from "../shared/components/template-editor.component";
-import { AIPromptExecutionDialogComponent } from "./AIPrompts/ai-prompt-execution-dialog.component";
 import { AIPromptFormComponentExtended, LoadAIPromptFormComponentExtended } from "./AIPrompts/ai-prompt-form.component";
 import { AIAgentFormComponentExtended, LoadAIAgentFormComponentExtended } from "./AIAgents/ai-agent-form.component";
-import { AITestHarnessComponent } from "./AIAgents/ai-test-harness.component";
-import { AITestHarnessDialogComponent } from "./AIAgents/ai-test-harness-dialog.component";
+import { AITestHarnessComponent } from "./ai-test-harness/ai-test-harness.component";
+import { AITestHarnessDialogComponent } from "./ai-test-harness/ai-test-harness-dialog.component";
 import { TestHarnessDialogService } from "./test-harness-dialog.service";
 import { JoinGridModule } from "@memberjunction/ng-join-grid";
 import { CodeEditorModule } from "@memberjunction/ng-code-editor";
@@ -35,8 +34,8 @@ import { ActionTestHarnessComponent } from "./Actions/action-test-harness.compon
 import { ActionTestHarnessDialogComponent } from "./Actions/action-test-harness-dialog.component";
 import { ActionExecutionLogFormComponentExtended } from "./Actions/action-execution-log-form.component";
 import { ActionParamDialogComponent } from "./Actions/action-param-dialog.component";
-import { AgentExecutionMonitorComponent } from "./AIAgents/agent-execution-monitor.component";
-import { ExecutionNodeComponent } from "./AIAgents/agent-execution-node.component";
+import { AgentExecutionMonitorComponent } from "./ai-test-harness/agent-execution-monitor.component";
+import { ExecutionNodeComponent } from "./ai-test-harness/agent-execution-node.component";
 
 @NgModule({
     declarations: [
@@ -46,7 +45,6 @@ import { ExecutionNodeComponent } from "./AIAgents/agent-execution-node.componen
         TemplatesFormExtendedComponent,
         TemplateParamDialogComponent,
         TemplateEditorComponent,
-        AIPromptExecutionDialogComponent,
         AIPromptFormComponentExtended,
         AIAgentFormComponentExtended,
         AITestHarnessComponent,

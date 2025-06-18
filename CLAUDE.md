@@ -1,5 +1,7 @@
 # MemberJunction Development Guide
 
+**VERY IMPORTANT** We want you to be a high performance agent. Therefore whenever you need to spin up tasks - if they do not require interaction with the user and if they are not interdependent in an way, ALWAYS spin up multiple parallel tasks to work together for faster responses. **NEVER** process tasks sequentially if they are candidates for parallelization
+
 ## IMPORTANT
 - Before starting a new line of work always check the local branch we're on and see if it is (a) separate from the default branch in the remote repo - we always want to work in local feature branches and (b) if we aren't in such a feature branch that is named for the work being requested and empty, cut a new one but ask first and then switch to it
 - **NEVER commit changes without explicit user request** - Always stage changes and show what would be committed, but wait for user approval before running git commit
@@ -25,6 +27,7 @@
 - Fix all compilation errors before proceeding with additional changes
 - This ensures code quality and prevents runtime issues
 - **Package-Specific Builds**: When building individual packages for testing/compilation, always use `npm run build` in the specific package directory (NOT turbo from root)
+- **Tasks** whenever you need to spin up tasks - if they do not require interaction with the user and if they are not interdependent in an way, ALWAYS spin up multiple parallel tasks to work together for faster responses. **NEVER** process tasks sequentially if they are candidates for parallelization
 
 ## Debugging Build Failures
 

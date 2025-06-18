@@ -8,6 +8,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ChatMessage } from '@memberjunction/ai';
 import { Subject, Subscription } from 'rxjs';
 import { AgentExecutionMonitorComponent } from './agent-execution-monitor.component';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 /**
  * Supported modes for the test harness
@@ -18,7 +19,6 @@ export type TestHarnessMode = 'agent' | 'prompt';
  * Result interface for AI agent execution operations.
  * Contains comprehensive information about the execution outcome, timing, and data.
  */
-import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 /**
  * Represents a variable in the data context or template data for agent execution.
@@ -87,6 +87,14 @@ export interface SavedConversation {
     templateData: Record<string, any>;
     /** Template variables used during the conversation (prompt mode) */
     templateVariables?: Record<string, any>;
+    /** Advanced parameters used during the conversation (prompt mode) */
+    advancedParams?: any;
+    /** Selected model ID (prompt mode) */
+    selectedModelId?: string;
+    /** Selected vendor ID (prompt mode) */
+    selectedVendorId?: string;
+    /** Skip validation setting (prompt mode) */
+    skipValidation?: boolean;
     /** When the conversation was first created */
     createdAt: Date;
     /** When the conversation was last modified */
@@ -213,26 +221,52 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /** Selected AI model for prompt execution */
     public selectedModelId: string = '';
     
-    /** Temperature setting for prompt execution */
-    public temperature: number = 0.7;
+    /** Selected AI vendor for prompt execution */
+    public selectedVendorId: string = '';
+    
+    /** Available AI vendors for the selected model */
+    public availableVendors: any[] = [];
     
     /** Maximum tokens for prompt execution */
     public maxTokens: number | null = null;
     
+    /** Whether to skip validation when running prompts */
+    public skipValidation: boolean = false;
+    
+    /** Advanced LLM Parameters */
+    public advancedParams = {
+        temperature: null as number | null,
+        topP: null as number | null,
+        topK: null as number | null,
+        minP: null as number | null,
+        frequencyPenalty: null as number | null,
+        presencePenalty: null as number | null,
+        seed: null as number | null,
+        stopSequences: [] as string[],
+        includeLogProbs: false,
+        topLogProbs: 2
+    };
+    
+    /** Raw stop sequences input for textarea */
+    public stopSequencesText: string = '';
+    
+    /** Whether advanced parameters panel is expanded */
+    public advancedParamsExpanded: boolean = false;
+    
     /** Available AI models for prompt execution */
     public availableModels: any[] = [];
     
-    /** Selected response format for prompt execution */
-    public selectedResponseFormat: 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific' = 'Any';
-    
     /** Available response format options */
-    public responseFormatOptions = [
+    protected responseFormatOptions = [
         { text: 'Any', value: 'Any' },
         { text: 'Text', value: 'Text' },
         { text: 'Markdown', value: 'Markdown' },
         { text: 'JSON', value: 'JSON' },
         { text: 'Model Specific', value: 'ModelSpecific' }
     ];
+
+    /** Selected response format for prompt execution */
+    public selectedResponseFormat = this.responseFormatOptions[0];
     
     // === UI State Management ===
     /** Whether the configuration sidebar is currently visible */
@@ -325,6 +359,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         // Load models if in prompt mode
         if (this.mode === 'prompt') {
             this.loadAvailableModels();
+            this.loadPromptDefaults();
         }
     }
 
@@ -492,12 +527,21 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             
             // Set default response format from prompt with slight delay for Kendo dropdown
             setTimeout(() => {
-                this.selectedResponseFormat = prompt.ResponseFormat || 'Any';
+                const format = this.responseFormatOptions.find(f => f.value.trim().toLowerCase() === prompt.ResponseFormat.trim().toLowerCase());
+                if (format) {
+                    this.selectedResponseFormat = format;
+                }
+                else {
+                    this.selectedResponseFormat = this.responseFormatOptions[0]; // Default to 'Any'
+                }
             }, 0);
         } else {
             // Not a prompt entity, show all active models
             filteredModels = AIEngineBase.Instance.Models.filter(model => model.IsActive);
         }
+        
+        // Sort models by name
+        filteredModels.sort((a, b) => a.Name.localeCompare(b.Name));
         
         // Add a blank option at the beginning
         this.availableModels = [
@@ -507,8 +551,123 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         
         // Don't auto-select a model - let the dropdown show the blank option
         this.selectedModelId = '';
+        this.selectedVendorId = '';
+        this.availableVendors = [];
     }
-
+    
+    /**
+     * Handles model selection change and loads available vendors for the selected model
+     */
+    public onModelSelectionChange() {
+        this.selectedVendorId = '';
+        this.availableVendors = [];
+        
+        if (!this.selectedModelId) {
+            return;
+        }
+        
+        // Ensure AIEngineBase is configured
+        if (!AIEngineBase.Instance.Models || AIEngineBase.Instance.Models.length === 0) {
+            AIEngineBase.Instance.Config(false).then(() => {
+                this.loadVendorsForModel();
+            });
+        } else {
+            this.loadVendorsForModel();
+        }
+    }
+    
+    /**
+     * Loads available vendors for the selected model
+     */
+    private loadVendorsForModel() {
+        if (!this.selectedModelId) {
+            return;
+        }
+        
+        // Get model-specific vendors
+        const modelVendors = AIEngineBase.Instance.ModelVendors.filter(
+            mv => mv.ModelID === this.selectedModelId && 
+                  mv.Status === 'Active' &&
+                  mv.Type?.trim().toLowerCase() === 'inference provider'
+        );
+        
+        // Map to vendor objects with priority from ModelVendor
+        const vendorObjects: any[] = [];
+        for (const mv of modelVendors) {
+            const vendor = AIEngineBase.Instance.Vendors.find(v => v.ID === mv.VendorID);
+            if (vendor) {
+                // For now, include all vendors. TODO: Filter by vendor type when available
+                vendorObjects.push({
+                    ID: vendor.ID,
+                    Name: vendor.Name,
+                    Priority: mv.Priority || 999 // Use ModelVendor priority
+                });
+            }
+        }
+        
+        // Sort by priority (lower number = higher priority)
+        vendorObjects.sort((a, b) => a.Priority - b.Priority);
+        
+        this.availableVendors = vendorObjects;
+        
+        // Auto-select the highest priority vendor if only one or set default
+        if (vendorObjects.length === 1) {
+            this.selectedVendorId = vendorObjects[0].ID;
+        } else if (vendorObjects.length > 1) {
+            // Select the highest priority (lowest priority number)
+            this.selectedVendorId = vendorObjects[0].ID;
+        }
+    }
+    
+    /**
+     * Loads default parameter values from the AI prompt entity
+     */
+    private loadPromptDefaults() {
+        if (this.mode === 'prompt' && this.entity && this.isPromptEntity(this.entity)) {
+            const prompt = this.entity as AIPromptEntity;
+            
+            // TODO: Uncomment after CodeGen runs with new AIPrompt columns
+            // Load default values from prompt entity
+            // if (prompt.Temperature != null) this.advancedParams.temperature = prompt.Temperature;
+            // if (prompt.TopP != null) this.advancedParams.topP = prompt.TopP;
+            // if (prompt.TopK != null) this.advancedParams.topK = prompt.TopK;
+            // if (prompt.MinP != null) this.advancedParams.minP = prompt.MinP;
+            // if (prompt.FrequencyPenalty != null) this.advancedParams.frequencyPenalty = prompt.FrequencyPenalty;
+            // if (prompt.PresencePenalty != null) this.advancedParams.presencePenalty = prompt.PresencePenalty;
+            // if (prompt.Seed != null) this.advancedParams.seed = prompt.Seed;
+            // if (prompt.StopSequences) {
+            //     this.stopSequencesText = prompt.StopSequences;
+            //     this.advancedParams.stopSequences = prompt.StopSequences.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+            // }
+            // if (prompt.IncludeLogProbs != null) this.advancedParams.includeLogProbs = prompt.IncludeLogProbs;
+            // if (prompt.TopLogProbs != null) this.advancedParams.topLogProbs = prompt.TopLogProbs;
+        }
+    }
+    
+    /**
+     * Resets advanced parameters to the prompt defaults
+     */
+    public resetToPromptDefaults() {
+        if (this.mode === 'prompt') {
+            // Reset to null first
+            this.advancedParams = {
+                temperature: null,
+                topP: null,
+                topK: null,
+                minP: null,
+                frequencyPenalty: null,
+                presencePenalty: null,
+                seed: null,
+                stopSequences: [],
+                includeLogProbs: false,
+                topLogProbs: 2
+            };
+            this.stopSequencesText = '';
+            
+            // Then load prompt defaults
+            this.loadPromptDefaults();
+        }
+    }
 
     /**
      * Resets the test harness to its initial state, clearing all conversations,
@@ -530,6 +689,22 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         this.subAgentHistory = [];
         // Set default tab based on mode
         this.activeTab = this.mode === 'agent' ? 'agentVariables' : 'templateVariables';
+        // Reset advanced parameters
+        this.advancedParams = {
+            temperature: null,
+            topP: null,
+            topK: null,
+            minP: null,
+            frequencyPenalty: null,
+            presencePenalty: null,
+            seed: null,
+            stopSequences: [],
+            includeLogProbs: false,
+            topLogProbs: 2
+        };
+        this.stopSequencesText = '';
+        this.advancedParamsExpanded = false;
+        this.skipValidation = false;
     }
     
     /**
@@ -693,7 +868,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             content: '',
             timestamp: new Date(),
             isStreaming: true,
-            streamingContent: '',
+            streamingContent: this.mode === 'agent' ? 'Running agent...' : 'Running prompt...',
             agentRunId: '',
             streamingStartTime: Date.now(),
             elapsedTime: 0
@@ -926,7 +1101,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             content: '',
             timestamp: new Date(),
             isStreaming: true,
-            streamingContent: '',
+            streamingContent: this.mode === 'agent' ? 'Running agent...' : 'Running prompt...',
             agentRunId: '',
             streamingStartTime: Date.now(),
             elapsedTime: 0
@@ -950,10 +1125,18 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 userMessage: userMessage
             };
             
+            // Build conversation messages
+            const messages = this.conversationMessages
+                .filter(m => !m.isStreaming && m.content) // Only include non-streaming messages with content
+                .map(m => ({
+                    role: m.role,
+                    content: m.content
+                }));
+            
             // Execute the prompt using RunAIPrompt
             const query = `
-                mutation RunAIPrompt($promptId: String!, $data: String, $modelId: String, $vendorId: String, $configurationId: String, $skipValidation: Boolean, $templateData: String, $responseFormat: String) {
-                    RunAIPrompt(promptId: $promptId, data: $data, modelId: $modelId, vendorId: $vendorId, configurationId: $configurationId, skipValidation: $skipValidation, templateData: $templateData, responseFormat: $responseFormat) {
+                mutation RunAIPrompt($promptId: String!, $data: String, $modelId: String, $vendorId: String, $configurationId: String, $skipValidation: Boolean, $templateData: String, $responseFormat: String, $temperature: Float, $topP: Float, $topK: Int, $minP: Float, $frequencyPenalty: Float, $presencePenalty: Float, $seed: Int, $stopSequences: [String!], $includeLogProbs: Boolean, $topLogProbs: Int, $messages: String) {
+                    RunAIPrompt(promptId: $promptId, data: $data, modelId: $modelId, vendorId: $vendorId, configurationId: $configurationId, skipValidation: $skipValidation, templateData: $templateData, responseFormat: $responseFormat, temperature: $temperature, topP: $topP, topK: $topK, minP: $minP, frequencyPenalty: $frequencyPenalty, presencePenalty: $presencePenalty, seed: $seed, stopSequences: $stopSequences, includeLogProbs: $includeLogProbs, topLogProbs: $topLogProbs, messages: $messages) {
                         success
                         output
                         parsedResult
@@ -971,11 +1154,22 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 promptId: (this.entity as AIPromptEntity).ID,
                 data: JSON.stringify(dataContext),
                 modelId: this.selectedModelId || undefined,
-                vendorId: undefined, // Use model's default vendor
+                vendorId: this.selectedVendorId || undefined,
                 configurationId: undefined, // Use default configuration
-                skipValidation: false,
+                skipValidation: this.skipValidation,
                 templateData: null, // Additional template context if needed
-                responseFormat: this.selectedResponseFormat || undefined
+                responseFormat: this.selectedResponseFormat?.value,
+                temperature: this.advancedParams.temperature ?? undefined,
+                topP: this.advancedParams.topP ?? undefined,
+                topK: this.advancedParams.topK ?? undefined,
+                minP: this.advancedParams.minP ?? undefined,
+                frequencyPenalty: this.advancedParams.frequencyPenalty ?? undefined,
+                presencePenalty: this.advancedParams.presencePenalty ?? undefined,
+                seed: this.advancedParams.seed ?? undefined,
+                stopSequences: this.advancedParams.stopSequences.length > 0 ? this.advancedParams.stopSequences : undefined,
+                includeLogProbs: this.advancedParams.includeLogProbs,
+                topLogProbs: this.advancedParams.includeLogProbs ? this.advancedParams.topLogProbs : undefined,
+                messages: messages.length > 0 ? JSON.stringify(messages) : undefined
             };
 
             const result = await dataProvider.ExecuteGQL(query, variables);
@@ -995,31 +1189,12 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 assistantMessage.content = executionResult.parsedResult || executionResult.output || 'No response generated';
                 assistantMessage.executionTime = executionResult.executionTimeMs;
                 
-                // Store raw result and metadata
-                assistantMessage.rawContent = executionResult.rawResult || executionResult.output || '';
+                // Store the complete execution result for JSON display
+                assistantMessage.rawContent = JSON.stringify(executionResult, null, 2);
                 
                 // Store execution metadata
-                if (executionResult.promptRunId || executionResult.tokensUsed) {
+                if (executionResult.promptRunId) {
                     assistantMessage.agentRunId = executionResult.promptRunId;
-                    // Store additional metadata in a structured format
-                    const metadata = {
-                        promptRunId: executionResult.promptRunId,
-                        tokensUsed: executionResult.tokensUsed,
-                        modelId: this.selectedModelId,
-                        validationResult: executionResult.validationResult
-                    };
-                    // If rawContent is JSON, try to merge metadata
-                    if (assistantMessage.rawContent) {
-                        try {
-                            const rawJson = JSON.parse(assistantMessage.rawContent);
-                            assistantMessage.rawContent = JSON.stringify({ ...rawJson, _metadata: metadata }, null, 2);
-                        } catch {
-                            // If not JSON, store metadata separately
-                            assistantMessage.rawContent = JSON.stringify(metadata, null, 2);
-                        }
-                    } else {
-                        assistantMessage.rawContent = JSON.stringify(metadata, null, 2);
-                    }
                 }
             } else {
                 assistantMessage.content = 'I encountered an error processing your request.';
@@ -1313,6 +1488,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             dataContext: this.buildDataContext(),
             templateData: this.mode === 'agent' ? this.buildTemplateData() : {},
             templateVariables: this.mode === 'prompt' ? this.buildTemplateVariables() : {},
+            advancedParams: this.mode === 'prompt' ? this.advancedParams : undefined,
+            selectedModelId: this.mode === 'prompt' ? this.selectedModelId : undefined,
+            selectedVendorId: this.mode === 'prompt' ? this.selectedVendorId : undefined,
+            skipValidation: this.mode === 'prompt' ? this.skipValidation : undefined,
             createdAt: new Date(),
             updatedAt: new Date()
         };
@@ -1389,6 +1568,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                     this.savedConversations[index].templateData = this.buildTemplateData();
                 } else {
                     this.savedConversations[index].templateVariables = this.buildTemplateVariables();
+                    this.savedConversations[index].advancedParams = this.advancedParams;
+                    this.savedConversations[index].selectedModelId = this.selectedModelId;
+                    this.savedConversations[index].selectedVendorId = this.selectedVendorId;
+                    this.savedConversations[index].skipValidation = this.skipValidation;
                 }
                 this.savedConversations[index].updatedAt = new Date();
                 
@@ -1462,6 +1645,36 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                           typeof value === 'number' ? 'number' :
                           typeof value === 'object' ? 'object' : 'string'
                 });
+            }
+            
+            // Restore advanced parameters
+            if (conversation.advancedParams) {
+                this.advancedParams = { ...this.advancedParams, ...conversation.advancedParams };
+                // Restore stop sequences text
+                this.stopSequencesText = this.advancedParams.stopSequences?.join(', ') || '';
+            }
+            
+            // Restore model and vendor selection
+            if (conversation.selectedModelId !== undefined) {
+                this.selectedModelId = conversation.selectedModelId;
+                // Trigger vendor loading if model is selected
+                if (this.selectedModelId) {
+                    this.onModelSelectionChange();
+                    // After vendors load, restore vendor selection
+                    setTimeout(() => {
+                        if (conversation.selectedVendorId !== undefined) {
+                            this.selectedVendorId = conversation.selectedVendorId;
+                        }
+                    }, 100);
+                }
+            }
+            if (conversation.selectedVendorId !== undefined && !this.selectedModelId) {
+                this.selectedVendorId = conversation.selectedVendorId;
+            }
+            
+            // Restore skip validation setting
+            if (conversation.skipValidation !== undefined) {
+                this.skipValidation = conversation.skipValidation;
             }
         }
         
@@ -1549,9 +1762,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             exportData.templateVariables = this.buildTemplateVariables();
             exportData.modelSettings = {
                 modelId: this.selectedModelId,
-                temperature: this.temperature,
-                maxTokens: this.maxTokens
+                vendorId: this.selectedVendorId,
+                maxTokens: this.maxTokens,
+                skipValidation: this.skipValidation
             };
+            exportData.advancedParams = this.advancedParams;
         }
 
         const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -1605,6 +1820,12 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                         }
                         
                         // Template data is already imported into agentVariables above
+                        
+                        // Import advanced parameters if in prompt mode
+                        if (this.mode === 'prompt' && data.advancedParams) {
+                            this.advancedParams = { ...this.advancedParams, ...data.advancedParams };
+                            this.stopSequencesText = this.advancedParams.stopSequences?.join(', ') || '';
+                        }
                         
                         this.currentConversationId = null;
                         this.scrollNeeded = true;
@@ -2229,5 +2450,27 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     public getEntityName(): string {
         if (!this.entity) return '';
         return this.entity.Name || 'Untitled';
+    }
+    
+    /**
+     * Updates stop sequences from the textarea input
+     */
+    public updateStopSequences() {
+        if (this.stopSequencesText.trim() === '') {
+            this.advancedParams.stopSequences = [];
+        } else {
+            // Split by comma and trim each sequence
+            this.advancedParams.stopSequences = this.stopSequencesText
+                .split(',')
+                .map(s => s.trim())
+                .filter(s => s.length > 0);
+        }
+    }
+    
+    /**
+     * Toggles the advanced parameters expansion panel
+     */
+    public toggleAdvancedParams() {
+        this.advancedParamsExpanded = !this.advancedParamsExpanded;
     }
 }
