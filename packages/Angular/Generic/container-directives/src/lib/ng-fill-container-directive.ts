@@ -22,7 +22,7 @@ import { MJEventType, MJGlobal } from '@memberjunction/global';
  * </div>
  */
 @Directive({
-  selector: '[]'
+  selector: '[mjFillContainer]'
 })
 export class FillContainer implements OnInit, OnDestroy {
   /** Whether to fill the parent's width. Default is true. */

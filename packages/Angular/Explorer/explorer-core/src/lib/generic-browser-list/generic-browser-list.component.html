@@ -1,160 +1,258 @@
-
-<div class="generic-browser-list-container">
-  <div class="main-fav-wrapper">
-    <div class="title-wrapper">
-      <div class="title-flex-display">
+<div class="mj-page-container">
+  <div class="mj-content-container">
+    
+    <!-- Header Section -->
+    <div class="mj-header">
+      <div class="mj-header-title">
         @if(selectedFolderID){
-          <span title="Parent" class="title-folder fa-solid fa-arrow-left fa-2xl breadcrumb-icon" (click)="goToParent()"></span> 
-          <span title="Folder" class="title-folder fa-regular fa-folder fa-2xl"></span>
+          <span title="Back to Parent" class="mj-btn-icon-only" (click)="goToParent()">
+            <span class="fa-solid fa-arrow-left"></span>
+          </span>
+          <div class="mj-header-icon">
+            <span class="fa-regular fa-folder"></span>
+          </div>
         }
-        <h4>{{title}}</h4>
+        <div>
+          <h1>{{title}}</h1>
+          @if(selectedFolderID){
+            <div class="mj-header-subtitle">
+              <span class="fa-solid fa-folder-open"></span>
+              Current Folder
+            </div>
+          }
+        </div>
       </div>
-      <kendo-dropdownbutton class="custom-dropdwn" (itemClick)="onDropdownItemClick($event)" [data]="dropdownOptions" themeColor="info">
-        <span class="fa-solid fa-plus"></span>
-        Create New
-      </kendo-dropdownbutton>
+      
+      <div class="mj-header-actions">
+        <kendo-dropdownbutton 
+          class="mj-btn-primary" 
+          (itemClick)="onDropdownItemClick($event)" 
+          [data]="dropdownOptions" 
+          themeColor="primary">
+          <span class="fa-solid fa-plus mj-btn-icon"></span>
+          <span class="mj-btn-text">Create New</span>
+        </kendo-dropdownbutton>
+      </div>
     </div>
-    <div class="title-wrapper">
-      <div class="search">
+
+    <!-- Toolbar Section -->
+    <div class="mj-toolbar">
+      <div class="mj-search">
         <kendo-textbox 
-        type="text" 
-        #searchInput 
-        placeholder="Search" 
-        (keyup)="onKeyup(searchInput.value)"
-        [clearButton]="true"
-        size="large"
-        rounded="large"
-        fillMode="solid"
-        >
-          <ng-template kendoTextBoxPrefixTemplate [showSeparator]="true">
-            <span class="fa-solid fa-magnifying-glass margin-left-small"></span>
+          class="mj-search-input"
+          type="text" 
+          #searchInput 
+          placeholder="Search items..." 
+          (keyup)="onKeyup(searchInput.value)"
+          [clearButton]="true"
+          size="large"
+          rounded="large"
+          fillMode="solid">
+          <ng-template kendoTextBoxPrefixTemplate>
+            <span class="fa-solid fa-magnifying-glass mj-search-icon"></span>
           </ng-template>
         </kendo-textbox>
       </div>
-      <div class="filter-wrapper">
-        <!--
-        <kendo-dropdownbutton [data]="data" themeColor="primary">
-          Sort By Recents
-        </kendo-dropdownbutton>
-        -->
-        <button kendobutton (click)="changeViewMode('grid')" class="cursor-pointer grid-btn btn-cmn">
-          <span class="fa-solid fa-bars"></span>
+      
+      <div class="mj-toolbar-actions">
+        <button 
+          class="mj-btn-icon-only" 
+          [class.mj-btn-primary]="displayAsGrid"
+          (click)="changeViewMode('grid')" 
+          title="Grid View">
+          <span class="fa-solid fa-bars mj-btn-icon"></span>
         </button>
-        <button kendobutton (click)="changeViewMode('list')" class="cursor-pointer active btn-cmn">
-          <span class="fa-solid fa-table-cells-large"></span>
+        <button 
+          class="mj-btn-icon-only"
+          [class.mj-btn-primary]="!displayAsGrid" 
+          (click)="changeViewMode('list')" 
+          title="Card View">
+          <span class="fa-solid fa-table-cells-large mj-btn-icon"></span>
         </button>
       </div>
     </div>
 
+    <!-- Main Content Area -->
     <div class="main-area">
-      <kendo-loader *ngIf="showLoader" type="converging-spinner"></kendo-loader>
+      <!-- Loading State -->
+      <div class="mj-loading" *ngIf="showLoader">
+        <kendo-loader type="converging-spinner"></kendo-loader>
+      </div>
+      
       @if(!showLoader){
+        <!-- Grid View -->
         @if(displayAsGrid){
-          <kendo-grid (cellClick)="onCellItemClicked($event)" [kendoGridBinding]="items">
+          <kendo-grid 
+            class="mj-grid-table"
+            (cellClick)="onCellItemClicked($event)" 
+            [kendoGridBinding]="items">
             <kendo-grid-column field="Name" title="Name"></kendo-grid-column>
             <kendo-grid-column field="Size" title="Size"></kendo-grid-column>
             <kendo-grid-column field="LastOpened" title="Last Opened"></kendo-grid-column>
             <kendo-grid-column field="ModifiedBy" title="Modified By"></kendo-grid-column>
-            <kendo-grid-column title="">
+            <kendo-grid-column title="Actions">
               <ng-template kendoGridCellTemplate let-dataItem>
-                <div class="grid-wrapper">
-                  @if(disableEditButton){
-                    <button class="list-btn" (click)="editItem(dataItem)">
+                <div class="mj-toolbar-actions">
+                  @if(!disableEditButton && (!dataItem.IsLink || dataItem.LinkPermissionLevel === 'Owner' || dataItem.LinkPermissionLevel === 'Edit')) {
+                    <button class="mj-btn-icon-only mj-btn-sm" (click)="editItem(dataItem)" title="Edit Item">
                       <span class="fa-regular fa-pen-to-square"></span>
                     </button>
                   }
-                  <button class="list-btn" (click)="deleteItem(dataItem)">
-                    <span class="fa-regular fa-trash-can"></span>
-                  </button>
+                  @if(!dataItem.IsLink || dataItem.LinkPermissionLevel === 'Owner') {
+                    <button class="mj-btn-icon-only mj-btn-sm" (click)="deleteItem(dataItem)" title="Delete Item">
+                      <span class="fa-regular fa-trash-can"></span>
+                    </button>
+                  }
+                  @else if (dataItem.IsLink) {
+                    <button class="mj-btn-icon-only mj-btn-sm" (click)="unlinkItem(dataItem)" title="Remove Link">
+                      <span class="fa-solid fa-link-slash"></span>
+                    </button>
+                  }
                 </div>
               </ng-template>
             </kendo-grid-column>
           </kendo-grid>
         }
+        
+        <!-- Card View -->
         @else{
-          <div class="card-list k-d-flex k-flex-row k-h-full k-flex-wrap">
-            @for(item of items; track item){
-              <kendo-card class="card-wrapper cursor-pointer">
-                <div class="list-item-icon">
-                  @if(!disableEditButton && (!item.IsLink || item.LinkPermissionLevel === 'Owner' || item.LinkPermissionLevel === 'Edit')) {
-                    <button (click)="editItem(item)" class="list-btn" title="Edit Item">
-                      <span class="fa-regular fa-pen-to-square"></span>
-                    </button>
-                  }
-                  @if(!item.IsLink || item.LinkPermissionLevel === 'Owner') {
-                    <button (click)="deleteItem(item)" class="list-btn" title="Delete Item">
-                      <span class="fa-regular fa-trash-can"></span>
-                    </button>                    
-                  }
-                  @else if (item.IsLink) {
-                    <button (click)="unlinkItem(item)" class="list-btn" title="Remove Link to Shared Item" >
-                      <span class="fa-solid fa-link-slash" style="color: rgb(19, 92, 201);"></span>
-                    </button>                    
-                  }
-                </div>
-                <kendo-card-body (click)="itemClick(item)">
-                    @if(item.IsLink) {
-                      <i [title]="item.Name + '(Shared)'" [ngClass]="getIconForResourceType(item)" style="color: rgb(19, 92, 201);"></i>
+          <!-- Empty State -->
+          @if(items.length === 0){
+            <div class="mj-empty-state">
+              <div class="mj-empty-icon">
+                <span class="fa-regular fa-folder-open"></span>
+              </div>
+              <h3>No items found</h3>
+              <p>This folder is empty or no items match your search criteria.</p>
+              <button class="mj-btn-primary" (click)="onDropdownItemClick({text: 'Folder'})">
+                <span class="fa-solid fa-plus mj-btn-icon"></span>
+                Create Your First Item
+              </button>
+            </div>
+          }
+          
+          <!-- Cards Grid -->
+          @else{
+            <div class="mj-grid-responsive">
+              @for(item of items; track item){
+                <div class="mj-card mj-grid-item" (click)="itemClick(item)">
+                  
+                  <!-- Card Actions -->
+                  <div class="mj-card-actions">
+                    @if(!disableEditButton && (!item.IsLink || item.LinkPermissionLevel === 'Owner' || item.LinkPermissionLevel === 'Edit')) {
+                      <button class="mj-btn-icon-only mj-btn-sm" (click)="editItem(item); $event.stopPropagation()" title="Edit Item">
+                        <span class="fa-regular fa-pen-to-square"></span>
+                      </button>
                     }
-                    @else {
-                      <span [title]="item.Name" [ngClass]="getIconForResourceType(item)"></span>
+                    @if(!item.IsLink || item.LinkPermissionLevel === 'Owner') {
+                      <button class="mj-btn-icon-only mj-btn-sm" (click)="deleteItem(item); $event.stopPropagation()" title="Delete Item">
+                        <span class="fa-regular fa-trash-can"></span>
+                      </button>
                     }
-                    <div class="padding-top-small">
-                      <h5 kendoCardTitle>{{ item.Name }}</h5>
-                      <p kendoCardSubtitle>{{ item.Description }}</p>
+                    @else if (item.IsLink) {
+                      <button class="mj-btn-icon-only mj-btn-sm" (click)="unlinkItem(item); $event.stopPropagation()" title="Remove Link">
+                        <span class="fa-solid fa-link-slash"></span>
+                      </button>
+                    }
+                  </div>
+                  
+                  <!-- Card Body -->
+                  <div class="mj-card-body">
+                    <div class="view-card-content">
+                      @if(item.IsLink) {
+                        <div class="icon" [title]="item.Name + ' (Shared)'">
+                          <span [ngClass]="getIconForResourceType(item)" style="color: var(--mj-blue);"></span>
+                          <span class="fa-solid fa-link" style="position: absolute; bottom: 0; right: 0; font-size: 0.8em;"></span>
+                        </div>
+                      }
+                      @else {
+                        <div class="icon" [title]="item.Name">
+                          <span [ngClass]="getIconForResourceType(item)"></span>
+                        </div>
+                      }
+                      
+                      <h2>{{ item.Name }}</h2>
+                      <p>{{ item.Description || 'No description available' }}</p>
                     </div>
-                </kendo-card-body>
-              </kendo-card>
-            }
-          </div>
+                  </div>
+                </div>
+              }
+            </div>
+          }
         }
       }
     </div>
   </div>
 
+  <!-- Delete Confirmation Dialog -->
   <kendo-dialog 
-  [minWidth]="450"
-  [width]="650"
-  class="dialog-wrapper" 
-  title="Confirm" 
-  *ngIf="deleteDialogOpened" 
-  (close)="onConfirmDeleteItem(false)">
-    <p class="k-m-7.5 k-text-center">
-      Are you sure you want to {{(selectedItem?.IsLink && selectedItem?.LinkPermissionLevel === 'Owner') || !selectedItem?.IsLink ? 'delete' : 'unlink'}} <b>{{selectedItem?.Name}}?</b>
-    </p>
-    <kendo-dialog-actions class="popup-actions-btn">
-      <button class="cancel-btn" (click)="onConfirmDeleteItem(true)" kendoButton themeColor="info">
-        Yes
+    [minWidth]="400"
+    [width]="500"
+    class="mj-dialog-confirm" 
+    title="Confirm Action" 
+    *ngIf="deleteDialogOpened" 
+    (close)="onConfirmDeleteItem(false)">
+    
+    <div class="mj-dialog-content">
+      <div class="mj-dialog-icon">
+        <span class="fa-solid fa-triangle-exclamation"></span>
+      </div>
+      <p>
+        Are you sure you want to 
+        <strong>{{(selectedItem?.IsLink && selectedItem?.LinkPermissionLevel === 'Owner') || !selectedItem?.IsLink ? 'delete' : 'unlink'}}</strong> 
+        <strong>{{selectedItem?.Name}}</strong>?
+      </p>
+      @if((selectedItem?.IsLink && selectedItem?.LinkPermissionLevel === 'Owner') || !selectedItem?.IsLink){
+        <p class="mj-dialog-warning">This action cannot be undone.</p>
+      }
+    </div>
+    
+    <kendo-dialog-actions class="mj-dialog-actions">
+      <button class="mj-btn-secondary" (click)="onConfirmDeleteItem(false)">
+        Cancel
       </button>
-      <button class="yes-btn" (click)="onConfirmDeleteItem(false)" kendoButton fillMode="outline" themeColor="info">
-        No 
+      <button class="mj-btn-primary" (click)="onConfirmDeleteItem(true)">
+        {{(selectedItem?.IsLink && selectedItem?.LinkPermissionLevel === 'Owner') || !selectedItem?.IsLink ? 'Delete' : 'Unlink'}}
       </button>
     </kendo-dialog-actions>
   </kendo-dialog>
 
+  <!-- Create Folder Dialog -->
   <kendo-dialog 
-    title="Create new folder" 
+    title="Create New Folder" 
     *ngIf="createFolderDialogOpened" 
     (close)="toggleCreateFolderView()"
-    [minWidth]="250"
+    [minWidth]="350"
     [width]="450"
-    class="dialog-wrapper"
-  >
-  <div class="search">
-    <kendo-textbox placeholder="Enter a folder name" (valueChange)="onCreateFolderKeyup($event)"/>
-  </div>
-    <kendo-dialog-actions class="popup-actions-btn">
-      <button class="cancel-btn" (click)="createFolder()" kendoButton themeColor="info">
-        Create
-      </button>
-      <button  class="yes-btn" (click)="toggleCreateFolderView()" kendoButton fillMode="outline" themeColor="info">
+    class="mj-dialog-form">
+    
+    <div class="mj-dialog-content">
+      <div class="mj-search">
+        <kendo-textbox 
+          class="mj-search-input"
+          placeholder="Enter folder name..." 
+          (valueChange)="onCreateFolderKeyup($event)">
+          <ng-template kendoTextBoxPrefixTemplate>
+            <span class="fa-solid fa-folder mj-search-icon"></span>
+          </ng-template>
+        </kendo-textbox>
+      </div>
+    </div>
+    
+    <kendo-dialog-actions class="mj-dialog-actions">
+      <button class="mj-btn-secondary" (click)="toggleCreateFolderView()">
         Cancel
+      </button>
+      <button class="mj-btn-primary" (click)="createFolder()">
+        <span class="fa-solid fa-plus mj-btn-icon"></span>
+        Create Folder
       </button>
     </kendo-dialog-actions>
   </kendo-dialog>
+
+  <!-- Entity Form Dialog -->
   <mj-entity-form-dialog
     #entityFormDialog
-    Mode="complete"
-  >
+    Mode="complete">
   </mj-entity-form-dialog>
 </div>
