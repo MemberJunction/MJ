@@ -1,6 +1,7 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, ElementRef, AfterViewChecked, SecurityContext } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, ElementRef, AfterViewChecked, SecurityContext, ViewContainerRef, ChangeDetectorRef } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
+import { WindowService, WindowRef, WindowCloseResult } from '@progress/kendo-angular-dialog';
 import { AIAgentEntity, AIPromptEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -8,6 +9,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ChatMessage } from '@memberjunction/ai';
 import { Subject, Subscription } from 'rxjs';
 import { AgentExecutionMonitorComponent } from './agent-execution-monitor.component';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 /**
  * Supported modes for the test harness
@@ -18,7 +20,6 @@ export type TestHarnessMode = 'agent' | 'prompt';
  * Result interface for AI agent execution operations.
  * Contains comprehensive information about the execution outcome, timing, and data.
  */
-import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 /**
  * Represents a variable in the data context or template data for agent execution.
@@ -87,6 +88,14 @@ export interface SavedConversation {
     templateData: Record<string, any>;
     /** Template variables used during the conversation (prompt mode) */
     templateVariables?: Record<string, any>;
+    /** Advanced parameters used during the conversation (prompt mode) */
+    advancedParams?: any;
+    /** Selected model ID (prompt mode) */
+    selectedModelId?: string;
+    /** Selected vendor ID (prompt mode) */
+    selectedVendorId?: string;
+    /** Skip validation setting (prompt mode) */
+    skipValidation?: boolean;
     /** When the conversation was first created */
     createdAt: Date;
     /** When the conversation was last modified */
@@ -136,9 +145,15 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /**
      * Creates a new AI Test Harness component instance.
      * @param sanitizer - Angular DomSanitizer for safe HTML rendering of formatted content
+     * @param windowService - Kendo WindowService for creating modal windows
+     * @param viewContainerRef - Angular ViewContainerRef for window positioning
+     * @param cdr - Angular ChangeDetectorRef for managing change detection
      */
     constructor(
-        private sanitizer: DomSanitizer
+        private sanitizer: DomSanitizer,
+        private windowService: WindowService,
+        private viewContainerRef: ViewContainerRef,
+        private cdr: ChangeDetectorRef
     ) {}
     
     /** The mode of operation - either 'agent' or 'prompt' */
@@ -213,26 +228,55 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /** Selected AI model for prompt execution */
     public selectedModelId: string = '';
     
-    /** Temperature setting for prompt execution */
-    public temperature: number = 0.7;
+    /** Selected AI vendor for prompt execution */
+    public selectedVendorId: string = '';
+    
+    /** Available AI vendors for the selected model */
+    public availableVendors: any[] = [];
+    
+    /** Default model for the prompt (cached for display) */
+    private defaultModelName: string = '';
     
     /** Maximum tokens for prompt execution */
     public maxTokens: number | null = null;
     
+    /** Whether to skip validation when running prompts */
+    public skipValidation: boolean = false;
+    
+    /** Advanced LLM Parameters */
+    public advancedParams = {
+        temperature: null as number | null,
+        topP: null as number | null,
+        topK: null as number | null,
+        minP: null as number | null,
+        frequencyPenalty: null as number | null,
+        presencePenalty: null as number | null,
+        seed: null as number | null,
+        stopSequences: [] as string[],
+        includeLogProbs: false,
+        topLogProbs: 2
+    };
+    
+    /** Raw stop sequences input for textarea */
+    public stopSequencesText: string = '';
+    
+    /** Whether advanced parameters panel is expanded */
+    public advancedParamsExpanded: boolean = false;
+    
     /** Available AI models for prompt execution */
     public availableModels: any[] = [];
     
-    /** Selected response format for prompt execution */
-    public selectedResponseFormat: 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific' = 'Any';
-    
     /** Available response format options */
-    public responseFormatOptions = [
+    protected responseFormatOptions = [
         { text: 'Any', value: 'Any' },
         { text: 'Text', value: 'Text' },
         { text: 'Markdown', value: 'Markdown' },
         { text: 'JSON', value: 'JSON' },
         { text: 'Model Specific', value: 'ModelSpecific' }
     ];
+
+    /** Selected response format for prompt execution */
+    public selectedResponseFormat = this.responseFormatOptions[0];
     
     // === UI State Management ===
     /** Whether the configuration sidebar is currently visible */
@@ -252,6 +296,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     
     /** Current JSON content to display in the dialog */
     public currentJsonContent: string = '';
+    
+    /** Reference to the JSON window when open */
+    private jsonWindowRef: WindowRef | null = null;
     
     // === Execution Monitor Properties ===
     /** Mode for the execution monitor component */
@@ -325,6 +372,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         // Load models if in prompt mode
         if (this.mode === 'prompt') {
             this.loadAvailableModels();
+            this.loadPromptDefaults();
         }
     }
 
@@ -383,11 +431,12 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         }
         
         // Auto-focus message input when dialog first becomes visible
+        // Use Promise.resolve to schedule this after current change detection cycle
         if (this.isVisible && !this._hasFocused && this.messageInput) {
             this._hasFocused = true;
-            setTimeout(() => {
+            Promise.resolve().then(() => {
                 this.messageInput?.focus();
-            }, 100);
+            });
         }
     }
 
@@ -492,23 +541,297 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             
             // Set default response format from prompt with slight delay for Kendo dropdown
             setTimeout(() => {
-                this.selectedResponseFormat = prompt.ResponseFormat || 'Any';
+                const format = this.responseFormatOptions.find(f => f.value.trim().toLowerCase() === prompt.ResponseFormat.trim().toLowerCase());
+                if (format) {
+                    this.selectedResponseFormat = format;
+                }
+                else {
+                    this.selectedResponseFormat = this.responseFormatOptions[0]; // Default to 'Any'
+                }
             }, 0);
         } else {
             // Not a prompt entity, show all active models
             filteredModels = AIEngineBase.Instance.Models.filter(model => model.IsActive);
         }
         
-        // Add a blank option at the beginning
+        // Sort models by name
+        filteredModels.sort((a, b) => a.Name.localeCompare(b.Name));
+        
+        // Determine the default model for this prompt
+        if (this.entity && 'AIModelTypeID' in this.entity) {
+            const prompt = this.entity as AIPromptEntity;
+            this.defaultModelName = await this.getDefaultModelName(prompt);
+        }
+        
+        // Add a blank option at the beginning with the default model name
         this.availableModels = [
-            { ID: '', Name: '-- Use Default Model --' },
+            { ID: '', Name: this.defaultModelName ? `-- Default: ${this.defaultModelName} --` : '-- Use Default Model --' },
             ...filteredModels
         ];
         
         // Don't auto-select a model - let the dropdown show the blank option
         this.selectedModelId = '';
+        
+        // If we have a default model, load its default vendor
+        if (this.defaultModelName) {
+            await this.loadDefaultVendor();
+        } else {
+            this.selectedVendorId = '';
+            this.availableVendors = [];
+        }
     }
-
+    
+    /** Default model object for the prompt (cached for vendor lookup) */
+    private defaultModel: any = null;
+    
+    /**
+     * Gets the default model name for a prompt based on its configuration
+     */
+    private async getDefaultModelName(prompt: AIPromptEntity): Promise<string> {
+        try {
+            // Get prompt-specific model associations
+            const promptModels = AIEngineBase.Instance.PromptModels.filter(
+                pm => pm.PromptID === prompt.ID && 
+                      (pm.Status === 'Active' || pm.Status === 'Preview')
+            );
+            
+            let defaultModel: any = null;
+            
+            if (promptModels.length > 0) {
+                // Sort by priority (higher priority first)
+                promptModels.sort((a, b) => (b.Priority || 0) - (a.Priority || 0));
+                
+                // Find the first active model
+                for (const pm of promptModels) {
+                    const model = AIEngineBase.Instance.Models.find(m => m.ID === pm.ModelID && m.IsActive);
+                    if (model) {
+                        defaultModel = model;
+                        break;
+                    }
+                }
+            }
+            
+            // If no prompt-specific model, use selection strategy
+            if (!defaultModel) {
+                const candidates = AIEngineBase.Instance.Models.filter(
+                    m => m.IsActive && 
+                         (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID)
+                );
+                
+                if (candidates.length > 0) {
+                    // Apply selection strategy
+                    if (prompt.SelectionStrategy === 'ByPower') {
+                        candidates.sort((a, b) => {
+                            switch (prompt.PowerPreference) {
+                                case 'Lowest':
+                                    return (a.PowerRank || 0) - (b.PowerRank || 0);
+                                case 'Highest':
+                                case 'Balanced':
+                                default:
+                                    return (b.PowerRank || 0) - (a.PowerRank || 0);
+                            }
+                        });
+                    }
+                    defaultModel = candidates[0];
+                }
+            }
+            
+            // Cache the default model object for vendor lookup
+            this.defaultModel = defaultModel;
+            
+            return defaultModel ? defaultModel.Name : '';
+        } catch (error) {
+            console.error('Error getting default model name:', error);
+            return '';
+        }
+    }
+    
+    /**
+     * Loads the vendors for the default model
+     */
+    private async loadDefaultVendor() {
+        try {
+            if (!this.defaultModel) {
+                this.availableVendors = [];
+                return;
+            }
+            
+            // Get vendors that offer this model - same logic as loadVendorsForModel
+            const modelVendors = AIEngineBase.Instance.ModelVendors.filter(
+                mv => mv.ModelID === this.defaultModel.ID && 
+                      mv.Status === 'Active' &&
+                      mv.Type?.trim().toLowerCase() === 'inference provider'
+            );
+            
+            // Map to vendor objects with priority from ModelVendor
+            const vendorObjects: any[] = [];
+            for (const mv of modelVendors) {
+                const vendor = AIEngineBase.Instance.Vendors.find(v => v.ID === mv.VendorID);
+                if (vendor) {
+                    vendorObjects.push({
+                        ID: vendor.ID,
+                        Name: vendor.Name,
+                        Priority: mv.Priority || 999 // Use ModelVendor priority
+                    });
+                }
+            }
+            
+            // Sort by priority (lower number = higher priority)
+            vendorObjects.sort((a, b) => a.Priority - b.Priority);
+            
+            this.availableVendors = vendorObjects;
+            
+            // Select the highest priority vendor
+            if (vendorObjects.length > 0) {
+                this.selectedVendorId = vendorObjects[0].ID;
+            }
+        } catch (error) {
+            console.error('Error loading default vendor:', error);
+            this.availableVendors = [];
+        }
+    }
+    
+    /**
+     * Handles model selection change and loads available vendors for the selected model
+     */
+    public onModelSelectionChange() {
+        this.selectedVendorId = '';
+        this.availableVendors = [];
+        
+        if (!this.selectedModelId) {
+            // When default model is selected, load default vendor
+            if (this.defaultModelName) {
+                this.loadDefaultVendor();
+            }
+            return;
+        }
+        
+        // Ensure AIEngineBase is configured
+        if (!AIEngineBase.Instance.Models || AIEngineBase.Instance.Models.length === 0) {
+            AIEngineBase.Instance.Config(false).then(() => {
+                this.loadVendorsForModel();
+            });
+        } else {
+            this.loadVendorsForModel();
+        }
+    }
+    
+    /**
+     * Loads available vendors for the selected model
+     */
+    private loadVendorsForModel() {
+        if (!this.selectedModelId) {
+            return;
+        }
+        
+        // Get model-specific vendors
+        const modelVendors = AIEngineBase.Instance.ModelVendors.filter(
+            mv => mv.ModelID === this.selectedModelId && 
+                  mv.Status === 'Active' &&
+                  mv.Type?.trim().toLowerCase() === 'inference provider'
+        );
+        
+        // Map to vendor objects with priority from ModelVendor
+        const vendorObjects: any[] = [];
+        for (const mv of modelVendors) {
+            const vendor = AIEngineBase.Instance.Vendors.find(v => v.ID === mv.VendorID);
+            if (vendor) {
+                // For now, include all vendors. TODO: Filter by vendor type when available
+                vendorObjects.push({
+                    ID: vendor.ID,
+                    Name: vendor.Name,
+                    Priority: mv.Priority || 999 // Use ModelVendor priority
+                });
+            }
+        }
+        
+        // Sort by priority (lower number = higher priority)
+        vendorObjects.sort((a, b) => a.Priority - b.Priority);
+        
+        this.availableVendors = vendorObjects;
+        
+        // Auto-select the highest priority vendor if only one or set default
+        if (vendorObjects.length === 1) {
+            this.selectedVendorId = vendorObjects[0].ID;
+        } else if (vendorObjects.length > 1) {
+            // Select the highest priority (lowest priority number)
+            this.selectedVendorId = vendorObjects[0].ID;
+        }
+    }
+    
+    /**
+     * Loads default parameter values from the AI prompt entity
+     */
+    private loadPromptDefaults() {
+        if (this.mode === 'prompt' && this.entity && this.isPromptEntity(this.entity)) {
+            const prompt = this.entity as AIPromptEntity;
+            
+            // Load default values from prompt entity
+            if (prompt.Temperature != null) this.advancedParams.temperature = prompt.Temperature;
+            if (prompt.TopP != null) this.advancedParams.topP = prompt.TopP;
+            if (prompt.TopK != null) this.advancedParams.topK = prompt.TopK;
+            if (prompt.MinP != null) this.advancedParams.minP = prompt.MinP;
+            if (prompt.FrequencyPenalty != null) this.advancedParams.frequencyPenalty = prompt.FrequencyPenalty;
+            if (prompt.PresencePenalty != null) this.advancedParams.presencePenalty = prompt.PresencePenalty;
+            if (prompt.Seed != null) this.advancedParams.seed = prompt.Seed;
+            if (prompt.StopSequences) {
+                this.stopSequencesText = prompt.StopSequences;
+                this.advancedParams.stopSequences = prompt.StopSequences.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+            }
+            if (prompt.IncludeLogProbs != null) this.advancedParams.includeLogProbs = prompt.IncludeLogProbs;
+            if (prompt.TopLogProbs != null) this.advancedParams.topLogProbs = prompt.TopLogProbs;
+        }
+    }
+    
+    /**
+     * Resets all model settings to the prompt defaults
+     */
+    public resetToPromptDefaults() {
+        if (this.mode === 'prompt' && this.entity && this.isPromptEntity(this.entity)) {
+            const prompt = this.entity as AIPromptEntity;
+            
+            // Reset model selection to default
+            this.selectedModelId = '';
+            
+            // Reset vendor - will be loaded by loadDefaultVendor
+            this.selectedVendorId = '';
+            
+            // Reset response format to prompt's setting
+            const format = this.responseFormatOptions.find(f => 
+                f.value.trim().toLowerCase() === prompt.ResponseFormat.trim().toLowerCase()
+            );
+            this.selectedResponseFormat = format || this.responseFormatOptions[0];
+            
+            // Reset max tokens
+            this.maxTokens = null;
+            
+            // Reset skip validation
+            this.skipValidation = false;
+            
+            // Reset advanced parameters
+            this.advancedParams = {
+                temperature: null,
+                topP: null,
+                topK: null,
+                minP: null,
+                frequencyPenalty: null,
+                presencePenalty: null,
+                seed: null,
+                stopSequences: [],
+                includeLogProbs: false,
+                topLogProbs: 2
+            };
+            this.stopSequencesText = '';
+            
+            // Reload prompt defaults for advanced params
+            this.loadPromptDefaults();
+            
+            // Reload default vendor for the default model
+            if (this.defaultModelName) {
+                this.loadDefaultVendor();
+            }
+        }
+    }
 
     /**
      * Resets the test harness to its initial state, clearing all conversations,
@@ -530,6 +853,22 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         this.subAgentHistory = [];
         // Set default tab based on mode
         this.activeTab = this.mode === 'agent' ? 'agentVariables' : 'templateVariables';
+        // Reset advanced parameters
+        this.advancedParams = {
+            temperature: null,
+            topP: null,
+            topK: null,
+            minP: null,
+            frequencyPenalty: null,
+            presencePenalty: null,
+            seed: null,
+            stopSequences: [],
+            includeLogProbs: false,
+            topLogProbs: 2
+        };
+        this.stopSequencesText = '';
+        this.advancedParamsExpanded = false;
+        this.skipValidation = false;
     }
     
     /**
@@ -655,11 +994,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         };
         this.conversationMessages.push(userMessage);
         
-        // Clear input after change detection to avoid ExpressionChangedAfterItHasBeenCheckedError
+        // Clear input and update change detection
         const messageToSend = this.currentUserMessage;
-        setTimeout(() => {
-            this.currentUserMessage = '';
-        }, 0);
+        this.currentUserMessage = '';
+        this.cdr.detectChanges();
         
         // Scroll to bottom
         this.scrollNeeded = true;
@@ -693,7 +1031,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             content: '',
             timestamp: new Date(),
             isStreaming: true,
-            streamingContent: '',
+            streamingContent: this.mode === 'agent' ? 'Running agent...' : 'Running prompt...',
             agentRunId: '',
             streamingStartTime: Date.now(),
             elapsedTime: 0
@@ -738,14 +1076,6 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
 
             // Generate a session ID for this execution
             const sessionId = dataProvider.sessionId;
-            
-            // DEBUG: Log authentication context and request details
-            const authToken = (dataProvider as any)._authToken || (window as any).localStorage?.getItem('mj-auth-token');
-            if (!authToken) {
-                console.warn('🔐 AI Test Harness: No authentication token found in dataProvider or localStorage');
-            } else {
-            }
-            
             
             // Execute the agent
             const query = `
@@ -926,7 +1256,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             content: '',
             timestamp: new Date(),
             isStreaming: true,
-            streamingContent: '',
+            streamingContent: this.mode === 'agent' ? 'Running agent...' : 'Running prompt...',
             agentRunId: '',
             streamingStartTime: Date.now(),
             elapsedTime: 0
@@ -950,10 +1280,18 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 userMessage: userMessage
             };
             
+            // Build conversation messages
+            const messages = this.conversationMessages
+                .filter(m => !m.isStreaming && m.content) // Only include non-streaming messages with content
+                .map(m => ({
+                    role: m.role,
+                    content: m.content
+                }));
+            
             // Execute the prompt using RunAIPrompt
             const query = `
-                mutation RunAIPrompt($promptId: String!, $data: String, $modelId: String, $vendorId: String, $configurationId: String, $skipValidation: Boolean, $templateData: String, $responseFormat: String) {
-                    RunAIPrompt(promptId: $promptId, data: $data, modelId: $modelId, vendorId: $vendorId, configurationId: $configurationId, skipValidation: $skipValidation, templateData: $templateData, responseFormat: $responseFormat) {
+                mutation RunAIPrompt($promptId: String!, $data: String, $modelId: String, $vendorId: String, $configurationId: String, $skipValidation: Boolean, $templateData: String, $responseFormat: String, $temperature: Float, $topP: Float, $topK: Int, $minP: Float, $frequencyPenalty: Float, $presencePenalty: Float, $seed: Int, $stopSequences: [String!], $includeLogProbs: Boolean, $topLogProbs: Int, $messages: String) {
+                    RunAIPrompt(promptId: $promptId, data: $data, modelId: $modelId, vendorId: $vendorId, configurationId: $configurationId, skipValidation: $skipValidation, templateData: $templateData, responseFormat: $responseFormat, temperature: $temperature, topP: $topP, topK: $topK, minP: $minP, frequencyPenalty: $frequencyPenalty, presencePenalty: $presencePenalty, seed: $seed, stopSequences: $stopSequences, includeLogProbs: $includeLogProbs, topLogProbs: $topLogProbs, messages: $messages) {
                         success
                         output
                         parsedResult
@@ -971,11 +1309,22 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 promptId: (this.entity as AIPromptEntity).ID,
                 data: JSON.stringify(dataContext),
                 modelId: this.selectedModelId || undefined,
-                vendorId: undefined, // Use model's default vendor
+                vendorId: this.selectedVendorId || undefined,
                 configurationId: undefined, // Use default configuration
-                skipValidation: false,
+                skipValidation: this.skipValidation,
                 templateData: null, // Additional template context if needed
-                responseFormat: this.selectedResponseFormat || undefined
+                responseFormat: this.selectedResponseFormat?.value,
+                temperature: this.advancedParams.temperature ?? undefined,
+                topP: this.advancedParams.topP ?? undefined,
+                topK: this.advancedParams.topK ?? undefined,
+                minP: this.advancedParams.minP ?? undefined,
+                frequencyPenalty: this.advancedParams.frequencyPenalty ?? undefined,
+                presencePenalty: this.advancedParams.presencePenalty ?? undefined,
+                seed: this.advancedParams.seed ?? undefined,
+                stopSequences: this.advancedParams.stopSequences.length > 0 ? this.advancedParams.stopSequences : undefined,
+                includeLogProbs: this.advancedParams.includeLogProbs,
+                topLogProbs: this.advancedParams.includeLogProbs ? this.advancedParams.topLogProbs : undefined,
+                messages: messages.length > 0 ? JSON.stringify(messages) : undefined
             };
 
             const result = await dataProvider.ExecuteGQL(query, variables);
@@ -995,31 +1344,12 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 assistantMessage.content = executionResult.parsedResult || executionResult.output || 'No response generated';
                 assistantMessage.executionTime = executionResult.executionTimeMs;
                 
-                // Store raw result and metadata
-                assistantMessage.rawContent = executionResult.rawResult || executionResult.output || '';
+                // Store the complete execution result for JSON display
+                assistantMessage.rawContent = JSON.stringify(executionResult, null, 2);
                 
                 // Store execution metadata
-                if (executionResult.promptRunId || executionResult.tokensUsed) {
+                if (executionResult.promptRunId) {
                     assistantMessage.agentRunId = executionResult.promptRunId;
-                    // Store additional metadata in a structured format
-                    const metadata = {
-                        promptRunId: executionResult.promptRunId,
-                        tokensUsed: executionResult.tokensUsed,
-                        modelId: this.selectedModelId,
-                        validationResult: executionResult.validationResult
-                    };
-                    // If rawContent is JSON, try to merge metadata
-                    if (assistantMessage.rawContent) {
-                        try {
-                            const rawJson = JSON.parse(assistantMessage.rawContent);
-                            assistantMessage.rawContent = JSON.stringify({ ...rawJson, _metadata: metadata }, null, 2);
-                        } catch {
-                            // If not JSON, store metadata separately
-                            assistantMessage.rawContent = JSON.stringify(metadata, null, 2);
-                        }
-                    } else {
-                        assistantMessage.rawContent = JSON.stringify(metadata, null, 2);
-                    }
                 }
             } else {
                 assistantMessage.content = 'I encountered an error processing your request.';
@@ -1313,6 +1643,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             dataContext: this.buildDataContext(),
             templateData: this.mode === 'agent' ? this.buildTemplateData() : {},
             templateVariables: this.mode === 'prompt' ? this.buildTemplateVariables() : {},
+            advancedParams: this.mode === 'prompt' ? this.advancedParams : undefined,
+            selectedModelId: this.mode === 'prompt' ? this.selectedModelId : undefined,
+            selectedVendorId: this.mode === 'prompt' ? this.selectedVendorId : undefined,
+            skipValidation: this.mode === 'prompt' ? this.skipValidation : undefined,
             createdAt: new Date(),
             updatedAt: new Date()
         };
@@ -1389,6 +1723,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                     this.savedConversations[index].templateData = this.buildTemplateData();
                 } else {
                     this.savedConversations[index].templateVariables = this.buildTemplateVariables();
+                    this.savedConversations[index].advancedParams = this.advancedParams;
+                    this.savedConversations[index].selectedModelId = this.selectedModelId;
+                    this.savedConversations[index].selectedVendorId = this.selectedVendorId;
+                    this.savedConversations[index].skipValidation = this.skipValidation;
                 }
                 this.savedConversations[index].updatedAt = new Date();
                 
@@ -1462,6 +1800,36 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                           typeof value === 'number' ? 'number' :
                           typeof value === 'object' ? 'object' : 'string'
                 });
+            }
+            
+            // Restore advanced parameters
+            if (conversation.advancedParams) {
+                this.advancedParams = { ...this.advancedParams, ...conversation.advancedParams };
+                // Restore stop sequences text
+                this.stopSequencesText = this.advancedParams.stopSequences?.join(', ') || '';
+            }
+            
+            // Restore model and vendor selection
+            if (conversation.selectedModelId !== undefined) {
+                this.selectedModelId = conversation.selectedModelId;
+                // Trigger vendor loading if model is selected
+                if (this.selectedModelId) {
+                    this.onModelSelectionChange();
+                    // After vendors load, restore vendor selection
+                    setTimeout(() => {
+                        if (conversation.selectedVendorId !== undefined) {
+                            this.selectedVendorId = conversation.selectedVendorId;
+                        }
+                    }, 100);
+                }
+            }
+            if (conversation.selectedVendorId !== undefined && !this.selectedModelId) {
+                this.selectedVendorId = conversation.selectedVendorId;
+            }
+            
+            // Restore skip validation setting
+            if (conversation.skipValidation !== undefined) {
+                this.skipValidation = conversation.skipValidation;
             }
         }
         
@@ -1549,9 +1917,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             exportData.templateVariables = this.buildTemplateVariables();
             exportData.modelSettings = {
                 modelId: this.selectedModelId,
-                temperature: this.temperature,
-                maxTokens: this.maxTokens
+                vendorId: this.selectedVendorId,
+                maxTokens: this.maxTokens,
+                skipValidation: this.skipValidation
             };
+            exportData.advancedParams = this.advancedParams;
         }
 
         const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -1605,6 +1975,12 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                         }
                         
                         // Template data is already imported into agentVariables above
+                        
+                        // Import advanced parameters if in prompt mode
+                        if (this.mode === 'prompt' && data.advancedParams) {
+                            this.advancedParams = { ...this.advancedParams, ...data.advancedParams };
+                            this.stopSequencesText = this.advancedParams.stopSequences?.join(', ') || '';
+                        }
                         
                         this.currentConversationId = null;
                         this.scrollNeeded = true;
@@ -1715,6 +2091,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     public showRawJsonDialog(message: ConversationMessage) {
         if (message.rawContent) {
+            // Close any existing window
+            if (this.jsonWindowRef) {
+                this.jsonWindowRef.close();
+            }
+
             try {
                 // Try to parse and format the JSON
                 const parsed = JSON.parse(message.rawContent);
@@ -1732,7 +2113,39 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 // If not valid JSON, show as-is
                 this.currentJsonContent = message.rawContent;
             }
-            this.showJsonDialog = true;
+
+            // Import the JsonViewerWindowComponent dynamically
+            import('./json-viewer-window.component').then(({ JsonViewerWindowComponent }) => {
+                // Create the window using WindowService
+                // Calculate center position accounting for scroll
+                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+                const centerTop = Math.max(50, (window.innerHeight - 700) / 2 + scrollTop);
+                const centerLeft = Math.max(50, (window.innerWidth - 900) / 2 + scrollLeft);
+
+                this.jsonWindowRef = this.windowService.open({
+                    title: 'Raw JSON Response',
+                    content: JsonViewerWindowComponent,
+                    width: 900,
+                    height: 700,
+                    minWidth: 600,
+                    minHeight: 400,
+                    resizable: true,
+                    draggable: true,
+                    top: centerTop,
+                    left: centerLeft
+                });
+
+                // Pass the JSON content to the component
+                const windowContent = this.jsonWindowRef.content.instance;
+                windowContent.jsonContent = this.currentJsonContent;
+
+                // Handle window close
+                this.jsonWindowRef.result.subscribe((result: WindowCloseResult) => {
+                    this.jsonWindowRef = null;
+                    this.currentJsonContent = '';
+                });
+            });
         }
     }
     
@@ -2035,9 +2448,12 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      * Closes the JSON dialog
      */
     public closeJsonDialog() {
+        if (this.jsonWindowRef) {
+            this.jsonWindowRef.close();
+            this.jsonWindowRef = null;
+        }
         this.showJsonDialog = false;
         this.currentJsonContent = '';
-        this.currentJsonMessage = null;
     }
     
     /**
@@ -2229,5 +2645,27 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     public getEntityName(): string {
         if (!this.entity) return '';
         return this.entity.Name || 'Untitled';
+    }
+    
+    /**
+     * Updates stop sequences from the textarea input
+     */
+    public updateStopSequences() {
+        if (this.stopSequencesText.trim() === '') {
+            this.advancedParams.stopSequences = [];
+        } else {
+            // Split by comma and trim each sequence
+            this.advancedParams.stopSequences = this.stopSequencesText
+                .split(',')
+                .map(s => s.trim())
+                .filter(s => s.length > 0);
+        }
+    }
+    
+    /**
+     * Toggles the advanced parameters expansion panel
+     */
+    public toggleAdvancedParams() {
+        this.advancedParamsExpanded = !this.advancedParamsExpanded;
     }
 }

@@ -158,6 +158,7 @@ Abstract class for text generation models. Features:
 - Additional provider-specific settings management
 - Response format control (Any, Text, Markdown, JSON, ModelSpecific)
 - Support for reasoning budget tokens (for reasoning models)
+- Advanced sampling parameters (see [Parameter Reference](#parameter-reference) below)
 
 #### BaseEmbeddings
 Abstract class for text embedding models. Provides:
@@ -755,6 +756,51 @@ The package is configured with TypeScript strict mode and targets ES2022. See `t
 4. **Type errors with content blocks**
    - Use the provided type guards and interfaces
    - Ensure content format matches the expected structure
+
+## Parameter Reference
+
+### ChatParams Parameters
+
+The `ChatParams` class supports the following parameters for controlling LLM behavior:
+
+#### Core Parameters (from BaseParams)
+- `model` (required): The model name to use
+- `temperature`: Controls randomness (0.0 = deterministic, 2.0 = very random)
+- `maxOutputTokens`: Maximum tokens to generate in response
+- `responseFormat`: Output format - 'Any', 'Text', 'Markdown', 'JSON', or 'ModelSpecific'
+- `seed`: Random seed for reproducible outputs (provider-dependent)
+- `stopSequences`: Array of sequences that will stop generation
+
+#### Sampling Parameters
+- `topP`: Top-p (nucleus) sampling (0-1). Alternative to temperature, considers cumulative probability
+- `topK`: Top-k sampling. Limits to top K most likely tokens (provider-dependent)
+- `minP`: Minimum probability threshold (0-1). Filters out low-probability tokens
+
+#### Repetition Control
+- `frequencyPenalty`: Reduce token repetition based on frequency (-2.0 to 2.0)
+- `presencePenalty`: Encourage topic diversity (-2.0 to 2.0)
+
+#### Advanced Features
+- `streaming`: Enable streaming responses
+- `includeLogProbs`: Request log probabilities for tokens
+- `topLogProbs`: Number of top log probabilities to return (2-20)
+- `effortLevel`: Model-specific effort/reasoning level
+- `reasoningBudgetTokens`: Token budget for reasoning models
+- `enableCaching`: Enable provider caching features
+- `cancellationToken`: AbortSignal for cancelling operations
+
+### Provider Support
+
+Not all providers support all parameters. The framework will:
+- Pass supported parameters to the provider
+- Log warnings for unsupported parameters (visible in console)
+- Continue execution without failing
+
+Common support patterns:
+- **OpenAI**: Supports most parameters except topK, minP
+- **Anthropic**: Supports topP, topK, but not frequency/presence penalties
+- **Google/Gemini**: Supports topP, topK, temperature
+- **Others**: Vary by provider - check console warnings
 
 ## License
 

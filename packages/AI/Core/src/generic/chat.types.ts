@@ -164,6 +164,54 @@ export class ChatParams extends BaseParams  {
      * and return a cancelled result as gracefully as possible.
      */
     cancellationToken?: AbortSignal;
+
+    // Core sampling controls
+
+    /**
+     * Top-p (nucleus) sampling parameter (0-1).
+     * An alternative to temperature sampling that considers the smallest set of tokens
+     * whose cumulative probability exceeds the probability p.
+     * For example, 0.1 means only the tokens comprising the top 10% probability mass are considered.
+     * Generally, use either temperature OR top-p, not both.
+     */
+    topP?: number;
+
+    /**
+     * Number between -2.0 and 2.0. Positive values penalize new tokens based on their
+     * existing frequency in the text so far, decreasing the model's likelihood to
+     * repeat the same line verbatim.
+     */
+    frequencyPenalty?: number;
+
+    /**
+     * Number between -2.0 and 2.0. Positive values penalize new tokens based on whether
+     * they appear in the text so far, increasing the model's likelihood to talk about new topics.
+     */
+    presencePenalty?: number;
+
+    // Advanced sampling controls
+
+    /**
+     * Top-k sampling parameter.
+     * Limits the model to only sample from the top K most likely tokens at each step.
+     * For example, k=50 means the model will only consider the 50 most likely next tokens.
+     * Not supported by all providers (e.g., OpenAI doesn't support this).
+     */
+    topK?: number;
+
+    /**
+     * Minimum probability threshold for token sampling (0-1).
+     * Tokens with probability below this threshold are filtered out before sampling.
+     * This is a newer parameter not yet widely supported.
+     */
+    minP?: number;
+
+    /**
+     * Number of top log probabilities to return per token.
+     * Only used when includeLogProbs is true.
+     * Typically ranges from 2-20, depending on the provider.
+     */
+    topLogProbs?: number;
 }
 /**
  * Returns the first user message from the chat params

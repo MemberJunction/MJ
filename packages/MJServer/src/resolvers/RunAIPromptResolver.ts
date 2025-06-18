@@ -1,4 +1,4 @@
-import { Resolver, Mutation, Arg, Ctx, ObjectType, Field } from 'type-graphql';
+import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, Int } from 'type-graphql';
 import { UserPayload } from '../types.js';
 import { LogError, LogStatus, Metadata } from '@memberjunction/core';
 import { AIPromptEntity } from '@memberjunction/core-entities';
@@ -46,7 +46,19 @@ export class RunAIPromptResolver extends ResolverBase {
         @Arg('vendorId', { nullable: true }) vendorId?: string,
         @Arg('configurationId', { nullable: true }) configurationId?: string,
         @Arg('skipValidation', { nullable: true }) skipValidation?: boolean,
-        @Arg('templateData', { nullable: true }) templateData?: string
+        @Arg('templateData', { nullable: true }) templateData?: string,
+        @Arg('responseFormat', { nullable: true }) responseFormat?: string,
+        @Arg('temperature', { nullable: true }) temperature?: number,
+        @Arg('topP', { nullable: true }) topP?: number,
+        @Arg('topK', () => Int, { nullable: true }) topK?: number,
+        @Arg('minP', { nullable: true }) minP?: number,
+        @Arg('frequencyPenalty', { nullable: true }) frequencyPenalty?: number,
+        @Arg('presencePenalty', { nullable: true }) presencePenalty?: number,
+        @Arg('seed', () => Int, { nullable: true }) seed?: number,
+        @Arg('stopSequences', () => [String], { nullable: true }) stopSequences?: string[],
+        @Arg('includeLogProbs', { nullable: true }) includeLogProbs?: boolean,
+        @Arg('topLogProbs', () => Int, { nullable: true }) topLogProbs?: number,
+        @Arg('messages', { nullable: true }) messages?: string
     ): Promise<AIPromptRunResult> {
         const startTime = Date.now();
         
@@ -127,6 +139,44 @@ export class RunAIPromptResolver extends ResolverBase {
             promptParams.configurationId = configurationId;
             promptParams.contextUser = currentUser;
             promptParams.skipValidation = skipValidation || false;
+            
+            // Parse and set conversation messages if provided
+            if (messages) {
+                try {
+                    promptParams.conversationMessages = JSON.parse(messages);
+                } catch (parseError) {
+                    // If parsing fails, treat as a simple user message
+                    promptParams.conversationMessages = [{
+                        role: 'user',
+                        content: messages
+                    }];
+                }
+            }
+            
+            // If responseFormat is provided, override the prompt's default response format
+            if (responseFormat) {
+                // We'll need to override the prompt's response format setting
+                // This will be handled in the AIPromptRunner when it builds the ChatParams
+                promptEntity.ResponseFormat = responseFormat as any;
+            }
+
+            // Build additional parameters for chat-specific settings
+            const additionalParams: Record<string, any> = {};
+            if (temperature != null) additionalParams.temperature = temperature;
+            if (topP != null) additionalParams.topP = topP;
+            if (topK != null) additionalParams.topK = topK;
+            if (minP != null) additionalParams.minP = minP;
+            if (frequencyPenalty != null) additionalParams.frequencyPenalty = frequencyPenalty;
+            if (presencePenalty != null) additionalParams.presencePenalty = presencePenalty;
+            if (seed != null) additionalParams.seed = seed;
+            if (stopSequences != null) additionalParams.stopSequences = stopSequences;
+            if (includeLogProbs != null) additionalParams.includeLogProbs = includeLogProbs;
+            if (topLogProbs != null) additionalParams.topLogProbs = topLogProbs;
+
+            // Only set additionalParameters if we have any
+            if (Object.keys(additionalParams).length > 0) {
+                promptParams.additionalParameters = additionalParams;
+            }
 
             // Execute the prompt
             const result = await promptRunner.ExecutePrompt(promptParams);

@@ -371,6 +371,24 @@ npm run build
 npm start
 ```
 
+## Supported Parameters
+
+The Mistral provider supports the following LLM parameters:
+
+**Supported:**
+- `temperature` - Controls randomness in the output (0.0-1.0)
+- `maxOutputTokens` - Maximum number of tokens to generate
+- `topP` - Nucleus sampling threshold (0.0-1.0)
+- `topK` - Limits vocabulary to top K tokens
+- `seed` - For deterministic outputs (passed as `randomSeed` to Mistral API)
+- `stopSequences` - Array of sequences where the API will stop generating
+- `responseFormat` - Output format (Text or JSON)
+
+**Not Supported:**
+- `frequencyPenalty` - Not available in Mistral API
+- `presencePenalty` - Not available in Mistral API
+- `minP` - Not available in Mistral API
+
 ## License
 
 ISC

@@ -164,6 +164,36 @@ export class AnthropicLLM extends BaseLLM {
                 stream: true, // even for non-streaming, we set stream to true as Anthropic prefers it for any decent sized response
                 messages: this.formatMessagesWithCaching(nonSystemMsgs, params.enableCaching || true)
             };
+
+            // Add temperature if specified
+            if (params.temperature != null) {
+                createParams.temperature = params.temperature;
+            }
+
+            // Add supported parameters
+            if (params.topP != null) {
+                createParams.top_p = params.topP;
+            }
+            if (params.topK != null) {
+                createParams.top_k = params.topK;
+            }
+            if (params.stopSequences != null && params.stopSequences.length > 0) {
+                createParams.stop_sequences = params.stopSequences;
+            }
+
+            // Anthropic doesn't support these parameters - warn if provided
+            if (params.frequencyPenalty != null) {
+                console.warn('Anthropic provider does not support frequencyPenalty parameter, ignoring');
+            }
+            if (params.presencePenalty != null) {
+                console.warn('Anthropic provider does not support presencePenalty parameter, ignoring');
+            }
+            if (params.minP != null) {
+                console.warn('Anthropic provider does not support minP parameter, ignoring');
+            }
+            if (params.seed != null) {
+                console.warn('Anthropic provider does not support seed parameter, ignoring');
+            }
  
             // Add system message(s), if present
             if (systemMsgs) {
@@ -256,6 +286,36 @@ export class AnthropicLLM extends BaseLLM {
             max_tokens: params.maxOutputTokens,
             stream: true as const
         };
+
+        // Add temperature if specified
+        if (params.temperature != null) {
+            createParams.temperature = params.temperature;
+        }
+
+        // Add supported parameters
+        if (params.topP != null) {
+            createParams.top_p = params.topP;
+        }
+        if (params.topK != null) {
+            createParams.top_k = params.topK;
+        }
+        if (params.stopSequences != null && params.stopSequences.length > 0) {
+            createParams.stop_sequences = params.stopSequences;
+        }
+
+        // Log warnings for unsupported parameters (same as non-streaming)
+        if (params.frequencyPenalty != null) {
+            console.warn('Anthropic provider does not support frequencyPenalty parameter, ignoring');
+        }
+        if (params.presencePenalty != null) {
+            console.warn('Anthropic provider does not support presencePenalty parameter, ignoring');
+        }
+        if (params.minP != null) {
+            console.warn('Anthropic provider does not support minP parameter, ignoring');
+        }
+        if (params.seed != null) {
+            console.warn('Anthropic provider does not support seed parameter, ignoring');
+        }
         
         // Add system with caching if present
         if (systemMsg) {

@@ -248,6 +248,41 @@ export default class Watch extends Command {
       }
     }
     
+    // Check if the record is dirty before saving
+    let wasActuallyUpdated = false;
+    if (!isNew && entity.Dirty) {
+      // Record is dirty, get the changes
+      const changes = entity.GetChangesSinceLastSave();
+      const changeKeys = Object.keys(changes);
+      if (changeKeys.length > 0) {
+        wasActuallyUpdated = true;
+        
+        // Get primary key info for display
+        const entityInfo = this.syncEngine.getEntityInfo(entityConfig.entity);
+        const primaryKeyDisplay: string[] = [];
+        if (entityInfo) {
+          for (const pk of entityInfo.PrimaryKeys) {
+            primaryKeyDisplay.push(`${pk.Name}: ${entity.Get(pk.Name)}`);
+          }
+        }
+        
+        this.log(''); // Add newline before update output
+        this.log(`📝 Updating ${entityConfig.entity} record:`);
+        if (primaryKeyDisplay.length > 0) {
+          this.log(`   Primary Key: ${primaryKeyDisplay.join(', ')}`);
+        }
+        this.log(`   Changes:`);
+        for (const fieldName of changeKeys) {
+          const field = entity.GetFieldByName(fieldName);
+          const oldValue = field ? field.OldValue : undefined;
+          const newValue = (changes as any)[fieldName];
+          this.log(`     ${fieldName}: ${oldValue} → ${newValue}`);
+        }
+      }
+    } else if (isNew) {
+      wasActuallyUpdated = true;
+    }
+    
     // Save the record
     const saved = await entity.Save();
     if (!saved) {
@@ -262,7 +297,11 @@ export default class Watch extends Command {
       throw new Error(`Failed to save record: ${errors}`);
     }
     
-    this.log(`Successfully ${isNew ? 'created' : 'updated'} ${entityConfig.entity} record`);
+    if (wasActuallyUpdated) {
+      this.log(`Successfully ${isNew ? 'created' : 'updated'} ${entityConfig.entity} record`);
+    } else {
+      this.log(`No changes detected for ${entityConfig.entity} record - skipped update`);
+    }
     
     // Update the local file with new primary key if created
     if (isNew) {

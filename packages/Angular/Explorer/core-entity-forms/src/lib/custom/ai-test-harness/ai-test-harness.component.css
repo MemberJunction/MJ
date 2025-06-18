@@ -175,7 +175,8 @@
     font-size: 14px;
 }
 
-.model-selector {
+.model-selector,
+.vendor-selector {
     width: 100%;
 }
 
@@ -193,6 +194,23 @@
     font-size: 12px;
     color: #6c757d;
     font-style: italic;
+}
+
+/* Checkbox Styles */
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    font-weight: 600;
+    color: #495057;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.skip-validation-checkbox {
+    margin-right: 8px;
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
 }
 
 /* Header Styles */
@@ -810,6 +828,13 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+    position: relative;
+}
+
+.tab-header .custom-button.icon-only {
+    position: absolute;
+    top: 0;
+    right: 0;
 }
 
 .tab-header h4 {
@@ -1007,89 +1032,33 @@
     flex-direction: column;
 }
 
-/* JSON Dialog Styles */
-.json-dialog-window {
-    /* Center the dialog on screen */
-    ::ng-deep .k-window {
-        position: fixed !important;
-        top: 50% !important;
-        left: 50% !important;
-        transform: translate(-50%, -50%) !important;
-        margin: 0 !important;
-    }
-    
-    ::ng-deep .k-window-content {
-        padding: 0 !important;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-    }
-    
-    ::ng-deep .k-window-titlebar {
-        .k-window-title {
-            font-size: 16px;
-            font-weight: 500;
-        }
-        
-        .k-window-actions {
-            button {
-                background: transparent;
-                border: none;
-                color: #666;
-                padding: 8px 12px;
-                cursor: pointer;
-                border-radius: 4px;
-                transition: all 0.2s;
-                
-                &:hover {
-                    background: rgba(0, 0, 0, 0.08);
-                    color: #333;
-                }
-                
-                i {
-                    font-size: 14px;
-                }
-            }
-        }
-    }
+/* JSON Dialog Styles - removed since we're using WindowService */
+
+/* Advanced Parameters Styles */
+.advanced-params-panel {
+    margin-top: 24px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
 }
 
-.json-dialog-content {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    background: white;
-    overflow: hidden;
+.advanced-params-panel ::ng-deep .k-expander-title {
+    font-weight: 600;
+    color: #495057;
 }
 
-.json-dialog-header {
-    padding: 12px 16px;
-    background: #f8f9fa;
-    border-bottom: 1px solid #dee2e6;
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    flex-shrink: 0;
+.advanced-settings {
+    padding: 16px;
 }
 
-.json-dialog-body {
-    flex: 1;
-    overflow: auto;
-    padding: 0;
-    position: relative;
-    min-height: 0;
-    
-    mj-code-editor {
-        display: block;
-        height: 100%;
-        
-        ::ng-deep .cm-editor {
-            height: 100%;
-            
-            .cm-scroller {
-                overflow: auto !important;
-                font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
-            }
-        }
-    }
+.advanced-param-input {
+    width: 100%;
+}
+
+.advanced-param-switch {
+    margin-top: 8px;
+}
+
+/* Format selector dropdown */
+.format-selector {
+    width: 100%;
 }
