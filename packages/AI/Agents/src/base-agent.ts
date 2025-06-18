@@ -630,13 +630,22 @@ export class BaseAgent {
             
             // Execute all actions in parallel
             const actionPromises = actions.map(async (action) => {
-                // Find the action entity
-                const actionEntity = actionEngine.Actions.find(a => 
-                    a.ID === action.id || a.Name === action.name
-                );
+                // Validate action ID
+                if (!action.id) {
+                    throw new Error(`Action ID is required for action: ${action.name || 'unknown'}`);
+                }
+                
+                // Find the action entity by ID
+                const actionEntity = actionEngine.Actions.find(a => a.ID === action.id);
                 
                 if (!actionEntity) {
-                    throw new Error(`Action not found: ${action.name || action.id}`);
+                    // Check if the provided ID is a valid UUID
+                    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                    if (!uuidRegex.test(action.id)) {
+                        throw new Error(`${action.id} is not a valid UUID and must be a UUID representing the Action ID`);
+                    } else {
+                        throw new Error(`Action with ID ${action.id} not found in the action table`);
+                    }
                 }
                 
                 // Convert params object to ActionParam array
@@ -707,13 +716,22 @@ export class BaseAgent {
         try {
             const engine = AIEngine.Instance;
             
-            // Find the sub-agent
-            const subAgent = engine.Agents.find(a => 
-                a.ID === subAgentRequest.id || a.Name === subAgentRequest.name
-            );
+            // Validate subAgentID
+            if (!subAgentRequest.id) {
+                throw new Error('Sub-agent ID is required');
+            }
+            
+            // Find the sub-agent by ID
+            const subAgent = engine.Agents.find(a => a.ID === subAgentRequest.id);
             
             if (!subAgent) {
-                throw new Error(`Sub-agent not found: ${subAgentRequest.name || subAgentRequest.id}`);
+                // Check if the provided ID is a valid UUID
+                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                if (!uuidRegex.test(subAgentRequest.id)) {
+                    throw new Error(`${subAgentRequest.id} is not a valid UUID and must be a UUID representing the Agent ID`);
+                } else {
+                    throw new Error(`Sub-agent with ID ${subAgentRequest.id} not found in the agent table`);
+                }
             }
             
             // Create a new AgentRunner instance
