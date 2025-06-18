@@ -271,8 +271,21 @@ export default class Push extends Command {
         // Show per-directory summary
         const dirName = path.relative(process.cwd(), entityDir) || '.';
         const dirTotal = result.created + result.updated + result.unchanged;
-        if (dirTotal > 0) {
-          this.log(`  ${dirName}: ${dirTotal} records (${result.created} created, ${result.updated} updated, ${result.unchanged} unchanged)`);
+        if (dirTotal > 0 || result.errors > 0) {
+          this.log(`\n📁 ${dirName}:`);
+          this.log(`   Total processed: ${dirTotal} unique records`);
+          if (result.created > 0) {
+            this.log(`   ✓ Created: ${result.created}`);
+          }
+          if (result.updated > 0) {
+            this.log(`   ✓ Updated: ${result.updated}`);
+          }
+          if (result.unchanged > 0) {
+            this.log(`   - Unchanged: ${result.unchanged}`);
+          }
+          if (result.errors > 0) {
+            this.log(`   ✗ Errors: ${result.errors}`);
+          }
         }
         
         totalCreated += result.created;
@@ -557,7 +570,6 @@ export default class Push extends Command {
     const spinner = ora();
     spinner.start('Processing records');
     
-    let totalRecords = 0;
     
     for (const file of jsonFiles) {
       try {
@@ -577,7 +589,6 @@ export default class Push extends Command {
         // Check if the file contains a single record or an array of records
         const isArray = Array.isArray(processedContent);
         const records: RecordData[] = isArray ? processedContent : [processedContent];
-        totalRecords += records.length;
         
         // Build and process defaults (including lookups)
         const defaults = await syncEngine.buildDefaults(filePath, entityConfig);
@@ -619,10 +630,15 @@ export default class Push extends Command {
               result.created += pushResult.relatedStats.created;
               result.updated += pushResult.relatedStats.updated;
               result.unchanged += pushResult.relatedStats.unchanged;
+              
+              // Debug logging for related entities
+              if (flags.verbose && pushResult.relatedStats.unchanged > 0) {
+                this.log(`   Related entities: ${pushResult.relatedStats.unchanged} unchanged`);
+              }
             }
           }
           
-          spinner.text = `Processing records (${result.created + result.updated + result.unchanged + result.errors}/${totalRecords})`;
+          spinner.text = `Processing records (${result.created + result.updated + result.unchanged + result.errors} processed)`;
         }
         
         // Write back the entire file if it's an array
@@ -640,7 +656,7 @@ export default class Push extends Command {
     }
     
     if (flags.verbose) {
-      spinner.succeed(`Processed ${totalRecords} records from ${jsonFiles.length} files`);
+      spinner.succeed(`Processed ${result.created + result.updated + result.unchanged} records from ${jsonFiles.length} files`);
     } else {
       spinner.stop();
     }
