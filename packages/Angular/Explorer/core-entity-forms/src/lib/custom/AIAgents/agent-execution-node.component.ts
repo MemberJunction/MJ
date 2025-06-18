@@ -48,13 +48,13 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
                             <i class="fa-solid fa-shield-halved"></i>
                         }
                         @case ('prompt') {
-                            <i class="fa-solid fa-comment-dots"></i>
+                            <i class="fa-solid fa-brain"></i>
                         }
                         @case ('action') {
                             <i class="fa-solid fa-bolt"></i>
                         }
                         @case ('sub-agent') {
-                            <i class="fa-solid fa-robot"></i>
+                            <i class="fa-solid fa-sitemap"></i>
                         }
                         @case ('decision') {
                             <i class="fa-solid fa-code-branch"></i>

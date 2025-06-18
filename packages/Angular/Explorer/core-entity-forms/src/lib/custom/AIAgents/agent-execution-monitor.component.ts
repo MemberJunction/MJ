@@ -808,7 +808,8 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         // Store reference
         this.nodeComponentMap.set(node.id, componentRef);
         
-        // Trigger change detection for the new component
+        // Force immediate change detection to ensure styles are applied
+        componentRef.changeDetectorRef.markForCheck();
         componentRef.changeDetectorRef.detectChanges();
         
         return componentRef;
@@ -1512,13 +1513,24 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                     existingNode.expanded = currentExpanded;
                     existingNode.detailsExpanded = currentDetailsExpanded;
                     
-                    // Update the component's node reference and trigger change detection
-                    componentRef.instance.node = { ...existingNode };
+                    // Update the component's node reference
+                    // Important: We need to update the node object directly to ensure
+                    // Angular detects changes to style bindings that depend on node.depth
+                    const nodeInstance = componentRef.instance.node;
+                    Object.assign(nodeInstance, existingNode);
+                    
+                    // Mark for check to ensure Angular updates the view
+                    componentRef.changeDetectorRef.markForCheck();
                     componentRef.changeDetectorRef.detectChanges();
                 }
             } else {
                 // Create new node
                 const newNode = this.createNodeFromLiveStep(step);
+                
+                // Debug: Log if depth is missing
+                if (newNode.depth === 0 && step.depth !== 0) {
+                    console.warn('Node depth was reset to 0 for step:', step);
+                }
                 
                 if (step.depth === 0) {
                     // Add to tree and create component
@@ -1536,7 +1548,10 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                         // Update parent component to show new child
                         const parentComponentRef = this.nodeComponentMap.get(parentNode.id);
                         if (parentComponentRef) {
-                            parentComponentRef.instance.node = { ...parentNode };
+                            // Update the parent node object directly
+                            const parentNodeInstance = parentComponentRef.instance.node;
+                            Object.assign(parentNodeInstance, parentNode);
+                            parentComponentRef.changeDetectorRef.markForCheck();
                             parentComponentRef.changeDetectorRef.detectChanges();
                         }
                     } else {
