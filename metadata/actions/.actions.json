@@ -2761,5 +2761,432 @@
       "lastModified": "2025-06-18T22:23:20.666Z",
       "checksum": "e0053d7b0d9c11308ecbf4e265b8b1fcc00e5dd9456c47f4d016e14711aaae97"
     }
+  },
+  {
+    "fields": {
+      "Name": "Create Record",
+      "Description": "Generic action for creating new entity records in the database. Accepts entity name and field values as parameters.",
+      "DriverClass": "CreateRecordAction",
+      "DriverPath": "@memberjunction/core-actions",
+      "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
+      "IsCoreAction": true,
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The name of the entity to create",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Fields",
+            "Type": "Input",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Object containing field names and values to set on the new record",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PrimaryKey",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Object containing the primary key field(s) and their value(s) for the created record.",
+            "IsRequired": false
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Record created successfully"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to create record"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ENTITY_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Entity not found in metadata"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "Validation error occurred"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PERMISSION_DENIED",
+            "IsSuccess": false,
+            "Description": "Permission denied to create record"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Record",
+      "Description": "Generic action for retrieving entity records from the database. Accepts entity name and primary key values as parameters.",
+      "DriverClass": "GetRecordAction",
+      "DriverPath": "@memberjunction/core-actions",
+      "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
+      "IsCoreAction": true,
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The name of the entity to retrieve",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PrimaryKey",
+            "Type": "Input",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Object containing primary key field(s) and value(s)",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Record",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "The retrieved entity record data",
+            "IsRequired": false
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Record retrieved successfully"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to retrieve record"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ENTITY_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Entity not found in metadata"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "RECORD_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Record not found"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "Validation error occurred"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PERMISSION_DENIED",
+            "IsSuccess": false,
+            "Description": "Permission denied to access record"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Update Record",
+      "Description": "Generic action for updating existing entity records in the database. Accepts entity name, primary key, and field values as parameters.",
+      "DriverClass": "UpdateRecordAction",
+      "DriverPath": "@memberjunction/core-actions",
+      "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
+      "IsCoreAction": true,
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The name of the entity to update",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PrimaryKey",
+            "Type": "Input",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Object containing primary key field(s) and value(s)",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Fields",
+            "Type": "Input",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Object containing field names and values to update",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "UpdatedFields",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Object containing the fields that were actually changed with old and new values",
+            "IsRequired": false
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Record updated successfully"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to update record"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ENTITY_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Entity not found in metadata"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "RECORD_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Record not found"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "Validation error occurred"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PERMISSION_DENIED",
+            "IsSuccess": false,
+            "Description": "Permission denied to update record"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_CHANGES",
+            "IsSuccess": true,
+            "Description": "No fields were modified"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CONCURRENT_UPDATE",
+            "IsSuccess": false,
+            "Description": "Record was modified by another user"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Delete Record",
+      "Description": "Generic action for deleting entity records from the database. Accepts entity name and primary key values as parameters.",
+      "DriverClass": "DeleteRecordAction",
+      "DriverPath": "@memberjunction/core-actions",
+      "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
+      "IsCoreAction": true,
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The name of the entity to delete",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PrimaryKey",
+            "Type": "Input",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Object containing primary key field(s) and value(s)",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DeletedRecord",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "The data of the deleted record",
+            "IsRequired": false
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Record deleted successfully"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to delete record"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ENTITY_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Entity not found in metadata"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "RECORD_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Record not found"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "Validation error occurred"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PERMISSION_DENIED",
+            "IsSuccess": false,
+            "Description": "Permission denied to delete record"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CASCADE_CONSTRAINT",
+            "IsSuccess": false,
+            "Description": "Cannot delete record: Cascade delete is not allowed"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "REFERENCE_CONSTRAINT",
+            "IsSuccess": false,
+            "Description": "Cannot delete record: It is referenced by other records"
+          }
+        }
+      ]
+    }
   }
 ]

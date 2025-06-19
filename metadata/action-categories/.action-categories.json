@@ -1,0 +1,18 @@
+[
+  {
+    "fields": {
+      "Name": "System",
+      "Description": "Core system actions and utilities",
+      "ParentID": null,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Data",
+      "Description": "Data management actions for CRUD operations",
+      "ParentID": "@lookup:Action Categories.Name=System&ParentID=null",
+      "Status": "Active"
+    }
+  }
+]

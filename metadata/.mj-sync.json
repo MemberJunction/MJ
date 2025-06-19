@@ -1,6 +1,7 @@
 {
   "version": "1.0.0",
   "directoryOrder": [
+    "action-categories",
     "actions",
     "prompt-categories",
     "prompts",
