@@ -2,6 +2,7 @@
   "version": "1.0.0",
   "directoryOrder": [
     "actions",
+    "prompt-categories",
     "prompts",
     "agent-types",
     "agents"

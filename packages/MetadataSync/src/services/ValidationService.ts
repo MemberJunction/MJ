@@ -440,7 +440,7 @@ export class ValidationService {
   private parseReference(reference: string): ParsedReference | null {
     const patterns: [ReferenceType, RegExp][] = [
       ['@file:', /^@file:(.+)$/],
-      ['@lookup:', /^@lookup:([^.]+)\.([^=]+)=(.+)$/],
+      ['@lookup:', /^@lookup:([^.]+)\.(.+)$/],
       ['@template:', /^@template:(.+)$/],
       ['@parent:', /^@parent:(.+)$/],
       ['@root:', /^@root:(.+)$/],
@@ -451,24 +451,49 @@ export class ValidationService {
       const match = reference.match(pattern);
       if (match) {
         if (type === '@lookup:') {
-          const [, entity, field, valueAndOptions] = match;
-          const [value, ...options] = valueAndOptions.split('?');
-          const createIfMissing = options.includes('create');
+          const [, entity, remaining] = match;
+          
+          // Check if this has ?create syntax
+          const hasCreate = remaining.includes('?create');
+          const lookupPart = hasCreate ? remaining.split('?')[0] : remaining;
+          
+          // Parse all lookup fields (can be multiple with &)
+          const lookupPairs = lookupPart.split('&');
+          const fields: Array<{field: string, value: string}> = [];
+          
+          for (const pair of lookupPairs) {
+            const fieldMatch = pair.match(/^(.+?)=(.+)$/);
+            if (fieldMatch) {
+              const [, field, value] = fieldMatch;
+              fields.push({ field: field.trim(), value: value.trim() });
+            }
+          }
+          
+          // For backward compatibility, use the first field as primary
+          const primaryField = fields.length > 0 ? fields[0] : { field: '', value: '' };
+          
+          // Parse additional fields for creation if ?create is present
           const additionalFields: Record<string, any> = {};
-
-          for (const option of options) {
-            if (option.includes('&')) {
-              const pairs = option.split('&');
-              for (const pair of pairs) {
-                const [key, val] = pair.split('=');
-                if (key && val && key !== 'create') {
-                  additionalFields[key] = val;
-                }
+          if (hasCreate && remaining.includes('?create&')) {
+            const createPart = remaining.split('?create&')[1];
+            const pairs = createPart.split('&');
+            for (const pair of pairs) {
+              const [key, val] = pair.split('=');
+              if (key && val) {
+                additionalFields[key] = decodeURIComponent(val);
               }
             }
           }
 
-          return { type, value, entity, field, createIfMissing, additionalFields };
+          return { 
+            type, 
+            value: primaryField.value, 
+            entity, 
+            field: primaryField.field,
+            fields, // Include all fields for validation
+            createIfMissing: hasCreate, 
+            additionalFields 
+          };
         }
         return { type, value: match[1] };
       }
@@ -516,17 +541,36 @@ export class ValidationService {
       return;
     }
 
-    const lookupField = lookupEntity.Fields.find((f: any) => f.Name === parsed.field);
-    if (!lookupField) {
-      this.addError({
-        type: 'reference',
-        severity: 'error',
-        entity: entityName,
-        field: fieldName,
-        file: sourceFile,
-        message: `Lookup field "${parsed.field}" not found on entity "${parsed.entity}"`,
-        suggestion: `Available fields: ${lookupEntity.Fields.map((f: any) => f.Name).join(', ')}`,
-      });
+    // For multi-field lookups, validate all fields
+    if (parsed.fields && parsed.fields.length > 0) {
+      for (const {field} of parsed.fields) {
+        const lookupField = lookupEntity.Fields.find((f: any) => f.Name === field);
+        if (!lookupField) {
+          this.addError({
+            type: 'reference',
+            severity: 'error',
+            entity: entityName,
+            field: fieldName,
+            file: sourceFile,
+            message: `Lookup field "${field}" not found on entity "${parsed.entity}"`,
+            suggestion: `Available fields: ${lookupEntity.Fields.map((f: any) => f.Name).join(', ')}`,
+          });
+        }
+      }
+    } else if (parsed.field) {
+      // Fallback for single field lookup (backward compatibility)
+      const lookupField = lookupEntity.Fields.find((f: any) => f.Name === parsed.field);
+      if (!lookupField) {
+        this.addError({
+          type: 'reference',
+          severity: 'error',
+          entity: entityName,
+          field: fieldName,
+          file: sourceFile,
+          message: `Lookup field "${parsed.field}" not found on entity "${parsed.entity}"`,
+          suggestion: `Available fields: ${lookupEntity.Fields.map((f: any) => f.Name).join(', ')}`,
+        });
+      }
     }
 
     // Track dependency

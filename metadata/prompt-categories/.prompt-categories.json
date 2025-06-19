@@ -1,0 +1,13 @@
+[
+  {
+    "Name": "MJ: System",
+    "Description": "System-level prompts for MemberJunction framework functionality",
+    "Status": "Active"
+  },
+  {
+    "Name": "Actions",
+    "ParentID": "@lookup:AI Prompt Categories.Name=MJ: System",
+    "Description": "Prompts for generating and managing MemberJunction Actions",
+    "Status": "Active"
+  }
+]

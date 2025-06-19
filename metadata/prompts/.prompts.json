@@ -412,5 +412,39 @@
       "lastModified": "2025-06-18T22:23:21.026Z",
       "checksum": "034fc33219f7d292975ae9bfedfc4683821055e565de017d69a3200077b06022"
     }
+  },
+  {
+    "fields": {
+      "Name": "Generate Action Code",
+      "Description": "Generates TypeScript code for MemberJunction Actions based on user requirements. Supports both base actions and child actions that orchestrate parent actions.",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/action-generation.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 3,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Actions&Parent=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 4.1",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1
+          } 
+        }
+      ]
+    } 
   }
 ]

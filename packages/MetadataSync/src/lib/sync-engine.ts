@@ -149,7 +149,7 @@ export class SyncEngine {
       const lookupStr = value.substring(8);
       
       // Parse lookup with optional create syntax
-      // Format: EntityName.FieldName=Value?create&OtherField=Value
+      // Format: EntityName.Field1=Value1&Field2=Value2?create&OtherField=Value
       const entityMatch = lookupStr.match(/^([^.]+)\./);
       if (!entityMatch) {
         throw new Error(`Invalid lookup format: ${value}`);
@@ -162,13 +162,22 @@ export class SyncEngine {
       const hasCreate = remaining.includes('?create');
       const lookupPart = hasCreate ? remaining.split('?')[0] : remaining;
       
-      // Parse the main lookup field
-      const fieldMatch = lookupPart.match(/^(.+?)=(.+)$/);
-      if (!fieldMatch) {
-        throw new Error(`Invalid lookup format: ${value}`);
+      // Parse all lookup fields (can be multiple with &)
+      const lookupFields: Array<{fieldName: string, fieldValue: string}> = [];
+      const lookupPairs = lookupPart.split('&');
+      
+      for (const pair of lookupPairs) {
+        const fieldMatch = pair.match(/^(.+?)=(.+)$/);
+        if (!fieldMatch) {
+          throw new Error(`Invalid lookup field format: ${pair} in ${value}`);
+        }
+        const [, fieldName, fieldValue] = fieldMatch;
+        lookupFields.push({ fieldName: fieldName.trim(), fieldValue: fieldValue.trim() });
       }
       
-      const [, fieldName, fieldValue] = fieldMatch;
+      if (lookupFields.length === 0) {
+        throw new Error(`No lookup fields specified: ${value}`);
+      }
       
       // Parse additional fields for creation if ?create is present
       let createFields: Record<string, any> = {};
@@ -183,7 +192,7 @@ export class SyncEngine {
         }
       }
       
-      return await this.resolveLookup(entityName, fieldName, fieldValue, hasCreate, createFields);
+      return await this.resolveLookup(entityName, lookupFields, hasCreate, createFields);
     }
     
     // Check for @env: reference
@@ -226,8 +235,7 @@ export class SyncEngine {
    */
   async resolveLookup(
     entityName: string, 
-    fieldName: string, 
-    fieldValue: string,
+    lookupFields: Array<{fieldName: string, fieldValue: string}>,
     autoCreate: boolean = false,
     createFields: Record<string, any> = {}
   ): Promise<string> {
@@ -239,11 +247,21 @@ export class SyncEngine {
       throw new Error(`Entity not found: ${entityName}`);
     }
     
-    const field = entityInfo.Fields.find(f => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase());
-    const quotes = field?.NeedsQuotes ? "'" : '';
+    // Build compound filter for all lookup fields
+    const filterParts: string[] = [];
+    for (const {fieldName, fieldValue} of lookupFields) {
+      const field = entityInfo.Fields.find(f => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase());
+      if (!field) {
+        throw new Error(`Field '${fieldName}' not found in entity '${entityName}'`);
+      }
+      const quotes = field.NeedsQuotes ? "'" : '';
+      filterParts.push(`${fieldName} = ${quotes}${fieldValue.replace(/'/g, "''")}${quotes}`);
+    }
+    
+    const extraFilter = filterParts.join(' AND ');
     const result = await rv.RunView({
       EntityName: entityName,
-      ExtraFilter: `${fieldName} = ${quotes}${fieldValue.replace(/'/g, "''")}${quotes}`,
+      ExtraFilter: extraFilter,
       MaxRows: 1
     }, this.contextUser);
     
@@ -276,9 +294,11 @@ export class SyncEngine {
         }
       }
       
-      // Set the lookup field
-      if (fieldName in newEntity) {
-        (newEntity as any)[fieldName] = fieldValue;
+      // Set all lookup fields
+      for (const {fieldName, fieldValue} of lookupFields) {
+        if (fieldName in newEntity) {
+          (newEntity as any)[fieldName] = fieldValue;
+        }
       }
       
       // Set any additional fields provided
@@ -289,7 +309,8 @@ export class SyncEngine {
       }
       
       // Save the new record (new records are always dirty)
-      console.log(`📝 Auto-creating ${entityName} record where ${fieldName}='${fieldValue}'`);
+      const filterDesc = lookupFields.map(({fieldName, fieldValue}) => `${fieldName}='${fieldValue}'`).join(' AND ');
+      console.log(`📝 Auto-creating ${entityName} record where ${filterDesc}`);
       const saved = await newEntity.Save();
       if (!saved) {
         const message = newEntity.LatestResult?.Message;
@@ -311,7 +332,8 @@ export class SyncEngine {
       }
     }
     
-    throw new Error(`Lookup failed: No record found in '${entityName}' where ${fieldName}='${fieldValue}'`);
+    const filterDesc = lookupFields.map(({fieldName, fieldValue}) => `${fieldName}='${fieldValue}'`).join(' AND ');
+    throw new Error(`Lookup failed: No record found in '${entityName}' where ${filterDesc}`);
   }
   
   /**

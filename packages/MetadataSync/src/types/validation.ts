@@ -164,6 +164,7 @@ export interface ParsedReference {
     value: string;
     entity?: string;
     field?: string;
+    fields?: Array<{field: string, value: string}>; // For multi-field lookups
     createIfMissing?: boolean;
     additionalFields?: Record<string, any>;
 }

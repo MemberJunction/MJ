@@ -718,13 +718,26 @@ Examples:
 ### @lookup: References (ENHANCED)
 Enable entity relationships using human-readable values:
 - Basic syntax: `@lookup:EntityName.FieldName=Value`
+- Multi-field syntax: `@lookup:EntityName.Field1=Value1&Field2=Value2`
 - Auto-create syntax: `@lookup:EntityName.FieldName=Value?create`
 - With additional fields: `@lookup:EntityName.FieldName=Value?create&Field2=Value2`
 
 Examples:
-- `@lookup:AI Prompt Types.Name=Chat` - Fails if not found
+- `@lookup:AI Prompt Types.Name=Chat` - Single field lookup, fails if not found
+- `@lookup:Users.Email=john@example.com&Department=Sales` - Multi-field lookup for precise matching
 - `@lookup:AI Prompt Categories.Name=Examples?create` - Creates if missing
 - `@lookup:AI Prompt Categories.Name=Examples?create&Description=Example prompts` - Creates with description
+
+#### Multi-Field Lookups (NEW)
+When you need to match records based on multiple criteria, use the multi-field syntax:
+```json
+{
+  "CategoryID": "@lookup:AI Prompt Categories.Name=Actions&Status=Active",
+  "ManagerID": "@lookup:Users.Email=manager@company.com&Department=Engineering&Status=Active"
+}
+```
+
+This ensures you get the exact record you want when multiple records might have the same value in a single field.
 
 ### @parent: References (NEW)
 Reference fields from the immediate parent entity in embedded collections:
