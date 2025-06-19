@@ -106,6 +106,146 @@ const params: RunActionParams = {
 const result = await engine.RunAction(params);
 ```
 
+### Using Context in Actions (New in v2.51.0)
+
+Actions now support type-safe context propagation for runtime-specific information:
+
+```typescript
+import { BaseAction } from '@memberjunction/actions';
+import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { RegisterClass } from '@memberjunction/global';
+
+// Define your context type
+interface APIContext {
+    apiEndpoint: string;
+    apiKey: string;
+    timeout: number;
+    retryCount: number;
+}
+
+// Note: BaseAction does not have generics - context is typed through params
+@RegisterClass(BaseAction, 'APICallAction')
+export class APICallAction extends BaseAction {
+    protected async InternalRunAction(params: RunActionParams<APIContext>): Promise<ActionResultSimple> {
+        // Access typed context through params
+        const endpoint = params.Context?.apiEndpoint;
+        const apiKey = params.Context?.apiKey;
+        const timeout = params.Context?.timeout || 30000;
+        
+        if (!endpoint || !apiKey) {
+            return {
+                Success: false,
+                ResultCode: 'MISSING_CONTEXT',
+                Message: 'API endpoint and key are required in context'
+            };
+        }
+        
+        // Use context for API call
+        const requestData = params.Params.find(p => p.Name === 'RequestData')?.Value;
+        
+        try {
+            const response = await this.callAPI(endpoint, apiKey, requestData, timeout);
+            
+            // Set output parameter
+            const outputParam = params.Params.find(p => p.Name === 'ResponseData');
+            if (outputParam) {
+                outputParam.Value = response;
+            }
+            
+            return {
+                Success: true,
+                ResultCode: 'SUCCESS',
+                Message: 'API call completed successfully',
+                Params: params.Params
+            };
+        } catch (error) {
+            return {
+                Success: false,
+                ResultCode: 'API_ERROR',
+                Message: error.message
+            };
+        }
+    }
+    
+    private async callAPI(endpoint: string, apiKey: string, data: any, timeout: number): Promise<any> {
+        // Implementation details
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        
+        try {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data),
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            return await response.json();
+        } catch (error) {
+            clearTimeout(timeoutId);
+            throw error;
+        }
+    }
+}
+```
+
+#### Running Actions with Context
+
+```typescript
+import { ActionEngineServer } from '@memberjunction/actions';
+import { RunActionParams } from '@memberjunction/actions-base';
+
+// Define context type
+interface APIContext {
+    apiEndpoint: string;
+    apiKey: string;
+    timeout: number;
+    retryCount: number;
+}
+
+// Configure parameters with context
+const params = new RunActionParams<APIContext>();
+params.Action = apiCallAction;
+params.ContextUser = currentUser;
+params.Params = [
+    { Name: 'RequestData', Value: { orderId: '12345' }, Type: 'Input' },
+    { Name: 'ResponseData', Value: null, Type: 'Output' }
+];
+
+// Set runtime context
+params.Context = {
+    apiEndpoint: process.env.API_ENDPOINT,
+    apiKey: process.env.API_KEY,
+    timeout: 10000,
+    retryCount: 3
+};
+
+// Execute with typed context
+const result = await ActionEngineServer.Instance.RunAction(params);
+```
+
+#### Context vs Parameters
+
+**Use Context for:**
+- Environment-specific configuration (API endpoints, service URLs)
+- Runtime credentials (API keys, tokens)
+- Session information (user preferences, correlation IDs)
+- Feature flags and toggles
+- Timeout and retry policies
+
+**Use Parameters for:**
+- Business data (customer ID, order details)
+- Action-specific inputs (email content, calculation values)
+- Data that should be logged and audited
+- Values that need to be stored in the database
+- Output values that other actions may depend on
+
+The context is particularly useful when actions are executed from AI agents, as it allows the agent to pass runtime information down through the entire execution hierarchy without modifying the action's formal parameter structure.
+
 ### Entity Actions
 
 Entity Actions are triggered automatically during entity lifecycle events. To work with entity actions, use the `EntityActionEngineServer`:
@@ -165,7 +305,7 @@ The main engine for executing actions.
 
 #### BaseAction
 
-Abstract base class for all actions.
+Abstract base class for all actions. Note that BaseAction does not use generics - context typing is achieved through the RunActionParams parameter.
 
 **Methods:**
 - `Run(params: RunActionParams): Promise<ActionResultSimple>` - Public method called by the engine
