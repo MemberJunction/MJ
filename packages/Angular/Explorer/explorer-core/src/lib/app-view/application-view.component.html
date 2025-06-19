@@ -1,19 +1,18 @@
-<!-- application-view.component.html -->
+<!-- Enhanced Application View Component -->
 <div class="mj-page-container" *ngIf="this.app">
-    <!-- Header Section -->
-     <div class="mj-breadcrumb">
+    <!-- Enhanced Breadcrumb Navigation -->
+     <nav class="mj-breadcrumb">
         <span class="mj-breadcrumb-item" (click)="GoHome($event)">
-            <i class="fa-solid fa-house"></i> Home
+            <i class="fas fa-home"></i>
+            Home
         </span>
-        <span class="mj-breadcrumb-separator">
-            <i class="fa-solid fa-chevron-right"></i>
-        </span>
+        <i class="fas fa-chevron-right mj-breadcrumb-separator"></i>
         <span class="mj-breadcrumb-item" (click)="GoToApps($event)">Applications</span>
-        <span class="mj-breadcrumb-separator">
-            <i class="fa-solid fa-chevron-right"></i>
-        </span>
+        <i class="fas fa-chevron-right mj-breadcrumb-separator"></i>
         <span class="mj-breadcrumb-current">{{this.app.Name}}</span>
-    </div>
+    </nav>
+
+    <!-- Enhanced Header Section -->
     <div class="mj-header"> 
         <div class="mj-header-title">
             <div class="mj-header-icon" *ngIf="this.app.Icon && this.app.Icon.length > 0">
@@ -21,16 +20,26 @@
             </div>
             <div>
                 <h1>{{this.app.Name}}</h1>
+                <div class="mj-header-subtitle" *ngIf="this.app.Description">
+                    <i class="fas fa-info-circle"></i>
+                    {{this.app.Description}}
+                </div>
             </div>
         </div>
         <div class="mj-header-actions">
-            <button class="mj-btn-icon-only" (click)="ShowAppEntitySelectionDialog()">
-                <i class="fa-solid fa-gear"></i>
-            </button>
+            <kendo-button 
+                fillMode="flat"
+                rounded="full"
+                size="large"
+                themeColor="primary"
+                [title]="'Configure Entities'"
+                (click)="ShowAppEntitySelectionDialog()">
+                <i class="fas fa-cog"></i>
+            </kendo-button>
         </div>
     </div>
 
-    <!-- Entity Selection Buttons -->
+    <!-- Enhanced Entity Selection Bar -->
     <div class="mj-entity-selection" *ngIf="SelectedAppEntities.length > 0">
         <div class="mj-entity-buttons">
             <button
@@ -38,6 +47,7 @@
                 class="mj-entity-btn"
                 [class.mj-entity-btn-active]="IsEntitySelected(item)"
                 (click)="onAppEntityButtonClicked(item)"
+                [title]="item.Description || item.Name"
             >
                 <i *ngIf="item.Icon && item.Icon.length > 0" 
                    [ngClass]="item.Icon" 
@@ -47,25 +57,33 @@
         </div>
     </div>
 
-    <!-- Empty State -->
+    <!-- Enhanced Empty State -->
     <div class="mj-empty-state" *ngIf="SelectedAppEntities.length === 0 && !showLoader">
-        <div class="mj-empty-icon">
-            <i class="fa-solid fa-gear"></i>
-        </div>
+        <i class="fas fa-database mj-empty-icon"></i>
         <h3>No Entities Selected</h3>
-        <p>Click the settings button to select entities for this application</p>
-        <button class="mj-btn-primary" (click)="ShowAppEntitySelectionDialog()">
-            <i class="fa-solid fa-gear"></i>
-            Select Entities
-        </button>
+        <p>Configure which entities you'd like to work with in this application</p>
+        <kendo-button 
+            themeColor="primary"
+            rounded="medium"
+            size="large"
+            (click)="ShowAppEntitySelectionDialog()">
+            <span class="button-content">
+                <i class="fas fa-cog"></i>
+                Configure Entities
+            </span>
+        </kendo-button>
     </div>
 
-    <!-- Loading State -->
-    <div class="mj-loading" *ngIf="showLoader">
-        <kendo-loader></kendo-loader>
+    <!-- Enhanced Loading State -->
+    <div class="mj-loading mj-loading-overlay" *ngIf="showLoader">
+        <kendo-loader 
+            type="converging-spinner" 
+            themeColor="primary" 
+            size="large">
+        </kendo-loader>
     </div>
 
-    <!-- Main Content -->
+    <!-- Main Content Area -->
     <div class="mj-main-content" *ngIf="SelectedAppEntities.length > 0 && !showLoader">
         <mj-resource-browser
             ResourceTypeName="User Views"

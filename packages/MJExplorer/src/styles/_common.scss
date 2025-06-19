@@ -39,7 +39,6 @@ a {
     @extend .mj-container;
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
 }
 
 .mj-content-container {
@@ -403,6 +402,215 @@ textarea.form-control {
     color: var(--gray-800);
     line-height: 1.6;
     margin: 0;
+}
+
+/* ===================================
+   KENDO ICON CARD SYSTEM
+   =================================== */
+
+/* Icon card class for Kendo cards - replaces mj-card mj-card-icon */
+.mj-kendo-icon-card {
+    text-align: center;
+    cursor: pointer;
+    position: relative;
+    overflow: visible;
+    width: 100%; /* Ensure full width in grid */
+    display: block; /* Override any inline defaults */
+    
+    /* Apply the base card hover effects */
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+    
+    &:hover {
+        border-color: var(--light-blue);
+        box-shadow:
+            0 8px 32px rgba(9, 35, 64, 0.12),
+            0 4px 16px rgba(0, 118, 182, 0.1);
+        transform: translateY(-4px);
+    }
+    
+    /* Override Kendo card body padding for icon cards */
+    .k-card-body {
+        padding: 30px 20px;
+        position: relative;
+    }
+    
+    /* Icon styling */
+    .mj-card-icon-large {
+        font-size: 4rem;
+        color: var(--mj-blue);
+        margin-bottom: 20px;
+        transition: all 0.3s ease;
+        background: linear-gradient(135deg, var(--mj-blue) 0%, var(--light-blue) 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        display: block;
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+    }
+    
+    &:hover .mj-card-icon-large {
+        transform: scale(1.1) rotate(5deg);
+        filter: drop-shadow(0 4px 8px rgba(0, 118, 182, 0.3));
+    }
+    
+    /* Title styling */
+    h3 {
+        color: var(--navy);
+        font-weight: 600;
+        margin-bottom: 12px;
+        margin-top: 0;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    /* Description styling */
+    p {
+        color: var(--gray-800);
+        line-height: 1.6;
+        margin: 0 0 12px 0;
+    }
+    
+    /* Chip hover effect */
+    .k-chip {
+        transition: all 0.2s ease;
+    }
+    
+    &:hover .k-chip {
+        transform: scale(1.05);
+    }
+    
+    /* Action buttons */
+    .mj-card-actions {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        display: flex;
+        gap: 4px;
+        opacity: 0;
+        transition: var(--transition-time);
+        z-index: 10;
+    }
+    
+    &:hover .mj-card-actions {
+        opacity: 1;
+    }
+}
+
+/* Optional variations for icon cards */
+.mj-kendo-icon-card {
+    /* Small variant */
+    &.mj-kendo-icon-card-sm {
+        .k-card-body {
+            padding: 20px 15px;
+        }
+        
+        .mj-card-icon-large {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+        
+        h3 {
+            font-size: 1rem;
+        }
+        
+        p {
+            font-size: 0.875rem;
+        }
+    }
+    
+    /* Large variant */
+    &.mj-kendo-icon-card-lg {
+        .k-card-body {
+            padding: 40px 30px;
+        }
+        
+        .mj-card-icon-large {
+            font-size: 5rem;
+            margin-bottom: 25px;
+        }
+        
+        h3 {
+            font-size: 1.5rem;
+        }
+        
+        p {
+            font-size: 1.125rem;
+        }
+    }
+    
+    /* Clickable variant with more pronounced hover */
+    &.mj-kendo-icon-card-clickable {
+        &:hover {
+            transform: translateY(-6px);
+            box-shadow:
+                0 12px 40px rgba(9, 35, 64, 0.15),
+                0 6px 20px rgba(0, 118, 182, 0.2);
+        }
+        
+        &:active {
+            transform: translateY(-2px);
+            box-shadow:
+                0 4px 16px rgba(9, 35, 64, 0.1),
+                0 2px 8px rgba(0, 118, 182, 0.15);
+        }
+    }
+}
+
+/* Responsive adjustments for Kendo icon cards */
+@media (max-width: 768px) {
+    .mj-kendo-icon-card {
+        .k-card-body {
+            padding: 20px 15px;
+        }
+        
+        .mj-card-icon-large {
+            font-size: 3rem;
+        }
+        
+        h3 {
+            font-size: 1.125rem;
+        }
+        
+        p {
+            font-size: 0.875rem;
+        }
+    }
+}
+
+/* Accessibility enhancements */
+.mj-kendo-icon-card:focus-visible {
+    outline: 2px solid var(--mj-blue);
+    outline-offset: 2px;
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+    .mj-kendo-icon-card {
+        border-width: 2px !important;
+        
+        &:hover {
+            border-width: 3px !important;
+        }
+    }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    .mj-kendo-icon-card,
+    .mj-kendo-icon-card .mj-card-icon-large,
+    .mj-kendo-icon-card .k-chip,
+    .mj-kendo-icon-card .mj-card-actions {
+        transition-duration: 0.01ms !important;
+    }
+    
+    .mj-kendo-icon-card:hover {
+        transform: none !important;
+    }
+    
+    .mj-kendo-icon-card:hover .mj-card-icon-large {
+        transform: none !important;
+    }
 }
 
 /* ===================================
@@ -1051,7 +1259,7 @@ textarea.form-control {
         0 8px 24px rgba(0, 118, 182, 0.2),
         inset 0 1px 0 rgba(255, 255, 255, 0.9);
     backdrop-filter: blur(10px);
-    overflow: hidden;
+    overflow: hidden !important;
     margin-top: 8px;
     animation: dropdown-appear 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     transform-origin: top center;
@@ -1096,6 +1304,7 @@ textarea.form-control {
 ::ng-deep .k-list-ul {
     padding: 8px 0;
     margin: 0;
+    border-radius: 16px;
 
     .k-list-item,
     .k-item {
@@ -1378,6 +1587,85 @@ textarea.form-control {
 .main-area .nav-container .nav-item {
     @extend .mj-card;
     @extend .mj-grid-item;
+}
+
+// Legacy icon card compatibility - redirect to use Kendo icon card styles
+// This allows existing mj-card mj-card-icon elements to work with new styles
+.mj-card.mj-card-icon {
+    // Reset the old icon card styles
+    padding: 0;
+    text-align: left;
+    
+    // Apply Kendo icon card styles
+    text-align: center;
+    cursor: pointer;
+    position: relative;
+    overflow: visible;
+    padding: 30px 20px;
+    
+    // Copy hover effects from mj-kendo-icon-card
+    &:hover {
+        .mj-card-icon-large {
+            transform: scale(1.1) rotate(5deg);
+            filter: drop-shadow(0 4px 8px rgba(0, 118, 182, 0.3));
+        }
+        
+        .k-chip {
+            transform: scale(1.05);
+        }
+        
+        .mj-card-actions {
+            opacity: 1;
+        }
+    }
+    
+    // Icon styling
+    .mj-card-icon-large {
+        font-size: 4rem;
+        color: var(--mj-blue);
+        margin-bottom: 20px;
+        transition: all 0.3s ease;
+        background: linear-gradient(135deg, var(--mj-blue) 0%, var(--light-blue) 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        display: block;
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+    }
+    
+    // Title styling
+    h3 {
+        color: var(--navy);
+        font-weight: 600;
+        margin-bottom: 12px;
+        margin-top: 0;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    // Description styling
+    p {
+        color: var(--gray-800);
+        line-height: 1.6;
+        margin: 0 0 12px 0;
+    }
+    
+    // Chip hover effect
+    .k-chip {
+        transition: all 0.2s ease;
+    }
+    
+    // Action buttons
+    .mj-card-actions {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        display: flex;
+        gap: 4px;
+        opacity: 0;
+        transition: var(--transition-time);
+        z-index: 10;
+    }
 }
 
 // Update existing view-card-content to use new standards

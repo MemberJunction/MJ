@@ -1,46 +1,80 @@
-.mj-app-icon {
+/* Data Browser Component - Minimal Custom Styles */
+/* Leveraging global styles from the MJ design system */
+
+/* Only component-specific overrides that can't be handled by global styles */
+
+/* Record Selector Dialog - Two column layout */
+::ng-deep mj-record-selector-dialog {
+    .mj-record-selector-content {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+    }
+    
+    /* Responsive - single column on mobile */
+    @media (max-width: 768px) {
+        .mj-record-selector-content {
+            grid-template-columns: 1fr;
+        }
+    }
+}
+
+/* Header title with icon - specific to this page */
+.mj-header .mj-header-title h1 {
+    &::before {
+        content: '\f5fd'; /* Font Awesome server icon */
+        font-family: 'Font Awesome 6 Free', 'FontAwesome';
+        font-weight: 900;
+        font-size: 2.5rem;
+        margin-right: 1rem;
+        color: var(--mj-blue);
+    }
+}
+
+/* App status indicator - component specific */
+.mj-app-status {
+    margin-top: auto;
+    padding-top: 16px;
+    font-size: 0.875rem;
+    color: var(--mj-blue);
+    font-weight: 500;
     display: flex;
+    align-items: center;
     justify-content: center;
-    margin-bottom: 16px;
+    gap: 6px;
     
-    span {
-        font-size: 3rem;
-        color: var(--mj-blue);
-        transition: var(--transition-time);
+    i {
+        font-size: 0.75rem;
     }
 }
 
-.mj-app-content {
-    text-align: center;
-    
-    h3 {
-        margin: 0 0 8px 0;
-        font-size: 1.25rem;
-        font-weight: 600;
-        color: var(--navy);
-        transition: var(--transition-time);
-    }
-    
-    p {
-        margin: 0;
-        font-size: 0.9rem;
-        color: var(--gray-800);
-        line-height: 1.4;
-        display: -webkit-box;
-        -webkit-line-clamp: 3;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
+/* Ensure consistent card body height in grid */
+.mj-kendo-icon-card .k-card-body {
+    min-height: 280px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* Responsive adjustments for card height */
+@media (max-width: 1024px) {
+    .mj-kendo-icon-card .k-card-body {
+        min-height: 240px;
     }
 }
 
-.mj-card:hover {
-    .mj-app-icon span {
-        color: var(--navy);
-        transform: scale(1.1);
+@media (max-width: 768px) {
+    .mj-kendo-icon-card .k-card-body {
+        min-height: 200px;
     }
     
-    .mj-app-content h3 {
-        color: var(--mj-blue);
-        transform: scale(1.02);
+    .mj-header .mj-header-title h1::before {
+        font-size: 1.875rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .mj-header .mj-header-title h1::before {
+        display: none; /* Hide icon on very small screens */
     }
 }

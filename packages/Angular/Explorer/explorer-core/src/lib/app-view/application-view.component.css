@@ -1,3 +1,250 @@
+/* Enhanced Application View Styles */
+/* Following the established MJ design system and style guide patterns */
+
+/* Entity Selection Bar - Enhanced with modern styling */
+.mj-entity-selection {
+    background: linear-gradient(135deg, var(--gray-600) 0%, #f8f9fa 100%);
+    border-radius: var(--border-radius);
+    padding: 20px;
+    margin-bottom: 24px;
+    box-shadow: 
+        0 2px 8px rgba(0, 0, 0, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    position: relative;
+    overflow: hidden;
+    
+    /* Subtle pattern overlay */
+    &::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-image: 
+            repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 10px,
+                rgba(255, 255, 255, 0.05) 10px,
+                rgba(255, 255, 255, 0.05) 20px
+            );
+        pointer-events: none;
+    }
+}
+
+.mj-entity-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    position: relative;
+    z-index: 1;
+}
+
+/* Entity Selection Buttons - Modern pill design */
+.mj-entity-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: var(--white-color);
+    border: 2px solid var(--gray-700);
+    border-radius: 50px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--navy);
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    white-space: nowrap;
+    
+    /* Shine effect on hover */
+    &::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(0, 118, 182, 0.1),
+            transparent
+        );
+        transition: left 0.6s ease;
+    }
+    
+    &:hover {
+        transform: translateY(-2px);
+        border-color: var(--mj-blue);
+        box-shadow: 
+            0 6px 20px rgba(0, 118, 182, 0.15),
+            0 2px 8px rgba(0, 0, 0, 0.1);
+        
+        &::before {
+            left: 100%;
+        }
+        
+        .mj-entity-btn-icon {
+            transform: rotate(10deg) scale(1.1);
+            color: var(--mj-blue);
+        }
+    }
+    
+    &:active {
+        transform: translateY(0);
+        box-shadow: 
+            0 2px 8px rgba(0, 118, 182, 0.15),
+            inset 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+}
+
+/* Active Entity Button */
+.mj-entity-btn-active {
+    background: linear-gradient(135deg, var(--mj-blue) 0%, #005a9e 100%);
+    color: var(--white-color);
+    border-color: var(--mj-blue);
+    font-weight: 600;
+    box-shadow: 
+        0 4px 16px rgba(0, 118, 182, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    
+    &::after {
+        content: '';
+        position: absolute;
+        bottom: -2px;
+        left: 10%;
+        right: 10%;
+        height: 3px;
+        background: var(--light-blue);
+        border-radius: 3px 3px 0 0;
+        box-shadow: 0 0 10px var(--light-blue);
+    }
+    
+    &:hover {
+        background: linear-gradient(135deg, #0084d1 0%, var(--mj-blue) 100%);
+        transform: translateY(-2px) scale(1.02);
+        box-shadow: 
+            0 8px 24px rgba(0, 118, 182, 0.4),
+            inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    }
+    
+    .mj-entity-btn-icon {
+        color: var(--white-color);
+        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+    }
+}
+
+/* Entity Button Icon */
+.mj-entity-btn-icon {
+    font-size: 16px;
+    transition: all 0.3s ease;
+    color: var(--mj-blue);
+}
+
+/* Enhanced Empty State */
+.mj-empty-state {
+    @extend .mj-empty-state; /* Inherit from global styles */
+    background: var(--white-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    margin: 40px auto;
+    max-width: 600px;
+    padding: 80px 40px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    
+    .mj-empty-icon {
+        position: relative;
+        z-index: 1;
+        font-size: 5rem;
+        color: var(--gray-800);
+        margin-bottom: 24px;
+        opacity: 0.3;
+        animation: rotate-slow 20s linear infinite;
+    }
+    
+    h3 {
+        position: relative;
+        z-index: 1;
+        font-size: 1.75rem;
+        color: var(--navy);
+        margin-bottom: 12px;
+        font-weight: 600;
+    }
+    
+    p {
+        position: relative;
+        z-index: 1;
+        font-size: 1.125rem;
+        color: var(--gray-800);
+        line-height: 1.6;
+        margin-bottom: 32px;
+        max-width: 400px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    
+    .mj-btn-primary {
+        position: relative;
+        z-index: 1;
+        font-size: 16px;
+        padding: 14px 32px;
+        box-shadow: 0 4px 16px rgba(0, 118, 182, 0.3);
+        
+        &:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px rgba(0, 118, 182, 0.4);
+        }
+    }
+}
+
+/* Loading State Enhancement */
+.mj-loading {
+    @extend .mj-loading;
+    min-height: 400px;
+    
+    .k-loader {
+        font-size: 48px;
+    }
+}
+
+/* Main Content Wrapper */
+.mj-main-content {
+    animation: fadeInUp 0.4s ease-out;
+}
+
+/* Enhanced Breadcrumb */
+.mj-breadcrumb {
+    @extend .mj-breadcrumb;
+    padding: 16px 0;
+    margin-bottom: 0;
+    
+    .mj-breadcrumb-item {
+        font-weight: 500;
+        
+        i {
+            margin-right: 6px;
+            font-size: 14px;
+        }
+        
+        &:hover {
+            transform: translateX(2px);
+        }
+    }
+    
+    .mj-breadcrumb-current {
+        font-weight: 600;
+        color: var(--navy);
+    }
+}
+
+
+
+/* Navigation Item Icon styling (kept from original) */
 .mj-nav-item-icon {
     display: flex;
     justify-content: center;
@@ -7,9 +254,11 @@
         font-size: 3rem;
         color: var(--mj-blue);
         transition: var(--transition-time);
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
     }
 }
 
+/* Navigation Item Content (kept from original) */
 .mj-nav-item-content {
     text-align: center;
     
@@ -29,52 +278,154 @@
     }
 }
 
-.mj-card:hover {
-    .mj-nav-item-icon i {
-        color: var(--navy);
-        transform: scale(1.1);
-    }
-    
-    .mj-nav-item-content h3 {
-        color: var(--mj-blue);
-        transform: scale(1.02);
-    }
-}
-
+/* Version Info Badge (kept from original with enhancements) */
 .mj-version-info {
     position: fixed;
     bottom: 2rem;
     right: 2rem;
-    background: var(--navy);
+    background: linear-gradient(135deg, var(--navy) 0%, #0a2a4d 100%);
     color: var(--white-color);
     padding: 0.75rem 1.25rem;
-    border-radius: 2rem;
+    border-radius: 50px;
     font-size: 0.85rem;
     font-weight: 500;
-    box-shadow: var(--shadow);
+    box-shadow: 
+        0 4px 16px rgba(9, 35, 64, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
     z-index: 1000;
     display: flex;
     align-items: center;
     gap: 0.5rem;
     transition: all var(--transition-time);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     
     &:hover {
-        background: var(--mj-blue);
-        transform: translateY(-2px);
-        box-shadow: 0 8px 24px rgba(0, 118, 182, 0.3);
+        background: linear-gradient(135deg, var(--mj-blue) 0%, #005a9e 100%);
+        transform: translateY(-4px) scale(1.05);
+        box-shadow: 
+            0 8px 32px rgba(0, 118, 182, 0.4),
+            inset 0 1px 0 rgba(255, 255, 255, 0.2);
     }
-}
-
-.mj-version-info i {
-    font-size: 0.75rem;
+    
+    i {
+        font-size: 0.75rem;
+    }
 }
 
 /* Responsive Design */
 @media (max-width: 768px) {
+    .mj-entity-selection {
+        padding: 16px;
+        margin-bottom: 20px;
+    }
+    
+    .mj-entity-buttons {
+        gap: 8px;
+    }
+    
+    .mj-entity-btn {
+        padding: 10px 16px;
+        font-size: 13px;
+        
+        .mj-entity-btn-icon {
+            font-size: 14px;
+        }
+    }
+    
+    .mj-header {
+        .mj-header-icon {
+            width: 48px;
+            height: 48px;
+            
+            span {
+                font-size: 24px;
+            }
+        }
+        
+        h1 {
+            font-size: 2rem;
+        }
+    }
+    
+    .mj-empty-state {
+        padding: 60px 30px;
+        margin: 20px auto;
+        
+        .mj-empty-icon {
+            font-size: 4rem;
+        }
+        
+        h3 {
+            font-size: 1.5rem;
+        }
+        
+        p {
+            font-size: 1rem;
+        }
+    }
+    
     .mj-version-info {
         bottom: 1rem;
         right: 1rem;
         font-size: 0.8rem;
         padding: 0.6rem 1rem;
     }
+}
+
+@media (max-width: 480px) {
+    .mj-entity-buttons {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .mj-entity-btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .mj-header {
+        h1 {
+            font-size: 1.5rem;
+        }
+    }
+}
+
+/* Accessibility Enhancements */
+.mj-entity-btn:focus-visible,
+.mj-btn-icon-only:focus-visible {
+    outline: 2px solid var(--mj-blue);
+    outline-offset: 2px;
+}
+
+/* High Contrast Mode */
+@media (prefers-contrast: high) {
+    .mj-entity-btn,
+    .mj-btn-icon-only {
+        border-width: 2px !important;
+    }
+    
+    .mj-entity-btn-active {
+        border-width: 3px !important;
+    }
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+    }
+    
+    .mj-entity-btn:hover,
+    .mj-btn-icon-only:hover {
+        transform: none !important;
+    }
+}
+
+/* Dark Mode Support (if needed in future) */
+@media (prefers-color-scheme: dark) {
+    /* Dark mode overrides can be added here */
 }

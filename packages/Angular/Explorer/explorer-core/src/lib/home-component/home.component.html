@@ -6,24 +6,46 @@
         </div>
     </div>
     
-    <div class="mj-grid-responsive"> 
-        <div class="mj-card mj-grid-item" 
-             *ngFor="let item of HomeItems; track item" 
-             (click)="navigate(item.Route)">
-            <div class="mj-card-body">
-                <div class="mj-nav-item-icon">
-                    <i [class]="'fa-solid ' + item.IconCSSClass"></i>
-                </div>
-                <div class="mj-nav-item-content">
-                    <h3>{{item.Name}}</h3>
-                    <p>{{getItemDescription(item)}}</p>
-                </div>
-            </div>
-        </div>
+    <!-- Loading State -->
+    <div class="mj-loading" *ngIf="isLoading">
+        <i class="fas fa-spinner fa-spin" style="font-size: 3rem; color: var(--mj-blue);"></i>
     </div>
     
+    <!-- Navigation Cards Grid -->
+    <div class="mj-grid-responsive" *ngIf="!isLoading"> 
+        <kendo-card class="mj-kendo-icon-card mj-nav-card"
+                    [width]="'100%'"
+                    *ngFor="let item of HomeItems; track item" 
+                    (click)="navigate(item.Route)">
+            <kendo-card-body>
+                <i [class]="'fa-solid ' + (item.IconCSSClass || 'fa-cube') + ' mj-card-icon-large'"></i>
+                <h3>{{item.Name}}</h3>
+                <p>{{getItemDescription(item)}}</p>
+                <kendo-chip 
+                    [label]="getChipLabel(item)" 
+                    rounded="full"
+                    [themeColor]="getThemeColor(item)"
+                    size="small"
+                    class="mt-2">
+                </kendo-chip>
+            </kendo-card-body>
+        </kendo-card>
+    </div>
+    
+    <!-- Empty State -->
+    <div class="mj-empty-state" *ngIf="!isLoading && HomeItems.length === 0">
+        <i class="fas fa-compass mj-empty-icon"></i>
+        <h3>No Navigation Items Available</h3>
+        <p>Contact your administrator to configure navigation items for the home screen.</p>
+        <button class="mj-btn mj-btn-primary" (click)="navigate('/settings')">
+            <i class="fas fa-cog"></i>
+            Go to Settings
+        </button>
+    </div>
+    
+    <!-- Version Info -->
     <div class="mj-version-info">
-        <i class="fa-solid fa-code-branch"></i>
-        <span>{{versionString}}</span>
+        <i class="fas fa-code-branch"></i>
+        <span>{{versionString || 'Loading...'}}</span>
     </div>
 </div>

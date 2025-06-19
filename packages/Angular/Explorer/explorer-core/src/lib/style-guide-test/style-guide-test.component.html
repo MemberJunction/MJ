@@ -140,34 +140,36 @@
   <div class="mj-content-container">
     <h2>Card Components</h2>
     
-    <h4>Icon Cards with Hover Effects</h4>
+    <h4>Icon Cards with Hover Effects (Kendo Cards)</h4>
     <div class="mj-grid mj-grid-4">
-      <div class="mj-card mj-card-icon" *ngFor="let item of sampleItems" (click)="handleCardClick(item)">
-        <i [class]="'fas ' + item.icon + ' mj-card-icon-large'"></i>
-        <h3>{{item.name}}</h3>
-        <p>{{item.description}}</p>
-        <kendo-chip 
-          [label]="item.color.toUpperCase()" 
-          rounded="full"
-          [themeColor]="item.color"
-          size="small"
-          class="mt-2">
-        </kendo-chip>
-        <div class="mj-card-actions">
-          <button class="mj-btn mj-btn-icon-only mj-btn-sm" (click)="$event.stopPropagation(); handleButtonClick('edit', item)">
-            <i class="fas fa-edit"></i>
-          </button>
-          <button class="mj-btn mj-btn-icon-only mj-btn-sm" (click)="$event.stopPropagation(); handleButtonClick('delete', item)">
-            <i class="fas fa-trash"></i>
-          </button>
-        </div>
-      </div>
+      <kendo-card class="mj-kendo-icon-card" *ngFor="let item of sampleItems" (click)="handleCardClick(item)">
+        <kendo-card-body>
+          <i [class]="'fas ' + item.icon + ' mj-card-icon-large'"></i>
+          <h3>{{item.name}}</h3>
+          <p>{{item.description}}</p>
+          <kendo-chip 
+            [label]="item.color.toUpperCase()" 
+            rounded="full"
+            [themeColor]="item.color"
+            size="small"
+            class="mt-2">
+          </kendo-chip>
+          <div class="mj-card-actions">
+            <button class="mj-btn mj-btn-icon-only mj-btn-sm" (click)="$event.stopPropagation(); handleButtonClick('edit', item)">
+              <i class="fas fa-edit"></i>
+            </button>
+            <button class="mj-btn mj-btn-icon-only mj-btn-sm" (click)="$event.stopPropagation(); handleButtonClick('delete', item)">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        </kendo-card-body>
+      </kendo-card>
     </div>
 
     <div class="mt-4">
       <h4>Kendo Cards with Custom Styling</h4>
       <div class="mj-grid mj-grid-3">
-        <kendo-card [width]="'100%'" class="custom-kendo-card">
+        <kendo-card class="custom-kendo-card">
           <kendo-card-header>
             <h4>
               <i class="fas fa-chart-bar mr-2"></i>
@@ -187,7 +189,7 @@
           </kendo-card-actions>
         </kendo-card>
 
-        <kendo-card [width]="'100%'" class="custom-kendo-card">
+        <kendo-card class="custom-kendo-card">
           <kendo-card-body>
             <div class="text-center">
               <kendo-avatar [imageSrc]="'assets/avatar-placeholder.jpg'" shape="circle" size="large"></kendo-avatar>
@@ -206,7 +208,7 @@
           </kendo-card-body>
         </kendo-card>
 
-        <kendo-card [width]="'100%'" class="custom-kendo-card">
+        <kendo-card class="custom-kendo-card">
           <kendo-card-body>
             <div class="mj-empty-state">
               <i class="fas fa-inbox mj-empty-icon"></i>

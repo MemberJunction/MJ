@@ -343,30 +343,8 @@ kendo-formfield .k-label {
     border-color: var(--mj-blue) !important;
 }
 
-/* Icon card enhancements - keep these custom styles */
-.mj-card-icon {
-    position: relative;
-    overflow: visible;
-}
-
-.mj-card-icon .k-chip {
-    transition: all 0.2s ease;
-}
-
-.mj-card-icon:hover .k-chip {
-    transform: scale(1.05);
-}
-
-/* Enhanced icon colors for cards */
-.mj-card-icon-large {
-    transition: all 0.3s ease;
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
-}
-
-.mj-card:hover .mj-card-icon-large {
-    transform: scale(1.1) rotate(5deg);
-    filter: drop-shadow(0 4px 8px rgba(0, 118, 182, 0.3));
-}
+/* Icon card styles have been moved to global _common.scss */
+/* The mj-kendo-icon-card class is now globally available */
 
 /* Responsive adjustments */
 @media (max-width: 768px) {

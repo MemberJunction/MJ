@@ -303,6 +303,8 @@
   border: 2px solid transparent;
   transition: var(--transition-time);
   overflow: hidden;
+  width: 100% !important; // Force full width and override inline styles
+  display: block; // Override any inline-block defaults
 
   &:hover {
     border-color: var(--light-blue);
@@ -331,6 +333,18 @@
   .k-card-actions {
     gap: 10px;
   }
+}
+
+// Ensure Kendo cards respect grid layouts
+.mj-grid .k-card,
+.mj-grid-1 .k-card,
+.mj-grid-2 .k-card,
+.mj-grid-3 .k-card,
+.mj-grid-4 .k-card,
+.mj-grid-responsive .k-card {
+  width: 100% !important;
+  max-width: none !important;
+  display: block;
 }
 
 // ===================================
