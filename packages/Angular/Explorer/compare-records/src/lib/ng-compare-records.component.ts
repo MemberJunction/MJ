@@ -129,7 +129,7 @@ export class CompareRecordsComponent {
         if (missingFields.length === 0) {
           // we have all the fields, so we can create a new BaseEntity object and load the data
           const record = await md.GetEntityObject(this.entityName); 
-          record.LoadFromData(r); // we just load from the data we have
+          await record.LoadFromData(r); // we just load from the data we have
           // replace the object in the array
           this.recordsToCompare[this.recordsToCompare.indexOf(r)] = record;
         }

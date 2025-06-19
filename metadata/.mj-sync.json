@@ -1,10 +1,15 @@
 {
   "version": "1.0.0",
   "directoryOrder": [
+    "action-categories",
     "actions",
+    "prompt-categories",
     "prompts",
     "agent-types",
     "agents"
+  ],
+  "ignoreDirectories": [
+    "output"
   ],
   "sqlLogging": {
     "enabled": true,

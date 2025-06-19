@@ -113,6 +113,49 @@ if (saveResult) {
 const deleteResult = await user.Delete();
 ```
 
+#### Loading Data from Objects (v2.52.0+)
+
+The `LoadFromData()` method is now async to support subclasses that need to perform additional loading operations:
+
+```typescript
+// Loading data from a plain object (now async)
+const userData = {
+    ID: '123',
+    FirstName: 'Jane',
+    LastName: 'Doe',
+    Email: 'jane@example.com'
+};
+
+// LoadFromData is now async as of v2.52.0
+await user.LoadFromData(userData);
+
+// This change enables subclasses to perform async operations
+// Example subclass implementation:
+class ExtendedUserEntity extends UserEntity {
+    public override async LoadFromData(data: any): Promise<boolean> {
+        const result = await super.LoadFromData(data);
+        if (result) {
+            // Can now perform async operations
+            await this.LoadUserPreferences();
+            await this.LoadUserRoles();
+        }
+        return result;
+    }
+    
+    // Important: Also override Load() for consistency
+    public override async Load(ID: string): Promise<boolean> {
+        const result = await super.Load(ID);
+        if (result) {
+            await this.LoadUserPreferences();
+            await this.LoadUserRoles();
+        }
+        return result;
+    }
+}
+```
+
+**Important**: Subclasses that perform additional loading should override BOTH `LoadFromData()` and `Load()` methods to ensure consistent behavior regardless of how the entity is populated.
+
 #### Entity Fields
 
 Each entity field is represented by an `EntityField` object that tracks value, dirty state, and metadata:
@@ -133,6 +176,38 @@ console.log(field.IsUnique); // true/false
 console.log(field.IsPrimaryKey); // true/false
 console.log(field.ReadOnly); // true/false
 ```
+
+#### Working with BaseEntity and Spread Operator
+
+**IMPORTANT**: BaseEntity uses TypeScript getter/setter properties for all entity fields. This means the JavaScript spread operator (`...`) will NOT capture entity field values because getters are not enumerable properties.
+
+```typescript
+// ❌ WRONG - Spread operator doesn't capture getter properties
+const userData = {
+  ...userEntity,  // This will NOT include ID, FirstName, LastName, etc.
+  customField: 'value'
+};
+
+// ✅ CORRECT - Use GetAll() to get plain object with all field values
+const userData = {
+  ...userEntity.GetAll(),  // Returns { ID: '...', FirstName: '...', LastName: '...', etc. }
+  customField: 'value'
+};
+
+// ✅ ALSO CORRECT - Access properties individually
+const userData = {
+  ID: userEntity.ID,
+  FirstName: userEntity.FirstName,
+  LastName: userEntity.LastName,
+  customField: 'value'
+};
+```
+
+The `GetAll()` method returns a plain JavaScript object containing all entity field values, which can be safely used with the spread operator. This design choice enables:
+- Clean property access syntax (`entity.Name` vs `entity.getName()`)
+- Full TypeScript/IntelliSense support
+- Easy property overriding in subclasses
+- Proper encapsulation with validation and side effects
 
 #### Save Options
 
@@ -319,6 +394,11 @@ import { SetProvider } from '@memberjunction/core';
 SetProvider(myProvider);
 ```
 
+## Breaking Changes
+
+### v2.52.0
+- **LoadFromData() is now async**: The `LoadFromData()` method in BaseEntity is now async to support subclasses that need to perform additional asynchronous operations during data loading. Update any direct calls to this method to use `await`.
+
 ## Best Practices
 
 1. **Always use Metadata.GetEntityObject()** to create entity instances - never use `new`
@@ -329,6 +409,7 @@ SetProvider(myProvider);
 6. **Respect permissions** - always check CanCreate/Update/Delete before operations
 7. **Use ExtraFilter** carefully - ensure SQL injection protection
 8. **Cache metadata instances** when possible to improve performance
+9. **Override both Load() and LoadFromData()** in subclasses that need additional loading logic to ensure consistent behavior
 
 ## Integration with Other MemberJunction Packages
 

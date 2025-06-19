@@ -96,7 +96,7 @@ export class UserViewEntityExtended extends UserViewEntity  {
             return ''
     }
 
-    override LoadFromData(data: any): boolean {
+    override async LoadFromData(data: any): Promise<boolean> {
         // in this case we need to make sure we ge the _ViewEntityInfo property set up correctly
         if (data && data.EntityID) {
             const md = new Metadata();
@@ -108,7 +108,7 @@ export class UserViewEntityExtended extends UserViewEntity  {
                 throw new Error('Unable to find entity info for entity ID: ' + data.EntityID)
             }
         }
-        return super.LoadFromData(data)
+        return await super.LoadFromData(data)
     }
 
     /**
@@ -627,7 +627,7 @@ export class ViewInfo {
      */
     static async GetViewEntity(viewId: string, contextUser?: UserInfo): Promise<UserViewEntityExtended> {
         const md = new Metadata();
-        const view = <UserViewEntityExtended>await md.GetEntityObject('User Views', contextUser);
+        const view = await md.GetEntityObject<UserViewEntityExtended>('User Views', contextUser);
         if (await view.Load(viewId))
             return view
         else

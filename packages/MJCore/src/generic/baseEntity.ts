@@ -1180,17 +1180,59 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
-     *
-     * This method is meant to be used only in situations where you are sure that the data you are loading is current in the database. MAKE SURE YOU ARE PASSING IN ALL FIELDS.
-     * The Dirty flags and other internal state will assume what is loading from the data parameter you pass in is equivalent to what is in the database. Generally speaking, you should use Load() instead of this method. The main use case(s) where this makes sense are:
-     *  (1) On the server if you are pulling data you know is fresh from say the result of another DB operation
-     *  (2) If on any tier you run a fresh RunView result, that gives you data from the database, you can then instantiate objects via Metadata.GetEntityObject() and then use this with the result from the RunView call
-     *  *** Note: for the #2 use case, when you call the RunView Object RunView() method with the ResultType='entity_object', you'll get an array of BaseEntity-derived objects instead of simple objects, that functionality utilizes this method
-     * @param data - a simple object that has properties that match the field names of the entity object
-     * @param replaceOldValues - if true, the old values of the fields will be set to the values provided in the data parameter, if false, they will be left alone
-     * @returns
+     * Loads entity data from a plain object, typically from database query results.
+     * 
+     * This method is meant to be used only in situations where you are sure that the data you are loading 
+     * is current in the database. MAKE SURE YOU ARE PASSING IN ALL FIELDS. The Dirty flags and other internal 
+     * state will assume what is loading from the data parameter you pass in is equivalent to what is in the database.
+     * 
+     * @remarks
+     * Generally speaking, you should use Load() instead of this method. The main use cases where this makes sense are:
+     * 1. On the server if you are pulling data you know is fresh from the result of another DB operation
+     * 2. If on any tier you run a fresh RunView result that gives you data from the database
+     * 3. When the RunView Object RunView() method is called with ResultType='entity_object'
+     * 
+     * **Important for Subclasses**: As of v2.53.0, this method is now async to support subclasses that need to 
+     * perform additional asynchronous loading operations (e.g., loading related data, fetching additional metadata).
+     * 
+     * Subclasses that need to perform additional loading should override BOTH this method AND Load() to ensure 
+     * consistent behavior regardless of how the entity is populated. This is because these two methods have 
+     * different execution paths:
+     * - Load() fetches data from the network/database and then calls provider-specific loading
+     * - LoadFromData() is called when data is already available (e.g., from RunView results)
+     * 
+     * @example
+     * ```typescript
+     * // Subclass implementation
+     * public override async LoadFromData(data: any, replaceOldValues: boolean = false): Promise<boolean> {
+     *     const result = await super.LoadFromData(data, replaceOldValues);
+     *     if (result) {
+     *         // Perform additional async loading here
+     *         await this.LoadRelatedData();
+     *         await this.LoadMetadata();
+     *     }
+     *     return result;
+     * }
+     * 
+     * // Don't forget to also override Load() for consistency, unless you INTEND to have different behavior
+     * // for Load() vs LoadFromData()
+     * public override async Load(ID: string, EntityRelationshipsToLoad: string[] = null): Promise<boolean> {
+     *     const result = await super.Load(ID, EntityRelationshipsToLoad);
+     *     if (result) {
+     *         // Same additional loading as in LoadFromData
+     *         await this.LoadRelatedData();
+     *         await this.LoadMetadata();
+     *     }
+     *     return result;
+     * }
+     * ```
+     * 
+     * @param data - A simple object that has properties that match the field names of the entity object
+     * @param replaceOldValues - If true, the old values of the fields will be set to the values provided 
+     *                           in the data parameter; if false, they will be left alone
+     * @returns Promise<boolean> - Returns true if the load was successful
      */
-    public LoadFromData(data: any, replaceOldValues: boolean = false) : boolean {
+    public async LoadFromData(data: any, _replaceOldValues: boolean = false): Promise<boolean> {
         this.SetMany(data, true);
         // now, check to see if we have the primary key set, if so, we should consider ourselves
         // loaded from the database and set the _recordLoaded flag to true along with the _everSaved flag

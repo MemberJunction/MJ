@@ -586,6 +586,12 @@ export const ActionSchema = z.object({
         * * Display Name: Driver Class
         * * SQL Data Type: nvarchar(255)
     * * Description: For actions where Type='Custom', this specifies the fully qualified class name of the BaseAction sub-class that should be instantiated to handle the action execution. This provides a more reliable mechanism than relying on the Name field for class instantiation.`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Actions (vwActions.ID)
+    * * Description: Optional ID of the parent action this action inherits from. Used for hierarchical action composition where child actions can specialize parent actions.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category
@@ -594,6 +600,10 @@ export const ActionSchema = z.object({
         * * Field Name: CodeApprovedByUser
         * * Display Name: Code Approved By User
         * * SQL Data Type: nvarchar(100)`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(425)`),
 });
 
 export type ActionEntityType = z.infer<typeof ActionSchema>;
@@ -10983,6 +10993,12 @@ export const TemplateParamSchema = z.object({
         * * Display Name: Order By
         * * SQL Data Type: nvarchar(MAX)
     * * Description: This field is used only when the Type of the TemplateParam table is "Entity". It is an optional field used to specify the sorting order for the related entity data that is used in the template for the Entity specified.`),
+    TemplateContentID: z.string().nullable().describe(`
+        * * Field Name: TemplateContentID
+        * * Display Name: Template Content ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Template Contents (vwTemplateContents.ID)
+    * * Description: Optional reference to a specific template content. When NULL, this parameter applies to all content items within the template. When set, this parameter applies only to the specified template content.`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template
@@ -13690,6 +13706,20 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     }
 
     /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Actions (vwActions.ID)
+    * * Description: Optional ID of the parent action this action inherits from. Used for hierarchical action composition where child actions can specialize parent actions.
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
     * * Field Name: Category
     * * Display Name: Category
     * * SQL Data Type: nvarchar(255)
@@ -13705,6 +13735,15 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     */
     get CodeApprovedByUser(): string | null {
         return this.Get('CodeApprovedByUser');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(425)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
     }
 }
 
@@ -41829,6 +41868,20 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     }
     set OrderBy(value: string | null) {
         this.Set('OrderBy', value);
+    }
+
+    /**
+    * * Field Name: TemplateContentID
+    * * Display Name: Template Content ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Template Contents (vwTemplateContents.ID)
+    * * Description: Optional reference to a specific template content. When NULL, this parameter applies to all content items within the template. When set, this parameter applies only to the specified template content.
+    */
+    get TemplateContentID(): string | null {
+        return this.Get('TemplateContentID');
+    }
+    set TemplateContentID(value: string | null) {
+        this.Set('TemplateContentID', value);
     }
 
     /**
