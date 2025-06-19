@@ -499,6 +499,33 @@ export default class Push extends Command {
       onlyFiles: true
     });
     
+    // Check if no JSON files were found and provide helpful error
+    if (jsonFiles.length === 0) {
+      const relativePath = path.relative(process.cwd(), entityDir) || '.';
+      const configFile = path.join(entityDir, '.mj-sync.json');
+      let errorMessage = `No JSON files found in ${relativePath} matching pattern: ${pattern}\n`;
+      errorMessage += `\nPlease check:\n`;
+      errorMessage += `  1. Files exist with the expected extension (.json)\n`;
+      errorMessage += `  2. The filePattern in ${configFile} matches your files\n`;
+      errorMessage += `  3. Files are not in ignored patterns: .mj-sync.json, .mj-folder.json, *.backup\n`;
+      
+      // Try to be more helpful by checking what files do exist
+      const allFiles = await fastGlob('*', {
+        cwd: entityDir,
+        onlyFiles: true,
+        dot: true
+      });
+      
+      if (allFiles.length > 0) {
+        errorMessage += `\nFiles found in directory: ${allFiles.slice(0, 5).join(', ')}`;
+        if (allFiles.length > 5) {
+          errorMessage += ` (and ${allFiles.length - 5} more)`;
+        }
+      }
+      
+      throw new Error(errorMessage);
+    }
+    
     if (flags.verbose) {
       this.log(`Processing ${jsonFiles.length} records in ${path.relative(process.cwd(), entityDir) || '.'}`);
     }

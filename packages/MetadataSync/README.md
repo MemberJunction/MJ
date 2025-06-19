@@ -818,6 +818,9 @@ mj-sync validate --verbose
 # Validate with JSON output for CI/CD
 mj-sync validate --format=json
 
+# Save validation report to markdown file
+mj-sync validate --save-report
+
 # Initialize a directory for metadata sync
 mj-sync init
 
@@ -973,6 +976,75 @@ Migration files include:
 
 The SQL logging runs in parallel with the actual database operations, ensuring minimal performance impact while capturing all SQL statements for review and potential migration use.
 
+### User Role Validation (NEW)
+
+MetadataSync now supports validating UserID fields against specific roles in the MemberJunction system. This ensures that only users with appropriate roles can be referenced in metadata files.
+
+#### Configuration
+
+Add the `userRoleValidation` configuration to your root `.mj-sync.json` file:
+
+```json
+{
+  "version": "1.0.0",
+  "userRoleValidation": {
+    "enabled": true,
+    "allowedRoles": [
+      "Administrator",
+      "Developer",
+      "Content Manager"
+    ],
+    "allowUsersWithoutRoles": false
+  }
+}
+```
+
+#### Configuration Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | boolean | false | Enable user role validation for UserID fields |
+| `allowedRoles` | string[] | [] | List of role names that are allowed |
+| `allowUsersWithoutRoles` | boolean | false | Allow users without any assigned roles |
+
+#### How It Works
+
+1. During validation, all user roles are loaded from the database and cached
+2. For each UserID field in metadata files, the validator checks:
+   - If the user exists and has roles assigned
+   - If the user has at least one of the allowed roles
+3. Validation fails if:
+   - A UserID references a user without any roles (unless `allowUsersWithoutRoles` is true)
+   - A UserID references a user whose roles are not in the `allowedRoles` list
+
+#### Example
+
+Given a metadata file with a UserID field:
+
+```json
+{
+  "fields": {
+    "Name": "Admin Action",
+    "UserID": "user-123"
+  }
+}
+```
+
+The validation will:
+1. Check if user-123 exists in the system
+2. Verify that user-123 has one of the allowed roles
+3. Report an error if the user doesn't have appropriate roles
+
+#### Error Messages
+
+```
+✗ UserID 'user-123' does not have any assigned roles
+  Suggestion: User must have one of these roles: Administrator, Developer
+
+✗ UserID 'user-456' has roles [Viewer] but none are in allowed list
+  Suggestion: Allowed roles: Administrator, Developer, Content Manager
+```
+
 ### Root Configuration (metadata/.mj-sync.json)
 ```json
 {
@@ -989,6 +1061,11 @@ The SQL logging runs in parallel with the actual database operations, ensuring m
     "enabled": true,
     "outputDirectory": "./sql_logging",
     "formatAsMigration": false
+  },
+  "userRoleValidation": {
+    "enabled": true,
+    "allowedRoles": ["Administrator", "Developer"],
+    "allowUsersWithoutRoles": false
   },
   "watch": {
     "debounceMs": 1000,

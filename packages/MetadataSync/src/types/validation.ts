@@ -10,7 +10,7 @@ export interface ValidationResult {
 }
 
 export interface ValidationError {
-    type: 'entity' | 'field' | 'value' | 'reference' | 'dependency' | 'circular';
+    type: 'entity' | 'field' | 'value' | 'reference' | 'dependency' | 'circular' | 'validation';
     severity: 'error';
     entity?: string;
     field?: string;
@@ -21,7 +21,7 @@ export interface ValidationError {
 }
 
 export interface ValidationWarning {
-    type: 'nesting' | 'naming' | 'bestpractice' | 'performance';
+    type: 'nesting' | 'naming' | 'bestpractice' | 'performance' | 'validation';
     severity: 'warning';
     entity?: string;
     field?: string;

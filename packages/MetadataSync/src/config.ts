@@ -89,6 +89,15 @@ export interface SyncConfig {
     /** File patterns to ignore during watch */
     ignorePatterns?: string[];
   };
+  /** User role validation configuration */
+  userRoleValidation?: {
+    /** Whether to enable user role validation for UserID fields */
+    enabled?: boolean;
+    /** List of role names that are allowed to be referenced in metadata */
+    allowedRoles?: string[];
+    /** Whether to allow users without any roles (defaults to false) */
+    allowUsersWithoutRoles?: boolean;
+  };
 }
 
 /**

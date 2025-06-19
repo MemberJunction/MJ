@@ -13,7 +13,6 @@ import type { MJConfig } from '../config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { UserInfo } from '@memberjunction/core';
-import { configManager } from './config-manager';
 
 /** Global ConnectionPool instance for connection lifecycle management */
 let globalPool: sql.ConnectionPool | null = null;
@@ -123,9 +122,10 @@ export async function cleanupProvider(): Promise<void> {
  * 
  * Retrieves the "System" user from MemberJunction's UserCache. This user is
  * typically used for CLI operations where no specific user context exists.
+ * The System user must have the Developer role to perform metadata sync operations.
  * 
  * @returns The System UserInfo object
- * @throws Error if System user is not found in the cache
+ * @throws Error if System user is not found in the cache or doesn't have Developer role
  * 
  * @example
  * ```typescript
@@ -138,6 +138,21 @@ export function getSystemUser(): UserInfo {
   if (!sysUser) {
     throw new Error("System user not found in cache. Ensure the system user exists in the database.");    
   }
+  
+  // Check if the System user has the Developer role
+  const hasDeveloperRole = sysUser.UserRoles && sysUser.UserRoles.some(
+    userRole => userRole.Role.trim().toLowerCase() === 'developer'
+  );
+  
+  if (!hasDeveloperRole) {
+    throw new Error(
+      "System user does not have the 'Developer' role. " +
+      "The Developer role is required for metadata sync operations. " +
+      "Please ensure the System user is assigned the Developer role in the database:\n" +
+      "* Add a record to the __mj.UserRole table linking the System user to the Developer role"
+    );
+  }
+  
   return sysUser;
 }
 
