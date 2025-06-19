@@ -1,7 +1,8 @@
 <div *ngIf="authBase.authenticated" class="app-main">
   <mj-header-component (toggle)="toggleDrawer($event)" selectedPage="selected" class="app-header" [applicationName]="environment.APPLICATION_NAME" [applicationInstance]="environment.APPLICATION_INSTANCE"></mj-header-component>
+  <mj-system-validation-banner></mj-system-validation-banner>
   <mj-navigation *ngIf="!HasError" nav class="app-body" [applicationName]="environment.APPLICATION_NAME"></mj-navigation>
-  <div *ngIf="HasError"><h1>System Error</h1><hr/>{{this.ErrorMessage}}</div>
+  <div *ngIf="HasError && !showValidationOnly"><h1>System Error</h1><hr/>{{this.ErrorMessage}}</div>
 </div>
 <div class="login-wrapper" *ngIf="!(authBase.authenticated)">
   <div class="main-banner">

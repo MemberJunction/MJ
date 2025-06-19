@@ -2,6 +2,7 @@ import { Arg, Ctx, Field, InputType, Int, ObjectType, PubSubEngine, Query, Resol
 import { AppContext } from '../types.js';
 import { ResolverBase } from './ResolverBase.js';
 import { LogError, LogStatus } from '@memberjunction/core';
+import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 
 /********************************************************************************
  * The PURPOSE of this resolver is to provide a generic way to run a view and return the results.
@@ -562,6 +563,136 @@ export class RunViewResolver extends ResolverBase {
           TotalRowCount: data?.TotalRowCount,
           ExecutionTime: data?.ExecutionTime,
           Success: data?.Success,
+        });
+      }
+
+      return results;
+    } catch (err) {
+      LogError(err);
+      return null;
+    }
+  }
+
+  @RequireSystemUser()
+  @Query(() => RunViewResult)
+  async RunViewByNameSystemUser(
+    @Arg('input', () => RunViewByNameInput) input: RunViewByNameInput,
+    @Ctx() { dataSource, userPayload }: AppContext,
+    pubSub: PubSubEngine
+  ) {
+    try {
+      const rawData = await super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+      if (rawData === null) return null;
+
+      const request = dataSource.request();
+      const entityIdResult = await request.query(`SELECT EntityID from [${this.MJCoreSchema}].vwUserViews WHERE Name='${input.ViewName}'`);
+      const entityId = entityIdResult.recordset;
+      const returnData = this.processRawData(rawData.Results, entityId[0].EntityID);
+      return {
+        Results: returnData,
+        UserViewRunID: rawData?.UserViewRunID,
+        RowCount: rawData?.RowCount,
+        TotalRowCount: rawData?.TotalRowCount,
+        ExecutionTime: rawData?.ExecutionTime,
+        Success: rawData?.Success,
+        ErrorMessage: rawData?.ErrorMessage,
+      };
+    } catch (err) {
+      LogError(err);
+      return null;
+    }
+  }
+
+  @RequireSystemUser()
+  @Query(() => RunViewResult)
+  async RunViewByIDSystemUser(
+    @Arg('input', () => RunViewByIDInput) input: RunViewByIDInput,
+    @Ctx() { dataSource, userPayload }: AppContext,
+    pubSub: PubSubEngine
+  ) {
+    try {
+      const rawData = await super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+      if (rawData === null) return null;
+
+      const request = dataSource.request();
+      const entityIdResult = await request.query(`SELECT EntityID from [${this.MJCoreSchema}].vwUserViews WHERE ID=${input.ViewID}`);
+      const entityId = entityIdResult.recordset;
+      const returnData = this.processRawData(rawData.Results, entityId[0].EntityID);
+      return {
+        Results: returnData,
+        UserViewRunID: rawData?.UserViewRunID,
+        RowCount: rawData?.RowCount,
+        TotalRowCount: rawData?.TotalRowCount,
+        ExecutionTime: rawData?.ExecutionTime,
+        Success: rawData?.Success,
+        ErrorMessage: rawData?.ErrorMessage,
+      };
+    } catch (err) {
+      LogError(err);
+      return null;
+    }
+  }
+
+  @RequireSystemUser()
+  @Query(() => RunViewResult)
+  async RunDynamicViewSystemUser(
+    @Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput,
+    @Ctx() { dataSource, userPayload }: AppContext,
+    pubSub: PubSubEngine
+  ) {
+    try {
+      const rawData = await super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+      if (rawData === null) return null;
+
+      const request = dataSource.request();
+      const entityIdResult = await request.query(`SELECT ID from [${this.MJCoreSchema}].vwEntities WHERE Name='${input.EntityName}'`);
+      const entityId = entityIdResult.recordset;
+      const returnData = this.processRawData(rawData.Results, entityId[0].ID);
+      return {
+        Results: returnData,
+        UserViewRunID: rawData?.UserViewRunID,
+        RowCount: rawData?.RowCount,
+        TotalRowCount: rawData?.TotalRowCount,
+        ExecutionTime: rawData?.ExecutionTime,
+        Success: rawData?.Success,
+        ErrorMessage: rawData?.ErrorMessage,
+      };
+    } catch (err) {
+      LogError(err);
+      return null;
+    }
+  }
+
+  @RequireSystemUser()
+  @Query(() => [RunViewGenericResult])
+  async RunViewsSystemUser(
+    @Arg('input', () => [RunViewGenericInput]) input: (RunViewByNameInput & RunViewByIDInput & RunDynamicViewInput)[],
+    @Ctx() { dataSource, userPayload }: AppContext,
+    pubSub: PubSubEngine
+  ) {
+    try {
+      const rawData: RunViewGenericResult[] = await super.RunViewsGeneric(input, dataSource, userPayload, pubSub);
+      if (!rawData) {
+        return null;
+      }
+
+      let results: RunViewGenericResult[] = [];
+      for (const [index, data] of rawData.entries()) {
+        const request = dataSource.request();
+        const entityIdResult = await request.query(
+          `SELECT TOP 1 ID from [${this.MJCoreSchema}].vwEntities WHERE Name='${input[index].EntityName}'`
+        );
+        const entityId = entityIdResult.recordset;
+        const returnData: any[] = this.processRawData(data.Results, entityId[0].ID);
+
+        results.push({
+          Results: returnData,
+          UserViewRunID: data?.UserViewRunID,
+          RowCount: data?.RowCount,
+          TotalRowCount: data?.TotalRowCount,
+          ExecutionTime: data?.ExecutionTime,
+          Success: data?.Success,
+          ErrorMessage: data?.ErrorMessage,
         });
       }
 
