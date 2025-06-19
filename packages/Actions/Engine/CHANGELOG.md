@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/actions
 
+## 2.52.0
+
+### Minor Changes
+
+- 760e844: added context to actions/agents
+
+### Patch Changes
+
+- Updated dependencies [e926106]
+- Updated dependencies [760e844]
+  - @memberjunction/ai@2.52.0
+  - @memberjunction/aiengine@2.52.0
+  - @memberjunction/core@2.52.0
+  - @memberjunction/core-entities@2.52.0
+  - @memberjunction/actions-base@2.52.0
+  - @memberjunction/doc-utils@2.52.0
+  - @memberjunction/global@2.52.0
+
 ## 2.51.0
 
 ### Minor Changes

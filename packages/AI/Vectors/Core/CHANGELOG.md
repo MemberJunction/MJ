@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/ai-vectors
 
+## 2.52.0
+
+### Minor Changes
+
+- e926106: Significant improvements to AI functionality
+
+### Patch Changes
+
+- Updated dependencies [e926106]
+  - @memberjunction/ai@2.52.0
+  - @memberjunction/aiengine@2.52.0
+  - @memberjunction/ai-vectordb@2.52.0
+  - @memberjunction/core@2.52.0
+  - @memberjunction/core-entities@2.52.0
+  - @memberjunction/global@2.52.0
+
 ## 2.51.0
 
 ### Patch Changes
