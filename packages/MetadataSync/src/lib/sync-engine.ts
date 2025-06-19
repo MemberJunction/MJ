@@ -288,7 +288,8 @@ export class SyncEngine {
         }
       }
       
-      // Save the new record
+      // Save the new record (new records are always dirty)
+      console.log(`📝 Auto-creating ${entityName} record where ${fieldName}='${fieldValue}'`);
       const saved = await newEntity.Save();
       if (!saved) {
         const message = newEntity.LatestResult?.Message;

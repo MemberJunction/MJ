@@ -314,6 +314,185 @@ try {
 // The agent run is properly marked as 'Cancelled' in the database
 ```
 
+### Context Propagation (New in v2.51.0)
+
+The AI Agents framework now supports type-safe context propagation throughout the execution hierarchy. This allows runtime-specific information to flow from agents to sub-agents and actions without being part of the formal parameters.
+
+**Note**: Context typing is now done at the parameter level rather than the class level, providing better flexibility and type inference.
+
+#### Basic Context Usage
+
+```typescript
+import { BaseAgent, ExecuteAgentParams } from '@memberjunction/ai-agents';
+
+// Define your context type
+interface MyAgentContext {
+    apiEndpoint: string;
+    apiKey: string;
+    environment: 'dev' | 'staging' | 'prod';
+    userPreferences: {
+        language: string;
+        timezone: string;
+    };
+}
+
+// Execute agent with typed context
+const agent = new BaseAgent();
+const params: ExecuteAgentParams<MyAgentContext> = {
+    agent: myAgentEntity,
+    conversationMessages: messages,
+    contextUser: currentUser,
+    context: {
+        apiEndpoint: 'https://api.example.com',
+        apiKey: process.env.API_KEY,
+        environment: 'prod',
+        userPreferences: {
+            language: 'en',
+            timezone: 'UTC'
+        }
+    }
+};
+const result = await agent.Execute(params);
+```
+
+#### Context Flow Through Hierarchy
+
+Context automatically flows through the entire execution hierarchy:
+
+```typescript
+// Parent agent execution
+const parentParams: ExecuteAgentParams<MyContext> = {
+    agent: parentAgentEntity,
+    conversationMessages: messages,
+    context: myContext  // Context passed here
+};
+const parentResult = await parentAgent.Execute(parentParams);
+
+// When parent executes sub-agents, context flows automatically
+// Sub-agents receive the same context without manual passing
+
+// When agents execute actions, context flows to them as well
+// Actions can access context via params.Context
+```
+
+#### Using Context in Custom Agents
+
+```typescript
+export class CustomAgent extends BaseAgent {
+    protected async preparePromptParams(
+        agentType: AIAgentTypeEntity,
+        systemPrompt: any,
+        childPrompt: any,
+        params: ExecuteAgentParams<MyAgentContext>
+    ): Promise<AIPromptParams> {
+        const promptParams = await super.preparePromptParams(agentType, systemPrompt, childPrompt, params);
+        
+        // Access typed context
+        if (params.context) {
+            promptParams.data.apiEndpoint = params.context.apiEndpoint;
+            promptParams.data.environment = params.context.environment;
+            
+            // Use context to modify behavior
+            if (params.context.environment === 'dev') {
+                promptParams.data.debugMode = true;
+            }
+        }
+        
+        return promptParams;
+    }
+}
+```
+
+#### Using Context in Actions
+
+```typescript
+import { BaseAction, RunActionParams } from '@memberjunction/actions';
+
+export class APICallAction extends BaseAction {
+    protected async InternalRunAction(params: RunActionParams<MyAgentContext>): Promise<ActionResultSimple> {
+        // Access typed context
+        const endpoint = params.Context?.apiEndpoint;
+        const apiKey = params.Context?.apiKey;
+        
+        if (!endpoint || !apiKey) {
+            return {
+                Success: false,
+                ResultCode: 'MISSING_CONTEXT',
+                Message: 'Required API configuration not found in context'
+            };
+        }
+        
+        // Use context for action execution
+        const response = await fetch(endpoint, {
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Accept-Language': params.Context.userPreferences.language
+            }
+        });
+        
+        return {
+            Success: true,
+            ResultCode: 'SUCCESS',
+            Message: 'API call completed'
+        };
+    }
+}
+```
+
+#### Common Context Use Cases
+
+1. **Environment Configuration**
+   ```typescript
+   interface EnvironmentContext {
+       apiEndpoints: Record<string, string>;
+       featureFlags: Record<string, boolean>;
+       debugMode: boolean;
+   }
+   ```
+
+2. **User Session Information**
+   ```typescript
+   interface SessionContext {
+       sessionId: string;
+       correlationId: string;
+       userPreferences: UserPreferences;
+       authTokens: Record<string, string>;
+   }
+   ```
+
+3. **Runtime Service Connections**
+   ```typescript
+   interface ServiceContext {
+       databaseConnection: string;
+       cacheClient: CacheClient;
+       messageQueue: QueueService;
+   }
+   ```
+
+#### Best Practices for Context Usage
+
+1. **Define Clear Context Types**: Create well-defined interfaces for your context objects
+2. **Keep Context Focused**: Include only runtime-specific data, not business logic parameters
+3. **Avoid Sensitive Data**: While context can contain API keys when necessary, minimize sensitive data exposure
+4. **Document Context Requirements**: Clearly document what context your agents and actions expect
+5. **Provide Defaults**: Handle cases where context might be undefined or partial
+
+#### Context vs Parameters
+
+Use **Context** for:
+- Environment-specific configuration
+- Runtime credentials and connections
+- User session information
+- Feature flags and toggles
+- Cross-cutting concerns
+
+Use **Parameters** for:
+- Business logic inputs
+- Data to be processed
+- Explicit action configuration
+- Values that should be logged/audited
+- Data that varies per execution
+
 ## Extending BaseAgent
 
 The BaseAgent class provides a flexible execution pipeline that can be extended and customized through protected methods. This allows subclasses to override specific parts of the execution flow while maintaining the overall architecture.

@@ -53,6 +53,8 @@ export interface MJConfig {
 export interface SyncConfig {
   /** Version of the sync configuration format */
   version: string;
+  /** Glob pattern for finding data files (defaults to "*.json") */
+  filePattern?: string;
   /** 
    * Directory processing order (only applies to root-level config, not inherited by subdirectories)
    * Specifies the order in which subdirectories should be processed to handle dependencies.
@@ -65,6 +67,11 @@ export interface SyncConfig {
     validateBeforePush?: boolean;
     /** Whether to require user confirmation before push */
     requireConfirmation?: boolean;
+    /** 
+     * Whether to automatically create new records when a primaryKey exists but record is not found
+     * Defaults to false - will warn instead of creating
+     */
+    autoCreateMissingRecords?: boolean;
   };
   /** SQL logging configuration (only applies to root-level config, not inherited by subdirectories) */
   sqlLogging?: {

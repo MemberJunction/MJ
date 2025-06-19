@@ -220,6 +220,46 @@ import { LoopAgentType } from '@memberjunction/aiengine';
 // - Execution flow control
 ```
 
+### Type-Safe Sub-Agent Requests (New in v2.51.0)
+
+The AI Engine now provides type-safe context propagation for sub-agent requests. Context is optional in the request definition and is provided at execution time by the framework:
+
+```typescript
+import { AgentSubAgentRequest, BaseAgentNextStep } from '@memberjunction/aiengine';
+
+// Define your context type
+interface MyContext {
+    apiEndpoint: string;
+    apiKey: string;
+    environment: 'dev' | 'staging' | 'prod';
+}
+
+// Create a typed sub-agent request - context is optional here
+const subAgentRequest: AgentSubAgentRequest<MyContext> = {
+    id: 'sub-agent-uuid',
+    name: 'DataProcessorAgent',
+    message: 'Process the uploaded data',
+    terminateAfter: false
+    // context is NOT set by AI agents - it's provided by the framework at execution time
+};
+
+// Use in agent next step decisions
+const nextStep: BaseAgentNextStep<MyContext> = {
+    step: 'sub-agent',
+    subAgent: subAgentRequest
+};
+
+// At execution time, the framework provides the context:
+// The parent agent's context is automatically passed to sub-agents
+// This ensures consistent runtime configuration across the agent hierarchy
+```
+
+This pattern ensures:
+- Type safety when defining sub-agent requests
+- Context is consistently provided by the execution framework
+- AI agents focus on decision logic without managing runtime configuration
+- Runtime contexts (API keys, endpoints, etc.) flow through the agent hierarchy automatically
+
 
 ## Advanced Features
 

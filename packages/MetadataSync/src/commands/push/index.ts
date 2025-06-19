@@ -13,12 +13,14 @@ import { configManager } from '../../lib/config-manager';
 import { getSyncEngine, resetSyncEngine } from '../../lib/singleton-manager';
 import { SQLServerDataProvider, type SqlLoggingSession } from '@memberjunction/sqlserver-dataprovider';
 import { uuidv4 } from '@memberjunction/global';
+import { FileBackupManager } from '../../lib/file-backup-manager';
 
 export default class Push extends Command {
   static description = 'Push local file changes to the database';
   
   private warnings: string[] = [];
   private errors: string[] = [];
+  private processedRecords: Map<string, { filePath: string; arrayIndex?: number; lineNumber?: number }> = new Map();
   
   static examples = [
     `<%= config.bin %> <%= command.id %>`,
@@ -46,7 +48,12 @@ export default class Push extends Command {
     const { flags } = await this.parse(Push);
     const spinner = ora();
     let sqlLogger: SqlLoggingSession | null = null;
+    const fileBackupManager = new FileBackupManager();
+    let hasActiveTransaction = false;
     const startTime = Date.now();
+    
+    // Reset the processed records tracking for this push operation
+    this.processedRecords.clear();
     
     try {
       // Load configurations
@@ -171,30 +178,74 @@ export default class Push extends Command {
         }
       }
       
+      // Initialize file backup manager (unless in dry-run mode)
+      if (!flags['dry-run']) {
+        await fileBackupManager.initialize();
+        if (flags.verbose) {
+          this.log('📁 File backup manager initialized');
+        }
+      }
+      
       // Start a database transaction for the entire push operation (unless in dry-run mode)
       // IMPORTANT: We start the transaction AFTER metadata loading and validation to avoid
       // transaction conflicts with background refresh operations
       if (!flags['dry-run']) {
         const { getDataProvider } = await import('../../lib/provider-utils');
         const dataProvider = getDataProvider();
+        
+        // Ensure we have SQLServerDataProvider for transaction support
+        if (!(dataProvider instanceof SQLServerDataProvider)) {
+          const errorMsg = 'MetadataSync requires SQLServerDataProvider for transaction support. Current provider does not support transactions.';
+          
+          // Rollback file backups since we're not proceeding
+          try {
+            await fileBackupManager.rollback();
+          } catch (rollbackError) {
+            this.warn(`Failed to rollback file backup initialization: ${rollbackError}`);
+          }
+          
+          this.error(errorMsg);
+        }
+        
         if (dataProvider && typeof dataProvider.BeginTransaction === 'function') {
           try {
             await dataProvider.BeginTransaction();
+            hasActiveTransaction = true;
             if (flags.verbose) {
               this.log('🔄 Transaction started - all changes will be committed or rolled back as a unit');
             }
           } catch (error) {
-            this.warn('Failed to start transaction - changes will be committed individually');
-            this.warn(`Transaction error: ${error instanceof Error ? error.message : String(error)}`);
+            // Transaction start failure is critical - we should not proceed without it
+            const errorMsg = `Failed to start database transaction: ${error instanceof Error ? error.message : String(error)}`;
+            
+            // Rollback file backups since we're not proceeding
+            try {
+              await fileBackupManager.rollback();
+            } catch (rollbackError) {
+              this.warn(`Failed to rollback file backup initialization: ${rollbackError}`);
+            }
+            
+            this.error(errorMsg);
           }
         } else {
-          this.warn('Transaction support not available - changes will be committed individually');
+          // No transaction support is also critical for data integrity
+          const errorMsg = 'Transaction support not available - cannot ensure data integrity';
+          
+          // Rollback file backups since we're not proceeding
+          try {
+            await fileBackupManager.rollback();
+          } catch (rollbackError) {
+            this.warn(`Failed to rollback file backup initialization: ${rollbackError}`);
+          }
+          
+          this.error(errorMsg);
         }
       }
       
       // Process each entity directory
       let totalCreated = 0;
       let totalUpdated = 0;
+      let totalUnchanged = 0;
       let totalErrors = 0;
       
       for (const entityDir of entityDirs) {
@@ -213,11 +264,33 @@ export default class Push extends Command {
           entityConfig,
           syncEngine,
           flags,
-          syncConfig
+          syncConfig,
+          fileBackupManager
         );
+        
+        // Show per-directory summary
+        const dirName = path.relative(process.cwd(), entityDir) || '.';
+        const dirTotal = result.created + result.updated + result.unchanged;
+        if (dirTotal > 0 || result.errors > 0) {
+          this.log(`\n📁 ${dirName}:`);
+          this.log(`   Total processed: ${dirTotal} unique records`);
+          if (result.created > 0) {
+            this.log(`   ✓ Created: ${result.created}`);
+          }
+          if (result.updated > 0) {
+            this.log(`   ✓ Updated: ${result.updated}`);
+          }
+          if (result.unchanged > 0) {
+            this.log(`   - Unchanged: ${result.unchanged}`);
+          }
+          if (result.errors > 0) {
+            this.log(`   ✗ Errors: ${result.errors}`);
+          }
+        }
         
         totalCreated += result.created;
         totalUpdated += result.updated;
+        totalUnchanged += result.unchanged;
         totalErrors += result.errors;
       }
       
@@ -229,6 +302,7 @@ export default class Push extends Command {
       this.log('\n' + formatter.formatSyncSummary('push', {
         created: totalCreated,
         updated: totalUpdated,
+        unchanged: totalUnchanged,
         deleted: 0,
         skipped: 0,
         errors: totalErrors,
@@ -236,11 +310,11 @@ export default class Push extends Command {
       }));
       
       // Handle transaction commit/rollback
-      if (!flags['dry-run']) {
+      if (!flags['dry-run'] && hasActiveTransaction) {
         const dataProvider = Metadata.Provider as SQLServerDataProvider;
         
-        // Check if we have an active transaction
-        if (dataProvider ) {
+        // We know we have an active transaction at this point
+        if (dataProvider) {
           let shouldCommit = true;
           
           // If there are any errors, always rollback
@@ -281,21 +355,41 @@ export default class Push extends Command {
             if (shouldCommit) {
               await dataProvider.CommitTransaction();
               this.log('\n✅ All changes committed successfully');
+              
+              // Clean up file backups after successful commit
+              await fileBackupManager.cleanup();
             } else {
               // User chose to rollback or errors/warnings in CI mode
               this.log('\n🔙 Rolling back all changes...');
+              
+              // Rollback database transaction
               await dataProvider.RollbackTransaction();
-              this.log('✅ Rollback completed - no changes were made to the database');
+              
+              // Rollback file changes
+              this.log('🔙 Rolling back file changes...');
+              await fileBackupManager.rollback();
+              
+              this.log('✅ Rollback completed - no changes were made to the database or files');
             }
           } catch (error) {
             // Try to rollback on any error
             this.log('\n❌ Transaction error - attempting to roll back changes');
             try {
               await dataProvider.RollbackTransaction();
-              this.log('✅ Rollback completed');
+              this.log('✅ Database rollback completed');
             } catch (rollbackError) {
-              this.log('❌ Rollback failed: ' + (rollbackError instanceof Error ? rollbackError.message : String(rollbackError)));
+              this.log('❌ Database rollback failed: ' + (rollbackError instanceof Error ? rollbackError.message : String(rollbackError)));
             }
+            
+            // Also rollback file changes
+            try {
+              this.log('🔙 Rolling back file changes...');
+              await fileBackupManager.rollback();
+              this.log('✅ File rollback completed');
+            } catch (fileRollbackError) {
+              this.log('❌ File rollback failed: ' + (fileRollbackError instanceof Error ? fileRollbackError.message : String(fileRollbackError)));
+            }
+            
             throw error;
           }
         }
@@ -309,19 +403,29 @@ export default class Push extends Command {
     } catch (error) {
       spinner.fail('Push failed');
       
-      // Try to rollback the transaction if one is active
+      // Try to rollback the transaction and files if not in dry-run mode
       if (!flags['dry-run']) {
         const { getDataProvider } = await import('../../lib/provider-utils');
         const dataProvider = getDataProvider();
         
-        if (dataProvider && typeof dataProvider.RollbackTransaction === 'function') {
+        // Rollback database transaction if we have one
+        if (hasActiveTransaction && dataProvider && typeof dataProvider.RollbackTransaction === 'function') {
           try {
-            this.log('\n🔙 Rolling back transaction due to error...');
+            this.log('\n🔙 Rolling back database transaction due to error...');
             await dataProvider.RollbackTransaction();
-            this.log('✅ Rollback completed - no changes were made to the database');
+            this.log('✅ Database rollback completed');
           } catch (rollbackError) {
-            this.log('❌ Rollback failed: ' + (rollbackError instanceof Error ? rollbackError.message : String(rollbackError)));
+            this.log('❌ Database rollback failed: ' + (rollbackError instanceof Error ? rollbackError.message : String(rollbackError)));
           }
+        }
+        
+        // Rollback file changes
+        try {
+          this.log('🔙 Rolling back file changes...');
+          await fileBackupManager.rollback();
+          this.log('✅ File rollback completed - all files restored to original state');
+        } catch (fileRollbackError) {
+          this.log('❌ File rollback failed: ' + (fileRollbackError instanceof Error ? fileRollbackError.message : String(fileRollbackError)));
         }
       }
       
@@ -381,9 +485,10 @@ export default class Push extends Command {
     entityConfig: any,
     syncEngine: SyncEngine,
     flags: any,
-    syncConfig: any
-  ): Promise<{ created: number; updated: number; errors: number }> {
-    const result = { created: 0, updated: 0, errors: 0 };
+    syncConfig: any,
+    fileBackupManager?: FileBackupManager
+  ): Promise<{ created: number; updated: number; unchanged: number; errors: number }> {
+    const result = { created: 0, updated: 0, unchanged: 0, errors: 0 };
     
     // Find files matching the configured pattern
     const pattern = entityConfig.filePattern || '*.json';
@@ -399,7 +504,7 @@ export default class Push extends Command {
     }
     
     // First, process all JSON files in this directory
-    await this.processJsonFiles(jsonFiles, entityDir, entityConfig, syncEngine, flags, result);
+    await this.processJsonFiles(jsonFiles, entityDir, entityConfig, syncEngine, flags, result, fileBackupManager);
     
     // Then, recursively process subdirectories
     const entries = await fs.readdir(entityDir, { withFileTypes: true });
@@ -435,11 +540,13 @@ export default class Push extends Command {
           subEntityConfig,
           syncEngine,
           flags,
-          syncConfig
+          syncConfig,
+          fileBackupManager
         );
         
         result.created += subResult.created;
         result.updated += subResult.updated;
+        result.unchanged += subResult.unchanged;
         result.errors += subResult.errors;
       }
     }
@@ -453,7 +560,8 @@ export default class Push extends Command {
     entityConfig: any,
     syncEngine: SyncEngine,
     flags: any,
-    result: { created: number; updated: number; errors: number }
+    result: { created: number; updated: number; unchanged: number; errors: number },
+    fileBackupManager?: FileBackupManager
   ): Promise<void> {
     if (jsonFiles.length === 0) {
       return;
@@ -462,12 +570,18 @@ export default class Push extends Command {
     const spinner = ora();
     spinner.start('Processing records');
     
-    let totalRecords = 0;
     
     for (const file of jsonFiles) {
       try {
         const filePath = path.join(entityDir, file);
-        const fileContent = await fs.readJson(filePath);
+        
+        // Backup the file before any modifications (unless dry-run)
+        if (!flags['dry-run'] && fileBackupManager) {
+          await fileBackupManager.backupFile(filePath);
+        }
+        
+        // Parse JSON with line number tracking
+        const { content: fileContent, lineNumbers } = await this.parseJsonWithLineNumbers(filePath);
         
         // Process templates in the loaded content
         const processedContent = await syncEngine.processTemplates(fileContent, entityDir);
@@ -475,7 +589,6 @@ export default class Push extends Command {
         // Check if the file contains a single record or an array of records
         const isArray = Array.isArray(processedContent);
         const records: RecordData[] = isArray ? processedContent : [processedContent];
-        totalRecords += records.length;
         
         // Build and process defaults (including lookups)
         const defaults = await syncEngine.buildDefaults(filePath, entityConfig);
@@ -485,7 +598,8 @@ export default class Push extends Command {
           const recordData = records[i];
           
           // Process the record
-          const isNew = await this.pushRecord(
+          const recordLineNumber = lineNumbers.get(i); // Get line number for this array index
+          const pushResult = await this.pushRecord(
             recordData,
             entityConfig.entity,
             path.dirname(filePath),
@@ -494,18 +608,37 @@ export default class Push extends Command {
             syncEngine,
             flags['dry-run'],
             flags.verbose,
-            isArray ? i : undefined
+            isArray ? i : undefined,
+            fileBackupManager,
+            recordLineNumber
           );
           
           if (!flags['dry-run']) {
-            if (isNew) {
-              result.created++;
-            } else {
-              result.updated++;
+            // Don't count duplicates in stats
+            if (!pushResult.isDuplicate) {
+              if (pushResult.isNew) {
+                result.created++;
+              } else if (pushResult.wasActuallyUpdated) {
+                result.updated++;
+              } else {
+                result.unchanged++;
+              }
+            }
+            
+            // Add related entity stats
+            if (pushResult.relatedStats) {
+              result.created += pushResult.relatedStats.created;
+              result.updated += pushResult.relatedStats.updated;
+              result.unchanged += pushResult.relatedStats.unchanged;
+              
+              // Debug logging for related entities
+              if (flags.verbose && pushResult.relatedStats.unchanged > 0) {
+                this.log(`   Related entities: ${pushResult.relatedStats.unchanged} unchanged`);
+              }
             }
           }
           
-          spinner.text = `Processing records (${result.created + result.updated + result.errors}/${totalRecords})`;
+          spinner.text = `Processing records (${result.created + result.updated + result.unchanged + result.errors} processed)`;
         }
         
         // Write back the entire file if it's an array
@@ -523,7 +656,7 @@ export default class Push extends Command {
     }
     
     if (flags.verbose) {
-      spinner.succeed(`Processed ${totalRecords} records from ${jsonFiles.length} files`);
+      spinner.succeed(`Processed ${result.created + result.updated + result.unchanged} records from ${jsonFiles.length} files`);
     } else {
       spinner.stop();
     }
@@ -538,14 +671,40 @@ export default class Push extends Command {
     syncEngine: SyncEngine,
     dryRun: boolean,
     verbose: boolean = false,
-    arrayIndex?: number
-  ): Promise<boolean> {
+    arrayIndex?: number,
+    fileBackupManager?: FileBackupManager,
+    lineNumber?: number
+  ): Promise<{ isNew: boolean; wasActuallyUpdated: boolean; isDuplicate: boolean; relatedStats?: { created: number; updated: number; unchanged: number } }> {
     // Load or create entity
     let entity: BaseEntity | null = null;
     let isNew = false;
     
     if (recordData.primaryKey) {
       entity = await syncEngine.loadEntity(entityName, recordData.primaryKey);
+      
+      // Warn if record has primaryKey but wasn't found
+      if (!entity) {
+        const pkDisplay = Object.entries(recordData.primaryKey)
+          .map(([key, value]) => `${key}=${value}`)
+          .join(', ');
+        
+        // Load sync config to check autoCreateMissingRecords setting
+        const syncConfig = await loadSyncConfig(configManager.getOriginalCwd());
+        const autoCreate = syncConfig?.push?.autoCreateMissingRecords ?? false;
+        
+        if (!autoCreate) {
+          const fileRef = lineNumber ? `${fileName}:${lineNumber}` : fileName;
+          this.warn(`⚠️  Record not found: ${entityName} with primaryKey {${pkDisplay}} at ${fileRef}`);
+          this.warn(`   To auto-create missing records, set push.autoCreateMissingRecords=true in .mj-sync.json`);
+          
+          // Skip this record
+          return { isNew: false, wasActuallyUpdated: false, isDuplicate: false };
+        } else {
+          if (verbose) {
+            this.log(`   Auto-creating missing ${entityName} record with primaryKey {${pkDisplay}}`);
+          }
+        }
+      }
     }
     
     if (!entity) {
@@ -608,7 +767,49 @@ export default class Push extends Command {
     
     if (dryRun) {
       this.log(`Would ${isNew ? 'create' : 'update'} ${entityName} record`);
-      return isNew;
+      return { isNew, wasActuallyUpdated: true, isDuplicate: false, relatedStats: undefined };
+    }
+    
+    // Check for duplicate processing (but only for existing records that were loaded)
+    let isDuplicate = false;
+    if (!isNew && entity) {
+      const fullFilePath = path.join(baseDir, fileName);
+      isDuplicate = this.checkAndTrackRecord(entityName, entity, fullFilePath, arrayIndex, lineNumber);
+    }
+    
+    // Check if the record is dirty before saving
+    let wasActuallyUpdated = false;
+    if (!isNew && entity.Dirty) {
+      // Record is dirty, get the changes
+      const changes = entity.GetChangesSinceLastSave();
+      const changeKeys = Object.keys(changes);
+      if (changeKeys.length > 0) {
+        wasActuallyUpdated = true;
+        
+        // Get primary key info for display
+        const entityInfo = syncEngine.getEntityInfo(entityName);
+        const primaryKeyDisplay: string[] = [];
+        if (entityInfo) {
+          for (const pk of entityInfo.PrimaryKeys) {
+            primaryKeyDisplay.push(`${pk.Name}: ${entity.Get(pk.Name)}`);
+          }
+        }
+        
+        this.log(''); // Add newline before update output
+        this.log(`📝 Updating ${entityName} record:`);
+        if (primaryKeyDisplay.length > 0) {
+          this.log(`   Primary Key: ${primaryKeyDisplay.join(', ')}`);
+        }
+        this.log(`   Changes:`);
+        for (const fieldName of changeKeys) {
+          const field = entity.GetFieldByName(fieldName);
+          const oldValue = field ? field.OldValue : undefined;
+          const newValue = (changes as any)[fieldName];
+          this.log(`     ${fieldName}: ${oldValue} → ${newValue}`);
+        }
+      }
+    } else if (isNew) {
+      wasActuallyUpdated = true;
     }
     
     // Save the record
@@ -626,14 +827,20 @@ export default class Push extends Command {
     }
     
     // Process related entities after saving parent
+    let relatedStats;
     if (recordData.relatedEntities && !dryRun) {
-      await this.processRelatedEntities(
+      const fullFilePath = path.join(baseDir, fileName);
+      relatedStats = await this.processRelatedEntities(
         recordData.relatedEntities,
         entity,
         entity, // root is same as parent for top level
         baseDir,
         syncEngine,
-        verbose
+        verbose,
+        fileBackupManager,
+        1, // indentLevel
+        fullFilePath,
+        arrayIndex
       );
     }
     
@@ -647,6 +854,10 @@ export default class Push extends Command {
         }
         recordData.primaryKey = newPrimaryKey;
       }
+      
+      // Track the new record now that we have its primary key
+      const fullFilePath = path.join(baseDir, fileName);
+      this.checkAndTrackRecord(entityName, entity, fullFilePath, arrayIndex, lineNumber);
     }
     
     // Always update sync metadata
@@ -663,7 +874,7 @@ export default class Push extends Command {
       await fs.writeJson(filePath, recordData, { spaces: 2 });
     }
     
-    return isNew;
+    return { isNew, wasActuallyUpdated, isDuplicate, relatedStats };
   }
   
   private async processRelatedEntities(
@@ -673,9 +884,13 @@ export default class Push extends Command {
     baseDir: string,
     syncEngine: SyncEngine,
     verbose: boolean = false,
-    indentLevel: number = 1
-  ): Promise<void> {
+    fileBackupManager?: FileBackupManager,
+    indentLevel: number = 1,
+    parentFilePath?: string,
+    parentArrayIndex?: number
+  ): Promise<{ created: number; updated: number; unchanged: number }> {
     const indent = '  '.repeat(indentLevel);
+    const stats = { created: 0, updated: 0, unchanged: 0 };
     
     for (const [entityName, records] of Object.entries(relatedEntities)) {
       if (verbose) {
@@ -690,6 +905,30 @@ export default class Push extends Command {
           
           if (relatedRecord.primaryKey) {
             entity = await syncEngine.loadEntity(entityName, relatedRecord.primaryKey);
+            
+            // Warn if record has primaryKey but wasn't found
+            if (!entity) {
+              const pkDisplay = Object.entries(relatedRecord.primaryKey)
+                .map(([key, value]) => `${key}=${value}`)
+                .join(', ');
+              
+              // Load sync config to check autoCreateMissingRecords setting
+              const syncConfig = await loadSyncConfig(configManager.getOriginalCwd());
+              const autoCreate = syncConfig?.push?.autoCreateMissingRecords ?? false;
+              
+              if (!autoCreate) {
+                const fileRef = parentFilePath ? path.relative(configManager.getOriginalCwd(), parentFilePath) : 'unknown';
+                this.warn(`${indent}⚠️  Related record not found: ${entityName} with primaryKey {${pkDisplay}} at ${fileRef}`);
+                this.warn(`${indent}   To auto-create missing records, set push.autoCreateMissingRecords=true in .mj-sync.json`);
+                
+                // Skip this record
+                continue;
+              } else {
+                if (verbose) {
+                  this.log(`${indent}   Auto-creating missing related ${entityName} record with primaryKey {${pkDisplay}}`);
+                }
+              }
+            }
           }
           
           if (!entity) {
@@ -746,6 +985,49 @@ export default class Push extends Command {
             }
           }
           
+          // Check for duplicate processing (but only for existing records that were loaded)
+          let isDuplicate = false;
+          if (!isNew && entity) {
+            // Use parent file path for related entities since they're defined in the parent's file
+            const relatedFilePath = parentFilePath || path.join(baseDir, 'unknown');
+            isDuplicate = this.checkAndTrackRecord(entityName, entity, relatedFilePath, parentArrayIndex);
+          }
+          
+          // Check if the record is dirty before saving
+          let wasActuallyUpdated = false;
+          if (!isNew && entity.Dirty) {
+            // Record is dirty, get the changes
+            const changes = entity.GetChangesSinceLastSave();
+            const changeKeys = Object.keys(changes);
+            if (changeKeys.length > 0) {
+              wasActuallyUpdated = true;
+              
+              // Get primary key info for display
+              const entityInfo = syncEngine.getEntityInfo(entityName);
+              const primaryKeyDisplay: string[] = [];
+              if (entityInfo) {
+                for (const pk of entityInfo.PrimaryKeys) {
+                  primaryKeyDisplay.push(`${pk.Name}: ${entity.Get(pk.Name)}`);
+                }
+              }
+              
+              this.log(''); // Add newline before update output
+              this.log(`${indent}📝 Updating related ${entityName} record:`);
+              if (primaryKeyDisplay.length > 0) {
+                this.log(`${indent}   Primary Key: ${primaryKeyDisplay.join(', ')}`);
+              }
+              this.log(`${indent}   Changes:`);
+              for (const fieldName of changeKeys) {
+                const field = entity.GetFieldByName(fieldName);
+                const oldValue = field ? field.OldValue : undefined;
+                const newValue = (changes as any)[fieldName];
+                this.log(`${indent}     ${fieldName}: ${oldValue} → ${newValue}`);
+              }
+            }
+          } else if (isNew) {
+            wasActuallyUpdated = true;
+          }
+          
           // Save the related entity
           const saved = await entity.Save();
           if (!saved) {
@@ -760,8 +1042,21 @@ export default class Push extends Command {
             throw new Error(`Failed to save related ${entityName}: ${errors}`);
           }
           
-          if (verbose) {
+          // Update stats - don't count duplicates
+          if (!isDuplicate) {
+            if (isNew) {
+              stats.created++;
+            } else if (wasActuallyUpdated) {
+              stats.updated++;
+            } else {
+              stats.unchanged++;
+            }
+          }
+          
+          if (verbose && wasActuallyUpdated) {
             this.log(`${indent}  ✓ ${isNew ? 'Created' : 'Updated'} ${entityName} record`);
+          } else if (verbose && !wasActuallyUpdated) {
+            this.log(`${indent}  - No changes to ${entityName} record`);
           }
           
           // Update the related record with primary key and sync metadata
@@ -773,6 +1068,10 @@ export default class Push extends Command {
               for (const pk of entityInfo.PrimaryKeys) {
                 relatedRecord.primaryKey[pk.Name] = entity.Get(pk.Name);
               }
+              
+              // Track the new related entity now that we have its primary key
+              const relatedFilePath = parentFilePath || path.join(baseDir, 'unknown');
+              this.checkAndTrackRecord(entityName, entity, relatedFilePath, parentArrayIndex);
             }
             
             // Always update sync metadata
@@ -784,20 +1083,166 @@ export default class Push extends Command {
           
           // Process nested related entities if any
           if (relatedRecord.relatedEntities) {
-            await this.processRelatedEntities(
+            const nestedStats = await this.processRelatedEntities(
               relatedRecord.relatedEntities,
               entity,
               rootEntity,
               baseDir,
               syncEngine,
               verbose,
-              indentLevel + 1
+              fileBackupManager,
+              indentLevel + 1,
+              parentFilePath,
+              parentArrayIndex
             );
+            
+            // Accumulate nested stats
+            stats.created += nestedStats.created;
+            stats.updated += nestedStats.updated;
+            stats.unchanged += nestedStats.unchanged;
           }
         } catch (error) {
           throw new Error(`Failed to process related ${entityName}: ${error}`);
         }
       }
     }
+    
+    return stats;
+  }
+  
+  /**
+   * Generate a unique tracking key for a record based on entity name and primary key values
+   */
+  private generateRecordKey(entityName: string, entity: BaseEntity): string {
+    const entityInfo = entity.EntityInfo;
+    const primaryKeyValues: string[] = [];
+    
+    if (entityInfo && entityInfo.PrimaryKeys.length > 0) {
+      for (const pk of entityInfo.PrimaryKeys) {
+        const value = entity.Get(pk.Name);
+        primaryKeyValues.push(`${pk.Name}:${value}`);
+      }
+    }
+    
+    return `${entityName}|${primaryKeyValues.join('|')}`;
+  }
+  
+  /**
+   * Check if a record has already been processed and warn if duplicate
+   */
+  private checkAndTrackRecord(
+    entityName: string, 
+    entity: BaseEntity, 
+    filePath?: string,
+    arrayIndex?: number,
+    lineNumber?: number
+  ): boolean {
+    const recordKey = this.generateRecordKey(entityName, entity);
+    
+    const existing = this.processedRecords.get(recordKey);
+    if (existing) {
+      const primaryKeyDisplay = entity.EntityInfo?.PrimaryKeys
+        .map(pk => `${pk.Name}: ${entity.Get(pk.Name)}`)
+        .join(', ') || 'unknown';
+      
+      // Format file location with clickable link for VSCode
+      // Create maps with just the line numbers we have
+      const currentLineMap = lineNumber ? new Map([[arrayIndex || 0, lineNumber]]) : undefined;
+      const originalLineMap = existing.lineNumber ? new Map([[existing.arrayIndex || 0, existing.lineNumber]]) : undefined;
+      
+      const currentLocation = this.formatFileLocation(filePath, arrayIndex, currentLineMap);
+      const originalLocation = this.formatFileLocation(existing.filePath, existing.arrayIndex, originalLineMap);
+      
+      this.warn(`⚠️  Duplicate record detected for ${entityName} (${primaryKeyDisplay})`);
+      this.warn(`   Current location:  ${currentLocation}`);
+      this.warn(`   Original location: ${originalLocation}`);
+      this.warn(`   The duplicate update will proceed, but you should review your data for unintended duplicates.`);
+      
+      return true; // is duplicate
+    }
+    
+    // Track the record with its source location
+    this.processedRecords.set(recordKey, {
+      filePath: filePath || 'unknown',
+      arrayIndex,
+      lineNumber
+    });
+    return false; // not duplicate
+  }
+  
+  /**
+   * Parse JSON file and track line numbers for array elements
+   */
+  private async parseJsonWithLineNumbers(filePath: string): Promise<{
+    content: any;
+    lineNumbers: Map<number, number>; // arrayIndex -> lineNumber
+  }> {
+    const fileText = await fs.readFile(filePath, 'utf-8');
+    const lines = fileText.split('\n');
+    const lineNumbers = new Map<number, number>();
+    
+    // Parse the JSON
+    const content = JSON.parse(fileText);
+    
+    // If it's an array, try to find where each element starts
+    if (Array.isArray(content)) {
+      let inString = false;
+      let bracketDepth = 0;
+      let currentIndex = -1;
+      
+      for (let lineNum = 0; lineNum < lines.length; lineNum++) {
+        const line = lines[lineNum];
+        
+        // Simple tracking of string boundaries and bracket depth
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          const prevChar = i > 0 ? line[i - 1] : '';
+          
+          if (char === '"' && prevChar !== '\\') {
+            inString = !inString;
+          }
+          
+          if (!inString) {
+            if (char === '{') {
+              bracketDepth++;
+              // If we're at depth 1 in the main array, this is a new object
+              if (bracketDepth === 1 && line.trim().startsWith('{')) {
+                currentIndex++;
+                lineNumbers.set(currentIndex, lineNum + 1); // 1-based line numbers
+              }
+            } else if (char === '}') {
+              bracketDepth--;
+            }
+          }
+        }
+      }
+    }
+    
+    return { content, lineNumbers };
+  }
+  
+  /**
+   * Format file location with clickable link for VSCode
+   */
+  private formatFileLocation(filePath?: string, arrayIndex?: number, lineNumbers?: Map<number, number>): string {
+    if (!filePath || filePath === 'unknown') {
+      return 'unknown';
+    }
+    
+    // Get absolute path for better VSCode integration
+    const absolutePath = path.resolve(filePath);
+    
+    // Try to get actual line number from our tracking
+    let lineNumber = 1;
+    if (arrayIndex !== undefined && lineNumbers && lineNumbers.has(arrayIndex)) {
+      lineNumber = lineNumbers.get(arrayIndex)!;
+    } else if (arrayIndex !== undefined) {
+      // Fallback estimation if we don't have actual line numbers
+      lineNumber = 2 + (arrayIndex * 15);
+    }
+    
+    // Create clickable file path for VSCode - format: file:line
+    // VSCode will make this clickable in the terminal
+    return `${absolutePath}:${lineNumber}`;
   }
 }

@@ -10,9 +10,9 @@
  * @since 2.43.0
  */
 
-import { ChatMessage, ChatResult, AIPromptRunResult, ExecutionStatus, CancellationReason, ModelInfo, JudgeMetadata, ValidationAttempt } from '@memberjunction/ai';
-import { AIPromptEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
-import { UserInfo, ValidationResult, ValidationErrorInfo } from '@memberjunction/core';
+import { ChatMessage } from '@memberjunction/ai';
+import { AIPromptEntity } from '@memberjunction/core-entities';
+import { UserInfo } from '@memberjunction/core';
 
 /**
  * Callback function type for execution progress updates
@@ -190,6 +190,13 @@ export class AIPromptParams {
    * @internal
    */
   parentPromptRunId?: string;
+
+  /**
+   * Additional model-specific parameters that will be passed through to the underlying model.
+   * For chat/LLM models, this can include parameters like temperature, topP, topK, etc.
+   * The AIPromptRunner will pass these through when building model-specific parameters.
+   */
+  additionalParameters?: Record<string, any>;
 }
 
 // Types now imported from @memberjunction/ai to avoid circular dependencies

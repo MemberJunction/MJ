@@ -707,6 +707,15 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * Returns a partial object that contains only the fields that have changed since the last time the record was saved. This is useful for scenarios where you want to send only the changes to the server or to a client.
+     * It is also helpful for quickly finding the fields that are "dirty".
+     * @returns 
+     */
+    public GetChangesSinceLastSave(): Partial<T> {
+        return this.GetAll(false, true);
+    }
+
+    /**
      * This utility method calls GetDataObject() internally and formats the result as a JSON string. If you want to get the data as an object instead of a string, call GetDataObject() directly.
      * @param params
      * @param minifyJSON
@@ -1455,6 +1464,6 @@ export abstract class BaseEntity<T = unknown> {
             }
         }
 
-        return this.GetAll() as K;
+        return this.GetAll() as unknown as K;
     }
 }

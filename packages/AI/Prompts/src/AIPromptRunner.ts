@@ -972,6 +972,58 @@ export class AIPromptRunner {
         promptRun.ParentID = params.parentPromptRunId;
       }
 
+      // Always save the response format from the prompt if it exists
+      if (prompt.ResponseFormat && prompt.ResponseFormat !== 'Any') {
+        promptRun.ResponseFormat = prompt.ResponseFormat;
+      }
+
+      // Save the actual values that will be used (either from prompt defaults or additionalParameters)
+      // First, apply defaults from prompt entity (TODO: uncomment after CodeGen)
+      // if (prompt.Temperature != null) promptRun.Temperature = prompt.Temperature;
+      // if (prompt.TopP != null) promptRun.TopP = prompt.TopP;
+      // if (prompt.TopK != null) promptRun.TopK = prompt.TopK;
+      // if (prompt.MinP != null) promptRun.MinP = prompt.MinP;
+      // if (prompt.FrequencyPenalty != null) promptRun.FrequencyPenalty = prompt.FrequencyPenalty;
+      // if (prompt.PresencePenalty != null) promptRun.PresencePenalty = prompt.PresencePenalty;
+      // if (prompt.Seed != null) promptRun.Seed = prompt.Seed;
+      // if (prompt.StopSequences) promptRun.StopSequences = prompt.StopSequences;
+      // if (prompt.IncludeLogProbs != null) promptRun.LogProbs = prompt.IncludeLogProbs;
+      // if (prompt.TopLogProbs != null) promptRun.TopLogProbs = prompt.TopLogProbs;
+      
+      // Then override with additionalParameters if provided
+      if (params.additionalParameters) {
+        if (params.additionalParameters.temperature !== undefined) {
+          promptRun.Temperature = params.additionalParameters.temperature;
+        }
+        if (params.additionalParameters.topP !== undefined) {
+          promptRun.TopP = params.additionalParameters.topP;
+        }
+        if (params.additionalParameters.topK !== undefined) {
+          promptRun.TopK = params.additionalParameters.topK;
+        }
+        if (params.additionalParameters.minP !== undefined) {
+          promptRun.MinP = params.additionalParameters.minP;
+        }
+        if (params.additionalParameters.frequencyPenalty !== undefined) {
+          promptRun.FrequencyPenalty = params.additionalParameters.frequencyPenalty;
+        }
+        if (params.additionalParameters.presencePenalty !== undefined) {
+          promptRun.PresencePenalty = params.additionalParameters.presencePenalty;
+        }
+        if (params.additionalParameters.seed !== undefined) {
+          promptRun.Seed = params.additionalParameters.seed;
+        }
+        if (params.additionalParameters.stopSequences !== undefined && params.additionalParameters.stopSequences.length > 0) {
+          promptRun.StopSequences = JSON.stringify(params.additionalParameters.stopSequences);
+        }
+        if (params.additionalParameters.includeLogProbs !== undefined) {
+          promptRun.LogProbs = params.additionalParameters.includeLogProbs;
+        }
+        if (params.additionalParameters.topLogProbs !== undefined) {
+          promptRun.TopLogProbs = params.additionalParameters.topLogProbs;
+        }
+      }
+
       // Store the input data/context as JSON in Messages field
       if (params.data || params.templateData) {
         promptRun.Messages = JSON.stringify({
@@ -1035,7 +1087,7 @@ export class AIPromptRunner {
     model: AIModelEntityExtended,
     renderedPrompt: string,
     prompt: AIPromptEntity,
-    _contextUser?: UserInfo,
+    params: AIPromptParams,
     conversationMessages?: ChatMessage[],
     templateMessageRole: TemplateMessageRole = 'system',
     cancellationToken?: AbortSignal,
@@ -1046,26 +1098,76 @@ export class AIPromptRunner {
       const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, apiKey);
 
       // Prepare chat parameters
-      const params = new ChatParams();
-      params.model = model.APIName;
-      params.responseFormat = 'JSON';
-      params.temperature = 0.7; // Default temperature if not specified
-      params.cancellationToken = cancellationToken;
+      const chatParams = new ChatParams();
+      chatParams.model = model.APIName;
+      chatParams.cancellationToken = cancellationToken;
+
+      // Apply defaults from prompt entity first (if they exist)
+      // These can be overridden by additionalParameters
+      if (prompt.Temperature != null) chatParams.temperature = prompt.Temperature;
+      if (prompt.TopP != null) chatParams.topP = prompt.TopP;
+      if (prompt.TopK != null) chatParams.topK = prompt.TopK;
+      if (prompt.MinP != null) chatParams.minP = prompt.MinP;
+      if (prompt.FrequencyPenalty != null) chatParams.frequencyPenalty = prompt.FrequencyPenalty;
+      if (prompt.PresencePenalty != null) chatParams.presencePenalty = prompt.PresencePenalty;
+      if (prompt.Seed != null) chatParams.seed = prompt.Seed;
+      if (prompt.StopSequences) {
+        // Parse comma-delimited stop sequences
+        chatParams.stopSequences = prompt.StopSequences.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+      }
+      if (prompt.IncludeLogProbs != null) chatParams.includeLogProbs = prompt.IncludeLogProbs;
+      if (prompt.TopLogProbs != null) chatParams.topLogProbs = prompt.TopLogProbs;
+
+      // Apply additional parameters if provided (these override prompt defaults)
+      if (params.additionalParameters) {
+        // Apply chat-specific parameters from additionalParameters
+        if (params.additionalParameters.temperature !== undefined) {
+          chatParams.temperature = params.additionalParameters.temperature;
+        }
+        if (params.additionalParameters.topP !== undefined) {
+          chatParams.topP = params.additionalParameters.topP;
+        }
+        if (params.additionalParameters.topK !== undefined) {
+          chatParams.topK = params.additionalParameters.topK;
+        }
+        if (params.additionalParameters.minP !== undefined) {
+          chatParams.minP = params.additionalParameters.minP;
+        }
+        if (params.additionalParameters.frequencyPenalty !== undefined) {
+          chatParams.frequencyPenalty = params.additionalParameters.frequencyPenalty;
+        }
+        if (params.additionalParameters.presencePenalty !== undefined) {
+          chatParams.presencePenalty = params.additionalParameters.presencePenalty;
+        }
+        if (params.additionalParameters.seed !== undefined) {
+          chatParams.seed = params.additionalParameters.seed;
+        }
+        if (params.additionalParameters.stopSequences !== undefined) {
+          chatParams.stopSequences = params.additionalParameters.stopSequences;
+        }
+        if (params.additionalParameters.includeLogProbs !== undefined) {
+          chatParams.includeLogProbs = params.additionalParameters.includeLogProbs;
+        }
+        if (params.additionalParameters.topLogProbs !== undefined) {
+          chatParams.topLogProbs = params.additionalParameters.topLogProbs;
+        }
+      }
+
+      // Apply response format from prompt settings
+      if (prompt.ResponseFormat && prompt.ResponseFormat !== 'Any') {
+        chatParams.responseFormat = prompt.ResponseFormat as 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific';
+      } else {
+        chatParams.responseFormat = 'JSON'; // Default to JSON for backward compatibility
+      }
 
       // Build message array with rendered prompt and conversation messages
-      params.messages = this.buildMessageArray(renderedPrompt, conversationMessages, templateMessageRole);
-
-      // Apply response format constraints if specified
-      if (prompt.ResponseFormat && prompt.ResponseFormat !== 'Any') {
-        // TODO: Implement response format constraints based on prompt.ResponseFormat
-        // This would involve setting the appropriate parameters for structured output
-      }
+      chatParams.messages = this.buildMessageArray(renderedPrompt, conversationMessages, templateMessageRole);
 
       // Execute the model with cancellation support
       if (cancellationToken) {
         // If cancellation token is provided, wrap the execution to handle cancellation
         return await Promise.race([
-          llm.ChatCompletion(params),
+          llm.ChatCompletion(chatParams),
           new Promise<never>((_, reject) => {
             if (cancellationToken.aborted) {
               reject(new Error('Chat completion was cancelled'));
@@ -1078,7 +1180,7 @@ export class AIPromptRunner {
         ]);
       } else {
         // No cancellation token, execute normally
-        return await llm.ChatCompletion(params);
+        return await llm.ChatCompletion(chatParams);
       }
     } catch (error) {
       LogError(`Error executing model ${model.Name}: ${error.message}`);
@@ -1161,7 +1263,7 @@ export class AIPromptRunner {
           selectedModel,
           renderedPromptText,
           prompt,
-          params.contextUser,
+          params,
           params.conversationMessages,
           params.templateMessageRole || 'system',
           params.cancellationToken,
@@ -1496,11 +1598,15 @@ export class AIPromptRunner {
           case 'number': {
             const numberResult = parseFloat(rawOutput);
             if (isNaN(numberResult)) {
-              const error = new ValidationErrorInfo('output', `Expected number output but got: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
-              validationErrors.push(error);
-              throw new Error(error.Message);
+                if (!skipValidation) {
+                const error = new ValidationErrorInfo('output', `Expected number output but got: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
+                validationErrors.push(error);
+                throw new Error(error.Message);
+              }
             }
-            parsedResult = numberResult;
+            else {
+              parsedResult = numberResult;
+            }
             break;
           }
 
@@ -1510,22 +1616,24 @@ export class AIPromptRunner {
               parsedResult = true;
             } else if (['false', 'no', '0'].includes(lowerOutput)) {
               parsedResult = false;
-            } else {
+            } else if (!skipValidation){
               const error = new ValidationErrorInfo('output', `Expected boolean output but got: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
               validationErrors.push(error);
               throw new Error(error.Message);
-            }
+            } 
             break;
           }
 
           case 'date': {
             const dateResult = new Date(rawOutput);
-            if (isNaN(dateResult.getTime())) {
+            if (isNaN(dateResult.getTime()) && !skipValidation) {
               const error = new ValidationErrorInfo('output', `Expected date output but got: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
               validationErrors.push(error);
               throw new Error(error.Message);
             }
-            parsedResult = dateResult;
+            else {
+              parsedResult = dateResult;  
+            }
             break;
           }
 
@@ -1533,12 +1641,15 @@ export class AIPromptRunner {
             try {
               parsedResult = JSON.parse(CleanJSON(rawOutput));
             } catch (jsonError) {
-              const error = new ValidationErrorInfo('output', `Expected JSON object but got invalid JSON: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
-              validationErrors.push(error);
-              throw new Error(error.Message);
+              // if we skip validation, we can allow thisk only emit this if 
+              // we are NOT skipping validation
+              if (!skipValidation) {
+                const error = new ValidationErrorInfo('output', `Expected JSON object but got invalid JSON: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
+                validationErrors.push(error);
+                throw new Error(error.Message);
+              }
             }
             break;
-
           default:
             parsedResult = rawOutput;
         }

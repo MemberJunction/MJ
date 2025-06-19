@@ -22,7 +22,6 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     public templateContent: TemplateContentEntity | null = null;
     public isLoadingTemplate = true; // Default to loading state
     public templateNotFoundInDatabase = false;
-    public showExecutionDialog = false;
     public showTestHarness = false;
     
     // Model management
@@ -292,7 +291,8 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             return;
         }
 
-        this.showExecutionDialog = true;
+        // Use test harness instead
+        this.openTestHarness();
     }
 
     /**
