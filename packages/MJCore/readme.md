@@ -134,6 +134,38 @@ console.log(field.IsPrimaryKey); // true/false
 console.log(field.ReadOnly); // true/false
 ```
 
+#### Working with BaseEntity and Spread Operator
+
+**IMPORTANT**: BaseEntity uses TypeScript getter/setter properties for all entity fields. This means the JavaScript spread operator (`...`) will NOT capture entity field values because getters are not enumerable properties.
+
+```typescript
+// ❌ WRONG - Spread operator doesn't capture getter properties
+const userData = {
+  ...userEntity,  // This will NOT include ID, FirstName, LastName, etc.
+  customField: 'value'
+};
+
+// ✅ CORRECT - Use GetAll() to get plain object with all field values
+const userData = {
+  ...userEntity.GetAll(),  // Returns { ID: '...', FirstName: '...', LastName: '...', etc. }
+  customField: 'value'
+};
+
+// ✅ ALSO CORRECT - Access properties individually
+const userData = {
+  ID: userEntity.ID,
+  FirstName: userEntity.FirstName,
+  LastName: userEntity.LastName,
+  customField: 'value'
+};
+```
+
+The `GetAll()` method returns a plain JavaScript object containing all entity field values, which can be safely used with the spread operator. This design choice enables:
+- Clean property access syntax (`entity.Name` vs `entity.getName()`)
+- Full TypeScript/IntelliSense support
+- Easy property overriding in subclasses
+- Proper encapsulation with validation and side effects
+
 #### Save Options
 
 ```typescript
