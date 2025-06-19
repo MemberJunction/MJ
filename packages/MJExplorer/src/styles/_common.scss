@@ -17,6 +17,19 @@ a {
     text-decoration: none;
 }
 
+button.preferences-button {
+    position: absolute;
+    top: -31px;
+    right: 15px;
+    z-index: 9999;
+    background: var(--mj-blue);
+    color: #FFFF;
+    border: none;
+    display: flex;
+    padding: 8px;
+    border-radius: 8px;
+}
+
 /* ===================================
    STANDARDIZED CONTAINER SYSTEM
    =================================== */
