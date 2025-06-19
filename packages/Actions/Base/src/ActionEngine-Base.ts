@@ -121,6 +121,7 @@ export class RunActionParams {
     * The action entity to be run.
     */
    public Action: ActionEntity;
+
    /**
     * The user context for the action.
     */
@@ -137,29 +138,17 @@ export class RunActionParams {
     * Optional, the input and output parameters as defined in the metadata for the action.
     */
    public Params: ActionParam[];
-};
 
-export type RunActionByNameParams = {
    /**
-    * The ID of the action to be run.
+    * Optional, a context object of any type that can be used to pass 
+    * additional information to the action. This is not part of the 
+    * parameters and is not stored in the database. Often this is used
+    * for environmental or runtime/user specific information that is not
+    * part of the metadata.
     */
-   ActionID: string,
-   /**
-    * The user context for the action.
-    */
-   ContextUser: UserInfo,
-   /**
-    * Optional, if true, an ActionExecutionLogEntity will not be created for this action run.
-    */
-   SkipActionLog?: boolean,
-   /**
-    * Optional, input and output params to be passed to the action.
-    * Note that if none are provided, the default values defined in the Metadata will be used.
-    * Otherwise you must provide all input parameters the action expects
-    */
-   Params?: ActionParam[];
+   public Context?: any;
 };
-
+ 
 
 /**
  * Base class for Action metadata. 
@@ -239,6 +228,17 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
       return this.__coreCategoryName;
     }
      
+   /**
+    * Returns an action based on its name
+    * @param actionName 
+    * @returns 
+    */
+   public GetActionByName(actionName: string): ActionEntityExtended | undefined {
+      if (!actionName || actionName.trim().length === 0) {
+         throw new Error("Action name cannot be null or empty.");
+      }
+      return this.Actions.find(a => a.Name.trim().toLowerCase() === actionName.trim().toLowerCase());
+   }
 
    /**
     * This method handles input validation. Subclasses can override this method to provide custom input validation.

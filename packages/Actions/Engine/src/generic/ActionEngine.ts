@@ -1,9 +1,8 @@
-import { BaseEngine, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
-import { ActionEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
+import { LogError, Metadata } from "@memberjunction/core";
+import { ActionExecutionLogEntity, ActionFilterEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
 import { MJGlobal, SafeJSONParse } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
-import { ActionEntityServerEntity } from "./ActionEntity.server";
-import { ActionEngineBase, ActionEntityExtended, ActionParam, ActionResult, ActionResultSimple, RunActionByNameParams, RunActionParams } from "@memberjunction/actions-base";
+import { ActionEngineBase, ActionEntityExtended, ActionParam, ActionResult, ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 
  
 
@@ -56,28 +55,6 @@ export class ActionEngineServer extends ActionEngineBase {
       return runActionResult;
    }
    
-   /**
-    * Finds an action by the provided ID and runs it. This is a convenience method that can be used to run an action without having to first find/create an action entity object.
-    * Note that if no ActionParams are provided, the function will use the action params defined in the metadata.
-    */
-   public async RunActionByID(params: RunActionByNameParams): Promise<ActionResult> {
-      const action: ActionEntityExtended | undefined = this.Actions.find(a => a.ID === params.ActionID);
-      if(!action){
-         throw new Error(`Action with ID ${params.ActionID} not found in Metadata`);
-      }
-
-      const actionParams: ActionParam[] = params.Params || this.GetActionParamsForAction(action);
-      const runParams: RunActionParams = {
-         Action: action,
-         ContextUser: params.ContextUser,
-         SkipActionLog: params.SkipActionLog,
-         Params: actionParams,
-         Filters: []
-      };
-
-      const actionResult = await this.RunAction(runParams);
-      return actionResult;
-   }
 
    protected GetActionParamsForAction(action: ActionEntityExtended): ActionParam[] {
       const params: ActionParam[] = action.Params.map((param: ActionParamEntity) => {

@@ -36,12 +36,14 @@ export type AgentAction = {
  * @property {string} name - Name of the sub-agent
  * @property {string} message - Context and instructions for the sub-agent
  * @property {boolean} terminateAfter - Whether to terminate the parent agent after sub-agent completes
+ * @property {any} context - Context data passed to the sub-agent by the parent agent
  */
 export type AgentSubAgentRequest = {
     id: string;
     name: string;
     message: string;
     terminateAfter: boolean;
+    context: any; // context for the sub-agent passed by the parent agent
 }
 
 /**

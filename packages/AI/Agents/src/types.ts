@@ -55,6 +55,7 @@ export type AgentExecutionStreamingCallback = (chunk: {
  * @property {AgentExecutionStreamingCallback} [onStreaming] - Optional callback for receiving streaming content updates
  * @property {string[]} [parentAgentHierarchy] - Optional parent agent hierarchy for sub-agent execution
  * @property {number} [parentDepth] - Optional parent depth for sub-agent execution
+ * @property {any} [context] - Optional additional context data to pass to the agent execution, this is passed to sub-agents and also action execution witin the agent's run cycle
  */
 export type ExecuteAgentParams = {
     agent: AIAgentEntity;
@@ -65,6 +66,7 @@ export type ExecuteAgentParams = {
     onStreaming?: AgentExecutionStreamingCallback;
     parentAgentHierarchy?: string[];
     parentDepth?: number;
+    context?: any;
 }
 
 /**

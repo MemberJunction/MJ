@@ -624,7 +624,7 @@ export class BaseAgent {
      * // results[0].Success, results[0].Result?.Code, results[0].Params
      * ```
      */
-    public async ExecuteActions(actions: AgentAction[], contextUser?: UserInfo): Promise<any[]> {
+    public async ExecuteActions(params: ExecuteAgentParams, actions: AgentAction[], contextUser?: UserInfo): Promise<any[]> {
         try {
             const actionEngine = ActionEngineServer.Instance;
             
@@ -661,7 +661,8 @@ export class BaseAgent {
                     Params: actionParams,
                     ContextUser: contextUser,
                     Filters: [],
-                    SkipActionLog: false
+                    SkipActionLog: false,
+                    Context: params.context // pass along our context to actions so they can use it however they need
                 });
                 
                 if (!result.Success) {
@@ -705,13 +706,9 @@ export class BaseAgent {
      * }, messages);
      * ```
      */
-    public async ExecuteSubAgent(
+    protected async ExecuteSubAgent(
+        params: ExecuteAgentParams,
         subAgentRequest: AgentSubAgentRequest, 
-        conversationMessages: ChatMessage[],
-        contextUser?: UserInfo,
-        cancellationToken?: AbortSignal,
-        onProgress?: AgentExecutionProgressCallback,
-        onStreaming?: AgentExecutionStreamingCallback
     ): Promise<ExecuteAgentResult> {
         try {
             const engine = AIEngine.Instance;
@@ -739,7 +736,7 @@ export class BaseAgent {
             
             // Prepare messages for sub-agent, adding the context message
             const subAgentMessages: ChatMessage[] = [
-                ...conversationMessages,
+                ...params.conversationMessages,
                 {
                     role: 'user',
                     content: subAgentRequest.message
@@ -754,12 +751,13 @@ export class BaseAgent {
             const result = await runner.RunAgent({
                 agent: subAgent,
                 conversationMessages: subAgentMessages,
-                contextUser: contextUser,
-                cancellationToken: cancellationToken,
-                onProgress: onProgress,
-                onStreaming: onStreaming,
+                contextUser: params.contextUser,
+                cancellationToken: params.cancellationToken,
+                onProgress: params.onProgress,
+                onStreaming: params.onStreaming,
                 parentAgentHierarchy: this._runContext?.agentHierarchy,
-                parentDepth: this._runContext?.depth
+                parentDepth: this._runContext?.depth,
+                context: params.context // pass along our context to sub-agents so they can keep passing it down and pass to actions as well
             });
             
             // Check if execution was successful
@@ -1375,22 +1373,8 @@ export class BaseAgent {
         try {
             // Execute sub-agent with cancellation and streaming support
             const subAgentResult = await this.ExecuteSubAgent(
-                subAgentRequest,
-                params.conversationMessages,
-                params.contextUser,
-                params.cancellationToken,
-                // Pass through progress callback with sub-agent context
-                params.onProgress ? (progress) => {
-                    params.onProgress!(progress);
-                } : undefined,
-                // Pass through streaming callback with sub-agent context
-                params.onStreaming ? (chunk) => {
-                    params.onStreaming!({
-                        ...chunk,
-                        stepType: 'subagent',
-                        stepEntityId: stepEntity.ID
-                    });
-                } : undefined
+                params,
+                subAgentRequest
             );
             
             // Check for cancellation after sub-agent execution
@@ -1578,7 +1562,7 @@ export class BaseAgent {
         const actionPromises = actionSteps.map(async ({ action, stepEntity, startTime }) => {
             try {
                 // Execute the action
-                const actionResults = await this.ExecuteActions([action], params.contextUser);
+                const actionResults = await this.ExecuteActions(params, [action], params.contextUser);
                 const actionResult = actionResults[0];
                 
                 // Create action execution result
