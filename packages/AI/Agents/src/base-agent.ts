@@ -16,7 +16,7 @@ import { UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { AIPromptRunner, AIPromptParams, ChildPromptParam } from '@memberjunction/ai-prompts';
 import { ChatMessage, AIPromptRunResult } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
-import { MJGlobal } from '@memberjunction/global';
+import { CopyScalarsAndArrays, MJGlobal } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import {
@@ -952,7 +952,8 @@ export class BaseAgent {
         
         // Save the agent run
         if (!await this._agentRun.Save()) {
-            throw new Error('Failed to create agent run record');
+            const errorMessage = JSON.stringify(CopyScalarsAndArrays(this._agentRun.LatestResult));
+            throw new Error(`Failed to create agent run record: Details: ${errorMessage}`);
         }
 
         // Initialize run context
