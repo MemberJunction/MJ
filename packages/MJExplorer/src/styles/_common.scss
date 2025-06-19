@@ -52,6 +52,7 @@ button.preferences-button {
     @extend .mj-container;
     display: flex;
     flex-direction: column;
+    overflow-x: hidden;
 }
 
 .mj-content-container {

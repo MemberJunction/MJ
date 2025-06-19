@@ -17,6 +17,17 @@
 @import './badges';
 @import './utilities';
 
+// Ensure button groups have correct colors (override any conflicting styles)
+kendo-buttongroup button,
+kendo-buttongroup .k-button {
+    color: var(--navy) !important;
+    
+    &[aria-pressed="true"],
+    &.k-selected {
+        color: var(--white-color) !important;
+    }
+}
+
 .link-text {
     cursor: pointer;
     color: darkblue;
@@ -179,7 +190,8 @@ kendo-recurrence-frequency-editor .k-edit-field {
     opacity: 0.4;
 }
  
-.k-tabstrip-items-wrapper .k-item {
+// Tab-specific styling - should not affect button groups
+.k-tabstrip .k-tabstrip-items-wrapper .k-item {
     color: black;
     font-weight: normal;
     border: solid 1px transparent;
