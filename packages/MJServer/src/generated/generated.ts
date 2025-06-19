@@ -30202,6 +30202,9 @@ export class TemplateContent_ {
     @MaxLength(510)
     Type: string;
         
+    @Field(() => [TemplateParam_])
+    TemplateParams_TemplateContentIDArray: TemplateParam_[]; // Link to TemplateParams
+    
 }
 
 //****************************************************************************
@@ -30313,6 +30316,16 @@ export class TemplateContentResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [TemplateParam_])
+    async TemplateParams_TemplateContentIDArray(@Root() templatecontent_: TemplateContent_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Template Params', userPayload);
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateParams] WHERE [TemplateContentID]='${templatecontent_.ID}' ` + this.getRowLevelSecurityWhereClause('Template Params', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('Template Params', rows);
+        return result;
+    }
+        
     @Mutation(() => TemplateContent_)
     async CreateTemplateContent(
         @Arg('input', () => CreateTemplateContentInput) input: CreateTemplateContentInput,
@@ -30402,6 +30415,10 @@ export class TemplateParam_ {
     @Field({nullable: true, description: `This field is used only when the Type of the TemplateParam table is "Entity". It is an optional field used to specify the sorting order for the related entity data that is used in the template for the Entity specified.`}) 
     OrderBy?: string;
         
+    @Field({nullable: true, description: `Optional reference to a specific template content. When NULL, this parameter applies to all content items within the template. When set, this parameter applies only to the specified template content.`}) 
+    @MaxLength(16)
+    TemplateContentID?: string;
+        
     @Field() 
     @MaxLength(510)
     Template: string;
@@ -30455,6 +30472,9 @@ export class CreateTemplateParamInput {
 
     @Field({ nullable: true })
     OrderBy: string | null;
+
+    @Field({ nullable: true })
+    TemplateContentID: string | null;
 }
     
 
@@ -30501,6 +30521,9 @@ export class UpdateTemplateParamInput {
 
     @Field({ nullable: true })
     OrderBy?: string | null;
+
+    @Field({ nullable: true })
+    TemplateContentID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
