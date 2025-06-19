@@ -11,7 +11,7 @@ import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http'
 //***********************************************************
 // MJ
 //***********************************************************
-import { ExplorerCoreModule } from '@memberjunction/ng-explorer-core';
+import { ExplorerCoreModule, SystemValidationBannerComponent } from '@memberjunction/ng-explorer-core';
 import { CoreGeneratedFormsModule, LoadCoreGeneratedForms, LoadCoreCustomForms } from '@memberjunction/ng-core-entity-forms';
 LoadCoreGeneratedForms(); // prevent tree shaking - dynamic loaded components don't have a static code path to them so Webpack will tree shake them out
 LoadCoreCustomForms(); // prevent tree shaking - dynamic loaded components don't have a static code path to them so Webpack will tree shake them out
@@ -97,6 +97,8 @@ export function MSALGuardConfigFactory(): MsalGuardConfiguration {
     NotificationModule,
     ReactiveFormsModule,
     AuthServicesModule.forRoot(environment),
+    // Import standalone component
+    SystemValidationBannerComponent,
   ],
   providers: [SharedService, provideHttpClient(withInterceptorsFromDi())],
   bootstrap: [AppComponent, RedirectComponent],
