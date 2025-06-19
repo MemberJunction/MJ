@@ -45,30 +45,36 @@
           placeholder="Search items..." 
           (keyup)="onKeyup(searchInput.value)"
           [clearButton]="true"
-          size="large"
-          rounded="large"
-          fillMode="solid">
+          size="medium"
+          rounded="medium"
+          fillMode="outline">
           <ng-template kendoTextBoxPrefixTemplate>
-            <span class="fa-solid fa-magnifying-glass mj-search-icon"></span>
+            <i class="fas fa-search search-prefix-icon"></i>
           </ng-template>
         </kendo-textbox>
       </div>
       
       <div class="mj-toolbar-actions">
-        <button 
-          class="mj-btn-icon-only" 
-          [class.mj-btn-primary]="displayAsGrid"
-          (click)="changeViewMode('grid')" 
-          title="Grid View">
-          <span class="fa-solid fa-bars mj-btn-icon"></span>
-        </button>
-        <button 
-          class="mj-btn-icon-only"
-          [class.mj-btn-primary]="!displayAsGrid" 
-          (click)="changeViewMode('list')" 
-          title="Card View">
-          <span class="fa-solid fa-table-cells-large mj-btn-icon"></span>
-        </button>
+        <kendo-buttongroup>
+          <button kendoButton 
+                  [toggleable]="true" 
+                  [selected]="displayAsGrid"
+                  (click)="changeViewMode('grid')" 
+                  title="Table View"
+                  fillMode="outline"
+                  themeColor="base">
+            <span class="fa-solid fa-table"></span>
+          </button>
+          <button kendoButton 
+                  [toggleable]="true" 
+                  [selected]="!displayAsGrid"
+                  (click)="changeViewMode('list')" 
+                  title="Card View"
+                  fillMode="outline"
+                  themeColor="base">
+            <span class="fa-solid fa-grip"></span>
+          </button>
+        </kendo-buttongroup>
       </div>
     </div>
 
@@ -86,13 +92,65 @@
             class="mj-grid-table"
             (cellClick)="onCellItemClicked($event)" 
             [kendoGridBinding]="items">
-            <kendo-grid-column field="Name" title="Name"></kendo-grid-column>
+            <kendo-grid-column field="Name" title="Name">
+              <ng-template kendoGridCellTemplate let-dataItem>
+                <div class="mj-grid-name-cell">
+                  @if(dataItem.IsLink) {
+                    <div class="mj-icon-wrapper-linked">
+                      <span [ngClass]="getIconForResourceType(dataItem)" class="mj-grid-icon"></span>
+                      <span class="fa-solid fa-link mj-grid-link-indicator"></span>
+                    </div>
+                  }
+                  @else {
+                    <span [ngClass]="getIconForResourceType(dataItem)" class="mj-grid-icon"></span>
+                  }
+                  <span class="mj-grid-name">{{ dataItem.Name }}</span>
+                </div>
+              </ng-template>
+            </kendo-grid-column>
             <kendo-grid-column field="Size" title="Size"></kendo-grid-column>
-            <kendo-grid-column field="LastOpened" title="Last Opened"></kendo-grid-column>
-            <kendo-grid-column field="ModifiedBy" title="Modified By"></kendo-grid-column>
+            <kendo-grid-column field="LastOpened" title="Last Opened">
+              <ng-template kendoGridCellTemplate let-dataItem>
+                @if(getItemProperty(dataItem, 'LastOpened')) {
+                  <span class="mj-grid-date">{{ getFormattedDate(getItemProperty(dataItem, 'LastOpened')) }}</span>
+                }
+              </ng-template>
+            </kendo-grid-column>
+            <kendo-grid-column field="ModifiedBy" title="Modified By">
+              <ng-template kendoGridCellTemplate let-dataItem>
+                {{ getItemProperty(dataItem, 'ModifiedBy') || '' }}
+              </ng-template>
+            </kendo-grid-column>
+            <kendo-grid-column field="Type" title="Type">
+              <ng-template kendoGridCellTemplate let-dataItem>
+                @if(dataItem.Type === 'Folder') {
+                  <kendo-chip 
+                    label="Folder" 
+                    rounded="full"
+                    themeColor="info"
+                    size="small">
+                  </kendo-chip>
+                }
+                @else if(dataItem.Type === 'Resource') {
+                  <kendo-chip 
+                    [label]="getResourceTypeLabel(dataItem)" 
+                    rounded="full"
+                    themeColor="base"
+                    size="small">
+                  </kendo-chip>
+                }
+              </ng-template>
+            </kendo-grid-column>
             <kendo-grid-column title="Actions">
               <ng-template kendoGridCellTemplate let-dataItem>
                 <div class="mj-toolbar-actions">
+                  @if(dataItem.Favorite !== undefined) {
+                    <button class="mj-btn-icon-only mj-btn-sm" 
+                            (click)="SetFavoriteStatus(dataItem); $event.stopPropagation()" 
+                            [title]="dataItem.Favorite ? 'Remove from favorites' : 'Add to favorites'">
+                      <span [ngClass]="dataItem.Favorite ? 'fa-solid fa-star' : 'fa-regular fa-star'"></span>
+                    </button>
+                  }
                   @if(!disableEditButton && (!dataItem.IsLink || dataItem.LinkPermissionLevel === 'Owner' || dataItem.LinkPermissionLevel === 'Edit')) {
                     <button class="mj-btn-icon-only mj-btn-sm" (click)="editItem(dataItem)" title="Edit Item">
                       <span class="fa-regular fa-pen-to-square"></span>
@@ -124,10 +182,12 @@
               </div>
               <h3>No items found</h3>
               <p>This folder is empty or no items match your search criteria.</p>
-              <button class="mj-btn-primary" (click)="onDropdownItemClick({text: 'Folder'})">
-                <span class="fa-solid fa-plus mj-btn-icon"></span>
-                Create Your First Item
-              </button>
+              <kendo-button themeColor="primary" rounded="medium" (click)="onDropdownItemClick({text: 'Folder'})">
+                <span class="button-content">
+                  <i class="fas fa-plus"></i>
+                  Create Your First Item
+                </span>
+              </kendo-button>
             </div>
           }
           
@@ -138,6 +198,13 @@
                 <kendo-card class="mj-kendo-icon-card mj-kendo-icon-card-clickable" (click)="itemClick(item)">
                   <!-- Card Actions -->
                   <div class="mj-card-actions">
+                    @if(item.Favorite !== undefined) {
+                      <button class="mj-btn-icon-only mj-btn-sm" 
+                              (click)="SetFavoriteStatus(item); $event.stopPropagation()" 
+                              [title]="item.Favorite ? 'Remove from favorites' : 'Add to favorites'">
+                        <span [ngClass]="item.Favorite ? 'fa-solid fa-star' : 'fa-regular fa-star'"></span>
+                      </button>
+                    }
                     @if(!disableEditButton && (!item.IsLink || item.LinkPermissionLevel === 'Owner' || item.LinkPermissionLevel === 'Edit')) {
                       <button class="mj-btn-icon-only mj-btn-sm" (click)="editItem(item); $event.stopPropagation()" title="Edit Item">
                         <span class="fa-regular fa-pen-to-square"></span>
@@ -170,6 +237,25 @@
                     <h3>{{ item.Name }}</h3>
                     <p>{{ item.Description || 'No description available' }}</p>
                     
+                    <!-- Resource metadata -->
+                    @if(getItemProperty(item, 'LastOpened') || getItemProperty(item, 'ModifiedBy')) {
+                      <div class="mj-card-metadata">
+                        @if(getItemProperty(item, 'LastOpened')) {
+                          <div class="mj-metadata-item">
+                            <span class="fa-regular fa-clock"></span>
+                            <span>{{ getFormattedDate(getItemProperty(item, 'LastOpened')) }}</span>
+                          </div>
+                        }
+                        @if(getItemProperty(item, 'ModifiedBy')) {
+                          <div class="mj-metadata-item">
+                            <span class="fa-regular fa-user"></span>
+                            <span>{{ getItemProperty(item, 'ModifiedBy') }}</span>
+                          </div>
+                        }
+                      </div>
+                    }
+                    
+                    <!-- Type chip -->
                     @if(item.Type === 'Folder') {
                       <kendo-chip 
                         label="Folder" 
@@ -220,12 +306,15 @@
     </div>
     
     <kendo-dialog-actions class="mj-dialog-actions">
-      <button class="mj-btn-secondary" (click)="onConfirmDeleteItem(false)">
+      <kendo-button fillMode="outline" rounded="medium" (click)="onConfirmDeleteItem(false)">
         Cancel
-      </button>
-      <button class="mj-btn-primary" (click)="onConfirmDeleteItem(true)">
-        {{(selectedItem?.IsLink && selectedItem?.LinkPermissionLevel === 'Owner') || !selectedItem?.IsLink ? 'Delete' : 'Unlink'}}
-      </button>
+      </kendo-button>
+      <kendo-button themeColor="error" rounded="medium" (click)="onConfirmDeleteItem(true)">
+        <span class="button-content">
+          <i [ngClass]="(selectedItem?.IsLink && selectedItem?.LinkPermissionLevel === 'Owner') || !selectedItem?.IsLink ? 'fas fa-trash' : 'fas fa-link-slash'"></i>
+          {{(selectedItem?.IsLink && selectedItem?.LinkPermissionLevel === 'Owner') || !selectedItem?.IsLink ? 'Delete' : 'Unlink'}}
+        </span>
+      </kendo-button>
     </kendo-dialog-actions>
   </kendo-dialog>
 
@@ -239,26 +328,31 @@
     class="mj-dialog-form">
     
     <div class="mj-dialog-content">
-      <div class="mj-search">
+      <kendo-formfield orientation="vertical">
+        <kendo-label text="Folder Name"></kendo-label>
         <kendo-textbox 
-          class="mj-search-input"
           placeholder="Enter folder name..." 
-          (valueChange)="onCreateFolderKeyup($event)">
+          (valueChange)="onCreateFolderKeyup($event)"
+          rounded="medium"
+          fillMode="outline"
+          [clearButton]="true">
           <ng-template kendoTextBoxPrefixTemplate>
-            <span class="fa-solid fa-folder mj-search-icon"></span>
+            <i class="fas fa-folder search-prefix-icon"></i>
           </ng-template>
         </kendo-textbox>
-      </div>
+      </kendo-formfield>
     </div>
     
     <kendo-dialog-actions class="mj-dialog-actions">
-      <button class="mj-btn-secondary" (click)="toggleCreateFolderView()">
+      <kendo-button fillMode="outline" rounded="medium" (click)="toggleCreateFolderView()">
         Cancel
-      </button>
-      <button class="mj-btn-primary" (click)="createFolder()">
-        <span class="fa-solid fa-plus mj-btn-icon"></span>
-        Create Folder
-      </button>
+      </kendo-button>
+      <kendo-button themeColor="primary" rounded="medium" (click)="createFolder()">
+        <span class="button-content">
+          <i class="fas fa-folder-plus"></i>
+          Create Folder
+        </span>
+      </kendo-button>
     </kendo-dialog-actions>
   </kendo-dialog>
 

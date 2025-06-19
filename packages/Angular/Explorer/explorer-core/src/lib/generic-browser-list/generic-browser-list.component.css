@@ -2,7 +2,7 @@
    GENERIC BROWSER LIST SPECIFIC STYLES
    =================================== */
 
-/* Icon wrapper for linked items */
+/* Link indicator for shared items */
 .mj-icon-wrapper-linked {
     position: relative;
     display: inline-block;
@@ -20,50 +20,93 @@
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-/* Action buttons in grid cells */
+/* Grid specific cells for this component */
+.mj-grid-name-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    
+    .mj-grid-icon {
+        font-size: 1.25rem;
+        color: var(--mj-blue);
+        flex-shrink: 0;
+    }
+    
+    .mj-grid-name {
+        font-weight: 500;
+        color: var(--navy);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .mj-grid-link-indicator {
+        position: absolute;
+        bottom: -4px;
+        right: -4px;
+        font-size: 0.75rem;
+        color: var(--mj-blue);
+        background: var(--white-color);
+        border-radius: 50%;
+        padding: 1px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    }
+}
+
+.mj-grid-date {
+    color: var(--gray-800);
+    font-size: 0.875rem;
+}
+
+/* Card metadata section specific to this component */
+.mj-card-metadata {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    margin: 12px 0;
+    font-size: 0.875rem;
+    color: var(--gray-800);
+    
+    .mj-metadata-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        
+        span:first-child {
+            font-size: 0.875rem;
+            color: var(--mj-blue);
+        }
+    }
+}
+
+/* Favorite star specific styling */
+.mj-card-actions {
+    .fa-star {
+        transition: all 0.2s ease;
+        
+        &.fa-solid {
+            color: #ffc107;
+        }
+        
+        &.fa-regular {
+            color: var(--gray-800);
+        }
+    }
+    
+    button:hover .fa-star.fa-regular {
+        color: #ffc107;
+    }
+}
+
+/* Action buttons in grid cells - specific sizing for this component */
 ::ng-deep .mj-grid-table {
     .mj-toolbar-actions {
-        display: flex;
-        gap: 8px;
-        justify-content: center;
-        
         .mj-btn-icon-only {
             width: 32px;
             height: 32px;
             padding: 0;
             font-size: 14px;
         }
-    }
-}
-
-/* Dialog content specific to this component */
-.mj-dialog-content {
-    text-align: center;
-    padding: 40px 30px;
-    
-    .mj-dialog-icon {
-        font-size: 4rem;
-        color: #ffc107;
-        margin-bottom: 24px;
-        display: block;
-    }
-    
-    p {
-        font-size: 1.125rem;
-        color: var(--navy);
-        margin-bottom: 16px;
-        line-height: 1.6;
-        
-        strong {
-            color: var(--mj-blue);
-            font-weight: 600;
-        }
-    }
-    
-    .mj-dialog-warning {
-        color: #dc3545;
-        font-size: 1rem;
-        font-style: italic;
-        margin-bottom: 0;
     }
 }

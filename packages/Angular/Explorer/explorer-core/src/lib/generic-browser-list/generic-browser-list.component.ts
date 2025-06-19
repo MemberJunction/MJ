@@ -587,4 +587,57 @@ export class GenericBrowserListComponent implements OnInit{
     // Return a formatted version of the item type or entity name
     return this.itemType || "Resource";
   }
+
+  public getFormattedDate(date: any): string {
+    if (!date) return '';
+    
+    const d = new Date(date);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - d.getTime());
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) {
+      return 'Today';
+    } else if (diffDays === 1) {
+      return 'Yesterday';
+    } else if (diffDays < 7) {
+      return `${diffDays} days ago`;
+    } else if (diffDays < 30) {
+      const weeks = Math.floor(diffDays / 7);
+      return `${weeks} week${weeks > 1 ? 's' : ''} ago`;
+    } else if (diffDays < 365) {
+      const months = Math.floor(diffDays / 30);
+      return `${months} month${months > 1 ? 's' : ''} ago`;
+    } else {
+      return d.toLocaleDateString();
+    }
+  }
+
+  /**
+   * Safely gets a property from an item, checking both the item itself and its Data property
+   */
+  public getItemProperty(item: Item, propertyName: string): any {
+    // First check if the property exists directly on the item
+    // We need to cast to any to avoid TypeScript index signature errors
+    const itemAsAny = item as any;
+    if (itemAsAny && itemAsAny[propertyName] !== undefined) {
+      return itemAsAny[propertyName];
+    }
+    
+    // Then check if it exists on the Data property
+    if (item && item.Data && item.Data[propertyName] !== undefined) {
+      return item.Data[propertyName];
+    }
+    
+    // If Data is a BaseEntity, try using the Get method
+    if (item && item.Data && typeof item.Data.Get === 'function') {
+      try {
+        return item.Data.Get(propertyName);
+      } catch (e) {
+        // Property doesn't exist
+      }
+    }
+    
+    return null;
+  }
 }
