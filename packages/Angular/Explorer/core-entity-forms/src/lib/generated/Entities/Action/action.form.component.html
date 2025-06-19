@@ -150,6 +150,19 @@
                             >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
+
+                    <mj-tab Name="Actions" [Visible]="record.IsSaved"> 
+                        <span class="fa-solid fa-bolt tab-header-icon"></span>Actions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Actions','ParentID')"  
+                            [NewRecordValues]="NewRecordValues('Actions')"
+                            [AllowLoad]="IsCurrentTab('Actions')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
                 </mj-tabstrip>
             </kendo-splitter-pane>
         </kendo-splitter>

@@ -61,6 +61,12 @@ export interface SyncConfig {
    * Directories not listed in this array will be processed after the ordered ones in alphabetical order.
    */
   directoryOrder?: string[];
+  /** 
+   * Directories to ignore during processing (only applies to root-level config)
+   * Can be directory names or glob patterns relative to the metadata root
+   * Examples: ["output", "examples", "**\/temp"]
+   */
+  ignoreDirectories?: string[];
   /** Push command configuration */
   push?: {
     /** Whether to validate records before pushing to database */
@@ -88,6 +94,15 @@ export interface SyncConfig {
     debounceMs?: number;
     /** File patterns to ignore during watch */
     ignorePatterns?: string[];
+  };
+  /** User role validation configuration */
+  userRoleValidation?: {
+    /** Whether to enable user role validation for UserID fields */
+    enabled?: boolean;
+    /** List of role names that are allowed to be referenced in metadata */
+    allowedRoles?: string[];
+    /** Whether to allow users without any roles (defaults to false) */
+    allowUsersWithoutRoles?: boolean;
   };
 }
 

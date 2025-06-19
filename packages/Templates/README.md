@@ -111,6 +111,7 @@ Parameter definitions for template input validation and documentation.
 |-------|------|-------------|
 | `ID` | uniqueidentifier | Primary key |
 | `TemplateID` | uniqueidentifier | Parent template reference |
+| `TemplateContentID` | uniqueidentifier | Optional: Specific content reference |
 | `Name` | nvarchar(255) | Parameter name |
 | `Type` | nvarchar(20) | Scalar, Array, Object, Record, Entity |
 | `IsRequired` | bit | Required parameter flag |
@@ -118,6 +119,11 @@ Parameter definitions for template input validation and documentation.
 | `EntityID` | uniqueidentifier | For Entity/Record type params |
 | `LinkedParameterName` | nvarchar(255) | For Entity filtering |
 | `ExtraFilter` | nvarchar(MAX) | Additional Entity constraints |
+
+**Content-Specific Parameters (NEW in v2.52.0)**:
+- When `TemplateContentID` is NULL: Parameter applies to all content variations (default)
+- When `TemplateContentID` has a value: Parameter applies only to that specific content
+- Content-specific parameters override global parameters with the same name
 
 ## Getting Started
 
@@ -194,7 +200,55 @@ const validationResult = template.ValidateTemplateInput(data);
 if (!validationResult.Success) {
     console.log('Validation errors:', validationResult.Errors);
 }
+
+// Validate for specific content (NEW in v2.52.0)
+const contentValidation = template.ValidateTemplateInput(data, contentId);
 ```
+
+### Content-Specific Parameters (NEW in v2.52.0)
+
+Templates now support parameters that apply only to specific content variations, enabling more flexible multi-format templates:
+
+```typescript
+// Get parameters for a specific content
+const contentParams = template.GetParametersForContent(contentId);
+
+// Get only global parameters (that apply to all contents)
+const globalParams = template.GetParametersForContent();
+```
+
+#### Use Case Example: Marketing Campaign Template
+
+Consider a marketing template with HTML and SMS variations:
+
+**Global Parameters** (apply to all content):
+- `recipientName` (required)
+- `companyName` (required)
+- `campaignCode` (required)
+
+**HTML-Specific Parameters**:
+- `heroImageUrl` (required for HTML only)
+- `colorScheme` (default: "blue")
+- `includeFooter` (default: true)
+
+**SMS-Specific Parameters**:
+- `shortLink` (required for SMS only)
+- `maxLength` (default: 160)
+
+```typescript
+// When rendering HTML content, these params are validated:
+// - All global params + HTML-specific params
+
+// When rendering SMS content, these params are validated:
+// - All global params + SMS-specific params
+```
+
+#### Parameter Precedence
+
+When the same parameter name exists at both global and content-specific levels:
+1. Content-specific parameter definition takes precedence
+2. This allows overriding requirements, defaults, and types per content
+3. The template engine automatically handles the resolution
 
 ### Template Caching
 
@@ -438,7 +492,8 @@ Enhanced template entity with content and parameter management.
 
 - `GetContentByType(type: string): TemplateContentEntity[]` - Get content by type
 - `GetHighestPriorityContent(type?: string): TemplateContentEntity` - Get primary content
-- `ValidateTemplateInput(data: any): ValidationResult` - Validate input parameters
+- `ValidateTemplateInput(data: any, contentId?: string): ValidationResult` - Validate input parameters
+- `GetParametersForContent(contentId?: string): TemplateParamEntity[]` - Get parameters for specific content (NEW in v2.52.0)
 
 ### TemplateRenderResult
 
@@ -607,6 +662,56 @@ The {{ companyName }} Team
 {{ companyName }} | {{ companyAddress }}
 ```
 
+### Content-Specific Parameters Example
+
+This example shows how to use content-specific parameters for a notification template that supports Email, SMS, and Push formats:
+
+```typescript
+// Template: "USER_NOTIFICATION"
+// Global Parameters:
+// - userName (required)
+// - notificationType (required)
+// - actionUrl (required)
+
+// Email Content Parameters:
+// - emailSubject (required for email)
+// - includeHeader (default: true)
+// - includeFooter (default: true)
+// - brandColor (default: "#3498db")
+
+// SMS Content Parameters:
+// - senderName (required for SMS)
+// - maxLength (default: 160)
+
+// Push Content Parameters:
+// - appIcon (required for push)
+// - badge (default: 1)
+// - sound (default: "default")
+
+// Usage for Email:
+const emailResult = await engine.RenderTemplate(notificationTemplate, emailContent, {
+    // Global params
+    userName: "John Doe",
+    notificationType: "payment_received",
+    actionUrl: "https://app.example.com/payments/123",
+    // Email-specific params
+    emailSubject: "Payment Received - $99.00",
+    brandColor: "#27ae60"
+});
+
+// Usage for SMS (different required params):
+const smsResult = await engine.RenderTemplate(notificationTemplate, smsContent, {
+    // Global params
+    userName: "John",
+    notificationType: "payment_received", 
+    actionUrl: "https://app.co/p/123",
+    // SMS-specific params
+    senderName: "ACMEPAY"
+});
+
+// The template engine automatically validates the correct parameters for each content type
+```
+
 ## Best Practices
 
 ### Template Naming and Organization
@@ -630,6 +735,11 @@ The {{ companyName }} Team
 2. **Provide defaults**: Set sensible default values where possible
 3. **Clear descriptions**: Document parameter purpose and expected format
 4. **Type appropriately**: Use correct parameter types (Scalar, Array, Object, etc.)
+5. **Content-Specific Strategy** (NEW in v2.52.0):
+   - Use global parameters for data shared across all formats
+   - Use content-specific parameters for format-specific needs
+   - Consider UI/UX differences between formats (e.g., SMS length limits)
+   - Document which parameters apply to which content types
 
 ### Performance Optimization
 

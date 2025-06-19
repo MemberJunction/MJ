@@ -13,7 +13,6 @@ import type { MJConfig } from '../config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { UserInfo } from '@memberjunction/core';
-import { configManager } from './config-manager';
 
 /** Global ConnectionPool instance for connection lifecycle management */
 let globalPool: sql.ConnectionPool | null = null;
@@ -123,9 +122,10 @@ export async function cleanupProvider(): Promise<void> {
  * 
  * Retrieves the "System" user from MemberJunction's UserCache. This user is
  * typically used for CLI operations where no specific user context exists.
+ * The System user must have the Developer role to perform metadata sync operations.
  * 
  * @returns The System UserInfo object
- * @throws Error if System user is not found in the cache
+ * @throws Error if System user is not found in the cache or doesn't have Developer role
  * 
  * @example
  * ```typescript
@@ -138,6 +138,21 @@ export function getSystemUser(): UserInfo {
   if (!sysUser) {
     throw new Error("System user not found in cache. Ensure the system user exists in the database.");    
   }
+  
+  // Check if the System user has the Developer role
+  const hasDeveloperRole = sysUser.UserRoles && sysUser.UserRoles.some(
+    userRole => userRole.Role.trim().toLowerCase() === 'developer'
+  );
+  
+  if (!hasDeveloperRole) {
+    throw new Error(
+      "System user does not have the 'Developer' role. " +
+      "The Developer role is required for metadata sync operations. " +
+      "Please ensure the System user is assigned the Developer role in the database:\n" +
+      "* Add a record to the __mj.UserRole table linking the System user to the Developer role"
+    );
+  }
+  
   return sysUser;
 }
 
@@ -185,7 +200,7 @@ export function getDataProvider(): SQLServerDataProvider | null {
  * const dirs = findEntityDirectories(process.cwd(), undefined, ['prompts', 'agent-types']);
  * ```
  */
-export function findEntityDirectories(dir: string, specificDir?: string, directoryOrder?: string[]): string[] {
+export function findEntityDirectories(dir: string, specificDir?: string, directoryOrder?: string[], ignoreDirectories?: string[]): string[] {
   const results: string[] = [];
   
   // If specific directory is provided, check if it's an entity directory or root config directory
@@ -208,7 +223,7 @@ export function findEntityDirectories(dir: string, specificDir?: string, directo
           // If this config has directoryOrder but no entity, treat it as a root config
           // and look for entity directories in its subdirectories
           if (config.directoryOrder) {
-            return findEntityDirectories(targetDir, undefined, config.directoryOrder);
+            return findEntityDirectories(targetDir, undefined, config.directoryOrder, config.ignoreDirectories);
           }
         } catch (error) {
           // If we can't parse the config, treat it as a regular directory
@@ -216,7 +231,7 @@ export function findEntityDirectories(dir: string, specificDir?: string, directo
       }
       
       // Fallback: look for entity subdirectories in the target directory
-      return findEntityDirectories(targetDir, undefined, directoryOrder);
+      return findEntityDirectories(targetDir, undefined, directoryOrder, ignoreDirectories);
     }
     return results;
   }
@@ -227,6 +242,14 @@ export function findEntityDirectories(dir: string, specificDir?: string, directo
   
   for (const entry of entries) {
     if (entry.isDirectory() && !entry.name.startsWith('.')) {
+      // Check if this directory should be ignored
+      if (ignoreDirectories && ignoreDirectories.some(pattern => {
+        // Simple pattern matching: exact name or ends with pattern
+        return entry.name === pattern || entry.name.endsWith(pattern);
+      })) {
+        continue;
+      }
+      
       const subDir = path.join(dir, entry.name);
       const hasSyncConfig = fs.existsSync(path.join(subDir, '.mj-sync.json'));
       
