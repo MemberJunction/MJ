@@ -10,7 +10,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
-import { uuidv4 } from '@memberjunction/global';
+import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Represents a backed-up file with its original and backup paths
