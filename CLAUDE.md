@@ -94,6 +94,31 @@ Look for packages that depend on each other:
 - Document public APIs with TSDoc comments
 - Follow single responsibility principle
 
+## Object-Oriented Design Principles
+
+### Code Reuse and DRY (Don't Repeat Yourself)
+- **ALWAYS** look for repeated code patterns and refactor them into base classes or shared utilities
+- When you notice similar code in multiple places (e.g., parameter validation, error handling, common operations):
+  - Create abstract base classes for shared functionality
+  - Extract common methods into utility functions
+  - Use inheritance and composition to reduce duplication
+- Example patterns to watch for:
+  - Multiple actions with similar parameter extraction logic → Create base action class
+  - Repeated error handling code → Create shared error analysis methods
+  - Common entity operations → Create entity helper utilities
+- Benefits of proper OOD:
+  - Easier maintenance (fix bugs in one place)
+  - Better consistency across the codebase
+  - Improved testability
+  - Clearer separation of concerns
+
+### When to Create Base Classes
+- 3+ classes with similar structure/behavior
+- Shared validation or processing logic
+- Common error handling patterns
+- Repeated boilerplate code
+- Clear "is-a" relationships between classes
+
 ## Entity Metadata Best Practices (CRITICAL)
 
 ### Finding Entity Names
