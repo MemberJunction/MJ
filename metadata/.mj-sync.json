@@ -8,6 +8,9 @@
     "agent-types",
     "agents"
   ],
+  "ignoreDirectories": [
+    "output"
+  ],
   "sqlLogging": {
     "enabled": true,
     "outputDirectory": "./sql_logging",

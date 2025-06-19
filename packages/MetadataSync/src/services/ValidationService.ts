@@ -719,6 +719,11 @@ export class ValidationService {
    * Add an entity dependency
    */
   private addEntityDependency(from: string, to: string): void {
+    // Don't add self-references as dependencies (e.g., ParentID in hierarchical structures)
+    if (from === to) {
+      return;
+    }
+    
     if (!this.entityDependencies.has(from)) {
       this.entityDependencies.set(from, {
         entityName: from,

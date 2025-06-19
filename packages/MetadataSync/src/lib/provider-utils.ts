@@ -200,7 +200,7 @@ export function getDataProvider(): SQLServerDataProvider | null {
  * const dirs = findEntityDirectories(process.cwd(), undefined, ['prompts', 'agent-types']);
  * ```
  */
-export function findEntityDirectories(dir: string, specificDir?: string, directoryOrder?: string[]): string[] {
+export function findEntityDirectories(dir: string, specificDir?: string, directoryOrder?: string[], ignoreDirectories?: string[]): string[] {
   const results: string[] = [];
   
   // If specific directory is provided, check if it's an entity directory or root config directory
@@ -223,7 +223,7 @@ export function findEntityDirectories(dir: string, specificDir?: string, directo
           // If this config has directoryOrder but no entity, treat it as a root config
           // and look for entity directories in its subdirectories
           if (config.directoryOrder) {
-            return findEntityDirectories(targetDir, undefined, config.directoryOrder);
+            return findEntityDirectories(targetDir, undefined, config.directoryOrder, config.ignoreDirectories);
           }
         } catch (error) {
           // If we can't parse the config, treat it as a regular directory
@@ -231,7 +231,7 @@ export function findEntityDirectories(dir: string, specificDir?: string, directo
       }
       
       // Fallback: look for entity subdirectories in the target directory
-      return findEntityDirectories(targetDir, undefined, directoryOrder);
+      return findEntityDirectories(targetDir, undefined, directoryOrder, ignoreDirectories);
     }
     return results;
   }
@@ -242,6 +242,14 @@ export function findEntityDirectories(dir: string, specificDir?: string, directo
   
   for (const entry of entries) {
     if (entry.isDirectory() && !entry.name.startsWith('.')) {
+      // Check if this directory should be ignored
+      if (ignoreDirectories && ignoreDirectories.some(pattern => {
+        // Simple pattern matching: exact name or ends with pattern
+        return entry.name === pattern || entry.name.endsWith(pattern);
+      })) {
+        continue;
+      }
+      
       const subDir = path.join(dir, entry.name);
       const hasSyncConfig = fs.existsSync(path.join(subDir, '.mj-sync.json'));
       

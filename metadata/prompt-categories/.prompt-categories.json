@@ -2,16 +2,28 @@
   {
     "fields": {
       "Name": "MJ: System",
-      "Description": "System-level prompts for MemberJunction framework functionality",
-      "Status": "Active"
+      "Description": "System-level prompts for MemberJunction framework functionality"
+    },
+    "primaryKey": {
+      "ID": "7D2DEF7F-138F-4620-8309-33964A97A997"
+    },
+    "sync": {
+      "lastModified": "2025-06-19T20:55:40.831Z",
+      "checksum": "4ba8d8ad492c8ca68df969c950040e61a54a591f16c2d20e8167eab16daf9b14"
     }
   },
   {
     "fields": {
       "Name": "Actions",
       "ParentID": "@lookup:AI Prompt Categories.Name=MJ: System",
-      "Description": "Prompts for generating and managing MemberJunction Actions",
-      "Status": "Active"
+      "Description": "Prompts for generating and managing MemberJunction Actions"
+    },
+    "primaryKey": {
+      "ID": "9A66484D-1B88-43D9-A166-692ABF7BFE64"
+    },
+    "sync": {
+      "lastModified": "2025-06-19T20:55:40.848Z",
+      "checksum": "f3e3218c21f49003943cd36c7672927d3868747659f77fd534a5ce32f4d6ea11"
     }
   }
 ]

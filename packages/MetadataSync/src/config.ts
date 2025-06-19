@@ -61,6 +61,12 @@ export interface SyncConfig {
    * Directories not listed in this array will be processed after the ordered ones in alphabetical order.
    */
   directoryOrder?: string[];
+  /** 
+   * Directories to ignore during processing (only applies to root-level config)
+   * Can be directory names or glob patterns relative to the metadata root
+   * Examples: ["output", "examples", "**\/temp"]
+   */
+  ignoreDirectories?: string[];
   /** Push command configuration */
   push?: {
     /** Whether to validate records before pushing to database */
