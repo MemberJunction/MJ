@@ -1,5 +1,18 @@
+// Core style imports
 @import './variables';
 @import './typography';
+
+// Import Kendo theme BEFORE our overrides
+// Try different import paths based on your setup:
+// Option 1: If using SCSS version
+// @import '@progress/kendo-theme-default/scss/all';
+// Option 2: If SCSS not available, comment out and use CSS in angular.json
+// For now, let's comment it out and rely on the CSS import in angular.json
+
+// Apply our theme overrides to Kendo components
+@import './kendo-theme-override';
+
+// Import remaining custom styles
 @import './common';
 @import './badges';
 @import './utilities';

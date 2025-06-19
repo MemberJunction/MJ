@@ -14,13 +14,15 @@ import { ExcelModule, GridModule, PDFModule } from '@progress/kendo-angular-grid
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { InputsModule } from '@progress/kendo-angular-inputs';
 import { LabelModule } from '@progress/kendo-angular-label';
-import { LayoutModule, TabStripModule } from '@progress/kendo-angular-layout';
+import { LayoutModule, TabStripModule, CardModule, AvatarModule } from '@progress/kendo-angular-layout';
 import { ListViewModule } from '@progress/kendo-angular-listview';
 import { SortableModule } from '@progress/kendo-angular-sortable';
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
 import { ProgressBarModule } from "@progress/kendo-angular-progressbar";
 import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { DragDropModule } from '@angular/cdk/drag-drop';
+// Badge functionality is included in IndicatorsModule
+// Chip functionality is included in ButtonsModule
 
 // MJ
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
@@ -185,7 +187,9 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     GenericDialogModule,
     ProgressBarModule,
     DateInputsModule,
-    DragDropModule
+    DragDropModule,
+    CardModule,
+    AvatarModule
   ],
   exports: [
     FormToolbarComponent,

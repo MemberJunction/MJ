@@ -1,4 +1,5 @@
-/* Style Guide Test Component Styles */
+/* Enhanced Style Guide Component Styles */
+/* Integrating Kendo UI with Font Awesome and Custom Cards */
 
 /* Component specific overrides and additions */
 .typography-demo h1,
@@ -20,6 +21,18 @@
     margin-bottom: 1rem;
 }
 
+/* Button content wrapper for Font Awesome icons in Kendo buttons */
+.button-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.button-content i {
+    font-size: 14px;
+}
+
+/* Badge and chip groups */
 .badge-group {
     display: flex;
     gap: 8px;
@@ -27,73 +40,278 @@
     align-items: center;
 }
 
-/* Table styling */
-.table-wrapper {
-    overflow-x: auto;
+/* Enhanced Kendo Card styling */
+.custom-kendo-card {
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+}
+
+.custom-kendo-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--light-blue);
+    box-shadow: 
+        0 8px 32px rgba(9, 35, 64, 0.12),
+        0 4px 16px rgba(0, 118, 182, 0.1);
+}
+
+.custom-kendo-card .k-card-header {
+    background: var(--gray-600);
+    border-bottom: 1px solid var(--gray-600);
+}
+
+.custom-kendo-card .k-card-header h4 {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    color: var(--navy);
+}
+
+/* Enhanced Grid Styling */
+.custom-grid {
     border-radius: var(--border-radius);
-    border: 1px solid var(--gray-700);
+    overflow: hidden;
 }
 
-.mj-table {
-    width: 100%;
-    border-collapse: collapse;
-    background: var(--white-color);
-}
-
-.mj-table thead {
+.custom-grid .k-grid-header {
     background: linear-gradient(135deg, var(--gray-600) 0%, #e8e8e8 100%);
 }
 
-.mj-table th {
-    padding: 16px 12px;
-    text-align: left;
-    font-weight: 600;
-    font-size: 14px;
+.custom-grid .k-grid-header th {
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: var(--navy);
-    border-bottom: 2px solid var(--gray-700);
+    font-weight: 600;
 }
 
-.mj-table td {
-    padding: 12px;
-    border-bottom: 1px solid var(--gray-600);
+/* User cell in grid */
+.user-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.user-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.user-name {
+    font-weight: 500;
     color: var(--navy);
+}
+
+.user-role {
+    font-size: 12px;
+    color: var(--gray-800);
+}
+
+/* Email link styling */
+.email-link {
+    color: var(--mj-blue);
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.email-link:hover {
+    color: var(--navy);
+    text-decoration: underline;
+}
+
+/* Status cell */
+.status-cell {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Action buttons in grid */
+.action-buttons {
+    display: flex;
+    gap: 4px;
+}
+
+/* Dropdown item with icon */
+.dropdown-item-content {
+    display: flex;
+    align-items: center;
+}
+
+.dropdown-item-content i {
+    width: 20px;
+    text-align: center;
+}
+
+/* Search prefix icon in Kendo TextBox */
+.search-prefix-icon {
+    color: var(--gray-800);
+    margin: 0 8px;
+}
+
+/* Tab title with icon */
+.tab-title {
+    display: flex;
+    align-items: center;
+}
+
+.tab-content-wrapper {
+    padding: 20px;
+}
+
+/* Checkbox group styling */
+.checkbox-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+/* Kendo overrides for better integration */
+.k-button .fa,
+.k-button .fas {
     font-size: 14px;
 }
 
-.mj-table tbody tr {
+/* Ensure Kendo buttons with Font Awesome icons have proper spacing */
+.k-button > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Kendo Badge enhancements */
+.k-badge {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Kendo Chip enhancements */
+.k-chip {
+    font-weight: 500;
     transition: all 0.2s ease;
 }
 
-.mj-table tbody tr:hover {
-    background: var(--light-blue);
-    transform: translateX(2px);
+.k-chip:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* Utility margin classes used in template */
-.mb-3 {
-    margin-bottom: 1rem;
+/* Form field enhancements */
+kendo-formfield {
+    display: block;
 }
 
-.mt-4 {
-    margin-top: 1.5rem;
+kendo-formfield .k-label {
+    font-weight: 500;
+    color: var(--navy);
+    margin-bottom: 0.5rem;
 }
 
-.mr-2 {
-    margin-right: 0.5rem;
+/* Kendo Dialog enhancements */
+.k-dialog-wrapper .k-dialog {
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+.k-dialog-wrapper .k-dialog-titlebar {
+    background: linear-gradient(135deg, var(--gray-600) 0%, #f8f9fa 100%);
+    padding: 24px 30px;
+}
+
+.k-dialog-wrapper .k-dialog-title {
+    font-size: 1.5rem;
+    color: var(--navy);
+}
+
+.k-dialog-wrapper .k-dialog-content {
+    padding: 30px;
+}
+
+/* Progress bar enhancements */
+.k-progressbar {
+    height: 8px;
+    border-radius: 4px;
+    background: var(--gray-600);
+}
+
+.k-progressbar .k-progress-status-wrap {
+    font-weight: 500;
+}
+
+/* Success progress bar */
+.progress-success .k-progressbar-progress {
+    background-color: #28a745 !important;
+}
+
+/* Loader container styling */
+.k-loader-container {
+    padding: 20px;
 }
 
 /* Ensure Font Awesome icons display properly */
-.fas {
-    font-family: 'Font Awesome 5 Free', 'FontAwesome';
+.fas, .fa {
+    font-family: 'Font Awesome 5 Free', 'Font Awesome 6 Free', 'FontAwesome';
     font-weight: 900;
 }
 
-.fa-solid {
-    font-family: 'Font Awesome 6 Free', 'FontAwesome';
-    font-weight: 900;
+.far {
+    font-family: 'Font Awesome 5 Free', 'Font Awesome 6 Free', 'FontAwesome';
+    font-weight: 400;
 }
+
+/* Utility margin classes used in template */
+.mb-0 { margin-bottom: 0 !important; }
+.mb-1 { margin-bottom: 0.25rem !important; }
+.mb-2 { margin-bottom: 0.5rem !important; }
+.mb-3 { margin-bottom: 1rem !important; }
+.mb-4 { margin-bottom: 1.5rem !important; }
+
+.mt-0 { margin-top: 0 !important; }
+.mt-1 { margin-top: 0.25rem !important; }
+.mt-2 { margin-top: 0.5rem !important; }
+.mt-3 { margin-top: 1rem !important; }
+.mt-4 { margin-top: 1.5rem !important; }
+
+.mr-0 { margin-right: 0 !important; }
+.mr-1 { margin-right: 0.25rem !important; }
+.mr-2 { margin-right: 0.5rem !important; }
+
+.ml-0 { margin-left: 0 !important; }
+.ml-1 { margin-left: 0.25rem !important; }
+.ml-2 { margin-left: 0.5rem !important; }
+
+.p-3 { padding: 1rem !important; }
+
+/* Text alignment */
+.text-center { text-align: center !important; }
+
+/* Form error styling */
+.k-form-error {
+    color: #dc3545;
+    font-size: 12px;
+    margin-top: 4px;
+    display: block;
+}
+
+/* Radio group styling */
+.radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.radio-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+/* Color utilities */
+.bg-success { background-color: #28a745 !important; }
 
 /* Modal backdrop fix for proper display */
 .mj-modal-overlay {
@@ -112,6 +330,44 @@
     animation: modal-overlay-appear 0.3s ease-out;
 }
 
+/* Fix for double borders in modals */
+.mj-modal .k-textbox,
+.mj-modal .k-dropdown,
+.mj-modal .k-dropdownlist {
+    border: 1px solid var(--gray-700) !important;
+}
+
+.mj-modal .k-textbox:focus,
+.mj-modal .k-dropdown:focus-within,
+.mj-modal .k-dropdownlist:focus-within {
+    border-color: var(--mj-blue) !important;
+}
+
+/* Icon card enhancements - keep these custom styles */
+.mj-card-icon {
+    position: relative;
+    overflow: visible;
+}
+
+.mj-card-icon .k-chip {
+    transition: all 0.2s ease;
+}
+
+.mj-card-icon:hover .k-chip {
+    transform: scale(1.05);
+}
+
+/* Enhanced icon colors for cards */
+.mj-card-icon-large {
+    transition: all 0.3s ease;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.mj-card:hover .mj-card-icon-large {
+    transform: scale(1.1) rotate(5deg);
+    filter: drop-shadow(0 4px 8px rgba(0, 118, 182, 0.3));
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .button-group {
@@ -119,17 +375,100 @@
         align-items: stretch;
     }
     
+    .button-group .k-button,
     .button-group .mj-btn {
         width: 100%;
         justify-content: center;
     }
     
-    .mj-table {
+    .mj-toolbar {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .mj-toolbar-actions {
+        width: 100%;
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .mj-toolbar-actions > * {
+        width: 100%;
+    }
+    
+    .custom-grid {
         font-size: 12px;
     }
     
-    .mj-table th,
-    .mj-table td {
+    .k-grid td,
+    .k-grid th {
         padding: 8px;
+    }
+    
+    .user-cell {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+    
+    .k-dialog-wrapper .k-dialog {
+        margin: 10px;
+        width: calc(100vw - 20px) !important;
+        max-width: none;
+    }
+}
+
+/* Print styles */
+@media print {
+    .mj-header-actions,
+    .mj-toolbar-actions,
+    .mj-card-actions,
+    .action-buttons,
+    .k-grid-toolbar,
+    .button-group {
+        display: none !important;
+    }
+    
+    .mj-card {
+        break-inside: avoid;
+        box-shadow: none;
+        border: 1px solid #ddd;
+    }
+}
+
+/* Dark mode support (if needed) */
+@media (prefers-color-scheme: dark) {
+    /* Add dark mode overrides here if needed */
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .mj-card,
+    .custom-kendo-card,
+    .k-button,
+    .mj-btn {
+        border-width: 2px !important;
+    }
+    
+    .badge,
+    .k-badge,
+    .k-chip {
+        border: 2px solid currentColor;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+    
+    .mj-card:hover,
+    .custom-kendo-card:hover {
+        transform: none !important;
     }
 }
