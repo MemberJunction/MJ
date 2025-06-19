@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/ai
 
+## 2.52.0
+
+### Minor Changes
+
+- e926106: Significant improvements to AI functionality
+
+### Patch Changes
+
+- @memberjunction/global@2.52.0
+
 ## 2.51.0
 
 ### Minor Changes

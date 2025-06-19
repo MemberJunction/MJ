@@ -334,6 +334,24 @@ Tests are not currently implemented. To add tests:
 npm test
 ```
 
+## Supported Parameters
+
+The Gemini provider supports the following LLM parameters:
+
+**Supported:**
+- `temperature` - Controls randomness in the output (0.0-1.0)
+- `maxOutputTokens` - Maximum number of tokens to generate
+- `topP` - Nucleus sampling threshold (0.0-1.0)
+- `topK` - Limits vocabulary to top K tokens
+- `seed` - For deterministic outputs
+- `stopSequences` - Array of sequences where the API will stop generating
+- `responseFormat` - Output format as MIME type (text/plain, application/json, etc.)
+
+**Not Supported:**
+- `frequencyPenalty` - Not available in Gemini API
+- `presencePenalty` - Not available in Gemini API
+- `minP` - Not available in Gemini API
+
 ## License
 
 ISC

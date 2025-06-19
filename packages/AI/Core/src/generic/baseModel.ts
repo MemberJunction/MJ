@@ -44,6 +44,19 @@ export class BaseParams {
      * Model max budget tokens that we may use for reasoning in reasoning models, optional.
      */
     reasoningBudgetTokens?: number
+
+    /**
+     * Optional seed for reproducible outputs.
+     * Not all models support seeding, but when supported, using the same seed
+     * with the same inputs should produce identical outputs.
+     */
+    seed?: number
+
+    /**
+     * Optional array of sequences where the model will stop generating further tokens.
+     * The returned text will not contain the stop sequence.
+     */
+    stopSequences?: string[]
 }
 
 /**

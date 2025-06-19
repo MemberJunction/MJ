@@ -71,6 +71,28 @@ export class GroqLLM extends BaseLLM {
             max_tokens: params.maxOutputTokens,
             temperature: params.temperature
         };
+        
+        // Add sampling and generation parameters
+        if (params.topP != null) {
+            groqParams.top_p = params.topP;
+        }
+        if (params.seed != null) {
+            groqParams.seed = params.seed;
+        }
+        if (params.stopSequences != null && params.stopSequences.length > 0) {
+            groqParams.stop = params.stopSequences;
+        }
+        if (params.frequencyPenalty != null) {
+            groqParams.frequency_penalty = params.frequencyPenalty;
+        }
+        if (params.presencePenalty != null) {
+            groqParams.presence_penalty = params.presencePenalty;
+        }
+        
+        // Groq doesn't support topK - warn if provided
+        if (params.topK != null) {
+            console.warn('Groq provider does not support topK parameter, ignoring');
+        }
          
         switch (params.responseFormat) {
             case 'Any':
@@ -137,6 +159,28 @@ export class GroqLLM extends BaseLLM {
         if (params.effortLevel) {
             // Note: This is still experimental in Groq, so we add it only if explicitly requested
             (groqParams as any).reasoning_effort = params.effortLevel;
+        }
+        
+        // Add sampling and generation parameters
+        if (params.topP != null) {
+            groqParams.top_p = params.topP;
+        }
+        if (params.seed != null) {
+            groqParams.seed = params.seed;
+        }
+        if (params.stopSequences != null && params.stopSequences.length > 0) {
+            groqParams.stop = params.stopSequences;
+        }
+        if (params.frequencyPenalty != null) {
+            groqParams.frequency_penalty = params.frequencyPenalty;
+        }
+        if (params.presencePenalty != null) {
+            groqParams.presence_penalty = params.presencePenalty;
+        }
+        
+        // Groq doesn't support topK - warn if provided
+        if (params.topK != null) {
+            console.warn('Groq provider does not support topK parameter, ignoring');
         }
         
         // Set response format if specified

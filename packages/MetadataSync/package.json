@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/metadata-sync",
-  "version": "2.51.0",
+  "version": "2.52.0",
   "description": "MemberJunction metadata synchronization CLI tool",
   "keywords": [
     "oclif",
@@ -51,12 +51,12 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^5.0.1",
-    "@memberjunction/core": "2.51.0",
-    "@memberjunction/core-entities": "2.51.0",
-    "@memberjunction/core-entities-server": "2.51.0",
-    "@memberjunction/global": "2.51.0",
-    "@memberjunction/sqlserver-dataprovider": "2.51.0",
-    "@memberjunction/graphql-dataprovider": "2.51.0",
+    "@memberjunction/core": "2.52.0",
+    "@memberjunction/core-entities": "2.52.0",
+    "@memberjunction/core-entities-server": "2.52.0",
+    "@memberjunction/global": "2.52.0",
+    "@memberjunction/sqlserver-dataprovider": "2.52.0",
+    "@memberjunction/graphql-dataprovider": "2.52.0",
     "@oclif/core": "^3",
     "@oclif/plugin-help": "^6",
     "@oclif/plugin-version": "^2.0.17",

@@ -3,6 +3,10 @@ import { NgModule } from '@angular/core';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { RouterModule, RouteReuseStrategy } from '@angular/router';
 
+// Services
+import { SystemValidationService } from './lib/services/system-validation.service';
+import { StartupValidationService } from './lib/services/startup-validation.service';
+
 // Kendo UI Angular imports
 import { ButtonsModule } from '@progress/kendo-angular-buttons'; 
 import { ChartsModule } from '@progress/kendo-angular-charts';
@@ -89,6 +93,7 @@ import { ResourceBrowserComponent } from './lib/resource-browser/resource-browse
 import { GenericDialogModule } from '@memberjunction/ng-generic-dialog';
 import {SingleListDetailComponent} from './lib/single-list-detail/single-list-detail.component';
 import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource.component';
+import { SystemValidationBannerComponent } from './lib/system-validation/system-validation-banner.component';
 import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test.component';
 
 @NgModule({
@@ -231,6 +236,10 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     DashboardPreferencesDialogComponent,
     StyleGuideTestComponent
   ],
-  providers: [{ provide: RouteReuseStrategy, useClass: CustomReuseStrategy }],
+  providers: [
+    { provide: RouteReuseStrategy, useClass: CustomReuseStrategy },
+    SystemValidationService,
+    StartupValidationService
+  ],
 })
 export class ExplorerCoreModule {}

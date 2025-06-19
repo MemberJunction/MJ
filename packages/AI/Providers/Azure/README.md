@@ -375,6 +375,25 @@ try {
 3. **Model not found**: Ensure the model is deployed in your Azure resource
 4. **Rate limiting**: Implement retry logic for high-volume applications
 
+## Supported Parameters
+
+The Azure provider supports the following LLM parameters (same as OpenAI since it uses OpenAI models):
+
+**Supported:**
+- `temperature` - Controls randomness in the output (0.0-2.0)
+- `maxOutputTokens` - Maximum number of tokens to generate
+- `topP` - Nucleus sampling threshold (0.0-1.0)
+- `frequencyPenalty` - Reduces repetition of token sequences (-2.0 to 2.0)
+- `presencePenalty` - Reduces repetition of specific tokens (-2.0 to 2.0)
+- `seed` - For deterministic outputs
+- `stopSequences` - Array of sequences where the API will stop generating
+- `includeLogProbs` - Whether to return log probabilities
+- `responseFormat` - Output format (Text, JSON, Markdown, etc.)
+
+**Not Supported:**
+- `topK` - Not available in Azure OpenAI API
+- `minP` - Not available in Azure OpenAI API
+
 ## License
 
 MIT - See LICENSE file in the repository root

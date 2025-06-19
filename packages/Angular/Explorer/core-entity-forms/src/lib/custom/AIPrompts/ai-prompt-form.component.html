@@ -112,11 +112,11 @@
                     <div class="action-buttons" style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
                         <div style="display: flex; gap: 8px;">
                             @if (record.ID) {
-                                <kendo-button themeColor="primary" size="large"
-                                            (click)="openTestHarness()"
-                                            title="Run AI Prompt Test Harness">
+                                <button kendoButton [themeColor]="'primary'" [size]="'large'"
+                                        (click)="openTestHarness()"
+                                        title="Run AI Prompt Test Harness">
                                     <i class="fa-solid fa-play"></i> Run
-                                </kendo-button>
+                                </button>
                             }
                         </div>
                         
@@ -169,12 +169,12 @@
                                     Create a new template or link to an existing one.
                                 </p>
                                 <div style="display: flex; gap: 12px;">
-                                    <kendo-button themeColor="primary" (click)="createNewTemplate()">
+                                    <button kendoButton [themeColor]="'primary'" (click)="createNewTemplate()">
                                         <i class="fa-solid fa-plus"></i> Create New Template
-                                    </kendo-button>
-                                    <kendo-button fillMode="outline" (click)="linkExistingTemplate()">
+                                    </button>
+                                    <button kendoButton [fillMode]="'outline'" (click)="linkExistingTemplate()">
                                         <i class="fa-solid fa-link"></i> Link Existing Template
-                                    </kendo-button>
+                                    </button>
                                 </div>
                             </div>
                         } @else if (templateNotFoundInDatabase) {
@@ -185,12 +185,12 @@
                                     The referenced template could not be loaded. It may have been deleted or moved.
                                 </p>
                                 <div style="display: flex; gap: 12px;">
-                                    <kendo-button fillMode="outline" (click)="loadTemplate()">
+                                    <button kendoButton [fillMode]="'outline'" (click)="loadTemplate()">
                                         <i class="fa-solid fa-refresh"></i> Retry Loading
-                                    </kendo-button>
-                                    <kendo-button themeColor="primary" (click)="createNewTemplate()">
+                                    </button>
+                                    <button kendoButton [themeColor]="'primary'" (click)="createNewTemplate()">
                                         <i class="fa-solid fa-plus"></i> Create New Template
-                                    </kendo-button>
+                                    </button>
                                 </div>
                             </div>
                         } @else {
@@ -247,10 +247,10 @@
                                             <i class="fa-solid fa-info-circle"></i> No models configured
                                             @if (EditMode) {
                                                 <div style="margin-top: 10px;">
-                                                    <kendo-button fillMode="outline" themeColor="primary" size="small"
+                                                    <button kendoButton fillMode="outline" themeColor="primary" size="small"
                                                                 (click)="addNewModel()">
                                                         <i class="fa-solid fa-plus"></i> Add Model
-                                                    </kendo-button>
+                                                    </button>
                                                 </div>
                                             }
                                         </div>
@@ -381,24 +381,24 @@
                                                 <div class="model-actions" style="display: flex; gap: 2px; flex-direction: column;">
                                                     @if (EditMode) {
                                                         <div style="display: flex; gap: 2px; margin-bottom: 4px;">
-                                                            <kendo-button fillMode="flat" size="small"
+                                                            <button kendoButton fillMode="flat" size="small"
                                                                         (click)="moveModelUp(i)"
                                                                         [disabled]="i === 0"
                                                                         title="Move up">
                                                                 <i class="fa-solid fa-chevron-up"></i>
-                                                            </kendo-button>
-                                                            <kendo-button fillMode="flat" size="small"
+                                                            </button>
+                                                            <button kendoButton fillMode="flat" size="small"
                                                                         (click)="moveModelDown(i)"
                                                                         [disabled]="i === promptModels.length - 1"
                                                                         title="Move down">
                                                                 <i class="fa-solid fa-chevron-down"></i>
-                                                            </kendo-button>
+                                                            </button>
                                                         </div>
-                                                        <kendo-button fillMode="flat" themeColor="error" size="small"
+                                                        <button kendoButton fillMode="flat" themeColor="error" size="small"
                                                                     (click)="removePromptModel(i)"
                                                                     title="Remove model">
                                                             <i class="fa-solid fa-times"></i>
-                                                        </kendo-button>
+                                                        </button>
                                                     }
                                                 </div>
                                             </div>
@@ -489,10 +489,10 @@
                                         
                                         @if (EditMode) {
                                             <div class="add-model-row" style="padding: 12px 16px; text-align: center; background: #f8f9fa; border-top: 1px solid #dee2e6;">
-                                                <kendo-button fillMode="outline" themeColor="success" size="small"
+                                                <button kendoButton fillMode="outline" themeColor="success" size="small"
                                                             (click)="addNewModel()">
                                                     <i class="fa-solid fa-plus"></i> Add Model
-                                                </kendo-button>
+                                                </button>
                                             </div>
                                         }
                                     }
@@ -782,13 +782,13 @@
                                                         }
                                                     </td>
                                                     <td style="padding: 12px; text-align: center;">
-                                                        <kendo-button 
+                                                        <button kendoButton 
                                                             fillMode="flat"
                                                             size="small"
                                                             (click)="navigateToPromptRun(run.ID)"
                                                             title="View details">
                                                             <i class="fa-solid fa-external-link"></i>
-                                                        </kendo-button>
+                                                        </button>
                                                     </td>
                                                 </tr>
                                             }
@@ -871,11 +871,6 @@
         </div>
     </form>
 
-    <!-- AI Prompt Execution Dialog -->
-    <mj-ai-prompt-execution-dialog
-        [aiPrompt]="record"
-        [(isVisible)]="showExecutionDialog">
-    </mj-ai-prompt-execution-dialog>
     
     <!-- AI Prompt Test Harness -->
     @if (showTestHarness) {

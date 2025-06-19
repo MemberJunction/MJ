@@ -127,17 +127,50 @@ export class AzureLLM extends BaseLLM {
                 }
             }
             
+            // Build request body with support for new parameters
+            const requestBody: any = {
+                messages: params.messages,
+                model: params.model,
+                max_tokens: params.maxOutputTokens,
+                temperature: params.temperature,
+                response_format: responseFormat
+            };
+            
+            // Add sampling and generation parameters (Azure uses OpenAI's API)
+            if (params.topP != null) {
+                requestBody.top_p = params.topP;
+            } else {
+                // Use default top_p of 0.95 if not provided
+                requestBody.top_p = 0.95;
+            }
+            
+            if (params.frequencyPenalty != null) {
+                requestBody.frequency_penalty = params.frequencyPenalty;
+            }
+            
+            if (params.presencePenalty != null) {
+                requestBody.presence_penalty = params.presencePenalty;
+            }
+            
+            if (params.seed != null) {
+                requestBody.seed = params.seed;
+            }
+            
+            if (params.stopSequences != null && params.stopSequences.length > 0) {
+                requestBody.stop = params.stopSequences;
+            }
+            
+            // Azure (using OpenAI models) doesn't support topK or minP - warn if provided
+            if (params.topK != null) {
+                console.warn('Azure provider does not support topK parameter, ignoring');
+            }
+            if (params.minP != null) {
+                console.warn('Azure provider does not support minP parameter, ignoring');
+            }
+            
             // Call Azure AI service
             const response = await this.Client.path("/chat/completions").post({
-                body: {
-                    messages: params.messages,
-                    model: params.model,
-                    max_tokens: params.maxOutputTokens,
-                    temperature: params.temperature,
-                    // Use default top_p of 0.95 if not provided
-                    top_p: 0.95,
-                    response_format: responseFormat
-                }
+                body: requestBody
             });
             
             // Handle error responses
@@ -212,18 +245,51 @@ export class AzureLLM extends BaseLLM {
             }
         }
         
+        // Build request body with support for new parameters
+        const requestBody: any = {
+            messages: params.messages,
+            model: params.model,
+            max_tokens: params.maxOutputTokens,
+            temperature: params.temperature,
+            response_format: responseFormat,
+            stream: true
+        };
+        
+        // Add sampling and generation parameters (Azure uses OpenAI's API)
+        if (params.topP != null) {
+            requestBody.top_p = params.topP;
+        } else {
+            // Use default top_p of 0.95 if not provided
+            requestBody.top_p = 0.95;
+        }
+        
+        if (params.frequencyPenalty != null) {
+            requestBody.frequency_penalty = params.frequencyPenalty;
+        }
+        
+        if (params.presencePenalty != null) {
+            requestBody.presence_penalty = params.presencePenalty;
+        }
+        
+        if (params.seed != null) {
+            requestBody.seed = params.seed;
+        }
+        
+        if (params.stopSequences != null && params.stopSequences.length > 0) {
+            requestBody.stop = params.stopSequences;
+        }
+        
+        // Azure (using OpenAI models) doesn't support topK or minP - warn if provided
+        if (params.topK != null) {
+            console.warn('Azure provider does not support topK parameter, ignoring');
+        }
+        if (params.minP != null) {
+            console.warn('Azure provider does not support minP parameter, ignoring');
+        }
+        
         // Create a streaming request to Azure AI
         const response = await this.Client.path("/chat/completions").post({
-            body: {
-                messages: params.messages,
-                model: params.model,
-                max_tokens: params.maxOutputTokens,
-                temperature: params.temperature,
-                // Use default top_p of 0.95 if not provided
-                top_p: 0.95,
-                response_format: responseFormat,
-                stream: true
-            }
+            body: requestBody
         });
         
         // Return the response stream
