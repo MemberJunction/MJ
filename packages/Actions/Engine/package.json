@@ -24,6 +24,7 @@
     "@memberjunction/actions-base": "2.51.0",
     "@memberjunction/core-entities": "2.51.0",
     "@memberjunction/ai": "2.51.0",
+    "@memberjunction/ai-prompts": "2.51.0",
     "@memberjunction/aiengine": "2.51.0",
     "@memberjunction/doc-utils": "2.51.0"
   }
