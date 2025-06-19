@@ -254,8 +254,14 @@ export class SyncEngine {
       if (!field) {
         throw new Error(`Field '${fieldName}' not found in entity '${entityName}'`);
       }
-      const quotes = field.NeedsQuotes ? "'" : '';
-      filterParts.push(`${fieldName} = ${quotes}${fieldValue.replace(/'/g, "''")}${quotes}`);
+      
+      // Handle null values properly
+      if (fieldValue.trim().toLowerCase() === 'null') {
+        filterParts.push(`${fieldName} IS NULL`);
+      } else {
+        const quotes = field.NeedsQuotes ? "'" : '';
+        filterParts.push(`${fieldName} = ${quotes}${fieldValue.replace(/'/g, "''")}${quotes}`);
+      }
     }
     
     const extraFilter = filterParts.join(' AND ');
@@ -297,7 +303,12 @@ export class SyncEngine {
       // Set all lookup fields
       for (const {fieldName, fieldValue} of lookupFields) {
         if (fieldName in newEntity) {
-          (newEntity as any)[fieldName] = fieldValue;
+          // Handle null values properly
+          if (fieldValue.toLowerCase() === 'null') {
+            (newEntity as any)[fieldName] = null;
+          } else {
+            (newEntity as any)[fieldName] = fieldValue;
+          }
         }
       }
       
