@@ -8,10 +8,10 @@
           <span title="Back to Parent" class="mj-btn-icon-only" (click)="goToParent()">
             <span class="fa-solid fa-arrow-left"></span>
           </span>
-          <div class="mj-header-icon">
-            <span class="fa-regular fa-folder"></span>
-          </div>
         }
+        <div class="mj-header-icon">
+          <span [ngClass]="getHeaderIconClass()"></span>
+        </div>
         <div>
           <h1>{{title}}</h1>
           @if(selectedFolderID){
@@ -135,8 +135,7 @@
           @else{
             <div class="mj-grid-responsive">
               @for(item of items; track item){
-                <div class="mj-card mj-grid-item" (click)="itemClick(item)">
-                  
+                <kendo-card class="mj-kendo-icon-card mj-kendo-icon-card-clickable" (click)="itemClick(item)">
                   <!-- Card Actions -->
                   <div class="mj-card-actions">
                     @if(!disableEditButton && (!item.IsLink || item.LinkPermissionLevel === 'Owner' || item.LinkPermissionLevel === 'Edit')) {
@@ -157,25 +156,38 @@
                   </div>
                   
                   <!-- Card Body -->
-                  <div class="mj-card-body">
-                    <div class="view-card-content">
-                      @if(item.IsLink) {
-                        <div class="icon" [title]="item.Name + ' (Shared)'">
-                          <span [ngClass]="getIconForResourceType(item)" style="color: var(--mj-blue);"></span>
-                          <span class="fa-solid fa-link" style="position: absolute; bottom: 0; right: 0; font-size: 0.8em;"></span>
-                        </div>
-                      }
-                      @else {
-                        <div class="icon" [title]="item.Name">
-                          <span [ngClass]="getIconForResourceType(item)"></span>
-                        </div>
-                      }
-                      
-                      <h2>{{ item.Name }}</h2>
-                      <p>{{ item.Description || 'No description available' }}</p>
-                    </div>
-                  </div>
-                </div>
+                  <kendo-card-body>
+                    @if(item.IsLink) {
+                      <div class="mj-icon-wrapper-linked" [title]="item.Name + ' (Shared)'">
+                        <span [ngClass]="getIconForResourceType(item)" class="mj-card-icon-large"></span>
+                        <span class="fa-solid fa-link mj-link-indicator"></span>
+                      </div>
+                    }
+                    @else {
+                      <span [ngClass]="getIconForResourceType(item)" class="mj-card-icon-large" [title]="item.Name"></span>
+                    }
+                    
+                    <h3>{{ item.Name }}</h3>
+                    <p>{{ item.Description || 'No description available' }}</p>
+                    
+                    @if(item.Type === 'Folder') {
+                      <kendo-chip 
+                        label="Folder" 
+                        rounded="full"
+                        themeColor="info"
+                        size="small">
+                      </kendo-chip>
+                    }
+                    @else if(item.Type === 'Resource') {
+                      <kendo-chip 
+                        [label]="getResourceTypeLabel(item)" 
+                        rounded="full"
+                        themeColor="base"
+                        size="small">
+                      </kendo-chip>
+                    }
+                  </kendo-card-body>
+                </kendo-card>
               }
             </div>
           }

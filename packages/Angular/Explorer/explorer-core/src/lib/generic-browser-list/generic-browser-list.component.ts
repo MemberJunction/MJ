@@ -527,16 +527,64 @@ export class GenericBrowserListComponent implements OnInit{
       return "";
     }
 
-    const LargeClass: string = "fa-3x ";
     if(item.Type === ItemType.Folder){  
-      return LargeClass + "fa-regular fa-folder";
+      return "fa-regular fa-folder";
     }
 
     const resourceType = this.resourceTypes.find(rt => rt.Entity === this.ItemEntityName);
-    if(resourceType){
-      return LargeClass + resourceType.Icon;// + rotateStyle;
+    if(resourceType && resourceType.Icon){
+      return resourceType.Icon;
     }
 
-    return "";
+    // Default icon if no resource type found
+    return "fa-solid fa-file";
+  }
+
+  public getHeaderIconClass(): string {
+    // If viewing a specific folder
+    if(this.selectedFolderID) {
+      return "fa-regular fa-folder-open";
+    }
+    
+    // Try to get icon from resource type
+    const resourceType = this.resourceTypes.find(rt => rt.Entity === this.ItemEntityName);
+    if(resourceType && resourceType.Icon){
+      return resourceType.Icon;
+    }
+    
+    // Default icons based on common types
+    switch(this.itemType?.toLowerCase()) {
+      case 'dashboard':
+      case 'dashboards':
+        return "fa-solid fa-chart-line";
+      case 'report':
+      case 'reports':
+        return "fa-solid fa-file-chart-column";
+      case 'query':
+      case 'queries':
+        return "fa-solid fa-database";
+      case 'view':
+      case 'views':
+        return "fa-solid fa-table";
+      case 'application':
+      case 'applications':
+        return "fa-solid fa-window-restore";
+      default:
+        return this.iconName || "fa-solid fa-th";
+    }
+  }
+
+  public getResourceTypeLabel(item: Item): string {
+    if(item.Type === ItemType.Folder) {
+      return "Folder";
+    }
+    
+    const resourceType = this.resourceTypes.find(rt => rt.Entity === this.ItemEntityName);
+    if(resourceType){
+      return resourceType.Name;
+    }
+    
+    // Return a formatted version of the item type or entity name
+    return this.itemType || "Resource";
   }
 }

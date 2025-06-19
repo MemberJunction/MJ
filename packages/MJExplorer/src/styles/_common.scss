@@ -1355,7 +1355,6 @@ textarea.form-control {
 
             &:hover {
                 background: linear-gradient(135deg, #0084d1 0%, var(--mj-blue) 100%);
-                transform: translateX(2px);
             }
         }
 
@@ -1418,7 +1417,6 @@ textarea.form-control {
 
         &:hover {
             background: var(--light-blue);
-            transform: translateX(2px);
             box-shadow: 0 2px 8px rgba(0, 118, 182, 0.15);
         }
 

@@ -1,278 +1,69 @@
- ::ng-deep .card-header-entity .add-item .k-button {
-     border: 1px solid var(--border-blue) !important;
-     background: var(--white-color) !important;
-     color: var(--border-blue);
-     font-weight: 500;
-     font-size: 16px;
-     border-radius: 10px;
-     line-height: 34px;
- }
+/* ===================================
+   GENERIC BROWSER LIST SPECIFIC STYLES
+   =================================== */
 
- ::ng-deep .card-header-entity .add-item .k-button:hover {
-     background: var(--border-blue) !important;
-     color: var(--white-color);
- }
+/* Icon wrapper for linked items */
+.mj-icon-wrapper-linked {
+    position: relative;
+    display: inline-block;
+}
 
- ::ng-deep .card-header-entity .add-item .k-button:hover .k-button-text svg path {
-     fill: var(--white-color) !important;
- }
+.mj-link-indicator {
+    position: absolute;
+    bottom: -5px;
+    right: -5px;
+    font-size: 1.5rem;
+    color: var(--mj-blue);
+    background: var(--white-color);
+    border-radius: 50%;
+    padding: 2px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
 
- .title-wrapper {
-     display: flex;
-     justify-content: space-between;
-     align-items: center;
-     padding: 14px 0;
-     border-bottom: 1px solid var(--med-gray);
- }
+/* Action buttons in grid cells */
+::ng-deep .mj-grid-table {
+    .mj-toolbar-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+        
+        .mj-btn-icon-only {
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            font-size: 14px;
+        }
+    }
+}
 
- .title-wrapper h4 {
-     margin: 0;
-     font-size: 24px;
-     line-height: 28px;
- }
-
- .main-fav-wrapper {
-     background: #fff;
-     padding: 20px;
- }
-
- .filter-wrapper {
-     display: flex;
-     justify-content: flex-start;
-     gap: 14px;
-     align-items: center;
- }
-
- .title-wrapper .search input {
-     width: 100%;
-     height: 100%;
-     font-size: 16px;
-     background: transparent;
-     border: none;
-     box-sizing: border-box;
-     padding-left: 40px;
-
- }
-
- .title-wrapper .search {
-     background: var(--light-shade);
-     width: 360px;
-     height: 44px;
-     position: relative;
-     border-radius: 10px;
- }
-
- .title-wrapper .search svg {
-     position: absolute;
-     top: 50%;
-     transform: translateY(-50%);
-     left: 12px;
- }
-
- ::ng-deep .main-fav-wrapper .title-wrapper .k-dropdown-button .k-button {
-     background: var(--border-blue);
-     color: var(--white-color);
-     font-size: 16px;
-     border: none;
-     padding: 8px 25px;
-     border-radius: 10px;
- }
-
- ::ng-deep .main-fav-wrapper .title-wrapper .k-dropdown-button .k-button .k-button-text,
- ::ng-deep .card-header-entity .add-item .k-button .k-button-text {
-     display: flex;
-     align-items: center;
-     gap: 8px;
- }
-
- .btn-cmn {
-     width: 44px;
-     height: 44px;
-     min-width: 44px;
-     background: transparent;
-     border-radius: 8px;
-     border: 1px solid var(--gray-color);
- }
-
- .btn-cmn.active {
-     border: 1px solid var(--border-blue);
- }
-
- ::ng-deep .main-fav-wrapper .title-wrapper .filter-wrapper .k-dropdown-button .k-button {
-     border: 1px solid var(--gray-color);
-     border-radius: 8px;
-     padding: 10px 25px;
-     background: var(--white-color);
-     color: var(--sideNav);
- }
-
- ::ng-deep .main-area .card-list .card-wrapper .k-card-body {
-     padding: 16px !important;
-     position: relative;
- }
-
- ::ng-deep .main-fav-wrapper .main-area .card-list .card-wrapper .list-item-icon {
-     position: absolute;
-     display: flex;
-     align-items: center;
-     gap: 8px;
-     top: 12px;
-     right: 12px;
-     z-index: 9;
- }
-
- .grid-wrapper {
-     display: flex;
-     align-items: center;
-     gap: 8px;
- }
-
- ::ng-deep .main-area .card-list .card-wrapper:hover {
-     box-shadow: 0px 0px 20px 0px rgba(60, 73, 99, 0.2);
-     border: 1px solid var(--border-active);
- }
-
- ::ng-deep .main-area .card-list .card-wrapper:hover .k-card-body .view-card-content-list h5 {
-     color: var(--border-blue);
- }
-
- ::ng-deep .main-area .card-list .card-wrapper .k-card-body .view-card-content-list p {
-     color: var(--sideNav);
-     font-size: 14px;
-     line-height: 16px;
-     height: auto;
-     text-overflow: ellipsis;
-     overflow: hidden;
-     display: -webkit-box;
-     -webkit-box-orient: vertical;
-
- }
-
- ::ng-deep .main-area .card-list .card-wrapper .k-card-body .view-card-content-list h5 {
-     font-size: 18px;
-     line-height: 21px;
-     color: var(--text-darked);
-     font-weight: 600;
- }
-
- .breadcrumb-wrap {
-     display: flex;
-     align-items: center;
-     gap: 8px;
-     padding: 12px 0;
- }
-
- .breadcrumb-wrap span {
-     font-size: 16px;
-     line-height: 18px;
-     font-weight: 400;
-     color: var(--black);
- }
-
- ::ng-deep .k-menu-popup {
-     box-shadow: 0px 0px 20px 0px rgba(60, 73, 99, 0.2);
-     border-radius: 10px;
-     padding: 16px;
- }
-
- ::ng-deep .k-menu-popup kendo-button-list ul li .k-menu-link {
-     box-shadow: none !important;
- }
-
- ::ng-deep .k-menu-popup kendo-button-list ul li .k-menu-link:active {
-     background: transparent !important;
- }
-
- ::ng-deep .k-menu-popup kendo-button-list ul li .k-menu-link .k-menu-link-text:hover {
-     color: var(--primary-color);
-     background: transparent !important;
-
- }
-
- ::ng-deep .dialog-wrapper .popup-actions-btn button {
-     flex: 1;
- }
-
- ::ng-deep .dialog-wrapper .popup-actions-btn {
-     display: flex;
- }
-
- ::ng-deep .dialog-wrapper .popup-actions-btn .cancel-btn {
-     background: var(--primary-color);
-     color: var(--white-color);
-     font-size: 16px;
-     font-weight: 700;
-     line-height: 34px;
-     text-align: center;
-     border-radius: 10px;
-     border: 1px solid transparent;
-
- }
-
- ::ng-deep .dialog-wrapper .popup-actions-btn .yes-btn {
-     border: 1px solid var(--primary-color);
-     background: transparent;
-     color: var(--primary-color);
-     font-size: 16px;
-     font-weight: 700;
-     line-height: 34px;
-     text-align: center;
-     border-radius: 10px;
-     box-shadow: none;
- }
-
- ::ng-deep .dialog-wrapper .popup-actions-btn .yes-btn:focus {
-     box-shadow: none !important;
- }
-
- ::ng-deep .dialog-wrapper .k-window-title {
-     font-size: 30px;
-     font-weight: 500;
-     line-height: 36px;
-     text-align: left;
-     color: var(--text-darked);
- }
-
- ::ng-deep .dialog-wrapper p {
-     font-size: 16px;
-     font-weight: 500;
-     line-height: 20px;
-     text-align: left;
-     color: var(--black);
- }
-
- .margin-left-small {
-     margin-left: 10px;
- }
-
- .card-wrapper {
-     min-width: 230px;
-     height: 150px;
-     min-height: 125px;
- }
-
- .padding-top-small {
-     padding-top: 10px;
- }
-
- .cursor-pointer {
-     cursor: pointer;
- }
-
- .title-folder {
-     padding-right: 20px;
-     margin: auto;
- }
-
- .title-flex-display {
-     display: flex;
-     flex-direction: row;
- }
-
- .breadcrumb-icon {
-     cursor: pointer;
- }
-
- .breacrumb-icon:hover {
-     color: var(--primary-color);
- }
+/* Dialog content specific to this component */
+.mj-dialog-content {
+    text-align: center;
+    padding: 40px 30px;
+    
+    .mj-dialog-icon {
+        font-size: 4rem;
+        color: #ffc107;
+        margin-bottom: 24px;
+        display: block;
+    }
+    
+    p {
+        font-size: 1.125rem;
+        color: var(--navy);
+        margin-bottom: 16px;
+        line-height: 1.6;
+        
+        strong {
+            color: var(--mj-blue);
+            font-weight: 600;
+        }
+    }
+    
+    .mj-dialog-warning {
+        color: #dc3545;
+        font-size: 1rem;
+        font-style: italic;
+        margin-bottom: 0;
+    }
+}

@@ -20,45 +20,50 @@
         (close)="toggleUpsertDashboardDialog(false)"
         [minWidth]="400"
         [width]="500"
-        class="mj-dialog"
     >
-        <div class="mj-dialog-content">
-            <div class="mj-form-field">
-                <kendo-label text="Name">
-                    <kendo-textbox 
-                        class="mj-form-input" 
-                        [value]="upsertDashboardName" 
-                        placeholder="Enter dashboard name" 
-                        (valueChange)="onUpsertDashboardNameKeyup($event)"
-                    />
-                </kendo-label>
-            </div>
-            
-            <div class="mj-form-field">
-                <kendo-label text="Description">
-                    <kendo-textbox 
-                        class="mj-form-input"
-                        [value]="upsertDashboardDescription" 
-                        placeholder="Enter description" 
-                        (valueChange)="onUpsertDashboardDescriptionKeyup($event)"
-                    />
-                </kendo-label>
-            </div>
-        </div>
+        <kendo-formfield orientation="vertical" class="mb-3">
+            <kendo-label text="Name" [for]="dashboardNameInput"></kendo-label>
+            <kendo-textbox 
+                #dashboardNameInput
+                [value]="upsertDashboardName" 
+                placeholder="Enter dashboard name" 
+                [clearButton]="true"
+                rounded="medium"
+                (valueChange)="onUpsertDashboardNameKeyup($event)"
+            />
+        </kendo-formfield>
         
-        <kendo-dialog-actions class="mj-dialog-actions">
-            <button class="mj-btn-primary" 
-                    (click)="selectedDashboard ? updateDashboard() : createDashboard()"
-                    kendoButton>
-                <i class="fa-solid fa-check"></i>
-                {{ selectedDashboard ? 'Update' : 'Create' }}
-            </button>
-            <button class="mj-btn-secondary" 
-                    (click)="toggleUpsertDashboardDialog(false)" 
-                    kendoButton>
-                <i class="fa-solid fa-times"></i>
-                Cancel
-            </button>
+        <kendo-formfield orientation="vertical">
+            <kendo-label text="Description" [for]="dashboardDescInput"></kendo-label>
+            <kendo-textbox 
+                #dashboardDescInput
+                [value]="upsertDashboardDescription" 
+                placeholder="Enter description" 
+                [clearButton]="true"
+                rounded="medium"
+                (valueChange)="onUpsertDashboardDescriptionKeyup($event)"
+            />
+        </kendo-formfield>
+        
+        <kendo-dialog-actions>
+            <kendo-button 
+                themeColor="primary"
+                rounded="medium"
+                (click)="selectedDashboard ? updateDashboard() : createDashboard()">
+                <span class="button-content">
+                    <i class="fas fa-check"></i>
+                    {{ selectedDashboard ? 'Update' : 'Create' }}
+                </span>
+            </kendo-button>
+            <kendo-button 
+                fillMode="outline"
+                rounded="medium"
+                (click)="toggleUpsertDashboardDialog(false)"> 
+                <span class="button-content">
+                    <i class="fas fa-times"></i>
+                    Cancel
+                </span>
+            </kendo-button>
         </kendo-dialog-actions>
     </kendo-dialog>
 </div>

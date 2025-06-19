@@ -1,7 +1,8 @@
-/* Enhanced Application View Styles */
-/* Following the established MJ design system and style guide patterns */
+:host {
+    display: block;
+}
 
-/* Entity Selection Bar - Enhanced with modern styling */
+/* Entity Selection Bar */
 .mj-entity-selection {
     background: linear-gradient(135deg, var(--gray-600) 0%, #f8f9fa 100%);
     border-radius: var(--border-radius);
@@ -144,72 +145,11 @@
     color: var(--mj-blue);
 }
 
-/* Enhanced Empty State */
-.mj-empty-state {
-    @extend .mj-empty-state; /* Inherit from global styles */
-    background: var(--white-color);
-    border-radius: var(--border-radius);
-    box-shadow: var(--shadow);
-    margin: 40px auto;
-    max-width: 600px;
-    padding: 80px 40px;
-    text-align: center;
-    position: relative;
-    overflow: hidden;
-    
-    .mj-empty-icon {
-        position: relative;
-        z-index: 1;
-        font-size: 5rem;
-        color: var(--gray-800);
-        margin-bottom: 24px;
-        opacity: 0.3;
-        animation: rotate-slow 20s linear infinite;
-    }
-    
-    h3 {
-        position: relative;
-        z-index: 1;
-        font-size: 1.75rem;
-        color: var(--navy);
-        margin-bottom: 12px;
-        font-weight: 600;
-    }
-    
-    p {
-        position: relative;
-        z-index: 1;
-        font-size: 1.125rem;
-        color: var(--gray-800);
-        line-height: 1.6;
-        margin-bottom: 32px;
-        max-width: 400px;
-        margin-left: auto;
-        margin-right: auto;
-    }
-    
-    .mj-btn-primary {
-        position: relative;
-        z-index: 1;
-        font-size: 16px;
-        padding: 14px 32px;
-        box-shadow: 0 4px 16px rgba(0, 118, 182, 0.3);
-        
-        &:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 24px rgba(0, 118, 182, 0.4);
-        }
-    }
-}
-
-/* Loading State Enhancement */
-.mj-loading {
-    @extend .mj-loading;
-    min-height: 400px;
-    
-    .k-loader {
-        font-size: 48px;
-    }
+/* Button content wrapper */
+.button-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
 }
 
 /* Main Content Wrapper */
@@ -217,68 +157,7 @@
     animation: fadeInUp 0.4s ease-out;
 }
 
-/* Enhanced Breadcrumb */
-.mj-breadcrumb {
-    @extend .mj-breadcrumb;
-    padding: 16px 0;
-    margin-bottom: 0;
-    
-    .mj-breadcrumb-item {
-        font-weight: 500;
-        
-        i {
-            margin-right: 6px;
-            font-size: 14px;
-        }
-        
-        &:hover {
-            transform: translateX(2px);
-        }
-    }
-    
-    .mj-breadcrumb-current {
-        font-weight: 600;
-        color: var(--navy);
-    }
-}
-
-
-
-/* Navigation Item Icon styling (kept from original) */
-.mj-nav-item-icon {
-    display: flex;
-    justify-content: center;
-    margin-bottom: 16px;
-    
-    i {
-        font-size: 3rem;
-        color: var(--mj-blue);
-        transition: var(--transition-time);
-        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
-    }
-}
-
-/* Navigation Item Content (kept from original) */
-.mj-nav-item-content {
-    text-align: center;
-    
-    h3 {
-        margin: 0 0 8px 0;
-        font-size: 1.25rem;
-        font-weight: 600;
-        color: var(--navy);
-        transition: var(--transition-time);
-    }
-    
-    p {
-        margin: 0;
-        font-size: 0.9rem;
-        color: var(--gray-800);
-        line-height: 1.4;
-    }
-}
-
-/* Version Info Badge (kept from original with enhancements) */
+/* Version Info Badge */
 .mj-version-info {
     position: fixed;
     bottom: 2rem;
