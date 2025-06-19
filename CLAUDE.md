@@ -22,6 +22,12 @@
   - Never insert __mj timestamp columns
   - Use `${flyway:defaultSchema}` placeholder
 
+## Entity Version Control
+- MemberJunction includes built-in version control called "Record Changes" for all entities
+- This feature tracks all changes to entity records unless explicitly disabled
+- No need to implement custom versioning - it's handled automatically by the framework
+- Access historical versions through the Record Changes entities
+
 ## Development Workflow
 - **CRITICAL**: After making code changes, always compile the affected package by running `npm run build` in that package's directory to check for TypeScript errors
 - Fix all compilation errors before proceeding with additional changes

@@ -26454,6 +26454,10 @@ export class Action_ {
     @MaxLength(510)
     DriverClass?: string;
         
+    @Field({nullable: true, description: `Optional ID of the parent action this action inherits from. Used for hierarchical action composition where child actions can specialize parent actions.`}) 
+    @MaxLength(16)
+    ParentID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Category?: string;
@@ -26461,6 +26465,10 @@ export class Action_ {
     @Field({nullable: true}) 
     @MaxLength(200)
     CodeApprovedByUser?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(850)
+    Parent?: string;
         
     @Field(() => [ActionParam_])
     ActionParams_ActionIDArray: ActionParam_[]; // Link to ActionParams
@@ -26488,6 +26496,9 @@ export class Action_ {
     
     @Field(() => [ActionAuthorization_])
     ActionAuthorizations_ActionIDArray: ActionAuthorization_[]; // Link to ActionAuthorizations
+    
+    @Field(() => [Action_])
+    Actions_ParentIDArray: Action_[]; // Link to Actions
     
 }
 
@@ -26549,6 +26560,9 @@ export class CreateActionInput {
 
     @Field({ nullable: true })
     DriverClass: string | null;
+
+    @Field({ nullable: true })
+    ParentID: string | null;
 }
     
 
@@ -26610,6 +26624,9 @@ export class UpdateActionInput {
 
     @Field({ nullable: true })
     DriverClass?: string | null;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -26759,6 +26776,16 @@ export class ActionResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Action Authorizations', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [Action_])
+    async Actions_ParentIDArray(@Root() action_: Action_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Actions', userPayload);
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActions] WHERE [ParentID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('Actions', rows);
         return result;
     }
         
