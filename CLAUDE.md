@@ -293,6 +293,29 @@ const md = new Metadata();
 const entity = await md.GetEntityObject<TemplateContentEntity>('Template Contents');
 ```
 
+### BaseEntity Spread Operator Limitation
+**CRITICAL**: Never use the spread operator (`...`) directly on BaseEntity-derived classes. BaseEntity properties are implemented as getters/setters, not plain JavaScript properties, so they won't be captured by the spread operator.
+
+```typescript
+// ❌ Wrong - spread operator doesn't capture getter properties
+const promptData = {
+  ...promptEntity,  // This will NOT include ID, Name, etc.
+  extraField: 'value'
+};
+
+// ✅ Correct - use GetAll() to get plain object with all properties
+const promptData = {
+  ...promptEntity.GetAll(),  // Returns { ID: '...', Name: '...', etc. }
+  extraField: 'value'
+};
+```
+
+**Why this matters:**
+- BaseEntity uses getter/setter methods for all entity fields
+- JavaScript spread operator only copies enumerable own properties
+- Getters are not enumerable properties, so they're skipped
+- `GetAll()` returns a plain object with all field values
+
 ### Server-Side Context User Requirements
 When working on server-side code, **ALWAYS** pass `contextUser` to `GetEntityObject` and `RunView` methods:
 
