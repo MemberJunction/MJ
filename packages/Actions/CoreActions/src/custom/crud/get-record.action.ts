@@ -43,7 +43,7 @@ import { BaseRecordMutationAction } from "./base-record-mutation.action";
  * });
  * ```
  */
-@RegisterClass(BaseRecordMutationAction, "Get Record")
+@RegisterClass(BaseRecordMutationAction, "GetRecordAction")
 export class GetRecordAction extends BaseRecordMutationAction {
     /**
      * Retrieves a record for the specified entity type using its primary key.

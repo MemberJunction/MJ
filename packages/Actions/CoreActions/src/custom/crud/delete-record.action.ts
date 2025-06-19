@@ -43,7 +43,7 @@ import { BaseRecordMutationAction } from "./base-record-mutation.action";
  * });
  * ```
  */
-@RegisterClass(BaseRecordMutationAction, "Delete Record")
+@RegisterClass(BaseRecordMutationAction, "DeleteRecordAction")
 export class DeleteRecordAction extends BaseRecordMutationAction {
     /**
      * Deletes a record for the specified entity type using its primary key.
