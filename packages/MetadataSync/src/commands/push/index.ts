@@ -896,7 +896,7 @@ export default class Push extends Command {
           const field = entity.GetFieldByName(fieldName);
           const oldValue = field ? field.OldValue : undefined;
           const newValue = (changes as any)[fieldName];
-          this.log(`     ${fieldName}: ${oldValue} → ${newValue}`);
+          this.log(`     ${fieldName}: ${this.formatFieldValue(oldValue)} → ${this.formatFieldValue(newValue)}`);
         }
       }
     } else if (isNew) {
@@ -1112,7 +1112,7 @@ export default class Push extends Command {
                 const field = entity.GetFieldByName(fieldName);
                 const oldValue = field ? field.OldValue : undefined;
                 const newValue = (changes as any)[fieldName];
-                this.log(`${indent}     ${fieldName}: ${oldValue} → ${newValue}`);
+                this.log(`${indent}     ${fieldName}: ${this.formatFieldValue(oldValue)} → ${this.formatFieldValue(newValue)}`);
               }
             }
           } else if (isNew) {
