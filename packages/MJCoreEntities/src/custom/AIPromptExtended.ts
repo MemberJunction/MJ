@@ -1,5 +1,5 @@
 import { BaseEntity, IRunViewProvider, RunView, ValidationErrorInfo, ValidationErrorType, ValidationResult } from "@memberjunction/core";
-import { AIPromptEntity, TemplateContentEntity } from "../generated/entity_subclasses";
+import { AIPromptEntity, TemplateContentEntity, TemplateParamEntity } from "../generated/entity_subclasses";
 import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseEntity, "AI Prompts")
@@ -20,12 +20,37 @@ export class AIPromptEntityExtended extends AIPromptEntity {
         this._templateText = value;
     }
 
+    /**
+     * private property to cache template parameters.
+     */
+    private _templateParams: TemplateParamEntity[] | null = null;
 
-    override LoadFromData(data: any, replaceOldValues?: boolean): boolean {
+    /**
+     * Virtual property to get the template parameters for this AI Prompt.
+     * Returns the cached parameters if available, or an empty array if not loaded yet.
+     * Call LoadTemplateParams() to ensure params are loaded.
+     */
+    public get TemplateParams(): TemplateParamEntity[] {
+        return this._templateParams || [];
+    }
+
+    /**
+     * Async getter for template parameters that ensures they are loaded.
+     * Use this when you need to guarantee the parameters are loaded from the database.
+     */
+    public async GetTemplateParams(): Promise<TemplateParamEntity[]> {
+        if (this._templateParams === null) {
+            await this.LoadTemplateParams();
+        }
+        return this._templateParams || [];
+    }
+
+
+    override async LoadFromData(data: any, replaceOldValues?: boolean): Promise<boolean> {
         // call the base class method to load the data
-        const result = super.LoadFromData(data, replaceOldValues);
+        const result = await super.LoadFromData(data, replaceOldValues);
 
-        this.LoadTemplateText(); // load the Template Text if it exists // cant do async b/c this method is not async
+        await this.LoadRelatedEntities();
 
         return result;
     }
@@ -55,9 +80,47 @@ export class AIPromptEntityExtended extends AIPromptEntity {
         }
     }
 
+    /**
+     * Loads the template parameters for this AI Prompt if it has a TemplateID.
+     * This method populates the _templateParams array.
+     */
+    protected async LoadTemplateParams(): Promise<boolean> {
+        if (this.TemplateID) {
+            const rv = new RunView(this.ProviderToUse as any as IRunViewProvider);
+            const templateParamsResult = await rv.RunView<TemplateParamEntity>({
+                EntityName: "Template Params",
+                ExtraFilter: `TemplateID='${this.TemplateID}'`,
+                OrderBy: "Name ASC",
+                ResultType: 'entity_object'
+            }, this.ContextCurrentUser);
+            
+            if (templateParamsResult && templateParamsResult.Success) {
+                this._templateParams = templateParamsResult.Results || [];
+                return true;
+            } else {
+                // If we failed to load, set to empty array
+                this._templateParams = [];
+                return false;
+            }
+        } else {
+            // No TemplateID, so no params
+            this._templateParams = [];
+            return true;
+        }
+    }
+
+
+    protected async LoadRelatedEntities(): Promise<void> {
+        await Promise.all([
+            this.LoadTemplateText(),
+            this.LoadTemplateParams()
+        ]);
+    }
+
     override async Load(ID: string, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
         const result = await super.Load(ID, EntityRelationshipsToLoad);
-        await this.LoadTemplateText(); // load the Template Text if it exists
+        // Load both template text and params in parallel for better performance
+        await this.LoadRelatedEntities();
         return result;
     }
 
