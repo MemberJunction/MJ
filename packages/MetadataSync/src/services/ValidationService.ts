@@ -101,12 +101,43 @@ export class ValidationService {
    * Validates a single entity directory
    */
   private async validateEntityDirectory(dir: string): Promise<{ files: number; entities: number; fileResults: Map<string, FileValidationResult> } | null> {
-    const configPath = path.join(dir, '.mj-sync.json');
-    if (!fs.existsSync(configPath)) {
+    // Check for .mj-folder.json first (new format)
+    let configPath = path.join(dir, '.mj-folder.json');
+    let config: any;
+    
+    if (fs.existsSync(configPath)) {
+      config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      // .mj-folder.json uses entityName field
+      if (!config.entityName) {
+        this.addError({
+          type: 'validation',
+          severity: 'error',
+          file: configPath,
+          message: 'Missing entityName field in .mj-folder.json',
+        });
+        return null;
+      }
+      config.entity = config.entityName; // Normalize to entity field
+    } else {
+      // Fall back to .mj-sync.json (legacy format)
+      configPath = path.join(dir, '.mj-sync.json');
+      if (!fs.existsSync(configPath)) {
+        return null;
+      }
+      config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    }
+
+    // Validate entity name exists
+    if (!config.entity || config.entity.trim() === '') {
+      this.addError({
+        type: 'validation',
+        severity: 'error',
+        file: configPath,
+        message: 'Entity name is empty or missing',
+      });
       return null;
     }
 
-    const config: EntitySyncConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     const entityInfo = this.metadata.EntityByName(config.entity);
 
     if (!entityInfo) {

@@ -2767,7 +2767,6 @@
       "Name": "Create Record",
       "Description": "Generic action for creating new entity records in the database. Accepts entity name and field values as parameters.",
       "DriverClass": "CreateRecordAction",
-      "DriverPath": "@memberjunction/core-actions",
       "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
       "IsCoreAction": true,
       "Status": "Active"
@@ -2857,7 +2856,6 @@
       "Name": "Get Record",
       "Description": "Generic action for retrieving entity records from the database. Accepts entity name and primary key values as parameters.",
       "DriverClass": "GetRecordAction",
-      "DriverPath": "@memberjunction/core-actions",
       "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
       "IsCoreAction": true,
       "Status": "Active"
@@ -2955,7 +2953,6 @@
       "Name": "Update Record",
       "Description": "Generic action for updating existing entity records in the database. Accepts entity name, primary key, and field values as parameters.",
       "DriverClass": "UpdateRecordAction",
-      "DriverPath": "@memberjunction/core-actions",
       "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
       "IsCoreAction": true,
       "Status": "Active"
@@ -3080,7 +3077,6 @@
       "Name": "Delete Record",
       "Description": "Generic action for deleting entity records from the database. Accepts entity name and primary key values as parameters.",
       "DriverClass": "DeleteRecordAction",
-      "DriverPath": "@memberjunction/core-actions",
       "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
       "IsCoreAction": true,
       "Status": "Active"

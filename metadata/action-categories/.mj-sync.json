@@ -1,5 +1,5 @@
 {
-  "entityName": "Action Categories",
+  "entity": "Action Categories",
   "filePattern": ".*.json",
   "defaults": {
   },
