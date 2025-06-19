@@ -845,7 +845,7 @@ export default class Push extends Command {
         try {
           const processedValue = await syncEngine.processFieldValue(value, baseDir, null, null);
           if (verbose) {
-            this.log(`  Setting ${field}: ${JSON.stringify(value)} -> ${JSON.stringify(processedValue)}`);
+            this.log(`  Setting ${field}: ${this.formatFieldValue(value)} -> ${this.formatFieldValue(processedValue)}`);
           }
           (entity as any)[field] = processedValue;
         } catch (error) {
@@ -1065,7 +1065,7 @@ export default class Push extends Command {
                   rootEntity
                 );
                 if (verbose) {
-                  this.log(`${indent}  Setting ${field}: ${JSON.stringify(value)} -> ${JSON.stringify(processedValue)}`);
+                  this.log(`${indent}  Setting ${field}: ${this.formatFieldValue(value)} -> ${this.formatFieldValue(processedValue)}`);
                 }
                 (entity as any)[field] = processedValue;
               } catch (error) {
@@ -1261,6 +1261,24 @@ export default class Push extends Command {
     return false; // not duplicate
   }
   
+  /**
+   * Format field value for console display
+   */
+  private formatFieldValue(value: any, maxLength: number = 50): string {
+    // Convert value to string representation
+    let strValue = JSON.stringify(value);
+    
+    // Trim the string
+    strValue = strValue.trim();
+    
+    // If it's longer than maxLength, truncate and add ellipsis
+    if (strValue.length > maxLength) {
+      return strValue.substring(0, maxLength) + '...';
+    }
+    
+    return strValue;
+  }
+
   /**
    * Parse JSON file and track line numbers for array elements
    */
