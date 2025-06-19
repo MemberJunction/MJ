@@ -68,6 +68,31 @@ export class GeminiLLM extends BaseLLM {
                 responseType: params.responseFormat,
             };
             
+            // Add supported parameters
+            if (params.topP != null) {
+                modelOptions.top_p = params.topP;
+            }
+            if (params.topK != null) {
+                modelOptions.top_k = params.topK;
+            }
+            if (params.stopSequences != null && params.stopSequences.length > 0) {
+                modelOptions.stop_sequences = params.stopSequences;
+            }
+            if (params.seed != null) {
+                modelOptions.seed = params.seed;
+            }
+
+            // Gemini doesn't support these parameters - warn if provided
+            if (params.frequencyPenalty != null) {
+                console.warn('Gemini provider does not support frequencyPenalty parameter, ignoring');
+            }
+            if (params.presencePenalty != null) {
+                console.warn('Gemini provider does not support presencePenalty parameter, ignoring');
+            }
+            if (params.minP != null) {
+                console.warn('Gemini provider does not support minP parameter, ignoring');
+            }
+            
             // Add generationConfig with reasoningMode if effortLevel is provided
             if (params.effortLevel) {
                 // Gemini has generationConfig.reasoningMode which can be set to 'full' for higher quality
@@ -144,6 +169,31 @@ export class GeminiLLM extends BaseLLM {
             temperature: params.temperature || 0.5,
             responseType: params.responseFormat,
         };
+        
+        // Add supported parameters
+        if (params.topP != null) {
+            modelOptions.top_p = params.topP;
+        }
+        if (params.topK != null) {
+            modelOptions.top_k = params.topK;
+        }
+        if (params.stopSequences != null && params.stopSequences.length > 0) {
+            modelOptions.stop_sequences = params.stopSequences;
+        }
+        if (params.seed != null) {
+            modelOptions.seed = params.seed;
+        }
+
+        // Gemini doesn't support these parameters - warn if provided
+        if (params.frequencyPenalty != null) {
+            console.warn('Gemini provider does not support frequencyPenalty parameter, ignoring');
+        }
+        if (params.presencePenalty != null) {
+            console.warn('Gemini provider does not support presencePenalty parameter, ignoring');
+        }
+        if (params.minP != null) {
+            console.warn('Gemini provider does not support minP parameter, ignoring');
+        }
         
         // Add generationConfig with reasoningMode if effortLevel is provided
         if (params.effortLevel) {

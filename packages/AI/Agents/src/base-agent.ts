@@ -63,6 +63,7 @@ import { AgentRunner } from './AgentRunner';
  * @class BaseAgent
  * @example
  * ```typescript
+ * // Using with default context type (any)
  * const agent = new BaseAgent();
  * const result = await agent.Execute({
  *   agent: myAgentEntity,
@@ -70,9 +71,23 @@ import { AgentRunner } from './AgentRunner';
  *   contextUser: currentUser
  * });
  * 
- * if (result.nextStep === 'success') {
- *   console.log('Agent completed successfully:', result.returnValue);
+ * // Using with typed context through ExecuteAgentParams
+ * interface MyContext {
+ *   apiKey: string;
+ *   environment: 'dev' | 'prod';
  * }
+ * 
+ * const agent = new BaseAgent();
+ * const params: ExecuteAgentParams<MyContext> = {
+ *   agent: myAgentEntity,
+ *   conversationMessages: messages,
+ *   contextUser: currentUser,
+ *   context: {
+ *     apiKey: 'abc123',
+ *     environment: 'prod'
+ *   }
+ * };
+ * const result = await agent.Execute(params);
  * ```
  */
 export class BaseAgent {
@@ -169,6 +184,7 @@ export class BaseAgent {
      * @param {AIAgentEntity} params.agent - The agent entity to execute
      * @param {ChatMessage[]} params.conversationMessages - Conversation history
      * @param {UserInfo} [params.contextUser] - Optional user context
+     * @param {any} [params.context] - Optional context object passed to sub-agents and actions
      * 
      * @returns {Promise<ExecuteAgentResult>} Result containing next step and any output
      * 
@@ -608,6 +624,7 @@ export class BaseAgent {
      * objects are returned, allowing the caller to access result codes, output parameters,
      * and other execution details.
      * 
+     * @param {ExecuteAgentParams} params - Parameters from agent execution for context passing
      * @param {AgentAction[]} actions - Array of actions to execute
      * @param {UserInfo} [contextUser] - Optional user context for permissions
      * 
@@ -617,26 +634,35 @@ export class BaseAgent {
      * 
      * @example
      * ```typescript
-     * const results = await this.ExecuteActions([
+     * const results = await this.ExecuteActions(params, [
      *   { id: 'action1', name: 'SendEmail', params: { to: 'user@example.com' } },
      *   { id: 'action2', name: 'UpdateRecord', params: { id: 123, status: 'active' } }
      * ]);
      * // results[0].Success, results[0].Result?.Code, results[0].Params
      * ```
      */
-    public async ExecuteActions(actions: AgentAction[], contextUser?: UserInfo): Promise<any[]> {
+    public async ExecuteActions(params: ExecuteAgentParams, actions: AgentAction[], contextUser?: UserInfo): Promise<any[]> {
         try {
             const actionEngine = ActionEngineServer.Instance;
             
             // Execute all actions in parallel
             const actionPromises = actions.map(async (action) => {
-                // Find the action entity
-                const actionEntity = actionEngine.Actions.find(a => 
-                    a.ID === action.id || a.Name === action.name
-                );
+                // Validate action ID
+                if (!action.id) {
+                    throw new Error(`Action ID is required for action: ${action.name || 'unknown'}`);
+                }
+                
+                // Find the action entity by ID
+                const actionEntity = actionEngine.Actions.find(a => a.ID === action.id);
                 
                 if (!actionEntity) {
-                    throw new Error(`Action not found: ${action.name || action.id}`);
+                    // Check if the provided ID is a valid UUID
+                    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                    if (!uuidRegex.test(action.id)) {
+                        throw new Error(`${action.id} is not a valid UUID and must be a UUID representing the Action ID`);
+                    } else {
+                        throw new Error(`Action with ID ${action.id} not found in the action table`);
+                    }
                 }
                 
                 // Convert params object to ActionParam array
@@ -652,7 +678,8 @@ export class BaseAgent {
                     Params: actionParams,
                     ContextUser: contextUser,
                     Filters: [],
-                    SkipActionLog: false
+                    SkipActionLog: false,
+                    Context: params.context // pass along our context to actions so they can use it however they need
                 });
                 
                 if (!result.Success) {
@@ -696,24 +723,29 @@ export class BaseAgent {
      * }, messages);
      * ```
      */
-    public async ExecuteSubAgent(
+    protected async ExecuteSubAgent(
+        params: ExecuteAgentParams,
         subAgentRequest: AgentSubAgentRequest, 
-        conversationMessages: ChatMessage[],
-        contextUser?: UserInfo,
-        cancellationToken?: AbortSignal,
-        onProgress?: AgentExecutionProgressCallback,
-        onStreaming?: AgentExecutionStreamingCallback
     ): Promise<ExecuteAgentResult> {
         try {
             const engine = AIEngine.Instance;
             
-            // Find the sub-agent
-            const subAgent = engine.Agents.find(a => 
-                a.ID === subAgentRequest.id || a.Name === subAgentRequest.name
-            );
+            // Validate subAgentID
+            if (!subAgentRequest.id) {
+                throw new Error('Sub-agent ID is required');
+            }
+            
+            // Find the sub-agent by ID
+            const subAgent = engine.Agents.find(a => a.ID === subAgentRequest.id);
             
             if (!subAgent) {
-                throw new Error(`Sub-agent not found: ${subAgentRequest.name || subAgentRequest.id}`);
+                // Check if the provided ID is a valid UUID
+                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                if (!uuidRegex.test(subAgentRequest.id)) {
+                    throw new Error(`${subAgentRequest.id} is not a valid UUID and must be a UUID representing the Agent ID`);
+                } else {
+                    throw new Error(`Sub-agent with ID ${subAgentRequest.id} not found in the agent table`);
+                }
             }
             
             // Create a new AgentRunner instance
@@ -721,7 +753,7 @@ export class BaseAgent {
             
             // Prepare messages for sub-agent, adding the context message
             const subAgentMessages: ChatMessage[] = [
-                ...conversationMessages,
+                ...params.conversationMessages,
                 {
                     role: 'user',
                     content: subAgentRequest.message
@@ -736,12 +768,13 @@ export class BaseAgent {
             const result = await runner.RunAgent({
                 agent: subAgent,
                 conversationMessages: subAgentMessages,
-                contextUser: contextUser,
-                cancellationToken: cancellationToken,
-                onProgress: onProgress,
-                onStreaming: onStreaming,
+                contextUser: params.contextUser,
+                cancellationToken: params.cancellationToken,
+                onProgress: params.onProgress,
+                onStreaming: params.onStreaming,
                 parentAgentHierarchy: this._runContext?.agentHierarchy,
-                parentDepth: this._runContext?.depth
+                parentDepth: this._runContext?.depth,
+                context: params.context // pass along our context to sub-agents so they can keep passing it down and pass to actions as well
             });
             
             // Check if execution was successful
@@ -1357,22 +1390,8 @@ export class BaseAgent {
         try {
             // Execute sub-agent with cancellation and streaming support
             const subAgentResult = await this.ExecuteSubAgent(
-                subAgentRequest,
-                params.conversationMessages,
-                params.contextUser,
-                params.cancellationToken,
-                // Pass through progress callback with sub-agent context
-                params.onProgress ? (progress) => {
-                    params.onProgress!(progress);
-                } : undefined,
-                // Pass through streaming callback with sub-agent context
-                params.onStreaming ? (chunk) => {
-                    params.onStreaming!({
-                        ...chunk,
-                        stepType: 'subagent',
-                        stepEntityId: stepEntity.ID
-                    });
-                } : undefined
+                params,
+                subAgentRequest
             );
             
             // Check for cancellation after sub-agent execution
@@ -1560,7 +1579,7 @@ export class BaseAgent {
         const actionPromises = actionSteps.map(async ({ action, stepEntity, startTime }) => {
             try {
                 // Execute the action
-                const actionResults = await this.ExecuteActions([action], params.contextUser);
+                const actionResults = await this.ExecuteActions(params, [action], params.contextUser);
                 const actionResult = actionResults[0];
                 
                 // Create action execution result
@@ -1649,7 +1668,9 @@ export class BaseAgent {
             content: resultsMessage
         });
         
-        // Return to continue processing - no need for retryInstructions anymore
+        // After actions complete, we need to process the results
+        // The retry step is used to re-execute the prompt with the action results
+        // This allows the agent to analyze the results and determine what to do next
         return {
             terminate: false,
             nextStep: {

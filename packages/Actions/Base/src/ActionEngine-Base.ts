@@ -115,12 +115,37 @@ export class ActionParam {
 
 /**
  * Class that holds the parameters for an action to be run. This is passed to the Run method of an action.
+ * 
+ * @template TContext - Type of the context object passed to the action execution.
+ *                      This allows for type-safe context propagation from agents to actions.
+ *                      Defaults to any for backward compatibility.
+ * 
+ * @example
+ * ```typescript
+ * // Define a typed context
+ * interface MyActionContext {
+ *   apiEndpoint: string;
+ *   apiKey: string;
+ *   environment: 'dev' | 'staging' | 'prod';
+ * }
+ * 
+ * // Use with type safety
+ * const params = new RunActionParams<MyActionContext>();
+ * params.Action = myAction;
+ * params.ContextUser = currentUser;
+ * params.Context = {
+ *   apiEndpoint: 'https://api.example.com',
+ *   apiKey: process.env.API_KEY,
+ *   environment: 'prod'
+ * };
+ * ```
  */
-export class RunActionParams {
+export class RunActionParams<TContext = any> {
    /**
     * The action entity to be run.
     */
    public Action: ActionEntity;
+
    /**
     * The user context for the action.
     */
@@ -137,29 +162,28 @@ export class RunActionParams {
     * Optional, the input and output parameters as defined in the metadata for the action.
     */
    public Params: ActionParam[];
-};
 
-export type RunActionByNameParams = {
    /**
-    * The ID of the action to be run.
+    * Optional context object that provides runtime-specific information to the action.
+    * This context is separate from the action parameters and is not stored in the database.
+    * 
+    * Common use cases include:
+    * - Environment-specific configuration (API endpoints, service URLs)
+    * - Runtime credentials or authentication tokens
+    * - User preferences or session information
+    * - Feature flags or toggles
+    * - Request-specific correlation IDs
+    * 
+    * The context flows from agents to actions, maintaining consistency throughout
+    * the execution hierarchy. Actions can use this context to adapt their behavior
+    * based on runtime conditions without modifying their core parameter structure.
+    * 
+    * Note: Avoid including sensitive data like passwords unless absolutely necessary,
+    * as context may be passed through multiple execution layers.
     */
-   ActionID: string,
-   /**
-    * The user context for the action.
-    */
-   ContextUser: UserInfo,
-   /**
-    * Optional, if true, an ActionExecutionLogEntity will not be created for this action run.
-    */
-   SkipActionLog?: boolean,
-   /**
-    * Optional, input and output params to be passed to the action.
-    * Note that if none are provided, the default values defined in the Metadata will be used.
-    * Otherwise you must provide all input parameters the action expects
-    */
-   Params?: ActionParam[];
+   public Context?: TContext;
 };
-
+ 
 
 /**
  * Base class for Action metadata. 
@@ -239,11 +263,24 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
       return this.__coreCategoryName;
     }
      
+   /**
+    * Returns an action based on its name
+    * @param actionName 
+    * @returns 
+    */
+   public GetActionByName(actionName: string): ActionEntityExtended | undefined {
+      if (!actionName || actionName.trim().length === 0) {
+         throw new Error("Action name cannot be null or empty.");
+      }
+      return this.Actions.find(a => a.Name.trim().toLowerCase() === actionName.trim().toLowerCase());
+   }
 
    /**
     * This method handles input validation. Subclasses can override this method to provide custom input validation.
+    * 
+    * @template TContext - Type of the context object in RunActionParams
     */
-   protected async ValidateInputs(params: RunActionParams): Promise<boolean> {
+   protected async ValidateInputs<TContext = any>(params: RunActionParams<TContext>): Promise<boolean> {
       return true;
    }
 }

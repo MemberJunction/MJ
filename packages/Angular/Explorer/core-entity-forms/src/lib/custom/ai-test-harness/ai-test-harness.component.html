@@ -1,4 +1,4 @@
-<div class="harness-container" *ngIf="isVisible">
+<div class="harness-container" *ngIf="isVisible" kendoWindowContainer>
         <!-- Header -->
         <div class="harness-header">
             @if (entity) {
@@ -352,10 +352,13 @@
 
                         <!-- Model Settings Tab (Prompt Mode) -->
                         @if (activeTab === 'modelSettings') {
-                            <div class="tab-content">
+                            <div class="tab-content" style="overflow-y: auto;">
                                 <div class="tab-header">
                                     <h4>Model Settings</h4>
                                     <p>Configure AI model parameters</p>
+                                    <button class="custom-button icon-only" (click)="resetToPromptDefaults()" title="Reset to Prompt Settings">
+                                        <i class="fa-solid fa-undo"></i>
+                                    </button>
                                 </div>
                                 
                                 <div class="model-settings">
@@ -363,6 +366,7 @@
                                         <label>AI Model</label>
                                         <kendo-dropdownlist 
                                             [(ngModel)]="selectedModelId"
+                                            (ngModelChange)="onModelSelectionChange()"
                                             [data]="availableModels"
                                             textField="Name"
                                             valueField="ID"
@@ -373,17 +377,25 @@
                                     </div>
                                     
                                     <div class="setting-group">
-                                        <label>Temperature ({{ temperature }})</label>
-                                        <kendo-slider 
-                                            [(ngModel)]="temperature"
-                                            [min]="0"
-                                            [max]="2"
-                                            [smallStep]="0.1"
-                                            [showButtons]="false"
-                                            class="temperature-slider">
-                                        </kendo-slider>
+                                        <label>AI Vendor</label>
+                                        <kendo-dropdownlist 
+                                            [(ngModel)]="selectedVendorId"
+                                            [data]="availableVendors"
+                                            textField="Name"
+                                            valueField="ID"
+                                            [valuePrimitive]="true"
+                                            [disabled]="availableVendors.length <= 1 || !selectedModelId"
+                                            placeholder="Select a vendor..."
+                                            class="vendor-selector">
+                                        </kendo-dropdownlist>
                                         <div class="setting-help">
-                                            Lower values make output more focused and deterministic
+                                            @if (!selectedModelId) {
+                                                Using default vendor for the default model
+                                            } @else if (availableVendors.length <= 1) {
+                                                Only one vendor available for this model
+                                            } @else {
+                                                Select the inference provider for this model
+                                            }
                                         </div>
                                     </div>
                                     
@@ -416,6 +428,172 @@
                                             Maximum length of generated response
                                         </div>
                                     </div>
+                                    
+                                    <div class="setting-group">
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" 
+                                                   [(ngModel)]="skipValidation"
+                                                   class="skip-validation-checkbox">
+                                            Skip Validation
+                                        </label>
+                                        <div class="setting-help">
+                                            Skip output validation during testing
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Advanced Parameters Expansion Panel -->
+                                    <kendo-expansionpanel 
+                                        [expanded]="advancedParamsExpanded"
+                                        (action)="toggleAdvancedParams()"
+                                        title="Advanced Parameters"
+                                        class="advanced-params-panel">
+                                        <div class="advanced-settings">
+                                            <div class="setting-group">
+                                                <label title="Controls randomness: 0 = more focused and deterministic, 2 = more random and creative">
+                                                    Temperature
+                                                </label>
+                                                <kendo-numerictextbox 
+                                                    [(ngModel)]="advancedParams.temperature"
+                                                    [min]="0"
+                                                    [max]="2"
+                                                    [step]="0.1"
+                                                    [format]="'n1'"
+                                                    placeholder="None"
+                                                    class="advanced-param-input">
+                                                </kendo-numerictextbox>
+                                            </div>
+                                            
+                                            <div class="setting-group">
+                                                <label title="Nucleus sampling: only consider tokens with cumulative probability up to this value. 1 = consider all tokens">
+                                                    Top P
+                                                </label>
+                                                <kendo-numerictextbox 
+                                                    [(ngModel)]="advancedParams.topP"
+                                                    [min]="0"
+                                                    [max]="1"
+                                                    [step]="0.01"
+                                                    [format]="'n2'"
+                                                    placeholder="None"
+                                                    class="advanced-param-input">
+                                                </kendo-numerictextbox>
+                                            </div>
+                                            
+                                            <div class="setting-group">
+                                                <label title="Only sample from the top K tokens. Lower values reduce randomness">
+                                                    Top K
+                                                </label>
+                                                <kendo-numerictextbox 
+                                                    [(ngModel)]="advancedParams.topK"
+                                                    [min]="1"
+                                                    [max]="100"
+                                                    [step]="1"
+                                                    [format]="'n0'"
+                                                    placeholder="None"
+                                                    class="advanced-param-input">
+                                                </kendo-numerictextbox>
+                                            </div>
+                                            
+                                            <div class="setting-group">
+                                                <label title="Minimum probability for token selection. Filters out low-probability tokens">
+                                                    Min P
+                                                </label>
+                                                <kendo-numerictextbox 
+                                                    [(ngModel)]="advancedParams.minP"
+                                                    [min]="0"
+                                                    [max]="1"
+                                                    [step]="0.01"
+                                                    [format]="'n2'"
+                                                    placeholder="None"
+                                                    class="advanced-param-input">
+                                                </kendo-numerictextbox>
+                                            </div>
+                                            
+                                            <div class="setting-group">
+                                                <label title="Penalizes tokens based on their frequency in the text. Positive values reduce repetition">
+                                                    Frequency Penalty
+                                                </label>
+                                                <kendo-numerictextbox 
+                                                    [(ngModel)]="advancedParams.frequencyPenalty"
+                                                    [min]="-2"
+                                                    [max]="2"
+                                                    [step]="0.1"
+                                                    [format]="'n1'"
+                                                    placeholder="None"
+                                                    class="advanced-param-input">
+                                                </kendo-numerictextbox>
+                                            </div>
+                                            
+                                            <div class="setting-group">
+                                                <label title="Penalizes tokens that have appeared in the text. Positive values increase topic diversity">
+                                                    Presence Penalty
+                                                </label>
+                                                <kendo-numerictextbox 
+                                                    [(ngModel)]="advancedParams.presencePenalty"
+                                                    [min]="-2"
+                                                    [max]="2"
+                                                    [step]="0.1"
+                                                    [format]="'n1'"
+                                                    placeholder="None"
+                                                    class="advanced-param-input">
+                                                </kendo-numerictextbox>
+                                            </div>
+                                            
+                                            <div class="setting-group">
+                                                <label title="Random seed for deterministic generation. Same seed produces same output">
+                                                    Seed
+                                                </label>
+                                                <kendo-numerictextbox 
+                                                    [(ngModel)]="advancedParams.seed"
+                                                    [format]="'n0'"
+                                                    placeholder="None"
+                                                    class="advanced-param-input">
+                                                </kendo-numerictextbox>
+                                            </div>
+                                            
+                                            <div class="setting-group">
+                                                <label title="Sequences that will stop generation when encountered. Enter comma-separated values">
+                                                    Stop Sequences
+                                                </label>
+                                                <kendo-textarea 
+                                                    [(ngModel)]="stopSequencesText"
+                                                    (ngModelChange)="updateStopSequences()"
+                                                    [rows]="2"
+                                                    placeholder="Enter comma-separated sequences"
+                                                    class="advanced-param-input">
+                                                </kendo-textarea>
+                                                <div class="setting-help">
+                                                    Separate multiple sequences with commas
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="setting-group">
+                                                <label title="Include log probabilities of the output tokens in the response">
+                                                    Include Log Probs
+                                                </label>
+                                                <kendo-switch 
+                                                    [(ngModel)]="advancedParams.includeLogProbs"
+                                                    class="advanced-param-switch">
+                                                </kendo-switch>
+                                            </div>
+                                            
+                                            @if (advancedParams.includeLogProbs) {
+                                                <div class="setting-group">
+                                                    <label title="Number of top log probabilities to include for each token">
+                                                        Top Log Probs
+                                                    </label>
+                                                    <kendo-numerictextbox 
+                                                        [(ngModel)]="advancedParams.topLogProbs"
+                                                        [min]="2"
+                                                        [max]="20"
+                                                        [step]="1"
+                                                        [format]="'n0'"
+                                                        placeholder="2"
+                                                        class="advanced-param-input">
+                                                    </kendo-numerictextbox>
+                                                </div>
+                                            }
+                                        </div>
+                                    </kendo-expansionpanel>
                                 </div>
                             </div>
                         }
@@ -610,35 +788,3 @@
         </kendo-dialog>
     }
 
-    <!-- JSON Display Dialog -->
-    @if (showJsonDialog) {
-        <kendo-window 
-            [title]="'Raw JSON Response'" 
-            [width]="900" 
-            [height]="700"
-            [minWidth]="600"
-            [minHeight]="400"
-            [resizable]="true"
-            [draggable]="true"
-            [state]="'default'"
-            [keepContent]="true"
-            (close)="closeJsonDialog()"
-            class="json-dialog-window">
-            <div class="json-dialog-content">
-                <div class="json-dialog-header">
-                    <button class="custom-button icon-only" (click)="copyJsonContent()" title="Copy JSON">
-                        <i class="fa-solid fa-copy"></i>
-                    </button>
-                </div>
-                <div class="json-dialog-body">
-                    <mj-code-editor 
-                        [(ngModel)]="currentJsonContent"
-                        [readonly]="true"
-                        [language]="'json'"
-                        [lineWrapping]="true"
-                        style="height: 100%; width: 100%;">
-                    </mj-code-editor>
-                </div>
-            </div>
-        </kendo-window>
-    }

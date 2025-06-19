@@ -11,12 +11,12 @@ export {
     DataContextVariable,
     ConversationMessage as AIAgentConversationMessage,
     SavedConversation
-} from './lib/custom/AIAgents/ai-test-harness.component';
+} from './lib/custom/ai-test-harness/ai-test-harness.component';
 
 export { 
     AITestHarnessDialogComponent,
     AITestHarnessDialogData
-} from './lib/custom/AIAgents/ai-test-harness-dialog.component';
+} from './lib/custom/ai-test-harness/ai-test-harness-dialog.component';
 
 // TODO: Prompt test harness components will be added later
 // export { 

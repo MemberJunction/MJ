@@ -2,6 +2,8 @@
 
 Advanced AI prompt execution engine with hierarchical template composition, intelligent model selection, parallel execution, output validation, and comprehensive execution tracking.
 
+> **Note on Parameters**: This package uses the parameter types defined in `@memberjunction/ai`. For a complete reference of available LLM parameters (temperature, topP, topK, etc.), see the [Parameter Reference](../Core/README.md#parameter-reference) in the AI Core documentation.
+
 [![npm version](https://badge.fury.io/js/%40memberjunction%2Fai-prompts.svg)](https://www.npmjs.com/package/@memberjunction/ai-prompts)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
 

@@ -97,6 +97,48 @@ const runParams: RunActionParams = {
 };
 ```
 
+#### Type-Safe Context Support (New in v2.51.0)
+
+RunActionParams now supports type-safe context propagation:
+
+```typescript
+import { RunActionParams } from '@memberjunction/actions-base';
+
+// Define your context type
+interface MyActionContext {
+    apiEndpoint: string;
+    apiKey: string;
+    environment: 'dev' | 'staging' | 'prod';
+    featureFlags: Record<string, boolean>;
+}
+
+// Create typed parameters
+const runParams = new RunActionParams<MyActionContext>();
+runParams.Action = actionEntity;
+runParams.ContextUser = userInfo;
+runParams.Params = [
+    { Name: 'customerID', Value: 'CUST123', Type: 'Input' },
+    { Name: 'orderAmount', Value: 150.00, Type: 'Input' }
+];
+
+// Set typed context
+runParams.Context = {
+    apiEndpoint: 'https://api.example.com',
+    apiKey: process.env.API_KEY,
+    environment: 'prod',
+    featureFlags: {
+        newFeature: true,
+        betaAccess: false
+    }
+};
+```
+
+The context object is:
+- **Separate from parameters**: Not stored in the database or included in logs
+- **Runtime-specific**: For environment configuration, credentials, and session data
+- **Type-safe**: Full TypeScript support when using generics
+- **Propagated automatically**: Flows from agents to actions in the execution hierarchy
+
 ### ActionResult
 
 The result object returned from action execution:
@@ -247,6 +289,47 @@ const params = prepareActionParams({
     OrderDate: new Date(),
     TotalAmount: 150.00
 });
+```
+
+### Using Context in Actions
+
+Context provides runtime-specific information separate from business parameters:
+
+```typescript
+import { RunActionParams } from '@memberjunction/actions-base';
+
+interface ServiceContext {
+    apiEndpoint: string;
+    apiKey: string;
+    timeout: number;
+    retryPolicy: {
+        maxRetries: number;
+        backoffMs: number;
+    };
+}
+
+async function executeActionWithContext(
+    action: ActionEntity,
+    businessParams: ActionParam[],
+    context: ServiceContext,
+    user: UserInfo
+) {
+    const runParams = new RunActionParams<ServiceContext>();
+    runParams.Action = action;
+    runParams.ContextUser = user;
+    runParams.Params = businessParams;
+    runParams.Context = context;
+    
+    // The action implementation can access context via this.ContextObject
+    // This is useful for:
+    // - API configurations that vary by environment
+    // - Runtime credentials not stored in metadata
+    // - Session-specific settings
+    // - Feature flags and toggles
+    
+    const result = await actionEngine.RunAction(runParams);
+    return result;
+}
 ```
 
 ## Dependencies

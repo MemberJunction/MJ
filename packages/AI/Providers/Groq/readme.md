@@ -269,6 +269,24 @@ When contributing to this package:
 3. Update tests when adding new features
 4. Document any Groq-specific behaviors or limitations
 
+## Supported Parameters
+
+The Groq provider supports the following LLM parameters:
+
+**Supported:**
+- `temperature` - Controls randomness in the output (0.0-2.0)
+- `maxOutputTokens` - Maximum number of tokens to generate
+- `topP` - Nucleus sampling threshold (0.0-1.0)
+- `seed` - For deterministic outputs
+- `stopSequences` - Array of sequences where the API will stop generating
+- `frequencyPenalty` - Reduces repetition of token sequences (-2.0 to 2.0)
+- `presencePenalty` - Reduces repetition of specific tokens (-2.0 to 2.0)
+- `responseFormat` - Output format (Text, JSON, etc.)
+
+**Not Supported:**
+- `topK` - Not available in Groq API
+- `minP` - Not available in Groq API
+
 ## License
 
 ISC
