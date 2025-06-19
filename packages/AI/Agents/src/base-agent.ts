@@ -63,6 +63,7 @@ import { AgentRunner } from './AgentRunner';
  * @class BaseAgent
  * @example
  * ```typescript
+ * // Using with default context type (any)
  * const agent = new BaseAgent();
  * const result = await agent.Execute({
  *   agent: myAgentEntity,
@@ -70,9 +71,23 @@ import { AgentRunner } from './AgentRunner';
  *   contextUser: currentUser
  * });
  * 
- * if (result.nextStep === 'success') {
- *   console.log('Agent completed successfully:', result.returnValue);
+ * // Using with typed context through ExecuteAgentParams
+ * interface MyContext {
+ *   apiKey: string;
+ *   environment: 'dev' | 'prod';
  * }
+ * 
+ * const agent = new BaseAgent();
+ * const params: ExecuteAgentParams<MyContext> = {
+ *   agent: myAgentEntity,
+ *   conversationMessages: messages,
+ *   contextUser: currentUser,
+ *   context: {
+ *     apiKey: 'abc123',
+ *     environment: 'prod'
+ *   }
+ * };
+ * const result = await agent.Execute(params);
  * ```
  */
 export class BaseAgent {
@@ -169,6 +184,7 @@ export class BaseAgent {
      * @param {AIAgentEntity} params.agent - The agent entity to execute
      * @param {ChatMessage[]} params.conversationMessages - Conversation history
      * @param {UserInfo} [params.contextUser] - Optional user context
+     * @param {any} [params.context] - Optional context object passed to sub-agents and actions
      * 
      * @returns {Promise<ExecuteAgentResult>} Result containing next step and any output
      * 
@@ -608,6 +624,7 @@ export class BaseAgent {
      * objects are returned, allowing the caller to access result codes, output parameters,
      * and other execution details.
      * 
+     * @param {ExecuteAgentParams} params - Parameters from agent execution for context passing
      * @param {AgentAction[]} actions - Array of actions to execute
      * @param {UserInfo} [contextUser] - Optional user context for permissions
      * 
@@ -617,7 +634,7 @@ export class BaseAgent {
      * 
      * @example
      * ```typescript
-     * const results = await this.ExecuteActions([
+     * const results = await this.ExecuteActions(params, [
      *   { id: 'action1', name: 'SendEmail', params: { to: 'user@example.com' } },
      *   { id: 'action2', name: 'UpdateRecord', params: { id: 123, status: 'active' } }
      * ]);

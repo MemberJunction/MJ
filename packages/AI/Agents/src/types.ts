@@ -46,6 +46,10 @@ export type AgentExecutionStreamingCallback = (chunk: {
 /**
  * Parameters required to execute an AI Agent.
  * 
+ * @template TContext - Type of the context object passed through agent and action execution.
+ *                      This allows for type-safe context propagation throughout the execution hierarchy.
+ *                      Defaults to any for backward compatibility.
+ * 
  * @interface ExecuteAgentParams
  * @property {AIAgentEntity} agent - The agent entity to execute, containing all metadata and configuration
  * @property {ChatMessage[]} conversationMessages - Array of chat messages representing the conversation history
@@ -55,9 +59,38 @@ export type AgentExecutionStreamingCallback = (chunk: {
  * @property {AgentExecutionStreamingCallback} [onStreaming] - Optional callback for receiving streaming content updates
  * @property {string[]} [parentAgentHierarchy] - Optional parent agent hierarchy for sub-agent execution
  * @property {number} [parentDepth] - Optional parent depth for sub-agent execution
- * @property {any} [context] - Optional additional context data to pass to the agent execution, this is passed to sub-agents and also action execution witin the agent's run cycle
+ * @property {TContext} [context] - Optional additional context data to pass to the agent execution.
+ *                                  This context is propagated to all sub-agents and actions throughout 
+ *                                  the execution hierarchy. Use this for runtime-specific data such as:
+ *                                  - Environment-specific configuration (API endpoints, feature flags)
+ *                                  - User-specific settings or preferences
+ *                                  - Session-specific data (request IDs, correlation IDs)
+ *                                  - External service credentials or connection information
+ *                                  
+ *                                  Note: Avoid including sensitive data like passwords or API keys 
+ *                                  unless absolutely necessary, as context may be passed to multiple 
+ *                                  agents and actions.
+ * 
+ * @example
+ * // Define a typed context
+ * interface MyAgentContext {
+ *   apiEndpoint: string;
+ *   userPreferences: { language: string; timezone: string };
+ *   sessionId: string;
+ * }
+ * 
+ * // Use with type safety
+ * const params: ExecuteAgentParams<MyAgentContext> = {
+ *   agent: myAgent,
+ *   conversationMessages: messages,
+ *   context: {
+ *     apiEndpoint: 'https://api.example.com',
+ *     userPreferences: { language: 'en', timezone: 'UTC' },
+ *     sessionId: 'abc123'
+ *   }
+ * };
  */
-export type ExecuteAgentParams = {
+export type ExecuteAgentParams<TContext = any> = {
     agent: AIAgentEntity;
     conversationMessages: ChatMessage[];
     contextUser?: UserInfo;
@@ -66,7 +99,7 @@ export type ExecuteAgentParams = {
     onStreaming?: AgentExecutionStreamingCallback;
     parentAgentHierarchy?: string[];
     parentDepth?: number;
-    context?: any;
+    context?: TContext;
 }
 
 /**

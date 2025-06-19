@@ -31,19 +31,47 @@ export type AgentAction = {
 /**
  * Represents a sub-agent invocation request.
  * 
+ * @template TContext - Type of the context object passed to the sub-agent.
+ *                      This allows for type-safe context propagation from parent to sub-agent.
+ *                      Defaults to any for backward compatibility.
+ * 
  * @interface AgentSubAgentRequest
  * @property {string} id - UUID of the sub-agent
  * @property {string} name - Name of the sub-agent
  * @property {string} message - Context and instructions for the sub-agent
  * @property {boolean} terminateAfter - Whether to terminate the parent agent after sub-agent completes
- * @property {any} context - Context data passed to the sub-agent by the parent agent
+ * @property {TContext} context - Context data passed to the sub-agent by the parent agent.
+ *                               This context flows through the entire execution hierarchy,
+ *                               allowing sub-agents to access runtime-specific configuration,
+ *                               environment settings, and shared state from their parent agents.
+ * 
+ * @example
+ * ```typescript
+ * // Define a typed context
+ * interface MyContext {
+ *   apiEndpoint: string;
+ *   authToken: string;
+ * }
+ * 
+ * // Use in sub-agent request
+ * const subAgentRequest: AgentSubAgentRequest<MyContext> = {
+ *   id: 'sub-agent-uuid',
+ *   name: 'DataProcessorAgent',
+ *   message: 'Process the uploaded data',
+ *   terminateAfter: false,
+ *   context: {
+ *     apiEndpoint: 'https://api.example.com',
+ *     authToken: 'bearer-token'
+ *   }
+ * };
+ * ```
  */
-export type AgentSubAgentRequest = {
+export type AgentSubAgentRequest<TContext = any> = {
     id: string;
     name: string;
     message: string;
     terminateAfter: boolean;
-    context: any; // context for the sub-agent passed by the parent agent
+    context?: TContext; // Optional because AI determines sub-agent invocation, context comes from execution params
 }
 
 /**
@@ -52,6 +80,10 @@ export type AgentSubAgentRequest = {
  * Agent types analyze the output of prompt execution and determine what should
  * happen next in the agent workflow. This type encapsulates that decision along
  * with any necessary context for the determined action.
+ * 
+ * @template TContext - Type of the context object used for sub-agent requests.
+ *                      This ensures type safety when passing context to sub-agents.
+ *                      Defaults to any for backward compatibility.
  * 
  * @interface BaseAgentNextStep
  * @property {'success' | 'failed' | 'retry' | 'sub-agent' | 'actions' | 'chat'} step - The determined next step
@@ -68,17 +100,17 @@ export type AgentSubAgentRequest = {
  * @property {string} [errorMessage] - Error message when step is 'failed'
  * @property {string} [retryReason] - Reason for retry when step is 'retry' (e.g., "Processing action results", "Handling error condition")
  * @property {string} [retryInstructions] - Instructions for the retry attempt, including any new context or results
- * @property {AgentSubAgentRequest} [subAgent] - Sub-agent details when step is 'sub-agent'
+ * @property {AgentSubAgentRequest<TContext>} [subAgent] - Sub-agent details when step is 'sub-agent'
  * @property {AgentAction[]} [actions] - Array of actions to execute when step is 'actions'
  * @property {string} [userMessage] - Message to send to user when step is 'chat'
  */
-export type BaseAgentNextStep = {
+export type BaseAgentNextStep<TContext = any> = {
     step: 'success' | 'failed' | 'retry' | 'sub-agent' | 'actions' | 'chat';
     returnValue?: any;
     errorMessage?: string;
     retryReason?: string;
     retryInstructions?: string;
-    subAgent?: AgentSubAgentRequest;
+    subAgent?: AgentSubAgentRequest<TContext>;
     actions?: AgentAction[];
     userMessage?: string;
 }
