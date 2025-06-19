@@ -766,26 +766,22 @@ kendo-buttongroup {
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
   overflow: hidden;
-  background: var(--white-color);
+  background: var(--mj-blue);
 
   // Grid header
   .k-grid-header {
-    background: linear-gradient(135deg, var(--gray-600) 0%, #e8e8e8 100%);
+    background: var(--mj-blue);
     border-bottom: 2px solid var(--gray-700);
 
     .k-header {
-      background: transparent;
-      border-color: var(--gray-700);
-      color: var(--navy);
+      background: var(--mj-blue);
+      border-color: var(--light-blue);
+      color: var(--white-color);
       font-weight: 600;
       font-size: 14px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
       padding: 16px 12px;
-
-      &:hover {
-        background: rgba(0, 118, 182, 0.1);
-      }
     }
   }
 
@@ -793,11 +789,6 @@ kendo-buttongroup {
   tbody tr {
     transition: all 0.2s ease;
     border-bottom: 1px solid var(--gray-600);
-
-    &:hover {
-      background: var(--light-blue);
-      box-shadow: 0 2px 8px rgba(0, 118, 182, 0.15);
-    }
 
     &.k-selected,
     &.k-state-selected {

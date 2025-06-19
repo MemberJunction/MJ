@@ -98,15 +98,6 @@
             <kendo-grid-column field="Name" title="Name">
               <ng-template kendoGridCellTemplate let-dataItem>
                 <div class="mj-grid-name-cell">
-                  @if(dataItem.IsLink) {
-                    <div class="mj-icon-wrapper-linked">
-                      <span [ngClass]="getIconForResourceType(dataItem)" class="mj-grid-icon"></span>
-                      <span class="fa-solid fa-link mj-grid-link-indicator"></span>
-                    </div>
-                  }
-                  @else {
-                    <span [ngClass]="getIconForResourceType(dataItem)" class="mj-grid-icon"></span>
-                  }
                   <span class="mj-grid-name">{{ dataItem.Name }}</span>
                 </div>
               </ng-template>
