@@ -193,31 +193,7 @@ async function executeSQLCore(
     
     return result;
   } catch (error: any) {
-    // If we get an EREQINPROG error, we need to handle it properly
-    if (error?.code === 'EREQINPROG') {
-      // This error means the connection (transaction or pool) is busy with another request
-      // For transactions, we MUST NOT clear the transaction or retry with the pool
-      // as this would execute the query outside of the transaction scope
-      
-      if (connectionSource === context.transaction) {
-        // Transaction is busy - this indicates a concurrency issue in the application
-        // The proper fix is to ensure queries within a transaction are serialized
-        const enhancedError = new Error(
-          'Transaction is busy with another request. Queries within a transaction must be executed sequentially, not concurrently. ' +
-          'Consider using Promise chains or async/await instead of Promise.all() for transaction queries. ' +
-          `Query: ${query.substring(0, 100)}... Original error: ${error.message}`
-        );
-        (enhancedError as any).code = 'EREQINPROG';
-        (enhancedError as any).originalError = error;
-        throw enhancedError;
-      } else {
-        // Pool connection is busy - this is less common but can happen under high load
-        // In this case, the pool should handle queuing automatically
-        throw error;
-      }
-    }
-    
-    // Log other errors
+    // Log all errors
     LogError(error);
     
     // Re-throw all errors
@@ -250,6 +226,9 @@ export class SQLServerDataProvider
 {
   private _pool: sql.ConnectionPool;
   private _transaction: sql.Transaction;
+  private _transactionDepth: number = 0;
+  private _savepointCounter: number = 0;
+  private _savepointStack: string[] = [];
   // Removed _transactionRequest - creating new Request objects for each query to avoid concurrency issues
   private _localStorageProvider: ILocalStorageProvider;
   private _bAllowRefresh: boolean = true;
@@ -261,6 +240,7 @@ export class SQLServerDataProvider
   // Instance SQL execution queue for serializing transaction queries
   // Non-transactional queries bypass this queue for maximum parallelism
   private _sqlQueue$ = new Subject<{
+    id: string;
     query: string;
     parameters: any;
     context: SQLExecutionContext;
@@ -286,6 +266,36 @@ export class SQLServerDataProvider
    */
   public get transactionState$(): Observable<boolean> {
     return this._transactionState$.asObservable();
+  }
+  
+  /**
+   * Gets the current transaction nesting depth
+   * 0 = no transaction, 1 = first level, 2+ = nested transactions
+   */
+  public get transactionDepth(): number {
+    return this._transactionDepth;
+  }
+  
+  /**
+   * Checks if we're currently in a transaction (at any depth)
+   */
+  public get inTransaction(): boolean {
+    return this._transactionDepth > 0;
+  }
+  
+  /**
+   * Checks if we're currently in a nested transaction (depth > 1)
+   */
+  public get inNestedTransaction(): boolean {
+    return this._transactionDepth > 1;
+  }
+  
+  /**
+   * Gets the current savepoint names in the stack (for debugging)
+   * Returns a copy to prevent external modification
+   */
+  public get savepointStack(): string[] {
+    return [...this._savepointStack];
   }
   
   /**
@@ -327,6 +337,7 @@ export class SQLServerDataProvider
    * This ensures all queries within a transaction execute sequentially
    */
   private initializeQueueProcessor(): void {
+    // Each instance gets its own queue processor
     this._queueSubscription = this._sqlQueue$.pipe(
       concatMap(item => 
         from(executeSQLCore(
@@ -3053,6 +3064,7 @@ export class SQLServerDataProvider
     // This prevents EREQINPROG errors when multiple queries try to use the same transaction
     return new Promise((resolve, reject) => {
       this._sqlQueue$.next({
+        id: uuidv4(),
         query,
         parameters,
         context,
@@ -3509,16 +3521,36 @@ export class SQLServerDataProvider
 
   public async BeginTransaction() {
     try {
-      // Create a new transaction from the pool
-      this._transaction = new sql.Transaction(this._pool);
-      await this._transaction.begin();
-
-      // Transaction created successfully
-      // Note: We create new Request objects for each query to avoid concurrency issues
+      this._transactionDepth++;
       
-      // Emit transaction state change
-      this._transactionState$.next(true);
+      if (this._transactionDepth === 1) {
+        // First transaction - actually begin using mssql Transaction object
+        this._transaction = new sql.Transaction(this._pool);
+        await this._transaction.begin();
+        
+        // Emit transaction state change
+        this._transactionState$.next(true);
+      } else {
+        // Nested transaction - create a savepoint and emit BEGIN TRANSACTION
+        const savepointName = `SavePoint_${++this._savepointCounter}`;
+        this._savepointStack.push(savepointName);
+        
+        // Create savepoint first
+        await this.ExecuteSQL(`SAVE TRANSACTION ${savepointName}`, null, {
+          description: `Creating savepoint ${savepointName}`,
+          ignoreLogging: true
+        });
+        
+        // Also emit BEGIN TRANSACTION to increment @@TRANCOUNT
+        // This documents our intent for nested transactions even though SQL Server
+        // doesn't truly support them yet
+        await this.ExecuteSQL(`BEGIN TRANSACTION`, null, {
+          description: `Nested transaction at depth ${this._transactionDepth}`,
+          ignoreLogging: true
+        });
+      }
     } catch (e) {
+      this._transactionDepth--; // Restore depth on error
       LogError(e);
       throw e; // force caller to handle
     }
@@ -3526,15 +3558,39 @@ export class SQLServerDataProvider
 
   public async CommitTransaction() {
     try {
-      if (this._transaction) {
+      if (!this._transaction) {
+        throw new Error('No active transaction to commit');
+      }
+      
+      if (this._transactionDepth === 0) {
+        throw new Error('Transaction depth mismatch - no transaction to commit');
+      }
+      
+      this._transactionDepth--;
+      
+      if (this._transactionDepth === 0) {
+        // Outermost transaction - use mssql Transaction object to commit
         await this._transaction.commit();
         this._transaction = null;
+        
+        // Clear savepoint tracking
+        this._savepointStack = [];
+        this._savepointCounter = 0;
         
         // Emit transaction state change
         this._transactionState$.next(false);
         
         // Process any deferred tasks after successful commit
         await this.processDeferredTasks();
+      } else {
+        // Nested transaction - emit COMMIT TRANSACTION to decrement @@TRANCOUNT
+        await this.ExecuteSQL(`COMMIT TRANSACTION`, null, {
+          description: `Committing nested transaction at depth ${this._transactionDepth + 1}`,
+          ignoreLogging: true
+        });
+        
+        // Remove the savepoint from stack since this level is now committed
+        this._savepointStack.pop();
       }
     } catch (e) {
       LogError(e);
@@ -3544,9 +3600,23 @@ export class SQLServerDataProvider
 
   public async RollbackTransaction() {
     try {
-      if (this._transaction) {
+      if (!this._transaction) {
+        throw new Error('No active transaction to rollback');
+      }
+      
+      if (this._transactionDepth === 0) {
+        throw new Error('Transaction depth mismatch - no transaction to rollback');
+      }
+      
+      if (this._transactionDepth === 1) {
+        // Outermost transaction - use mssql Transaction object to rollback everything
         await this._transaction.rollback();
         this._transaction = null;
+        this._transactionDepth = 0;
+        
+        // Clear savepoint tracking
+        this._savepointStack = [];
+        this._savepointCounter = 0;
         
         // Emit transaction state change
         this._transactionState$.next(false);
@@ -3557,8 +3627,39 @@ export class SQLServerDataProvider
         if (deferredCount > 0) {
           LogStatus(`Cleared ${deferredCount} deferred tasks after transaction rollback`);
         }
+      } else {
+        // Nested transaction - rollback to the last savepoint
+        const savepointName = this._savepointStack[this._savepointStack.length - 1];
+        if (!savepointName) {
+          throw new Error('Savepoint stack mismatch - no savepoint to rollback to');
+        }
+        
+        // Rollback to the savepoint (this preserves the outer transaction)
+        // Note: We use ROLLBACK TRANSACTION SavePointName (without TO) as per SQL Server syntax
+        await this.ExecuteSQL(`ROLLBACK TRANSACTION ${savepointName}`, null, {
+          description: `Rolling back to savepoint ${savepointName}`,
+          ignoreLogging: true
+        });
+        
+        // Important: We do NOT emit another ROLLBACK TRANSACTION here because that would
+        // rollback the entire transaction. The savepoint rollback already handled undoing
+        // the work since the savepoint was created.
+        
+        // Remove the savepoint from stack and decrement depth
+        this._savepointStack.pop();
+        this._transactionDepth--;
       }
     } catch (e) {
+      // On error in nested transaction, maintain state
+      // On error in outer transaction, reset everything
+      if (this._transactionDepth === 1 || !this._transaction) {
+        this._transaction = null;
+        this._transactionDepth = 0;
+        this._savepointStack = [];
+        this._savepointCounter = 0;
+        this._transactionState$.next(false);
+      }
+      
       LogError(e);
       throw e; // force caller to handle
     }
