@@ -38,9 +38,8 @@
 
   <div class="dialog-content">
     @if (loading) {
-      <div class="loading-container">
-        <kendo-loader></kendo-loader>
-        Loading dashboards...
+      <div class="loading-overlay">
+        <kendo-loader type="converging-spinner" [themeColor]="'primary'"></kendo-loader>
       </div>
     }
 
