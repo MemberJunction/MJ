@@ -1,8 +1,7 @@
-import { BaseEntity, EntityInfo, EntitySaveOptions, LogError, Metadata, RunView } from "@memberjunction/core";
-import { ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity, AIPromptEntity } from "@memberjunction/core-entities";
+import { BaseEntity, DatabaseProviderBase, EntityInfo, EntitySaveOptions, LogError, Metadata, RunView } from "@memberjunction/core";
+import { ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
 import { MJEventType, MJGlobal, RegisterClass } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
-//import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 
 import { AIPromptRunner, AIPromptParams } from "@memberjunction/ai-prompts";
 import { DocumentationEngine, LibraryEntityExtended, LibraryItemEntityExtended } from "@memberjunction/doc-utils";
@@ -40,15 +39,8 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
         if (md.ProviderType !== 'Database')
             throw new Error('This class is only supported for server-side/database providers. Remove this package from your application.');
     }
-    /**
-     * Default implementation simply returns 'OpenAI' - override this in your subclass if you are using a different AI vendor.
-     * @returns
-     */
-    protected get AIVendorName(): string {
-        return 'OpenAI';
-    }
 
-
+    
     /**
      * Override of the base Save method to handle the pre-processing to auto generate code whenever an action's UserPrompt is modified.
      * This happens when a new record is created and also whenever the UserPrompt field is changed.
@@ -60,10 +52,10 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
         await ActionEngineBase.Instance.Config(false, this.ContextCurrentUser);
         await DocumentationEngine.Instance.Config(false, this.ContextCurrentUser);
 
-        //const provider = Metadata.Provider as SQLServerDataProvider;
+        const provider = Metadata.Provider as DatabaseProviderBase;
         
         // Start a database transaction
-        //FIX: await provider.BeginTransaction();
+        await provider.BeginTransaction();
         
         try {
             let newCodeGenerated: boolean = false;
@@ -115,18 +107,18 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
                 }
                 
                 // Commit the transaction
-                // FIX await provider.CommitTransaction();
+                await provider.CommitTransaction();
                 return true;
             }
             else {
                 // Rollback on save failure
-                // FIX await provider.RollbackTransaction();
+                await provider.RollbackTransaction();
                 return false;
             }
         }
         catch (e) {
             // Rollback on any error
-            // FIX await provider.RollbackTransaction();
+            await provider.RollbackTransaction();
             throw e;
         }
     }

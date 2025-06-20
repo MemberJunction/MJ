@@ -65,9 +65,10 @@ export class SyncEngine {
    * Initializes the sync engine by refreshing metadata cache
    * @returns Promise that resolves when initialization is complete
    */
-  async initialize(): Promise<void> {
-    // Initialize metadata
-    await this.metadata.Refresh();
+  async initialize(forceRefresh: boolean = false): Promise<void> {
+    if (forceRefresh) {
+      await this.metadata.Refresh();
+    }
   }
   
   /**
