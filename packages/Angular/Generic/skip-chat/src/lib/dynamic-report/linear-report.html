@@ -1,16 +1,16 @@
 @if(SkipData) {
-    <div style="display: flex; flex-direction: column; height: 100%;">
+    <div>
         <!-- Report Controls -->
         @if (matchingReportID !== null) {
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <div style="display: flex; align-items: center;">
+            <div>
+                <div>
                     <div class="report-link" (click)="clickMatchingReport()">Report: {{matchingReportName}}</div>
                 </div>
             </div>
         }
 
         <!-- Main Report Content -->
-        <div style="flex: 1; min-height: 0; overflow: hidden;">
+        <div>
             @if(IsChart) {
                 <skip-dynamic-chart 
                     #theChart 

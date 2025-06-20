@@ -1,241 +1,249 @@
-<div class="chat-container"  #topLevelDiv>
-    <div class="layout">
-        @if (IsConversationListVisible) {
-            <div class="left-panel">
-                <div class="conversation-history">
-                    <div class="new-chat-area">
-                        <span class="fa-solid fa-table-columns toggle-icon" (click)="DisplayConversationList(false)"></span>
-                        @if (ShowSkipLogoInConversationList) {
-                            <img [src]="SkipLogoURL" class="avatar" />
+<div class="claude-chat-container" #topLevelDiv>
+    <!-- Left Sidebar -->
+    <div class="claude-sidebar" [class.claude-sidebar-collapsed]="!IsConversationListVisible">
+        <div class="claude-sidebar-header">
+            <button class="claude-new-chat-btn" *ngIf="AllowNewConversations" (click)="CreateNewConversation()">
+                <i class="fas fa-plus"></i>
+                <span>New chat</span>
+            </button>
+            <button class="claude-sidebar-toggle" (click)="DisplayConversationList(false)">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+        </div>
+        
+        <div class="claude-conversations-list">
+            @for (convo of Conversations; track convo.ID) {
+                <div class="claude-conversation-item" 
+                     [class.claude-conversation-active]="SelectedConversation?.ID === convo.ID"
+                     [class.claude-conversation-processing]="IsSkipProcessing(convo)"
+                     [title]="convo.Name"
+                     (click)="SelectConversation(convo)">
+                    <div class="claude-conversation-content">
+                        @if (SelectedConversation && IsSkipProcessing(convo)) {
+                            <i class="fas fa-circle-notch fa-spin claude-processing-icon"></i>
                         }
-                        @if (AllowNewConversations) {
-                            <span class="fa-solid fa-pen-to-square new-convo-icon" (click)="CreateNewConversation()"></span>                            
+                        @if (SelectedConversation?.ID === convo.ID && ConversationEditMode) {
+                            <textarea 
+                                class="claude-conversation-edit" 
+                                [(ngModel)]="convo.Name" 
+                                maxlength="100"
+                                (click)="$event.stopPropagation()"
+                                (keyup.enter)="saveConvoName(convo)"
+                                (keyup.escape)="cancelConvoEdit(convo)">
+                            </textarea>
+                        } @else {
+                            <span class="claude-conversation-name">{{ convo.Name }}</span>
                         }
                     </div>
-                    <kendo-listview
-                        class="conversation-list"
-                        [data]="Conversations"
-                        [style.height.px]="280"
-                        [itemClass]="{ 'item-border': true }" 
-                        #conversationList
-                        >
-                        <ng-template kendoListViewItemTemplate let-dataItem="dataItem">
-                            <div class="conversation-item" 
-                                    [ngClass]="GetConversationItemClass(dataItem)"
-                                    [title]="dataItem.Name" 
-                                    (click)="SelectConversation(dataItem)"> 
-                                <span *ngIf="SelectedConversation && IsSkipProcessing(dataItem)" class="fa-regular fa-clock"></span>
-                                <div class="text-container">
-                                    <span *ngIf="dataItem.ID !== SelectedConversation?.ID || !ConversationEditMode">{{ dataItem.Name }}</span>
-                                    <textarea *ngIf="dataItem.ID === SelectedConversation?.ID && ConversationEditMode" [(ngModel)]="dataItem.Name" maxlength="100"></textarea>
-                                </div>
-                                <div *ngIf="SelectedConversation?.ID === dataItem.ID" class="edit-conversation-panel">
-                                    <span *ngIf="!ConversationEditMode" class="fa-solid fa-pen-to-square" (click)="editConvo(dataItem)"></span>
-                                    <span *ngIf="!ConversationEditMode" class="fa-regular fa-trash-can" (click)="showDeleteConvoDialog(dataItem)"></span>
-                                    <span *ngIf="ConversationEditMode" class="fa-solid fa-check" (click)="saveConvoName(dataItem)"></span>
-                                    <span *ngIf="ConversationEditMode" class="fa-solid fa-xmark" (click)="cancelConvoEdit(dataItem)"></span>
-                                </div>
-                            </div>
-                        </ng-template>
-                    </kendo-listview>
-                    <!-- COMMENTED OUT as we don't want to support embedded conversations in the UI for now
-                            <div class="embedded-conversations"><input kendoCheckBox type="checkbox" [(ngModel)]="IncludeLinkedConversationsInList" (ngModelChange)="loadConversations()"/> <span (click)="FlipEmbeddedConversationState()">Show Linked Conversations</span></div> -->
-                </div>    
-            </div>
-        }
-        @if (!IsConversationListVisible) {
-            <span class="fa-solid fa-table-columns toggle-icon" (click)="DisplayConversationList(true)"></span>
-        }
+                    @if (SelectedConversation?.ID === convo.ID) {
+                        <div class="claude-conversation-actions">
+                            @if (!ConversationEditMode) {
+                                <button class="claude-icon-btn" (click)="editConvo(convo); $event.stopPropagation()">
+                                    <i class="fas fa-pen"></i>
+                                </button>
+                                <button class="claude-icon-btn" (click)="showDeleteConvoDialog(convo); $event.stopPropagation()">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            } @else {
+                                <button class="claude-icon-btn" (click)="saveConvoName(convo); $event.stopPropagation()">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button class="claude-icon-btn" (click)="cancelConvoEdit(convo); $event.stopPropagation()">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
 
-        <div class="right-panel">
-            <skip-split-panel 
-                #splitPanel
-                [Mode]="EnableArtifactSplitView && selectedArtifact ? 'BothSides' : 'LeftOnly'" 
-                [SplitRatio]="SplitRatio" 
-                (SplitRatioChanged)="onSplitRatioChanged($event)"
-                [RightPanelHeaderContent]="artifactHeaderInfo"
-                [VersionList]="artifactVersionList"
-                [SelectedVersionId]="selectedArtifactVersionId"
-                (VersionSelected)="onArtifactVersionSelected($event)"
-                mjFillContainer [fillWidth]="false" [fillHeight]="true">
+    <!-- Collapsed Sidebar Toggle -->
+    @if (!IsConversationListVisible) {
+        <button class="claude-sidebar-expand" (click)="DisplayConversationList(true)">
+            <i class="fas fa-chevron-right"></i>
+        </button>
+    }
+
+    <!-- Main Chat Area -->
+    <div class="claude-main-content">
+        <skip-split-panel 
+            #splitPanel
+            [Mode]="EnableArtifactSplitView && selectedArtifact ? 'BothSides' : 'LeftOnly'" 
+            [SplitRatio]="SplitRatio" 
+            (SplitRatioChanged)="onSplitRatioChanged($event)"
+            [RightPanelHeaderContent]="artifactHeaderInfo"
+            [VersionList]="artifactVersionList"
+            [SelectedVersionId]="selectedArtifactVersionId"
+            (VersionSelected)="onArtifactVersionSelected($event)"
+            mjFillContainer [fillWidth]="false" [fillHeight]="true">
+            
+            <!-- Chat Panel -->
+            <div left-panel class="claude-chat-panel">
+                <!-- Hidden reference div -->
+                <div #AskSkipPanel style="width:0; height:0; overflow:hidden; position:absolute;"></div>
                 
-                <!-- Left Panel (Chat) -->
-                <div left-panel class="conversation-wrapper">
-                    <!-- Use this for reference only, but don't display - hidden via width:0, height:0 -->
-                    <div #AskSkipPanel style="width:0; height:0; overflow:hidden; position:absolute;"></div>
-                    
-                    <div class="messages" #scrollContainer (scroll)="checkScroll()">
-                        <div class="welcome-wrapper" *ngIf="(!Messages || Messages.length ===0) && _conversationLoadComplete">
-                            <div class='welcome-message'>
-                                <img [src]="SkipLogoURL" />
-                                <div class="welcome-header-text">What can I help with today?</div>
-                            </div>
-                            <div class='welcome-suggested-questions'>
-                                <div class="welcome-suggested-questions-col">
-                                    <div class="welcome-question" (click)="sendPrompt(WelcomeQuestions[0].prompt)">
-                                        <span class="welcome-question-header">{{WelcomeQuestions[0].topLine}}</span>
-                                        <span>{{WelcomeQuestions[0].bottomLine}}</span>
-                                    </div>
-                                    <div class="welcome-question" (click)="sendPrompt(WelcomeQuestions[1].prompt)">
-                                        <span class="welcome-question-header">{{WelcomeQuestions[1].topLine}}</span>
-                                        <span>{{WelcomeQuestions[1].bottomLine}}</span>
-                                    </div>    
-                                </div>
-                                <div class="welcome-suggested-questions-col">
-                                    <div class="welcome-question" (click)="sendPrompt(WelcomeQuestions[2].prompt)">
-                                        <span class="welcome-question-header">{{WelcomeQuestions[2].topLine}}</span>
-                                        <span>{{WelcomeQuestions[2].bottomLine}}</span>
-                                    </div>
-                                    <div class="welcome-question" (click)="sendPrompt(WelcomeQuestions[3].prompt)">
-                                        <span class="welcome-question-header">{{WelcomeQuestions[3].topLine}}</span>
-                                        <span>{{WelcomeQuestions[3].bottomLine}}</span>
-                                    </div>    
-                                </div>
-                            </div>    
-                        </div>
-                        @if (!_conversationLoadComplete) {
-                            <div class="loading-convo-messages-wrapper">
-                                <kendo-loader></kendo-loader>
-                            </div>
-                        }   
-                        <div class="messages-container" mjContainer mjSkipResize="true"><!--mjSkipResize results in everything below this level NOT being resized, performance optimization-->
-                            <!-- Dynamic messages will be injected here -->
-                        </div>
-                        <span class="scroll-to-bottom-icon" 
-                              *ngIf="_showScrollToBottomIcon && Messages && Messages.length > 0" 
-                              [style.left.px]="getScrollToBottomIconPosition()"
-                              (click)="scrollToBottomAnimate()">
-                            <i class="fas fa-arrow-down"></i>
-                        </span>
-                    </div>
-                    @if (SelectedConversationCurrentUserPermissionLevel === 'Owner' || 
-                        SelectedConversationCurrentUserPermissionLevel === 'Edit') {
-                        <div class="input-area">
-                            <div class="text-area-wrapper">
-                                <textarea
-                                    #AskSkipInput 
-                                    [disabled]="SelectedConversation && IsSkipProcessing(SelectedConversation)" 
-                                    (keyup.enter)="onEnter($event)" 
-                                    (input)="onInputChange($event)"
-                                    type="text" 
-                                    [placeholder]="_AskSkipTextboxPlaceholder"></textarea>
-                            </div>
-                            <div class="button-area" [style.marginLeft.px]="-35 * NumVisibleButtons">
-                                @if (ShowDataContextButton) {
-                                    <button kendoButton >
-                                        <span class="fa-solid fa-gear" 
-                                                (click)="showDataContextDialog()"></span>
-                                    </button>    
-                                }
-                                @if (SelectedConversation && IsSkipProcessing(SelectedConversation)) {
-                                    <button kendoButton 
-                                        class="stop-button"
-                                        (click)="stopProcessing()">
-                                        <span class="fas fa-solid fa-stop"></span>
+                <!-- Messages Area -->
+                <div class="claude-messages-area" #scrollContainer (scroll)="checkScroll()">
+                    <!-- Welcome Screen -->
+                    @if ((!Messages || Messages.length === 0) && _conversationLoadComplete) {
+                        <div class="claude-welcome">
+                            <img [src]="SkipLogoURL" class="claude-welcome-logo" />
+                            <h1 class="claude-welcome-title">What can I help with today?</h1>
+                            <div class="claude-welcome-suggestions">
+                                @for (question of WelcomeQuestions; track question.topLine) {
+                                    <button class="claude-suggestion-card" (click)="sendPrompt(question.prompt)">
+                                        <div class="claude-suggestion-title">{{ question.topLine }}</div>
+                                        <div class="claude-suggestion-subtitle">{{ question.bottomLine }}</div>
                                     </button>
-                                }
-                                @else {
-                                    <button kendoButton 
-                                        [disabled]="IsTextAreaEmpty()" 
-                                        (click)="sendSkipMessage()">
-                                        <span class="fas fa-solid fa-arrow-up"></span>
-                                    </button>
-                                }
-                                @if (ShowSharingButton && SelectedConversationCurrentUserPermissionLevel === 'Owner') {
-                                    <button kendoButton class="share-button">
-                                        <span class="fa-solid fa-share"
-                                                (click)="showSharingDialog()"></span>
-                                    </button>    
                                 }
                             </div>
                         </div>
                     }
+                    
+                    <!-- Loading State -->
+                    @if (!_conversationLoadComplete) {
+                        <div class="claude-loading-wrapper">
+                            <kendo-loader type="infinite-spinner" themeColor="primary" size="medium"></kendo-loader>
+                            <span class="claude-loading-text">Loading conversation...</span>
+                        </div>
+                    }
+                    
+                    <!-- Messages Container -->
+                    <div class="claude-messages-container" mjContainer mjSkipResize="true">
+                        <!-- Dynamic messages will be injected here -->
+                    </div>
+                    
+                    <!-- Scroll to Bottom Button -->
+                    @if (_showScrollToBottomIcon && Messages && Messages.length > 0) {
+                        <button class="claude-scroll-bottom" 
+                                [style.left.px]="getScrollToBottomIconPosition()"
+                                (click)="scrollToBottomAnimate()">
+                            <i class="fas fa-arrow-down"></i>
+                        </button>
+                    }
                 </div>
                 
-                <!-- Right Panel (Artifact Viewer) -->
-                <div right-panel>
-                    <skip-artifact-viewer
-                        *ngIf="selectedArtifact"
-                        [ArtifactID]="selectedArtifact.artifactId"
-                        [ArtifactVersionID]="selectedArtifact.artifactVersionId"
-                        [DataContext]="DataContext"
-                        (NavigateToMatchingReport)="NavigateToMatchingReport.emit($event)"
-                        (NewReportCreated)="NewReportCreated.emit($event)"
-                        (DrillDownEvent)="DrillDownEvent.emit($event)"
-                        (ArtifactInfoChanged)="onArtifactInfoChanged($event)">
-                    </skip-artifact-viewer>
-                </div>
-            </skip-split-panel>
-        </div>    
-    </div> 
-</div>     
+                <!-- Input Area -->
+                @if (SelectedConversationCurrentUserPermissionLevel === 'Owner' || 
+                     SelectedConversationCurrentUserPermissionLevel === 'Edit') {
+                    <div class="claude-input-area">
+                        <div class="claude-input-wrapper">
+                            <textarea
+                                #AskSkipInput 
+                                class="claude-input"
+                                [disabled]="SelectedConversation && IsSkipProcessing(SelectedConversation)" 
+                                (keyup.enter)="onEnter($event)" 
+                                (input)="onInputChange($event)"
+                                [placeholder]="_AskSkipTextboxPlaceholder"
+                                rows="1">
+                            </textarea>
+                            <div class="claude-input-actions">
+                                @if (ShowDataContextButton) {
+                                    <button class="claude-input-btn" (click)="showDataContextDialog()" title="Data Context">
+                                        <i class="fas fa-database"></i>
+                                    </button>
+                                }
+                                @if (ShowSharingButton && SelectedConversationCurrentUserPermissionLevel === 'Owner') {
+                                    <button class="claude-input-btn" (click)="showSharingDialog()" title="Share">
+                                        <i class="fas fa-share"></i>
+                                    </button>
+                                }
+                                @if (SelectedConversation && IsSkipProcessing(SelectedConversation)) {
+                                    <button class="claude-input-btn claude-stop-btn" (click)="stopProcessing()">
+                                        <i class="fas fa-stop"></i>
+                                    </button>
+                                } @else {
+                                    <button class="claude-input-btn claude-send-btn" 
+                                            [disabled]="IsTextAreaEmpty()" 
+                                            (click)="sendSkipMessage()">
+                                        <i class="fas fa-arrow-up"></i>
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+            
+            <!-- Artifact Panel -->
+            <div right-panel class="claude-artifact-panel">
+                <skip-artifact-viewer
+                    *ngIf="selectedArtifact"
+                    [ArtifactID]="selectedArtifact.artifactId"
+                    [ArtifactVersionID]="selectedArtifact.artifactVersionId"
+                    [DataContext]="DataContext"
+                    (NavigateToMatchingReport)="NavigateToMatchingReport.emit($event)"
+                    (NewReportCreated)="NewReportCreated.emit($event)"
+                    (DrillDownEvent)="DrillDownEvent.emit($event)"
+                    (ArtifactInfoChanged)="onArtifactInfoChanged($event)">
+                </skip-artifact-viewer>
+            </div>
+        </skip-split-panel>
+    </div>
+</div>
 
-@if(isDataContextDialogVisible) {
-    <mj-data-context-dialog [dataContextId]="DataContextID" (dialogClosed)="closeDataContextDialog()" [Provider]="ProviderToUse"></mj-data-context-dialog>
+<!-- Dialogs -->
+@if (isDataContextDialogVisible) {
+    <mj-data-context-dialog 
+        [dataContextId]="DataContextID" 
+        (dialogClosed)="closeDataContextDialog()" 
+        [Provider]="ProviderToUse">
+    </mj-data-context-dialog>
 }
-@if(isSharingDialogVisible && SelectedConversation && conversationResourceTypeID) {
+
+@if (isSharingDialogVisible && SelectedConversation && conversationResourceTypeID) {
     <kendo-dialog
         title="Share Conversation"
         (close)="closeSharingDialog('no')"
         [width]="650"
         [height]="400"
-    >
+        class="claude-dialog">
         <mj-resource-permissions 
             [Provider]="Provider"
             [ResourceTypeID]="conversationResourceTypeID"
             [ResourceRecordID]="SelectedConversation.ID"
             [ExcludedRoleNames]="SharingExcludeRoleNames"
             [ExcludedUserEmails]="SharingExcludeEmails"
-            #resourcePermissions
-        >
+            #resourcePermissions>
         </mj-resource-permissions>
         <kendo-dialog-actions>
-            <button kendoButton (click)="closeSharingDialog('yes')" themeColor="primary">
-                Save
-            </button>
-        <button kendoButton (click)="closeSharingDialog('no')">
-            Cancel
-        </button>
+            <button kendoButton (click)="closeSharingDialog('yes')" themeColor="primary">Save</button>
+            <button kendoButton (click)="closeSharingDialog('no')">Cancel</button>
         </kendo-dialog-actions>
-    </kendo-dialog>    
+    </kendo-dialog>
 }
 
-<kendo-dialog
-    title="Please confirm"
-    *ngIf="confirmDeleteConversationDialogOpen"
-    (close)="closeDeleteConversation('no')"
-    [minWidth]="250"
-    [width]="450"
->
-    <p style="margin: 30px; text-align: center;">
-        Would you like to delete {{SelectedConversation?.Name}}?
-    </p>
-    <kendo-dialog-actions>
-        <button kendoButton (click)="closeDeleteConversation('yes')" themeColor="primary">
-            Yes
-        </button>
-    <button kendoButton (click)="closeDeleteConversation('no')">
-        No
-    </button>
-    </kendo-dialog-actions>
-</kendo-dialog>    
+@if (confirmDeleteConversationDialogOpen) {
+    <kendo-dialog
+        title="Delete Conversation"
+        (close)="closeDeleteConversation('no')"
+        [width]="450"
+        class="claude-dialog">
+        <p class="claude-dialog-message">
+            Are you sure you want to delete "{{ SelectedConversation?.Name }}"? This action cannot be undone.
+        </p>
+        <kendo-dialog-actions>
+            <button kendoButton (click)="closeDeleteConversation('yes')" themeColor="error">Delete</button>
+            <button kendoButton (click)="closeDeleteConversation('no')">Cancel</button>
+        </kendo-dialog-actions>
+    </kendo-dialog>
+}
 
-<kendo-dialog
-    title="Please confirm"
-    *ngIf="confirmMessageEditOrDeleteDialogOpen"
-    (close)="closeMessageEditOrDeleteDialog('no')"
-    [minWidth]="250"
-    [width]="450"
->
-    <p style="margin: 30px; text-align: center;">
-        Would you like to {{messageEditOrDeleteType}} this message? Doing so will result in any subsequent messages in the conversation being deleted.
-    </p>
-    <kendo-dialog-actions>
-        <button kendoButton (click)="closeMessageEditOrDeleteDialog('yes')" themeColor="primary">
-            Yes
-        </button>
-    <button kendoButton (click)="closeMessageEditOrDeleteDialog('no')">
-        No
-    </button>
-    </kendo-dialog-actions>
-</kendo-dialog>  
+@if (confirmMessageEditOrDeleteDialogOpen) {
+    <kendo-dialog
+        title="Confirm {{ messageEditOrDeleteType | titlecase }}"
+        (close)="closeMessageEditOrDeleteDialog('no')"
+        [width]="450"
+        class="claude-dialog">
+        <p class="claude-dialog-message">
+            Would you like to {{ messageEditOrDeleteType }} this message? 
+            Doing so will result in any subsequent messages in the conversation being deleted.
+        </p>
+        <kendo-dialog-actions>
+            <button kendoButton (click)="closeMessageEditOrDeleteDialog('yes')" themeColor="primary">Yes</button>
+            <button kendoButton (click)="closeMessageEditOrDeleteDialog('no')">Cancel</button>
+        </kendo-dialog-actions>
+    </kendo-dialog>
+}

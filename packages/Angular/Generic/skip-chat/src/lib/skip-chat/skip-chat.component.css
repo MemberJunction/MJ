@@ -1,537 +1,549 @@
-.layout {
+/* Claude-style Chat Container */
+.claude-chat-container {
     display: flex;
-    flex-direction: row; /* Ensures left and right panels are side by side */
-    height: 100%; /* Fill the available height */
-    width: 100%; /* Fill the available width */
+    height: 100%;
+    width: 100%;
+    background: #f7f7f8;
+    overflow: hidden;
     position: relative;
-    overflow: hidden; /* Prevent content from expanding beyond container */
 }
 
-.left-panel {
-    width: 272px; /* Fixed width for the conversation list */
-    background-color: #f8f9fa; /* Optional: Background color */
-    border-right: 1px solid #ddd; /* Optional: Add a divider */
-    overflow-y: auto; /* Enable scrolling if content overflows */
-    overflow-x: hidden; /* Hide horizontal scrollbar */
-    position: relative;
-
-    scrollbar-width: thin; /* For Firefox */
-    scrollbar-color: #d3d3d3 #f8f9fa; /* Thumb color and track color */
-}
-
-/* For WebKit-based browsers (Chrome, Edge, Safari) */
-.left-panel::-webkit-scrollbar {
-    width: 8px; /* Narrower scrollbar */
-    background-color: #f8f9fa; /* Scrollbar track color */
-}
-
-.left-panel::-webkit-scrollbar-thumb {
-    background-color: #d3d3d3; /* Lighter gray scrollbar thumb */
-    border-radius: 4px; /* Rounded corners for the thumb */
-}
-
-.left-panel::-webkit-scrollbar-thumb:hover {
-    background-color: #c0c0c0; /* Slightly darker gray on hover */
-}
-
-.left-panel::-webkit-scrollbar-track {
-    background-color: #f8f9fa; /* Background of the scrollbar track */
-}
-
-.right-panel {
-    flex: 1; /* Take up the remaining space */
+/* Sidebar Styles */
+.claude-sidebar {
+    width: 260px;
+    color: #FFF;
+    background: var(--gray-600);
     display: flex;
     flex-direction: column;
-    height: 100%;
-    max-height: 100%; /* Don't exceed parent container height */
-    overflow: hidden; /* Hide overflow to prevent double scrollbars */
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 100;
 }
 
-.conversation-header {
+.claude-sidebar-collapsed {
+    width: 0;
+    overflow: hidden;
+}
+
+.claude-sidebar-header {
+    padding: 16px;
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    padding: 8px 16px;
-    background-color: #f5f7f9;
-    border-bottom: 1px solid #dde4ee;
-    height: 40px;
-    flex-shrink: 0;
+    justify-content: space-between;
+    border-bottom: 1px solid #e0e0e0;
 }
 
-.conversation-title {
-    font-size: 15px;
+.claude-new-chat-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 14px;
     font-weight: 500;
-    color: #333;
+    color: var(--gray-800);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.claude-new-chat-btn:hover {
+    background: #f7f7f8;
+    border-color: #d0d0d0;
+}
+
+.claude-new-chat-btn i {
+    font-size: 16px;
+}
+
+.claude-sidebar-toggle {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.claude-sidebar-toggle:hover {
+    background: #f0f0f0;
+    color: #1a1a1a;
+}
+
+/* Sidebar Expand Button */
+.claude-sidebar-expand {
+    position: absolute;
+    left: 12px;
+    top: 12px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    z-index: 99;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.claude-sidebar-expand:hover {
+    background: #f7f7f8;
+    color: #1a1a1a;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+/* Conversations List */
+.claude-conversations-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.claude-conversations-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.claude-conversations-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.claude-conversations-list::-webkit-scrollbar-thumb {
+    background: #d0d0d0;
+    border-radius: 3px;
+}
+
+.claude-conversations-list::-webkit-scrollbar-thumb:hover {
+    background: #b0b0b0;
+}
+
+/* Conversation Items */
+.claude-conversation-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    margin-bottom: 2px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.claude-conversation-item:hover {
+    background: #f7f7f8;
+}
+
+.claude-conversation-active {
+    background: #f0f0f0;
+}
+
+.claude-conversation-active:hover {
+    background: #e8e8e8;
+}
+
+.claude-conversation-processing {
+    opacity: 0.7;
+}
+
+.claude-conversation-content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.claude-processing-icon {
+    font-size: 14px;
+    color: var(--mj-blue);
+}
+
+.claude-conversation-name {
+    flex: 1;
+    font-size: 14px;
+    color: #1a1a1a;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 70%;
 }
 
-.artifact-counter-container {
+.claude-conversation-edit {
+    flex: 1;
+    padding: 4px 8px;
+    border: 1px solid var(--mj-blue);
+    border-radius: 4px;
+    background: #ffffff;
+    font-size: 14px;
+    color: #1a1a1a;
+    resize: none;
+    outline: none;
+}
+
+.claude-conversation-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.claude-conversation-item:hover .claude-conversation-actions,
+.claude-conversation-active .claude-conversation-actions {
+    opacity: 1;
+}
+
+.claude-icon-btn {
+    width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s ease;
 }
 
+.claude-icon-btn:hover {
+    background: #e0e0e0;
+    color: #1a1a1a;
+}
 
-.new-convo-icon {
-    color: #808080; /* Mid-gray */
-    font-size: 18px; /* Adjust icon size */
-    cursor: pointer; /* Make it clear the icon is clickable */
-    z-index: 10; /* Ensure the icon is above other content */
-    padding: 5px;
+/* Main Content Area */
+.claude-main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+/* Chat Panel */
+.claude-chat-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: #ffffff;
+}
+
+/* Messages Area */
+.claude-messages-area {
+    flex: 1;
+    overflow-y: auto;
+    position: relative;
+}
+
+.claude-messages-area::-webkit-scrollbar {
+    width: 8px;
+}
+
+.claude-messages-area::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.claude-messages-area::-webkit-scrollbar-thumb {
+    background: #d0d0d0;
     border-radius: 4px;
 }
 
-.toggle-icon {
-    color: #808080; /* Mid-gray */
-    font-size: 18px; /* Adjust icon size */
-    cursor: pointer; /* Make it clear the icon is clickable */
-    z-index: 10; /* Ensure the icon is above other content */
-    margin-left: 6px;
-    padding: 3px;
-    border-radius: 3px;
-}
- 
-
-.right-panel .toggle-icon {
-    margin-left: 3px;
-    margin-top: 2px;
-    position: absolute;
-    top: 10px;
-    left: auto;
-    right: 10px; /* For the right panel toggle */
+.claude-messages-area::-webkit-scrollbar-thumb:hover {
+    background: #b0b0b0;
 }
 
-
-.chat-container {
-    padding: 5px;
-    display: flex;
-    flex-direction: row;
-    height: calc(100vh - 111px);
-    font-family: Söhne, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-    font-size: 1rem;
-    /*initial sizes*/
-    width: 100%;
-    overflow: hidden; /* Prevent container from growing beyond viewport */
-    background-color: #f9f9f9;
-}
-
-.conversation-wrapper {
-    display: flex;
-    flex-direction: column;
-    position: relative; /* This ensures child absolute elements position relative to this container */
-    background-color: #f9f9f9;
-    height: 100%; /* Ensure it takes full height */
-    max-height: 100%; /* Don't exceed parent container height */
-    flex: 1;
-    overflow: auto; /* Allow content to scroll */
-}
-
-.new-conversation {
-    height: 30px;
-    font-size: large;
-}
-
-.conversation-history {
-    width: 240px;
-    min-width: 240px;
-    height: 95%;
-    overflow-y: auto; /* Add scroll if the content exceeds the height */
-    overflow-x: hidden; /* Hide horizontal scrollbar */
-    margin-right: 10px;
-    padding-top: 5px;
-    background-color: #f9f9f9;
-    margin-top: 0px;  
-    padding: 12px;  
-}
-
-.k-tabstrip-content-for-skip {
-    padding: 0;
-    padding-block: 0;
-}
-
-
-.conversation-history > button {
-    height: 25px;
-}
-
-.skip-title {
-    font-size: larger;
-    margin-bottom: 5px;
-    height: 20px;
-    margin-top: 5px;
-}
-
-.conversation-list {
-    margin-top: 5px;
-    padding-top: 5px;
-    
-    border: 0;
-    background-color: #f9f9f9;
-}
-
-
-
-/* Center the welcome message vertically and horizontally */
-.welcome-wrapper {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    height: 100%;
-    width: 100%;
-    overflow: hidden;
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 5;
-}
-
-.welcome-message {
+/* Welcome Screen */
+.claude-welcome {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    padding: 40px 20px;
     text-align: center;
-    overflow: hidden;
-    height: 100%;
-    padding-bottom: 100px; /* Push the content up a bit */
 }
 
-.embedded-conversations {
-    margin-left: 3px;
-    margin-top: 5px;
-    font-size: 10pt;
-    color: rgb(48, 48, 235);
+.claude-welcome-logo {
+    width: 150px;
+    margin-bottom: 24px;
 }
-.embedded-conversations > span {
-    margin-top: 4px;
-    margin-left: 5px;
+
+.claude-welcome-title {
+    font-size: 24px;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin: 0 0 32px 0;
+}
+
+.claude-welcome-suggestions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    max-width: 600px;
+    width: 100%;
+}
+
+.claude-suggestion-card {
+    padding: 16px;
+    background: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    text-align: left;
     cursor: pointer;
-}
-.conversation-item-linked {
-    color: rgb(48, 48, 235);
+    transition: all 0.2s ease;
 }
 
-.welcome-message img {
-    width: 120px;
-    height: 50px;
-    margin-bottom: 20px; /* Adds some space between the image and the text below */
-    position: relative;
-    z-index: 10;
+.claude-suggestion-card:hover {
+    background: #f7f7f8;
+    border-color: #d0d0d0;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
-.welcome-header-text {
-    font-size: larger;
-    font-weight: bold;
+.claude-suggestion-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin-bottom: 4px;
 }
 
-/* Position the welcome-suggested-questions at the bottom of its container */
-.welcome-suggested-questions {
+.claude-suggestion-subtitle {
+    font-size: 13px;
+    color: #666;
+    line-height: 1.4;
+}
+
+/* Loading State */
+.claude-loading-wrapper {
     display: flex;
     flex-direction: column;
+    align-items: center;
     justify-content: center;
-    align-content: center;
-    margin-top: 30px; /* Push questions down for spacing */
-}
-.welcome-suggested-questions-col {
-    display: flex;
-    margin-bottom: 10px; /* Space between rows */
+    gap: 16px;
 }
 
-/* Flex layout for questions, two per row */
-.welcome-question {
-    display: flex;
-    flex-direction: column; /* Stack the header and text vertically */
-    align-items: left;;
-    width: 300px;  
-    justify-content: space-between;
-    margin: 5px; /* Adds some space around each question */
-    border: solid 1px rgba(41, 28, 28, 0.08);
-    border-radius: 15px;
-    padding: 10px;
-    cursor: pointer;
-}
-
-.welcome-question:hover {
-    background-color: rgba(0, 0, 0, 0.05);
-}
-
-
-.welcome-question-header {
-    font-size: 12pt;
-    font-weight: bold;
-    display: block; /* Ensures the header is on its own line */
-}
-
-/* Non-bold text for the content below the header */
-.welcome-question span:not(.welcome-question-header) {
-    font-weight: normal;
-    font-size: 10pt;
-}
-
-
-.messages {
-    overflow-y: auto !important; /* enable scrolling if the content overflows */
-    overflow-x: hidden !important; /* hide horizontal scrollbar */
-    /* border: solid 1px rgba(0, 0, 0, 0.08); */
-    margin-bottom: 5px;
-
-    margin-top: 2px; /* align it with the top of converation history exactly*/
-
-    background-color: #f9f9f9;
-    flex: 1 1 auto; /* Take up available space but don't push parent beyond size */
-    height: calc(100% - 50px); /* Ensure messages container has a height */
-    max-height: 100%; /* Don't exceed parent height */
-    scrollbar-width: thin; /* For Firefox */
-    scrollbar-color: #d3d3d3 #f8f9fa; /* Thumb color and track color */
-    position: relative; /* For proper positioning of scroll icon */
-}
-
-/* For WebKit-based browsers (Chrome, Edge, Safari) */
-.messages::-webkit-scrollbar {
-    width: 8px; /* Narrower scrollbar */
-    background-color: #f8f9fa; /* Scrollbar track color */
-}
-
-.messages::-webkit-scrollbar-thumb {
-    background-color: #d3d3d3; /* Lighter gray scrollbar thumb */
-    border-radius: 4px; /* Rounded corners for the thumb */
-}
-
-.messages::-webkit-scrollbar-thumb:hover {
-    background-color: #c0c0c0; /* Slightly darker gray on hover */
-}
-
-.messages::-webkit-scrollbar-track {
-    background-color: #f8f9fa; /* Background of the scrollbar track */
-}
-
-/* Class for the messages container */
-.messages-container {
-    min-height: 20px; /* Ensure container takes space even when empty */
-}
-
-
-
-.new-chat-area {
-    display: flex;
-    justify-content: space-between; /* Aligns children (img and button) to each end */
-    align-items: center; /* Centers children vertically */
-}
-.avatar {
-    max-height: 24px;
-    margin-right: 10px;
-    margin-left: 5px;
-    margin-bottom: 3px;
-    /* Ensure the image aligns to the left */
-    margin-right: auto; /* Pushes everything else to the right */
-}
-
-.conversation-item {
-    margin-left: 5px;
-    margin-right: 5px;
-    padding-top: 10px;
-    padding-bottom: 10px;
-    padding-left: 5px;
-    padding-right: 5px;
-    border-radius: 5px;
-    cursor: pointer;
-    overflow: hidden;
-    max-height: 150px;
+.claude-loading-text {
     font-size: 14px;
-
-    display: flex;
-    align-items: flex-start; /* Align items to the top */
-
-    flex-wrap: wrap; /* Allow items to wrap to the next line */
+    color: #666;
 }
 
-.text-container {
-    flex: 1; /* Take up remaining space */
-    display: flex;
-    flex-direction: column; /* Stack children vertically */
+/* Messages Container */
+.claude-messages-container {
+    padding: 20px 0;
 }
 
-.text-container textarea {
-    resize: none; /* Disable resizing */
-    /* Add more styles for the textarea if needed */
-}
-
-.conversation-item > .conversation-icon {
-    margin-top: 3px;
-}
-
-.conversation-item span {
-    display: inline-block;
-    white-space: pre-wrap;  /* Allow text to wrap */
-    overflow: auto;
-    word-wrap: break-word;
-    margin-left: 3px;     /* Move the text to the right */
-}
-
-.conversation-item:hover {
-    background-color: rgba(0, 0, 0, 0.05);
-}
-.conversation-item-selected {
-    background-color: rgba(0, 0, 0, 0.15);
-}
-
-
-.conversation-item > .conversation-icon {
-    margin-right: 11px;
-}
-.edit-conversation-panel {
-    display: flex;
-    justify-content: flex-end; /* Align icons to the right */
-    margin-top: 2px; /* litle buffer on top */
-    margin-right: 2px; /* litle buffer to the right */
-}
-.edit-conversation-panel > .k-icon {
-    margin-left: 5px;
-    cursor: pointer;
-}
-.edit-conversation-panel > .k-icon:hover {
-    color: #ff0000;
-}
-
-
-
-.input-area {
-    min-height: 35px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 15px;
-    position: sticky;
-    bottom: 0;
-    background-color: #f9f9f9;
-    z-index: 10;
-}
-
-.input-area > .button-area {
-    vertical-align: top;
-    margin-top: 3px;
-    margin-left: -65px;
-}
-/*all buttons in the button area within the input area*/
-.button-area > button {
-    width: 30px;
-    height: 30px;
-    border-radius: 12px;
-    margin-left: 3px;
-}
-
-/* Stop button styling */
-.button-area > button.stop-button {
-    background-color: #dc3545;
-    color: white;
-}
-
-.button-area > button.stop-button:hover {
-    background-color: #c82333;
-}
-/* .input-area > button:first-of-type {
-    margin-left: -40px;
-}
-.input-area > button:last-child {
-    margin-left: -65px;
-}
-.input-area > .share-button {
-    margin-left: 10px;
-} */
-
-.text-area-wrapper {
-    padding: 3px;
-    border: solid 1px rgba(0, 0, 0, 0.08) ;
-    border-radius: 15px;
-
-    margin-top: 4px;
-    margin-right: -1px;
-    min-height: 42px;
-    max-height: 100%; /* Prevent it from growing beyond the container */
-
-    overflow: hidden;    
-    align-items: center;
-
-    /*combined width and padding is 800*/
-    width: 710px;    
-    padding-right: 90px
-} 
-.text-area-wrapper > textarea {
-    border: 0;
-    outline: 0;
-    resize: none;
-
-    min-height: 20px; /* Initial height */
-
-    width: 100%;
-    overflow-y: hidden; /* Hide scrollbar */
-
-    font-family: Söhne, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-    font-size: 1rem;
-
-    margin-left: 7px;
-    margin-top: 7px;
-    margin-bottom: 5px;
-
-    background-color: #f9f9f9;
-}
-
-/* .text-area-wrapper > textarea:disabled {
-    background-color: white;
-} */
-
-.input-wrapper {
-    flex-grow: 1; /* This will make the input-wrapper take the remaining space */
-    height: 100%;
-}
-
-.waiting-for-ai {
-    position: absolute;
-    display: flex; /* Use flexbox layout */
+/* Scroll to Bottom Button */
+.claude-scroll-bottom {
+    position: fixed;
     bottom: 100px;
-    z-index: 999;
-    left: 10px; 
-}
-  
-.scroll-to-bottom-icon {
-    position: fixed; /* Fixed positioning to float over content */
-    bottom: 120px; /* Position relative to the viewport */
-    /* left position will be set dynamically via inline style */
-    transform: translateX(-50%); /* Shift it back by half its width to center it */
-    z-index: 1000; /* Ensure it stays on top */
-    background-color: white; /* Circle background color */
-    color: black; /* Icon color */
-    border-radius: 50%; /* Makes the background a circle */
-    width: 40px; /* Circle size */
-    height: 40px; /* Circle size */
+    transform: translateX(-50%);
+    width: 36px;
+    height: 36px;
     display: flex;
-    justify-content: center;
     align-items: center;
-    box-shadow: 0px 0px 5px rgba(0,0,0,0.3); /* Subtle shadow for better visibility */
+    justify-content: center;
+    background: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 18px;
+    color: #666;
     cursor: pointer;
-    opacity: 0.9; /* Slightly transparent */
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+    z-index: 50;
 }
 
-.loading-convo-messages-wrapper {
+.claude-scroll-bottom:hover {
+    background: #f7f7f8;
+    color: #1a1a1a;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Input Area */
+.claude-input-area {
+    border-top: 1px solid #e0e0e0;
+    padding: 16px 20px 20px;
+    background: #ffffff;
+}
+
+.claude-input-wrapper {
     display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100%;
-    width: 100%;
-    position: absolute;
-    z-index: 1000;
+    align-items: flex-end;
+    gap: 8px;
+    background: #f7f7f8;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 12px;
+    transition: all 0.2s ease;
 }
 
-@media (min-width: 600px) {
-    .welcome-suggested-questions {
-        display: flex;
-        flex-wrap: wrap; /* Allows questions to wrap to the next line */
-        align-content: flex-end; /* Aligns the content to the bottom */
+.claude-input-wrapper:focus-within {
+    border-color: #a0a0a0;
+    background: #ffffff;
+}
+
+.claude-input {
+    flex: 1;
+    padding: 0;
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    font-size: 15px;
+    line-height: 1.5;
+    color: #1a1a1a;
+    resize: none;
+    outline: none;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.claude-input::placeholder {
+    color: #999;
+}
+
+.claude-input:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.claude-input-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.claude-input-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.claude-input-btn:hover:not(:disabled) {
+    background: #e0e0e0;
+    color: #1a1a1a;
+}
+
+.claude-input-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.claude-send-btn {
+    background: var(--mj-blue);
+    color: #ffffff;
+}
+
+.claude-send-btn:hover:not(:disabled) {
+    background: #0066a0;
+}
+
+.claude-stop-btn {
+    background: #dc3545;
+    color: #ffffff;
+}
+
+.claude-stop-btn:hover {
+    background: #c82333;
+}
+
+/* Artifact Panel */
+.claude-artifact-panel {
+    background: #f7f7f8;
+    border-left: 1px solid #e0e0e0;
+}
+
+/* Dialog Overrides */
+.claude-dialog .k-dialog-wrapper {
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.claude-dialog .k-dialog-titlebar {
+    background: #f7f7f8;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 16px 20px;
+}
+
+.claude-dialog .k-dialog-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1a1a1a;
+}
+
+.claude-dialog .k-dialog-content {
+    padding: 20px;
+}
+
+.claude-dialog-message {
+    font-size: 14px;
+    color: #666;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.claude-dialog .k-dialog-actions {
+    background: #f7f7f8;
+    border-top: 1px solid #e0e0e0;
+    padding: 16px 20px;
+    gap: 8px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .claude-sidebar {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+    }
+    
+    .claude-sidebar-collapsed {
+        left: -260px;
+    }
+    
+    .claude-welcome-suggestions {
+        grid-template-columns: 1fr;
+    }
+    
+    .claude-input-area {
+        padding: 12px 16px;
     }
 }
-  
+
+/* Animation Classes */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.claude-conversation-item {
+    animation: fadeIn 0.3s ease;
+}
+
+/* Focus States */
+.claude-input-btn:focus-visible,
+.claude-icon-btn:focus-visible,
+.claude-suggestion-card:focus-visible {
+    outline: 2px solid var(--mj-blue);
+    outline-offset: 2px;
+}
