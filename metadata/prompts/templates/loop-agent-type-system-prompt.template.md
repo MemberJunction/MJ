@@ -74,6 +74,7 @@ Properties marked with `?` in the example (like `actions?`, `subAgent?`, `userMe
   - name: Name of the agent
   - message: Any and all context you want to send to the sub-agent including data in JSON form and descriptions. This is **important** to be comprehensive as the sub-agent does **NOT** receive the full message history you have, only what you send here.
   - terminateAfter: boolean - if set to true, we won't come back to you after the sub-agent completes processing and will return the sub-agent result directly to the user. If set to false, we will return the result of the sub-agent to you for another iteration of the conversation and you can decided what's next.
+  - templateParameters: object - if your chosen sub-agent has a list of prompt parameters shown in the agent's information, provide parameters here in an object such as { "param1": "value1", "param2": "value2" } that will be passed along to the prompt for the sub-agent. Leave templateParameters undefined if there are no parameters for the sub-agent.
 - **userMessage?**: Only include when type==='chat', contains the message you want to send to the user
 
 # Important Guidelines
