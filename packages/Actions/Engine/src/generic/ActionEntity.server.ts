@@ -2,7 +2,7 @@ import { BaseEntity, EntityInfo, EntitySaveOptions, LogError, Metadata, RunView 
 import { ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity, AIPromptEntity } from "@memberjunction/core-entities";
 import { MJEventType, MJGlobal, RegisterClass } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
-import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
+//import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 
 import { AIPromptRunner, AIPromptParams } from "@memberjunction/ai-prompts";
 import { DocumentationEngine, LibraryEntityExtended, LibraryItemEntityExtended } from "@memberjunction/doc-utils";
@@ -60,10 +60,10 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
         await ActionEngineBase.Instance.Config(false, this.ContextCurrentUser);
         await DocumentationEngine.Instance.Config(false, this.ContextCurrentUser);
 
-        const provider = Metadata.Provider as SQLServerDataProvider;
+        //const provider = Metadata.Provider as SQLServerDataProvider;
         
         // Start a database transaction
-        await provider.BeginTransaction();
+        //FIX: await provider.BeginTransaction();
         
         try {
             let newCodeGenerated: boolean = false;
@@ -115,18 +115,18 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
                 }
                 
                 // Commit the transaction
-                await provider.CommitTransaction();
+                // FIX await provider.CommitTransaction();
                 return true;
             }
             else {
                 // Rollback on save failure
-                await provider.RollbackTransaction();
+                // FIX await provider.RollbackTransaction();
                 return false;
             }
         }
         catch (e) {
             // Rollback on any error
-            await provider.RollbackTransaction();
+            // FIX await provider.RollbackTransaction();
             throw e;
         }
     }
