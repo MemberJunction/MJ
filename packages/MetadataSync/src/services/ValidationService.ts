@@ -550,6 +550,23 @@ export class ValidationService {
         message: `File reference not found: "${filePath}"`,
         suggestion: `Create file at: ${resolvedPath}`,
       });
+      return;
+    }
+
+    // Read the file and check for {@include} references
+    try {
+      const content = fs.readFileSync(resolvedPath, 'utf-8');
+      await this.validateIncludeReferences(content, resolvedPath, new Set([resolvedPath]));
+    } catch (error) {
+      this.addError({
+        type: 'reference',
+        severity: 'error',
+        entity: entityName,
+        field: fieldName,
+        file: sourceFile,
+        message: `Failed to read file reference: "${filePath}"`,
+        details: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -1065,6 +1082,74 @@ export class ValidationService {
           file: filePath,
           message: `UserID '${userId}' has roles [${userRoles.join(', ')}] but none are in allowed list`,
           suggestion: `Allowed roles: ${allowedRoles.join(', ')}`,
+        });
+      }
+    }
+  }
+
+  /**
+   * Validates {@include} references within file content
+   * 
+   * Recursively checks all {@include path} references in file content to ensure:
+   * - Referenced files exist
+   * - No circular references occur
+   * - Include paths are valid
+   * 
+   * @param content - The file content to validate
+   * @param filePath - Path of the file being validated
+   * @param visitedPaths - Set of already visited paths for circular reference detection
+   */
+  private async validateIncludeReferences(content: string, filePath: string, visitedPaths: Set<string>): Promise<void> {
+    // Pattern to match {@include path} references
+    const includePattern = /\{@include\s+([^\}]+)\s*\}/g;
+    let match: RegExpExecArray | null;
+    
+    while ((match = includePattern.exec(content)) !== null) {
+      const [fullMatch, includePath] = match;
+      const trimmedPath = includePath.trim();
+      
+      // Resolve the include path relative to the current file's directory
+      const currentDir = path.dirname(filePath);
+      const resolvedPath = path.resolve(currentDir, trimmedPath);
+      
+      // Check for circular reference
+      if (visitedPaths.has(resolvedPath)) {
+        this.addError({
+          type: 'reference',
+          severity: 'error',
+          file: filePath,
+          message: `Circular {@include} reference detected: "${trimmedPath}"`,
+          details: `Path ${resolvedPath} is already being processed`,
+          suggestion: 'Restructure your includes to avoid circular references',
+        });
+        continue;
+      }
+      
+      // Check if the included file exists
+      if (!fs.existsSync(resolvedPath)) {
+        this.addError({
+          type: 'reference',
+          severity: 'error',
+          file: filePath,
+          message: `{@include} file not found: "${trimmedPath}"`,
+          suggestion: `Create file at: ${resolvedPath}`,
+        });
+        continue;
+      }
+      
+      // Recursively validate the included file
+      try {
+        const includedContent = fs.readFileSync(resolvedPath, 'utf-8');
+        const newVisitedPaths = new Set(visitedPaths);
+        newVisitedPaths.add(resolvedPath);
+        await this.validateIncludeReferences(includedContent, resolvedPath, newVisitedPaths);
+      } catch (error) {
+        this.addError({
+          type: 'reference',
+          severity: 'error',
+          file: filePath,
+          message: `Failed to read {@include} file: "${trimmedPath}"`,
+          details: error instanceof Error ? error.message : String(error),
         });
       }
     }
