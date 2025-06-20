@@ -105,7 +105,7 @@ export class RunCodeGenBase {
    * @throws Error if any critical step fails
    * @returns Promise that resolves when generation is complete
    */
-  public async Run(skipDatabaseGeneration: boolean = false) {
+  public async Run(skipDatabaseGeneration: boolean = false, sqlGenerationOptions?: SQLGenerationOptions) {
     try {
       const startTime = new Date();
       startSpinner(`Starting MemberJunction CodeGen @ ${startTime.toLocaleString()}`);
@@ -128,6 +128,76 @@ export class RunCodeGenBase {
 
       const runCommandsObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCommandsBase>(RunCommandsBase)!;
       const sqlCodeGenObject = MJGlobal.Instance.ClassFactory.CreateInstance<SQLCodeGenBase>(SQLCodeGenBase)!;
+
+      // Check if we're doing SQL generation only
+      if (sqlGenerationOptions?.generateAllSQL || sqlGenerationOptions?.generateEntitySQL) {
+        startSpinner('Generating SQL to output file...');
+        
+        // Filter entities based on the request
+        let entitiesToGenerate = md.Entities.filter(e => e.IncludeInAPI);
+        if (sqlGenerationOptions.generateEntitySQL) {
+          // Filter to just the requested entity
+          const entityName = sqlGenerationOptions.generateEntitySQL;
+          entitiesToGenerate = entitiesToGenerate.filter(e => 
+            e.Name.toLowerCase() === entityName.toLowerCase()
+          );
+          
+          if (entitiesToGenerate.length === 0) {
+            failSpinner(`Entity '${entityName}' not found`);
+            process.exit(1);
+          }
+        }
+
+        // Generate SQL for all requested entities
+        let allSQL = '';
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        
+        allSQL += `-- MemberJunction SQL Generation\n`;
+        allSQL += `-- Generated: ${new Date().toISOString()}\n`;
+        allSQL += `-- Entities: ${entitiesToGenerate.length}\n`;
+        allSQL += `-- ========================================\n\n`;
+
+        for (const entity of entitiesToGenerate) {
+          updateSpinner(`Generating SQL for ${entity.Name}...`);
+          
+          const result = await sqlCodeGenObject.generateSingleEntitySQLToSeparateFiles({
+            pool,
+            entity,
+            directory: '', // Not used when writeFiles is false
+            onlyPermissions: false,
+            writeFiles: false, // Don't write individual files
+            skipExecution: true, // Don't execute
+            enableSQLLoggingForNewOrModifiedEntities: false
+          });
+
+          if (result.sql || result.permissionsSQL) {
+            allSQL += `\n-- ========================================\n`;
+            allSQL += `-- Entity: ${entity.Name} (${entity.SchemaName}.${entity.BaseTable})\n`;
+            allSQL += `-- ========================================\n\n`;
+            
+            if (result.sql) {
+              allSQL += result.sql;
+              allSQL += '\nGO\n\n';
+            }
+            
+            if (result.permissionsSQL) {
+              allSQL += '-- Permissions\n';
+              allSQL += result.permissionsSQL;
+              allSQL += '\nGO\n\n';
+            }
+          }
+        }
+
+        // Write to output file
+        const fs = await import('fs');
+        const path = await import('path');
+        const outputPath = path.resolve(sqlGenerationOptions.outputFile!);
+        
+        fs.writeFileSync(outputPath, allSQL);
+        succeedSpinner(`SQL generated to ${outputPath}`);
+        
+        process.exit(0); // Success, exit without running the rest of CodeGen
+      }
 
       // check to see if the user wants to skip database generation via the config settings
       const skipDB = skipDatabaseGeneration || getSettingValue('skip_database_generation', false);
@@ -451,7 +521,13 @@ export class RunCodeGenBase {
  * await runMemberJunctionCodeGeneration(true);
  * ```
  */
-export async function runMemberJunctionCodeGeneration(skipDatabaseGeneration: boolean = false) {
+export interface SQLGenerationOptions {
+  generateAllSQL?: boolean;
+  generateEntitySQL?: string;
+  outputFile?: string;
+}
+
+export async function runMemberJunctionCodeGeneration(skipDatabaseGeneration: boolean = false, sqlGenerationOptions?: SQLGenerationOptions) {
   const runObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCodeGenBase>(RunCodeGenBase)!;
-  return await runObject.Run(skipDatabaseGeneration);
+  return await runObject.Run(skipDatabaseGeneration, sqlGenerationOptions);
 }

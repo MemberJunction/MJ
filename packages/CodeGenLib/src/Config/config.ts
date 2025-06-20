@@ -426,6 +426,11 @@ const configInfoSchema = z.object({
   graphqlPort: z.coerce.number().int().positive().default(4000),
 
   verboseOutput: z.boolean().optional().default(false),
+  /**
+   * Generate upsert stored procedures for all entities that have both Create and Update APIs enabled.
+   * These are convenience procedures for DBAs that check existence and call the appropriate Create or Update procedure.
+   */
+  generateUpserts: z.boolean().optional().default(true),
 });
 /**
  * Current working directory for the code generation process
