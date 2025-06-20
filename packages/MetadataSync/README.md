@@ -1,6 +1,6 @@
 # MemberJunction Metadata Sync
 
-A CLI tool for synchronizing MemberJunction database metadata with local file system representations. This tool enables developers and non-technical users to manage MJ metadata using their preferred editors and version control systems while maintaining the database as the source of truth.
+A library for synchronizing MemberJunction database metadata with local file system representations. This library is integrated into the MemberJunction CLI (`mj`) and enables developers and non-technical users to manage MJ metadata using their preferred editors and version control systems while maintaining the database as the source of truth.
 
 ## Purpose
 
@@ -401,10 +401,10 @@ echo '{
 #### Step 4: Test and Validate
 ```bash
 # Dry run to check for errors
-mj-sync push --dir="templates" --dry-run
+mj sync push --dir="templates" --dry-run
 
 # If successful, do actual push
-mj-sync push --dir="templates"
+mj sync push --dir="templates"
 ```
 
 ### AI/LLM Guidelines
@@ -805,57 +805,59 @@ Templates can reference other templates:
 
 ## CLI Commands
 
+All MetadataSync commands are available through the MemberJunction CLI under the `sync` namespace:
+
 ```bash
 # Validate all metadata files
-mj-sync validate
+mj sync validate
 
 # Validate a specific directory
-mj-sync validate --dir="./metadata"
+mj sync validate --dir="./metadata"
 
 # Validate with detailed output
-mj-sync validate --verbose
+mj sync validate --verbose
 
 # Validate with JSON output for CI/CD
-mj-sync validate --format=json
+mj sync validate --format=json
 
 # Initialize a directory for metadata sync
-mj-sync init
+mj sync init
 
 # Pull all AI Prompts from database to ai-prompts directory
-mj-sync pull --entity="AI Prompts"
+mj sync pull --entity="AI Prompts"
 
 # Pull specific records by filter
-mj-sync pull --entity="AI Prompts" --filter="CategoryID='customer-service-id'"
+mj sync pull --entity="AI Prompts" --filter="CategoryID='customer-service-id'"
 
 # Pull multiple records into a single file (NEW)
-mj-sync pull --entity="AI Prompts" --multi-file="all-prompts"
-mj-sync pull --entity="AI Prompts" --filter="Status='Active'" --multi-file="active-prompts.json"
+mj sync pull --entity="AI Prompts" --multi-file="all-prompts"
+mj sync pull --entity="AI Prompts" --filter="Status='Active'" --multi-file="active-prompts.json"
 
 # Push all changes from current directory and subdirectories
-mj-sync push
+mj sync push
 
 # Push only specific entity directory
-mj-sync push --dir="ai-prompts"
+mj sync push --dir="ai-prompts"
 
 # Push with verbose output (NEW)
-mj-sync push -v
-mj-sync push --verbose
+mj sync push -v
+mj sync push --verbose
 
 # Dry run to see what would change
-mj-sync push --dry-run
+mj sync push --dry-run
 
 # Show status of local vs database
-mj-sync status
+mj sync status
 
 # Watch for changes and auto-push
-mj-sync watch
+mj sync watch
 
 # CI/CD mode (push with no prompts, fails on validation errors)
-mj-sync push --ci
+mj sync push --ci
 
 # Push/Pull without validation
-mj-sync push --no-validate
-mj-sync pull --entity="AI Prompts" --no-validate
+mj sync push --no-validate
+mj sync pull --entity="AI Prompts" --no-validate
 ```
 
 ## Configuration
@@ -962,7 +964,7 @@ Migration files include:
 
 2. **Run push command** as normal:
    ```bash
-   mj-sync push
+   mj sync push
    ```
 
 3. **Review generated SQL** in the output directory:
@@ -1422,12 +1424,12 @@ Processing AI Prompts in demo/ai-prompts
 ## Use Cases
 
 ### Developer Workflow
-1. `mj-sync pull --entity="AI Prompts"` to get latest prompts with their models
+1. `mj sync pull --entity="AI Prompts"` to get latest prompts with their models
 2. Edit prompts and adjust model configurations in VS Code
-3. Test locally with `mj-sync push --dry-run`
+3. Test locally with `mj sync push --dry-run`
 4. Commit changes to Git
 5. PR review with diff visualization
-6. CI/CD runs `mj-sync push --ci` on merge
+6. CI/CD runs `mj sync push --ci` on merge
 
 ### Content Team Workflow
 1. Pull prompts to local directory
@@ -1440,8 +1442,8 @@ Processing AI Prompts in demo/ai-prompts
 ```yaml
 - name: Push Metadata to Production
   run: |
-    npm install -g @memberjunction/metadata-sync
-    mj-sync push --ci --entity="AI Prompts"
+    npm install -g @memberjunction/cli
+    mj sync push --ci --entity="AI Prompts"
 ```
 
 ## Benefits
@@ -1476,31 +1478,31 @@ The MetadataSync tool includes a comprehensive validation system that checks you
 By default, validation runs automatically before push and pull operations:
 ```bash
 # These commands validate first, then proceed if valid
-mj-sync push
-mj-sync pull --entity="AI Prompts"
+mj sync push
+mj sync pull --entity="AI Prompts"
 ```
 
 #### Manual Validation
 Run validation without performing any sync operations:
 ```bash
 # Validate current directory
-mj-sync validate
+mj sync validate
 
 # Validate specific directory
-mj-sync validate --dir="./metadata"
+mj sync validate --dir="./metadata"
 
 # Verbose output shows all files checked
-mj-sync validate --verbose
+mj sync validate --verbose
 ```
 
 #### CI/CD Integration
 Get JSON output for automated pipelines:
 ```bash
 # JSON output for parsing
-mj-sync validate --format=json
+mj sync validate --format=json
 
 # In CI mode, validation failures cause immediate exit
-mj-sync push --ci
+mj sync push --ci
 ```
 
 #### Validation During Push
@@ -1515,8 +1517,8 @@ mj-sync push --ci
 For emergency fixes or when you know validation will fail:
 ```bash
 # Skip validation checks (USE WITH CAUTION!)
-mj-sync push --no-validate
-mj-sync pull --entity="AI Prompts" --no-validate
+mj sync push --no-validate
+mj sync pull --entity="AI Prompts" --no-validate
 ```
 
 ⚠️ **Warning:** Using `--no-validate` may push invalid metadata to your database, potentially breaking your application. Only use this flag when absolutely necessary.
@@ -1588,7 +1590,7 @@ Errors
    Entity: Templates
    Field: Status
    File: ./metadata/templates/.my-template.json
-   → Suggestion: Check spelling of 'Status'. Run 'mj-sync list-entities' to see available entities.
+   → Suggestion: Check spelling of 'Status'. Run 'mj sync list-entities' to see available entities.
 
 2. File not found: ./shared/footer.html
    Entity: Templates
@@ -1622,7 +1624,7 @@ Errors
       "field": "Status",
       "file": "./metadata/templates/.my-template.json",
       "message": "Field \"Status\" does not exist on entity \"Templates\"",
-      "suggestion": "Check spelling of 'Status'. Run 'mj-sync list-entities' to see available entities."
+      "suggestion": "Check spelling of 'Status'. Run 'mj sync list-entities' to see available entities."
     }
   ],
   "warnings": [...]
@@ -1716,9 +1718,9 @@ Control validation behavior in your workflow:
 
 ### Best Practices
 
-1. **Run validation during development**: `mj-sync validate` frequently
+1. **Run validation during development**: `mj sync validate` frequently
 2. **Fix errors before warnings**: Errors block operations, warnings don't
-3. **Use verbose mode** to understand issues: `mj-sync validate -v`
+3. **Use verbose mode** to understand issues: `mj sync validate -v`
 4. **Include in CI/CD**: Parse JSON output for automated checks
 5. **Don't skip validation** unless absolutely necessary
 
@@ -1730,7 +1732,7 @@ If validation fails:
 
 1. **Read the error message carefully** - It includes specific details
 2. **Check the suggestion** - Most errors include how to fix them
-3. **Use verbose mode** for more context: `mj-sync validate -v`
+3. **Use verbose mode** for more context: `mj sync validate -v`
 4. **Verify entity definitions** in generated entity files
 5. **Check file paths** are relative to the metadata directory
 
@@ -1738,9 +1740,9 @@ If validation fails:
 
 For large metadata sets:
 
-1. **Disable best practice checks**: `mj-sync validate --no-best-practices`
-2. **Validate specific directories**: `mj-sync validate --dir="./prompts"`
-3. **Reduce nesting depth warning**: `mj-sync validate --max-depth=20`
+1. **Disable best practice checks**: `mj sync validate --no-best-practices`
+2. **Validate specific directories**: `mj sync validate --dir="./prompts"`
+3. **Reduce nesting depth warning**: `mj sync validate --max-depth=20`
 
 ## Programmatic Usage
 
@@ -1859,8 +1861,8 @@ export async function validateBeforeDeploy(metadataPath: string): Promise<boolea
 # Example GitHub Actions workflow
 - name: Validate Metadata
   run: |
-    npm install @memberjunction/metadata-sync
-    npx mj-sync validate --dir=./metadata --format=json > validation-results.json
+    npm install @memberjunction/cli
+    npx mj sync validate --dir=./metadata --format=json > validation-results.json
     
 - name: Check Validation Results
   run: |

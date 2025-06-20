@@ -191,8 +191,8 @@ export default class Push extends Command {
           this.log(chalk.yellow('\n⚠️  Push completed with errors'));
         }
         
-        if (sqlLogPath) {
-          this.log(`\n📄 SQL log saved to: ${path.relative(process.cwd(), sqlLogPath)}`);
+        if (result.sqlLogPath) {
+          this.log(`\n📄 SQL log saved to: ${path.relative(process.cwd(), result.sqlLogPath)}`);
         }
       }
       

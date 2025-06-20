@@ -4,6 +4,8 @@ export { SyncEngine } from './lib/sync-engine';
 export type { RecordData } from './lib/sync-engine';
 export { ConfigManager, configManager } from './lib/config-manager';
 export { getSyncEngine, resetSyncEngine } from './lib/singleton-manager';
+export { SQLLogger } from './lib/sql-logger';
+export { TransactionManager } from './lib/transaction-manager';
 
 // Service exports
 export { InitService } from './services/InitService';

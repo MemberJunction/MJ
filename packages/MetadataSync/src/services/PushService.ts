@@ -3,9 +3,11 @@ import path from 'path';
 import fastGlob from 'fast-glob';
 import { BaseEntity, LogStatus, Metadata, UserInfo, CompositeKey } from '@memberjunction/core';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
-import { loadEntityConfig } from '../config';
+import { loadEntityConfig, loadSyncConfig } from '../config';
 import { FileBackupManager } from '../lib/file-backup-manager';
 import { configManager } from '../lib/config-manager';
+import { SQLLogger } from '../lib/sql-logger';
+import { TransactionManager } from '../lib/transaction-manager';
 
 export interface PushOptions {
   dir?: string;
@@ -56,7 +58,20 @@ export class PushService {
     
     const fileBackupManager = new FileBackupManager();
     
+    // Load sync config for SQL logging settings
+    const syncConfig = await loadSyncConfig(configManager.getOriginalCwd());
+    const sqlLogger = new SQLLogger(syncConfig);
+    const transactionManager = new TransactionManager(sqlLogger);
+    
     try {
+      // Initialize SQL logger if enabled
+      if (sqlLogger.enabled && !options.dryRun) {
+        await sqlLogger.initialize();
+        if (options.verbose) {
+          callbacks?.onLog?.('📝 SQL logging enabled');
+        }
+      }
+      
       // Find entity directories to process
       const entityDirs = this.findEntityDirectories(configManager.getOriginalCwd(), options.dir);
       
@@ -82,51 +97,70 @@ export class PushService {
       let totalUnchanged = 0;
       let totalErrors = 0;
       
-      for (const entityDir of entityDirs) {
-        const entityConfig = await loadEntityConfig(entityDir);
-        if (!entityConfig) {
-          const warning = `Skipping ${entityDir} - no valid entity configuration`;
-          this.warnings.push(warning);
-          callbacks?.onWarn?.(warning);
-          continue;
+      // Begin transaction if not in dry-run mode
+      if (!options.dryRun) {
+        await transactionManager.beginTransaction();
+      }
+      
+      try {
+        for (const entityDir of entityDirs) {
+          const entityConfig = await loadEntityConfig(entityDir);
+          if (!entityConfig) {
+            const warning = `Skipping ${entityDir} - no valid entity configuration`;
+            this.warnings.push(warning);
+            callbacks?.onWarn?.(warning);
+            continue;
+          }
+          
+          if (options.verbose) {
+            callbacks?.onLog?.(`\nProcessing ${entityConfig.entity} in ${entityDir}`);
+          }
+          
+          const result = await this.processEntityDirectory(
+            entityDir,
+            entityConfig,
+            options,
+            fileBackupManager,
+            callbacks,
+            sqlLogger
+          );
+          
+          // Show per-directory summary
+          const dirName = path.relative(process.cwd(), entityDir) || '.';
+          const dirTotal = result.created + result.updated + result.unchanged;
+          if (dirTotal > 0 || result.errors > 0) {
+            callbacks?.onLog?.(`\n📁 ${dirName}:`);
+            callbacks?.onLog?.(`   Total processed: ${dirTotal} unique records`);
+            if (result.created > 0) {
+              callbacks?.onLog?.(`   ✓ Created: ${result.created}`);
+            }
+            if (result.updated > 0) {
+              callbacks?.onLog?.(`   ✓ Updated: ${result.updated}`);
+            }
+            if (result.unchanged > 0) {
+              callbacks?.onLog?.(`   - Unchanged: ${result.unchanged}`);
+            }
+            if (result.errors > 0) {
+              callbacks?.onLog?.(`   ✗ Errors: ${result.errors}`);
+            }
+          }
+          
+          totalCreated += result.created;
+          totalUpdated += result.updated;
+          totalUnchanged += result.unchanged;
+          totalErrors += result.errors;
         }
         
-        if (options.verbose) {
-          callbacks?.onLog?.(`\nProcessing ${entityConfig.entity} in ${entityDir}`);
+        // Commit transaction if successful
+        if (!options.dryRun && totalErrors === 0) {
+          await transactionManager.commitTransaction();
         }
-        
-        const result = await this.processEntityDirectory(
-          entityDir,
-          entityConfig,
-          options,
-          fileBackupManager,
-          callbacks
-        );
-        
-        // Show per-directory summary
-        const dirName = path.relative(process.cwd(), entityDir) || '.';
-        const dirTotal = result.created + result.updated + result.unchanged;
-        if (dirTotal > 0 || result.errors > 0) {
-          callbacks?.onLog?.(`\n📁 ${dirName}:`);
-          callbacks?.onLog?.(`   Total processed: ${dirTotal} unique records`);
-          if (result.created > 0) {
-            callbacks?.onLog?.(`   ✓ Created: ${result.created}`);
-          }
-          if (result.updated > 0) {
-            callbacks?.onLog?.(`   ✓ Updated: ${result.updated}`);
-          }
-          if (result.unchanged > 0) {
-            callbacks?.onLog?.(`   - Unchanged: ${result.unchanged}`);
-          }
-          if (result.errors > 0) {
-            callbacks?.onLog?.(`   ✗ Errors: ${result.errors}`);
-          }
+      } catch (error) {
+        // Rollback transaction on error
+        if (!options.dryRun) {
+          await transactionManager.rollbackTransaction();
         }
-        
-        totalCreated += result.created;
-        totalUpdated += result.updated;
-        totalUnchanged += result.unchanged;
-        totalErrors += result.errors;
+        throw error;
       }
       
       // Commit file backups if successful and not in dry-run mode
@@ -137,12 +171,22 @@ export class PushService {
         }
       }
       
+      // Write SQL log if enabled
+      let sqlLogPath: string | undefined;
+      if (sqlLogger.enabled && !options.dryRun) {
+        sqlLogPath = await sqlLogger.writeLog();
+        if (sqlLogPath && options.verbose) {
+          callbacks?.onLog?.(`📝 SQL log written to: ${sqlLogPath}`);
+        }
+      }
+      
       return {
         created: totalCreated,
         updated: totalUpdated,
         unchanged: totalUnchanged,
         errors: totalErrors,
-        warnings: this.warnings
+        warnings: this.warnings,
+        sqlLogPath
       };
       
     } catch (error) {
@@ -164,7 +208,8 @@ export class PushService {
     entityConfig: any,
     options: PushOptions,
     fileBackupManager: FileBackupManager,
-    callbacks?: PushCallbacks
+    callbacks?: PushCallbacks,
+    sqlLogger?: SQLLogger
   ): Promise<EntityPushResult> {
     let created = 0;
     let updated = 0;
@@ -314,6 +359,8 @@ export class PushService {
     }
     
     // Save the record
+    // TODO: Hook into BaseEntity SQL execution for SQL logging
+    // Currently SQL logging requires deeper integration with MJ core
     const saveResult = await entity.Save();
     
     if (!saveResult) {
@@ -341,8 +388,12 @@ export class PushService {
     options: PushOptions,
     callbacks?: PushCallbacks
   ): Promise<void> {
-    // This is a simplified version - full implementation would process
-    // related entities with proper parent references
+    // TODO: Complete implementation for processing related entities
+    // This is a simplified version - full implementation would:
+    // 1. Create entity objects for each related entity type
+    // 2. Apply field values with proper parent/root references
+    // 3. Save related entities with proper error handling
+    // 4. Support nested related entities recursively
     for (const [key, records] of Object.entries(relatedEntities)) {
       for (const relatedRecord of records) {
         // Process @parent references

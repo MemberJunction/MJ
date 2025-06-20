@@ -269,4 +269,7 @@ const config = {
   migrationsLocation: process.env.MIGRATIONS_LOCATION ?? 'filesystem:./migrations',
 };
 
+// Export configuration for use in other modules
+// Note: This export was added to support the integrated MJCLI package
+// which needs access to the distribution configuration
 module.exports = config;
