@@ -1,30 +1,30 @@
-<div class="claude-chat-container" #topLevelDiv>
+<div class="skip-chat-container" #topLevelDiv>
     <!-- Left Sidebar -->
-    <div class="claude-sidebar" [class.claude-sidebar-collapsed]="!IsConversationListVisible">
-        <div class="claude-sidebar-header">
-            <button class="claude-new-chat-btn" *ngIf="AllowNewConversations" (click)="CreateNewConversation()">
+    <div class="skip-sidebar" [class.skip-sidebar-collapsed]="!IsConversationListVisible">
+        <div class="skip-sidebar-header">
+            <button class="skip-new-chat-btn" *ngIf="AllowNewConversations" (click)="CreateNewConversation()">
                 <i class="fas fa-plus"></i>
                 <span>New chat</span>
             </button>
-            <button class="claude-sidebar-toggle" (click)="DisplayConversationList(false)">
+            <button class="skip-sidebar-toggle" (click)="DisplayConversationList(false)">
                 <i class="fas fa-chevron-left"></i>
             </button>
         </div>
         
-        <div class="claude-conversations-list">
+        <div class="skip-conversations-list">
             @for (convo of Conversations; track convo.ID) {
-                <div class="claude-conversation-item" 
-                     [class.claude-conversation-active]="SelectedConversation?.ID === convo.ID"
-                     [class.claude-conversation-processing]="IsSkipProcessing(convo)"
+                <div class="skip-conversation-item" 
+                     [class.skip-conversation-active]="SelectedConversation?.ID === convo.ID"
+                     [class.skip-conversation-processing]="IsSkipProcessing(convo)"
                      [title]="convo.Name"
                      (click)="SelectConversation(convo)">
-                    <div class="claude-conversation-content">
+                    <div class="skip-conversation-content">
                         @if (SelectedConversation && IsSkipProcessing(convo)) {
-                            <i class="fas fa-circle-notch fa-spin claude-processing-icon"></i>
+                            <i class="fas fa-circle-notch fa-spin skip-processing-icon"></i>
                         }
                         @if (SelectedConversation?.ID === convo.ID && ConversationEditMode) {
                             <textarea 
-                                class="claude-conversation-edit" 
+                                class="skip-conversation-edit" 
                                 [(ngModel)]="convo.Name" 
                                 maxlength="100"
                                 (click)="$event.stopPropagation()"
@@ -32,23 +32,23 @@
                                 (keyup.escape)="cancelConvoEdit(convo)">
                             </textarea>
                         } @else {
-                            <span class="claude-conversation-name">{{ convo.Name }}</span>
+                            <span class="skip-conversation-name">{{ convo.Name }}</span>
                         }
                     </div>
                     @if (SelectedConversation?.ID === convo.ID) {
-                        <div class="claude-conversation-actions">
+                        <div class="skip-conversation-actions">
                             @if (!ConversationEditMode) {
-                                <button class="claude-icon-btn" (click)="editConvo(convo); $event.stopPropagation()">
+                                <button class="skip-icon-btn" (click)="editConvo(convo); $event.stopPropagation()">
                                     <i class="fas fa-pen"></i>
                                 </button>
-                                <button class="claude-icon-btn" (click)="showDeleteConvoDialog(convo); $event.stopPropagation()">
+                                <button class="skip-icon-btn" (click)="showDeleteConvoDialog(convo); $event.stopPropagation()">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             } @else {
-                                <button class="claude-icon-btn" (click)="saveConvoName(convo); $event.stopPropagation()">
+                                <button class="skip-icon-btn" (click)="saveConvoName(convo); $event.stopPropagation()">
                                     <i class="fas fa-check"></i>
                                 </button>
-                                <button class="claude-icon-btn" (click)="cancelConvoEdit(convo); $event.stopPropagation()">
+                                <button class="skip-icon-btn" (click)="cancelConvoEdit(convo); $event.stopPropagation()">
                                     <i class="fas fa-times"></i>
                                 </button>
                             }
@@ -61,13 +61,13 @@
 
     <!-- Collapsed Sidebar Toggle -->
     @if (!IsConversationListVisible) {
-        <button class="claude-sidebar-expand" (click)="DisplayConversationList(true)">
+        <button class="skip-sidebar-expand" (click)="DisplayConversationList(true)">
             <i class="fas fa-chevron-right"></i>
         </button>
     }
 
     <!-- Main Chat Area -->
-    <div class="claude-main-content">
+    <div class="skip-main-content">
         <skip-split-panel 
             #splitPanel
             [Mode]="EnableArtifactSplitView && selectedArtifact ? 'BothSides' : 'LeftOnly'" 
@@ -80,22 +80,22 @@
             mjFillContainer [fillWidth]="false" [fillHeight]="true">
             
             <!-- Chat Panel -->
-            <div left-panel class="claude-chat-panel">
+            <div left-panel class="skip-chat-panel">
                 <!-- Hidden reference div -->
                 <div #AskSkipPanel style="width:0; height:0; overflow:hidden; position:absolute;"></div>
                 
                 <!-- Messages Area -->
-                <div class="claude-messages-area" #scrollContainer (scroll)="checkScroll()">
+                <div class="skip-messages-area" #scrollContainer (scroll)="checkScroll()">
                     <!-- Welcome Screen -->
                     @if ((!Messages || Messages.length === 0) && _conversationLoadComplete) {
-                        <div class="claude-welcome">
-                            <img [src]="SkipLogoURL" class="claude-welcome-logo" />
-                            <h1 class="claude-welcome-title">What can I help with today?</h1>
-                            <div class="claude-welcome-suggestions">
+                        <div class="skip-welcome">
+                            <img [src]="SkipLogoURL" class="skip-welcome-logo" />
+                            <h1 class="skip-welcome-title">What can I help with today?</h1>
+                            <div class="skip-welcome-suggestions">
                                 @for (question of WelcomeQuestions; track question.topLine) {
-                                    <button class="claude-suggestion-card" (click)="sendPrompt(question.prompt)">
-                                        <div class="claude-suggestion-title">{{ question.topLine }}</div>
-                                        <div class="claude-suggestion-subtitle">{{ question.bottomLine }}</div>
+                                    <button class="skip-suggestion-card" (click)="sendPrompt(question.prompt)">
+                                        <div class="skip-suggestion-title">{{ question.topLine }}</div>
+                                        <div class="skip-suggestion-subtitle">{{ question.bottomLine }}</div>
                                     </button>
                                 }
                             </div>
@@ -104,20 +104,20 @@
                     
                     <!-- Loading State -->
                     @if (!_conversationLoadComplete) {
-                        <div class="claude-loading-wrapper">
+                        <div class="skip-loading-wrapper">
                             <kendo-loader type="infinite-spinner" themeColor="primary" size="medium"></kendo-loader>
-                            <span class="claude-loading-text">Loading conversation...</span>
+                            <span class="skip-loading-text">Loading conversation...</span>
                         </div>
                     }
                     
                     <!-- Messages Container -->
-                    <div class="claude-messages-container" mjContainer mjSkipResize="true">
+                    <div class="skip-messages-container" mjContainer mjSkipResize="true">
                         <!-- Dynamic messages will be injected here -->
                     </div>
                     
                     <!-- Scroll to Bottom Button -->
                     @if (_showScrollToBottomIcon && Messages && Messages.length > 0) {
-                        <button class="claude-scroll-bottom" 
+                        <button class="skip-scroll-bottom" 
                                 [style.left.px]="getScrollToBottomIconPosition()"
                                 (click)="scrollToBottomAnimate()">
                             <i class="fas fa-arrow-down"></i>
@@ -128,34 +128,34 @@
                 <!-- Input Area -->
                 @if (SelectedConversationCurrentUserPermissionLevel === 'Owner' || 
                      SelectedConversationCurrentUserPermissionLevel === 'Edit') {
-                    <div class="claude-input-area">
-                        <div class="claude-input-wrapper">
+                    <div class="skip-input-area">
+                        <div class="skip-input-wrapper">
                             <textarea
                                 #AskSkipInput 
-                                class="claude-input"
+                                class="skip-input"
                                 [disabled]="SelectedConversation && IsSkipProcessing(SelectedConversation)" 
                                 (keyup.enter)="onEnter($event)" 
                                 (input)="onInputChange($event)"
                                 [placeholder]="_AskSkipTextboxPlaceholder"
                                 rows="1">
                             </textarea>
-                            <div class="claude-input-actions">
+                            <div class="skip-input-actions">
                                 @if (ShowDataContextButton) {
-                                    <button class="claude-input-btn" (click)="showDataContextDialog()" title="Data Context">
+                                    <button class="skip-input-btn" (click)="showDataContextDialog()" title="Data Context">
                                         <i class="fas fa-database"></i>
                                     </button>
                                 }
                                 @if (ShowSharingButton && SelectedConversationCurrentUserPermissionLevel === 'Owner') {
-                                    <button class="claude-input-btn" (click)="showSharingDialog()" title="Share">
+                                    <button class="skip-input-btn" (click)="showSharingDialog()" title="Share">
                                         <i class="fas fa-share"></i>
                                     </button>
                                 }
                                 @if (SelectedConversation && IsSkipProcessing(SelectedConversation)) {
-                                    <button class="claude-input-btn claude-stop-btn" (click)="stopProcessing()">
+                                    <button class="skip-input-btn skip-stop-btn" (click)="stopProcessing()">
                                         <i class="fas fa-stop"></i>
                                     </button>
                                 } @else {
-                                    <button class="claude-input-btn claude-send-btn" 
+                                    <button class="skip-input-btn skip-send-btn" 
                                             [disabled]="IsTextAreaEmpty()" 
                                             (click)="sendSkipMessage()">
                                         <i class="fas fa-arrow-up"></i>
@@ -168,7 +168,7 @@
             </div>
             
             <!-- Artifact Panel -->
-            <div right-panel class="claude-artifact-panel">
+            <div right-panel class="skip-artifact-panel">
                 <skip-artifact-viewer
                     *ngIf="selectedArtifact"
                     [ArtifactID]="selectedArtifact.artifactId"
@@ -199,7 +199,7 @@
         (close)="closeSharingDialog('no')"
         [width]="650"
         [height]="400"
-        class="claude-dialog">
+        class="skip-dialog">
         <mj-resource-permissions 
             [Provider]="Provider"
             [ResourceTypeID]="conversationResourceTypeID"
@@ -220,8 +220,8 @@
         title="Delete Conversation"
         (close)="closeDeleteConversation('no')"
         [width]="450"
-        class="claude-dialog">
-        <p class="claude-dialog-message">
+        class="skip-dialog">
+        <p class="skip-dialog-message">
             Are you sure you want to delete "{{ SelectedConversation?.Name }}"? This action cannot be undone.
         </p>
         <kendo-dialog-actions>
@@ -236,8 +236,8 @@
         title="Confirm {{ messageEditOrDeleteType | titlecase }}"
         (close)="closeMessageEditOrDeleteDialog('no')"
         [width]="450"
-        class="claude-dialog">
-        <p class="claude-dialog-message">
+        class="skip-dialog">
+        <p class="skip-dialog-message">
             Would you like to {{ messageEditOrDeleteType }} this message? 
             Doing so will result in any subsequent messages in the conversation being deleted.
         </p>
