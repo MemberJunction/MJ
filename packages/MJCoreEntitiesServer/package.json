@@ -25,6 +25,7 @@
     "@memberjunction/ai-vector-dupe": "2.52.0",
     "@memberjunction/skip-types": "2.52.0",
     "@memberjunction/aiengine": "2.52.0",
+    "@memberjunction/sqlserver-dataprovider": "2.52.0",
     "zod": "^3.23.8"
   }
 }
