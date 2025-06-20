@@ -1,6 +1,7 @@
 import { Metadata, TransactionGroupBase, TransactionResult } from "@memberjunction/core";
 import * as sql from 'mssql';
 import { SQLServerDataProvider } from "./SQLServerDataProvider";
+import { LogError, LogStatus } from "@memberjunction/core";
 
 /**
  * SQL Server implementation of the TransactionGroupBase
@@ -68,6 +69,21 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                         }
                         catch (e) {
                             result = e; // push the exception to the result
+                            bSuccess = false; // mark as failed
+                            
+                            // CRITICAL FIX: Immediately rollback on first failure
+                            try {
+                                await transaction.rollback();
+                            } catch (rollbackError) {
+                                LogError(`Failed to rollback after operation error: ${rollbackError}`);
+                            }
+                            
+                            // Create result for the failed operation
+                            returnResults.push(new TransactionResult(item, result, bSuccess));
+                            
+                            // Throw error immediately to stop processing
+                            const errorMessage = e instanceof Error ? e.message : String(e);
+                            throw new Error(`Transaction rolled back due to operation failure: ${errorMessage}`);
                         }
                         // save the results
                         returnResults.push(new TransactionResult(item, result && result.length > 0 ? result[0] : result, bSuccess));
@@ -131,17 +147,50 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                         }
                         catch (e) {
                             result = e; // push the exception to the result
+                            bSuccess = false; // mark as failed
+                            
+                            // CRITICAL FIX: Immediately rollback on first failure
+                            try {
+                                await transaction.rollback();
+                            } catch (rollbackError) {
+                                LogError(`Failed to rollback after operation error: ${rollbackError}`);
+                            }
+                            
+                            // Create result for the failed operation
+                            returnResults.push(new TransactionResult(item, result, bSuccess));
+                            
+                            // Throw error immediately to stop processing
+                            const errorMessage = e instanceof Error ? e.message : String(e);
+                            throw new Error(`Transaction rolled back due to operation failure: ${errorMessage}`);
                         }
                         // save the results
                         returnResults.push(new TransactionResult(item, result && result.length > 0 ? result[0] : result, bSuccess));
                     }
                 }
                 
+                // NOTE: Failure checking is now handled immediately in catch blocks above
+                // If we reach this point, all operations succeeded
+                
                 await transaction.commit();
             } catch (error) {
-                // Rollback on any error
-                await transaction.rollback();
-                throw error;
+                // Enhanced error handling for commit failures or operation failures
+                // Note: If this is an operation failure, the transaction may already be rolled back
+                try {
+                    // Only attempt rollback if the error doesn't indicate transaction was already rolled back
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    if (!errorMessage.includes('Transaction rolled back due to operation failure')) {
+                        await transaction.rollback();
+                    }
+                } catch (rollbackError) {
+                    LogError(`Failed to rollback after commit error: ${rollbackError}`);
+                }
+                
+                // Re-throw the original error (which may already indicate rollback occurred)
+                if (error instanceof Error) {
+                    throw error;
+                } else {
+                    throw new Error(`Transaction failed: ${String(error)}. All changes have been rolled back.`);
+                }
             }
         }
         return returnResults;

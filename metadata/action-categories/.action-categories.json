@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "System",
-      "Description": "Core system actions and utilities",
+      "Description": "Core system actions and utilities 123",
       "ParentID": null,
       "Status": "Active"
     },
@@ -10,14 +10,14 @@
       "ID": "9ae3480b-41ff-4e4a-a5f0-eb009465b26a"
     },
     "sync": {
-      "lastModified": "2025-06-20T02:56:43.378Z",
-      "checksum": "8f2c939b7e1853350ab0307221c4311e7870795e3ed0cd4bb8a377a752846c31"
+      "lastModified": "2025-06-20T18:48:42.750Z",
+      "checksum": "c079eb9025ee36af56569dce4dbf08572e9b32f8cd0d863fbf8e242495582c3a"
     }
   },
   {
     "fields": {
       "Name": "Data",
-      "Description": "Data management actions for CRUD operations",
+      "Description": "Data management actions for CRUD operations 456",
       "ParentID": "@lookup:Action Categories.Name=System&ParentID=null",
       "Status": "Active"
     },
@@ -25,8 +25,8 @@
       "ID": "22285832-93AD-427E-81BA-E332F63FC5B9"
     },
     "sync": {
-      "lastModified": "2025-06-20T02:56:43.383Z",
-      "checksum": "7079caf593c8c2ac1153bc053e85262e4e7dfba1513c81b7fdbe54a9f50a44c2"
+      "lastModified": "2025-06-20T18:48:42.755Z",
+      "checksum": "9ccfe1eed687606b0459ec4b31d320c5c562a82eb5967895feb6006732a808d9"
     }
   }
 ]

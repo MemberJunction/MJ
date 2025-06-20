@@ -65,9 +65,10 @@ export class SyncEngine {
    * Initializes the sync engine by refreshing metadata cache
    * @returns Promise that resolves when initialization is complete
    */
-  async initialize(): Promise<void> {
-    // Initialize metadata
-    await this.metadata.Refresh();
+  async initialize(forceRefresh: boolean = false): Promise<void> {
+    if (forceRefresh) {
+      await this.metadata.Refresh();
+    }
   }
   
   /**
@@ -126,7 +127,10 @@ export class SyncEngine {
       const fullPath = path.resolve(baseDir, filePath);
       
       if (await fs.pathExists(fullPath)) {
-        return await fs.readFile(fullPath, 'utf-8');
+        const fileContent = await fs.readFile(fullPath, 'utf-8');
+        
+        // Process the file content for {@include} references
+        return await this.processFileContentWithIncludes(fullPath, fileContent);
       } else {
         throw new Error(`File not found: ${fullPath}`);
       }
@@ -659,6 +663,87 @@ export class SyncEngine {
     } catch (error) {
       throw new Error(`Failed to load template ${fullPath}: ${error}`);
     }
+  }
+  
+  /**
+   * Process file content with {@include} references
+   * 
+   * Recursively processes a file's content to resolve `{@include path}` references.
+   * Include references use JSDoc-style syntax and support:
+   * - Relative paths resolved from the containing file's directory
+   * - Recursive includes (includes within included files)
+   * - Circular reference detection to prevent infinite loops
+   * - Seamless content substitution maintaining surrounding text
+   * 
+   * @param filePath - Path to the file being processed
+   * @param content - The file content to process
+   * @param visitedPaths - Set of already visited file paths for circular reference detection
+   * @returns Promise resolving to the content with all includes resolved
+   * @throws Error if circular reference detected or included file not found
+   * 
+   * @example
+   * ```typescript
+   * // Content with include reference
+   * const content = 'This is a {@include ./shared/header.md} example';
+   * 
+   * // Resolves to:
+   * const result = await processFileContentWithIncludes('/path/to/file.md', content);
+   * // 'This is a [contents of header.md] example'
+   * ```
+   */
+  private async processFileContentWithIncludes(
+    filePath: string, 
+    content: string, 
+    visitedPaths: Set<string> = new Set()
+  ): Promise<string> {
+    // Add current file to visited set
+    const absolutePath = path.resolve(filePath);
+    if (visitedPaths.has(absolutePath)) {
+      throw new Error(`Circular reference detected: ${absolutePath} is already being processed`);
+    }
+    visitedPaths.add(absolutePath);
+    
+    // Pattern to match {@include path} references
+    // Supports whitespace around the path for flexibility
+    const includePattern = /\{@include\s+([^\}]+)\s*\}/g;
+    
+    let processedContent = content;
+    let match: RegExpExecArray | null;
+    
+    // Process all {@include} references
+    while ((match = includePattern.exec(content)) !== null) {
+      const [fullMatch, includePath] = match;
+      const trimmedPath = includePath.trim();
+      
+      // Resolve the include path relative to the current file's directory
+      const currentDir = path.dirname(filePath);
+      const resolvedPath = path.resolve(currentDir, trimmedPath);
+      
+      try {
+        // Check if the included file exists
+        if (!await fs.pathExists(resolvedPath)) {
+          throw new Error(`Included file not found: ${resolvedPath}`);
+        }
+        
+        // Read the included file
+        const includedContent = await fs.readFile(resolvedPath, 'utf-8');
+        
+        // Recursively process the included content for nested includes
+        const processedInclude = await this.processFileContentWithIncludes(
+          resolvedPath, 
+          includedContent, 
+          new Set(visitedPaths) // Pass a copy to allow the same file in different branches
+        );
+        
+        // Replace the {@include} reference with the processed content
+        processedContent = processedContent.replace(fullMatch, processedInclude);
+      } catch (error) {
+        // Enhance error message with context
+        throw new Error(`Failed to process {@include ${trimmedPath}} in ${filePath}: ${error}`);
+      }
+    }
+    
+    return processedContent;
   }
   
   /**

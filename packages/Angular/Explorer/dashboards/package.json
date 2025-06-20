@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-dashboards",
-  "version": "2.52.0",
+  "version": "2.53.0",
   "description": "MemberJunction Dashboards",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -25,12 +25,12 @@
     "@angular/forms": "18.0.2"
   },
   "dependencies": {
-    "@memberjunction/core": "2.52.0",
-    "@memberjunction/core-entities": "2.52.0",
-    "@memberjunction/templates-base-types": "2.52.0",
-    "@memberjunction/ng-container-directives": "2.52.0",
-    "@memberjunction/ng-notifications": "2.52.0",
-    "@memberjunction/ng-shared": "2.52.0",
+    "@memberjunction/core": "2.53.0",
+    "@memberjunction/core-entities": "2.53.0",
+    "@memberjunction/templates-base-types": "2.53.0",
+    "@memberjunction/ng-container-directives": "2.53.0",
+    "@memberjunction/ng-notifications": "2.53.0",
+    "@memberjunction/ng-shared": "2.53.0",
     "@progress/kendo-angular-dropdowns": "16.2.0",
     "@progress/kendo-angular-navigation": "16.2.0",
     "@progress/kendo-angular-inputs": "16.2.0",

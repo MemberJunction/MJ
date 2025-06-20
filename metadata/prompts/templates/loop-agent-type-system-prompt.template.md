@@ -48,6 +48,10 @@ always use our designated response format shown below
 
 
 # Response Format
+You will be using JSON to respond in compliance with this TypeScript:
+```ts
+{@include ../output/loop-agent-type-system-prompt-output.example.ts}
+```
 You MUST respond with valid JSON in the following structure:
 
 {{ _OUTPUT_EXAMPLE | safe }}

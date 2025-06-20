@@ -1,29 +1,37 @@
 {
-  "taskComplete": false,
+  "taskComplete": "[BOOLEAN: true if task is fully complete, false if more steps needed]",
+  "message": "[STRING: Human-readable message about current status or final result - this is what the user/caller sees]",
+  "payload": {
+    "[KEY]": "[VALUE: Your agent-specific data structure goes here]",
+    "[EXAMPLE_STRUCTURE]": {
+      "resultsFound": "[NUMBER or other data]",
+      "processedItems": "[Array of processed data]",
+      "customField": "[Any structure your agent needs to return]"
+    },
+    "[NOTE]": "This payload structure is completely flexible based on your agent's purpose"
+  },
+  "reasoning": "[STRING: Your internal explanation of why you made this decision - helps with debugging]",
+  "confidence": "[OPTIONAL NUMBER: 0.0 to 1.0 indicating confidence in this decision]",
   "nextStep": {
-    "type": "action",
-    "actions?": [
+    "type": "[REQUIRED if taskComplete=false: Must be exactly one of: 'action' | 'sub-agent' | 'chat']",
+    "actions": [
       {
-        "id": "action UUID goes here",
-        "name": "action name goes here",
+        "id": "[UUID: The exact ID from available actions list]",
+        "name": "[STRING: The exact name from available actions list]",
         "params": {
-          "param1": "value1",
-          "param2": "value2"
+          "[PARAM_NAME]": "[PARAM_VALUE: Must match action's expected parameters]",
+          "[ANOTHER_PARAM]": "[Value matching the action's parameter type]"
         }
       }
     ],
-    "subAgent?": {
-      "id": "sub agent UUID goes here",
-      "name": "sub agent name goes here",
-      "message": "your message to the sub-agent including any important context for the sub-agent to be aware of. Can be text and/or JSON",
-      "terminateAfter": true,
+    "subAgent": {
+      "id": "[UUID: The exact ID from available sub-agents list]",
+      "name": "[STRING: The exact name from available sub-agents list]",
+      "message": "[STRING: Complete context and instructions for the sub-agent - they don't see conversation history]",
       "templateParameters": {
-        "param1": "value1",
-        "param2": "value2"
-      }
-    },
-    "userMessage?": "Provide a message to the user, only provided if type='chat'"
-  },
-  "reasoning": "The conversation is still in the information gathering phase. The user has expressed interest in products but hasn't provided enough details for me to make accurate recommendations yet. I need to ask about budget next",
-  "confidence": 0.90
+        "[TEMPLATE_PARAM_NAME]": "[VALUE: If sub-agent has template parameters, provide values here]"
+      },
+      "terminateAfter": "[BOOLEAN: true to end parent agent after sub-agent completes, false to continue]"
+    }
+  }
 }
