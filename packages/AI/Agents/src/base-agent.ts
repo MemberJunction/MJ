@@ -281,18 +281,19 @@ export class BaseAgent {
      * - Custom termination conditions
      * - Alternative flow control mechanisms
      * 
+     * @template R - The type of the return value from agent execution
      * @param {ExecuteAgentParams} params - The execution parameters with wrapped callbacks (includes wrapped onProgress and onStreaming)
      * @param {AgentConfiguration} config - The loaded agent configuration
-     * @returns {Promise<{finalReturnValue: any, stepCount: number}>} The execution result with final return value and step count
+     * @returns {Promise<{finalReturnValue: R, stepCount: number}>} The execution result with typed final return value and step count
      * @protected
      */
-    protected async executeAgentInternal(
+    protected async executeAgentInternal<R = any>(
         params: ExecuteAgentParams, 
         config: AgentConfiguration
-    ): Promise<{finalReturnValue: any, stepCount: number}> {
+    ): Promise<{finalReturnValue: R, stepCount: number}> {
         let continueExecution = true;
         let currentNextStep: BaseAgentNextStep | null = null;
-        let finalReturnValue: any = undefined;
+        let finalReturnValue: R | undefined = undefined;
         let stepCount = 0;
 
         while (continueExecution) {
@@ -308,13 +309,13 @@ export class BaseAgent {
             // Check if we should continue or terminate
             if (stepResult.terminate) {
                 continueExecution = false;
-                finalReturnValue = stepResult.returnValue;
+                finalReturnValue = stepResult.returnValue as R;
             } else {
                 currentNextStep = stepResult.nextStep;
             }
         }
 
-        return { finalReturnValue, stepCount };
+        return { finalReturnValue: finalReturnValue as R, stepCount };
     }
 
     /**

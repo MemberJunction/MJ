@@ -12,11 +12,12 @@ import { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep } from '@memb
 export class ParallelExecutionAgent extends BaseAgent {
     /**
      * Override the internal execution logic to implement parallel execution
+     * with strongly typed return value
      */
-    protected async executeAgentInternal(
+    protected async executeAgentInternal<R = { results: any[], allSuccessful: boolean }>(
         params: ExecuteAgentParams, 
         config: AgentConfiguration
-    ): Promise<{finalReturnValue: any, stepCount: number}> {
+    ): Promise<{finalReturnValue: R, stepCount: number}> {
         // Example: Execute initial prompt
         const firstStepResult = await this.executeNextStep(params, config, null);
         let stepCount = 1;
@@ -47,7 +48,7 @@ export class ParallelExecutionAgent extends BaseAgent {
                 finalReturnValue: {
                     step: allSuccessful ? 'success' : 'failed',
                     returnValue: { results, allSuccessful }
-                },
+                } as R,
                 stepCount
             };
         }
