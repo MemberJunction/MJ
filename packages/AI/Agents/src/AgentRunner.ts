@@ -45,11 +45,11 @@ export class AgentRunner {
      * 3. Calls Execute on the agent instance and returns the result
      * 
      * @param {ExecuteAgentParams} params - Parameters for agent execution (same as BaseAgent.Execute)
-     * @returns {Promise<ExecuteAgentResult>} The execution result (same as BaseAgent.Execute)
+     * @returns {Promise<ExecuteAgentResult<T>>} The execution result (same as BaseAgent.Execute)
      * 
      * @throws {Error} Throws if agent type loading fails or agent instantiation fails
      */
-    public async RunAgent(params: ExecuteAgentParams): Promise<ExecuteAgentResult> {
+    public async RunAgent<T>(params: ExecuteAgentParams<T>): Promise<ExecuteAgentResult<T>> {
         try {
             LogStatus(`AgentRunner: Starting execution for agent: ${params.agent.Name} (ID: ${params.agent.ID})`);
             
