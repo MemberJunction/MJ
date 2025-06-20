@@ -2,6 +2,76 @@
   height: calc(100vh - 80px);
 }
 
+.context-menu {
+  position: fixed;
+  z-index: 9999;
+  background-color: #ffffff;
+  border: 1px solid #ccc;
+  padding: 3px 3px;
+  box-shadow: var(--shadow);
+}
+
+.nav-tab-title {
+  margin-left: 10px;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 9999;
+  background-color: #ffffff;
+  border: 1px solid var(--gray-600);
+  padding: 3px 3px;
+  box-shadow: var(--shadow);
+}
+
+.tab-icon {
+  margin-right: 5px;
+}
+
+.context-menu-item {
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.context-menu-item:hover {
+  background-color: var(--gray-700);
+}
+
+.navigation-wrap .drawer-container {
+  background: var(--gray-color);
+}
+
+.navigation-wrap .drawer-container .k-content {
+  padding: 25px;
+}
+
+.navigation-wrap .drawer-container .k-tabstrip-items-wrapper {
+  background: var(--med-gray);
+  padding-left: 20px;
+}
+
+.navigation-wrap .drawer-container .k-tabstrip-items-wrapper .k-item.k-active {
+  border: 1px solid var(--light-gray);
+  background: var(--light-gray);
+  border-radius: 8px 8px 0 0;
+  color: var(--blue-text);
+
+}
+
+.navigation-wrap .drawer-container .k-tabstrip-items-wrapper .k-item:hover {
+  color: var(--blue-text);
+}
+
+.navigation-wrap .drawer-container .k-tabstrip-items-wrapper .k-item {
+  background: var(--med-gray);
+  border-radius: 0;
+  border-right: 1px solid #909090;
+}
+
+.tab-resource {
+  display: block;
+}
+
 .navigation-wrap kendo-loader {
   position: absolute;
   top: 50%;
@@ -57,6 +127,6 @@
 
   ::ng-deep .k-drawer-mini .item-descr-wrap {
     display: block;
-}
+  }
 
 }

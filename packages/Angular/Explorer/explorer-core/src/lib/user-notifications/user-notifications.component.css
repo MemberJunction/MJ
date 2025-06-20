@@ -194,7 +194,6 @@
 /* Empty State */
 .empty-notifications {
     @extend .mj-empty-state;
-    min-height: 300px;
     margin: 40px 20px;
 }
 

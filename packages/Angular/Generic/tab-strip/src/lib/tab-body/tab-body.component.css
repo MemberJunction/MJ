@@ -2,4 +2,6 @@
     border-top: 0;
     width: 100%;
     display: block;
+    overflow-y: auto;
+    height: calc(100vh - 123px);
   } 

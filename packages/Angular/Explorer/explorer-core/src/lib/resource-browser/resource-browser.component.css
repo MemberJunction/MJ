@@ -85,7 +85,6 @@
 /* Main Content Area */
 .main-area {
     position: relative;
-    min-height: 300px;
 }
 
 .main-area kendo-loader {
