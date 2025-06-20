@@ -1,11 +1,32 @@
-import { BaseEntity, CodeNameFromString, EntityInfo, EntitySaveOptions, LogError, Metadata, RunView } from "@memberjunction/core";
-import { ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
-import { CleanJSON, MJEventType, MJGlobal, RegisterClass } from "@memberjunction/global";
+import { BaseEntity, EntityInfo, EntitySaveOptions, LogError, Metadata, RunView } from "@memberjunction/core";
+import { ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity, AIPromptEntity } from "@memberjunction/core-entities";
+import { MJEventType, MJGlobal, RegisterClass } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
+//import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 
-import { BaseLLM, ChatMessage, ChatParams, GetAIAPIKey } from "@memberjunction/ai";
+import { AIPromptRunner, AIPromptParams } from "@memberjunction/ai-prompts";
 import { DocumentationEngine, LibraryEntityExtended, LibraryItemEntityExtended } from "@memberjunction/doc-utils";
 import { ActionEngineBase, ActionEntityExtended, ActionLibrary, GeneratedCode } from "@memberjunction/actions-base";
+
+/**
+ * Extended GeneratedCode interface to include parameters and result codes
+ */
+interface GeneratedCodeExtended extends GeneratedCode {
+    Parameters?: Array<{
+        Name: string;
+        Type: 'Input' | 'Output' | 'Both';
+        ValueType: 'Scalar' | 'Simple Object' | 'BaseEntity Sub-Class' | 'Other';
+        IsArray: boolean;
+        IsRequired: boolean;
+        DefaultValue: string | null;
+        Description: string;
+    }>;
+    ResultCodes?: Array<{
+        ResultCode: string;
+        Description: string;
+        IsSuccess: boolean;
+    }>;
+}
 
 /**
  * Server-Only custom sub-class for Actions entity. This sub-class handles the process of auto-generation code for the Actions entity.
@@ -39,40 +60,78 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
         await ActionEngineBase.Instance.Config(false, this.ContextCurrentUser);
         await DocumentationEngine.Instance.Config(false, this.ContextCurrentUser);
 
-        let newCodeGenerated: boolean = false;
-        let codeLibraries: ActionLibrary[] = [];
-        if ( this.Type === 'Generated' && // only generate when the type is Generated
-             !this.CodeLocked && // only generate when the code is not locked
-             (this.GetFieldByName('UserPrompt').Dirty || !this.IsSaved || this.ForceCodeGeneration)  // only generate when the UserPrompt field is dirty or this is a new record or we are being asked to FORCE code generation
-           ) {
-            // UserPrompt field is dirty, or this is a new record, either way, this is the condition where we want to generate the Code.
-            const result = await this.GenerateCode();
-            if (result.Success) {
-                this.Code = result.Code;
-                this.CodeComments = result.Comments;
-                this.CodeApprovalStatus = 'Pending'; // set to pending even if previously approved since we changed the code
-                this.CodeApprovedAt = null; // reset the approved at date
-                this.CodeApprovedByUserID = null; // reset the approved by user id
-                newCodeGenerated = true; // flag for post-save processing of libraries
-                codeLibraries = result.LibrariesUsed;
+        //const provider = Metadata.Provider as SQLServerDataProvider;
+        
+        // Start a database transaction
+        //FIX: await provider.BeginTransaction();
+        
+        try {
+            let newCodeGenerated: boolean = false;
+            let codeLibraries: ActionLibrary[] = [];
+            let generatedParameters: Array<any> = [];
+            let generatedResultCodes: Array<any> = [];
+            
+            if ( this.Type === 'Generated' && // only generate when the type is Generated
+                 !this.CodeLocked && // only generate when the code is not locked
+                 (this.GetFieldByName('UserPrompt').Dirty || !this.IsSaved || this.ForceCodeGeneration)  // only generate when the UserPrompt field is dirty or this is a new record or we are being asked to FORCE code generation
+               ) {
+                // UserPrompt field is dirty, or this is a new record, either way, this is the condition where we want to generate the Code.
+                const result = await this.GenerateCode();
+                if (result.Success) {
+                    this.Code = result.Code;
+                    this.CodeComments = result.Comments;
+                    this.CodeApprovalStatus = 'Pending'; // set to pending even if previously approved since we changed the code
+                    this.CodeApprovedAt = null; // reset the approved at date
+                    this.CodeApprovedByUserID = null; // reset the approved by user id
+                    newCodeGenerated = true; // flag for post-save processing of libraries
+                    codeLibraries = result.LibrariesUsed;
+                    
+                    // Store the generated parameters and result codes for later processing
+                    generatedParameters = result.Parameters || [];
+                    generatedResultCodes = result.ResultCodes || [];
+                }
+                else
+                    throw new Error(`Failed to generate code for Action ${this.Name}.`);
             }
-            else
-                throw new Error(`Failed to generate code for Action ${this.Name}.`);
-        }
 
-        this.ForceCodeGeneration = false; // make sure to reset this flag every time we save, it should never live past one run of the Save method, of course if Save fails, below, then it will not be reset
-        const wasNewRecord = !this.IsSaved;
-        if (await super.Save(options)) {
-            if (newCodeGenerated)
-                return this.manageLibraries(codeLibraries, wasNewRecord);
-            else
+            this.ForceCodeGeneration = false; // make sure to reset this flag every time we save, it should never live past one run of the Save method
+            const wasNewRecord = !this.IsSaved;
+            
+            if (await super.Save(options)) {
+                // Now handle all the child entities within the same transaction
+                if (newCodeGenerated) {
+                    // Process libraries
+                    await this.manageLibraries(codeLibraries, wasNewRecord);
+                    
+                    // Process parameters 
+                    if (generatedParameters.length > 0) {
+                        await this.ProcessGeneratedParameters(generatedParameters);
+                    }
+                    
+                    // Process result codes
+                    if (generatedResultCodes.length > 0) {
+                        await this.ProcessGeneratedResultCodes(generatedResultCodes);
+                    }
+                }
+                
+                // Commit the transaction
+                // FIX await provider.CommitTransaction();
                 return true;
+            }
+            else {
+                // Rollback on save failure
+                // FIX await provider.RollbackTransaction();
+                return false;
+            }
         }
-        else
-            return false;
+        catch (e) {
+            // Rollback on any error
+            // FIX await provider.RollbackTransaction();
+            throw e;
+        }
     }
 
-    protected async manageLibraries(codeLibraries: ActionLibrary[], wasNewRecord: boolean): Promise<boolean> {
+    protected async manageLibraries(codeLibraries: ActionLibrary[], wasNewRecord: boolean): Promise<void> {
         // new code was generated, we need to sync up the ActionLibraries table with the libraries used in the code for this Action
         // get a list of existing ActionLibrary records that match this Action
         const existingLibraries: ActionLibraryEntity[] = [];
@@ -97,7 +156,7 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
         const librariesToRemove = existingLibraries.filter(el => !codeLibraries.some(l => l.LibraryName.trim().toLowerCase() === el.Library.trim().toLowerCase()));
         const librariesToUpdate = existingLibraries.filter(el => codeLibraries.some(l => l.LibraryName.trim().toLowerCase() === el.Library.trim().toLowerCase()));
         const md = new Metadata();
-        const tg = await md.CreateTransactionGroup();
+        
         for (const lib of librariesToAdd) {
             const libMetadata = md.Libraries.find(l => l.Name.trim().toLowerCase() === lib.LibraryName.trim().toLowerCase());
             if (libMetadata) {
@@ -105,7 +164,6 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
                 newLib.ActionID = this.ID;
                 newLib.LibraryID = libMetadata.ID;
                 newLib.ItemsUsed = lib.ItemsUsed.join(',');
-                newLib.TransactionGroup = tg;
                 await newLib.Save(); 
             }
         }
@@ -114,22 +172,14 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
         for (const lib of librariesToUpdate) {
             const newCode = codeLibraries.find(l => l.LibraryName.trim().toLowerCase() === lib.Library.trim().toLowerCase());
             lib.ItemsUsed = newCode.ItemsUsed.join(',');
-            lib.TransactionGroup = tg;
             await lib.Save();  
         }
 
         // now remove the libraries that are no longer used
         for (const lib of librariesToRemove) {
             // each lib in this array iteration is already a BaseEntity derived object
-            lib.TransactionGroup = tg;
             await lib.Delete();  
         }
-
-        // now commit the transaction
-        if (await tg.Submit())
-            return true;
-        else
-            return false;
     }
 
     protected SendMessage(message: string) {
@@ -145,35 +195,72 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
      * the mj_actions library for each user environment. The mj_actions library will have a class for each action and that class will have certain libraries imported at the top of the file and available for use.
      * That information along with a detailed amount of system prompt steering goes into the AI model in order to generate contextually appropriate and reliable code that maps to the business logic of the user
      */
-    public async GenerateCode(maxAttempts: number = 3): Promise<GeneratedCode> {
+    public async GenerateCode(maxAttempts: number = 3): Promise<GeneratedCodeExtended> {
         try {
             this.SendMessage('Generating code... ');
 
-            const model = await AIEngine.Instance.GetHighestPowerModel(this.AIVendorName, 'llm', this.ContextCurrentUser)
-            const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass));
+            // Ensure AIEngine is configured
+            await AIEngine.Instance.Config(false, this.ContextCurrentUser);
 
-            const chatParams: ChatParams = {
-                model: model.APINameOrName,
-                messages: [
-                    {
-                        role: 'system',
-                        content: this.GenerateSysPrompt()
-                    },
-                    {
-                        role: 'user',
-                        content: this.UserPrompt,
-                    },
-                ],
+            // Load the consolidated prompt template from preloaded prompts
+            const aiPrompt = AIEngine.Instance.Prompts.find(p => 
+                p.Name === 'Generate Action Code' && 
+                p.Category === 'Actions'
+            );
+
+            if (!aiPrompt) {
+                throw new Error('Failed to find AI prompt template: Generate Action Code in Actions category');
             }
-            let result: GeneratedCode = await this.InternalGenerateCode(llm, chatParams, maxAttempts);
-            if(result.Success){
-                //now run the code through the QA agent to make sure the code is valid
-                let qaResult: GeneratedCode = await this.ValidateCode(llm, this.UserPrompt, result, maxAttempts);
-                return qaResult;
-            }
-            else{
-                //something went wrong in the first pass, just return the error
-                return result;
+
+            // Prepare prompt data
+            const promptData = await this.PreparePromptData();
+
+            // Execute the prompt using AIPromptRunner
+            const promptRunner = new AIPromptRunner();
+            const params = new AIPromptParams();
+            params.prompt = aiPrompt;
+            params.data = promptData;
+            params.contextUser = this.ContextCurrentUser;
+
+            const result = await promptRunner.ExecutePrompt<{
+                code: string;
+                explanation: string;
+                libraries: Array<{LibraryName: string, ItemsUsed: string[]}>;
+                parameters?: Array<{
+                    Name: string;
+                    Type: 'Input' | 'Output' | 'Both';
+                    ValueType: 'Scalar' | 'Simple Object' | 'BaseEntity Sub-Class' | 'Other';
+                    IsArray: boolean;
+                    IsRequired: boolean;
+                    DefaultValue: string | null;
+                    Description: string;
+                }>;
+                resultCodes?: Array<{
+                    ResultCode: string;
+                    Description: string;
+                    IsSuccess: boolean;
+                }>;
+            }>(params);
+
+            if (result.success && result.result) {
+                const generatedCode: GeneratedCodeExtended = {
+                    Success: true,
+                    Code: result.result.code.trim(),
+                    Comments: result.result.explanation,
+                    LibrariesUsed: result.result.libraries,
+                    Parameters: result.result.parameters,
+                    ResultCodes: result.result.resultCodes
+                };
+
+                // Validate the generated code
+                return await this.ValidateGeneratedCode(generatedCode, maxAttempts);
+            } else {
+                return {
+                    Success: false,
+                    Code: '',
+                    Comments: result.errorMessage || 'Failed to generate code',
+                    LibrariesUsed: []
+                };
             }
         }
         catch (e) {
@@ -182,399 +269,271 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
         }
     }
 
-    protected async InternalGenerateCode(llm: BaseLLM, chatParams: ChatParams, attemptsRemaining: number): Promise<GeneratedCode> {
-        try {
-            const result = await llm.ChatCompletion(chatParams);
-            if (result && result.data) {
-                const llmResponse = result.data.choices[0].message.content;
-                if (llmResponse) {
-                    // try to parse it as JSON
-                    const cleansed: string = CleanJSON(llmResponse);
-                    if (!cleansed)
-                        throw new Error('Invalid JSON response from AI: ' + llmResponse);
 
-                    const parsed = JSON.parse(cleansed);
-                    if (parsed.code && parsed.code.length > 0) {
-                        const trimmed = parsed.code.trim();
-                        let comments: string = parsed.explanation;
-                        if(parsed.reflection){
-                            comments = comments + `\n ${parsed.reflection}`;
-                        }
-                        const result: GeneratedCode = {
-                            Success: true,
-                            Code: trimmed,
-                            Comments: parsed.explanation,
-                            LibrariesUsed: parsed.libraries
-                        };
-
-                        return result;
-                    }
-                    else {
-                        throw new Error('Invalid JSON response from AI: ' + llmResponse);
-                    }
-                }
-                else
-                    throw new Error('No response from AI');
-            }
-            else
-                throw new Error('No response from AI');
-        }
-        catch (e) {
-            LogError(e);
-            if (attemptsRemaining > 1) {
-                // try again
-                return await this.InternalGenerateCode(llm, chatParams, attemptsRemaining - 1);
-            }
-            else
-                return {
-                    Success: false,
-                    Code: '',
-                    Comments: `Error communicating with AI: ${e.message}`,
-                    LibrariesUsed: []
-                }
-        }
-    }
-
-    protected async ValidateCode(llm: BaseLLM, userRequest: string, generatedCode: GeneratedCode, attemptsRemaining: number): Promise<GeneratedCode> {
-        this.SendMessage(`Reviewing code...`);
-        const model = await AIEngine.Instance.GetHighestPowerModel(this.AIVendorName, 'llm', this.ContextCurrentUser)
-        const promptMessage: string = this.GenerateValidateCodePrompt(userRequest, generatedCode);
-        const validatePrompt: ChatMessage = {
-            role: 'system',
-            content: promptMessage
+    /**
+     * Prepares the data context for the prompt template
+     */
+    protected async PreparePromptData(): Promise<Record<string, any>> {
+        const data: Record<string, any> = {
+            userPrompt: this.UserPrompt,
+            availableLibraries: this.GenerateLibrariesContext(),
+            IsChildAction: !!this.ParentID  // Template variable for conditional sections
         };
 
-        let chatParams: ChatParams = new ChatParams();
-        chatParams.messages = [validatePrompt];
-        chatParams.model = model.APINameOrName;
+        // If this is a child action, load parent context and create ChildActionInfo
+        if (this.ParentID) {
+            const parentAction = await this.LoadParentAction();
+            if (parentAction) {
+                // Create the ChildActionInfo template variable with all parent details
+                data.ChildActionInfo = `
+**Parent Action Name:** ${parentAction.Name}
+**Parent Description:** ${parentAction.Description || 'No description provided'}
 
-        let result: GeneratedCode = await this.InternalGenerateCode(llm, chatParams, attemptsRemaining);
-        if(result.Success){
-            return result;
-        }
-        else if (attemptsRemaining > 1) {
-            return this.ValidateCode(llm, userRequest, generatedCode, attemptsRemaining - 1);
-        }
-        else {
-            return {
-                Success: false,
-                Code: '',
-                Comments: `Error communicating with AI: ${result.Comments}`,
-                LibrariesUsed: []
-            }
-        }
+**Parent Parameters:**
+${JSON.stringify(parentAction.Params.map(p => {
+    return {
+        Name: p.Name,
+        Type: p.Type,
+        ValueType: p.ValueType,
+        IsArray: p.IsArray,
+        IsRequired: p.IsRequired,
+        DefaultValue: p.DefaultValue,
+        Description: p.Description
     }
-
-    public GenerateSysPrompt(): string {
-        const prompt: string = `<RETURN_FORMAT>
-    * CRITICAL - I am a bot, I can ONLY understand fully formed JSON responses
-    * YOUR RESPONSE MUST BE A JSON OBJECT
-    * MORE INFO BELOW
-</RETURN_FORMAT>
-
-<INTRODUCTION>
-You are an expert in TypeScript coding and business applications. You take great pride in easy to read, commented, and nicely formatted code.
-You will be provided a request for how to handle a specific type of action that they want created. An action is a "verb" in the MemberJunction framework that can do basically anything the user asks for.
-Your job is to write the TypeScript code that will be taken and inserted into a class as shown below using the classes
-for inputs/outputs and the ActionResultSimple class that is provided. The code you write will be used by the MemberJunction engine to execute the action when
-it is called by the user.
-</INTRODUCTION>
-
- ${this.GenerateContextInfo()}
-
-Your response must be JSON and parsable into this type:
-const returnType = {
-    code: string, // The typescript code you will create that will work in the context described above. Make sure to include line breaks, but not tabs. That is, pretty format in terms of new lines, but do NOT indent with spaces/tabs, as I'll handle indentation.
-    explanation: string // an explanation for a semi-technical person explaining what the code does. Here again use line breaks liberally to make it easy to read but do NOT indent with spaces/tabs as I will handle that. Use * lists and numbered lists as appropriate.
-    libraries: [
-        {LibraryName: string, ItemsUsed: string[]}, // tell me the libraries you have used in the code you created here in this array of libraries. I need this info to properly import them in the final code.
-    ]
-};
-</CRITICAL>
-**** REMEMBER **** I am a BOT, do not return anything other than the above JSON format to me or I will choke on your response!
-`
-        return prompt;
-    }
-
-    public GenerateValidateCodePrompt(userRequest: string, generatedCode: GeneratedCode): string {
-        return `<RETURN_FORMAT>
-    * CRITICAL - I am a bot, I can ONLY understand fully formed JSON responses
-    * YOUR RESPONSE MUST BE A JSON OBJECT
-    * MORE INFO BELOW
-</RETURN_FORMAT>
-
-        <INTRODUCTION>
-You are an expert in TypeScript coding and business applications. You take great pride in easy to read, commented, and nicely formatted code.
-You are also exceptional in catching errors in other people's code and providing clear and easy to understand bug fixes, with comments explaining the
-issues and how you corrected it.
-You will be provided a request for how to handle a specific type of action that they want created, as well code written by someone else that attempts
-to satisfy the request. An action is a "verb" in the MemberJunction framework that can do basically anything the user asks for.
-Your job is to:
-1 - Verify that the given code can successfully compile and run, using the provided libraries and parameters.
-2- Verify that the given code satifies the user's request.
-</INTRODUCTION>
-
-The user's original request was:
-${userRequest}
-
-The generated code is below:
-<GENERATEDCODE>
-${generatedCode.Code}
-</GENERATEDCODE>
-
-Here are some comments about the above code:
-<CODECOMMENTS>
-${generatedCode.Comments}
-</CODECOMMENTS>
-
-As well as the libraries used in the above code:
-<LIBRARIESUSED>
-${JSON.stringify(generatedCode.LibrariesUsed, null, 2)}
-</LIBRARIESUSED>
-
-<CONTEXTINFO>
-Here is some additional info to help you:
-${this.GenerateContextInfo()}
-</CONTEXTINFO>
-
-<RUNVIEWINFO>
-Here is some additonal info regarding the RunViewParams object
-${this.GenerateRunViewParamsInfo()}
-</RUNVIEWINFO>
-
-Your response must be JSON and parsable into this type:
-    const returnType = {
-        reflection: string, //Jot down your notes here on why you think the given code was valid or not. If it wasnt, write down why it isnt. Is it because there are syntax or logic errors, or because it doesnt satisfy the user's request?
-        success: boolean //whether or not the above code is valid and can successfully compile and run, using the given libraries and data types
-        code: string, // REMEMBER: your code will be inserted INTO an existing method so do not generate the method signature, just the code that I will drop into my existing method as shown in the <CONTEXTINFO>
-        explanation: string // If the code is not valid, you will provide an explanation for a semi-technical person explaining what the corrected code does. Here again use line breaks liberally to make it easy to read but do NOT indent with spaces/tabs as I will handle that. Use * lists and numbered lists as appropriate.
-        libraries: [
-            {LibraryName: string, ItemsUsed: string[]}, // If the code is not valid, tell me the libraries you have used in the corrected code you created here in this array of libraries. I need this info to properly import them in the final code.
-        ]
-};
+}), null, 2)}
 `;
-    }
-
-    public GenerateContextInfo(): string {
-        return `
-        <CODE_EXAMPLE>
-export class ${this.ProgrammaticName}Action extends BaseAction {
-    public async Run(params: RunActionParams): Promise<ActionResultSimple> {
-        // IMPORTANT: your code will go here, do not generate the method signature, just the code inside the method
-        /* FOR THE RETURN VALUE you should return a JavaScript object that has these properties:
-            {
-                Success: boolean // or false if the action failed
-                ResultCode: ${this.ResultCodes && this.ResultCodes.length > 0 ? this.ResultCodes.map(rc => `'${rc.ResultCode}'`).join(" | ") : 'string'} // The result of the action
-                Message: string // a message to show the user
+                // Also include the parent action object for template access
+                data.parentAction = {
+                    Name: parentAction.Name,
+                    Description: parentAction.Description
+                };
             }
-        */
-    }
-}
-</CODE_EXAMPLE>
-
-<AVAILABLE_PARAMETERS>
-The params parameter into the Run method has a property called Params which is an array of ActionParam objects. These objects have a Name and Value property and map to the defined parameters for this action. The parameters for this
-action are as shown below. For parameters shown as output, make sure you generate the code to handle this and place a new item in the Params array with the Name and Value set to the output parameter name and value respectively. If
-the parameter has a type of input/output, you will receive the value as an input, and you can update it if the program you create needs to pass back a different value.
-    ${
-        JSON.stringify(this.Params)
-    }
-</AVAILABLE_PARAMETERS>
-
-<AVAILABLE_LIBRARIES>
-The following libraries are available for use in your code. THEY ARE ALREADY IMPORTED. **DO NOT IMPORT THEM IN YOUR CODE**
-Use the code examples and reference information shown below, only use properties and methods shown in the documentation/examples.
-IMPORTANT: DO NOT GENERATE IMPORT STATEMENTS FOR THESE LIBRARIES, THEY ARE ALREADY IMPORTED FOR YOU!
-${DocumentationEngine.Instance.Libraries.map((library: LibraryEntityExtended) => {
-    return library.Items.map((item: LibraryItemEntityExtended) => {
-      return `
-      {
-          "LibraryName": ${item.Name},
-          "Content": ${item.HTMLContent}
-      }
-      `
-    });
-  })}
-</AVAILABLE_LIBRARIES>
-
-<REFERENCE_TYPES>
-    /**
-     * Class that has the result of the individual action execution and used by the engine or other caller
-     */
-    export class ActionResultSimple {
-        /**
-            * Indicates if the action was successful or not.
-            */
-        public Success: boolean;
-
-        /**
-            * A string that indicates the strucutred output/results of the action
-            */
-        public ResultCode: string;
-
-        /**
-            * Optional, additional information about the result of the action
-            */
-        public Message?: string;
-
-        /**
-            * Some actions return output parameters. If the action that was run has outputs, they will be provided here.
-            */
-        public Outputs?: ActionParam[];
-    }
-    /**
-     * Generic class for holding parameters for an action for both inputs and outputs
-     */
-    export class ActionParam {
-        /**
-        * The name of the parameter
-        */
-        public Name: string;
-        /**
-        * The value of the parameter. This can be any type of object.
-        */
-        public Value: any;
-    }
-    /**
-     * Class that holds the parameters for an action to be run. This is passed to the Run method of an action.
-     */
-    export class RunActionParams {
-        public Action: ActionEntity;
-        public ContextUser: UserInfo;
-        /**
-        * Optional, a list of filters that should be run before the action is executed.
-        */
-        public Filters: ActionFilterEntity[];
-        /**
-        * Optional, the input and output parameters as defined in the metadata for the action.
-        */
-        public Params: ActionParam[];
-    }
-</REFERENCE_TYPES>
-
-<ENTITIES>
-Entities in MemberJunction are storage objects and roughly map to database tables. Here are the entities in the system to give you additional context to understand the request:
-${
-    JSON.stringify(Metadata.Provider.Entities.map(e => {
-        // for each entity, get the name, description and base view
-        return {
-            Entity: e.Name,
-            SchemaName: e.SchemaName,
-            Description: e.Description,
-            BaseView: e.BaseView
         }
-    }))
-}
-</ENTITIES>
-The next message, which will be a user message in the conversation, will contain the sys admin's requested behavior for this entity.
 
-<CRITICAL>
-I am a bot and can only understand FULLY FORMED JSON responses that can be parsed with JSON.parse().
-        `;
+        return data;
     }
 
-    public GenerateRunViewParamsInfo(): string {
-        return `/**
- * Parameters for running either a stored or dynamic view.
- * A stored view is a view that is saved in the database and can be run either by ID or Name.
- * A dynamic view is one that is not stored in the database and you provide parameters to return data as
- * desired programatically.
- */
-export type RunViewParams = {
     /**
-     * optional - ID of the UserView record to run, if provided, ViewName is ignored
+     * Loads the parent action entity if this is a child action
      */
-    ViewID?: number
-    /**
-     * optional - Name of the UserView record to run, if you are using this, make sure to use a naming convention
-     * so that your view names are unique. For example use a prefix like __Entity_View_ etc so that you're
-     * likely to have a single result. If more than one view is available that matches a provided view name an
-     * exception will be thrown.
-     */
-    ViewName?: string
-    /**
-     * optional - this is the loaded instance of the BaseEntity (UserViewEntityComplete or a subclass of it).
-     * This is the preferred parameter to use IF you already have a view entity object loaded up in your code
-     * becuase by passing this in, the RunView() method doesn't have to lookup all the metadata for the view and it is faster.
-     * If you provide ViewEntity, ViewID/ViewName are ignored.
-     */
-    ViewEntity?: BaseEntity
-    /**
-     * optional - this is only used if ViewID/ViewName/ViewEntity are not provided, it is used for
-     * Dynamic Views in combination with the optional ExtraFilter
-     */
-    EntityName?: string
-    /**
-     * An optional SQL WHERE clause that you can add to the existing filters on a stored view. For dynamic views, you can either
-     * run a view without a filter (if the entity definition allows it with AllowAllRowsAPI=1) or filter with any valid SQL WHERE clause.
-     */
-    ExtraFilter?: string
-    /**
-     * An optional SQL ORDER BY clause that you can use for dynamic views, as well as to OVERRIDE the stored view's sorting order.
-     */
-    OrderBy?: string
-    /**
-     * An optional array of field names that you want returned. The RunView() function will always return ID so you don't need to ask for that. If you leave this null then
-     * for a dynamic view all fields are returned, and for stored views, the fields stored in it view configuration are returned.
-      */
-    Fields?: string[]
-    /**
-     * optional - string that represents a user "search" - typically from a text search option in a UI somewhere. This field is then used in the view filtering to search whichever fields are configured to be included in search in the Entity Fields definition.
-     * Search String is combined with the stored view filters as well as ExtraFilter with an AND.
-     */
-    UserSearchString?: string
-    /**
-     * optional - if provided, records that were returned in the specified UserViewRunID will NOT be allowed in the result set.
-     * This is useful if you want to run a particular view over time and exclude a specific prior run's resulting data set. If you
-     * want to exclude ALL data returned from ALL prior runs, use the ExcludeDataFromAllPriorViewRuns property instead.
-     */
-    ExcludeUserViewRunID?: number
-    /**
-     * optional - if set to true, the resulting data will filter out ANY records that were ever returned by this view, when the SaveViewResults property was set to true.
-     * This is useful if you want to run a particular view over time and make sure the results returned each time are new to the view.
-     */
-    ExcludeDataFromAllPriorViewRuns?: boolean
-    /**
-     * optional - if you are providing the optional ExcludeUserViewRunID property, you can also optionally provide
-     * this filter which will negate the specific list of record IDs that are excluded by the ExcludeUserViewRunID property.
-     * This can be useful if you want to ensure a certain class of data is always allowed into your view and not filtered out
-     * by a prior view run.
-     *
-     */
-    OverrideExcludeFilter?: string
-    /**
-     * optional - if set to true, the LIST OF ID values from the view run will be stored in the User View Runs entity and the
-     * newly created UserViewRun.ID value will be returned in the RunViewResult that the RunView() function sends back to ya.
-     */
-    SaveViewResults?: boolean
-    /**
-     * optional - if set to true, if there IS any UserViewMaxRows property set for the entity in question, it will be IGNORED. This is useful in scenarios where you
-     * want to programmatically run a view and get ALL the data back, regardless of the MaxRows setting on the entity.
-     */
-    IgnoreMaxRows?: boolean
+    protected async LoadParentAction(): Promise<ActionEntityExtended | null> {
+        if (!this.ParentID) return null;
 
-    /**
-     * optional - if provided, and if IgnoreMaxRows = false, this value will be used to constrain the total # of rows returned by the view. If this is not provided, either the default settings at the entity-level will be used, or if the entity has no UserViewMaxRows setting, all rows will be returned that match any filter, if provided.
-     */
-    MaxRows?: number
-    /**
-     * optional - if set to true, the view run will ALWAYS be logged to the Audit Log, regardless of the entity's property settings for logging view runs.
-     */
-    ForceAuditLog?: boolean
-    /**
-     * optional - if provided and either ForceAuditLog is set, or the entity's property settings for logging view runs are set to true, this will be used as the Audit Log Description.
-     */
-    AuditLogDescription?: string
-
-    /**
-     * Result Type is: 'simple', 'entity_object', or 'count_only' and defaults to 'simple'. If 'entity_object' is specified, the Results[] array will contain
-     * BaseEntity-derived objects instead of simple objects. This is useful if you want to work with the data in a more strongly typed manner and/or
-     * if you plan to do any update/delete operations on the data after it is returned. The 'count_only' option will return no rows, but the TotalRowCount property of the RunViewResult object will be populated.
-     */
-    ResultType?: 'simple' | 'entity_object' | 'count_only';
-}
-        `;
+        const md = new Metadata();
+        const parent = await md.GetEntityObject<ActionEntityExtended>('Actions', this.ContextCurrentUser);
+        if (await parent.Load(this.ParentID)) {
+            return parent;
+        }
+        return null;
     }
+
+    /**
+     * Processes generated parameters and saves them to the database
+     */
+    protected async ProcessGeneratedParameters(parameters: Array<any>): Promise<void> {
+        const md = new Metadata();
+
+        try {
+            // First, get existing parameters
+            const rv = new RunView();
+            const existingParams = await rv.RunView<ActionParamEntity>({
+                EntityName: 'Action Params',
+                ExtraFilter: `ActionID='${this.ID}'`,
+                ResultType: 'entity_object'
+            }, this.ContextCurrentUser);
+
+            if (!existingParams.Success) {
+                throw new Error(`Failed to load existing parameters: ${existingParams.ErrorMessage}`);
+            }
+
+            const existingParamsList = existingParams.Results || [];
+            const generatedParamNames = parameters.map(p => p.Name.toLowerCase());
+
+            // Find parameters to add, update, or remove
+            const paramsToAdd = parameters.filter(p => 
+                !existingParamsList.some(ep => ep.Name.toLowerCase() === p.Name.toLowerCase())
+            );
+            
+            const paramsToUpdate = existingParamsList.filter(ep =>
+                parameters.some(p => p.Name.toLowerCase() === ep.Name.toLowerCase())
+            );
+            
+            const paramsToRemove = existingParamsList.filter(ep =>
+                !generatedParamNames.includes(ep.Name.toLowerCase())
+            );
+
+            // Add new parameters
+            for (const param of paramsToAdd) {
+                const newParam = await md.GetEntityObject<ActionParamEntity>('Action Params', this.ContextCurrentUser);
+                newParam.ActionID = this.ID;
+                newParam.Name = param.Name;
+                const t = param.Type;
+                if (t === 'Input' || t === 'Output' || t === 'Both') {
+                    newParam.Type = t;
+                } else {
+                    newParam.Type = 'Input'; // Default to Input if type is not recognized and emit a warning
+                    console.warn(`Action Generator: Unrecognized parameter type "${t}" for parameter "${param.Name}". Defaulting to "Input".`);
+                }
+                newParam.ValueType = param.ValueType;
+                newParam.IsArray = param.IsArray;
+                newParam.IsRequired = param.IsRequired;
+                newParam.DefaultValue = param.DefaultValue;
+                newParam.Description = param.Description;
+                await newParam.Save();
+            }
+
+            // Update existing parameters if properties changed
+            for (const existingParam of paramsToUpdate) {
+                const generatedParam = parameters.find(p => p.Name.toLowerCase() === existingParam.Name.toLowerCase());
+                if (generatedParam) {
+                    let hasChanges = false;
+                    
+                    // Check each property for changes
+                    if (existingParam.Type !== generatedParam.Type) {
+                        existingParam.Type = generatedParam.Type;
+                        hasChanges = true;
+                    }
+                    if (existingParam.ValueType !== generatedParam.ValueType) {
+                        existingParam.ValueType = generatedParam.ValueType;
+                        hasChanges = true;
+                    }
+                    if (existingParam.IsArray !== generatedParam.IsArray) {
+                        existingParam.IsArray = generatedParam.IsArray;
+                        hasChanges = true;
+                    }
+                    if (existingParam.IsRequired !== generatedParam.IsRequired) {
+                        existingParam.IsRequired = generatedParam.IsRequired;
+                        hasChanges = true;
+                    }
+                    if (existingParam.DefaultValue !== generatedParam.DefaultValue) {
+                        existingParam.DefaultValue = generatedParam.DefaultValue;
+                        hasChanges = true;
+                    }
+                    if (existingParam.Description !== generatedParam.Description) {
+                        existingParam.Description = generatedParam.Description;
+                        hasChanges = true;
+                    }
+                    
+                    if (hasChanges) {
+                        await existingParam.Save();
+                    }
+                }
+            }
+
+            // Remove parameters that are no longer in the generated list
+            for (const paramToRemove of paramsToRemove) {
+                await paramToRemove.Delete();
+            }
+
+        } catch (e) {
+            LogError('Failed to save generated parameters:', e);
+            throw e; // Re-throw since we're in a transaction
+        }
+    }
+
+    /**
+     * Processes generated result codes and saves them to the database
+     */
+    protected async ProcessGeneratedResultCodes(resultCodes: Array<{ResultCode: string; Description: string; IsSuccess: boolean}>): Promise<void> {
+        const md = new Metadata();
+
+        try {
+            // First, get existing result codes
+            const rv = new RunView();
+            const existingCodes = await rv.RunView<ActionResultCodeEntity>({
+                EntityName: 'Action Result Codes',
+                ExtraFilter: `ActionID='${this.ID}'`,
+                ResultType: 'entity_object'
+            }, this.ContextCurrentUser);
+
+            if (!existingCodes.Success) {
+                throw new Error(`Failed to load existing result codes: ${existingCodes.ErrorMessage}`);
+            }
+
+            const existingCodesList = existingCodes.Results || [];
+            const generatedCodeNames = resultCodes.map(rc => rc.ResultCode.toLowerCase());
+
+            // Find result codes to add, update, or remove
+            const codesToAdd = resultCodes.filter(rc => 
+                !existingCodesList.some(ec => ec.ResultCode.toLowerCase() === rc.ResultCode.toLowerCase())
+            );
+            
+            const codesToUpdate = existingCodesList.filter(ec =>
+                resultCodes.some(rc => rc.ResultCode.toLowerCase() === ec.ResultCode.toLowerCase())
+            );
+            
+            const codesToRemove = existingCodesList.filter(ec =>
+                !generatedCodeNames.includes(ec.ResultCode.toLowerCase())
+            );
+
+            // Add new result codes
+            for (const resultCode of codesToAdd) {
+                const newCode = await md.GetEntityObject<ActionResultCodeEntity>('Action Result Codes', this.ContextCurrentUser);
+                newCode.ActionID = this.ID;
+                newCode.ResultCode = resultCode.ResultCode;
+                newCode.Description = resultCode.Description;
+                newCode.IsSuccess = resultCode.IsSuccess;
+                await newCode.Save();
+            }
+
+            // Update existing result codes if properties changed
+            for (const existingCode of codesToUpdate) {
+                const generatedCode = resultCodes.find(rc => rc.ResultCode.toLowerCase() === existingCode.ResultCode.toLowerCase());
+                if (generatedCode) {
+                    let hasChanges = false;
+                    
+                    // Check each property for changes
+                    if (existingCode.Description !== generatedCode.Description) {
+                        existingCode.Description = generatedCode.Description;
+                        hasChanges = true;
+                    }
+                    if (existingCode.IsSuccess !== generatedCode.IsSuccess) {
+                        existingCode.IsSuccess = generatedCode.IsSuccess;
+                        hasChanges = true;
+                    }
+                    
+                    if (hasChanges) {
+                        await existingCode.Save();
+                    }
+                }
+            }
+
+            // Remove result codes that are no longer in the generated list
+            for (const codeToRemove of codesToRemove) {
+                await codeToRemove.Delete();
+            }
+
+        } catch (e) {
+            LogError('Failed to save generated result codes:', e);
+            throw e; // Re-throw since we're in a transaction
+        }
+    }
+
+    /**
+     * Validates the generated code
+     */
+    protected async ValidateGeneratedCode(generatedCode: GeneratedCodeExtended, attemptsRemaining: number): Promise<GeneratedCodeExtended> {
+        // For now, return the code as-is
+        // TODO: Implement validation logic using a separate prompt
+        return generatedCode;
+    }
+
+    /**
+     * Generates the libraries context for the prompt
+     */
+    protected GenerateLibrariesContext(): string {
+        return DocumentationEngine.Instance.Libraries.map((library: LibraryEntityExtended) => {
+            return library.Items.map((item: LibraryItemEntityExtended) => {
+                return JSON.stringify({
+                    LibraryName: library.Name,
+                    ItemName: item.Name,
+                    Content: item.HTMLContent
+                });
+            }).join('\n');
+        }).join('\n');
+    }
+
+
 }
 
 export function LoadActionEntityServer() {

@@ -1,8 +1,8 @@
-<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
-    <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer (ResizeContainer)="InvokeManualResize()">
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
                     
                     <mj-tab Name="Details">
                         Details
@@ -16,6 +16,18 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
+                    <mj-tab Name="Template Params" [Visible]="record.IsSaved"> 
+                        Template Params
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Template Params','TemplateContentID')"  
+                            [NewRecordValues]="NewRecordValues('Template Params')"
+                            [AllowLoad]="IsCurrentTab('Template Params')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>

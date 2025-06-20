@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0",
+  "filePattern": "*.json",
+  "userRoleValidation": {
+    "enabled": true,
+    "allowedRoles": [
+      "Administrator",
+      "Developer",
+      "Content Manager"
+    ],
+    "allowUsersWithoutRoles": false
+  },
+  "push": {
+    "validateBeforePush": true
+  }
+}

@@ -1,10 +1,7 @@
- 
-
-.tab-body {
+ .tab-body {
     border-top: 0;
-    background-color: #F5F6FA;    
     width: 100%;
-    height: 200px;
     display: block;
-    overflow: auto;
+    overflow-y: auto;
+    height: calc(100vh - 123px);
   } 

@@ -1,0 +1,864 @@
+<!-- Enhanced Style Guide with Kendo UI Components and Font Awesome -->
+<div class="mj-page-container">
+  <!-- Page Header with Mixed Components -->
+  <div class="mj-content-container">
+    <div class="mj-header">
+      <div class="mj-header-title">
+        <i class="fas fa-paint-brush mj-header-icon"></i>
+        <div>
+          <h1>Kendo UI + Font Awesome Style Guide</h1>
+          <div class="mj-header-subtitle">
+            <i class="fas fa-palette"></i>
+            Modern components with custom styling
+          </div>
+        </div>
+      </div>
+      <div class="mj-header-actions">
+        <!-- Kendo Button with Font Awesome Icon -->
+        <kendo-button fillMode="outline" rounded="medium" themeColor="base">
+          <span class="button-content">
+            <i class="fas fa-download"></i>
+            Export
+          </span>
+        </kendo-button>
+        <kendo-button themeColor="primary" rounded="medium">
+          <span class="button-content">
+            <i class="fas fa-save"></i>
+            Save Changes
+          </span>
+        </kendo-button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Typography Section -->
+  <div class="mj-content-container">
+    <h2>Typography Examples</h2>
+    <div class="typography-demo">
+      <h1>Heading 1 - Main page titles</h1>
+      <h2>Heading 2 - Section headers</h2>
+      <h3>Heading 3 - Subsection titles</h3>
+      <h4>Heading 4 - Component titles</h4>
+      <p>Body text - Regular paragraph content with good readability and proper line height for easy reading.</p>
+      <p class="text-muted">Muted text for secondary information</p>
+    </div>
+  </div>
+
+  <!-- Enhanced Button Examples -->
+  <div class="mj-content-container">
+    <h2>Button System Comparison</h2>
+    
+    <div class="mb-3">
+      <h4>Kendo Buttons with Font Awesome Icons</h4>
+      <div class="button-group">
+        <kendo-button themeColor="primary" rounded="medium" size="large">
+          <span class="button-content">
+            <i class="fas fa-check"></i>
+            Primary Action
+          </span>
+        </kendo-button>
+        <kendo-button themeColor="info" rounded="medium">
+          <span class="button-content">
+            <i class="fas fa-info-circle"></i>
+            Info Button
+          </span>
+        </kendo-button>
+        <kendo-button themeColor="success" rounded="medium">
+          <span class="button-content">
+            <i class="fas fa-check-circle"></i>
+            Success
+          </span>
+        </kendo-button>
+        <kendo-button themeColor="warning" rounded="medium">
+          <span class="button-content">
+            <i class="fas fa-exclamation-triangle"></i>
+            Warning
+          </span>
+        </kendo-button>
+        <kendo-button themeColor="error" rounded="medium">
+          <span class="button-content">
+            <i class="fas fa-times-circle"></i>
+            Error
+          </span>
+        </kendo-button>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <h4>Icon-Only Kendo Buttons</h4>
+      <div class="button-group">
+        <kendo-button fillMode="flat" rounded="full" size="large" title="Edit">
+          <i class="fas fa-edit"></i>
+        </kendo-button>
+        <kendo-button fillMode="flat" rounded="full" size="large" title="Delete">
+          <i class="fas fa-trash"></i>
+        </kendo-button>
+        <kendo-button fillMode="flat" rounded="full" size="large" title="Settings">
+          <i class="fas fa-cog"></i>
+        </kendo-button>
+        <kendo-button fillMode="flat" rounded="full" size="large" title="Search">
+          <i class="fas fa-search"></i>
+        </kendo-button>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <h4>Custom MJ Buttons (For Comparison)</h4>
+      <div class="button-group">
+        <button class="mj-btn mj-btn-primary">
+          <i class="fas fa-rocket"></i>
+          Launch
+        </button>
+        <button class="mj-btn mj-btn-secondary">
+          <i class="fas fa-edit"></i>
+          Edit
+        </button>
+        <button class="mj-btn mj-btn-ghost">
+          <i class="fas fa-times"></i>
+          Cancel
+        </button>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <h4>Kendo Button Group</h4>
+      <kendo-buttongroup>
+        <button kendoButton [toggleable]="true" [selected]="true">
+          <i class="fas fa-bold"></i>
+        </button>
+        <button kendoButton [toggleable]="true">
+          <i class="fas fa-italic"></i>
+        </button>
+        <button kendoButton [toggleable]="true">
+          <i class="fas fa-underline"></i>
+        </button>
+      </kendo-buttongroup>
+    </div>
+  </div>
+
+  <!-- Enhanced Card System with Icon Cards -->
+  <div class="mj-content-container">
+    <h2>Card Components</h2>
+    
+    <h4>Icon Cards with Hover Effects (Kendo Cards)</h4>
+    <div class="mj-grid mj-grid-4">
+      <kendo-card class="mj-kendo-icon-card" *ngFor="let item of sampleItems" (click)="handleCardClick(item)">
+        <kendo-card-body>
+          <i [class]="'fas ' + item.icon + ' mj-card-icon-large'"></i>
+          <h3>{{item.name}}</h3>
+          <p>{{item.description}}</p>
+          <kendo-chip 
+            [label]="item.color.toUpperCase()" 
+            rounded="full"
+            [themeColor]="item.color"
+            size="small"
+            class="mt-2">
+          </kendo-chip>
+          <div class="mj-card-actions">
+            <button class="mj-btn mj-btn-icon-only mj-btn-sm" (click)="$event.stopPropagation(); handleButtonClick('edit', item)">
+              <i class="fas fa-edit"></i>
+            </button>
+            <button class="mj-btn mj-btn-icon-only mj-btn-sm" (click)="$event.stopPropagation(); handleButtonClick('delete', item)">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        </kendo-card-body>
+      </kendo-card>
+    </div>
+
+    <div class="mt-4">
+      <h4>Kendo Cards with Custom Styling</h4>
+      <div class="mj-grid mj-grid-3">
+        <kendo-card class="custom-kendo-card">
+          <kendo-card-header>
+            <h4>
+              <i class="fas fa-chart-bar mr-2"></i>
+              Analytics Overview
+            </h4>
+          </kendo-card-header>
+          <kendo-card-body>
+            <p>View real-time analytics and performance metrics for your application.</p>
+            <kendo-chip-list>
+              <kendo-chip label="Real-time" icon="clock" themeColor="success"></kendo-chip>
+              <kendo-chip label="Interactive" icon="filter" themeColor="info"></kendo-chip>
+            </kendo-chip-list>
+          </kendo-card-body>
+          <kendo-card-actions orientation="horizontal" layout="end">
+            <kendo-button fillMode="flat">Details</kendo-button>
+            <kendo-button themeColor="primary">View Dashboard</kendo-button>
+          </kendo-card-actions>
+        </kendo-card>
+
+        <kendo-card class="custom-kendo-card">
+          <kendo-card-body>
+            <div class="text-center">
+              <kendo-avatar [imageSrc]="'assets/avatar-placeholder.jpg'" shape="circle" size="large"></kendo-avatar>
+              <h4 class="mt-3">User Profile</h4>
+              <p>Manage your account settings and preferences</p>
+              <kendo-badge-container>
+                <kendo-button themeColor="primary" rounded="medium">
+                  <span class="button-content">
+                    <i class="fas fa-bell"></i>
+                    Notifications
+                  </span>
+                </kendo-button>
+                <kendo-badge rounded="full" themeColor="error" position="edge" [align]="badgeAlignTopEnd">{{notificationCount}}</kendo-badge>
+              </kendo-badge-container>
+            </div>
+          </kendo-card-body>
+        </kendo-card>
+
+        <kendo-card class="custom-kendo-card">
+          <kendo-card-body>
+            <div class="mj-empty-state">
+              <i class="fas fa-inbox mj-empty-icon"></i>
+              <h3>No Data Available</h3>
+              <p>Start by importing your data</p>
+              <kendo-button themeColor="primary" rounded="medium">
+                <span class="button-content">
+                  <i class="fas fa-upload"></i>
+                  Import Data
+                </span>
+              </kendo-button>
+            </div>
+          </kendo-card-body>
+        </kendo-card>
+      </div>
+    </div>
+  </div>
+
+  <!-- Enhanced Form Elements -->
+  <div class="mj-content-container">
+    <h2>Form Elements - Kendo vs Custom</h2>
+    
+    <div class="mj-grid mj-grid-2">
+      <div>
+        <h4>Kendo Form Components</h4>
+        
+        <kendo-formfield orientation="vertical" class="mb-3">
+          <kendo-label text="Full Name" [for]="fullNameInput"></kendo-label>
+          <kendo-textbox 
+            #fullNameInput
+            placeholder="Enter your full name"
+            [clearButton]="true"
+            [formControl]="fullNameControl"
+            rounded="medium">
+          </kendo-textbox>
+          <div class="k-form-error" *ngIf="fullNameControl.touched && fullNameControl.errors?.['required']">
+            Full name is required
+          </div>
+        </kendo-formfield>
+
+        <kendo-formfield orientation="vertical" class="mb-3">
+          <kendo-label text="Department" [for]="deptDropdown"></kendo-label>
+          <kendo-dropdownlist 
+            #deptDropdown
+            [data]="departments"
+            textField="name"
+            valueField="id"
+            [(ngModel)]="selectedDepartment"
+            rounded="medium">
+            <ng-template kendoDropDownListItemTemplate let-dataItem>
+              <span class="dropdown-item-content">
+                <i [class]="dataItem.icon" class="mr-2"></i>
+                {{ dataItem.name }}
+              </span>
+            </ng-template>
+          </kendo-dropdownlist>
+        </kendo-formfield>
+
+        <kendo-formfield orientation="vertical" class="mb-3">
+          <kendo-label text="Technologies"></kendo-label>
+          <kendo-multiselect 
+            [data]="technologies"
+            [(ngModel)]="selectedTechnologies"
+            placeholder="Select technologies..."
+            rounded="medium">
+          </kendo-multiselect>
+        </kendo-formfield>
+
+        <kendo-formfield orientation="vertical" class="mb-3">
+          <kendo-label text="Project Date"></kendo-label>
+          <kendo-datepicker 
+            [(value)]="dateValue"
+            format="dd/MM/yyyy"
+            rounded="medium">
+          </kendo-datepicker>
+        </kendo-formfield>
+      </div>
+      
+      <div>
+        <h4>Custom Form Elements</h4>
+        
+        <div class="form-group">
+          <label class="form-label">
+            <i class="fas fa-search mr-1"></i>
+            Search Field
+          </label>
+          <div class="mj-search">
+            <i class="fas fa-search mj-search-icon"></i>
+            <input type="text" class="mj-search-input" placeholder="Search items..." [(ngModel)]="searchText">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">
+            <i class="fas fa-comment mr-1"></i>
+            Comments
+          </label>
+          <kendo-textarea 
+            [formControl]="commentsControl"
+            placeholder="Enter your comments..."
+            [rows]="4"
+            rounded="medium">
+          </kendo-textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Options</label>
+          <div class="checkbox-group">
+            <label class="checkbox-label">
+              <input type="checkbox" kendoCheckBox />
+              <span class="ml-2">Enable notifications</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" kendoCheckBox checked />
+              <span class="ml-2">Subscribe to newsletter</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Theme Preference</label>
+          <div class="radio-group">
+            <label class="radio-label" *ngFor="let option of themeOptions">
+              <input type="radio" name="theme" [value]="option" [(ngModel)]="selectedTheme" kendoRadioButton />
+              <span class="ml-2">{{option}}</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Enhanced Kendo Grid with Font Awesome -->
+  <div class="mj-content-container">
+    <h2>Enhanced Kendo Grid</h2>
+    
+    <kendo-grid 
+      [data]="gridData" 
+      [height]="400" 
+      [sortable]="true"
+      [filterable]="true"
+      [groupable]="false"
+      [reorderable]="true"
+      [resizable]="true"
+      [selectable]="{ checkboxOnly: true, mode: 'multiple' }"
+      class="custom-grid">
+      
+      <kendo-grid-checkbox-column [width]="45" [headerClass]="'text-center'" [class]="'text-center'"></kendo-grid-checkbox-column>
+      
+      <kendo-grid-column field="name" title="Name" [width]="200">
+        <ng-template kendoGridCellTemplate let-dataItem>
+          <div class="user-cell">
+            <kendo-avatar 
+              [initials]="getInitials(dataItem.name)" 
+              themeColor="info"
+              shape="circle"
+              size="small">
+            </kendo-avatar>
+            <div class="user-info">
+              <div class="user-name">{{ dataItem.name }}</div>
+              <div class="user-role">{{ dataItem.role }}</div>
+            </div>
+          </div>
+        </ng-template>
+      </kendo-grid-column>
+
+      <kendo-grid-column field="email" title="Email" [width]="220">
+        <ng-template kendoGridCellTemplate let-dataItem>
+          <a href="mailto:{{dataItem.email}}" class="email-link">
+            <i class="fas fa-envelope mr-1"></i>
+            {{ dataItem.email }}
+          </a>
+        </ng-template>
+      </kendo-grid-column>
+      
+      <kendo-grid-column field="department" title="Department" [width]="150">
+        <ng-template kendoGridCellTemplate let-dataItem>
+          <kendo-chip 
+            [label]="dataItem.department"
+            rounded="medium"
+            fillMode="outline">
+          </kendo-chip>
+        </ng-template>
+      </kendo-grid-column>
+      
+      <kendo-grid-column field="status" title="Status" [width]="120">
+        <ng-template kendoGridCellTemplate let-dataItem>
+          <span class="status-cell">
+            <i [class]="getStatusIcon(dataItem.status) + ' mr-1'"></i>
+            <kendo-badge 
+              [themeColor]="getStatusThemeColor(dataItem.status)"
+              rounded="full"
+              size="small">
+              {{ dataItem.status }}
+            </kendo-badge>
+          </span>
+        </ng-template>
+      </kendo-grid-column>
+
+      <kendo-grid-column title="Actions" [width]="120" [sortable]="false" [filterable]="false">
+        <ng-template kendoGridCellTemplate let-dataItem>
+          <div class="action-buttons">
+            <kendo-button 
+              fillMode="flat"
+              rounded="full"
+              size="small"
+              themeColor="info"
+              title="Edit"
+              (click)="editItem(dataItem)">
+              <i class="fas fa-edit"></i>
+            </kendo-button>
+            <kendo-button 
+              fillMode="flat"
+              rounded="full"
+              size="small"
+              themeColor="error"
+              title="Delete"
+              (click)="deleteItem(dataItem)">
+              <i class="fas fa-trash"></i>
+            </kendo-button>
+          </div>
+        </ng-template>
+      </kendo-grid-column>
+    </kendo-grid>
+  </div>
+
+  <!-- Badges and Chips -->
+  <div class="mj-content-container">
+    <h2>Badges, Chips & Status Indicators</h2>
+    
+    <div class="mb-3">
+      <h4>Custom Badges with Font Awesome</h4>
+      <div class="badge-group">
+        <span class="badge badge-success">
+          <i class="fas fa-check mr-1"></i>
+          Active
+        </span>
+        <span class="badge badge-danger">
+          <i class="fas fa-times mr-1"></i>
+          Inactive
+        </span>
+        <span class="badge badge-warning">
+          <i class="fas fa-clock mr-1"></i>
+          Pending
+        </span>
+        <span class="badge badge-info">
+          <i class="fas fa-info-circle mr-1"></i>
+          Info
+        </span>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <h4>Kendo Chips with Icons</h4>
+      <kendo-chip-list>
+        <kendo-chip label="Approved" icon="check" themeColor="success" [removable]="true"></kendo-chip>
+        <kendo-chip label="In Progress" icon="clock" themeColor="warning" [removable]="true"></kendo-chip>
+        <kendo-chip label="Rejected" icon="x" themeColor="error" [removable]="true"></kendo-chip>
+        <kendo-chip label="Under Review" icon="eye" themeColor="info" [removable]="true"></kendo-chip>
+      </kendo-chip-list>
+    </div>
+
+    <div class="mb-3">
+      <h4>Notification Badges</h4>
+      <div class="badge-group">
+        <kendo-badge-container>
+          <kendo-button themeColor="primary" rounded="medium">
+            <i class="fas fa-envelope mr-2"></i>
+            Messages
+          </kendo-button>
+          <kendo-badge themeColor="error" position="edge" [align]="badgeAlignTopEnd">12</kendo-badge>
+        </kendo-badge-container>
+
+        <kendo-badge-container>
+          <kendo-button fillMode="flat" rounded="full" size="large">
+            <i class="fas fa-bell"></i>
+          </kendo-button>
+          <kendo-badge themeColor="warning" position="edge" [align]="badgeAlignTopEnd" rounded="full">3</kendo-badge>
+        </kendo-badge-container>
+
+        <kendo-badge-container>
+          <kendo-avatar initials="JD" themeColor="info"></kendo-avatar>
+          <kendo-badge themeColor="success" position="edge" [align]="badgeAlignBottomEnd" size="small">
+            <i class="fas fa-check"></i>
+          </kendo-badge>
+        </kendo-badge-container>
+      </div>
+    </div>
+  </div>
+
+  <!-- Navigation Components -->
+  <div class="mj-content-container">
+    <h2>Navigation & Layout Components</h2>
+    
+    <div class="mb-3">
+      <h4>Enhanced Toolbar with Search</h4>
+      <div class="mj-toolbar">
+        <h3 class="mj-toolbar-title">
+          <i class="fas fa-users mr-2"></i>
+          User Management
+        </h3>
+        <div class="mj-toolbar-actions">
+          <kendo-textbox 
+            placeholder="Search users..."
+            [clearButton]="true"
+            [(ngModel)]="searchText"
+            rounded="medium"
+            style="width: 300px;">
+            <ng-template kendoTextBoxPrefixTemplate>
+              <i class="fas fa-search search-prefix-icon"></i>
+            </ng-template>
+          </kendo-textbox>
+          <kendo-button fillMode="outline" rounded="medium">
+            <span class="button-content">
+              <i class="fas fa-filter"></i>
+              Filter
+            </span>
+          </kendo-button>
+          <kendo-button themeColor="primary" rounded="medium">
+            <span class="button-content">
+              <i class="fas fa-user-plus"></i>
+              Add User
+            </span>
+          </kendo-button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <h4>Breadcrumb Navigation</h4>
+      <nav class="mj-breadcrumb">
+        <span class="mj-breadcrumb-item">
+          <i class="fas fa-home mr-1"></i>
+          Home
+        </span>
+        <i class="fas fa-chevron-right mj-breadcrumb-separator"></i>
+        <span class="mj-breadcrumb-item">
+          <i class="fas fa-th mr-1"></i>
+          Components
+        </span>
+        <i class="fas fa-chevron-right mj-breadcrumb-separator"></i>
+        <span class="mj-breadcrumb-item mj-breadcrumb-current">
+          <i class="fas fa-paint-brush mr-1"></i>
+          Style Guide
+        </span>
+      </nav>
+    </div>
+
+    <div>
+      <h4>Kendo TabStrip with Font Awesome</h4>
+      <kendo-tabstrip>
+        <kendo-tabstrip-tab title="Overview" [selected]="true">
+          <ng-template kendoTabTitle>
+            <span class="tab-title">
+              <i class="fas fa-chart-pie mr-2"></i>
+              Overview
+            </span>
+          </ng-template>
+          <ng-template kendoTabContent>
+            <div class="tab-content-wrapper">
+              <h5>Dashboard Overview</h5>
+              <p>View your application's key metrics and performance indicators.</p>
+              <kendo-button themeColor="primary">View Details</kendo-button>
+            </div>
+          </ng-template>
+        </kendo-tabstrip-tab>
+        
+        <kendo-tabstrip-tab title="Settings">
+          <ng-template kendoTabTitle>
+            <span class="tab-title">
+              <i class="fas fa-cog mr-2"></i>
+              Settings
+            </span>
+          </ng-template>
+          <ng-template kendoTabContent>
+            <div class="tab-content-wrapper">
+              <h5>Application Settings</h5>
+              <p>Configure your application preferences and options.</p>
+            </div>
+          </ng-template>
+        </kendo-tabstrip-tab>
+        
+        <kendo-tabstrip-tab title="Reports">
+          <ng-template kendoTabTitle>
+            <span class="tab-title">
+              <i class="fas fa-file-alt mr-2"></i>
+              Reports
+            </span>
+          </ng-template>
+          <ng-template kendoTabContent>
+            <div class="tab-content-wrapper">
+              <h5>Generate Reports</h5>
+              <p>Create and download various reports from your data.</p>
+            </div>
+          </ng-template>
+        </kendo-tabstrip-tab>
+      </kendo-tabstrip>
+    </div>
+  </div>
+
+  <!-- Progress and Loading States -->
+  <div class="mj-content-container">
+    <h2>Progress & Loading Indicators</h2>
+    
+    <div class="mb-3">
+      <h4>Kendo Progress Bars</h4>
+      <kendo-progressbar 
+        [value]="progressValue" 
+        [max]="100"
+        type="percent"
+        [animation]="true"
+        class="mb-2">
+      </kendo-progressbar>
+      
+      <kendo-progressbar 
+        [value]="progressValue" 
+        [max]="100"
+        type="value"
+        class="mb-2 progress-success">
+      </kendo-progressbar>
+      
+      <kendo-progressbar 
+        [indeterminate]="true"
+        [animation]="true">
+      </kendo-progressbar>
+      
+      <kendo-button themeColor="primary" (click)="loadData()" class="mt-2">
+        <span class="button-content">
+          <i class="fas fa-sync"></i>
+          Simulate Loading
+        </span>
+      </kendo-button>
+    </div>
+
+    <div class="mb-3">
+      <h4>Loading States</h4>
+      <div class="mj-grid mj-grid-4">
+        <kendo-card>
+          <kendo-card-body>
+            <div class="text-center">
+              <kendo-loader type="converging-spinner" themeColor="primary" size="medium"></kendo-loader>
+              <p class="mt-2 mb-0">Converging</p>
+            </div>
+          </kendo-card-body>
+        </kendo-card>
+        
+        <kendo-card>
+          <kendo-card-body>
+            <div class="text-center">
+              <kendo-loader type="infinite-spinner" themeColor="info" size="medium"></kendo-loader>
+              <p class="mt-2 mb-0">Infinite</p>
+            </div>
+          </kendo-card-body>
+        </kendo-card>
+        
+        <kendo-card>
+          <kendo-card-body>
+            <div class="text-center">
+              <kendo-loader type="pulsing" themeColor="success" size="medium"></kendo-loader>
+              <p class="mt-2 mb-0">Pulsing</p>
+            </div>
+          </kendo-card-body>
+        </kendo-card>
+        
+        <kendo-card>
+          <kendo-card-body>
+            <div class="text-center">
+              <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--mj-blue);"></i>
+              <p class="mt-2 mb-0">Font Awesome</p>
+            </div>
+          </kendo-card-body>
+        </kendo-card>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal/Dialog Examples -->
+  <div class="mj-content-container">
+    <h2>Modals & Dialogs</h2>
+    
+    <div class="button-group">
+      <button class="mj-btn mj-btn-primary" (click)="openModal()">
+        <i class="fas fa-window-maximize"></i>
+        Custom Modal
+      </button>
+      <kendo-button themeColor="info" rounded="medium" (click)="openKendoDialog()">
+        <span class="button-content">
+          <i class="fas fa-comment"></i>
+          Kendo Dialog
+        </span>
+      </kendo-button>
+      <button class="mj-btn mj-btn-secondary" (click)="openConfirmModal()">
+        <i class="fas fa-exclamation-triangle"></i>
+        Confirm Dialog
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Custom Modal -->
+<div class="mj-modal-overlay" *ngIf="isModalOpen" (click)="closeModal()">
+  <div class="mj-modal mj-modal-lg" (click)="$event.stopPropagation()">
+    <div class="mj-modal-header">
+      <h3 class="mj-modal-title">
+        <i class="fas fa-cog mj-modal-icon"></i>
+        Custom Modal Example
+      </h3>
+      <button class="mj-modal-close" (click)="closeModal()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="mj-modal-body">
+      <p>This custom modal maintains your brand styling while working alongside Kendo components.</p>
+      
+      <div class="form-group">
+        <label class="form-label">
+          <i class="fas fa-user mr-1"></i>
+          Username
+        </label>
+        <kendo-textbox placeholder="Enter username" rounded="medium"></kendo-textbox>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">
+          <i class="fas fa-palette mr-1"></i>
+          Theme Preference
+        </label>
+        <kendo-dropdownlist 
+          [data]="themeOptions"
+          [value]="selectedTheme"
+          rounded="medium">
+        </kendo-dropdownlist>
+      </div>
+    </div>
+    <div class="mj-modal-footer">
+      <kendo-button fillMode="outline" (click)="closeModal()">Cancel</kendo-button>
+      <kendo-button themeColor="primary">
+        <span class="button-content">
+          <i class="fas fa-save"></i>
+          Save Changes
+        </span>
+      </kendo-button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div class="mj-modal-overlay" *ngIf="isConfirmModalOpen" (click)="closeConfirmModal()">
+  <div class="mj-modal mj-modal-confirm" (click)="$event.stopPropagation()">
+    <div class="mj-modal-header">
+      <h3 class="mj-modal-title">Confirm Delete</h3>
+      <button class="mj-modal-close" (click)="closeConfirmModal()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="mj-modal-body">
+      <i class="fas fa-exclamation-triangle mj-modal-confirm-icon warning"></i>
+      <h4>Are you sure?</h4>
+      <p>This action cannot be undone. All associated data will be permanently deleted.</p>
+    </div>
+    <div class="mj-modal-footer">
+      <button class="mj-btn mj-btn-ghost" (click)="closeConfirmModal()">Cancel</button>
+      <button class="mj-btn mj-btn-primary" style="background: #dc3545; border-color: #dc3545;">
+        <i class="fas fa-trash"></i>
+        Delete
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Kendo Dialog -->
+<kendo-dialog 
+  title="Edit User Information" 
+  *ngIf="isKendoDialogOpen" 
+  (close)="closeKendoDialog()" 
+  [minWidth]="450" 
+  [width]="600"
+  [height]="400">
+  
+  <form [formGroup]="formGroup">
+    <kendo-formfield orientation="vertical" class="mb-3">
+      <kendo-label text="Full Name" [for]="nameField"></kendo-label>
+      <kendo-textbox 
+        #nameField
+        formControlName="fullName"
+        placeholder="Enter full name"
+        [clearButton]="true"
+        rounded="medium">
+        <ng-template kendoTextBoxPrefixTemplate>
+          <i class="fas fa-user search-prefix-icon"></i>
+        </ng-template>
+      </kendo-textbox>
+      <div class="k-form-error" *ngIf="fullNameControl.touched && fullNameControl.errors?.['required']">
+        Name is required
+      </div>
+    </kendo-formfield>
+
+    <kendo-formfield orientation="vertical" class="mb-3">
+      <kendo-label text="Email Address" [for]="emailField"></kendo-label>
+      <kendo-textbox 
+        #emailField
+        formControlName="email"
+        placeholder="user@example.com"
+        [clearButton]="true"
+        rounded="medium">
+        <ng-template kendoTextBoxPrefixTemplate>
+          <i class="fas fa-envelope search-prefix-icon"></i>
+        </ng-template>
+      </kendo-textbox>
+      <div class="k-form-error" *ngIf="emailControl.touched && emailControl.errors?.['email']">
+        Please enter a valid email
+      </div>
+    </kendo-formfield>
+
+    <kendo-formfield orientation="vertical" class="mb-3">
+      <kendo-label text="Department" [for]="deptField"></kendo-label>
+      <kendo-dropdownlist 
+        #deptField
+        formControlName="department"
+        [data]="departments"
+        textField="name"
+        valueField="id"
+        rounded="medium">
+        <ng-template kendoDropDownListItemTemplate let-dataItem>
+          <span class="dropdown-item-content">
+            <i [class]="dataItem.icon" class="mr-2"></i>
+            {{ dataItem.name }}
+          </span>
+        </ng-template>
+      </kendo-dropdownlist>
+    </kendo-formfield>
+
+    <kendo-formfield orientation="vertical">
+      <kendo-label text="Additional Notes"></kendo-label>
+      <kendo-textarea 
+        formControlName="comments"
+        placeholder="Enter any additional notes..."
+        [rows]="3"
+        rounded="medium">
+      </kendo-textarea>
+    </kendo-formfield>
+  </form>
+  
+  <kendo-dialog-actions>
+    <kendo-button fillMode="outline" (click)="closeKendoDialog()">Cancel</kendo-button>
+    <kendo-button themeColor="primary" (click)="submitForm()" [disabled]="!formGroup.valid">
+      <span class="button-content">
+        <i class="fas fa-save"></i>
+        Save Changes
+      </span>
+    </kendo-button>
+  </kendo-dialog-actions>
+</kendo-dialog>

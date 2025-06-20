@@ -1,4 +1,4 @@
-<div class="prompt-management-v2" mjFillContainer [rightMargin]="8" [bottomMargin]="8">
+<div class="prompt-management-v2">
   @if (isLoading) {
     <div class="loading-container">
       <div class="loading-content">
@@ -180,31 +180,34 @@
                           <i [class]="getPromptIcon(prompt)"></i>
                         </div>
                         <div class="card-info">
-                          <h4>{{ prompt.Name }}</h4>
-                          <div class="card-meta">
-                            <span class="category">{{ prompt.CategoryName }}</span>
-                            <span class="type">{{ prompt.TypeName }}</span>
-                          </div>
+                          <h4 class="prompt-name">{{ prompt.Name || 'Unnamed Prompt' }}</h4>
+                          @if (prompt.Description) {
+                            <p class="card-description">{{ prompt.Description }}</p>
+                          }
                         </div>
                         <i class="fa-solid fa-chevron-down expand-icon" [class.rotated]="expandedPromptId === prompt.ID"></i>
                       </div>
 
                       @if (expandedPromptId === prompt.ID) {
                         <div class="card-content">
-                          @if (prompt.Description) {
-                            <div class="description-section">
-                              <h5>Description</h5>
-                              <p>{{ prompt.Description }}</p>
-                            </div>
-                          }
-
                           <div class="stats-grid">
+                            <div class="stat">
+                              <span class="stat-label">Category</span>
+                              <span class="stat-value">{{ prompt.CategoryName }}</span>
+                            </div>
+                            <div class="stat">
+                              <span class="stat-label">Type</span>
+                              <span class="stat-value">{{ prompt.TypeName }}</span>
+                            </div>
                             <div class="stat">
                               <span class="stat-label">Status</span>
                               <span class="stat-value status-badge" [class]="getStatusClass(prompt.Status)">
                                 {{ prompt.Status }}
                               </span>
                             </div>
+                          </div>
+
+                          <div class="stats-grid" style="margin-top: 12px;">
                             <div class="stat">
                               <span class="stat-label">Template</span>
                               <span class="stat-value">

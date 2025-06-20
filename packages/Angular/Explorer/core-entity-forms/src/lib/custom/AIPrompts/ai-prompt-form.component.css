@@ -117,3 +117,64 @@
 .history-row:hover {
     background: #e9ecef !important;
 }
+
+/* Template Parameters Styles */
+.parameter-card {
+    position: relative;
+    overflow: hidden;
+}
+
+.parameter-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 4px;
+    background: inherit;
+    transition: width 0.2s;
+}
+
+.parameter-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.parameter-card:hover::before {
+    width: 6px;
+}
+
+.type-badge {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    transition: transform 0.2s;
+}
+
+.parameter-card:hover .type-badge {
+    transform: scale(1.05);
+}
+
+/* Parameter type icons animation */
+.parameter-card i.fa-solid {
+    transition: transform 0.3s;
+}
+
+.parameter-card:hover i.fa-solid {
+    transform: rotate(360deg);
+}
+
+/* Grid responsive behavior */
+@media (max-width: 768px) {
+    .parameter-card {
+        margin-bottom: 8px;
+    }
+    
+    .parameter-card h6 {
+        font-size: 0.95em;
+    }
+    
+    .type-badge {
+        font-size: 0.7em !important;
+    }
+}

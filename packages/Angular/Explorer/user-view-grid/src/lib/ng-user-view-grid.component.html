@@ -1,10 +1,10 @@
-<div class="user-view-grid-wrap" mjFillContainer>
+<div class="user-view-grid-wrap" >
     @if (isLoading || !AllowLoad || neverLoaded) {
         <kendo-loader></kendo-loader>
     }
     @else {
         <kendo-grid #kendoGrid
-            mjFillContainer
+            
             [resizable]="true"
             [data]="gridView" 
             [skip]="skip"
@@ -146,7 +146,7 @@
                 title="Compare Records"
                 *ngIf="isCompareDialogOpened"
             >
-                <div mjFillContainer [fillHeight]="true" [bottomMargin]="100">
+                <div>
                     <mj-compare-records
                         #recordCompareRef
                         [entityName]="_entityInfo ? _entityInfo.Name : ''"

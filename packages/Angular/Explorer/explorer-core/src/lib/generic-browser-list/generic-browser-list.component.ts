@@ -527,16 +527,117 @@ export class GenericBrowserListComponent implements OnInit{
       return "";
     }
 
-    const LargeClass: string = "fa-3x ";
     if(item.Type === ItemType.Folder){  
-      return LargeClass + "fa-regular fa-folder";
+      return "fa-regular fa-folder";
     }
 
     const resourceType = this.resourceTypes.find(rt => rt.Entity === this.ItemEntityName);
-    if(resourceType){
-      return LargeClass + resourceType.Icon;// + rotateStyle;
+    if(resourceType && resourceType.Icon){
+      return resourceType.Icon;
     }
 
-    return "";
+    // Default icon if no resource type found
+    return "fa-solid fa-file";
+  }
+
+  public getHeaderIconClass(): string {
+    // If viewing a specific folder
+    if(this.selectedFolderID) {
+      return "fa-regular fa-folder-open";
+    }
+    
+    // Try to get icon from resource type
+    const resourceType = this.resourceTypes.find(rt => rt.Entity === this.ItemEntityName);
+    if(resourceType && resourceType.Icon){
+      return resourceType.Icon;
+    }
+    
+    // Default icons based on common types
+    switch(this.itemType?.toLowerCase()) {
+      case 'dashboard':
+      case 'dashboards':
+        return "fa-solid fa-chart-line";
+      case 'report':
+      case 'reports':
+        return "fa-solid fa-file-chart-column";
+      case 'query':
+      case 'queries':
+        return "fa-solid fa-database";
+      case 'view':
+      case 'views':
+        return "fa-solid fa-table";
+      case 'application':
+      case 'applications':
+        return "fa-solid fa-window-restore";
+      default:
+        return this.iconName || "fa-solid fa-th";
+    }
+  }
+
+  public getResourceTypeLabel(item: Item): string {
+    if(item.Type === ItemType.Folder) {
+      return "Folder";
+    }
+    
+    const resourceType = this.resourceTypes.find(rt => rt.Entity === this.ItemEntityName);
+    if(resourceType){
+      return resourceType.Name;
+    }
+    
+    // Return a formatted version of the item type or entity name
+    return this.itemType || "Resource";
+  }
+
+  public getFormattedDate(date: any): string {
+    if (!date) return '';
+    
+    const d = new Date(date);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - d.getTime());
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) {
+      return 'Today';
+    } else if (diffDays === 1) {
+      return 'Yesterday';
+    } else if (diffDays < 7) {
+      return `${diffDays} days ago`;
+    } else if (diffDays < 30) {
+      const weeks = Math.floor(diffDays / 7);
+      return `${weeks} week${weeks > 1 ? 's' : ''} ago`;
+    } else if (diffDays < 365) {
+      const months = Math.floor(diffDays / 30);
+      return `${months} month${months > 1 ? 's' : ''} ago`;
+    } else {
+      return d.toLocaleDateString();
+    }
+  }
+
+  /**
+   * Safely gets a property from an item, checking both the item itself and its Data property
+   */
+  public getItemProperty(item: Item, propertyName: string): any {
+    // First check if the property exists directly on the item
+    // We need to cast to any to avoid TypeScript index signature errors
+    const itemAsAny = item as any;
+    if (itemAsAny && itemAsAny[propertyName] !== undefined) {
+      return itemAsAny[propertyName];
+    }
+    
+    // Then check if it exists on the Data property
+    if (item && item.Data && item.Data[propertyName] !== undefined) {
+      return item.Data[propertyName];
+    }
+    
+    // If Data is a BaseEntity, try using the Get method
+    if (item && item.Data && typeof item.Data.Get === 'function') {
+      try {
+        return item.Data.Get(propertyName);
+      } catch (e) {
+        // Property doesn't exist
+      }
+    }
+    
+    return null;
   }
 }

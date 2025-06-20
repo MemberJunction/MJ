@@ -3,7 +3,7 @@ import { Component, Output, EventEmitter } from '@angular/core';
 @Component({
   selector: 'mj-entity-integration',
   template: `
-    <div class="entity-integration-placeholder" mjFillContainer>
+    <div class="entity-integration-placeholder" >
       <div class="placeholder-content">
         <i class="fa-solid fa-sitemap"></i>
         <h3>Entity Integration</h3>

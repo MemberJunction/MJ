@@ -2,11 +2,14 @@
   "entity": "Actions",
   "filePattern": ".*.json",
   "defaults": {
-    "CategoryID": "@lookup:Action Categories.Name=System?create&Description=MJ System Actions"
+      "CategoryID": "@lookup:Action Categories.Name=System"
   },
+  "ignoreDirectories": [
+    "templates"
+  ],
   "pull": {
     "createNewFileIfNotFound": true,
-    "newFileName": "actions.json",
+    "newFileName": ".actions.json",
     "appendRecordsToExistingFile": true,
     "updateExistingRecords": true,
     "preserveFields": [],

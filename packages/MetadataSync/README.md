@@ -718,13 +718,26 @@ Examples:
 ### @lookup: References (ENHANCED)
 Enable entity relationships using human-readable values:
 - Basic syntax: `@lookup:EntityName.FieldName=Value`
+- Multi-field syntax: `@lookup:EntityName.Field1=Value1&Field2=Value2`
 - Auto-create syntax: `@lookup:EntityName.FieldName=Value?create`
 - With additional fields: `@lookup:EntityName.FieldName=Value?create&Field2=Value2`
 
 Examples:
-- `@lookup:AI Prompt Types.Name=Chat` - Fails if not found
+- `@lookup:AI Prompt Types.Name=Chat` - Single field lookup, fails if not found
+- `@lookup:Users.Email=john@example.com&Department=Sales` - Multi-field lookup for precise matching
 - `@lookup:AI Prompt Categories.Name=Examples?create` - Creates if missing
 - `@lookup:AI Prompt Categories.Name=Examples?create&Description=Example prompts` - Creates with description
+
+#### Multi-Field Lookups (NEW)
+When you need to match records based on multiple criteria, use the multi-field syntax:
+```json
+{
+  "CategoryID": "@lookup:AI Prompt Categories.Name=Actions&Status=Active",
+  "ManagerID": "@lookup:Users.Email=manager@company.com&Department=Engineering&Status=Active"
+}
+```
+
+This ensures you get the exact record you want when multiple records might have the same value in a single field.
 
 ### @parent: References (NEW)
 Reference fields from the immediate parent entity in embedded collections:
@@ -818,6 +831,9 @@ mj-sync validate --verbose
 # Validate with JSON output for CI/CD
 mj-sync validate --format=json
 
+# Save validation report to markdown file
+mj-sync validate --save-report
+
 # Initialize a directory for metadata sync
 mj-sync init
 
@@ -898,6 +914,53 @@ Directory order is configured in the root-level `.mj-sync.json` file only (not i
 2. **Categories → Items**: Create category records before items that reference them
 3. **Parent → Child**: Process parent entities before child entities with foreign key dependencies
 
+### Ignore Directories
+
+The MetadataSync tool supports ignoring specific directories during push/pull operations. This is useful for:
+- Excluding output or example directories from processing
+- Skipping temporary or build directories
+- Organizing support files without them being processed as metadata
+
+#### Configuration
+
+Ignore directories are configured in `.mj-sync.json` files and are **cumulative** through the directory hierarchy:
+
+```json
+{
+  "version": "1.0.0",
+  "ignoreDirectories": [
+    "output",
+    "examples",
+    "templates"
+  ]
+}
+```
+
+#### How It Works
+
+- **Cumulative Inheritance**: Each directory inherits ignore patterns from its parent directories
+- **Relative Paths**: Directory names are relative to the location of the `.mj-sync.json` file
+- **Simple Patterns**: Supports exact directory names (e.g., "output", "temp")
+- **Additive**: Child directories can add their own ignore patterns to parent patterns
+
+#### Example
+
+```
+metadata/.mj-sync.json            → ignoreDirectories: ["output", "temp"]
+├── prompts/.mj-sync.json         → ignoreDirectories: ["examples"]
+│   ├── output/                   → IGNORED (from root)
+│   ├── examples/                 → IGNORED (from prompts)
+│   └── production/.mj-sync.json  → ignoreDirectories: ["drafts"]
+│       ├── drafts/               → IGNORED (from production)
+│       └── output/               → IGNORED (inherited from root)
+```
+
+In this example:
+- Root level ignores "output" and "temp" everywhere
+- Prompts directory adds "examples" to the ignore list
+- Production subdirectory further adds "drafts"
+- All patterns are cumulative, so production inherits all parent ignores
+
 ### SQL Logging (NEW)
 
 The MetadataSync tool now supports SQL logging for capturing all database operations during push commands. This feature is useful for:
@@ -973,6 +1036,75 @@ Migration files include:
 
 The SQL logging runs in parallel with the actual database operations, ensuring minimal performance impact while capturing all SQL statements for review and potential migration use.
 
+### User Role Validation (NEW)
+
+MetadataSync now supports validating UserID fields against specific roles in the MemberJunction system. This ensures that only users with appropriate roles can be referenced in metadata files.
+
+#### Configuration
+
+Add the `userRoleValidation` configuration to your root `.mj-sync.json` file:
+
+```json
+{
+  "version": "1.0.0",
+  "userRoleValidation": {
+    "enabled": true,
+    "allowedRoles": [
+      "Administrator",
+      "Developer",
+      "Content Manager"
+    ],
+    "allowUsersWithoutRoles": false
+  }
+}
+```
+
+#### Configuration Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | boolean | false | Enable user role validation for UserID fields |
+| `allowedRoles` | string[] | [] | List of role names that are allowed |
+| `allowUsersWithoutRoles` | boolean | false | Allow users without any assigned roles |
+
+#### How It Works
+
+1. During validation, all user roles are loaded from the database and cached
+2. For each UserID field in metadata files, the validator checks:
+   - If the user exists and has roles assigned
+   - If the user has at least one of the allowed roles
+3. Validation fails if:
+   - A UserID references a user without any roles (unless `allowUsersWithoutRoles` is true)
+   - A UserID references a user whose roles are not in the `allowedRoles` list
+
+#### Example
+
+Given a metadata file with a UserID field:
+
+```json
+{
+  "fields": {
+    "Name": "Admin Action",
+    "UserID": "user-123"
+  }
+}
+```
+
+The validation will:
+1. Check if user-123 exists in the system
+2. Verify that user-123 has one of the allowed roles
+3. Report an error if the user doesn't have appropriate roles
+
+#### Error Messages
+
+```
+✗ UserID 'user-123' does not have any assigned roles
+  Suggestion: User must have one of these roles: Administrator, Developer
+
+✗ UserID 'user-456' has roles [Viewer] but none are in allowed list
+  Suggestion: Allowed roles: Administrator, Developer, Content Manager
+```
+
 ### Root Configuration (metadata/.mj-sync.json)
 ```json
 {
@@ -989,6 +1121,11 @@ The SQL logging runs in parallel with the actual database operations, ensuring m
     "enabled": true,
     "outputDirectory": "./sql_logging",
     "formatAsMigration": false
+  },
+  "userRoleValidation": {
+    "enabled": true,
+    "allowedRoles": ["Administrator", "Developer"],
+    "allowUsersWithoutRoles": false
   },
   "watch": {
     "debounceMs": 1000,

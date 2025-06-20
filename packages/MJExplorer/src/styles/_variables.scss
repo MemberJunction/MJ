@@ -1,31 +1,21 @@
-// Global variables here
-$background-color: #D4D6E4;
-$info-background: #151950;
-$angular-color: #e21e36;
-$link-color: #71A6FF;
-$white: #FFFFFF;
-
-$tiger-team: #FF6358;
-$lemon-team: #FFD246;
-$organic-team: #55AB1D;
-$ocean-team: #28B4C8;
 
 // variables using theme 
 :root {
-    --white-color: #fff;
-    --black: #000;
-    --primary-color: #0076B6;
-    --blue-text: #376692;
-    --sideNav: #002C45;
-    --menuSelect: #2B4A66;
-    --gray-color: #CACAD3;
-    --text-darked: #0A0045;
-    --light-gray: #F5F6FA;
-    --med-gray: #D5D8E5;
-    --sky-blue: #6EBBE4;
-    --border-active: #5A8CFF;
-    --border-blue: #2264DC;
-    --light-shade: #F2F5FA;
-    --tdata-color: #1B1C1E;
-    --thead-color: #909090;
-  }
+  --navy: #092340;
+  --light-blue: #AAE7FD;
+  --gray-600: #F4F4F4;
+  --gray-700: #D9D9D9;
+  --gray-800: #AAA;
+  --gray-900: #333;
+  --mj-blue: #0076B6;
+  --white-color: #FFF;
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  --border-radius: 1rem;
+  --transition-time: .3s ease;
+  /* Kendo UI Colors */
+  --kendo-color-primary: #0076B6;
+  --kendo-color-secondary: #092340;
+  --kendo-color-primary-hover: #0076B6;
+  --kendo-color-secondary-hover: #092340;
+  --kendo-color-primary-on-surface: #0076B6;
+}

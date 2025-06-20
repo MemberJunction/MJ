@@ -227,7 +227,7 @@ async function createUserFromData(userData: unknown) {
   if (result.success) {
     const md = new Metadata();
     const user = await md.GetEntityObject<UserEntity>('Users');
-    user.LoadFromData(result.data);
+    await user.LoadFromData(result.data);
     
     const saveResult = await user.Save();
     return saveResult.Success;

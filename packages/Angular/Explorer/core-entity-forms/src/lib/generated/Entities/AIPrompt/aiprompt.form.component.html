@@ -1,8 +1,8 @@
-<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
-    <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer (ResizeContainer)="InvokeManualResize()">
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
                     
                     <mj-tab Name="Details">
                         Details
@@ -25,7 +25,7 @@
                             [NewRecordValues]="NewRecordValues('AI Result Cache')"
                             [AllowLoad]="IsCurrentTab('AI Result Cache')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -51,7 +51,7 @@
                             [NewRecordValues]="NewRecordValues('MJ: AI Configurations')"
                             [AllowLoad]="IsCurrentTab('MJ: AI Configurations')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -64,7 +64,7 @@
                             [NewRecordValues]="NewRecordValues('MJ: AI Configurations')"
                             [AllowLoad]="IsCurrentTab('MJ: AI Configurations')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -77,7 +77,7 @@
                             [NewRecordValues]="NewRecordValues('AI Prompts')"
                             [AllowLoad]="IsCurrentTab('AI Prompts')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -90,7 +90,7 @@
                             [NewRecordValues]="NewRecordValues('MJ: AI Prompt Models')"
                             [AllowLoad]="IsCurrentTab('MJ: AI Prompt Models')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -103,7 +103,7 @@
                             [NewRecordValues]="NewRecordValues('MJ: AI Agent Prompts')"
                             [AllowLoad]="IsCurrentTab('MJ: AI Agent Prompts')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -116,7 +116,7 @@
                             [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs')"
                             [AllowLoad]="IsCurrentTab('MJ: AI Prompt Runs')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -129,7 +129,7 @@
                             [NewRecordValues]="NewRecordValues('AI Agents')"
                             [AllowLoad]="IsCurrentTab('AI Agents')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>

@@ -3,7 +3,7 @@ import { Component, Output, EventEmitter } from '@angular/core';
 @Component({
   selector: 'mj-security-permissions',
   template: `
-    <div class="security-permissions-placeholder" mjFillContainer>
+    <div class="security-permissions-placeholder" >
       <div class="placeholder-content">
         <i class="fa-solid fa-lock"></i>
         <h3>Security & Permissions</h3>

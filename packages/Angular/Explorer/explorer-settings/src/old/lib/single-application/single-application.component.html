@@ -1,4 +1,4 @@
-<div mjFillContainer>
+<div >
     @if(isLoading) {
         <kendo-loader></kendo-loader>
     }
@@ -17,7 +17,7 @@
                 </tr>
             </tbody>
         </table>         
-        <mj-tabstrip mjFillContainer (ResizeContainer)="InvokeManualResize()">
+        <mj-tabstrip  (ResizeContainer)="InvokeManualResize()">
             <mj-tab [TabSelected]="true">
                 Entities
             </mj-tab>

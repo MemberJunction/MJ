@@ -220,13 +220,15 @@ export class RunView  {
         if (param.ResultType === 'entity_object' && result && result.Success){
             // we need to transform each of the items in the result set into a BaseEntity-derived object
             const p = <IMetadataProvider><any>this.ProviderToUse;
-            const newItems = [];
-            for (const item of result.Results) {
+            
+            // Create entities and load data in parallel for better performance
+            const entityPromises = result.Results.map(async (item) => {
                 const entity = await p.GetEntityObject(param.EntityName, contextUser);
-                entity.LoadFromData(item);
-                newItems.push(entity);
-            }
-            result.Results = newItems;
+                await entity.LoadFromData(item);
+                return entity;
+            });
+            
+            result.Results = await Promise.all(entityPromises);
         }
     }
 

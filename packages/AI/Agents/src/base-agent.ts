@@ -11,12 +11,12 @@
  * @since 2.49.0
  */
 
-import { AIAgentEntity, AIAgentTypeEntity, AIAgentRunEntity, AIAgentRunStepEntity } from '@memberjunction/core-entities';
+import { AIAgentEntity, AIAgentTypeEntity, AIAgentRunEntity, AIAgentRunStepEntity, TemplateParamEntity } from '@memberjunction/core-entities';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { AIPromptRunner, AIPromptParams, ChildPromptParam } from '@memberjunction/ai-prompts';
 import { ChatMessage, AIPromptRunResult } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
-import { MJGlobal } from '@memberjunction/global';
+import { CopyScalarsAndArrays, MJGlobal } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import {
@@ -774,6 +774,7 @@ export class BaseAgent {
                 onStreaming: params.onStreaming,
                 parentAgentHierarchy: this._runContext?.agentHierarchy,
                 parentDepth: this._runContext?.depth,
+                data: subAgentRequest.templateParameters,
                 context: params.context // pass along our context to sub-agents so they can keep passing it down and pass to actions as well
             });
             
@@ -803,10 +804,32 @@ export class BaseAgent {
             Name: sa.Name,
             Description: sa.Description,
             Type: sa.TypeID ? this.getAgentTypeName(sa.TypeID) : 'Unknown',
+            TemplateParameters: this.getAgentPromptParameters(sa),
             Status: sa.Status,
             ExecutionMode: sa.ExecutionMode,
             ExecutionOrder: sa.ExecutionOrder
         })), null, 2);
+    }
+
+    /**
+     * Utility method to get agent prompt parameters for a given agent. This gets the 
+     * highest priority prompt for the agent, and then gets the parameters for that
+     * prompt.
+     * @param agent 
+     */
+    protected getAgentPromptParameters(agent: AIAgentEntity): Array<TemplateParamEntity> {
+        const engine = AIEngine.Instance;
+        const agentPrompt = engine.AgentPrompts
+            .filter(ap => ap.AgentID === agent.ID && ap.Status === 'Active')
+            .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder)[0];
+        
+        if (!agentPrompt) return [];
+
+        const prompt = engine.Prompts.find(p => p.ID === agentPrompt.PromptID);
+        if (!prompt) return [];
+
+        // Return parameters as key-value pairs
+        return prompt.TemplateParams;
     }
 
     /**
@@ -952,7 +975,8 @@ export class BaseAgent {
         
         // Save the agent run
         if (!await this._agentRun.Save()) {
-            throw new Error('Failed to create agent run record');
+            const errorMessage = JSON.stringify(CopyScalarsAndArrays(this._agentRun.LatestResult));
+            throw new Error(`Failed to create agent run record: Details: ${errorMessage}`);
         }
 
         // Initialize run context

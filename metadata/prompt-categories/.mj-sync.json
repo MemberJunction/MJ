@@ -1,0 +1,20 @@
+{
+  "entity": "AI Prompt Categories",
+  "filePattern": ".*.json",
+  "defaults": {},
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".prompt-categories.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "lookupFields": {
+      "ParentID": {
+        "entity": "AI Prompt Categories",
+        "field": "Name"
+      }
+    }
+  }
+}
