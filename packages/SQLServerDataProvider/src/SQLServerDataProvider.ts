@@ -3531,21 +3531,13 @@ export class SQLServerDataProvider
         // Emit transaction state change
         this._transactionState$.next(true);
       } else {
-        // Nested transaction - create a savepoint and emit BEGIN TRANSACTION
+        // Nested transaction - create a savepoint
         const savepointName = `SavePoint_${++this._savepointCounter}`;
         this._savepointStack.push(savepointName);
         
-        // Create savepoint first
+        // Create savepoint for nested transaction
         await this.ExecuteSQL(`SAVE TRANSACTION ${savepointName}`, null, {
-          description: `Creating savepoint ${savepointName}`,
-          ignoreLogging: true
-        });
-        
-        // Also emit BEGIN TRANSACTION to increment @@TRANCOUNT
-        // This documents our intent for nested transactions even though SQL Server
-        // doesn't truly support them yet
-        await this.ExecuteSQL(`BEGIN TRANSACTION`, null, {
-          description: `Nested transaction at depth ${this._transactionDepth}`,
+          description: `Creating savepoint ${savepointName} at depth ${this._transactionDepth}`,
           ignoreLogging: true
         });
       }
@@ -3583,13 +3575,8 @@ export class SQLServerDataProvider
         // Process any deferred tasks after successful commit
         await this.processDeferredTasks();
       } else {
-        // Nested transaction - emit COMMIT TRANSACTION to decrement @@TRANCOUNT
-        await this.ExecuteSQL(`COMMIT TRANSACTION`, null, {
-          description: `Committing nested transaction at depth ${this._transactionDepth + 1}`,
-          ignoreLogging: true
-        });
-        
-        // Remove the savepoint from stack since this level is now committed
+        // Nested transaction - just remove the savepoint from stack
+        // The savepoint remains valid in SQL Server until the outer transaction commits or rolls back
         this._savepointStack.pop();
       }
     } catch (e) {
@@ -3640,10 +3627,6 @@ export class SQLServerDataProvider
           description: `Rolling back to savepoint ${savepointName}`,
           ignoreLogging: true
         });
-        
-        // Important: We do NOT emit another ROLLBACK TRANSACTION here because that would
-        // rollback the entire transaction. The savepoint rollback already handled undoing
-        // the work since the savepoint was created.
         
         // Remove the savepoint from stack and decrement depth
         this._savepointStack.pop();
