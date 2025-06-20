@@ -133,11 +133,12 @@ export type BaseAgentNextStep<TContext = any> = {
  * @property {'user_requested' | 'timeout' | 'system'} [cancellationReason] - Reason for cancellation if cancelled
  * @property {AIAgentRunEntity} agentRun - The main database entity tracking this execution
  * @property {ExecutionNode[]} executionTree - Hierarchical tree of execution nodes showing parent-child relationships
+ * @template {T} [T] - Generic type parameter for return value, allowing flexibility in the type of data returned by the agent
  */
-export type ExecuteAgentResult = {
+export type ExecuteAgentResult<T = any> = {
     success: boolean;
     finalStep: BaseAgentNextStep['step'];
-    returnValue?: any;
+    returnValue?: T;
     errorMessage?: string;
     cancelled?: boolean;
     cancellationReason?: 'user_requested' | 'timeout' | 'system';
@@ -160,11 +161,12 @@ export type ExecuteAgentResult = {
  * @property {Date} startTime - When this step began execution
  * @property {Date} [endTime] - When this step completed (null while running)
  * @property {number} [durationMs] - How long this step took to execute in milliseconds
+ * @template {T} [T] - Generic type parameter for the step's execution result, allowing flexibility in the type of data returned
  */
-export type ExecutionChainStep = {
+export type ExecutionChainStep<T = any> = {
     stepEntity: AIAgentRunStepEntity;
     executionType: 'prompt' | 'action' | 'sub-agent' | 'decision' | 'chat' | 'validation';
-    executionResult: StepExecutionResult;
+    executionResult: StepExecutionResult<T>;
     nextStepDecision: NextStepDecision;
     startTime: Date;
     endTime?: Date;
@@ -177,10 +179,10 @@ export type ExecutionChainStep = {
  * Each execution type has its own result structure containing the native result
  * from the underlying system (prompts, actions, etc.) along with metadata.
  */
-export type StepExecutionResult = 
+export type StepExecutionResult<T = any> = 
     | PromptExecutionResult
     | ActionExecutionResult
-    | SubAgentExecutionResult
+    | SubAgentExecutionResult<T>
     | DecisionExecutionResult
     | ChatExecutionResult
     | ValidationExecutionResult;
@@ -264,12 +266,13 @@ export type ActionExecutionResult = {
  * @property {string} subAgentId - UUID of the sub-agent that was executed
  * @property {string} subAgentName - Human-readable name of the sub-agent
  * @property {ExecuteAgentResult} result - The complete execution result from the sub-agent (recursive)
+ * @template T - Generic type parameter for the sub-agent's return value, allowing flexibility in the type of data returned
  */
-export type SubAgentExecutionResult = {
+export type SubAgentExecutionResult<T = any> = {
     type: 'sub-agent';
     subAgentId: string;
     subAgentName: string;
-    result: ExecuteAgentResult;
+    result: ExecuteAgentResult<T>;
 }
 
 /**

@@ -13,11 +13,11 @@
     </div>  
   }
   <mj-tabstrip class="report-tabstrip" (TabSelected)="onTabSelect($event)" (ResizeContainer)="sharedService.InvokeManualResize()">
-    <mj-tab [TabSelected]="isTabSelected(0)" *ngIf="IsHTML">
+    <mj-tab [TabSelected]="isTabSelected(0)" *ngIf="IsInteractive">
       <span class="fa-solid fa-magnifying-glass-chart"></span>
       <span class="report-tab-title">Report</span>
     </mj-tab>
-    <mj-tab-body *ngIf="IsHTML">
+    <mj-tab-body *ngIf="IsInteractive">
       <div class="report-tab-contents" mjFillContainer [bottomMargin]="20" [rightMargin]="20" [style]="{overflowY: 'hidden', overflowX: 'hidden'}">
         <skip-dynamic-ui-component #theUIComponent [SkipData]="SkipData"  (DrillDownEvent)="handleUIComponentDrillDown($event)" style="display:block;">
         </skip-dynamic-ui-component>  
