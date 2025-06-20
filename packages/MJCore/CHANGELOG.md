@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/core
 
+## 2.53.0
+
+### Minor Changes
+
+- bddc4ea: LoadFromData() changed to async, various other changes
+
+### Patch Changes
+
+- @memberjunction/global@2.53.0
+
 ## 2.52.0
 
 ### Minor Changes

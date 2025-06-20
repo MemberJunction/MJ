@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 2.53.0
+
+### Patch Changes
+
+- 720aa19: Add system user GraphQL resolvers for RunView and Query operations
+- Updated dependencies [bddc4ea]
+  - @memberjunction/core@2.53.0
+  - @memberjunction/core-entities@2.53.0
+  - @memberjunction/actions-base@2.53.0
+  - @memberjunction/global@2.53.0
+
 ## 2.52.0
 
 ### Patch Changes
