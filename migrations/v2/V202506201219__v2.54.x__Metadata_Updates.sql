@@ -380,6 +380,7 @@ EXEC [__mj].spUpdateTemplateParam @TemplateID = '8E5F83E5-837B-4C53-9171-08272BF
 @ID = '04FF433E-F36B-1410-8DB5-00021F8B792E';
 
 GO
+ 
 
 -- Save AI Prompts (core SP call only)
 EXEC [__mj].spUpdateAIPrompt @Name = 'Loop Agent Type: System Prompt',
@@ -401,7 +402,7 @@ EXEC [__mj].spUpdateAIPrompt @Name = 'Loop Agent Type: System Prompt',
 @OutputExample = '{
   "taskComplete": "[BOOLEAN: true if task is fully complete, false if more steps needed]",
   "message": "[STRING: Human-readable message about current status or final result - this is what the user/caller sees]",
-  "payload": {
+  "payload*": {
     "[KEY]": "[VALUE: Your agent-specific data structure goes here]",
     "[EXAMPLE_STRUCTURE]": {
       "resultsFound": "[NUMBER or other data]",
@@ -412,23 +413,23 @@ EXEC [__mj].spUpdateAIPrompt @Name = 'Loop Agent Type: System Prompt',
   },
   "reasoning": "[STRING: Your internal explanation of why you made this decision - helps with debugging]",
   "confidence": "[OPTIONAL NUMBER: 0.0 to 1.0 indicating confidence in this decision]",
-  "nextStep": {
+  "nextStep?": {
     "type": "[REQUIRED if taskComplete=false: Must be exactly one of: ''action'' | ''sub-agent'' | ''chat'']",
-    "actions": [
+    "actions?": [
       {
         "id": "[UUID: The exact ID from available actions list]",
         "name": "[STRING: The exact name from available actions list]",
-        "params": {
+        "params*": {
           "[PARAM_NAME]": "[PARAM_VALUE: Must match action''s expected parameters]",
           "[ANOTHER_PARAM]": "[Value matching the action''s parameter type]"
         }
       }
     ],
-    "subAgent": {
+    "subAgent?": {
       "id": "[UUID: The exact ID from available sub-agents list]",
       "name": "[STRING: The exact name from available sub-agents list]",
       "message": "[STRING: Complete context and instructions for the sub-agent - they don''t see conversation history]",
-      "templateParameters": {
+      "templateParameters*": {
         "[TEMPLATE_PARAM_NAME]": "[VALUE: If sub-agent has template parameters, provide values here]"
       },
       "terminateAfter": "[BOOLEAN: true to end parent agent after sub-agent completes, false to continue]"
@@ -461,4 +462,5 @@ EXEC [__mj].spUpdateAIPrompt @Name = 'Loop Agent Type: System Prompt',
 @IncludeLogProbs = 0,
 @TopLogProbs = NULL,
 @ID = 'FF7D441F-36E1-458A-B548-0FC2208923BE';
- 
+
+GO
