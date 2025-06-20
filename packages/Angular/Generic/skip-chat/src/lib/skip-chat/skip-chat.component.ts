@@ -165,6 +165,11 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   }
   resourcePermissions: ResourcePermissionsComponent | null = null;
 
+  /**
+   * Tracks which conversation menu is currently open
+   */
+  public activeConversationMenu: string | null = null;
+
 
   /**
    * Internal state variable to track if the conversation list is visible or not. Defaults to true. Conversation List only is shown if this is true and ShowConversationList is true.
@@ -650,6 +655,11 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     if (this._providerPushStatusSub) {
       this._providerPushStatusSub.unsubscribe();
     }
+    
+    // Remove click outside listener
+    if (this._clickOutsideListener) {
+      document.removeEventListener('click', this._clickOutsideListener);
+    }
   }
 
   protected updateParentTabPanelStyling() {
@@ -678,9 +688,21 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   public _initialLoadComplete: boolean = false;
   public _isLoading: boolean = false;
   public _numLoads: number = 0;
+  private _clickOutsideListener: ((event: MouseEvent) => void) | null = null;
+  
   public async ngAfterViewInit() {
     if (this.AutoLoad)
       await this.Load();
+    
+    // Setup click outside listener for dropdown menus
+    this._clickOutsideListener = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.skip-dropdown-wrapper') && this.activeConversationMenu) {
+        this.closeConversationMenu();
+        this.cdRef.detectChanges();
+      }
+    };
+    document.addEventListener('click', this._clickOutsideListener);
   }
 
   protected get ResourcePermissionEngine(): ResourcePermissionEngine {
@@ -899,6 +921,24 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     conversation.Name = this._oldConvoName;
     this.ConversationEditMode = false;
   }
+  
+  /**
+   * Toggles the conversation dropdown menu
+   */
+  public toggleConversationMenu(conversationId: string): void {
+    if (this.activeConversationMenu === conversationId) {
+      this.activeConversationMenu = null;
+    } else {
+      this.activeConversationMenu = conversationId;
+    }
+  }
+  
+  /**
+   * Closes the conversation dropdown menu
+   */
+  public closeConversationMenu(): void {
+    this.activeConversationMenu = null;
+  }
 
   public async saveConvoName(conversation: ConversationEntity) {
     let newConvoObject: ConversationEntity;
@@ -1109,8 +1149,10 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
    * @returns 
    */
   public async SelectConversation(conversation: ConversationEntity) {
+    // Close any open dropdown menus
+    this.closeConversationMenu();
     
-      // load up the conversation if not already the one that's loaded
+    // load up the conversation if not already the one that's loaded
     if (conversation && conversation.ID !== this.SelectedConversation?.ID) {
       // check to see if the user has access to the conversation
       if (!await this.UserCanAccessConversation(this.ProviderToUse.CurrentUser, conversation)) {
@@ -1972,6 +2014,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
           // Explicitly set the split panel to BothSides mode with the correct ratio
           this.splitPanel.setMode('BothSides');
           
+          // Close the sidebar when opening the artifact panel
+          this.DisplayConversationList(false);
+          
           // Emit events for parent components
           this.ArtifactSelected.emit(artifact);
           
@@ -1995,6 +2040,10 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         artifactVersionId: null
       };
       this.SplitRatio = this.DefaultSplitRatio;
+      
+      // Close the sidebar when opening the artifact panel
+      this.DisplayConversationList(false);
+      
       this.ArtifactSelected.emit(artifact);
       this.ArtifactViewed.emit(artifact);
     }

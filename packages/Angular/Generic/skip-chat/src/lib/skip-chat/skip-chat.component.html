@@ -38,12 +38,29 @@
                     @if (SelectedConversation?.ID === convo.ID) {
                         <div class="skip-conversation-actions">
                             @if (!ConversationEditMode) {
-                                <button class="skip-icon-btn" (click)="editConvo(convo); $event.stopPropagation()">
-                                    <i class="fas fa-pen"></i>
-                                </button>
-                                <button class="skip-icon-btn" (click)="showDeleteConvoDialog(convo); $event.stopPropagation()">
-                                    <i class="fas fa-trash"></i>
-                                </button>
+                                <div class="skip-dropdown-wrapper">
+                                    <button class="skip-dropdown-trigger" 
+                                            (click)="toggleConversationMenu(convo.ID); $event.stopPropagation()"
+                                            [class.active]="activeConversationMenu === convo.ID">
+                                        <i class="fas fa-ellipsis-v"></i>
+                                    </button>
+                                    @if (activeConversationMenu === convo.ID) {
+                                        <div class="skip-dropdown-menu" 
+                                             (click)="$event.stopPropagation()">
+                                            <button class="skip-dropdown-item" 
+                                                    (click)="editConvo(convo); closeConversationMenu()">
+                                                <i class="fas fa-pen"></i>
+                                                <span>Rename</span>
+                                            </button>
+                                            <div class="skip-dropdown-divider"></div>
+                                            <button class="skip-dropdown-item skip-dropdown-item-danger" 
+                                                    (click)="showDeleteConvoDialog(convo); closeConversationMenu()">
+                                                <i class="fas fa-trash"></i>
+                                                <span>Delete</span>
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
                             } @else {
                                 <button class="skip-icon-btn" (click)="saveConvoName(convo); $event.stopPropagation()">
                                     <i class="fas fa-check"></i>
