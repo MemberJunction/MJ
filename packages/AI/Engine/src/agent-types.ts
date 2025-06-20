@@ -13,6 +13,10 @@
 import { AIPromptRunResult } from '@memberjunction/ai';
 import { AIAgentRunEntity, AIAgentRunStepEntity } from '@memberjunction/core-entities';
 import { ActionResult, ActionResultSimple } from '@memberjunction/actions-base';
+import { ChatMessage } from '@memberjunction/ai';
+import { AIAgentEntity } from '@memberjunction/core-entities';
+import { UserInfo } from '@memberjunction/core';
+
 
 /**
  * Represents a single action to be executed.
@@ -133,7 +137,7 @@ export type BaseAgentNextStep<TContext = any> = {
  * @property {'user_requested' | 'timeout' | 'system'} [cancellationReason] - Reason for cancellation if cancelled
  * @property {AIAgentRunEntity} agentRun - The main database entity tracking this execution
  * @property {ExecutionNode[]} executionTree - Hierarchical tree of execution nodes showing parent-child relationships
- * @template {T} [T] - Generic type parameter for return value, allowing flexibility in the type of data returned by the agent
+ * @template {T} T - Generic type parameter for return value, allowing flexibility in the type of data returned by the agent
  */
 export type ExecuteAgentResult<T = any> = {
     success: boolean;
@@ -351,3 +355,163 @@ export type NextStepDetails =
     | { type: 'retry'; retryReason: string; retryInstructions: string }
     | { type: 'chat'; message: string }
     | { type: 'complete'; returnValue?: any };
+
+
+/**
+ * Callback function type for agent execution progress updates
+ */
+export type AgentExecutionProgressCallback = (progress: {
+    /** Current step in the agent execution process */
+    step: 'initialization' | 'validation' | 'prompt_execution' | 'action_execution' | 'subagent_execution' | 'decision_processing' | 'finalization';
+    /** Progress percentage (0-100) */
+    percentage: number;
+    /** Human-readable status message */
+    message: string;
+    /** Additional metadata about the current step */
+    metadata?: Record<string, unknown>;
+}) => void;
+
+/**
+ * Callback function type for streaming content updates during agent execution
+ */
+export type AgentExecutionStreamingCallback = (chunk: {
+    /** The content chunk received */
+    content: string;
+    /** Whether this is the final chunk */
+    isComplete: boolean;
+    /** Which step is producing this content */
+    stepType?: 'prompt' | 'action' | 'subagent' | 'chat';
+    /** Specific step entity ID producing this content */
+    stepEntityId?: string;
+    /** Model name producing this content (for prompt steps) */
+    modelName?: string;
+}) => void;
+
+/**
+ * Parameters required to execute an AI Agent.
+ * 
+ * @template TContext - Type of the context object passed through agent and action execution.
+ *                      This allows for type-safe context propagation throughout the execution hierarchy.
+ *                      Defaults to any for backward compatibility.
+ * 
+ * @interface ExecuteAgentParams
+ * @property {AIAgentEntity} agent - The agent entity to execute, containing all metadata and configuration
+ * @property {ChatMessage[]} conversationMessages - Array of chat messages representing the conversation history
+ * @property {UserInfo} [contextUser] - Optional user context for permission checking and personalization
+ * @property {AbortSignal} [cancellationToken] - Optional cancellation token to abort the agent execution
+ * @property {AgentExecutionProgressCallback} [onProgress] - Optional callback for receiving execution progress updates
+ * @property {AgentExecutionStreamingCallback} [onStreaming] - Optional callback for receiving streaming content updates
+ * @property {string[]} [parentAgentHierarchy] - Optional parent agent hierarchy for sub-agent execution
+ * @property {number} [parentDepth] - Optional parent depth for sub-agent execution
+ * @property {Record<string, any>} [data] - Optional data context for template rendering and prompt execution
+ * @property {TContext} [context] - Optional additional context data to pass to the agent execution.
+ *                                  This context is propagated to all sub-agents and actions throughout 
+ *                                  the execution hierarchy. Use this for runtime-specific data such as:
+ *                                  - Environment-specific configuration (API endpoints, feature flags)
+ *                                  - User-specific settings or preferences
+ *                                  - Session-specific data (request IDs, correlation IDs)
+ *                                  - External service credentials or connection information
+ *                                  
+ *                                  Note: Avoid including sensitive data like passwords or API keys 
+ *                                  unless absolutely necessary, as context may be passed to multiple 
+ *                                  agents and actions.
+ * 
+ * @example
+ * // Define a typed context
+ * interface MyAgentContext {
+ *   apiEndpoint: string;
+ *   userPreferences: { language: string; timezone: string };
+ *   sessionId: string;
+ * }
+ * 
+ * // Use with type safety
+ * const params: ExecuteAgentParams<MyAgentContext> = {
+ *   agent: myAgent,
+ *   conversationMessages: messages,
+ *   context: {
+ *     apiEndpoint: 'https://api.example.com',
+ *     userPreferences: { language: 'en', timezone: 'UTC' },
+ *     sessionId: 'abc123'
+ *   }
+ * };
+ */
+export type ExecuteAgentParams<TContext = any> = {
+    agent: AIAgentEntity;
+    conversationMessages: ChatMessage[];
+    contextUser?: UserInfo;
+    cancellationToken?: AbortSignal;
+    onProgress?: AgentExecutionProgressCallback;
+    onStreaming?: AgentExecutionStreamingCallback;
+    parentAgentHierarchy?: string[];
+    parentDepth?: number;
+    data?: Record<string, any>; // Additional data to pass through execution
+    context?: TContext;
+}
+
+/**
+ * Context data provided to agent prompts during execution.
+ * 
+ * This data structure is passed to the prompt templates and contains information
+ * about the agent, its sub-agents, and available actions. The sub-agent and action
+ * details are JSON stringified to work with the template engine.
+ * 
+ * @interface AgentContextData
+ * @property {string | null} agentName - The name of the agent being executed
+ * @property {string | null} agentDescription - Description of the agent's purpose and capabilities
+ * @property {number} subAgentCount - Number of sub-agents available to this agent
+ * @property {string} subAgentDetails - JSON stringified array of AIAgentEntity objects representing sub-agents
+ * @property {number} actionCount - Number of actions available to this agent
+ * @property {string} actionDetails - JSON stringified array of ActionEntity objects representing available actions
+ */
+export type AgentContextData = {
+    agentName: string | null;
+    agentDescription: string | null;
+    subAgentCount: number;
+    subAgentDetails: string;  // JSON stringified AIAgentEntity[]
+    actionCount: number;
+    actionDetails: string;     // JSON stringified ActionEntity[]
+}
+
+/**
+ * Configuration loaded for agent execution.
+ * 
+ * @interface AgentConfiguration
+ * @property {boolean} success - Whether configuration was loaded successfully
+ * @property {string} [errorMessage] - Error message if configuration failed
+ * @property {any} [agentType] - The loaded agent type entity
+ * @property {any} [systemPrompt] - The loaded system prompt entity
+ * @property {any} [childPrompt] - The loaded child prompt entity
+ */
+export type AgentConfiguration = {
+    success: boolean;
+    errorMessage?: string;
+    agentType?: any;
+    systemPrompt?: any;
+    childPrompt?: any;
+}
+
+/**
+ * Context maintained throughout an agent run.
+ * 
+ * This context tracks the current execution state, parent relationships for
+ * nested sub-agent calls, agent hierarchy for streaming messages, and any 
+ * persistent state needed across steps.
+ * 
+ * @interface AgentRunContext
+ * @property {number} currentStepIndex - Current position in the execution chain (0-based)
+ * @property {string[]} parentRunStack - Stack of parent run IDs for nested sub-agent calls
+ * @property {string[]} agentHierarchy - Stack of agent names for hierarchical message display (e.g., ["Marketing Agent", "Copywriter Agent"])
+ * @property {number} depth - Current nesting depth (0 = root agent, 1 = first sub-agent, etc.)
+ * @property {string} [conversationId] - Optional conversation ID linking multiple agent runs
+ * @property {string} [userId] - Optional user ID for context and permissions
+ * @property {Record<string, any>} agentState - Any persistent state maintained across steps
+ */
+export type AgentRunContext = {
+    currentStepIndex: number;
+    parentRunStack: string[];
+    agentHierarchy: string[];
+    depth: number;
+    conversationId?: string;
+    userId?: string;
+    agentState: Record<string, any>;
+}    

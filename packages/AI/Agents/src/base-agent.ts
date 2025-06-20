@@ -25,26 +25,21 @@ import {
     AgentConfiguration,
     AgentRunContext,
     AgentExecutionProgressCallback,
-    AgentExecutionStreamingCallback
-} from './types';
-import {
     ExecuteAgentResult,
     AgentAction,
     AgentSubAgentRequest,
     ExecutionChainStep,
     ExecutionNode,
-    StepExecutionResult,
     NextStepDecision,
     PromptExecutionResult,
     ActionExecutionResult,
     SubAgentExecutionResult,
-    DecisionExecutionResult,
     ValidationExecutionResult,
     ChatExecutionResult,
     NextStepDetails,
     BaseAgentNextStep
 } from '@memberjunction/aiengine';
-import { ActionEntityExtended, ActionResult, ActionResultSimple } from '@memberjunction/actions-base';
+import { ActionEntityExtended } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
 
 /**
@@ -185,6 +180,8 @@ export class BaseAgent {
      * @param {ChatMessage[]} params.conversationMessages - Conversation history
      * @param {UserInfo} [params.contextUser] - Optional user context
      * @param {any} [params.context] - Optional context object passed to sub-agents and actions
+     * @template C - The type of the agent's context as provided in the ExecuteAgentParams
+     * @template R - The type of the agent's result as returned in ExecuteAgentResult
      * 
      * @returns {Promise<ExecuteAgentResult>} Result containing next step and any output
      * 
@@ -199,7 +196,7 @@ export class BaseAgent {
      * });
      * ```
      */
-    public async Execute(params: ExecuteAgentParams): Promise<ExecuteAgentResult> {
+    public async Execute<C = any, R = any>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
         try {
             // Wrap the progress callback to capture all events
             const wrappedParams = {
@@ -247,30 +244,11 @@ export class BaseAgent {
                 return await this.createFailureResult(config.errorMessage || 'Failed to load agent configuration', params.contextUser);
             }
 
-            // Main execution loop
-            let continueExecution = true;
-            let currentNextStep: BaseAgentNextStep | null = null;
-            let finalReturnValue: any = undefined;
-            let stepCount = 0;
-
-            while (continueExecution) {
-                // Check for cancellation before each step
-                if (params.cancellationToken?.aborted) {
-                    return await this.createCancelledResult('Cancelled during execution', params.contextUser);
-                }
-
-                // Execute the current step based on previous decision or initial prompt
-                const stepResult = await this.executeNextStep(wrappedParams, config, currentNextStep);
-                stepCount++;
-                
-                // Check if we should continue or terminate
-                if (stepResult.terminate) {
-                    continueExecution = false;
-                    finalReturnValue = stepResult.returnValue;
-                } else {
-                    currentNextStep = stepResult.nextStep;
-                }
-            }
+            // Execute the agent's internal logic with wrapped parameters
+            const executionResult = await this.executeAgentInternal(wrappedParams, config);
+            
+            // Extract the final return value from the execution result
+            const finalReturnValue = executionResult.finalReturnValue;
 
             // Report finalization progress
             wrappedParams.onProgress?.({
@@ -284,11 +262,59 @@ export class BaseAgent {
 
         } catch (error) {
             // Check if error is due to cancellation
-            if (params.cancellationToken?.aborted) {
-                return await this.createCancelledResult('Cancelled due to error during execution', params.contextUser);
+            if (params.cancellationToken?.aborted || error.message === 'Cancelled during execution') {
+                return await this.createCancelledResult(error.message || 'Cancelled due to error during execution', params.contextUser);
             }
             return await this.createFailureResult(error.message, params.contextUser);
         }
+    }
+
+    /**
+     * Executes the agent's internal logic.
+     * 
+     * This method contains the core execution logic that drives agent behavior. By default,
+     * it implements a sequential execution loop, but subclasses can override this to 
+     * implement different execution patterns such as:
+     * - Parallel execution of multiple steps
+     * - Event-driven or reactive execution
+     * - State machine implementations
+     * - Custom termination conditions
+     * - Alternative flow control mechanisms
+     * 
+     * @param {ExecuteAgentParams} params - The execution parameters with wrapped callbacks (includes wrapped onProgress and onStreaming)
+     * @param {AgentConfiguration} config - The loaded agent configuration
+     * @returns {Promise<{finalReturnValue: any, stepCount: number}>} The execution result with final return value and step count
+     * @protected
+     */
+    protected async executeAgentInternal(
+        params: ExecuteAgentParams, 
+        config: AgentConfiguration
+    ): Promise<{finalReturnValue: any, stepCount: number}> {
+        let continueExecution = true;
+        let currentNextStep: BaseAgentNextStep | null = null;
+        let finalReturnValue: any = undefined;
+        let stepCount = 0;
+
+        while (continueExecution) {
+            // Check for cancellation before each step
+            if (params.cancellationToken?.aborted) {
+                throw new Error('Cancelled during execution');
+            }
+
+            // Execute the current step based on previous decision or initial prompt
+            const stepResult = await this.executeNextStep(params, config, currentNextStep);
+            stepCount++;
+            
+            // Check if we should continue or terminate
+            if (stepResult.terminate) {
+                continueExecution = false;
+                finalReturnValue = stepResult.returnValue;
+            } else {
+                currentNextStep = stepResult.nextStep;
+            }
+        }
+
+        return { finalReturnValue, stepCount };
     }
 
     /**
@@ -1176,13 +1202,17 @@ export class BaseAgent {
     /**
      * Executes the next step based on the current state.
      * 
-     * @private
+     * This method can be overridden by subclasses to customize step execution behavior.
+     * It handles the execution of different step types (prompt, actions, sub-agent, chat)
+     * based on the previous decision.
+     * 
+     * @protected
      * @param {ExecuteAgentParams} params - Original execution parameters
      * @param {AgentConfiguration} config - Agent configuration
      * @param {BaseAgentNextStep | null} previousDecision - Previous step decision
      * @returns {Promise<{terminate: boolean, returnValue?: any, nextStep?: BaseAgentNextStep}>}
      */
-    private async executeNextStep(
+    protected async executeNextStep(
         params: ExecuteAgentParams, 
         config: AgentConfiguration, 
         previousDecision: BaseAgentNextStep | null
