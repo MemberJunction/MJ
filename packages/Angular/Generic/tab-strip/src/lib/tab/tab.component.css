@@ -1,37 +1,31 @@
-
-  .single-tab {
-    flex: 0 0 auto; /* Prevent tabs from shrinking */
+.single-tab {
+    flex: 0 0 auto;
     cursor: pointer;
-    height: 26px;
-    margin-right: 1px;
-    padding-left: 10px;
-    padding-right: 10px;
-    padding-top: 5px;
+    display: flex;
+    align-items: center;
+    margin-right: 2px;
+    padding: .5rem;
     border-radius: 8px 8px 0 0;
-    border-top: solid 1px #D5D8E5;;
-    border-left: solid 1px #D5D8E5;;
-    border-right: solid 1px #D5D8E5;;
+    border-top: solid 1px var(--gray-600);
+    border-left: solid 1px var(--gray-600);
+    border-right: solid 1px var(--gray-600);
     border-bottom: 0;
-    background-color: #D5D8E5;
-    font-size: 14px;
-  }
-  .single-tab:hover {
-    color: #bb443c;
-  }
-  .single-tab-selected {
-    background-color: #F5F6FA;
-    font-weight: bold;
-  }
-  
-  .tab-close-button {
-    cursor: pointer;
-    margin-left: 10px;
-    padding: 2px;
-    font-size: 12px;
-    border-radius: 10px;
-    color: black;
-  }
-  .tab-close-button:hover {
-    background-color: lightgray;
-  }
- 
+    background-color: #FFF;
+}
+
+.single-tab-selected {
+  color: var(--mj-blue);
+}
+
+.tab-close-button {
+  cursor: pointer;
+  margin-left: 10px;
+  padding: 2px;
+  font-size: 12px;
+  border-radius: 10px;
+  color: var(--gray-800);
+}
+
+.tab-close-button:hover {
+  color: var(--gray-900);
+}

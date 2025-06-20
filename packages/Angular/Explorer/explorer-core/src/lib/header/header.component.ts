@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Output, ViewChild, ElementRef, OnInit, Input } from '@angular/core';
+import { Component, EventEmitter, Output, ViewChild, ElementRef, OnInit, Input, HostListener } from '@angular/core';
 import { take, firstValueFrom } from 'rxjs';
 import { Router } from '@angular/router';
 
@@ -19,10 +19,8 @@ export class HeaderComponent implements OnInit {
     @Input() applicationName!: string;
     @Input() applicationInstance!: string;
 
-    public menuItems: Array<string> = [
-        'User Name', 'Logout'
-    ];
-    public selectedMenuItem: string = 'User Name';
+    public menuItems: Array<string> = [];
+    public selectedMenuItem: string = '';
     public userImageURL: string = 'assets/user.png';
     @Output() public toggle = new EventEmitter();
 
@@ -30,6 +28,9 @@ export class HeaderComponent implements OnInit {
     @ViewChild(DropDownListComponent) entityDropdown!: DropDownListComponent
 
     public appName: string='';
+    public isSearchOpen: boolean = false; // Track search popup state
+    public isUserMenuOpen: boolean = false; // Track user menu state
+    public userName: string = ''; // Store user name
 
     public selectedLanguage = { locale: 'English', localeId: 'en-US' };
     public popupSettings = { width: '150' };
@@ -51,6 +52,48 @@ export class HeaderComponent implements OnInit {
 
     constructor(public authBase: MJAuthBase, public sharedService: SharedService, private msftUserImageService: MSFTUserImageService, private router: Router) {}
 
+    // Listen for clicks outside the search area and user menu to close them
+    @HostListener('document:click', ['$event'])
+    onDocumentClick(event: MouseEvent): void {
+        const target = event.target as HTMLElement;
+        const searchWrapper = document.querySelector('.search-wrapper');
+        const searchToggle = document.querySelector('.search-toggle-icon');
+        const userDropdown = document.querySelector('.user-dropdown-wrapper');
+        
+        // Close search popup if clicking outside
+        if (this.isSearchOpen && searchWrapper && searchToggle) {
+            if (!searchWrapper.contains(target) && !searchToggle.contains(target)) {
+                this.isSearchOpen = false;
+            }
+        }
+        
+        // Close user menu if clicking outside
+        if (this.isUserMenuOpen && userDropdown) {
+            if (!userDropdown.contains(target)) {
+                this.isUserMenuOpen = false;
+            }
+        }
+    }
+
+    // Toggle search popup visibility
+    public toggleSearch(): void {
+        this.isSearchOpen = !this.isSearchOpen;
+        
+        // Focus on search input when opened
+        if (this.isSearchOpen) {
+            setTimeout(() => {
+                if (this.searchInput && this.searchInput.nativeElement) {
+                    this.searchInput.nativeElement.focus();
+                }
+            }, 100);
+        }
+    }
+
+    // Toggle user menu dropdown
+    public toggleUserMenu(): void {
+        this.isUserMenuOpen = !this.isUserMenuOpen;
+    }
+
     public changeTheme(theme: {href: string, text: string}) {
         this.selectedTheme = theme;
         const themeEl: any = document.getElementById('theme');
@@ -62,15 +105,14 @@ export class HeaderComponent implements OnInit {
     }
 
     public async logout() {
+        this.isUserMenuOpen = false; // Close the menu
         this.authBase.logout();
         localStorage.removeItem('auth')
         localStorage.removeItem('claims')
     }
 
     public async valueChange(event: any) {
-        if(event === 'Logout'){
-            this.logout();
-        }
+        // This method is no longer needed since we're using custom dropdown
     }
 
     public async showNotifications(event: any) {
@@ -83,9 +125,9 @@ export class HeaderComponent implements OnInit {
         this.router.navigate(['notifications']);
     }
 
-
     public searchableEntities: any[] = [];
     public selectedEntity: any;
+    
     public async ngOnInit() {
         this.appName = `${this.applicationName} - ${this.applicationInstance}`;
         MJGlobal.Instance.GetEventListener(true).subscribe(async (event) => {
@@ -93,8 +135,7 @@ export class HeaderComponent implements OnInit {
                 await this.loadSearchableEntities();
 
                 const md = new Metadata();
-                this.menuItems[0] = md.CurrentUser.FirstLast;
-                this.selectedMenuItem = this.menuItems[0];
+                this.userName = md.CurrentUser.FirstLast; // Store user name for display
 
                 const claims$ = (await this.authBase.getUserClaims()).pipe(take(1));
                 const claims = await firstValueFrom(claims$);
@@ -125,6 +166,7 @@ export class HeaderComponent implements OnInit {
         const inputValue = this.searchInput.nativeElement.value
         if (inputValue && inputValue.length > 0 && inputValue.trim().length > 2 /* at least 3 characters to search*/ ) {
             this.searchInput.nativeElement.value = ''; // blank it out
+            this.isSearchOpen = false; // Close search popup after search
 
             this.router.navigate(['resource', 'search', inputValue], { queryParams: { Entity: this.selectedEntity.Name } })
         }

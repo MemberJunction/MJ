@@ -636,7 +636,7 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
                 }
             } 
             // next, generate HTML for the field, use fillContainer if we have just one field
-            html += `        <mj-form-field ${section.Fields.length === 1 ? 'mjFillContainer' : ''}
+            html += `        <mj-form-field ${section.Fields.length === 1 ? '' : ''}
             [record]="record"
             [ShowLabel]="${ section.Fields.length > 1 ? 'true' : 'false'}"
             FieldName="${field.CodeName}"
@@ -783,10 +783,10 @@ ${componentCodeWithTabs}
        * @returns Generated HTML with splitter layout
        */
       protected generateSingleEntityHTMLWithSplitterForAngular(topArea: string, additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
-          const htmlCode: string =  `<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
-    <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
+          const htmlCode: string =  `<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
-        <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()" mjFillContainer>
+        <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()" >
             <kendo-splitter-pane [collapsible]="true" [size]="TopAreaHeight">
 ${this.innerTopAreaHTML(topArea)}
             </kendo-splitter-pane>
@@ -825,7 +825,7 @@ ${this.innerTabStripHTML(additionalSections, relatedEntitySections)}
         const relatedEntityBeforeFieldTabs = relatedEntitySections.filter(s => s.RelatedEntityDisplayLocation === 'Before Field Tabs');
         const relatedEntityAfterFieldTabs = relatedEntitySections.filter(s => s.RelatedEntityDisplayLocation === 'After Field Tabs');
 
-      return `                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer (ResizeContainer)="InvokeManualResize()">
+      return `                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
                     ${relatedEntityBeforeFieldTabs ? relatedEntityBeforeFieldTabs.map(s => s.TabCode).join('\n') : ''}
                     ${additionalSections ? additionalSections.filter(s => s.Type !== GeneratedFormSectionType.Top).map(s => s.TabCode).join('\n               ') : ''}
                     ${relatedEntityAfterFieldTabs ? relatedEntityAfterFieldTabs.map(s => s.TabCode).join('\n') : ''}
@@ -840,8 +840,8 @@ ${this.innerTabStripHTML(additionalSections, relatedEntitySections)}
        * @returns Generated HTML without splitter layout
        */
       protected generateSingleEntityHTMLWithOUTSplitterForAngular(topArea: string, additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
-          const htmlCode: string =  `<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
-    <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
+          const htmlCode: string =  `<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 ${this.innerTopAreaHTML(topArea)}
 ${this.innerTabStripHTML(additionalSections, relatedEntitySections)}

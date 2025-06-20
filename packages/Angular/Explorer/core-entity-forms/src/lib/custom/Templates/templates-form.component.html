@@ -1,6 +1,6 @@
-<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
+<div class="record-form-container">
     @if (record) {
-        <form class="record-form" #form="ngForm" mjFillContainer>
+        <form class="record-form" #form="ngForm" >
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
         <!-- Top Section - Key Fields -->
@@ -76,7 +76,7 @@
             </div>
         </div>
 
-        <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer (ResizeContainer)="InvokeManualResize()" [bottomMargin]="140">
+        <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
             
             <!-- Contents Tab - Main Focus -->
             <mj-tab Name="Contents">
@@ -86,7 +86,7 @@
                 </span>
             </mj-tab>
             <mj-tab-body>
-                <div class="template-contents-main content-margin" mjFillContainer [bottomMargin]="80">
+                <div class="template-contents-main content-margin">
                     <!-- Shared Template Editor -->
                     <mj-template-editor 
                         [template]="record"
@@ -195,7 +195,7 @@
                     [NewRecordValues]="NewRecordValues('AI Prompts')"
                     [AllowLoad]="IsCurrentTab('AI Prompts')"  
                     [EditMode]="GridEditMode()"  
-                    [BottomMargin]="GridBottomMargin">
+                >
                 </mj-user-view-grid>                    
             </mj-tab-body>
 
@@ -209,7 +209,7 @@
                     [NewRecordValues]="NewRecordValues('Entity Documents')"
                     [AllowLoad]="IsCurrentTab('Entity Documents')"  
                     [EditMode]="GridEditMode()"  
-                    [BottomMargin]="GridBottomMargin">
+                >
                 </mj-user-view-grid>                    
             </mj-tab-body>
         </mj-tabstrip>

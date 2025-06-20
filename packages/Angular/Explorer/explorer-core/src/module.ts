@@ -18,12 +18,15 @@ import { ExcelModule, GridModule, PDFModule } from '@progress/kendo-angular-grid
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { InputsModule } from '@progress/kendo-angular-inputs';
 import { LabelModule } from '@progress/kendo-angular-label';
-import { LayoutModule, TabStripModule } from '@progress/kendo-angular-layout';
+import { LayoutModule, TabStripModule, CardModule, AvatarModule } from '@progress/kendo-angular-layout';
 import { ListViewModule } from '@progress/kendo-angular-listview';
 import { SortableModule } from '@progress/kendo-angular-sortable';
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
 import { ProgressBarModule } from "@progress/kendo-angular-progressbar";
+import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { DragDropModule } from '@angular/cdk/drag-drop';
+// Badge functionality is included in IndicatorsModule
+// Chip functionality is included in ButtonsModule
 
 // MJ
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
@@ -91,6 +94,7 @@ import { GenericDialogModule } from '@memberjunction/ng-generic-dialog';
 import {SingleListDetailComponent} from './lib/single-list-detail/single-list-detail.component';
 import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource.component';
 import { SystemValidationBannerComponent } from './lib/system-validation/system-validation-banner.component';
+import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test.component';
 
 @NgModule({
   declarations: [
@@ -135,7 +139,8 @@ import { SystemValidationBannerComponent } from './lib/system-validation/system-
     SingleListDetailComponent,
     ListDetailResource,
     TabbedDashboardComponent,
-    DashboardPreferencesDialogComponent
+    DashboardPreferencesDialogComponent,
+    StyleGuideTestComponent
   ],
   imports: [
     AppRoutingModule,
@@ -186,7 +191,10 @@ import { SystemValidationBannerComponent } from './lib/system-validation/system-
     ResourcePermissionsModule,
     GenericDialogModule,
     ProgressBarModule,
-    DragDropModule
+    DateInputsModule,
+    DragDropModule,
+    CardModule,
+    AvatarModule
   ],
   exports: [
     FormToolbarComponent,
@@ -225,7 +233,8 @@ import { SystemValidationBannerComponent } from './lib/system-validation/system-
     ResourceBrowserComponent,
     ListDetailResource,
     TabbedDashboardComponent,
-    DashboardPreferencesDialogComponent
+    DashboardPreferencesDialogComponent,
+    StyleGuideTestComponent
   ],
   providers: [
     { provide: RouteReuseStrategy, useClass: CustomReuseStrategy },

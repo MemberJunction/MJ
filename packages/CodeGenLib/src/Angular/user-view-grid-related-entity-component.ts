@@ -50,7 +50,7 @@ export class UserViewGridRelatedEntityGenerator extends RelatedEntityDisplayComp
     [NewRecordValues]="NewRecordValues('${input.RelationshipInfo!.RelatedEntity.trim()}')"
     [AllowLoad]="IsCurrentTab('${input.TabName.trim()}')"  
     [EditMode]="GridEditMode()"  
-    [BottomMargin]="GridBottomMargin">
+    >
 </mj-user-view-grid>`
         return {
             Success: true,

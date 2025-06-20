@@ -86,7 +86,6 @@ import { EntityPermissionChangedEvent } from '@memberjunction/ng-entity-permissi
     <mj-entity-permissions-grid
       [EntityName]="'Customers'"
       [Mode]="'Entity'"
-      [BottomMargin]="20"
       (PermissionChanged)="onPermissionChanged($event)">
     </mj-entity-permissions-grid>
   `
@@ -145,7 +144,6 @@ Provide a dropdown to select entities dynamically:
       <h2>Entity Permissions Manager</h2>
       <mj-entity-permissions-selector-with-grid
         [EntityName]="initialEntity"
-        [BottomMargin]="30"
         (PermissionChanged)="handlePermissionChange($event)">
       </mj-entity-permissions-selector-with-grid>
     </div>

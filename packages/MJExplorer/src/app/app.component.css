@@ -11,8 +11,7 @@
 }
 
 .app-body {
-    flex-grow: 1; /* Takes up the remaining space */
-    width: 100%;
+    overflow: hidden;
 }
   .login-wrapper {
     display: flex;

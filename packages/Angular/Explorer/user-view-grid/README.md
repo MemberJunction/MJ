@@ -89,7 +89,6 @@ Use the component in your template:
 ```html
 <mj-user-view-grid
   [Params]="viewParams"
-  [BottomMargin]="15"
   [AutoNavigate]="true"
   (rowClicked)="onRowClicked($event)"
   (rowEdited)="onRowEdited($event)">

@@ -1,5 +1,5 @@
-<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
-    <form *ngIf="record" class="record-form" #form="ngForm" mjFillContainer>
+<div class="record-form-container">
+    <form *ngIf="record" class="record-form" #form="ngForm" >
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
         <!-- Main Content Area - Template Editor and Configuration -->
@@ -960,7 +960,6 @@
                                 [NewRecordValues]="NewRecordValues('AI Result Cache')"
                                 [AllowLoad]="true"
                                 [EditMode]="GridEditMode()"  
-                                [BottomMargin]="0"
                                 style="height: 300px;">
                             </mj-user-view-grid>
                         </div>
@@ -990,7 +989,6 @@
                                         [NewRecordValues]="NewRecordValues('MJ: AI Agent Prompts')"
                                         [AllowLoad]="true"
                                         [EditMode]="GridEditMode()"  
-                                        [BottomMargin]="0"
                                         style="height: 200px;">
                                     </mj-user-view-grid>
                                 </div>
@@ -1003,7 +1001,6 @@
                                         [NewRecordValues]="NewRecordValues('AI Prompts')"
                                         [AllowLoad]="true"
                                         [EditMode]="GridEditMode()"  
-                                        [BottomMargin]="0"
                                         style="height: 200px;">
                                     </mj-user-view-grid>
                                 </div>

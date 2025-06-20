@@ -1,14 +1,14 @@
-<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
-    <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
+<div class="record-form-container">
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
-        <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()" mjFillContainer>
+        <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()" >
             <kendo-splitter-pane [collapsible]="true" [size]="TopAreaHeight">
                 <div #topArea class="record-form-group">
                     <mj-form-section Entity="Actions" Section="top-area" [record]="record" [EditMode]="this.EditMode"></mj-form-section>
                 </div>
             </kendo-splitter-pane>
             <kendo-splitter-pane>
-                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer (ResizeContainer)="InvokeManualResize()">
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
                     
                     <mj-tab Name="Details">
                         Details
@@ -43,7 +43,7 @@
                             [NewRecordValues]="NewRecordValues('Action Params')"
                             [AllowLoad]="IsCurrentTab('Params')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -56,7 +56,7 @@
                             [NewRecordValues]="NewRecordValues('Action Libraries')"
                             [AllowLoad]="IsCurrentTab('Libraries')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -69,7 +69,7 @@
                             [NewRecordValues]="NewRecordValues('Scheduled Actions')"
                             [AllowLoad]="IsCurrentTab('Scheduled Actions')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -82,7 +82,7 @@
                             [NewRecordValues]="NewRecordValues('Action Result Codes')"
                             [AllowLoad]="IsCurrentTab('Result Codes')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -95,7 +95,7 @@
                             [NewRecordValues]="NewRecordValues('AI Agent Actions')"
                             [AllowLoad]="IsCurrentTab('AIAgent Actions')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -108,7 +108,7 @@
                             [NewRecordValues]="NewRecordValues('Action Contexts')"
                             [AllowLoad]="IsCurrentTab('Action Contexts')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -121,7 +121,7 @@
                             [NewRecordValues]="NewRecordValues('Entity Actions')"
                             [AllowLoad]="IsCurrentTab('Entity Actions')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -134,7 +134,7 @@
                             [NewRecordValues]="NewRecordValues('Action Execution Logs')"
                             [AllowLoad]="IsCurrentTab('Execution Logs')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -147,7 +147,7 @@
                             [NewRecordValues]="NewRecordValues('Action Authorizations')"
                             [AllowLoad]="IsCurrentTab('Authorizations')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
