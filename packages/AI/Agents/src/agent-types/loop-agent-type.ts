@@ -26,7 +26,7 @@ import { LogError, LogStatus } from '@memberjunction/core';
  * 
  * @interface LoopAgentResponse
  */
-interface LoopAgentResponse<T = any> {
+export interface LoopAgentResponse<T = any> {
     /**
      * Indicates whether the entire task has been completed successfully.
      * When true, the agent loop will terminate and return the final result.
