@@ -14,7 +14,7 @@ You will be creating a **child action** that orchestrates and extends a parent a
 
 **Parent Action Context:**
 {{ ChildActionInfo }}
-
+ 
 Your child action should invoke the parent action using:
 ```typescript
 const a = ActionEngineServer.Instance.Actions.find(a => a.Name === '{{ parentAction.Name }}');

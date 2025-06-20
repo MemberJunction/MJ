@@ -11,7 +11,7 @@
   - Description (string, unlimited) - Detailed description of the dashboard's purpose
   - CategoryID (UUID) - References a Dashboard Category for organization
   - Type (enum) - Dashboard type: "Config" (default, metadata-driven), "Code" (compiled TypeScript), or "Dynamic Code"
-  (Skip-generated runtime) 
+  (Skip-generated runtime)   
   - Thumbnail (string) - Base64 encoded image or URL for the dashboard thumbnail
   - Scope (enum) - "Global" (default, available to all) or "App" (specific to an application)
   - ApplicationID (UUID) - Required if Scope is "App", links to the specific Application

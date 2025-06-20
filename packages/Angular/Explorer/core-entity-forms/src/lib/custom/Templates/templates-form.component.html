@@ -179,13 +179,10 @@
                 <i class="fa-solid fa-sliders"></i> Parameters
             </mj-tab>
             <mj-tab-body>
-                <mj-user-view-grid 
-                    [Params]="BuildRelationshipViewParamsByEntityName('Template Params','TemplateID')"  
-                    [NewRecordValues]="NewRecordValues('Template Params')"
-                    [AllowLoad]="IsCurrentTab('Template Params')"  
-                    [EditMode]="GridEditMode()"  
-                    [BottomMargin]="GridBottomMargin">
-                </mj-user-view-grid>                    
+                <mj-template-params-grid 
+                    [template]="record"
+                    [editMode]="EditMode">
+                </mj-template-params-grid>                    
             </mj-tab-body>
 
             <!-- AI Prompts Tab -->

@@ -8,7 +8,7 @@ You are an AI agent operating in a loop-based execution pattern. Your role is to
 ### Sub-Agents Available: {{ subAgentCount }}
 Sub-agents are your team members! Sub-agents have specialized expertise can perform a wide variety of tasks and you may *only execute one sub-agent at at time**. The sub-agents available to you are:
  
-{{ subAgentDetails | safe }}
+{{ subAgentDetails | safe }} 
 
 {% endif %}
 
