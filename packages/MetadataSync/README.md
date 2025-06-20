@@ -914,6 +914,53 @@ Directory order is configured in the root-level `.mj-sync.json` file only (not i
 2. **Categories → Items**: Create category records before items that reference them
 3. **Parent → Child**: Process parent entities before child entities with foreign key dependencies
 
+### Ignore Directories
+
+The MetadataSync tool supports ignoring specific directories during push/pull operations. This is useful for:
+- Excluding output or example directories from processing
+- Skipping temporary or build directories
+- Organizing support files without them being processed as metadata
+
+#### Configuration
+
+Ignore directories are configured in `.mj-sync.json` files and are **cumulative** through the directory hierarchy:
+
+```json
+{
+  "version": "1.0.0",
+  "ignoreDirectories": [
+    "output",
+    "examples",
+    "templates"
+  ]
+}
+```
+
+#### How It Works
+
+- **Cumulative Inheritance**: Each directory inherits ignore patterns from its parent directories
+- **Relative Paths**: Directory names are relative to the location of the `.mj-sync.json` file
+- **Simple Patterns**: Supports exact directory names (e.g., "output", "temp")
+- **Additive**: Child directories can add their own ignore patterns to parent patterns
+
+#### Example
+
+```
+metadata/.mj-sync.json            → ignoreDirectories: ["output", "temp"]
+├── prompts/.mj-sync.json         → ignoreDirectories: ["examples"]
+│   ├── output/                   → IGNORED (from root)
+│   ├── examples/                 → IGNORED (from prompts)
+│   └── production/.mj-sync.json  → ignoreDirectories: ["drafts"]
+│       ├── drafts/               → IGNORED (from production)
+│       └── output/               → IGNORED (inherited from root)
+```
+
+In this example:
+- Root level ignores "output" and "temp" everywhere
+- Prompts directory adds "examples" to the ignore list
+- Production subdirectory further adds "drafts"
+- All patterns are cumulative, so production inherits all parent ignores
+
 ### SQL Logging (NEW)
 
 The MetadataSync tool now supports SQL logging for capturing all database operations during push commands. This feature is useful for:

@@ -14,13 +14,15 @@ You will be creating a **child action** that orchestrates and extends a parent a
 
 **Parent Action Context:**
 {{ ChildActionInfo }}
-
+ 
 Your child action should invoke the parent action using:
 ```typescript
-const result = await ActionEngine.Instance.RunAction({
-    ActionName: '{{ parentAction.Name }}',
+const a = ActionEngineServer.Instance.Actions.find(a => a.Name === '{{ parentAction.Name }}');
+parentResult = await ActionEngineServer.Instance.RunAction({
+    Action: a,
     Params: mappedParams,
-    ContextUser: params.ContextUser
+    ContextUser: params.ContextUser,
+    Filters: []
 });
 ```
 {% else %}
@@ -46,10 +48,6 @@ Your action should return one of these result codes:
 These libraries are already imported and available for use:
 {{ availableLibraries }}
 
-### Available Entities
-These entities exist in the system for context:
-{{ entities }}
-
 ## Requirements
 
 1. **Implement the InternalRunAction method** - Your code goes inside this method
@@ -70,15 +68,21 @@ const inputParam1 = params.Params.find(p => p.Name.trim().toLowerCase() === 'par
 
 // 2. Pre-process: Transform child parameters to parent format
 const mappedParams: ActionParam[] = [
-    { Name: 'ParentParam1', Value: transformedValue1 },
+    { 
+      Name: 'ParentParam1', 
+      Type: 'Input', 
+      Value: transformedValue1  
+    },
     // ... map other parameters
 ];
 
 // 3. Invoke parent action
-const parentResult = await ActionEngine.Instance.RunAction({
-    ActionName: '{{ parentAction.Name }}',
+const a = ActionEngineServer.Instance.Actions.find(a => a.Name === '{{ parentAction.Name }}');
+parentResult = await ActionEngineServer.Instance.RunAction({
+    Action: a,
     Params: mappedParams,
-    ContextUser: params.ContextUser
+    ContextUser: params.ContextUser,
+    Filters: []
 });
 
 // 4. Check parent result
@@ -97,6 +101,7 @@ const processedOutput = transformParentOutput(parentResult);
 if (outputNeeded) {
     params.Params.push({
         Name: 'OutputParam',
+        Type: 'Output',
         Value: processedOutput
     });
 }

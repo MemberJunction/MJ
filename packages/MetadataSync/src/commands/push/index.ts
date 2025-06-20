@@ -261,13 +261,20 @@ export default class Push extends Command {
           this.log(`\nProcessing ${entityConfig.entity} in ${entityDir}`);
         }
         
+        // Combine root ignoreDirectories with entity-level ignoreDirectories
+        const initialIgnoreDirectories = [
+          ...(syncConfig?.ignoreDirectories || []),
+          ...(entityConfig?.ignoreDirectories || [])
+        ];
+        
         const result = await this.processEntityDirectory(
           entityDir,
           entityConfig,
           syncEngine,
           flags,
           syncConfig,
-          fileBackupManager
+          fileBackupManager,
+          initialIgnoreDirectories
         );
         
         // Show per-directory summary
@@ -488,7 +495,8 @@ export default class Push extends Command {
     syncEngine: SyncEngine,
     flags: any,
     syncConfig: any,
-    fileBackupManager?: FileBackupManager
+    fileBackupManager?: FileBackupManager,
+    parentIgnoreDirectories?: string[]
   ): Promise<{ created: number; updated: number; unchanged: number; errors: number }> {
     const result = { created: 0, updated: 0, unchanged: 0, errors: 0 };
     
@@ -571,11 +579,23 @@ export default class Push extends Command {
     const entries = await fs.readdir(entityDir, { withFileTypes: true });
     for (const entry of entries) {
       if (entry.isDirectory() && !entry.name.startsWith('.')) {
+        // Build cumulative ignore list: parent + current directory's ignores
+        const currentDirConfig = await loadSyncConfig(entityDir);
+        const currentEntityConfig = await loadEntityConfig(entityDir);
+        const cumulativeIgnoreDirectories = [
+          ...(parentIgnoreDirectories || []),
+          ...(currentDirConfig?.ignoreDirectories || []),
+          ...(currentEntityConfig?.ignoreDirectories || [])
+        ];
+        
         // Check if this directory should be ignored
-        if (syncConfig?.ignoreDirectories && syncConfig.ignoreDirectories.some((pattern: string) => {
+        if (cumulativeIgnoreDirectories.some((pattern: string) => {
           // Simple pattern matching: exact name or ends with pattern
           return entry.name === pattern || entry.name.endsWith(pattern);
         })) {
+          if (flags.verbose) {
+            this.log(`  Ignoring directory: ${entry.name} (matched ignore pattern)`);
+          }
           continue;
         }
         
@@ -603,14 +623,15 @@ export default class Push extends Command {
           };
         }
         
-        // Process subdirectory with merged config
+        // Process subdirectory with merged config and cumulative ignore directories
         const subResult = await this.processEntityDirectory(
           subDir,
           subEntityConfig,
           syncEngine,
           flags,
           syncConfig,
-          fileBackupManager
+          fileBackupManager,
+          cumulativeIgnoreDirectories
         );
         
         result.created += subResult.created;
@@ -824,7 +845,7 @@ export default class Push extends Command {
         try {
           const processedValue = await syncEngine.processFieldValue(value, baseDir, null, null);
           if (verbose) {
-            this.log(`  Setting ${field}: ${JSON.stringify(value)} -> ${JSON.stringify(processedValue)}`);
+            this.log(`  Setting ${field}: ${this.formatFieldValue(value)} -> ${this.formatFieldValue(processedValue)}`);
           }
           (entity as any)[field] = processedValue;
         } catch (error) {
@@ -875,7 +896,7 @@ export default class Push extends Command {
           const field = entity.GetFieldByName(fieldName);
           const oldValue = field ? field.OldValue : undefined;
           const newValue = (changes as any)[fieldName];
-          this.log(`     ${fieldName}: ${oldValue} → ${newValue}`);
+          this.log(`     ${fieldName}: ${this.formatFieldValue(oldValue)} → ${this.formatFieldValue(newValue)}`);
         }
       }
     } else if (isNew) {
@@ -1044,7 +1065,7 @@ export default class Push extends Command {
                   rootEntity
                 );
                 if (verbose) {
-                  this.log(`${indent}  Setting ${field}: ${JSON.stringify(value)} -> ${JSON.stringify(processedValue)}`);
+                  this.log(`${indent}  Setting ${field}: ${this.formatFieldValue(value)} -> ${this.formatFieldValue(processedValue)}`);
                 }
                 (entity as any)[field] = processedValue;
               } catch (error) {
@@ -1091,7 +1112,7 @@ export default class Push extends Command {
                 const field = entity.GetFieldByName(fieldName);
                 const oldValue = field ? field.OldValue : undefined;
                 const newValue = (changes as any)[fieldName];
-                this.log(`${indent}     ${fieldName}: ${oldValue} → ${newValue}`);
+                this.log(`${indent}     ${fieldName}: ${this.formatFieldValue(oldValue)} → ${this.formatFieldValue(newValue)}`);
               }
             }
           } else if (isNew) {
@@ -1240,6 +1261,24 @@ export default class Push extends Command {
     return false; // not duplicate
   }
   
+  /**
+   * Format field value for console display
+   */
+  private formatFieldValue(value: any, maxLength: number = 50): string {
+    // Convert value to string representation
+    let strValue = JSON.stringify(value);
+    
+    // Trim the string
+    strValue = strValue.trim();
+    
+    // If it's longer than maxLength, truncate and add ellipsis
+    if (strValue.length > maxLength) {
+      return strValue.substring(0, maxLength) + '...';
+    }
+    
+    return strValue;
+  }
+
   /**
    * Parse JSON file and track line numbers for array elements
    */

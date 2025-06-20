@@ -71,6 +71,7 @@ export type AgentSubAgentRequest<TContext = any> = {
     name: string;
     message: string;
     terminateAfter: boolean;
+    templateParameters?: Record<string, string>; // Optional template parameters for sub-agent invocation
     context?: TContext; // Optional because AI determines sub-agent invocation, context comes from execution params
 }
 

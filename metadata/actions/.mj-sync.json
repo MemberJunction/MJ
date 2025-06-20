@@ -4,6 +4,9 @@
   "defaults": {
       "CategoryID": "@lookup:Action Categories.Name=System"
   },
+  "ignoreDirectories": [
+    "templates"
+  ],
   "pull": {
     "createNewFileIfNotFound": true,
     "newFileName": ".actions.json",

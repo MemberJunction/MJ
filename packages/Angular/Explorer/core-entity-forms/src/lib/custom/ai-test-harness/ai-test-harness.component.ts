@@ -2,8 +2,8 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, S
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 import { WindowService, WindowRef, WindowCloseResult } from '@progress/kendo-angular-dialog';
-import { AIAgentEntity, AIPromptEntity } from '@memberjunction/core-entities';
-import { Metadata } from '@memberjunction/core';
+import { AIAgentEntity, AIPromptEntity, TemplateParamEntity } from '@memberjunction/core-entities';
+import { Metadata, RunView } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ChatMessage } from '@memberjunction/ai';
@@ -373,6 +373,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         if (this.mode === 'prompt') {
             this.loadAvailableModels();
             this.loadPromptDefaults();
+            this.loadTemplateParameters(); // Load template parameters for pre-population
         }
     }
 
@@ -782,6 +783,76 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             if (prompt.TopLogProbs != null) this.advancedParams.topLogProbs = prompt.TopLogProbs;
         }
     }
+
+    /**
+     * Loads template parameters from the prompt's template and pre-populates
+     * the template variables with their default values
+     */
+    private async loadTemplateParameters() {
+        if (this.mode === 'prompt' && this.entity && this.isPromptEntity(this.entity)) {
+            const prompt = this.entity as AIPromptEntity;
+            
+            if (!prompt.TemplateID) {
+                return; // No template to load parameters from
+            }
+
+            try {
+                const rv = new RunView();
+                const result = await rv.RunView<TemplateParamEntity>({
+                    EntityName: 'Template Params',
+                    ExtraFilter: `TemplateID='${prompt.TemplateID}'`,
+                    OrderBy: 'Name ASC',
+                    ResultType: 'entity_object'
+                });
+
+                if (result.Success && result.Results && result.Results.length > 0) {
+                    // Clear existing template variables
+                    this.templateVariables = [];
+                    
+                    // Add each template parameter as a variable with its default value
+                    for (const param of result.Results) {
+                        this.templateVariables.push({
+                            name: param.Name,
+                            value: param.DefaultValue || '',
+                            type: this.getVariableTypeFromParamType(param.Type)
+                        });
+                    }
+                    
+                    // If no parameters found, add one empty variable to start
+                    if (this.templateVariables.length === 0) {
+                        this.templateVariables.push({ name: '', value: '', type: 'string' });
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading template parameters:', error);
+                // Add one empty variable on error
+                this.templateVariables = [{ name: '', value: '', type: 'string' }];
+            }
+        }
+    }
+
+    /**
+     * Maps template parameter types to variable types
+     */
+    private getVariableTypeFromParamType(paramType: string): 'string' | 'number' | 'boolean' | 'object' {
+        switch (paramType?.toLowerCase()) {
+            case 'number':
+            case 'integer':
+            case 'float':
+            case 'decimal':
+                return 'number';
+            case 'boolean':
+            case 'bool':
+                return 'boolean';
+            case 'object':
+            case 'json':
+            case 'array':
+                return 'object';
+            default:
+                return 'string';
+        }
+    }
+
     
     /**
      * Resets all model settings to the prompt defaults

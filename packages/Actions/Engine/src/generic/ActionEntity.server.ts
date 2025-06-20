@@ -1,6 +1,6 @@
-import { BaseEntity, CodeNameFromString, EntityInfo, EntitySaveOptions, LogError, Metadata, RunView } from "@memberjunction/core";
+import { BaseEntity, EntityInfo, EntitySaveOptions, LogError, Metadata, RunView } from "@memberjunction/core";
 import { ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity, AIPromptEntity } from "@memberjunction/core-entities";
-import { CleanJSON, MJEventType, MJGlobal, RegisterClass } from "@memberjunction/global";
+import { MJEventType, MJGlobal, RegisterClass } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 
@@ -276,16 +276,7 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
     protected async PreparePromptData(): Promise<Record<string, any>> {
         const data: Record<string, any> = {
             userPrompt: this.UserPrompt,
-            actionParams: JSON.stringify(this.Params, null, 2),
-            resultCodes: this.ResultCodes && this.ResultCodes.length > 0 ? 
-                this.ResultCodes.map(rc => `'${rc.ResultCode}'`).join(' | ') : "'Success' | 'Failed'",
             availableLibraries: this.GenerateLibrariesContext(),
-            entities: JSON.stringify(Metadata.Provider.Entities.map(e => ({
-                Entity: e.Name,
-                SchemaName: e.SchemaName,
-                Description: e.Description,
-                BaseView: e.BaseView
-            })), null, 2),
             IsChildAction: !!this.ParentID  // Template variable for conditional sections
         };
 
@@ -299,7 +290,17 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
 **Parent Description:** ${parentAction.Description || 'No description provided'}
 
 **Parent Parameters:**
-${JSON.stringify(parentAction.Params, null, 2)}
+${JSON.stringify(parentAction.Params.map(p => {
+    return {
+        Name: p.Name,
+        Type: p.Type,
+        ValueType: p.ValueType,
+        IsArray: p.IsArray,
+        IsRequired: p.IsRequired,
+        DefaultValue: p.DefaultValue,
+        Description: p.Description
+    }
+}), null, 2)}
 `;
                 // Also include the parent action object for template access
                 data.parentAction = {
@@ -366,7 +367,13 @@ ${JSON.stringify(parentAction.Params, null, 2)}
                 const newParam = await md.GetEntityObject<ActionParamEntity>('Action Params', this.ContextCurrentUser);
                 newParam.ActionID = this.ID;
                 newParam.Name = param.Name;
-                newParam.Type = param.Type;
+                const t = param.Type;
+                if (t === 'Input' || t === 'Output' || t === 'Both') {
+                    newParam.Type = t;
+                } else {
+                    newParam.Type = 'Input'; // Default to Input if type is not recognized and emit a warning
+                    console.warn(`Action Generator: Unrecognized parameter type "${t}" for parameter "${param.Name}". Defaulting to "Input".`);
+                }
                 newParam.ValueType = param.ValueType;
                 newParam.IsArray = param.IsArray;
                 newParam.IsRequired = param.IsRequired;
