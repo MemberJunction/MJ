@@ -831,7 +831,7 @@ export class BaseAgent {
             Name: sa.Name,
             Description: sa.Description,
             Type: sa.TypeID ? this.getAgentTypeName(sa.TypeID) : 'Unknown',
-            TemplateParameters: this.getAgentPromptParameters(sa),
+            TemplateParameters: this.getAgentPromptParametersJSON(sa),
             Status: sa.Status,
             ExecutionMode: sa.ExecutionMode,
             ExecutionOrder: sa.ExecutionOrder
@@ -857,6 +857,17 @@ export class BaseAgent {
 
         // Return parameters as key-value pairs
         return prompt.TemplateParams;
+    }
+
+    protected getAgentPromptParametersJSON(agent: AIAgentEntity): string {
+        const params = this.getAgentPromptParameters(agent);
+        return JSON.stringify(params.map(param => ({
+            Name: param.Name,
+            Type: param.Type,
+            IsRequired: param.IsRequired,
+            DefaultValue: param.DefaultValue,
+            Description: param.Description
+        })), null, 2);
     }
 
     /**
