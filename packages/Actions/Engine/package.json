@@ -26,7 +26,6 @@
     "@memberjunction/ai": "2.52.0",
     "@memberjunction/aiengine": "2.52.0",
     "@memberjunction/ai-prompts": "2.52.0",
-    "@memberjunction/doc-utils": "2.52.0",
-    "@memberjunction/sqlserver-dataprovider": "2.52.0"
+    "@memberjunction/doc-utils": "2.52.0"
   }
 }
