@@ -16,7 +16,11 @@
       "id": "sub agent UUID goes here",
       "name": "sub agent name goes here",
       "message": "your message to the sub-agent including any important context for the sub-agent to be aware of. Can be text and/or JSON",
-      "terminateAfter": true
+      "terminateAfter": true,
+      "templateParameters": {
+        "param1": "value1",
+        "param2": "value2"
+      }
     },
     "userMessage?": "Provide a message to the user, only provided if type='chat'"
   },

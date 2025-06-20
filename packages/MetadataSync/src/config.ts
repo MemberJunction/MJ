@@ -62,9 +62,10 @@ export interface SyncConfig {
    */
   directoryOrder?: string[];
   /** 
-   * Directories to ignore during processing (only applies to root-level config)
-   * Can be directory names or glob patterns relative to the metadata root
-   * Examples: ["output", "examples", "**\/temp"]
+   * Directories to ignore during processing
+   * Can be directory names or glob patterns relative to the location of the .mj-sync.json file
+   * Cumulative: subdirectories inherit and add to parent ignoreDirectories
+   * Examples: ["output", "examples", "temp"]
    */
   ignoreDirectories?: string[];
   /** Push command configuration */
@@ -170,6 +171,13 @@ export interface EntityConfig {
   filePattern?: string;
   /** Default field values applied to all records in this directory */
   defaults?: Record<string, any>;
+  /** 
+   * Directories to ignore during processing
+   * Can be directory names or glob patterns relative to the location of the .mj-sync.json file
+   * Cumulative: subdirectories inherit and add to parent ignoreDirectories
+   * Examples: ["output", "examples", "temp"]
+   */
+  ignoreDirectories?: string[];
   /** Pull command specific configuration */
   pull?: {
     /** Glob pattern for finding existing files to update (defaults to filePattern) */

@@ -186,6 +186,7 @@ export function getDataProvider(): SQLServerDataProvider | null {
  * @param dir - Base directory to search from
  * @param specificDir - Optional specific subdirectory name to check
  * @param directoryOrder - Optional array specifying the order directories should be processed
+ * @param ignoreDirectories - Optional array of directory patterns to ignore
  * @returns Array of absolute directory paths containing .mj-sync.json files, ordered according to directoryOrder
  * 
  * @example
@@ -223,7 +224,12 @@ export function findEntityDirectories(dir: string, specificDir?: string, directo
           // If this config has directoryOrder but no entity, treat it as a root config
           // and look for entity directories in its subdirectories
           if (config.directoryOrder) {
-            return findEntityDirectories(targetDir, undefined, config.directoryOrder, config.ignoreDirectories);
+            // Merge ignore directories from parent with current config
+            const mergedIgnoreDirectories = [
+              ...(ignoreDirectories || []),
+              ...(config.ignoreDirectories || [])
+            ];
+            return findEntityDirectories(targetDir, undefined, config.directoryOrder, mergedIgnoreDirectories);
           }
         } catch (error) {
           // If we can't parse the config, treat it as a regular directory

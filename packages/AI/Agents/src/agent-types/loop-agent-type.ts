@@ -102,6 +102,15 @@ interface LoopAgentResponse {
              * history. Can be plain text or include JSON data.
              */
             message: string;
+
+            /**
+             * If the sub-agent's system prompt includes any template parameters,
+             * this object should provide values for those parameters.
+             * Keys must match the parameter names defined in the sub-agent's system prompt.
+             * Values should match the expected types for each parameter.
+             * @optional
+             */
+            templateParameters?: Record<string, any>;
             
             /**
              * Whether to terminate the parent agent after the sub-agent completes.
@@ -250,7 +259,8 @@ export class LoopAgentType extends BaseAgentType {
                             id: response.nextStep.subAgent.id,
                             name: response.nextStep.subAgent.name,
                             message: response.nextStep.subAgent.message,
-                            terminateAfter: response.nextStep.subAgent.terminateAfter
+                            terminateAfter: response.nextStep.subAgent.terminateAfter,
+                            templateParameters: response.nextStep.subAgent.templateParameters || {}
                         }
                     };
 

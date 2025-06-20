@@ -1,0 +1,28 @@
+{
+  "parameters": [
+    {
+      "name": "customerName",
+      "type": "Scalar",
+      "isRequired": true,
+      "description": "The name of the customer",
+      "usage": ["greeting header", "personalization"],
+      "defaultValue": null
+    },
+    {
+      "name": "orderItems",
+      "type": "Array",
+      "isRequired": false,
+      "description": "List of items in the customer's order",
+      "usage": ["order details section", "item iteration"],
+      "defaultValue": null
+    },
+    {
+      "name": "companyInfo",
+      "type": "Object",
+      "isRequired": true,
+      "description": "Company information object containing name, address, and contact details",
+      "usage": ["footer section", "contact information"],
+      "defaultValue": null
+    }
+  ]
+}
