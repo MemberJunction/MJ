@@ -19,6 +19,7 @@ export const SPType = {
     Create: 'Create',
     Update: 'Update',
     Delete: 'Delete',
+    Upsert: 'Upsert',
   } as const;
 
 export type SPType = typeof SPType[keyof typeof SPType];
@@ -568,6 +569,42 @@ export class SQLCodeGenBase {
                     sRet += s + '\nGO\n';
             }
 
+            // UPSERT SP
+            if (options.entity.AllowUpsertAPI && !options.entity.VirtualEntity) {
+                const spName: string = this.getSPName(options.entity, SPType.Upsert);
+                if (!options.onlyPermissions && 
+                    (options.entity.spUpsertGenerated || 
+                     (configInfo.forceRegeneration?.enabled && (configInfo.forceRegeneration?.spUpsert || configInfo.forceRegeneration?.allStoredProcedures)))) {
+                    // generate the upsert SP
+                    const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + this.generateSPUpsert(options.entity)
+                    if (options.writeFiles) {
+                        const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
+
+                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpsert SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
+
+                        fs.writeFileSync(filePath, s);
+                        files.push(filePath);
+                    }
+                    sRet += s + '\nGO\n';
+                }
+                const s = this.generateSPPermissions(options.entity, spName, SPType.Upsert) + '\n\n';
+                if (s.length > 0)
+                    permissionsSQL += s + '\nGO\n';
+                if (options.writeFiles) {
+                    const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, true, true));
+
+                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpsert Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
+
+                    fs.writeFileSync(filePath, s);
+                    files.push(filePath);
+                }
+
+                // now, append the permissions to the return string IF we did NOT generate the proc - because if we generated the proc, that
+                // means we already generated the permissions for it above and it is part of sRet already, but we always save it to a file, (per above line)
+                if (!options.entity.spUpsertGenerated)
+                    sRet += s + '\nGO\n';
+            }
+
             // check to see if the options.entity supports full text search or not
             if (options.entity.FullTextSearchEnabled || (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.fullTextSearch)) {
                 // always generate the code so we can get the function name from the below function call
@@ -618,6 +655,8 @@ export class SQLCodeGenBase {
                 return entity.spUpdate && entity.spUpdate.length > 0 ? entity.spUpdate : 'spUpdate' + entity.ClassName;
             case SPType.Delete:
                 return entity.spDelete && entity.spDelete.length > 0 ? entity.spDelete : 'spDelete' + entity.ClassName;
+            case SPType.Upsert:
+                return entity.spUpsert && entity.spUpsert.length > 0 ? entity.spUpsert : 'spUpsert' + entity.ClassName;
         }
     }
 
@@ -635,6 +674,8 @@ export class SQLCodeGenBase {
                 files.push(this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, this.getSPName(entity, SPType.Update), true, true));
             if (entity.AllowDeleteAPI)
                 files.push(this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, this.getSPName(entity, SPType.Delete), true, true));
+            if (entity.AllowUpsertAPI)
+                files.push(this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, this.getSPName(entity, SPType.Upsert), true, true));
         }
         if (entity.FullTextSearchEnabled)
             files.push(this.SQLUtilityObject.getDBObjectFileName('full_text_search_function', entity.SchemaName, entity.BaseTable, true, true));
@@ -684,6 +725,15 @@ export class SQLCodeGenBase {
             else
                 // custom SP, still generate the permissions
                 sOutput += this.generateSPPermissions(entity, entity.spDelete, SPType.Delete) + '\n\n';
+        }
+
+        if (entity.AllowUpsertAPI && !entity.VirtualEntity) {
+            if (entity.spUpsertGenerated)
+                // generated SP, will include permissions
+                sOutput += this.generateSPUpsert(entity) + '\n\n';
+            else
+                // custom SP, still generate the permissions
+                sOutput += this.generateSPPermissions(entity, entity.spUpsert, SPType.Upsert) + '\n\n';
         }
 
         // check to see if the entity supports full text search or not
@@ -992,7 +1042,8 @@ ${whereClause}GO${permissions}
             if (
                     (type == SPType.Create && ep.CanCreate) ||
                     (type == SPType.Update && ep.CanUpdate) ||
-                    (type == SPType.Delete && ep.CanDelete)
+                    (type == SPType.Delete && ep.CanDelete) ||
+                    (type == SPType.Upsert && ep.CanCreate && ep.CanUpdate)
                ) {
                     if (ep.RoleSQLName && ep.RoleSQLName.length > 0) {
                         sOutput += (sOutput === '' ? `GRANT EXECUTE ON [${entity.SchemaName}].[${spName}] TO ` : ', ') + `[${ep.RoleSQLName}]`
@@ -1203,6 +1254,57 @@ GO
 ${permissions}
 GO
 ${updatedAtTrigger}
+        `
+    }
+
+    protected generateSPUpsert(entity: EntityInfo): string {
+        const spName: string = entity.spUpsert ? entity.spUpsert : `spUpsert${entity.ClassName}`;
+        const efParamString: string = this.createEntityFieldsParamString(entity.Fields, false);
+        const permissions: string = this.generateSPPermissions(entity, spName, SPType.Upsert);
+        
+        return `
+------------------------------------------------------------
+----- UPSERT PROCEDURE FOR ${entity.BaseTable}
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${entity.SchemaName}].[${spName}]
+GO
+
+CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
+    ${efParamString},
+    @OperationType CHAR(1) OUTPUT -- 'I' for Insert, 'U' for Update
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    -- Check if record exists based on primary key(s)
+    IF EXISTS (
+        SELECT 1 
+        FROM [${entity.SchemaName}].[${entity.BaseTable}] 
+        WHERE ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
+    )
+    BEGIN
+        -- Record exists, perform update
+        EXEC [${entity.SchemaName}].[${this.getSPName(entity, SPType.Update)}] ${entity.Fields.filter(f => 
+            (f.AllowUpdateAPI || f.IsPrimaryKey) && 
+            !f.IsVirtual && 
+            !f.IsSpecialDateField
+        ).map(f => `@${f.CodeName}`).join(', ')}
+        SET @OperationType = 'U'
+    END
+    ELSE
+    BEGIN
+        -- Record does not exist, perform insert
+        EXEC [${entity.SchemaName}].[${this.getSPName(entity, SPType.Create)}] ${entity.Fields.filter(f => 
+            f.AllowUpdateAPI && 
+            !f.IsVirtual && 
+            !f.IsSpecialDateField && 
+            !(f.IsPrimaryKey && f.AutoIncrement)
+        ).map(f => `@${f.CodeName}`).join(', ')}
+        SET @OperationType = 'I'
+    END
+END
+GO
+${permissions}
         `
     }
 

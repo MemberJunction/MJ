@@ -240,6 +240,10 @@ const forceRegenerationConfigSchema = z.object({
    */
   spDelete: z.boolean().default(false),
   /**
+   * Force regeneration of spUpsert procedures
+   */
+  spUpsert: z.boolean().default(false),
+  /**
    * Force regeneration of all stored procedures
    */
   allStoredProcedures: z.boolean().default(false),

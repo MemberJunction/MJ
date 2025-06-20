@@ -768,6 +768,7 @@ export class EntityInfo extends BaseInfo {
     AllowUpdateAPI: boolean = false
     AllowCreateAPI: boolean = false
     AllowDeleteAPI: boolean = false
+    AllowUpsertAPI: boolean = false
     CustomResolverAPI: boolean = false
     AllowUserSearchAPI: boolean = false
     FullTextSearchEnabled: boolean = false
@@ -781,9 +782,11 @@ export class EntityInfo extends BaseInfo {
     spCreate: string = null
     spUpdate: string = null
     spDelete: string = null
+    spUpsert: string = null
     spCreateGenerated: boolean = null
     spUpdateGenerated: boolean = null
     spDeleteGenerated: boolean = null
+    spUpsertGenerated: boolean = null
     CascadeDeletes: boolean = null
     DeleteType: 'Hard' | 'Soft' = 'Hard'
     AllowRecordMerge: boolean = null
