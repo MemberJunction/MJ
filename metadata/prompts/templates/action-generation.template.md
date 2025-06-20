@@ -90,7 +90,7 @@ if (!parentResult.Success) {
     return {
         Success: false,
         ResultCode: 'ParentActionFailed',
-        Message: `Parent action failed: ${parentResult.Message}`
+        Message: 'Parent action failed: ' + parentResult.Message
     };
 }
 
