@@ -1705,6 +1705,75 @@ export class AIPromptRunner {
   }
 
   /**
+   * Recursively validates an object against an example template.
+   * Keys ending with '?' are optional, all others are required.
+   * Keys ending with '*' are required but can contain any value/structure.
+   * 
+   * @param result - The actual result to validate
+   * @param example - The example template with optional fields marked with '?' and wildcard fields with '*'
+   * @param path - Current path in the object hierarchy for error reporting
+   * @returns Array of validation errors
+   */
+  private validateObjectAgainstExample(
+    result: unknown,
+    example: unknown,
+    path: string = ''
+  ): ValidationErrorInfo[] {
+    const errors: ValidationErrorInfo[] = [];
+
+    // If example is not an object, we don't validate structure
+    if (typeof example !== 'object' || example === null || Array.isArray(example)) {
+      return errors;
+    }
+
+    // Result must be an object if example is an object
+    if (typeof result !== 'object' || result === null || Array.isArray(result)) {
+      errors.push(new ValidationErrorInfo(
+        path || 'root',
+        `Expected object but got ${Array.isArray(result) ? 'array' : typeof result}`,
+        result,
+        ValidationErrorType.Failure
+      ));
+      return errors;
+    }
+
+    const resultObj = result as Record<string, unknown>;
+    const exampleObj = example as Record<string, unknown>;
+
+    // Check each field in the example
+    for (const [key, exampleValue] of Object.entries(exampleObj)) {
+      const isOptional = key.trim().endsWith('?');
+      const isWildcard = key.trim().endsWith('*');
+      const cleanKey = key.trim().replace(/[?*]$/, ''); // Remove trailing ? or *
+      const fieldPath = path ? `${path}.${cleanKey}` : cleanKey;
+
+      // Check if required field exists
+      if (!isOptional && !(cleanKey in resultObj)) {
+        errors.push(new ValidationErrorInfo(
+          fieldPath,
+          `Required field '${cleanKey}' is missing`,
+          undefined,
+          ValidationErrorType.Failure
+        ));
+        continue;
+      }
+
+      // If field exists and is not a wildcard, validate nested structure
+      if (cleanKey in resultObj && !isWildcard) {
+        const nestedErrors = this.validateObjectAgainstExample(
+          resultObj[cleanKey],
+          exampleValue,
+          fieldPath
+        );
+        errors.push(...nestedErrors);
+      }
+      // If it's a wildcard field, we skip validation of its contents
+    }
+
+    return errors;
+  }
+
+  /**
    * Validates parsed result against JSON schema derived from OutputExample
    */
   private async validateAgainstSchema(
@@ -1715,6 +1784,33 @@ export class AIPromptRunner {
     const validationErrors: ValidationErrorInfo[] = [];
 
     try {
+      // Parse the output example
+      let exampleObject: unknown;
+      try {
+        exampleObject = JSON.parse(outputExample);
+      } catch (parseError) {
+        const error = new ValidationErrorInfo('outputExample', `Invalid OutputExample JSON: ${parseError.message}`, outputExample, ValidationErrorType.Failure);
+        validationErrors.push(error);
+        return validationErrors;
+      }
+
+      // Use the recursive validation helper
+      const errors = this.validateObjectAgainstExample(parsedResult, exampleObject);
+      validationErrors.push(...errors);
+
+      if (validationErrors.length === 0) {
+        LogStatus(`✅ Validation passed for prompt ${promptId}`);
+      } else {
+        LogStatus(`⚠️ Validation found ${validationErrors.length} issues for prompt ${promptId}:`);
+        validationErrors.forEach((error, index) => {
+          LogStatus(`   ${index + 1}. ${error.Source}: ${error.Message}`);
+        });
+        LogStatus(`   Note: Field suffixes in OutputExample:`);
+        LogStatus(`   - '?' = optional field (e.g., "reasoning?": "...")`);
+        LogStatus(`   - '*' = required but any content (e.g., "payload*": {})`);
+      }
+      
+      /* FUTURE IMPLEMENTATION - Keep this commented for reference
       // Get or create cached validator for this prompt using static cache
       let validator = AIPromptRunner._schemaCache.get(promptId);
       
@@ -1769,6 +1865,7 @@ export class AIPromptRunner {
         LogStatus(`   - Mark optional properties with '?' suffix (e.g., "subAgent?": {...})`)
         LogStatus(`   - Example values like "param1", "value1" are treated as placeholders`);
       }
+      */
 
     } catch (error) {
       const validationError = new ValidationErrorInfo('validation', `Unexpected validation error: ${error.message}`, undefined, ValidationErrorType.Failure);
