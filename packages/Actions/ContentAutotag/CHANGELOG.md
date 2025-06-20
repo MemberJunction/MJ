@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/actions-content-autotag
 
+## 2.53.0
+
+### Patch Changes
+
+- Updated dependencies [bddc4ea]
+- Updated dependencies [390f587]
+- Updated dependencies [b5560c0]
+  - @memberjunction/core-actions@2.53.0
+  - @memberjunction/core@2.53.0
+  - @memberjunction/core-entities@2.53.0
+  - @memberjunction/actions@2.53.0
+  - @memberjunction/content-autotagging@2.53.0
+  - @memberjunction/global@2.53.0
+
 ## 2.52.0
 
 ### Patch Changes

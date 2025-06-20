@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/ng-container-directives
 
+## 2.53.0
+
+### Patch Changes
+
+- 51fe03b: This PR introduces comprehensive UI enhancements and responsive design improvements to the MemberJunction platform. The changes focus on modernizing the user interface, improving mobile responsiveness, standardizing Kendo UI styling, and creating a cohesive design system.
+- Updated dependencies [bddc4ea]
+  - @memberjunction/core@2.53.0
+  - @memberjunction/global@2.53.0
+
 ## 2.52.0
 
 ### Patch Changes

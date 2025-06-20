@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/entity-communications-server
 
+## 2.53.0
+
+### Patch Changes
+
+- Updated dependencies [bddc4ea]
+  - @memberjunction/core@2.53.0
+  - @memberjunction/core-entities@2.53.0
+  - @memberjunction/communication-engine@2.53.0
+  - @memberjunction/entity-communications-base@2.53.0
+  - @memberjunction/global@2.53.0
+
 ## 2.52.0
 
 ### Patch Changes

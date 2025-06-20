@@ -1,5 +1,41 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 2.53.0
+
+### Minor Changes
+
+- e00127a: added services and system-validation directories to the explorer core package. To these we can components that perform different validation checks when we boot up MJ. The specific error tackled in the PR is the case where a User logs in but has not Roles. Previously we would get a cryptic "Resource Types not Found" error that failed to indicate what the actual problem was, and how in that case we get a banner indicating the lack of roles for the user.
+
+### Patch Changes
+
+- 51fe03b: This PR introduces comprehensive UI enhancements and responsive design improvements to the MemberJunction platform. The changes focus on modernizing the user interface, improving mobile responsiveness, standardizing Kendo UI styling, and creating a cohesive design system.
+- Updated dependencies [bddc4ea]
+- Updated dependencies [51fe03b]
+  - @memberjunction/core@2.53.0
+  - @memberjunction/core-entities@2.53.0
+  - @memberjunction/ng-container-directives@2.53.0
+  - @memberjunction/ng-skip-chat@2.53.0
+  - @memberjunction/ng-tabstrip@2.53.0
+  - @memberjunction/ng-ask-skip@2.53.0
+  - @memberjunction/ng-auth-services@2.53.0
+  - @memberjunction/ng-base-forms@2.53.0
+  - @memberjunction/ng-compare-records@2.53.0
+  - @memberjunction/ng-dashboards@2.53.0
+  - @memberjunction/ng-entity-form-dialog@2.53.0
+  - @memberjunction/ng-explorer-settings@2.53.0
+  - @memberjunction/ng-record-changes@2.53.0
+  - @memberjunction/ng-shared@2.53.0
+  - @memberjunction/ng-user-view-grid@2.53.0
+  - @memberjunction/ng-user-view-properties@2.53.0
+  - @memberjunction/ng-file-storage@2.53.0
+  - @memberjunction/ng-query-grid@2.53.0
+  - @memberjunction/ng-record-selector@2.53.0
+  - @memberjunction/ng-resource-permissions@2.53.0
+  - @memberjunction/communication-types@2.53.0
+  - @memberjunction/entity-communications-client@2.53.0
+  - @memberjunction/templates-base-types@2.53.0
+  - @memberjunction/global@2.53.0
+
 ## 2.52.0
 
 ### Patch Changes

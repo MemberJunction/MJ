@@ -1,5 +1,39 @@
 # Change Log - @memberjunction/server
 
+## 2.53.0
+
+### Patch Changes
+
+- 720aa19: Add system user GraphQL resolvers for RunView and Query operations
+- Updated dependencies [bddc4ea]
+- Updated dependencies [720aa19]
+- Updated dependencies [390f587]
+- Updated dependencies [b5560c0]
+  - @memberjunction/core-actions@2.53.0
+  - @memberjunction/core@2.53.0
+  - @memberjunction/core-entities@2.53.0
+  - @memberjunction/graphql-dataprovider@2.53.0
+  - @memberjunction/actions@2.53.0
+  - @memberjunction/templates@2.53.0
+  - @memberjunction/ai-agents@2.53.0
+  - @memberjunction/aiengine@2.53.0
+  - @memberjunction/ai-prompts@2.53.0
+  - @memberjunction/ai-vectors-pinecone@2.53.0
+  - @memberjunction/entity-communications-server@2.53.0
+  - @memberjunction/doc-utils@2.53.0
+  - @memberjunction/external-change-detection@2.53.0
+  - @memberjunction/core-entities-server@2.53.0
+  - @memberjunction/data-context@2.53.0
+  - @memberjunction/queue@2.53.0
+  - @memberjunction/storage@2.53.0
+  - @memberjunction/sqlserver-dataprovider@2.53.0
+  - @memberjunction/skip-types@2.53.0
+  - @memberjunction/data-context-server@2.53.0
+  - @memberjunction/ai@2.53.0
+  - @memberjunction/ai-mistral@2.53.0
+  - @memberjunction/ai-openai@2.53.0
+  - @memberjunction/global@2.53.0
+
 ## 2.52.0
 
 ### Patch Changes
