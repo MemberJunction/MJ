@@ -4,9 +4,10 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 import { WindowService, WindowRef, WindowCloseResult } from '@progress/kendo-angular-dialog';
 import { AIAgentEntity, AIPromptEntity, TemplateParamEntity } from '@memberjunction/core-entities';
-import { Metadata, RunView } from '@memberjunction/core';
+import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { SharedService } from '@memberjunction/ng-shared';
 import { ChatMessage } from '@memberjunction/ai';
 import { Subject, Subscription } from 'rxjs';
 import { AgentExecutionMonitorComponent } from './agent-execution-monitor.component';
@@ -2289,6 +2290,27 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         executionTree.forEach(node => processNode(node));
         
         return summary;
+    }
+    
+    /**
+     * Get the last run ID from conversation messages
+     */
+    getLastRunId(): string | null {
+        const lastAssistantMessage = this.conversationMessages
+            .filter(m => m.role === 'assistant' && m.agentRunId)
+            .pop();
+        return lastAssistantMessage?.agentRunId || null;
+    }
+    
+    /**
+     * Navigate to the run details form
+     */
+    navigateToRun(event: { runId: string; runType: 'agent' | 'prompt' }) {
+        if (event.runType === 'agent') {
+            SharedService.Instance.OpenEntityRecord('MJ: AI Agent Runs', CompositeKey.FromID(event.runId));
+        } else {
+            SharedService.Instance.OpenEntityRecord('MJ: AI Prompt Runs', CompositeKey.FromID(event.runId));
+        }
     }
     
     /**

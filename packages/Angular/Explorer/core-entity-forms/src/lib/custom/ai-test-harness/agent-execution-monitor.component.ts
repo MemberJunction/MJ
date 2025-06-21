@@ -1,4 +1,4 @@
-import { Component, Input, OnChanges, SimpleChanges, OnDestroy, ViewChild, ElementRef, AfterViewInit, ChangeDetectorRef, ChangeDetectionStrategy, ViewContainerRef, ComponentRef } from '@angular/core';
+import { Component, Input, OnChanges, SimpleChanges, OnDestroy, ViewChild, ElementRef, AfterViewInit, ChangeDetectorRef, ChangeDetectionStrategy, ViewContainerRef, ComponentRef, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subject, interval, Subscription } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -101,6 +101,12 @@ export interface ExecutionStats {
                         <span class="agent-path">{{ formatAgentPath(currentStep.agentPath) }}</span>
                         <span class="step-name">{{ currentStep.name }}</span>
                     </div>
+                }
+                @if (mode === 'historical' && runId && isExecutionComplete()) {
+                    <button class="view-run-btn" (click)="onViewRunClick()">
+                        <i class="fa-solid fa-external-link-alt"></i>
+                        View {{ runType === 'agent' ? 'Agent' : 'Prompt' }} Run
+                    </button>
                 }
             </div>
 
@@ -571,6 +577,33 @@ export interface ExecutionStats {
             background: #e3f2fd;
             color: #2196f3;
         }
+        
+        /* View Run Button */
+        .view-run-btn {
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+            margin-left: auto;
+        }
+        
+        .view-run-btn:hover {
+            background: #1976d2;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .view-run-btn i {
+            font-size: 12px;
+        }
 
         /* Responsive */
         @media (max-width: 768px) {
@@ -602,6 +635,10 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     @Input() mode: ExecutionMonitorMode = 'historical';
     @Input() executionData: any = null; // Can be live updates or historical data
     @Input() autoExpand: boolean = true; // Auto-expand nodes in live mode
+    @Input() runId: string | null = null; // ID of the run (agent or prompt)
+    @Input() runType: 'agent' | 'prompt' = 'agent'; // Type of run
+    
+    @Output() viewRunClick = new EventEmitter<{ runId: string; runType: 'agent' | 'prompt' }>();
     
     @ViewChild('executionTreeContainer') executionTreeContainer!: ElementRef<HTMLDivElement>;
     @ViewChild('executionNodesContainer', { read: ViewContainerRef }) executionNodesContainer!: ViewContainerRef;
@@ -1832,6 +1869,23 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             if (node.children) {
                 this.restoreExpandedState(node.children, expandedState, detailsExpandedState);
             }
+        }
+    }
+    
+    /**
+     * Check if execution is complete
+     */
+    isExecutionComplete(): boolean {
+        return this.stats.completedSteps > 0 && 
+               this.stats.completedSteps === this.stats.totalSteps - this.stats.failedSteps;
+    }
+    
+    /**
+     * Handle view run button click
+     */
+    onViewRunClick(): void {
+        if (this.runId) {
+            this.viewRunClick.emit({ runId: this.runId, runType: this.runType });
         }
     }
     

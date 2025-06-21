@@ -196,4 +196,13 @@ export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogF
             // Could show notification here
         }
     }
+    
+    async copyToClipboard(text: string) {
+        try {
+            await navigator.clipboard.writeText(text);
+            // Could show a toast notification here
+        } catch (err) {
+            console.error('Failed to copy to clipboard:', err);
+        }
+    }
 }

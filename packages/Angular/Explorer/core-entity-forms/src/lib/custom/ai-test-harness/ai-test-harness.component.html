@@ -286,7 +286,10 @@
                                 <mj-agent-execution-monitor
                                     [mode]="executionMonitorMode"
                                     [executionData]="currentExecutionData"
-                                    [autoExpand]="true">
+                                    [autoExpand]="true"
+                                    [runId]="getLastRunId()"
+                                    [runType]="mode"
+                                    (viewRunClick)="navigateToRun($event)">
                                 </mj-agent-execution-monitor>
                             </div>
                         }
