@@ -18,7 +18,7 @@
       <span class="report-tab-title">Report</span>
     </mj-tab>
     <mj-tab-body *ngIf="IsInteractive">
-      <div class="report-tab-contents" mjFillContainer [bottomMargin]="20" [rightMargin]="20" [style]="{overflowY: 'hidden', overflowX: 'hidden'}">
+      <div class="report-tab-contents">
         <skip-dynamic-ui-component #theUIComponent [SkipData]="SkipData"  (DrillDownEvent)="handleUIComponentDrillDown($event)" style="display:block;">
         </skip-dynamic-ui-component>  
       </div>

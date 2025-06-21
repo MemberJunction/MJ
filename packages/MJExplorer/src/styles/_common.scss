@@ -36,7 +36,6 @@ button.preferences-button {
 
 .mj-container {
     padding: 20px;
-    height: 100%;
     box-sizing: border-box;
 }
 
@@ -50,9 +49,6 @@ button.preferences-button {
 
 .mj-page-container {
     @extend .mj-container;
-    display: flex;
-    flex-direction: column;
-    overflow-x: hidden;
 }
 
 .mj-content-container {

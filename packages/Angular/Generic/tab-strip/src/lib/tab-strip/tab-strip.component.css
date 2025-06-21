@@ -4,6 +4,11 @@
   overflow-y: auto;
 }
 
+.tabstrip-container .tabstrip-container {
+  display: block;
+  height: auto;
+}
+
 .tab-header-outer {
   position: relative;
   display: flex;
