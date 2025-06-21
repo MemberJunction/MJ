@@ -1620,10 +1620,10 @@ export class BaseAgent {
         const actionPromises = actions.map(async (action) => {
             const startTime = new Date();
             const stepEntity = await this.createStepEntity('action', `Execute Action: ${action.name}`, params.contextUser, action.id);
-
+            let actionResult;
             try {
                 // Execute the action
-                const actionResult = await this.ExecuteSingleAction(params, action, params.contextUser);
+                actionResult = await this.ExecuteSingleAction(params, action, params.contextUser);
                 
                 // Update step entity with ActionExecutionLog ID if available
                 if (actionResult.LogEntry?.ID) {
@@ -1676,7 +1676,7 @@ export class BaseAgent {
             } catch (error) {
                 await this.finalizeStepEntity(stepEntity, false, error.message);
 
-                return { success: false, error: error.message, action, stepEntity };
+                return { success: false, result: actionResult, error: error.message, action, stepEntity };
             }
         });
         
@@ -1697,7 +1697,7 @@ export class BaseAgent {
                 actionId: result.action.id,
                 params: result.action.params,
                 success: result.success,
-                resultCode: actionResult.Result?.ResultCode || (result.success ? 'SUCCESS' : 'ERROR'),
+                resultCode: actionResult?.Result?.ResultCode || (result.success ? 'SUCCESS' : 'ERROR'),
                 message: result.success ? actionResult?.Message || 'Action completed' : result.error
             };
         });
