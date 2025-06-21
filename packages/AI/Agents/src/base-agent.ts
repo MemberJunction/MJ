@@ -1131,9 +1131,10 @@ export class BaseAgent {
      * @param {UserInfo} contextUser - User context for the operation
      * @param {string} [targetId] - Optional ID of the target entity
      * @param {any} [inputData] - Optional input data to capture for this step
+     * @param {string} [targetLogId] - Optional ID of the execution log (ActionExecutionLog, AIPromptRun, or AIAgentRun)
      * @returns {Promise<AIAgentRunStepEntity>} - The created step entity
      */
-    private async createStepEntity(stepType: string, stepName: string, contextUser: UserInfo, targetId?: string, inputData?: any): Promise<AIAgentRunStepEntity> {
+    private async createStepEntity(stepType: string, stepName: string, contextUser: UserInfo, targetId?: string, inputData?: any, targetLogId?: string): Promise<AIAgentRunStepEntity> {
         const stepEntity = await this._metadata.GetEntityObject<AIAgentRunStepEntity>('MJ: AI Agent Run Steps', contextUser);
         
         stepEntity.AgentRunID = this._agentRun!.ID;
@@ -1142,6 +1143,7 @@ export class BaseAgent {
         // Include hierarchy breadcrumb in StepName for better logging
         stepEntity.StepName = this.formatHierarchicalMessage(stepName);
         stepEntity.TargetID = targetId || null;
+        stepEntity.TargetLogID = targetLogId || null;
         stepEntity.Status = 'Running';
         stepEntity.StartedAt = new Date();
         
@@ -1342,6 +1344,12 @@ export class BaseAgent {
             // Execute the prompt
             const promptResult = await this.executePrompt(promptParams);
             
+            // Update step entity with AIPromptRun ID if available
+            if (promptResult.promptRun?.ID) {
+                stepEntity.TargetLogID = promptResult.promptRun.ID;
+                await stepEntity.Save();
+            }
+            
             // Check for cancellation after prompt execution
             if (params.cancellationToken?.aborted) {
                 await this.finalizeStepEntity(stepEntity, false, 'Cancelled during prompt execution');
@@ -1478,6 +1486,12 @@ export class BaseAgent {
                 params,
                 subAgentRequest
             );
+            
+            // Update step entity with AIAgentRun ID if available
+            if (subAgentResult.agentRun?.ID) {
+                stepEntity.TargetLogID = subAgentResult.agentRun.ID;
+                await stepEntity.Save();
+            }
             
             // Check for cancellation after sub-agent execution
             if (params.cancellationToken?.aborted) {
@@ -1659,6 +1673,12 @@ export class BaseAgent {
                 // Execute the action
                 const actionResults = await this.ExecuteActions(params, [action], params.contextUser);
                 const actionResult = actionResults[0];
+                
+                // Update step entity with ActionExecutionLog ID if available
+                if (actionResult.LogEntry?.ID) {
+                    stepEntity.TargetLogID = actionResult.LogEntry.ID;
+                    await stepEntity.Save();
+                }
                 
                 // Create action execution result
                 const executionResult: ActionExecutionResult = {

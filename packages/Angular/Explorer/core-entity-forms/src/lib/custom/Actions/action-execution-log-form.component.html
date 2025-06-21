@@ -13,14 +13,14 @@
                             @if (action) {
                                 <span class="action-name">{{ action.Name }}</span>
                             }
-                            <span class="log-id">{{ record?.ID }}</span>
+                            <span class="log-id">{{ record.ID }}</span>
                         </div>
                     </div>
                 </div>
                 <div class="header-right">
-                    <div class="status-badge" [attr.data-status]="record?.ResultCode?.toLowerCase()">
+                    <div class="status-badge" [attr.data-status]="record.ResultCode?.toLowerCase()">
                         <i class="fas" [ngClass]="getResultCodeIcon()"></i>
-                        {{ record?.ResultCode || 'UNKNOWN' }}
+                        {{ record.ResultCode || 'UNKNOWN' }}
                     </div>
                     <div class="execution-time">
                         <i class="fas fa-clock"></i>
@@ -31,12 +31,12 @@
             <div class="header-stats">
                 <div class="stat">
                     <span class="label">Started</span>
-                    <span class="value">{{ record?.StartedAt | date:'short' }}</span>
+                    <span class="value">{{ record.StartedAt | date:'short' }}</span>
                 </div>
-                @if (record?.EndedAt) {
+                @if (record.EndedAt) {
                     <div class="stat">
                         <span class="label">Ended</span>
-                        <span class="value">{{ record?.EndedAt | date:'short' }}</span>
+                        <span class="value">{{ record.EndedAt | date:'short' }}</span>
                     </div>
                 }
                 @if (action) {
@@ -73,21 +73,21 @@
                         <div class="details-grid">
                             <div class="detail-item">
                                 <label>Execution ID</label>
-                                <span class="monospace">{{ record?.ID }}</span>
+                                <span class="monospace">{{ record.ID }}</span>
                             </div>
                             <div class="detail-item">
                                 <label>Action ID</label>
-                                <span class="monospace">{{ record?.ActionID }}</span>
+                                <span class="monospace">{{ record.ActionID }}</span>
                             </div>
                             <div class="detail-item">
                                 <label>User ID</label>
-                                <span class="monospace">{{ record?.UserID }}</span>
+                                <span class="monospace">{{ record.UserID }}</span>
                             </div>
                             <div class="detail-item">
                                 <label>Result Code</label>
                                 <span class="detail-value">
                                     <i class="fas" [ngClass]="getResultCodeIcon()" [style.color]="getResultCodeColor()"></i>
-                                    <span [style.color]="getResultCodeColor()">{{ record?.ResultCode || 'N/A' }}</span>
+                                    <span [style.color]="getResultCodeColor()">{{ record.ResultCode || 'N/A' }}</span>
                                 </span>
                             </div>
                             <div class="detail-item">
@@ -96,14 +96,14 @@
                             </div>
                             <div class="detail-item">
                                 <label>Retention Period</label>
-                                <span>{{ record?.RetentionPeriod ? record.RetentionPeriod + ' days' : 'Indefinite' }}</span>
+                                <span>{{ record.RetentionPeriod ? record.RetentionPeriod + ' days' : 'Indefinite' }}</span>
                             </div>
                         </div>
                     </ng-template>
                 </kendo-panelbar-item>
 
                 <!-- Input Parameters -->
-                @if (record?.Params) {
+                @if (record.Params) {
                     <kendo-panelbar-item title="Input Parameters" [expanded]="expandedSections.input">
                         <ng-template kendoPanelBarContent>
                             <div class="json-viewer">
@@ -127,7 +127,7 @@
                 }
 
                 <!-- Output Message -->
-                @if (record?.Message) {
+                @if (record.Message) {
                     <kendo-panelbar-item title="Output Message" [expanded]="expandedSections.output">
                         <ng-template kendoPanelBarContent>
                             <div class="json-viewer">
@@ -151,7 +151,7 @@
                 }
 
                 <!-- Empty States for missing data -->
-                @if (!record?.Params && !record?.Message) {
+                @if (!record.Params && !record.Message) {
                     <kendo-panelbar-item title="Execution Data" [expanded]="true">
                         <ng-template kendoPanelBarContent>
                             <div class="empty-state">
