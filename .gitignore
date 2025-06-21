@@ -122,3 +122,5 @@ packages/AI/MCPServer/build/Server.js
 sql_logging/
 kendo-license.txt
 metadata/demo-prompt.md
+
+.mj-ai/
