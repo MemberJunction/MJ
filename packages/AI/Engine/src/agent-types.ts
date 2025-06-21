@@ -101,6 +101,7 @@ export type AgentSubAgentRequest<TContext = any> = {
  *   - 'sub-agent': The agent should spawn a sub-agent to handle a specific task
  *   - 'actions': The agent should perform one or more actions using the Actions framework
  *   - 'chat': The agent needs to communicate with the user before proceeding
+ * @property {boolean} terminate - Whether to terminate the agent execution after this step
  * @property {any} [returnValue] - Optional value to return with the step determination
  * @property {string} [errorMessage] - Error message when step is 'failed'
  * @property {string} [retryReason] - Reason for retry when step is 'retry' (e.g., "Processing action results", "Handling error condition")
@@ -109,9 +110,10 @@ export type AgentSubAgentRequest<TContext = any> = {
  * @property {AgentAction[]} [actions] - Array of actions to execute when step is 'actions'
  * @property {string} [userMessage] - Message to send to user when step is 'chat'
  */
-export type BaseAgentNextStep<TContext = any> = {
+export type BaseAgentNextStep<R = any, TContext = any> = {
+    terminate: boolean;
     step: 'success' | 'failed' | 'retry' | 'sub-agent' | 'actions' | 'chat';
-    returnValue?: any;
+    returnValue?: R;
     errorMessage?: string;
     retryReason?: string;
     retryInstructions?: string;

@@ -245,11 +245,8 @@ export class BaseAgent {
             }
 
             // Execute the agent's internal logic with wrapped parameters
-            const executionResult = await this.executeAgentInternal(wrappedParams, config);
+            const executionResult = await this.executeAgentInternal<R>(wrappedParams, config);
             
-            // Extract the final return value from the execution result
-            const finalReturnValue = executionResult.finalReturnValue;
-
             // Report finalization progress
             wrappedParams.onProgress?.({
                 step: 'finalization',
@@ -258,8 +255,7 @@ export class BaseAgent {
             });
 
             // Finalize the agent run
-            return await this.finalizeAgentRun(finalReturnValue?.step || 'success', finalReturnValue, params.contextUser);
-
+            return await this.finalizeAgentRun<R>(executionResult.finalStep.step, executionResult.finalStep.returnValue, params.contextUser);
         } catch (error) {
             // Check if error is due to cancellation
             if (params.cancellationToken?.aborted || error.message === 'Cancelled during execution') {
@@ -290,10 +286,9 @@ export class BaseAgent {
     protected async executeAgentInternal<R = any>(
         params: ExecuteAgentParams, 
         config: AgentConfiguration
-    ): Promise<{finalReturnValue: R, stepCount: number}> {
+    ): Promise<{finalStep: BaseAgentNextStep<R>, stepCount: number}> {
         let continueExecution = true;
-        let currentNextStep: BaseAgentNextStep | null = null;
-        let finalReturnValue: R | undefined = undefined;
+        let currentNextStep: BaseAgentNextStep<R> | null = null;        
         let stepCount = 0;
 
         while (continueExecution) {
@@ -303,19 +298,19 @@ export class BaseAgent {
             }
 
             // Execute the current step based on previous decision or initial prompt
-            const stepResult = await this.executeNextStep(params, config, currentNextStep);
+            const nextStep = await this.executeNextStep<R>(params, config, currentNextStep);
             stepCount++;
             
             // Check if we should continue or terminate
-            if (stepResult.terminate) {
+            if (nextStep.terminate) {
                 continueExecution = false;
-                finalReturnValue = stepResult.returnValue as R;
+                currentNextStep = nextStep;
             } else {
-                currentNextStep = stepResult.nextStep;
+                currentNextStep = nextStep;
             }
         }
 
-        return { finalReturnValue: finalReturnValue as R, stepCount };
+        return { finalStep: currentNextStep, stepCount };
     }
 
     /**
@@ -480,17 +475,18 @@ export class BaseAgent {
      * @returns {Promise<ExecuteAgentResult>} The execution result
      * @protected
      */
-    protected async processNextStep(
+    protected async processNextStep<R>(
         params: ExecuteAgentParams,
         agentType: AIAgentTypeEntity,
         promptResult: any
-    ): Promise<BaseAgentNextStep> {
+    ): Promise<BaseAgentNextStep<R>> {
         // Get the agent type instance
         let agentTypeInstance: BaseAgentType | null;
         try {
             agentTypeInstance = await this.getAgentTypeInstance(agentType);
         } catch (error) {
             return {
+                terminate: false, // agent decides to terminate or not based on failure
                 step: 'failed',
                 errorMessage: error.message
             };
@@ -750,10 +746,10 @@ export class BaseAgent {
      * }, messages);
      * ```
      */
-    protected async ExecuteSubAgent(
-        params: ExecuteAgentParams,
-        subAgentRequest: AgentSubAgentRequest, 
-    ): Promise<ExecuteAgentResult> {
+    protected async ExecuteSubAgent<SC = any, SR = any>(
+        params: ExecuteAgentParams<SC>,
+        subAgentRequest: AgentSubAgentRequest<SC>, 
+    ): Promise<ExecuteAgentResult<SR>> {
         try {
             const engine = AIEngine.Instance;
             
@@ -1224,11 +1220,11 @@ export class BaseAgent {
      * @param {BaseAgentNextStep | null} previousDecision - Previous step decision
      * @returns {Promise<{terminate: boolean, returnValue?: any, nextStep?: BaseAgentNextStep}>}
      */
-    protected async executeNextStep(
+    protected async executeNextStep<R = any>(
         params: ExecuteAgentParams, 
         config: AgentConfiguration, 
-        previousDecision: BaseAgentNextStep | null
-    ): Promise<{terminate: boolean, returnValue?: any, nextStep?: BaseAgentNextStep}> {
+        previousDecision: BaseAgentNextStep<R> | null
+    ): Promise<BaseAgentNextStep<R>> {
         
         // Determine what to execute
         if (!previousDecision) {
@@ -1249,11 +1245,18 @@ export class BaseAgent {
                 
             case 'chat':
                 return await this.executeChatStep(params, previousDecision.userMessage!);
-                
             case 'success':
+                return { 
+                    terminate: true,
+                    step: 'success', 
+                    returnValue: previousDecision.returnValue 
+                };
             case 'failed':
-                return { terminate: true, returnValue: previousDecision.returnValue };
-                
+                return { 
+                    terminate: true,
+                    step: 'failed', 
+                    returnValue: previousDecision.returnValue 
+                };
             default:
                 throw new Error(`Unsupported next step: ${previousDecision.step}`);
         }
@@ -1264,11 +1267,11 @@ export class BaseAgent {
      * 
      * @private
      */
-    private async executePromptStep(
+    private async executePromptStep<R>(
         params: ExecuteAgentParams, 
         config: AgentConfiguration,
         retryContext?: BaseAgentNextStep
-    ): Promise<{terminate: boolean, returnValue?: any, nextStep?: BaseAgentNextStep}> {
+    ): Promise<BaseAgentNextStep<R>> {
         
         const startTime = new Date();
         
@@ -1332,9 +1335,14 @@ export class BaseAgent {
             // Check for cancellation after prompt execution
             if (params.cancellationToken?.aborted) {
                 await this.finalizeStepEntity(stepEntity, false, 'Cancelled during prompt execution');
-                return { terminate: true, returnValue: await this.createCancelledResult('Cancelled during prompt execution', params.contextUser) };
+                const cancelledResult = await this.createCancelledResult('Cancelled during prompt execution', params.contextUser);
+                return { 
+                    ...cancelledResult,
+                    terminate: true, 
+                    step: cancelledResult.finalStep,
+                    returnValue: cancelledResult.returnValue,   
+                }
             }
-            
             // Create prompt execution result
             const executionResult: PromptExecutionResult = {
                 type: 'prompt',
@@ -1351,7 +1359,7 @@ export class BaseAgent {
             });
             
             // Determine next step using agent type
-            const nextStep = await this.processNextStep(params, config.agentType!, promptResult);
+            const nextStep = await this.processNextStep<R>(params, config.agentType!, promptResult);
             
             // Create next step decision
             const nextStepDecision: NextStepDecision = {
@@ -1392,12 +1400,12 @@ export class BaseAgent {
             
             // Return based on next step
             if (nextStep.step === 'chat') {
-                return { terminate: true, returnValue: nextStep };
+                return { ...nextStep, terminate: true };
             }
             else if (nextStep.step === 'success' || nextStep.step === 'failed') {
-                return { terminate: true, returnValue: nextStep.returnValue };
+                return { ...nextStep, terminate: true };
             } else {
-                return { terminate: false, nextStep };
+                return { ...nextStep, terminate: false };
             }
             
         } catch (error) {
@@ -1411,10 +1419,10 @@ export class BaseAgent {
      * 
      * @private
      */
-    private async executeSubAgentStep(
-        params: ExecuteAgentParams,
-        subAgentRequest: AgentSubAgentRequest
-    ): Promise<{terminate: boolean, returnValue?: any, nextStep?: BaseAgentNextStep}> {
+    private async executeSubAgentStep<SC = any, SR = any>(
+        params: ExecuteAgentParams<SC>,
+        subAgentRequest: AgentSubAgentRequest<SC>
+    ): Promise<BaseAgentNextStep<SR, SC>> {
         
         // Check for cancellation before starting
         if (params.cancellationToken?.aborted) {
@@ -1537,19 +1545,11 @@ export class BaseAgent {
                 content: resultMessage
             });
             
-            if (shouldTerminate) {
-                return { terminate: true, returnValue: subAgentResult.returnValue };
-            } else {
-                // Continue processing - no need for retryInstructions anymore
-                return { 
-                    terminate: false, 
-                    nextStep: {
-                        step: 'retry',
-                        retryReason: `Analyzing results from "${subAgentRequest.name}" agent to integrate findings`
-                    }
-                };
-            }
-            
+            return { 
+                ...subAgentResult, 
+                step: subAgentResult.success ? 'success' : 'failed', 
+                terminate: shouldTerminate 
+            };            
         } catch (error) {
             await this.finalizeStepEntity(stepEntity, false, error.message);
             throw error;
@@ -1564,7 +1564,7 @@ export class BaseAgent {
     private async executeActionsStep(
         params: ExecuteAgentParams,
         actions: AgentAction[]
-    ): Promise<{terminate: boolean, returnValue?: any, nextStep?: BaseAgentNextStep}> {
+    ): Promise<BaseAgentNextStep> {
         
         // Check for cancellation before starting
         if (params.cancellationToken?.aborted) {
@@ -1739,12 +1739,11 @@ export class BaseAgent {
         // This allows the agent to analyze the results and determine what to do next
         return {
             terminate: false,
-            nextStep: {
-                step: 'retry',
-                retryReason: failedActions.length > 0 
-                    ? `Processing results with ${failedActions.length} failed action(s): ${failedActions.map(a => a.actionName).join(', ')}`
-                    : `Analyzing results from ${actionSummaries.length} completed action(s) to formulate response`
-            }
+            step: 'retry',
+            returnValue: actionSummaries,
+            retryReason: failedActions.length > 0 
+                ? `Processing results with ${failedActions.length} failed action(s): ${failedActions.map(a => a.actionName).join(', ')}`
+                : `Analyzing results from ${actionSummaries.length} completed action(s) to formulate response`
         };
     }
 
@@ -1756,7 +1755,7 @@ export class BaseAgent {
     private async executeChatStep(
         params: ExecuteAgentParams,
         userMessage: string
-    ): Promise<{terminate: boolean, returnValue?: any, nextStep?: BaseAgentNextStep}> {
+    ): Promise<BaseAgentNextStep> {
         // Chat functionality would need to be implemented based on the specific chat system
         // For now, we'll just create a failed step
         const startTime = new Date();
@@ -1785,7 +1784,11 @@ export class BaseAgent {
         
         await this.finalizeStepEntity(stepEntity, false, 'Chat not implemented');
         
-        return { terminate: true };
+        return { 
+            step: 'chat',
+            terminate: true,
+            returnValue: userMessage,
+        };
     }
 
     /**
@@ -1843,7 +1846,7 @@ export class BaseAgent {
      * 
      * @private
      */
-    private async finalizeAgentRun(finalStep: BaseAgentNextStep['step'], returnValue?: any, contextUser?: UserInfo): Promise<ExecuteAgentResult> {
+    private async finalizeAgentRun<R>(finalStep: BaseAgentNextStep['step'], returnValue?: R, contextUser?: UserInfo): Promise<ExecuteAgentResult<R>> {
         if (this._agentRun) {
             this._agentRun.Status = 'Completed';
             this._agentRun.CompletedAt = new Date();
