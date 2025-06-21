@@ -208,7 +208,6 @@
     outline: none;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 0 0 3px rgba(0, 118, 182, 0.15);
-    font-family: inherit;
     line-height: 1.4;
     min-height: 36px;
     position: relative;
@@ -590,7 +589,6 @@
     padding: 0;
     border: none;
     background: transparent;
-    font-family: inherit;
     font-size: 15px;
     line-height: 1.5;
     color: #1a1a1a;

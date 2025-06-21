@@ -5,7 +5,7 @@
                 <img [src]="GetUserImageSource()" class="avatar" />
             }
             @else {
-                <span class="fa-solid fa-user default-user-image"></span>
+                <span class="fas fa-user default-user-image"></span>
             }
         </div>
         <div class="message" 
@@ -20,8 +20,8 @@
                 @if(!IsTemporaryMessage && !IsAIMessage && ShowMessageEditPanel && !ConversationProcessing) {
                     <!-- this is a user message, so we need to offer the ability to edit/delete the message. -->
                     <div class="message-actions" title="Message actions">
-                        <span class="fa-solid fa-edit" (click)="RaiseMessageEditRequest()" title="Edit message"></span>
-                        <span class="fa-solid fa-trash" (click)="RaiseMessageDeleteRequest()" title="Delete message"></span>
+                        <span class="fas fa-edit" (click)="RaiseMessageEditRequest()" title="Edit message"></span>
+                        <span class="fas fa-trash" (click)="RaiseMessageDeleteRequest()" title="Delete message"></span>
                     </div>
                 }
                 
@@ -31,8 +31,8 @@
                 
                 @if(HasArtifact) {
                     <!-- Artifact indicator for messages with associated artifacts -->
-                    <div class="artifact-indicator" (click)="onArtifactIndicatorClick()">
-                        <i class="fa-solid fa-file-lines"></i>
+                    <div class="mj-btn mj-btn-secondary" (click)="onArtifactIndicatorClick()">
+                        <i class="fas fa-file-alt"></i>
                         <span class="artifact-label">{{ArtifactName || 'View Artifact'}}{{ArtifactVersion ? ' v' + ArtifactVersion : ''}}</span>
                     </div>
                 }
@@ -71,8 +71,8 @@
                 <div class="message-rating">
                     <div class="rating-prompt">Was this response helpful?</div>
                     <div class="rating-buttons">
-                        <span class="fa-solid fa-thumbs-up" (click)="ShowFeedbackDialog(10)" title="This was helpful"></span>
-                        <span class="fa-solid fa-thumbs-down" (click)="ShowFeedbackDialog(1)" title="This wasn't helpful"></span>
+                        <span class="fas fa-thumbs-up" (click)="ShowFeedbackDialog(10)" title="This was helpful"></span>
+                        <span class="fas fa-thumbs-down" (click)="ShowFeedbackDialog(1)" title="This wasn't helpful"></span>
                     </div>
                 </div>
             }
@@ -101,9 +101,9 @@
                 <div class="rating-feedback">
                     <span class="rating-status-text">{{RatingStatusText}}</span>
                     @if(ConversationDetailRecord.UserRating === 10) {
-                        <span class="fa-solid fa-thumbs-up rating-icon-selected"></span>
+                        <span class="fas fa-thumbs-up rating-icon-selected"></span>
                     } @else {
-                        <span class="fa-solid fa-thumbs-down rating-icon-selected"></span>
+                        <span class="fas fa-thumbs-down rating-icon-selected"></span>
                     }
                 </div>
             }

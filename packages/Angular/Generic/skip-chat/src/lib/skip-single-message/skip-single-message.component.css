@@ -1,41 +1,63 @@
+/* Import MJ variables and utilities */
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
+
+/* Message Row Container */
 .message-row {
     display: flex;
-    align-items: start; /* if you want to align them at the top */
-    /* border-bottom: solid 1px rgba(0, 0, 0, 0.08); */
-    justify-content: center; /* Center align horizontally */
-   
-    padding: 10px;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 20px 10px;
+    position: relative;
+    animation: messageSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+@keyframes messageSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Message Container */
 .message {
     word-wrap: break-word;
     width: 100%;
     margin-right: 20px;
-    padding-bottom: 30px; /* Increased to ensure space for action buttons */
-    min-height: 60px; /* Ensure minimum height for short messages */
-    position: relative; /* Ensure position relative for absolute positioning of child elements */
+    padding-bottom: 30px;
+    min-height: 60px;
+    position: relative;
+    
     @media (min-width: 1280px) {
         max-width: 48rem;
     }
 }
 
+/* Message Actions (Edit/Delete) */
 .message-actions {
     position: absolute;
     bottom: 5px;
     right: 10px;
-    background-color: #ffffff;
-    border-radius: 20px;
-    padding: 6px 10px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    background: #ffffff;
+    border-radius: 24px;
+    padding: 8px 12px;
+    box-shadow: 
+        0 4px 12px rgba(0, 0, 0, 0.08),
+        0 2px 6px rgba(0, 118, 182, 0.12);
     z-index: 10;
-    transition: opacity 0.3s ease, transform 0.3s ease;
-    border: 1px solid #e0e0e0;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid rgba(0, 118, 182, 0.15);
     opacity: 0;
     transform: translateY(5px) scale(0.95);
     pointer-events: none;
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 8px;
+    backdrop-filter: blur(10px);
 }
 
 .message:hover .message-actions {
@@ -43,143 +65,271 @@
     transform: translateY(0) scale(1);
     pointer-events: auto;
 }
- 
+
+/* Ensure Font Awesome icons are displayed properly */
 .message-actions > span {
-    margin: 0 5px;
+    margin: 0;
     color: #6e7072;
     cursor: pointer;
     font-size: 14px;
-    padding: 3px;
-    transition: all 0.2s ease;
-    width: 18px;
-    height: 18px;
+    padding: 6px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Ensure Font Awesome icons inherit the right styles */
+.message-actions > span.fas {
+    font-family: 'Font Awesome 5 Free';
+    font-weight: 900;
+}
+
+.message-actions > span::before {
+    /* Font Awesome will handle the icon display */
+    display: inline-block;
 }
 
 .message-actions > span:hover {
-    color: #333;
-    background-color: #f5f5f5;
+    transform: scale(1.1);
 }
 
 .message-actions > span.fa-edit:hover {
     color: #4285f4;
+    background: rgba(66, 133, 244, 0.1);
 }
 
 .message-actions > span.fa-trash:hover {
     color: #ea4335;
+    background: rgba(234, 67, 53, 0.1);
 }
 
+/* Message Image/Avatar */
 .message-image {
-    max-width: 24px;
-    max-height: 24px;
-    margin-right: 10px;
+    width: 40px;
+    height: 40px;
+    margin-right: 12px;
     margin-left: 5px;
     margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #f4f4f4;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
+
 .message-image > img {
-    max-width: 100%;
-    max-height: 100%;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
 }
 
+/* Avatar styling */
+.avatar {
+    transition: transform 0.3s ease;
+}
 
+.message-row:hover .avatar {
+    transform: scale(1.05);
+}
 
+/* Default user icon */
+.default-user-image {
+    width: 24px;
+    font-size: 20px;
+    color: #0076B6;
+}
+
+/* Message type specific styling */
 .error-message {
-    background-color:lightpink;
+    background: rgba(255, 235, 238, 0.8);
+    border-radius: 16px;
+    padding: 16px;
+    border: 1px solid rgba(244, 67, 54, 0.2);
 }
 
 .ai-message-in-progress {
-    /* font-style: italic; */
     opacity: 0.9;
 }
 
+/* Loading indicator and elapsed time */
 .elapsed-time {
-    font-style: regular;
-    font-size: 0.8rem;
-    color: #124be7;
-    margin-left: 5px;
-    margin-right: 5px;
+    font-size: 0.75rem;
+    color: #0076B6;
+    margin-left: 8px;
+    margin-right: 8px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
 }
 
+/* Message user name */
 .message-user-name {
     font-weight: 600;
-    margin-top: 0px;
-    margin-bottom: 10px;
-    padding-bottom: 7px;
-    height: .5rem;
+    margin-top: 0;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    color: #092340;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
+/* Kendo Loader styling */
+::ng-deep .ai-message-in-progress kendo-loader {
+    vertical-align: middle;
+    margin-right: 8px;
+}
+
+/* Suggested items container */
 .suggested-container {
-    margin-right: 20px; /*match the message class*/
+    margin-right: 20px;
     display: flex;
     flex-direction: column;
-    align-items: left;
-    justify-content: left;
-    padding: 10px;
-    margin-top: 10px;
-    margin-bottom: 10px;
-    border: solid 1px rgba(28, 103, 202, 0.08);
-    background-color: rgb(241, 236, 227);
-}
-.suggested-header {
-    font-weight: 600;
-    margin-bottom: 10px;
-}
-.suggested-questions-list {
-    display: flex;
-    flex-wrap: wrap;
-}
-.suggested-answers-list {
-    display: flex;
-    flex-wrap: none;
-}
-.suggested-item {
-    margin: 5px;
-    padding: 5px 10px;
-    border-radius: 5px;
-    background-color: #f5f5f5;
-    cursor: pointer;
-    transition: background-color 0.3s;
-}
-.suggested-item:hover {
-    background-color: #96d0f1;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 20px;
+    margin-top: 16px;
+    margin-bottom: 16px;
+    border: 2px solid rgba(0, 118, 182, 0.15);
+    background: #f9fafb;
+    border-radius: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
 }
 
-.default-user-image {
-    width: 24px;
-    font-size: 22px;
+.suggested-header {
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: #092340;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.suggested-questions-list,
+.suggested-answers-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+}
+
+.suggested-answers-list {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 8px;
+}
+
+/* Custom scrollbar for answers list */
+.suggested-answers-list::-webkit-scrollbar {
+    height: 6px;
+}
+
+.suggested-answers-list::-webkit-scrollbar-track {
+    background: #f4f4f4;
+    border-radius: 3px;
+}
+
+.suggested-answers-list::-webkit-scrollbar-thumb {
+    background: #0076B6;
+    border-radius: 3px;
+}
+
+.suggested-item {
+    padding: 10px 16px;
+    border-radius: 24px;
+    background: #ffffff;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 2px solid rgba(0, 118, 182, 0.1);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #092340;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+    position: relative;
+    overflow: hidden;
+}
+
+.suggested-item:hover {
+    background: #0076B6;
+    color: #ffffff;
+    border-color: #0076B6;
+    transform: translateY(-2px);
+    box-shadow: 
+        0 4px 12px rgba(0, 118, 182, 0.3),
+        0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.suggested-item:active {
+    transform: translateY(0);
+    box-shadow: 
+        0 1px 3px rgba(0, 118, 182, 0.2),
+        0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 /* Message rating styles */
 .message-rating {
-    display: flex;
+    display: inline-flex;
     flex-direction: column;
-    margin-top: 15px;
-    padding: 8px 12px;
-    background-color: #f5f5f5;
-    border-radius: 8px;
-    width: fit-content;
+    margin-top: 16px;
+    padding: 16px 20px;
+    background: #f9fafb;
+    border: 2px solid rgba(0, 118, 182, 0.15);
+    border-radius: 16px;
+    width: auto;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    animation: ratingFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes ratingFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .rating-prompt {
-    font-size: 0.9rem;
-    margin-bottom: 8px;
-    color: #555;
+    font-size: 0.875rem;
+    margin-bottom: 12px;
+    color: #092340;
+    font-weight: 500;
 }
 
 .rating-buttons {
     display: flex;
-    gap: 15px;
+    gap: 16px;
 }
 
 .rating-buttons span {
-    font-size: 1.2rem;
+    font-size: 1.5rem;
     cursor: pointer;
-    padding: 5px;
-    border-radius: 4px;
-    transition: all 0.2s ease;
+    padding: 10px;
+    border-radius: 50%;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: #ffffff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .fa-thumbs-up {
@@ -187,8 +337,12 @@
 }
 
 .fa-thumbs-up:hover {
-    background-color: rgba(76, 175, 80, 0.1);
-    transform: scale(1.1);
+    background: #4caf50;
+    color: #ffffff;
+    transform: scale(1.15) rotate(-10deg);
+    box-shadow: 
+        0 6px 16px rgba(76, 175, 80, 0.3),
+        0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .fa-thumbs-down {
@@ -196,126 +350,214 @@
 }
 
 .fa-thumbs-down:hover {
-    background-color: rgba(244, 67, 54, 0.1);
-    transform: scale(1.1);
+    background: #f44336;
+    color: #ffffff;
+    transform: scale(1.15) rotate(10deg);
+    box-shadow: 
+        0 6px 16px rgba(244, 67, 54, 0.3),
+        0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
+.rating-buttons span:active {
+    transform: scale(0.95);
+}
+
+/* Rating feedback */
 .rating-feedback {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     margin-top: 12px;
-    color: #666;
-    font-size: 0.85rem;
-    font-style: italic;
+    padding: 12px 16px;
+    background: rgba(66, 133, 244, 0.1);
+    border-radius: 12px;
+    border: 1px solid rgba(0, 118, 182, 0.2);
+    animation: thankYouFadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes thankYouFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
 }
 
 .rating-status-text {
     margin-right: 8px;
+    color: #0076B6;
+    font-weight: 500;
+    font-size: 0.875rem;
 }
 
 .rating-icon-selected {
-    font-size: 0.9rem;
+    font-size: 1rem;
+    color: #0076B6;
 }
 
-/* Artifact indicator styles */
-.artifact-indicator {
-    display: flex;
-    align-items: center;
-    margin-top: 12px;
-    padding: 12px 16px;
-    background-color: #eef6ff;
-    border: 1px solid #d0e1fd;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    width: 100%;
-    box-sizing: border-box;
-}
-
-.artifact-indicator:hover {
-    background-color: #d2e5ff;
-    border-color: #a9c9fc;
-}
-
-.artifact-indicator i {
-    font-size: 16px;
-    color: #4285f4;
-    margin-right: 10px;
-}
-
-.artifact-label {
-    font-size: 14px;
-    color: #4285f4;
-    font-weight: 500;
-}
-
+/* Completion time */
 .completion-time {
-    font-size: 12px;
+    font-size: 0.75rem;
     color: #666;
     font-style: italic;
-    margin-top: 5px;
-    display: inline-block;
+    margin: 8px 0;
+    opacity: 0.8;
+}
+
+/* Enhanced Kendo Dialog styles */
+::ng-deep .k-dialog {
+    border-radius: 20px !important;
+    box-shadow: 
+        0 25px 50px rgba(0, 0, 0, 0.15),
+        0 10px 30px rgba(0, 118, 182, 0.2) !important;
+    border: 2px solid rgba(0, 118, 182, 0.1) !important;
+    overflow: hidden;
+}
+
+::ng-deep .k-dialog-titlebar {
+    background: #f4f4f4 !important;
+    border-bottom: 2px solid #d9d9d9 !important;
+    padding: 24px 30px !important;
+}
+
+::ng-deep .k-dialog-title {
+    color: #092340 !important;
+    font-size: 1.25rem !important;
+    font-weight: 600 !important;
+}
+
+::ng-deep .k-dialog-content {
+    padding: 30px !important;
 }
 
 /* Input wrapper styles */
 ::ng-deep .input-wrapper {
-    margin-bottom: 16px;
+    margin-bottom: 20px;
 }
 
 ::ng-deep .input-wrapper label {
     display: block;
-    font-weight: 500;
-    margin-bottom: 8px;
-    color: #333;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: #092340;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 ::ng-deep .k-dialog-actions {
-    padding: 16px 20px;
-    border-top: 1px solid #eee;
+    padding: 20px 30px !important;
+    border-top: 2px solid #d9d9d9 !important;
+    background: #f4f4f4 !important;
+    gap: 12px;
 }
 
-::ng-deep .k-dialog button[kendoButton],
-::ng-deep .k-window button[kendoButton] {
-    padding: 8px 16px;
-    border-radius: 4px;
-    font-weight: 500;
-    transition: all 0.2s ease;
+/* Enhanced Kendo button styles in dialogs */
+::ng-deep .k-dialog button[kendoButton] {
+    padding: 10px 20px !important;
+    border-radius: 12px !important;
+    font-weight: 500 !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    min-height: 44px !important;
 }
 
-::ng-deep .k-textbox-container,
-::ng-deep .k-textarea-container {
-    width: 100%;
+::ng-deep .k-dialog button[kendoButton][themeColor="primary"] {
+    background: #0076B6 !important;
+    border: none !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 12px rgba(0, 118, 182, 0.2) !important;
 }
 
+::ng-deep .k-dialog button[kendoButton][themeColor="primary"]:hover {
+    background: #005a9e !important;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(0, 118, 182, 0.3) !important;
+}
+
+/* Enhanced textarea styles */
 ::ng-deep .k-textarea {
-    width: 100%;
-    font-family: inherit;
-    font-size: 1rem;
-    border-color: #ddd;
-    padding: 8px 12px;
-    border-radius: 4px;
-    resize: none;
-    box-sizing: border-box;
-}
-
-/* Style the kendo-textarea resize handle */
-::ng-deep .k-textarea-container .k-resize-handle {
-    background-color: #ddd;
-    height: 6px;
-    border-radius: 0 0 4px 4px;
-}
-
-::ng-deep .k-textarea-container .k-resize-handle:hover {
-    background-color: #5cc0ed;
+    width: 100% !important;
+    font-family: 'Montserrat', sans-serif !important;
+    font-size: 1rem !important;
+    border: 2px solid #d9d9d9 !important;
+    padding: 12px 16px !important;
+    border-radius: 12px !important;
+    resize: none !important;
+    box-sizing: border-box !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    background: #ffffff !important;
 }
 
 ::ng-deep .k-textarea:focus {
-    border-color: #5cc0ed;
-    box-shadow: 0 0 0 2px rgba(92, 192, 237, 0.2);
+    border-color: #0076B6 !important;
+    box-shadow: 
+        0 0 0 3px rgba(0, 118, 182, 0.15),
+        0 2px 8px rgba(0, 118, 182, 0.1) !important;
+    outline: none !important;
+}
+
+/* Report container styling */
+#reportContainer {
+    margin-top: 16px;
 }
 
 /* Ensure dialog stays within viewport */
 ::ng-deep .k-dialog {
     max-height: 90vh;
     overflow: auto;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .message-row {
+        padding: 16px 8px;
+    }
+    
+    .message {
+        margin-right: 12px;
+    }
+    
+    .message-image {
+        width: 32px;
+        height: 32px;
+        margin-right: 10px;
+    }
+    
+    .suggested-container {
+        padding: 16px;
+        margin-right: 12px;
+    }
+    
+    .suggested-questions-list {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .suggested-item {
+        width: 100%;
+        text-align: center;
+        white-space: normal;
+    }
+    
+    .rating-buttons {
+        gap: 24px;
+        justify-content: center;
+        width: 100%;
+    }
+    
+    .artifact-indicator {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* Debug styles to ensure Font Awesome is working */
+.fas, .far, .fab {
+    display: inline-block !important;
+    font-style: normal !important;
+    font-variant: normal !important;
+    text-rendering: auto !important;
+    -webkit-font-smoothing: antialiased !important;
 }
