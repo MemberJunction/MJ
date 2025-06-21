@@ -38050,6 +38050,10 @@ export class AIAgentRunStep_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `ID of the execution log/run record created for this step (ActionExecutionLog.ID for action steps, AIAgentRun.ID for subagent steps, AIPromptRun.ID for prompt steps)`}) 
+    @MaxLength(16)
+    TargetLogID?: string;
+        
 }
 
 //****************************************************************************
@@ -38095,6 +38099,9 @@ export class CreateAIAgentRunStepInput {
 
     @Field({ nullable: true })
     OutputData: string | null;
+
+    @Field({ nullable: true })
+    TargetLogID: string | null;
 }
     
 
@@ -38141,6 +38148,9 @@ export class UpdateAIAgentRunStepInput {
 
     @Field({ nullable: true })
     OutputData?: string | null;
+
+    @Field({ nullable: true })
+    TargetLogID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

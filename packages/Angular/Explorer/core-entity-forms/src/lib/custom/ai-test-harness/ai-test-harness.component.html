@@ -114,7 +114,8 @@
                                 </button>
                                 @if (message.isStreaming) {
                                     <div class="streaming-wrapper">
-                                        <span class="streaming-content">{{ message.streamingContent }}<span class="cursor">|</span></span>
+                                        <span class="streaming-content" [innerHTML]="getFormattedStreamingContent(message)"></span>
+                                        <span class="cursor">|</span>
                                     </div>
                                 } @else {
                                     <div [innerHTML]="getFormattedContent(message)"></div>
@@ -123,6 +124,28 @@
                                     <div class="error-details">
                                         <i class="fa-solid fa-exclamation-triangle"></i>
                                         {{ message.error }}
+                                    </div>
+                                }
+                                @if (message.payload && mode === 'agent' && message.role === 'assistant') {
+                                    <div class="payload-section" [class.collapsed]="message.payloadCollapsed">
+                                        <div class="payload-header" (click)="togglePayloadCollapse(message)">
+                                            <span class="payload-label">
+                                                <i class="fa-solid fa-code"></i> Payload
+                                            </span>
+                                            <button class="payload-toggle" type="button">
+                                                <i class="fa-solid" [class.fa-chevron-down]="!message.payloadCollapsed" [class.fa-chevron-right]="message.payloadCollapsed"></i>
+                                            </button>
+                                        </div>
+                                        @if (!message.payloadCollapsed) {
+                                            <div class="payload-content">
+                                                <mj-code-editor
+                                                    [ngModel]="formatJson(message.payload)"
+                                                    [language]="'json'"
+                                                    [readonly]="true"
+                                                    style="height: 300px; width: 100%;">
+                                                </mj-code-editor>
+                                            </div>
+                                        }
                                     </div>
                                 }
                             </div>
@@ -286,7 +309,10 @@
                                 <mj-agent-execution-monitor
                                     [mode]="executionMonitorMode"
                                     [executionData]="currentExecutionData"
-                                    [autoExpand]="true">
+                                    [autoExpand]="true"
+                                    [runId]="getLastRunId()"
+                                    [runType]="mode"
+                                    (viewRunClick)="navigateToRun($event)">
                                 </mj-agent-execution-monitor>
                             </div>
                         }
@@ -685,6 +711,11 @@
                                             <i class="fa-solid fa-diagram-project"></i>
                                         </button>
                                     }
+                                    @if (message.agentRunId && mode === 'agent' && message.role === 'assistant') {
+                                        <button class="execution-history-toggle" (click)="navigateToAgentRun(message.agentRunId)" title="View full run details">
+                                            <i class="fa-solid fa-external-link-alt"></i>
+                                        </button>
+                                    }
                                 </div>
                                 <div class="message-content">
                                     <button class="copy-button-in-bubble" (click)="copyMessage(message)" title="Copy message">
@@ -701,6 +732,23 @@
                                         <div class="error-details">
                                             <i class="fa-solid fa-exclamation-triangle"></i>
                                             {{ message.error }}
+                                        </div>
+                                    }
+                                    @if (message.payload && mode === 'agent' && message.role === 'assistant') {
+                                        <div class="payload-section" [class.collapsed]="message.payloadCollapsed">
+                                            <div class="payload-header" (click)="togglePayloadCollapse(message)">
+                                                <span class="payload-label">
+                                                    <i class="fa-solid fa-code"></i> Payload
+                                                </span>
+                                                <button class="payload-toggle" type="button">
+                                                    <i class="fa-solid" [class.fa-chevron-down]="!message.payloadCollapsed" [class.fa-chevron-right]="message.payloadCollapsed"></i>
+                                                </button>
+                                            </div>
+                                            @if (!message.payloadCollapsed) {
+                                                <div class="payload-content">
+                                                    <pre>{{ formatJson(message.payload) }}</pre>
+                                                </div>
+                                            }
                                         </div>
                                     }
                                 </div>

@@ -1,4 +1,4 @@
-<div class="record-form-container">
+<div class="record-form-container"  >
     <form *ngIf="record" class="record-form"  #form="ngForm" >
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
         <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()" >
@@ -160,7 +160,7 @@
                             [NewRecordValues]="NewRecordValues('Actions')"
                             [AllowLoad]="IsCurrentTab('Actions')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
