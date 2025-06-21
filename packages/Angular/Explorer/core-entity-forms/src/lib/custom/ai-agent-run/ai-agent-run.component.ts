@@ -148,7 +148,7 @@ export class AIAgentRunFormComponent extends BaseFormComponent implements OnInit
         this.stepsSubject$.next(steps);
         
         // Load action logs for action steps
-        const actionSteps = steps.filter(s => s.StepType === 'tool');
+        const actionSteps = steps.filter(s => s.StepType === 'action');
         if (actionSteps.length > 0) {
           await this.loadActionLogs(actionSteps);
         }

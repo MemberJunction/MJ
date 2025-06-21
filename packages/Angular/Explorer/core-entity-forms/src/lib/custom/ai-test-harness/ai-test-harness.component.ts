@@ -67,6 +67,10 @@ export interface ConversationMessage extends ChatMessage {
     showJsonRaw?: boolean;
     /** Execution history data for this message (agent mode) */
     executionData?: any;
+    /** Payload data from agent execution to display separately */
+    payload?: any;
+    /** Whether the payload section is collapsed */
+    payloadCollapsed?: boolean;
 }
 
 /**
@@ -1238,8 +1242,17 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 
                 // Extract the user message from the nested returnValue structure
                 let displayContent = 'No response generated';
+                let payloadData = null;
+                
                 if (fullResult.returnValue) {
-                    if (typeof fullResult.returnValue === 'object' && 
+                    // Check for message field (as shown in user's example)
+                    if (typeof fullResult.returnValue === 'object' && fullResult.returnValue.message) {
+                        displayContent = fullResult.returnValue.message;
+                        // If there's also a payload, store it separately
+                        if (fullResult.returnValue.payload) {
+                            payloadData = fullResult.returnValue.payload;
+                        }
+                    } else if (typeof fullResult.returnValue === 'object' && 
                         fullResult.returnValue.nextStep?.userMessage) {
                         // This is the expected structure for chat responses
                         displayContent = fullResult.returnValue.nextStep.userMessage;
@@ -1253,6 +1266,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 }
                 
                 assistantMessage.content = displayContent;
+                assistantMessage.payload = payloadData; // Store the payload if present
                 assistantMessage.executionTime = executionResult.executionTimeMs;
                 assistantMessage.agentRunId = fullResult.agentRun?.ID || assistantMessage.agentRunId;
                 
@@ -2372,12 +2386,24 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      * @param content - JSON string to format
      * @returns Formatted JSON string or original content if parsing fails
      */
-    public formatJson(content: string): string {
+    public formatJson(content: any): string {
         try {
-            return JSON.stringify(JSON.parse(content), null, 2);
+            if (typeof content === 'string') {
+                return JSON.stringify(JSON.parse(content), null, 2);
+            } else {
+                return JSON.stringify(content, null, 2);
+            }
         } catch {
-            return content;
+            return typeof content === 'string' ? content : JSON.stringify(content);
         }
+    }
+
+    /**
+     * Toggles the collapsed state of a message's payload section
+     * @param message - The message to toggle payload visibility for
+     */
+    public togglePayloadCollapse(message: ConversationMessage): void {
+        message.payloadCollapsed = !message.payloadCollapsed;
     }
 
     /**
