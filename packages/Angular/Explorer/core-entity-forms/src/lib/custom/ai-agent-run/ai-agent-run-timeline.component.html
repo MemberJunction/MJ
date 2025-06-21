@@ -11,8 +11,47 @@
       </mj-ai-agent-run-step-node>
       
       <!-- Sub-Run Timeline (Recursive) -->
-      <div class="sub-timeline" *ngIf="item.type === 'subrun' && item.isExpanded && item.data?.ID">
+      <div class="sub-timeline" *ngIf="(item.type === 'subrun' || (item.type === 'step' && item.data?.StepType === 'subagent')) && item.isExpanded">
+        <!-- Show loading indicator while loading children -->
+        <div class="loading-children" *ngIf="item.type === 'step' && !item.childrenLoaded">
+          <i class="fas fa-spinner fa-spin"></i> Loading sub-agent steps...
+        </div>
+        
+        <!-- Show no children message -->
+        <div class="no-children" *ngIf="item.type === 'step' && item.childrenLoaded && item.hasNoChildren">
+          <i class="fas fa-info-circle"></i> No sub-agent steps found
+        </div>
+        
+        <!-- For sub-agent steps that have loaded children -->
+        <ng-container *ngIf="item.type === 'step' && item.childrenLoaded && item.children && item.children.length > 0">
+          <ng-container *ngFor="let child of item.children">
+            <!-- Render the sub-run container with its steps -->
+            <mj-ai-agent-run-step-node
+              [item]="child"
+              [isSelected]="selectedItem?.id === child.id"
+              (itemClick)="selectItem(child)"
+              (expandToggle)="toggleItemExpansion(child, $event)"
+              (navigateToEntity)="navigateToEntity.emit($event)">
+            </mj-ai-agent-run-step-node>
+            
+            <!-- Show the steps within this sub-run when expanded -->
+            <div class="sub-run-steps" *ngIf="child.isExpanded && child.children">
+              <ng-container *ngFor="let step of child.children">
+                <mj-ai-agent-run-step-node
+                  [item]="step"
+                  [isSelected]="selectedItem?.id === step.id"
+                  (itemClick)="selectItem(step)"
+                  (expandToggle)="toggleItemExpansion(step, $event)"
+                  (navigateToEntity)="navigateToEntity.emit($event)">
+                </mj-ai-agent-run-step-node>
+              </ng-container>
+            </div>
+          </ng-container>
+        </ng-container>
+        
+        <!-- For actual sub-run items (from the initial load) -->
         <mj-ai-agent-run-timeline
+          *ngIf="item.type === 'subrun' && item.data?.ID"
           [aiAgentRunId]="item.data.ID"
           [autoRefresh]="false"
           (itemSelected)="selectItem($event)"

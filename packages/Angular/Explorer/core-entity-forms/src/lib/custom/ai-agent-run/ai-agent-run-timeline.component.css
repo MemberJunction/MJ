@@ -31,3 +31,36 @@
 .error-state {
   color: #dc3545;
 }
+
+/* Loading and No Children States */
+.loading-children,
+.no-children {
+  padding: 12px 20px;
+  margin-left: 60px;
+  color: #6c757d;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.loading-children i {
+  color: #2196f3;
+}
+
+.no-children {
+  color: #868e96;
+  font-style: italic;
+}
+
+.no-children i {
+  color: #adb5bd;
+}
+
+/* Sub-run steps container */
+.sub-run-steps {
+  margin-left: 20px;
+  padding-left: 20px;
+  border-left: 2px solid #e9ecef;
+  margin-top: 8px;
+}

@@ -806,6 +806,7 @@ export class BaseAgent {
                 onStreaming: params.onStreaming,
                 parentAgentHierarchy: this._runContext?.agentHierarchy,
                 parentDepth: this._runContext?.depth,
+                parentRun: this._agentRun,
                 data: subAgentRequest.templateParameters,
                 context: params.context // pass along our context to sub-agents so they can keep passing it down and pass to actions as well
             });
@@ -1013,8 +1014,7 @@ export class BaseAgent {
         this._agentRun.UserID = params.contextUser?.ID || null;
         
         // Set parent run ID if we're in a sub-agent context
-        // TODO: Get parent run ID from execution context when implementing sub-agent tracking
-        this._agentRun.ParentRunID = null;
+        this._agentRun.ParentRunID = params.parentRun?.ID;
         
         // Save the agent run
         if (!await this._agentRun.Save()) {
@@ -1305,8 +1305,8 @@ export class BaseAgent {
             // Report prompt execution progress with context
             const isRetry = !!retryContext;
             const promptMessage = isRetry 
-                ? `Re-executing agent prompt with additional context from ${retryContext.retryReason || 'previous actions'}`
-                : `Executing agent's initial prompt to analyze your request`;
+                ? `Running ${params.agent.Name} with context from *${retryContext.retryReason || 'previous actions'}*`
+                : `Running ${params.agent.Name}'s initial prompt...`;
                 
             params.onProgress?.({
                 step: 'prompt_execution',
