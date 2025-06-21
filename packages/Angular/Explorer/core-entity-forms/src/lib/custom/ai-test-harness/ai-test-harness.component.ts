@@ -2407,6 +2407,20 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     }
 
     /**
+     * Formats streaming content with markdown rendering
+     * @param message - The message containing streaming content
+     * @returns SafeHtml formatted content
+     */
+    public getFormattedStreamingContent(message: ConversationMessage): SafeHtml {
+        if (!message.streamingContent) {
+            return this.sanitizer.sanitize(SecurityContext.HTML, '') || '';
+        }
+        
+        // Use the same markdown rendering as regular content
+        return this.renderMarkdown(message.streamingContent.trim());
+    }
+
+    /**
      * Automatically detects the content type of a message for appropriate rendering.
      * Uses pattern matching to identify JSON, Markdown, or plain text content.
      * @param content - Content string to analyze

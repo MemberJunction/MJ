@@ -6,12 +6,13 @@
 
 .timeline {
   position: relative;
+  padding-left: 40px; /* Add padding to accommodate expand buttons */
 }
 
 .sub-timeline {
-  margin-left: 40px;
+  margin-left: 24px;
   margin-top: 8px;
-  padding-left: 20px;
+  padding-left: 12px;
   border-left: 2px dashed #e0e6ed;
 }
 

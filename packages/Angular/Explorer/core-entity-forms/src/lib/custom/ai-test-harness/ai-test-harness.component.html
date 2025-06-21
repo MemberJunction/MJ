@@ -114,7 +114,8 @@
                                 </button>
                                 @if (message.isStreaming) {
                                     <div class="streaming-wrapper">
-                                        <span class="streaming-content">{{ message.streamingContent }}<span class="cursor">|</span></span>
+                                        <div class="streaming-content" [innerHTML]="getFormattedStreamingContent(message)"></div>
+                                        <span class="cursor">|</span>
                                     </div>
                                 } @else {
                                     <div [innerHTML]="getFormattedContent(message)"></div>
