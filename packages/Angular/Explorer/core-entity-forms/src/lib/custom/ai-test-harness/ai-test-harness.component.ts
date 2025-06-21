@@ -2416,8 +2416,16 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             return this.sanitizer.sanitize(SecurityContext.HTML, '') || '';
         }
         
-        // Use the same markdown rendering as regular content
-        return this.renderMarkdown(message.streamingContent.trim());
+        const trimmedContent = message.streamingContent.trim();
+        
+        // Check if content type is markdown before applying markdown rendering
+        const contentType = this.detectContentType(trimmedContent);
+        if (contentType === 'markdown') {
+            return this.renderMarkdown(trimmedContent);
+        } else {
+            // For plain text, just sanitize and return without extra processing
+            return this.sanitizer.sanitize(SecurityContext.HTML, trimmedContent) || '';
+        }
     }
 
     /**

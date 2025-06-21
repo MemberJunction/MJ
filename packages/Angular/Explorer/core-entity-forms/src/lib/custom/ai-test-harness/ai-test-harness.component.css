@@ -433,11 +433,10 @@
 
 .streaming-wrapper {
     position: relative;
-    display: inline;
 }
 
 .streaming-wrapper .cursor {
-    display: inline-block;
+    display: inline;
     margin-left: 2px;
 }
 
