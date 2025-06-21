@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, ElementRef, AfterViewChecked, SecurityContext, ViewContainerRef, ChangeDetectorRef } from '@angular/core';
+import { Router } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 import { WindowService, WindowRef, WindowCloseResult } from '@progress/kendo-angular-dialog';
@@ -153,7 +154,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         private sanitizer: DomSanitizer,
         private windowService: WindowService,
         private viewContainerRef: ViewContainerRef,
-        private cdr: ChangeDetectorRef
+        private cdr: ChangeDetectorRef,
+        private router: Router
     ) {}
     
     /** The mode of operation - either 'agent' or 'prompt' */
@@ -2761,5 +2763,15 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     public toggleAdvancedParams() {
         this.advancedParamsExpanded = !this.advancedParamsExpanded;
+    }
+    
+    /**
+     * Navigates to the AI Agent Run form to view detailed execution information
+     * @param agentRunId - The ID of the agent run to view
+     */
+    public navigateToAgentRun(agentRunId: string) {
+        if (agentRunId) {
+            this.router.navigate(['/entities', 'MJ: AI Agent Runs', agentRunId]);
+        }
     }
 }

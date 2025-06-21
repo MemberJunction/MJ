@@ -1,0 +1,289 @@
+<div class="record-form-container ai-agent-run-form">
+  <div class="record-form">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-content">
+        <div class="header-left">
+          <div class="icon-wrapper">
+            <i class="fas fa-robot"></i>
+          </div>
+          <div class="header-info">
+            <h2>AI Agent Run</h2>
+            <div class="meta-info">
+              <span class="agent-name" *ngIf="agent">{{ agent.Name }}</span>
+              <span class="run-id">{{ record?.ID }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="header-right">
+          <div class="status-badge" [attr.data-status]="record?.Status">
+            <i class="fas" [ngClass]="getStatusIcon(record?.Status || '')"></i>
+            {{ record?.Status }}
+          </div>
+          <div class="header-actions">
+            <button class="btn-icon" (click)="refreshData()" title="Refresh">
+              <i class="fas fa-sync-alt"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="header-stats">
+        <div class="stat">
+          <span class="label">Started</span>
+          <span class="value">{{ record?.StartedAt | date:'medium' }}</span>
+        </div>
+        <div class="stat" *ngIf="record?.CompletedAt">
+          <span class="label">Completed</span>
+          <span class="value">{{ record?.CompletedAt | date:'medium' }}</span>
+        </div>
+        <div class="stat" *ngIf="record?.CompletedAt">
+          <span class="label">Duration</span>
+          <span class="value">{{ calculateDuration(record.StartedAt, record.CompletedAt) }}</span>
+        </div>
+        <div class="stat" *ngIf="record?.Success !== null">
+          <span class="label">Result</span>
+          <span class="value" [class.success]="record.Success" [class.error]="!record.Success">
+            {{ record.Success ? 'Success' : 'Failed' }}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab" [class.active]="activeTab === 'timeline'" (click)="activeTab = 'timeline'">
+        <i class="fas fa-stream"></i> Timeline
+      </button>
+      <button class="tab" [class.active]="activeTab === 'details'" (click)="activeTab = 'details'">
+        <i class="fas fa-info-circle"></i> Details
+      </button>
+    </div>
+
+    <!-- Content -->
+    <div class="content-area" [class.with-panel]="jsonPanelExpanded">
+      <!-- Timeline Tab -->
+      <div class="tab-content" *ngIf="activeTab === 'timeline'">
+        <div class="timeline-container" *ngIf="!loading && (timelineItems$ | async) as items">
+          <div class="timeline" *ngIf="items.length > 0">
+            <ng-container *ngFor="let item of items">
+              <div class="timeline-item" 
+                   [class.selected]="selectedTimelineItem?.id === item.id"
+                   [attr.data-status]="item.status"
+                   [attr.data-type]="item.type"
+                   [style.margin-left.px]="item.level * 40"
+                   (click)="selectTimelineItem(item)">
+                
+                <div class="timeline-marker" [attr.data-color]="item.color">
+                  <i class="fas" [ngClass]="item.icon"></i>
+                </div>
+                
+                <div class="timeline-content">
+                  <div class="timeline-header">
+                    <h4>{{ item.title }}</h4>
+                    <span class="timeline-time">{{ item.startTime | date:'HH:mm:ss.SSS' }}</span>
+                  </div>
+                  <div class="timeline-subtitle">{{ item.subtitle }}</div>
+                  <div class="timeline-meta">
+                    <span class="duration" *ngIf="item.duration">
+                      <i class="fas fa-clock"></i> {{ item.duration }}
+                    </span>
+                    <span class="status" [attr.data-status]="item.status">
+                      {{ item.status }}
+                    </span>
+                  </div>
+                </div>
+                
+                <div class="timeline-actions" *ngIf="item.type === 'subrun'">
+                  <button class="btn-link" (click)="navigateToSubRun(item.id); $event.stopPropagation()">
+                    <i class="fas fa-external-link-alt"></i> View Run
+                  </button>
+                </div>
+              </div>
+              
+              <!-- Children items -->
+              <ng-container *ngIf="item.children && item.children.length > 0">
+                <div class="timeline-children">
+                  <div class="timeline-item child-item"
+                       *ngFor="let child of item.children"
+                       [class.selected]="selectedTimelineItem?.id === child.id"
+                       [attr.data-status]="child.status"
+                       [attr.data-type]="child.type"
+                       [style.margin-left.px]="child.level * 40"
+                       (click)="selectTimelineItem(child); $event.stopPropagation()">
+                    
+                    <div class="timeline-marker small" [attr.data-color]="child.color">
+                      <i class="fas" [ngClass]="child.icon"></i>
+                    </div>
+                    
+                    <div class="timeline-content">
+                      <div class="timeline-header">
+                        <h5>{{ child.title }}</h5>
+                        <span class="timeline-time">{{ child.startTime | date:'HH:mm:ss.SSS' }}</span>
+                      </div>
+                      <div class="timeline-subtitle">{{ child.subtitle }}</div>
+                      <div class="timeline-meta">
+                        <span class="duration" *ngIf="child.duration">
+                          <i class="fas fa-clock"></i> {{ child.duration }}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div class="timeline-actions" *ngIf="child.type === 'subrun'">
+                      <button class="btn-link" (click)="navigateToSubRun(child.id); $event.stopPropagation()">
+                        <i class="fas fa-external-link-alt"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </ng-container>
+            </ng-container>
+          </div>
+          
+          <div class="empty-state" *ngIf="items.length === 0">
+            <i class="fas fa-stream fa-3x"></i>
+            <p>No execution steps found</p>
+          </div>
+        </div>
+        
+        <div class="loading-state" *ngIf="loading">
+          <i class="fas fa-spinner fa-spin fa-2x"></i>
+          <p>Loading timeline...</p>
+        </div>
+        
+        <div class="error-state" *ngIf="error">
+          <i class="fas fa-exclamation-triangle fa-2x"></i>
+          <p>{{ error }}</p>
+        </div>
+      </div>
+
+      <!-- Details Tab -->
+      <div class="tab-content" *ngIf="activeTab === 'details'">
+        <kendo-panelbar>
+          <kendo-panelbar-item title="General Information" [expanded]="true">
+            <ng-template kendoPanelBarContent>
+              <div class="details-grid">
+                <div class="detail-item">
+                  <label>Run ID</label>
+                  <span>{{ record?.ID }}</span>
+                </div>
+                <div class="detail-item">
+                  <label>Agent ID</label>
+                  <span>{{ record?.AgentID }}</span>
+                </div>
+                <div class="detail-item">
+                  <label>Agent Name</label>
+                  <span>{{ agent?.Name || 'N/A' }}</span>
+                </div>
+                <div class="detail-item">
+                  <label>Parent Run ID</label>
+                  <span>{{ record?.ParentRunID || 'None (Root)' }}</span>
+                </div>
+                <div class="detail-item">
+                  <label>Conversation ID</label>
+                  <span>{{ record?.ConversationID || 'N/A' }}</span>
+                </div>
+                <div class="detail-item">
+                  <label>User</label>
+                  <span>{{ record?.User || 'N/A' }}</span>
+                </div>
+              </div>
+            </ng-template>
+          </kendo-panelbar-item>
+          
+          <kendo-panelbar-item title="Execution Status">
+            <ng-template kendoPanelBarContent>
+              <div class="details-grid">
+                <div class="detail-item">
+                  <label>Status</label>
+                  <span class="status-badge" [attr.data-status]="record?.Status">
+                    {{ record?.Status }}
+                  </span>
+                </div>
+                <div class="detail-item">
+                  <label>Success</label>
+                  <span [class.success]="record?.Success" [class.error]="record?.Success === false">
+                    {{ record?.Success === null ? 'In Progress' : (record?.Success ? 'Yes' : 'No') }}
+                  </span>
+                </div>
+                <div class="detail-item full-width" *ngIf="record?.ErrorMessage">
+                  <label>Error Message</label>
+                  <div class="error-message">{{ record.ErrorMessage }}</div>
+                </div>
+              </div>
+            </ng-template>
+          </kendo-panelbar-item>
+          
+          <kendo-panelbar-item title="Result" *ngIf="record?.Result">
+            <ng-template kendoPanelBarContent>
+              <div class="result-viewer">
+                <mj-code-editor
+                  [(ngModel)]="record.Result"
+                  [language]="'json'"
+                  [readonly]="true"
+                  style="height: 300px; width: 100%;">
+                </mj-code-editor>
+              </div>
+            </ng-template>
+          </kendo-panelbar-item>
+          
+          <kendo-panelbar-item title="Agent State" *ngIf="record?.AgentState">
+            <ng-template kendoPanelBarContent>
+              <div class="state-viewer">
+                <mj-code-editor
+                  [(ngModel)]="record.AgentState"
+                  [language]="'json'"
+                  [readonly]="true"
+                  style="height: 400px; width: 100%;">
+                </mj-code-editor>
+              </div>
+            </ng-template>
+          </kendo-panelbar-item>
+        </kendo-panelbar>
+      </div>
+    </div>
+
+    <!-- JSON Detail Panel -->
+    <div class="json-panel" [class.expanded]="jsonPanelExpanded" *ngIf="selectedTimelineItem">
+      <div class="json-panel-header">
+        <h3>
+          <i class="fas" [ngClass]="selectedTimelineItem.icon"></i>
+          {{ selectedTimelineItem.title }}
+        </h3>
+        <button class="btn-icon" (click)="closeJsonPanel()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="json-panel-content">
+        <div class="json-panel-meta">
+          <div class="meta-item">
+            <label>Type</label>
+            <span>{{ selectedTimelineItem.type }}</span>
+          </div>
+          <div class="meta-item">
+            <label>Status</label>
+            <span class="status-badge small" [attr.data-status]="selectedTimelineItem.status">
+              {{ selectedTimelineItem.status }}
+            </span>
+          </div>
+          <div class="meta-item">
+            <label>Duration</label>
+            <span>{{ selectedTimelineItem.duration || 'N/A' }}</span>
+          </div>
+        </div>
+        <div class="json-viewer">
+          <div class="json-toolbar">
+            <button class="btn-icon" title="Copy JSON" (click)="copyToClipboard(getSelectedItemJson())">
+              <i class="fas fa-copy"></i>
+            </button>
+          </div>
+          <mj-code-editor
+            [(ngModel)]="selectedItemJsonString"
+            [language]="'json'"
+            [readonly]="true"
+            style="height: calc(100vh - 400px); width: 100%;">
+          </mj-code-editor>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

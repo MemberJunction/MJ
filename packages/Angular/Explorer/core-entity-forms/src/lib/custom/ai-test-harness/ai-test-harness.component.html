@@ -685,6 +685,11 @@
                                             <i class="fa-solid fa-diagram-project"></i>
                                         </button>
                                     }
+                                    @if (message.agentRunId && mode === 'agent' && message.role === 'assistant') {
+                                        <button class="execution-history-toggle" (click)="navigateToAgentRun(message.agentRunId)" title="View full run details">
+                                            <i class="fa-solid fa-external-link-alt"></i>
+                                        </button>
+                                    }
                                 </div>
                                 <div class="message-content">
                                     <button class="copy-button-in-bubble" (click)="copyMessage(message)" title="Copy message">
