@@ -1,5 +1,20 @@
 # @memberjunction/metadata-sync
 
+## 2.54.0
+
+### Patch Changes
+
+- 98ef1f7: Loop Agent Type improvement + Metadata Sync tool Feeature for @include
+- Updated dependencies [20f424d]
+- Updated dependencies [dfca664]
+- Updated dependencies [1273b07]
+  - @memberjunction/core@2.54.0
+  - @memberjunction/sqlserver-dataprovider@2.54.0
+  - @memberjunction/graphql-dataprovider@2.54.0
+  - @memberjunction/core-entities@2.54.0
+  - @memberjunction/core-entities-server@2.54.0
+  - @memberjunction/global@2.54.0
+
 ## 2.53.0
 
 ### Patch Changes

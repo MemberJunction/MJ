@@ -1,5 +1,47 @@
 # Change Log - @memberjunction/server
 
+## 2.54.0
+
+### Patch Changes
+
+- Updated dependencies [20f424d]
+- Updated dependencies [a6f553e]
+- Updated dependencies [81913a6]
+- Updated dependencies [c96d6dd]
+- Updated dependencies [dfca664]
+- Updated dependencies [0f6e995]
+- Updated dependencies [e267cc4]
+- Updated dependencies [08b032c]
+- Updated dependencies [1273b07]
+- Updated dependencies [98ef1f7]
+- Updated dependencies [5e2cfa1]
+- Updated dependencies [0046359]
+- Updated dependencies [91dd7d8]
+  - @memberjunction/core@2.54.0
+  - @memberjunction/ai-agents@2.54.0
+  - @memberjunction/aiengine@2.54.0
+  - @memberjunction/ai-prompts@2.54.0
+  - @memberjunction/sqlserver-dataprovider@2.54.0
+  - @memberjunction/ai-vectors-pinecone@2.54.0
+  - @memberjunction/core-actions@2.54.0
+  - @memberjunction/actions@2.54.0
+  - @memberjunction/entity-communications-server@2.54.0
+  - @memberjunction/doc-utils@2.54.0
+  - @memberjunction/external-change-detection@2.54.0
+  - @memberjunction/graphql-dataprovider@2.54.0
+  - @memberjunction/core-entities@2.54.0
+  - @memberjunction/core-entities-server@2.54.0
+  - @memberjunction/data-context@2.54.0
+  - @memberjunction/queue@2.54.0
+  - @memberjunction/storage@2.54.0
+  - @memberjunction/templates@2.54.0
+  - @memberjunction/skip-types@2.54.0
+  - @memberjunction/data-context-server@2.54.0
+  - @memberjunction/ai@2.54.0
+  - @memberjunction/ai-mistral@2.54.0
+  - @memberjunction/ai-openai@2.54.0
+  - @memberjunction/global@2.54.0
+
 ## 2.53.0
 
 ### Patch Changes

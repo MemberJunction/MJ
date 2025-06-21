@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ng-tabstrip
 
+## 2.54.0
+
+### Patch Changes
+
+- b21ba9e: This PR addresses multiple UI issues and improvements across the MemberJunction Explorer and Angular components, enhancing user experience and visual consistency throughout the platform.
+  - @memberjunction/ng-container-directives@2.54.0
+
 ## 2.53.0
 
 ### Patch Changes

@@ -1,5 +1,25 @@
 # Change Log - @memberjunction/ng-ask-skip
 
+## 2.54.0
+
+### Patch Changes
+
+- b21ba9e: This PR addresses multiple UI issues and improvements across the MemberJunction Explorer and Angular components, enhancing user experience and visual consistency throughout the platform.
+- Updated dependencies [20f424d]
+- Updated dependencies [b21ba9e]
+  - @memberjunction/core@2.54.0
+  - @memberjunction/ng-tabstrip@2.54.0
+  - @memberjunction/ng-shared@2.54.0
+  - @memberjunction/ng-user-view-grid@2.54.0
+  - @memberjunction/ng-chat@2.54.0
+  - @memberjunction/ng-container-directives@2.54.0
+  - @memberjunction/ng-data-context@2.54.0
+  - @memberjunction/ng-skip-chat@2.54.0
+  - @memberjunction/graphql-dataprovider@2.54.0
+  - @memberjunction/core-entities@2.54.0
+  - @memberjunction/skip-types@2.54.0
+  - @memberjunction/global@2.54.0
+
 ## 2.53.0
 
 ### Patch Changes

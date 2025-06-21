@@ -1,5 +1,18 @@
 # @memberjunction/ng-dashboards
 
+## 2.54.0
+
+### Patch Changes
+
+- b21ba9e: This PR addresses multiple UI issues and improvements across the MemberJunction Explorer and Angular components, enhancing user experience and visual consistency throughout the platform.
+- Updated dependencies [20f424d]
+  - @memberjunction/core@2.54.0
+  - @memberjunction/ng-shared@2.54.0
+  - @memberjunction/ng-container-directives@2.54.0
+  - @memberjunction/ng-notifications@2.54.0
+  - @memberjunction/core-entities@2.54.0
+  - @memberjunction/templates-base-types@2.54.0
+
 ## 2.53.0
 
 ### Patch Changes

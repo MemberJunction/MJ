@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/queue
 
+## 2.54.0
+
+### Patch Changes
+
+- Updated dependencies [20f424d]
+- Updated dependencies [a6f553e]
+- Updated dependencies [0f6e995]
+- Updated dependencies [0046359]
+  - @memberjunction/core@2.54.0
+  - @memberjunction/aiengine@2.54.0
+  - @memberjunction/core-entities@2.54.0
+  - @memberjunction/ai@2.54.0
+  - @memberjunction/global@2.54.0
+
 ## 2.53.0
 
 ### Patch Changes

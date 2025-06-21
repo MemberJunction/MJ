@@ -1,5 +1,29 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 2.54.0
+
+### Patch Changes
+
+- dfca664: **SQLServerDataProvider Changes:**
+
+  - SQLServerTransactionGroup now immediately rolls back and stops processing on first operation failure
+  - Enhanced error handling to prevent double rollback attempts
+  - Improved error messages to clearly indicate when transactions are rolled back
+
+- 1273b07: fix transaction handling
+- Updated dependencies [20f424d]
+- Updated dependencies [a6f553e]
+- Updated dependencies [0f6e995]
+- Updated dependencies [0046359]
+  - @memberjunction/core@2.54.0
+  - @memberjunction/aiengine@2.54.0
+  - @memberjunction/ai-vector-dupe@2.54.0
+  - @memberjunction/actions@2.54.0
+  - @memberjunction/core-entities@2.54.0
+  - @memberjunction/queue@2.54.0
+  - @memberjunction/ai@2.54.0
+  - @memberjunction/global@2.54.0
+
 ## 2.53.0
 
 ### Patch Changes
