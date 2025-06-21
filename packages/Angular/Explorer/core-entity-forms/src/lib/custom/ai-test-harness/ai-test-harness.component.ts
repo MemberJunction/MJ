@@ -1372,6 +1372,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                         promptRunId
                         rawResult
                         validationResult
+                        chatResult
                     }
                 }
             `;
@@ -1416,7 +1417,16 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 assistantMessage.executionTime = executionResult.executionTimeMs;
                 
                 // Store the complete execution result for JSON display
-                assistantMessage.rawContent = JSON.stringify(executionResult, null, 2);
+                // If chatResult is provided, parse it and include it in the display
+                const resultForDisplay: any = { ...executionResult };
+                if (executionResult.chatResult) {
+                    try {
+                        resultForDisplay.chatResult = JSON.parse(executionResult.chatResult);
+                    } catch {
+                        // If parsing fails, keep it as a string
+                    }
+                }
+                assistantMessage.rawContent = JSON.stringify(resultForDisplay, null, 2);
                 
                 // Store execution metadata
                 if (executionResult.promptRunId) {
@@ -1425,6 +1435,19 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             } else {
                 assistantMessage.content = 'I encountered an error processing your request.';
                 assistantMessage.error = executionResult?.error || 'Unknown error occurred';
+                
+                // Include chatResult in error case too
+                if (executionResult) {
+                    const errorResult: any = { ...executionResult };
+                    if (executionResult.chatResult) {
+                        try {
+                            errorResult.chatResult = JSON.parse(executionResult.chatResult);
+                        } catch {
+                            // If parsing fails, keep it as a string
+                        }
+                    }
+                    assistantMessage.rawContent = JSON.stringify(errorResult, null, 2);
+                }
             }
             
             delete assistantMessage.streamingContent;
