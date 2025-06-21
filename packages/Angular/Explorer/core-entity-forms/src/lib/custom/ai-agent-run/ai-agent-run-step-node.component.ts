@@ -22,10 +22,34 @@ export class AIAgentRunStepNodeComponent {
   }
 
   get canNavigateToEntity(): boolean {
+    // For steps, check if it's a type that has a target and if TargetLogID exists
+    if (this.item.type === 'step' && this.item.data) {
+      const stepType = this.item.data.StepType;
+      return (stepType === 'execute_action' || stepType === 'action' || stepType === 'prompt' || stepType === 'subagent') 
+        && !!this.item.data.TargetLogID;
+    }
+    // For direct types (from related entities)
     return this.item.type === 'action' || this.item.type === 'prompt' || this.item.type === 'subrun';
   }
 
   get entityNavigationText(): string {
+    // For step types, check the StepType
+    if (this.item.type === 'step' && this.item.data) {
+      const stepType = this.item.data.StepType;
+      switch (stepType) {
+        case 'execute_action':
+        case 'action':
+          return 'View Action Log';
+        case 'prompt':
+          return 'View Prompt Run';
+        case 'subagent':
+          return 'View Agent Run';
+        default:
+          return 'View Details';
+      }
+    }
+    
+    // For direct types
     switch (this.item.type) {
       case 'action':
         return 'View Action Log';
@@ -73,21 +97,43 @@ export class AIAgentRunStepNodeComponent {
     if (!this.canNavigateToEntity) return;
 
     let entityName = '';
-    let recordId = this.item.id;
+    let recordId = '';
 
-    switch (this.item.type) {
-      case 'action':
-        entityName = 'Action Execution Logs';
-        break;
-      case 'prompt':
-        entityName = 'MJ: AI Prompt Runs';
-        break;
-      case 'subrun':
-        entityName = 'MJ: AI Agent Runs';
-        break;
+    // For step types, use TargetLogID and determine entity based on StepType
+    if (this.item.type === 'step' && this.item.data) {
+      recordId = this.item.data.TargetLogID;
+      const stepType = this.item.data.StepType;
+      
+      switch (stepType) {
+        case 'execute_action':
+        case 'action':
+          entityName = 'Action Execution Logs';
+          break;
+        case 'prompt':
+          entityName = 'MJ: AI Prompt Runs';
+          break;
+        case 'subagent':
+          entityName = 'MJ: AI Agent Runs';
+          break;
+      }
+    } else {
+      // For direct types, use the item ID
+      recordId = this.item.id;
+      
+      switch (this.item.type) {
+        case 'action':
+          entityName = 'Action Execution Logs';
+          break;
+        case 'prompt':
+          entityName = 'MJ: AI Prompt Runs';
+          break;
+        case 'subrun':
+          entityName = 'MJ: AI Agent Runs';
+          break;
+      }
     }
 
-    if (entityName) {
+    if (entityName && recordId) {
       this.navigateToEntity.emit({ entityName, recordId });
     }
   }

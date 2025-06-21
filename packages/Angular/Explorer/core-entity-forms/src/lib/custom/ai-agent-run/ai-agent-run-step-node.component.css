@@ -3,6 +3,7 @@
   align-items: flex-start;
   gap: 12px;
   padding: 12px;
+  padding-left: 22px; /* Add extra padding to accommodate expand button */
   margin-bottom: 8px;
   background: white;
   border: 1px solid #e0e6ed;
@@ -27,7 +28,7 @@
 /* Expand/Collapse Button */
 .expand-toggle {
   position: absolute;
-  left: -30px;
+  left: -20px;
   top: 12px;
   width: 24px;
   height: 24px;

@@ -137,7 +137,12 @@
                                         </div>
                                         @if (!message.payloadCollapsed) {
                                             <div class="payload-content">
-                                                <pre>{{ formatJson(message.payload) }}</pre>
+                                                <mj-code-editor
+                                                    [ngModel]="formatJson(message.payload)"
+                                                    [language]="'json'"
+                                                    [readonly]="true"
+                                                    style="height: 300px; width: 100%;">
+                                                </mj-code-editor>
                                             </div>
                                         }
                                     </div>

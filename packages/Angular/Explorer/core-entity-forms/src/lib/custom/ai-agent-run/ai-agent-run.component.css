@@ -1,6 +1,6 @@
 .ai-agent-run-form {
   height: 100%;
-  overflow: hidden;
+  overflow: auto;
 }
 
 /* Header Styles */
@@ -224,13 +224,13 @@
 .content-area {
   position: relative;
   height: calc(100vh - 280px);
-  overflow: hidden;
+  overflow: auto;
   background: white;
 }
 
 .tab-content {
   height: 100%;
-  overflow: hidden;
+  overflow: auto;
 }
 
 /* Details tab specific */
@@ -277,7 +277,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: auto;
   padding: 16px;
 }
 
@@ -338,7 +338,7 @@
   background: white;
   border-radius: 8px;
   border: 1px solid #e0e6ed;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .json-toolbar {
@@ -722,7 +722,7 @@
   flex-direction: column;
   gap: 10px;
   min-height: 0;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .json-toolbar {
@@ -774,7 +774,7 @@
 .state-viewer {
   padding: 20px;
   max-height: 450px;
-  overflow: hidden;
+  overflow: auto;
   display: flex;
   flex-direction: column;
 }

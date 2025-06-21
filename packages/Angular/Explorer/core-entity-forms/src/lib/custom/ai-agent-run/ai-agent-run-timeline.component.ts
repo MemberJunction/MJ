@@ -383,28 +383,12 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
           stepsByRun.get(runId)!.push(step);
         });
         
-        // Create timeline items for each group of steps
+        // Create timeline items directly from steps (no intermediate node)
         item.children = [];
         for (const [runId, steps] of stepsByRun) {
-          // Create a container item for each sub-run
-          const subRunItem: TimelineItem = {
-            id: runId,
-            type: 'subrun',
-            title: `Sub-Agent Run`,
-            subtitle: `${steps.length} steps`,
-            status: steps[steps.length - 1]?.Status || 'Unknown',
-            startTime: steps[0]?.StartedAt || new Date(),
-            endTime: steps[steps.length - 1]?.CompletedAt || undefined,
-            duration: this.calculateDuration(steps[0]?.StartedAt, steps[steps.length - 1]?.CompletedAt),
-            icon: 'fa-robot',
-            color: this.getStatusColor(steps[steps.length - 1]?.Status || 'Unknown'),
-            data: { ID: runId },
-            level: item.level + 1,
-            parentId: item.id,
-            isExpanded: false,
-            children: steps.map(step => this.createTimelineItemFromStep(step, item.level + 2))
-          };
-          item.children.push(subRunItem);
+          // Add steps directly as children, no intermediate container
+          const childSteps = steps.map(step => this.createTimelineItemFromStep(step, item.level + 1));
+          item.children.push(...childSteps);
         }
       } else {
         console.log('🔄 Timeline: No sub-agent steps found');

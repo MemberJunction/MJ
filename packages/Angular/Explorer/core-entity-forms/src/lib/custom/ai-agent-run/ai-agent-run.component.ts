@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, ElementRef 
 import { Router, ActivatedRoute } from '@angular/router';
 import { Subject, Observable, BehaviorSubject, combineLatest } from 'rxjs';
 import { takeUntil, map, distinctUntilChanged, shareReplay } from 'rxjs/operators';
-import { Metadata, RunView } from '@memberjunction/core';
+import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { AIAgentRunEntity, AIAgentRunStepEntity, ActionExecutionLogEntity, AIPromptRunEntity, AIAgentEntity } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
@@ -92,21 +92,21 @@ export class AIAgentRunFormComponent extends BaseFormComponent implements OnInit
   }
   
   navigateToSubRun(runId: string) {
-    this.router.navigate(['/entities', 'MJ: AI Agent Runs', runId]);
+    SharedService.Instance.OpenEntityRecord("MJ: AI Agent Runs", CompositeKey.FromID(runId));
   }
 
   navigateToParentRun() {
     if (this.record.ParentRunID) {
-      this.router.navigate(['/entities', 'MJ: AI Agent Runs', this.record.ParentRunID]);
+      SharedService.Instance.OpenEntityRecord("MJ: AI Agent Runs", CompositeKey.FromID(this.record.ParentRunID));
     }
   }
   
   navigateToActionLog(logId: string) {
-    this.router.navigate(['/entities', 'Action Execution Logs', logId]);
+    SharedService.Instance.OpenEntityRecord("Action Execution Logs", CompositeKey.FromID(logId));
   }
   
   navigateToEntityRecord(event: { entityName: string; recordId: string }) {
-    this.router.navigate(['/entities', event.entityName, event.recordId]);
+    SharedService.Instance.OpenEntityRecord(event.entityName, CompositeKey.FromID(event.recordId));
   }
   
   refreshData() {

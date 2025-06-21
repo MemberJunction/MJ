@@ -1287,7 +1287,7 @@ export class BaseAgent {
             // Report prompt execution progress with context
             const isRetry = !!retryContext;
             const promptMessage = isRetry 
-                ? `Running ${params.agent.Name} with context from *${retryContext.retryReason || 'previous actions'}*`
+                ? `Running ${params.agent.Name} with context from ${retryContext.retryReason || 'previous actions'}`
                 : `Running ${params.agent.Name}'s initial prompt...`;
                 
             params.onProgress?.({
