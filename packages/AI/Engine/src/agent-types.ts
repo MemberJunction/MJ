@@ -371,6 +371,8 @@ export type AgentExecutionProgressCallback = (progress: {
     message: string;
     /** Additional metadata about the current step */
     metadata?: Record<string, unknown>;
+    /** When this progress message should be displayed */
+    displayMode?: 'live' | 'historical' | 'both';
 }) => void;
 
 /**
