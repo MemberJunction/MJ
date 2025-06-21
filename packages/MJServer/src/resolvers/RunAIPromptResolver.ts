@@ -33,6 +33,9 @@ export class AIPromptRunResult {
 
     @Field({ nullable: true })
     validationResult?: string;
+
+    @Field({ nullable: true })
+    chatResult?: string;
 }
 
 @Resolver()
@@ -194,7 +197,8 @@ export class RunAIPromptResolver extends ResolverBase {
                     executionTimeMs: executionTime,
                     tokensUsed: result.tokensUsed,
                     promptRunId: result.promptRun?.ID,
-                    validationResult: result.validationResult ? JSON.stringify(result.validationResult) : undefined
+                    validationResult: result.validationResult ? JSON.stringify(result.validationResult) : undefined,
+                    chatResult: result.chatResult ? JSON.stringify(result.chatResult) : undefined
                 };
             } else {
                 LogError(`AI Prompt run failed for ${promptEntity.Name}: ${result.errorMessage}`);
@@ -202,7 +206,8 @@ export class RunAIPromptResolver extends ResolverBase {
                     success: false,
                     error: result.errorMessage,
                     executionTimeMs: executionTime,
-                    promptRunId: result.promptRun?.ID
+                    promptRunId: result.promptRun?.ID,
+                    chatResult: result.chatResult ? JSON.stringify(result.chatResult) : undefined
                 };
             }
 
