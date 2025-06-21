@@ -1,6 +1,6 @@
 {
   "taskComplete": "[BOOLEAN: true if task is fully complete, false if more steps needed]",
-  "message": "[STRING: Human-readable message about current status or final result - this is what the user/caller sees]",
+  "message": "[STRING: Human-readable message about current status or final result - this is what the user/caller sees - they do NOT see what is in the payload, so include EVERYTHING here that is important for the user even if it overlaps with the payload]",
   "payload*": {
     "[KEY]": "[VALUE: Your agent-specific data structure goes here]",
     "[EXAMPLE_STRUCTURE]": {

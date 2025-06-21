@@ -8,7 +8,7 @@
  * 
  * @interface LoopAgentResponse
  */
-interface LoopAgentResponse<T = any> {
+export interface LoopAgentResponse<T = any> {
     /**
      * Indicates whether the entire task has been completed successfully.
      * When true, the agent loop will terminate and return the final result.
@@ -20,6 +20,10 @@ interface LoopAgentResponse<T = any> {
      * A message that provides information to the caller, which is either a human, another computer system, or 
      * a parent agent. This message should be readable, clear and provide insight. The structured
      * details of the result of the agent's execution should not be here, but rather be included in the @see payload.
+     * 
+     * This message should include EVERYTHING that you want the user to be able to read, they do not
+     * see what is in the payload, so even if this is redundant with the payload, it is important to
+     * include it here so that the user can read it.
      *
      * This message is returned regardless of whether taskComplete is true or false, allowing
      * the agent to communicate with its caller.
