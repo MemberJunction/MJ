@@ -214,11 +214,12 @@ export class LoopAgentType extends BaseAgentType {
      * 
      * @throws {Error} Implicitly through failed parsing, but returns failed step instead
      */
-    public async DetermineNextStep(promptResult: AIPromptRunResult): Promise<BaseAgentNextStep> {
+    public async DetermineNextStep(promptResult: AIPromptRunResult): Promise<BaseAgentNextStep<LoopAgentResponse>> {
         try {
             // Ensure we have a successful result
             if (!promptResult.success || !promptResult.result) {
                 return {
+                    terminate: false,
                     step: 'failed',
                     errorMessage: promptResult.errorMessage || 'Prompt execution failed'
                 };
@@ -234,6 +235,7 @@ export class LoopAgentType extends BaseAgentType {
                 }
             } catch (parseError) {
                 return {
+                    terminate: false,
                     step: 'failed',
                     errorMessage: `Failed to parse JSON response: ${parseError.message}`
                 };
@@ -242,94 +244,88 @@ export class LoopAgentType extends BaseAgentType {
             // Validate the response structure
             if (!this.isValidLoopResponse(response)) {
                 return {
+                    terminate: false,
                     step: 'failed',
                     errorMessage: 'Invalid response structure from loop agent prompt'
                 };
-            }
-
-            // Log the agent's reasoning
-            LogStatus(`🔄 Loop Agent Reasoning: ${response.reasoning}`);
-            
-            // Log confidence if available
-            if (response.confidence !== undefined) {
-                LogStatus(`🎯 Confidence: ${(response.confidence * 100).toFixed(0)}%`);
             }
 
             // Check if task is complete
             if (response.taskComplete) {
                 LogStatus('✅ Loop Agent: Task completed successfully');
                 return {
+                    terminate: response.taskComplete,
                     step: 'success',
-                    returnValue: response
+                    returnValue: response,                    
                 };
             }
 
             // Handle when nextStep is not provided but task is not complete
             if (!response.nextStep) {
                 return {
+                    terminate: false,
                     step: 'failed',
                     errorMessage: 'Task not complete but no next step provided'
                 };
             }
 
             // Determine next step based on type
+            const retVal: Partial<BaseAgentNextStep<LoopAgentResponse>> = {
+                returnValue: response, // we always return the full response as the return value
+                terminate: response.taskComplete
+            }
             switch (response.nextStep.type) {
                 case 'sub-agent':
                     if (!response.nextStep.subAgent) {
-                        return {
-                            step: 'failed',
-                            errorMessage: 'Sub-agent details not specified'
-                        };
+                        retVal.step = 'failed';
+                        retVal.errorMessage = 'Sub-agent details not specified';
                     }
-                    return {
-                        step: 'sub-agent',
-                        subAgent: {
+                    else {
+                        retVal.step = 'sub-agent';
+                        retVal.subAgent = {
                             id: response.nextStep.subAgent.id,
                             name: response.nextStep.subAgent.name,
                             message: response.nextStep.subAgent.message,
                             terminateAfter: response.nextStep.subAgent.terminateAfter,
                             templateParameters: response.nextStep.subAgent.templateParameters || {}
                         }
-                    };
-
+                    }
+                    break;
                 case 'action':
                     if (!response.nextStep.actions || response.nextStep.actions.length === 0) {
-                        return {
-                            step: 'failed',
-                            errorMessage: 'Actions not specified'
-                        };
+                        retVal.step = 'failed';
+                        retVal.errorMessage = 'Actions not specified for action type';
                     }
-                    return {
-                        step: 'actions',
-                        actions: response.nextStep.actions.map(action => ({
+                    else {
+                        retVal.step = 'actions',
+                        retVal.actions = response.nextStep.actions.map(action => ({
                             id: action.id,
                             name: action.name,
                             params: action.params
                         }))
-                    };
-
+                    }
+                    break;
                 case 'chat':
                     if (!response.message) {
-                        return {
-                            step: 'failed',
-                            errorMessage: 'Chat type specified but no user message provided'
-                        };
+                        retVal.step = 'failed';
+                        retVal.errorMessage = 'Chat type specified but no user message provided';
                     }
-                    return {
-                        step: 'chat',
-                        userMessage: response.message
-                    };
-
+                    else {
+                        retVal.step = 'chat';
+                        retVal.userMessage = response.message;
+                        retVal.terminate = true; // when chat request, this agent needs to return back to the caller/user
+                    }
+                    break;
                 default:
-                    return {
-                        step: 'failed',
-                        errorMessage: `Unknown next step type: ${response.nextStep.type}`
-                    };
+                    retVal.step = 'failed';
+                    retVal.errorMessage = `Unknown next step type: ${response.nextStep.type}`;
+                    break;
             }
-
+            return retVal as BaseAgentNextStep<LoopAgentResponse>;
         } catch (error) {
             LogError(`Error in LoopAgentType.DetermineNextStep: ${error.message}`);
             return {
+                terminate: false,
                 step: 'failed',
                 errorMessage: `Failed to parse loop agent response: ${error.message}`
             };
