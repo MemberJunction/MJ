@@ -428,12 +428,12 @@ export class BaseAgent {
         params: ExecuteAgentParams
     ): Promise<AIPromptParams> {
         // Gather context data
-        const contextData = await this.gatherContextData(params.agent, params.contextUser);
+        const promptTemplateData = await this.gatherPromptTemplateData(params.agent, params.contextUser, params.data);
 
         // Set up the hierarchical prompt execution
         const promptParams = new AIPromptParams();
         promptParams.prompt = systemPrompt;
-        promptParams.data = contextData;
+        promptParams.data = promptTemplateData;
         promptParams.contextUser = params.contextUser;
         promptParams.conversationMessages = params.conversationMessages;
         promptParams.templateMessageRole = 'system';
@@ -443,7 +443,7 @@ export class BaseAgent {
             new ChildPromptParam(
                 {
                     prompt: childPrompt,
-                    data: contextData,
+                    data: promptTemplateData,
                     contextUser: params.contextUser,
                     conversationMessages: params.conversationMessages,
                     templateMessageRole: 'user'
@@ -558,6 +558,7 @@ export class BaseAgent {
      * 
      * @param {AIAgentEntity} agent - The agent to gather context for
      * @param {UserInfo} [_contextUser] - Optional user context (reserved for future use)
+     * @param {any} [extraData] - Optional extra data to include in the context, if provided and keys conflict within the agent context data, the extraData will override the agent context data.
      * 
      * @returns {Promise<AgentContextData>} Structured context data for prompts
      * 
@@ -565,7 +566,7 @@ export class BaseAgent {
      * 
      * @private
      */
-    private async gatherContextData(agent: AIAgentEntity, _contextUser?: UserInfo): Promise<AgentContextData> {
+    private async gatherPromptTemplateData(agent: AIAgentEntity, _contextUser?: UserInfo, extraData?: any): Promise<AgentContextData> {
         try {
             const engine = AIEngine.Instance;
             
@@ -587,7 +588,15 @@ export class BaseAgent {
                 actionDetails: this.formatActionDetails(activeActions),
             };
 
-            return contextData;
+            if (extraData) {
+                return {
+                    ...contextData,
+                    ...extraData
+                }
+            }
+            else {
+                return contextData;
+            }
         } catch (error) {
             throw new Error(`Error gathering context data: ${error.message}`);
         }
