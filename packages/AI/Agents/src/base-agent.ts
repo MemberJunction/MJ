@@ -129,25 +129,6 @@ export class BaseAgent {
     private _subAgentRuns: ExecuteAgentResult[] = [];
 
     /**
-     * Get all agent run steps for the current execution.
-     * @private
-     */
-    private async getAgentRunSteps(contextUser?: UserInfo): Promise<AIAgentRunStepEntity[]> {
-        if (!this._agentRun) return [];
-        
-        const md = new Metadata();
-        const rv = new RunView();
-        const result = await rv.RunView<AIAgentRunStepEntity>({
-            EntityName: 'MJ: AI Agent Run Steps',
-            ExtraFilter: `AgentRunID = '${this._agentRun.ID}'`,
-            OrderBy: 'StepNumber',
-            ResultType: 'entity_object'
-        }, contextUser);
-        
-        return result.Success ? result.Results : [];
-    }
-
-    /**
      * Wrapper for progress callbacks that captures all progress events.
      * @private
      */
@@ -1680,7 +1661,7 @@ export class BaseAgent {
                 const outputData = {
                     actionResult: {
                         success: actionResult.Success,
-                        resultCode: actionResult.Result.ResultCode,
+                        resultCode: actionResult.Result?.ResultCode,
                         message: actionResult.Message,
                         parameters: actionResult.Params
                     }
@@ -1716,7 +1697,7 @@ export class BaseAgent {
                 actionId: result.action.id,
                 params: result.action.params,
                 success: result.success,
-                resultCode: actionResult.Result.ResultCode || (result.success ? 'SUCCESS' : 'ERROR'),
+                resultCode: actionResult.Result?.ResultCode || (result.success ? 'SUCCESS' : 'ERROR'),
                 message: result.success ? actionResult?.Message || 'Action completed' : result.error
             };
         });
