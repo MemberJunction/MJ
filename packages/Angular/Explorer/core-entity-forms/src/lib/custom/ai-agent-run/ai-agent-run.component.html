@@ -60,10 +60,13 @@
     </div>
 
     <!-- Content -->
-    <div class="content-area" [class.with-panel]="jsonPanelExpanded">
+    <div class="content-area">
       <!-- Timeline Tab -->
-      <div class="tab-content" *ngIf="activeTab === 'timeline'">
-        <div class="timeline-container" *ngIf="!loading && (timelineItems$ | async) as items">
+      <div class="tab-content" *ngIf="activeTab === 'timeline'" style="height: 100%;">
+        <kendo-splitter style="height: 100%;" orientation="horizontal">
+          <!-- Timeline Pane -->
+          <kendo-splitter-pane [min]="'400px'">
+            <div class="timeline-container" *ngIf="!loading && (timelineItems$ | async) as items">
           <div class="timeline" *ngIf="items.length > 0">
             <ng-container *ngFor="let item of items">
               <div class="timeline-item" 
@@ -80,7 +83,7 @@
                 <div class="timeline-content">
                   <div class="timeline-header">
                     <h4>{{ item.title }}</h4>
-                    <span class="timeline-time">{{ item.startTime | date:'HH:mm:ss.SSS' }}</span>
+                    <span class="timeline-time">{{ item.startTime | date:'h:mm:ss a' }}</span>
                   </div>
                   <div class="timeline-subtitle">{{ item.subtitle }}</div>
                   <div class="timeline-meta">
@@ -118,7 +121,7 @@
                     <div class="timeline-content">
                       <div class="timeline-header">
                         <h5>{{ child.title }}</h5>
-                        <span class="timeline-time">{{ child.startTime | date:'HH:mm:ss.SSS' }}</span>
+                        <span class="timeline-time">{{ child.startTime | date:'h:mm:ss a' }}</span>
                       </div>
                       <div class="timeline-subtitle">{{ child.subtitle }}</div>
                       <div class="timeline-meta">
@@ -150,10 +153,66 @@
           <p>Loading timeline...</p>
         </div>
         
-        <div class="error-state" *ngIf="error">
-          <i class="fas fa-exclamation-triangle fa-2x"></i>
-          <p>{{ error }}</p>
-        </div>
+            <div class="error-state" *ngIf="error">
+              <i class="fas fa-exclamation-triangle fa-2x"></i>
+              <p>{{ error }}</p>
+            </div>
+          </kendo-splitter-pane>
+          
+          <!-- JSON Detail Pane -->
+          <kendo-splitter-pane [size]="'45%'" [min]="'300px'" [collapsed]="!selectedTimelineItem">
+            <div class="json-detail-pane" *ngIf="selectedTimelineItem">
+              <div class="json-pane-header">
+                <h3>
+                  <i class="fas" [ngClass]="selectedTimelineItem.icon"></i>
+                  {{ selectedTimelineItem.title }}
+                </h3>
+                <button class="btn-icon" (click)="closeJsonPanel()" title="Close">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+              <div class="json-pane-content">
+                <div class="json-meta">
+                  <div class="meta-item">
+                    <label>Type</label>
+                    <span>{{ selectedTimelineItem.type }}</span>
+                  </div>
+                  <div class="meta-item">
+                    <label>Status</label>
+                    <span class="status-badge small" [attr.data-status]="selectedTimelineItem.status">
+                      {{ selectedTimelineItem.status }}
+                    </span>
+                  </div>
+                  <div class="meta-item">
+                    <label>Duration</label>
+                    <span>{{ selectedTimelineItem.duration || 'N/A' }}</span>
+                  </div>
+                </div>
+                
+                <!-- Action-specific link -->
+                <div class="action-link" *ngIf="selectedTimelineItem.type === 'action' && selectedTimelineItem.data?.ID">
+                  <button class="btn-link" (click)="navigateToActionLog(selectedTimelineItem.data.ID)">
+                    <i class="fas fa-external-link-alt"></i> View Action Execution Log
+                  </button>
+                </div>
+                
+                <div class="json-viewer">
+                  <div class="json-toolbar">
+                    <button class="btn-icon" title="Copy JSON" (click)="copyToClipboard(getSelectedItemJson())">
+                      <i class="fas fa-copy"></i>
+                    </button>
+                  </div>
+                  <mj-code-editor
+                    [(ngModel)]="selectedItemJsonString"
+                    [language]="'json'"
+                    [readonly]="true"
+                    style="height: calc(100% - 160px); width: 100%;">
+                  </mj-code-editor>
+                </div>
+              </div>
+            </div>
+          </kendo-splitter-pane>
+        </kendo-splitter>
       </div>
 
       <!-- Details Tab -->
@@ -239,50 +298,6 @@
             </ng-template>
           </kendo-panelbar-item>
         </kendo-panelbar>
-      </div>
-    </div>
-
-    <!-- JSON Detail Panel -->
-    <div class="json-panel" [class.expanded]="jsonPanelExpanded" *ngIf="selectedTimelineItem">
-      <div class="json-panel-header">
-        <h3>
-          <i class="fas" [ngClass]="selectedTimelineItem.icon"></i>
-          {{ selectedTimelineItem.title }}
-        </h3>
-        <button class="btn-icon" (click)="closeJsonPanel()">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-      <div class="json-panel-content">
-        <div class="json-panel-meta">
-          <div class="meta-item">
-            <label>Type</label>
-            <span>{{ selectedTimelineItem.type }}</span>
-          </div>
-          <div class="meta-item">
-            <label>Status</label>
-            <span class="status-badge small" [attr.data-status]="selectedTimelineItem.status">
-              {{ selectedTimelineItem.status }}
-            </span>
-          </div>
-          <div class="meta-item">
-            <label>Duration</label>
-            <span>{{ selectedTimelineItem.duration || 'N/A' }}</span>
-          </div>
-        </div>
-        <div class="json-viewer">
-          <div class="json-toolbar">
-            <button class="btn-icon" title="Copy JSON" (click)="copyToClipboard(getSelectedItemJson())">
-              <i class="fas fa-copy"></i>
-            </button>
-          </div>
-          <mj-code-editor
-            [(ngModel)]="selectedItemJsonString"
-            [language]="'json'"
-            [readonly]="true"
-            style="height: calc(100vh - 400px); width: 100%;">
-          </mj-code-editor>
-        </div>
       </div>
     </div>
   </div>

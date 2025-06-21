@@ -296,7 +296,7 @@ export class AIAgentRunFormComponent extends BaseFormComponent implements OnInit
       startTime: run.__mj_CreatedAt,
       endTime: run.__mj_UpdatedAt,
       duration: this.calculateDuration(run.__mj_CreatedAt, run.__mj_UpdatedAt),
-      icon: 'fa-comment',
+      icon: 'fa-microchip',
       color: 'info',
       data: run,
       level
@@ -305,10 +305,11 @@ export class AIAgentRunFormComponent extends BaseFormComponent implements OnInit
   
   private getStepIcon(stepType: string): string {
     const iconMap: Record<string, string> = {
-      'prompt': 'fa-comment',
+      'prompt': 'fa-microchip',
       'tool': 'fa-tools',
       'subagent': 'fa-robot',
-      'decision': 'fa-code-branch'
+      'decision': 'fa-code-branch',
+      'action': 'fa-cog'
     };
     return iconMap[stepType] || 'fa-circle';
   }
@@ -343,7 +344,6 @@ export class AIAgentRunFormComponent extends BaseFormComponent implements OnInit
   }
   
   closeJsonPanel() {
-    this.jsonPanelExpanded = false;
     this.selectedTimelineItem = null;
     this.selectedItemSubject$.next(null);
     this.selectedItemJsonString = '{}';
@@ -352,6 +352,10 @@ export class AIAgentRunFormComponent extends BaseFormComponent implements OnInit
   
   navigateToSubRun(runId: string) {
     this.router.navigate(['/entities', 'MJ: AI Agent Runs', runId]);
+  }
+  
+  navigateToActionLog(logId: string) {
+    this.router.navigate(['/entities', 'Action Execution Logs', logId]);
   }
   
   refreshData() {
