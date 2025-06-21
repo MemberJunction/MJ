@@ -231,11 +231,6 @@ export class LoopAgentType extends BaseAgentType {
                 LogError('LoopAgentResponse requires subAgent object for sub-agent type');
                 return false;
             }
-
-            if (response.nextStep.type === 'chat' && !response.nextStep.userMessage) {
-                LogError('LoopAgentResponse requires userMessage for chat type');
-                return false;
-            }
         }
 
         return true;
