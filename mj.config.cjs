@@ -271,6 +271,7 @@ const mjServerConfig = {
     orgID: process.env.ASK_SKIP_ORGANIZATION_ID,
     apiKey: process.env.ASK_SKIP_API_KEY,  
     organizationInfo: process.env.ASK_SKIP_ORGANIZATION_INFO,
+    baseUrl: process.env.GRAPHQL_BASE_URL ?? 'http://localhost',
     entitiesToSend: {
       excludeSchemas: [],
       includeEntitiesFromExcludedSchemas: [
