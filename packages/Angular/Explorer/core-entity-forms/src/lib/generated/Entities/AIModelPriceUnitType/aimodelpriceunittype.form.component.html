@@ -1,8 +1,8 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form"  #form="ngForm">
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event)" (ResizeContainer)="InvokeManualResize()">
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
                     
                     <mj-tab Name="Details">
                         Details
@@ -25,7 +25,7 @@
                             [NewRecordValues]="NewRecordValues('MJ: AI Model Costs')"
                             [AllowLoad]="IsCurrentTab('MJ: AI Model Costs')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>

@@ -7269,6 +7269,11 @@ export const AIAgentRunStepSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    TargetLogID: z.string().nullable().describe(`
+        * * Field Name: TargetLogID
+        * * Display Name: Target Log ID
+        * * SQL Data Type: uniqueidentifier
+    * * Description: ID of the execution log/run record created for this step (ActionExecutionLog.ID for action steps, AIAgentRun.ID for subagent steps, AIPromptRun.ID for prompt steps)`),
 });
 
 export type AIAgentRunStepEntityType = z.infer<typeof AIAgentRunStepSchema>;
@@ -31494,6 +31499,19 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: TargetLogID
+    * * Display Name: Target Log ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: ID of the execution log/run record created for this step (ActionExecutionLog.ID for action steps, AIAgentRun.ID for subagent steps, AIPromptRun.ID for prompt steps)
+    */
+    get TargetLogID(): string | null {
+        return this.Get('TargetLogID');
+    }
+    set TargetLogID(value: string | null) {
+        this.Set('TargetLogID', value);
     }
 }
 
