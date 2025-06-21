@@ -349,7 +349,7 @@ export class AIPromptRunner {
     return {
       success: true,
       rawResult: chatResult.data?.choices?.[0]?.message?.content,
-      result: parsedResult.result as T,
+      result: parsedResult?.result ? parsedResult as T : parsedResult as T,
       chatResult,
       promptRun,
       executionTimeMS,
