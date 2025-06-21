@@ -1,0 +1,224 @@
+<div class="record-form-container ai-agent-run-form">
+  <div class="record-form">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-content">
+        <div class="header-left">
+          <div class="icon-wrapper">
+            <i class="fas fa-robot"></i>
+          </div>
+          <div class="header-info">
+            <h2>AI Agent Run</h2>
+            <div class="meta-info">
+              <span class="agent-name" *ngIf="agent">{{ agent.Name }}</span>
+              <span class="run-id">{{ record.ID }}</span>
+              <span class="parent-run" *ngIf="record.ParentRunID">
+                <i class="fas fa-level-up-alt"></i>
+                <a (click)="navigateToParentRun()" class="parent-link">Parent Run</a>
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="header-right">
+          <div class="status-badge" [attr.data-status]="record.Status">
+            <i class="fas" [ngClass]="getStatusIcon(record.Status || '')"></i>
+            {{ record.Status }}
+          </div>
+          <div class="header-actions">
+            <button class="btn-icon" (click)="refreshData()" title="Refresh">
+              <i class="fas fa-sync-alt"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="header-stats">
+        <div class="stat">
+          <span class="label">Started</span>
+          <span class="value">{{ record.StartedAt | date:'medium' }}</span>
+        </div>
+        <div class="stat" *ngIf="record.CompletedAt">
+          <span class="label">Completed</span>
+          <span class="value">{{ record.CompletedAt | date:'medium' }}</span>
+        </div>
+        <div class="stat" *ngIf="record.CompletedAt">
+          <span class="label">Duration</span>
+          <span class="value">{{ calculateDuration(record.StartedAt, record.CompletedAt) }}</span>
+        </div>
+        <div class="stat" *ngIf="record.Success !== null">
+          <span class="label">Result</span>
+          <span class="value" [class.success]="record.Success" [class.error]="!record.Success">
+            {{ record.Success ? 'Success' : 'Failed' }}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab" [class.active]="activeTab === 'timeline'" (click)="activeTab = 'timeline'">
+        <i class="fas fa-stream"></i> Timeline
+      </button>
+      <button class="tab" [class.active]="activeTab === 'details'" (click)="activeTab = 'details'">
+        <i class="fas fa-info-circle"></i> Details
+      </button>
+    </div>
+
+    <!-- Content -->
+    <div class="content-area">
+      <!-- Timeline Tab -->
+      <div class="tab-content" *ngIf="activeTab === 'timeline'" style="height: 100%;">
+        <kendo-splitter style="height: 100%;" orientation="horizontal">
+          <!-- Timeline Pane -->
+          <kendo-splitter-pane [min]="'400px'">
+            <mj-ai-agent-run-timeline
+              [aiAgentRunId]="record.ID"
+              [autoRefresh]="record.Status === 'Running'"
+              [refreshInterval]="3000"
+              (itemSelected)="selectTimelineItem($event)"
+              (navigateToEntity)="navigateToEntityRecord($event)">
+            </mj-ai-agent-run-timeline>
+          </kendo-splitter-pane>
+          
+          <!-- JSON Detail Pane -->
+          <kendo-splitter-pane [size]="'45%'" [min]="'300px'" [collapsed]="!selectedTimelineItem">
+            <div class="json-detail-pane" *ngIf="selectedTimelineItem">
+              <div class="json-pane-header">
+                <h3>
+                  <i class="fas" [ngClass]="selectedTimelineItem.icon"></i>
+                  {{ selectedTimelineItem.title }}
+                </h3>
+                <button class="btn-icon" (click)="closeJsonPanel()" title="Close">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+              <div class="json-pane-content">
+                <div class="json-meta">
+                  <div class="meta-item">
+                    <label>Type</label>
+                    <span>{{ selectedTimelineItem.type }}</span>
+                  </div>
+                  <div class="meta-item">
+                    <label>Status</label>
+                    <span class="status-badge small" [attr.data-status]="selectedTimelineItem.status">
+                      {{ selectedTimelineItem.status }}
+                    </span>
+                  </div>
+                  <div class="meta-item">
+                    <label>Duration</label>
+                    <span>{{ selectedTimelineItem.duration || 'N/A' }}</span>
+                  </div>
+                </div>
+                
+                <!-- Action-specific link -->
+                <div class="action-link" *ngIf="selectedTimelineItem.type === 'action' && selectedTimelineItem.data?.ID">
+                  <button class="btn-link" (click)="navigateToActionLog(selectedTimelineItem.data.ID)">
+                    <i class="fas fa-external-link-alt"></i> View Action Execution Log
+                  </button>
+                </div>
+                
+                <div class="json-viewer">
+                  <div class="json-toolbar">
+                    <button class="btn-icon" title="Copy JSON" (click)="copyToClipboard(getSelectedItemJson())">
+                      <i class="fas fa-copy"></i>
+                    </button>
+                  </div>
+                  <mj-code-editor
+                    [(ngModel)]="selectedItemJsonString"
+                    [language]="'json'"
+                    [readonly]="true"
+                    style="height: calc(100% - 160px); width: 100%;">
+                  </mj-code-editor>
+                </div>
+              </div>
+            </div>
+          </kendo-splitter-pane>
+        </kendo-splitter>
+      </div>
+
+      <!-- Details Tab -->
+      <div class="tab-content" *ngIf="activeTab === 'details'">
+        <kendo-panelbar>
+          <kendo-panelbar-item title="General Information" [expanded]="true">
+            <ng-template kendoPanelBarContent>
+              <div class="details-grid">
+                <div class="detail-item">
+                  <label>Run ID</label>
+                  <span>{{ record.ID }}</span>
+                </div>
+                <div class="detail-item">
+                  <label>Agent ID</label>
+                  <span>{{ record.AgentID }}</span>
+                </div>
+                <div class="detail-item">
+                  <label>Agent Name</label>
+                  <span>{{ agent?.Name || 'N/A' }}</span>
+                </div>
+                <div class="detail-item">
+                  <label>Parent Run ID</label>
+                  <span>{{ record.ParentRunID || 'None (Root)' }}</span>
+                </div>
+                <div class="detail-item">
+                  <label>Conversation ID</label>
+                  <span>{{ record.ConversationID || 'N/A' }}</span>
+                </div>
+                <div class="detail-item">
+                  <label>User</label>
+                  <span>{{ record.User || 'N/A' }}</span>
+                </div>
+              </div>
+            </ng-template>
+          </kendo-panelbar-item>
+          
+          <kendo-panelbar-item title="Execution Status">
+            <ng-template kendoPanelBarContent>
+              <div class="details-grid">
+                <div class="detail-item">
+                  <label>Status</label>
+                  <span class="status-badge" [attr.data-status]="record.Status">
+                    {{ record.Status }}
+                  </span>
+                </div>
+                <div class="detail-item">
+                  <label>Success</label>
+                  <span [class.success]="record.Success" [class.error]="record.Success === false">
+                    {{ record.Success === null ? 'In Progress' : (record.Success ? 'Yes' : 'No') }}
+                  </span>
+                </div>
+                <div class="detail-item full-width" *ngIf="record.ErrorMessage">
+                  <label>Error Message</label>
+                  <div class="error-message">{{ record.ErrorMessage }}</div>
+                </div>
+              </div>
+            </ng-template>
+          </kendo-panelbar-item>
+          
+          <kendo-panelbar-item title="Result" *ngIf="record.Result">
+            <ng-template kendoPanelBarContent>
+              <div class="result-viewer">
+                <mj-code-editor
+                  [(ngModel)]="record.Result"
+                  [language]="'json'"
+                  [readonly]="true"
+                  style="height: 300px; width: 100%;">
+                </mj-code-editor>
+              </div>
+            </ng-template>
+          </kendo-panelbar-item>
+          
+          <kendo-panelbar-item title="Agent State" *ngIf="record.AgentState">
+            <ng-template kendoPanelBarContent>
+              <div class="state-viewer">
+                <mj-code-editor
+                  [(ngModel)]="record.AgentState"
+                  [language]="'json'"
+                  [readonly]="true"
+                  style="height: 400px; width: 100%;">
+                </mj-code-editor>
+              </div>
+            </ng-template>
+          </kendo-panelbar-item>
+        </kendo-panelbar>
+      </div>
+    </div>
+  </div>
+</div>

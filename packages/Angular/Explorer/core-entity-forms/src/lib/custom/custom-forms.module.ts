@@ -39,6 +39,9 @@ import { ActionParamDialogComponent } from "./Actions/action-param-dialog.compon
 import { AgentExecutionMonitorComponent } from "./ai-test-harness/agent-execution-monitor.component";
 import { ExecutionNodeComponent } from "./ai-test-harness/agent-execution-node.component";
 import { JsonViewerWindowComponent } from "./ai-test-harness/json-viewer-window.component";
+import { AIAgentRunFormComponent } from "./ai-agent-run/ai-agent-run.component";
+import { AIAgentRunTimelineComponent } from "./ai-agent-run/ai-agent-run-timeline.component";
+import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-node.component";
 
 @NgModule({
     declarations: [
@@ -61,6 +64,9 @@ import { JsonViewerWindowComponent } from "./ai-test-harness/json-viewer-window.
         ActionExecutionLogFormComponentExtended,
         ActionParamDialogComponent,
         JsonViewerWindowComponent,
+        AIAgentRunFormComponent,
+        AIAgentRunTimelineComponent,
+        AIAgentRunStepNodeComponent,
     ],
     imports: [
         CommonModule,
@@ -112,6 +118,9 @@ import { JsonViewerWindowComponent } from "./ai-test-harness/json-viewer-window.
         ActionTestHarnessDialogComponent,
         ActionExecutionLogFormComponentExtended,
         ExecutionNodeComponent,
+        AIAgentRunFormComponent,
+        AIAgentRunTimelineComponent,
+        AIAgentRunStepNodeComponent,
     ],
     providers: [
         TestHarnessDialogService
@@ -124,6 +133,11 @@ export function LoadActionExecutionLogFormComponentExtended() {
     // This function is called to ensure the form is loaded
 }
 
+// Loader function for AIAgentRunFormComponent
+export function LoadAIAgentRunFormComponent() {
+    // This function is called to ensure the form is loaded
+}
+
 export function LoadCoreCustomForms() {
     LoadEntitiesFormComponent()
     LoadActionExtendedTopComponent();
@@ -133,4 +147,5 @@ export function LoadCoreCustomForms() {
     LoadAIAgentFormComponentExtended();
     LoadActionExecutionLogFormComponentExtended();
     LoadActionFormComponentExtended();
+    LoadAIAgentRunFormComponent();
 }

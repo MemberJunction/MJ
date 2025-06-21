@@ -6,6 +6,19 @@ import { ChatCompletionChoice, ResponseFormat, CompletionEvent, CompletionRespon
 @RegisterClass(BaseLLM, "MistralLLM")
 export class MistralLLM extends BaseLLM {
     private _client: Mistral;
+    
+    // State tracking for streaming thinking extraction
+    private _streamingState: {
+        accumulatedThinking: string;
+        inThinkingBlock: boolean;
+        pendingContent: string;
+        thinkingComplete: boolean;
+    } = {
+        accumulatedThinking: '',
+        inThinkingBlock: false,
+        pendingContent: '',
+        thinkingComplete: false
+    };
 
     constructor(apiKey: string) {
         super(apiKey);
@@ -84,19 +97,32 @@ export class MistralLLM extends BaseLLM {
         const endTime = new Date();
 
         let choices: ChatResultChoice[] = chatResponse.choices.map((choice: ChatCompletionChoice) => {
-            let content: string = "";
+            let rawContent: string = "";
 
             if(choice.message.content && typeof choice.message.content === 'string') {
-                content = choice.message.content;
+                rawContent = choice.message.content;
             }
             else if(choice.message.content && Array.isArray(choice.message.content)) {
-                content = choice.message.content.join(' ');
+                rawContent = choice.message.content.join(' ');
+            }
+
+            // Extract thinking content from Magistral models
+            let content: string = rawContent.trim();
+            let thinkingContent: string | undefined = undefined;
+            if (content.startsWith('<think>') && content.includes('</think>')) {
+                // extract thinking content
+                const thinkStart = content.indexOf('<think>') + '<think>'.length;
+                const thinkEnd = content.indexOf('</think>');
+                thinkingContent = content.substring(thinkStart, thinkEnd).trim();
+                // remove thinking content from main content
+                content = content.substring(thinkEnd + '</think>'.length).trim();
             }
 
             const res: ChatResultChoice = {
                 message: {
                     role: ChatMessageRole.assistant,
-                    content: content
+                    content: content,
+                    thinking: thinkingContent || undefined
                 },
                 finish_reason: choice.finishReason,
                 index: choice.index
@@ -120,9 +146,23 @@ export class MistralLLM extends BaseLLM {
     }
     
     /**
+     * Reset streaming state for a new request
+     */
+    private resetStreamingState(): void {
+        this._streamingState = {
+            accumulatedThinking: '',
+            inThinkingBlock: false,
+            pendingContent: '',
+            thinkingComplete: false
+        };
+    }
+    
+    /**
      * Create a streaming request for Mistral
      */
     protected async createStreamingRequest(params: ChatParams): Promise<any> {
+        // Reset streaming state for new request
+        this.resetStreamingState();
         let responseFormat: ResponseFormat | undefined = undefined;
         if (params.responseFormat === 'JSON') {
             responseFormat = { type: "json_object" };
@@ -185,17 +225,29 @@ export class MistralLLM extends BaseLLM {
     } {
         let content = '';
         let usage = null;
+        let finishReason = undefined;
         
         if (chunk?.data?.choices && chunk.data.choices.length > 0) {
             const choice = chunk.data.choices[0];
             
             // Extract content from the choice delta
             if (choice?.delta?.content) {
+                let rawContent = '';
                 if (typeof choice.delta.content === 'string') {
-                    content = choice.delta.content;
+                    rawContent = choice.delta.content;
                 } else if (Array.isArray(choice.delta.content)) {
-                    content = choice.delta.content.join('');
+                    rawContent = choice.delta.content.join('');
                 }
+                
+                // Add raw content to pending content for processing
+                this._streamingState.pendingContent += rawContent;
+                
+                // Process the pending content to extract thinking
+                content = this.processThinkingInStreamingContent();
+            }
+            
+            if (choice?.finishReason) {
+                finishReason = choice.finishReason;
             }
             
             // Save usage information if available
@@ -209,9 +261,88 @@ export class MistralLLM extends BaseLLM {
         
         return {
             content,
-            finishReason: chunk?.data?.choices?.[0]?.finishReason,
+            finishReason,
             usage
         };
+    }
+    
+    /**
+     * Process pending content to extract thinking blocks
+     * Returns content that should be emitted to the user
+     */
+    private processThinkingInStreamingContent(): string {
+        const state = this._streamingState;
+        let outputContent = '';
+        
+        // If thinking is already complete, just pass through content
+        if (state.thinkingComplete) {
+            outputContent = state.pendingContent;
+            state.pendingContent = '';
+            return outputContent;
+        }
+        
+        // Check if we're currently in a thinking block
+        if (state.inThinkingBlock) {
+            // Look for end of thinking block
+            const endIndex = state.pendingContent.indexOf('</think>');
+            
+            if (endIndex !== -1) {
+                // Found end of thinking block
+                state.accumulatedThinking += state.pendingContent.substring(0, endIndex);
+                state.inThinkingBlock = false;
+                state.thinkingComplete = true;
+                
+                // Keep remaining content after </think> for output
+                state.pendingContent = state.pendingContent.substring(endIndex + '</think>'.length);
+                outputContent = state.pendingContent.trim();
+                state.pendingContent = '';
+            } else {
+                // Still in thinking block, accumulate all content
+                state.accumulatedThinking += state.pendingContent;
+                state.pendingContent = '';
+            }
+        } else {
+            // Not in thinking block, check if one is starting
+            const startIndex = state.pendingContent.indexOf('<think>');
+            
+            if (startIndex !== -1) {
+                // Found start of thinking block
+                if (startIndex === 0) {
+                    // Thinking starts at beginning
+                    state.inThinkingBlock = true;
+                    state.pendingContent = state.pendingContent.substring('<think>'.length);
+                    
+                    // Process again to check for end tag in same chunk
+                    return this.processThinkingInStreamingContent();
+                } else {
+                    // There's content before thinking block - this shouldn't happen
+                    // with Mistral Magistral models, but handle it just in case
+                    outputContent = state.pendingContent.substring(0, startIndex);
+                    state.pendingContent = state.pendingContent.substring(startIndex);
+                    state.inThinkingBlock = true;
+                    state.pendingContent = state.pendingContent.substring('<think>'.length);
+                }
+            } else {
+                // No thinking block found
+                // Check if we might be at the start of a partial tag
+                if (state.pendingContent.endsWith('<') || 
+                    state.pendingContent.endsWith('<t') ||
+                    state.pendingContent.endsWith('<th') ||
+                    state.pendingContent.endsWith('<thi') ||
+                    state.pendingContent.endsWith('<thin')) {
+                    // Hold back content that might be start of tag
+                    const lastOpenBracket = state.pendingContent.lastIndexOf('<');
+                    outputContent = state.pendingContent.substring(0, lastOpenBracket);
+                    state.pendingContent = state.pendingContent.substring(lastOpenBracket);
+                } else {
+                    // No thinking block and no partial tag, output all content
+                    outputContent = state.pendingContent;
+                    state.pendingContent = '';
+                }
+            }
+        }
+        
+        return outputContent;
     }
     
     /**
@@ -228,12 +359,16 @@ export class MistralLLM extends BaseLLM {
         // Create a proper ChatResult instance with constructor params
         const result = new ChatResult(true, now, now);
         
+        // Get thinking content from streaming state
+        const thinkingContent = this._streamingState.accumulatedThinking.trim();
+        
         // Set all properties
         result.data = {
             choices: [{
                 message: {
                     role: ChatMessageRole.assistant,
-                    content: accumulatedContent ? accumulatedContent : ''
+                    content: accumulatedContent ? accumulatedContent : '',
+                    thinking: thinkingContent || undefined
                 },
                 finish_reason: lastChunk?.data?.choices?.[0]?.finishReason || 'stop',
                 index: 0

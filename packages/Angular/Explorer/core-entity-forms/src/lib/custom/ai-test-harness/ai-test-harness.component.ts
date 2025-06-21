@@ -1,11 +1,13 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, ElementRef, AfterViewChecked, SecurityContext, ViewContainerRef, ChangeDetectorRef } from '@angular/core';
+import { Router } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 import { WindowService, WindowRef, WindowCloseResult } from '@progress/kendo-angular-dialog';
 import { AIAgentEntity, AIPromptEntity, TemplateParamEntity } from '@memberjunction/core-entities';
-import { Metadata, RunView } from '@memberjunction/core';
+import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { SharedService } from '@memberjunction/ng-shared';
 import { ChatMessage } from '@memberjunction/ai';
 import { Subject, Subscription } from 'rxjs';
 import { AgentExecutionMonitorComponent } from './agent-execution-monitor.component';
@@ -65,6 +67,10 @@ export interface ConversationMessage extends ChatMessage {
     showJsonRaw?: boolean;
     /** Execution history data for this message (agent mode) */
     executionData?: any;
+    /** Payload data from agent execution to display separately */
+    payload?: any;
+    /** Whether the payload section is collapsed */
+    payloadCollapsed?: boolean;
 }
 
 /**
@@ -153,7 +159,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         private sanitizer: DomSanitizer,
         private windowService: WindowService,
         private viewContainerRef: ViewContainerRef,
-        private cdr: ChangeDetectorRef
+        private cdr: ChangeDetectorRef,
+        private router: Router
     ) {}
     
     /** The mode of operation - either 'agent' or 'prompt' */
@@ -1235,8 +1242,17 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 
                 // Extract the user message from the nested returnValue structure
                 let displayContent = 'No response generated';
+                let payloadData = null;
+                
                 if (fullResult.returnValue) {
-                    if (typeof fullResult.returnValue === 'object' && 
+                    // Check for message field (as shown in user's example)
+                    if (typeof fullResult.returnValue === 'object' && fullResult.returnValue.message) {
+                        displayContent = fullResult.returnValue.message;
+                        // If there's also a payload, store it separately
+                        if (fullResult.returnValue.payload) {
+                            payloadData = fullResult.returnValue.payload;
+                        }
+                    } else if (typeof fullResult.returnValue === 'object' && 
                         fullResult.returnValue.nextStep?.userMessage) {
                         // This is the expected structure for chat responses
                         displayContent = fullResult.returnValue.nextStep.userMessage;
@@ -1250,6 +1266,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 }
                 
                 assistantMessage.content = displayContent;
+                assistantMessage.payload = payloadData; // Store the payload if present
                 assistantMessage.executionTime = executionResult.executionTimeMs;
                 assistantMessage.agentRunId = fullResult.agentRun?.ID || assistantMessage.agentRunId;
                 
@@ -1372,6 +1389,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                         promptRunId
                         rawResult
                         validationResult
+                        chatResult
                     }
                 }
             `;
@@ -1416,7 +1434,16 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 assistantMessage.executionTime = executionResult.executionTimeMs;
                 
                 // Store the complete execution result for JSON display
-                assistantMessage.rawContent = JSON.stringify(executionResult, null, 2);
+                // If chatResult is provided, parse it and include it in the display
+                const resultForDisplay: any = { ...executionResult };
+                if (executionResult.chatResult) {
+                    try {
+                        resultForDisplay.chatResult = JSON.parse(executionResult.chatResult);
+                    } catch {
+                        // If parsing fails, keep it as a string
+                    }
+                }
+                assistantMessage.rawContent = JSON.stringify(resultForDisplay, null, 2);
                 
                 // Store execution metadata
                 if (executionResult.promptRunId) {
@@ -1425,6 +1452,19 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             } else {
                 assistantMessage.content = 'I encountered an error processing your request.';
                 assistantMessage.error = executionResult?.error || 'Unknown error occurred';
+                
+                // Include chatResult in error case too
+                if (executionResult) {
+                    const errorResult: any = { ...executionResult };
+                    if (executionResult.chatResult) {
+                        try {
+                            errorResult.chatResult = JSON.parse(executionResult.chatResult);
+                        } catch {
+                            // If parsing fails, keep it as a string
+                        }
+                    }
+                    assistantMessage.rawContent = JSON.stringify(errorResult, null, 2);
+                }
             }
             
             delete assistantMessage.streamingContent;
@@ -2267,6 +2307,27 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     }
     
     /**
+     * Get the last run ID from conversation messages
+     */
+    getLastRunId(): string | null {
+        const lastAssistantMessage = this.conversationMessages
+            .filter(m => m.role === 'assistant' && m.agentRunId)
+            .pop();
+        return lastAssistantMessage?.agentRunId || null;
+    }
+    
+    /**
+     * Navigate to the run details form
+     */
+    navigateToRun(event: { runId: string; runType: 'agent' | 'prompt' }) {
+        if (event.runType === 'agent') {
+            SharedService.Instance.OpenEntityRecord('MJ: AI Agent Runs', CompositeKey.FromID(event.runId));
+        } else {
+            SharedService.Instance.OpenEntityRecord('MJ: AI Prompt Runs', CompositeKey.FromID(event.runId));
+        }
+    }
+    
+    /**
      * Copies the message content to clipboard.
      * @param message - The message to copy
      */
@@ -2325,11 +2386,45 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      * @param content - JSON string to format
      * @returns Formatted JSON string or original content if parsing fails
      */
-    public formatJson(content: string): string {
+    public formatJson(content: any): string {
         try {
-            return JSON.stringify(JSON.parse(content), null, 2);
+            if (typeof content === 'string') {
+                return JSON.stringify(JSON.parse(content), null, 2);
+            } else {
+                return JSON.stringify(content, null, 2);
+            }
         } catch {
-            return content;
+            return typeof content === 'string' ? content : JSON.stringify(content);
+        }
+    }
+
+    /**
+     * Toggles the collapsed state of a message's payload section
+     * @param message - The message to toggle payload visibility for
+     */
+    public togglePayloadCollapse(message: ConversationMessage): void {
+        message.payloadCollapsed = !message.payloadCollapsed;
+    }
+
+    /**
+     * Formats streaming content with markdown rendering
+     * @param message - The message containing streaming content
+     * @returns SafeHtml formatted content
+     */
+    public getFormattedStreamingContent(message: ConversationMessage): SafeHtml {
+        if (!message.streamingContent) {
+            return this.sanitizer.sanitize(SecurityContext.HTML, '') || '';
+        }
+        
+        const trimmedContent = message.streamingContent.trim();
+        
+        // Check if content type is markdown before applying markdown rendering
+        const contentType = this.detectContentType(trimmedContent);
+        if (contentType === 'markdown') {
+            return this.renderMarkdown(trimmedContent);
+        } else {
+            // For plain text, just sanitize and return without extra processing
+            return this.sanitizer.sanitize(SecurityContext.HTML, trimmedContent) || '';
         }
     }
 
@@ -2738,5 +2833,15 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     public toggleAdvancedParams() {
         this.advancedParamsExpanded = !this.advancedParamsExpanded;
+    }
+    
+    /**
+     * Navigates to the AI Agent Run form to view detailed execution information
+     * @param agentRunId - The ID of the agent run to view
+     */
+    public navigateToAgentRun(agentRunId: string) {
+        if (agentRunId) {
+            this.router.navigate(['/entities', 'MJ: AI Agent Runs', agentRunId]);
+        }
     }
 }

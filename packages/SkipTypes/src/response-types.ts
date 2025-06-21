@@ -66,11 +66,12 @@ export class SkipAPIAnalysisCompleteResponse extends SkipAPIResponse {
      */
     dataContext: SimpleDataContext;
     /**
-     * The type of component generated, data is a simple table, plot is a chart and html is a custom HTML component
+     * The type of component generated, data is a simple table, plot is a chart and interactive is a custom interactive component
      * For data/plot types, the results will be server-generated and available in the executionResults property
-     * For html type, the executionResults will be null because the server generates an HTML component that is intended to run on the client.
+     * For interactive type, the executionResults will be null because the server generates an interactive component that is 
+     * intended to run on the client.
      */
-    resultType: "data" | "plot" | "html" | null;
+    resultType: "data" | "plot" | "interactive" | null;
     /**
      * The results of the execution of the sub-process to run the server-side script
      */

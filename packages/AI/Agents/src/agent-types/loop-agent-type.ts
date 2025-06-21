@@ -15,128 +15,7 @@ import { BaseAgentType } from './base-agent-type';
 import { BaseAgentNextStep } from '@memberjunction/aiengine';
 import { AIPromptRunResult } from '@memberjunction/ai';
 import { LogError, LogStatus } from '@memberjunction/core';
-
-/**
- * Response structure expected from the Loop Agent Type system prompt.
- * This interface matches the JSON schema defined in the loop agent type template.
- * 
- * @interface LoopAgentResponse
- */
-interface LoopAgentResponse {
-    /**
-     * Indicates whether the entire task has been completed successfully.
-     * When true, the agent loop will terminate and return the final result.
-     * When false, the agent will continue processing based on nextStep.
-     */
-    taskComplete: boolean;
-    
-    /**
-     * The agent's reasoning about the current state and decision made.
-     * This should be a clear, concise explanation of why the agent chose
-     * the specific next step, helping with debugging and transparency.
-     */
-    reasoning: string;
-    
-    /**
-     * Defines what the agent should do next. Only required when taskComplete is false.
-     * The agent must specify exactly one type of next step (action, sub-agent, or chat).
-     * @optional
-     */
-    nextStep?: {
-        /**
-         * The type of operation to perform next:
-         * - 'action': Execute one or more actions in parallel
-         * - 'sub-agent': Delegate to a single sub-agent
-         * - 'chat': Send a message back to the user
-         */
-        type: 'action' | 'sub-agent' | 'chat';
-        
-        /**
-         * Array of actions to execute. Required when type is 'action'.
-         * All actions in the array will be executed in parallel.
-         * @optional
-         */
-        actions?: Array<{
-            /**
-             * The unique identifier (UUID) of the action to execute.
-             * Must match an action ID from the available actions list.
-             */
-            id: string;
-            
-            /**
-             * The human-readable name of the action.
-             * Should match the name from the available actions list.
-             */
-            name: string;
-            
-            /**
-             * Parameters to pass to the action.
-             * Keys must match the parameter names defined in the action's schema.
-             * Values should match the expected types for each parameter.
-             */
-            params: Record<string, unknown>;
-        }>;
-        
-        /**
-         * Sub-agent to invoke. Required when type is 'sub-agent'.
-         * Only one sub-agent can be invoked at a time.
-         * @optional
-         */
-        subAgent?: {
-            /**
-             * The unique identifier (UUID) of the sub-agent to execute.
-             * Must match a sub-agent ID from the available sub-agents list.
-             */
-            id: string;
-            
-            /**
-             * The human-readable name of the sub-agent.
-             * Should match the name from the available sub-agents list.
-             */
-            name: string;
-            
-            /**
-             * The message/context to send to the sub-agent.
-             * This should include all necessary information for the sub-agent
-             * to complete its task, as it does NOT receive the full conversation
-             * history. Can be plain text or include JSON data.
-             */
-            message: string;
-
-            /**
-             * If the sub-agent's system prompt includes any template parameters,
-             * this object should provide values for those parameters.
-             * Keys must match the parameter names defined in the sub-agent's system prompt.
-             * Values should match the expected types for each parameter.
-             * @optional
-             */
-            templateParameters?: Record<string, any>;
-            
-            /**
-             * Whether to terminate the parent agent after the sub-agent completes.
-             * - true: Return sub-agent result directly to user, parent agent stops
-             * - false: Return sub-agent result to parent agent for further processing
-             */
-            terminateAfter: boolean;
-        };
-        
-        /**
-         * Message to send to the user. Required when type is 'chat'.
-         * This is used when the agent needs to ask for clarification,
-         * provide information, or communicate with the user.
-         * @optional
-         */
-        userMessage?: string;
-    };
-    
-    /**
-     * The agent's confidence level in its decision (0.0 to 1.0).
-     * Higher values indicate greater certainty about the chosen action.
-     * Can be used for logging, debugging, or conditional logic.
-     * @optional
-     */
-    confidence?: number;
-}
+import { LoopAgentResponse } from './loop-agent-response-type';
 
 /**
  * Implementation of the Loop Agent Type pattern.
@@ -186,11 +65,12 @@ export class LoopAgentType extends BaseAgentType {
      * 
      * @throws {Error} Implicitly through failed parsing, but returns failed step instead
      */
-    public async DetermineNextStep(promptResult: AIPromptRunResult): Promise<BaseAgentNextStep> {
+    public async DetermineNextStep(promptResult: AIPromptRunResult): Promise<BaseAgentNextStep<LoopAgentResponse>> {
         try {
             // Ensure we have a successful result
             if (!promptResult.success || !promptResult.result) {
                 return {
+                    terminate: false,
                     step: 'failed',
                     errorMessage: promptResult.errorMessage || 'Prompt execution failed'
                 };
@@ -206,6 +86,7 @@ export class LoopAgentType extends BaseAgentType {
                 }
             } catch (parseError) {
                 return {
+                    terminate: false,
                     step: 'failed',
                     errorMessage: `Failed to parse JSON response: ${parseError.message}`
                 };
@@ -214,94 +95,88 @@ export class LoopAgentType extends BaseAgentType {
             // Validate the response structure
             if (!this.isValidLoopResponse(response)) {
                 return {
+                    terminate: false,
                     step: 'failed',
                     errorMessage: 'Invalid response structure from loop agent prompt'
                 };
-            }
-
-            // Log the agent's reasoning
-            LogStatus(`🔄 Loop Agent Reasoning: ${response.reasoning}`);
-            
-            // Log confidence if available
-            if (response.confidence !== undefined) {
-                LogStatus(`🎯 Confidence: ${(response.confidence * 100).toFixed(0)}%`);
             }
 
             // Check if task is complete
             if (response.taskComplete) {
                 LogStatus('✅ Loop Agent: Task completed successfully');
                 return {
+                    terminate: response.taskComplete,
                     step: 'success',
-                    returnValue: response
+                    returnValue: response,                    
                 };
             }
 
             // Handle when nextStep is not provided but task is not complete
             if (!response.nextStep) {
                 return {
+                    terminate: false,
                     step: 'failed',
                     errorMessage: 'Task not complete but no next step provided'
                 };
             }
 
             // Determine next step based on type
+            const retVal: Partial<BaseAgentNextStep<LoopAgentResponse>> = {
+                returnValue: response, // we always return the full response as the return value
+                terminate: response.taskComplete
+            }
             switch (response.nextStep.type) {
                 case 'sub-agent':
                     if (!response.nextStep.subAgent) {
-                        return {
-                            step: 'failed',
-                            errorMessage: 'Sub-agent details not specified'
-                        };
+                        retVal.step = 'failed';
+                        retVal.errorMessage = 'Sub-agent details not specified';
                     }
-                    return {
-                        step: 'sub-agent',
-                        subAgent: {
+                    else {
+                        retVal.step = 'sub-agent';
+                        retVal.subAgent = {
                             id: response.nextStep.subAgent.id,
                             name: response.nextStep.subAgent.name,
                             message: response.nextStep.subAgent.message,
                             terminateAfter: response.nextStep.subAgent.terminateAfter,
                             templateParameters: response.nextStep.subAgent.templateParameters || {}
                         }
-                    };
-
+                    }
+                    break;
                 case 'action':
                     if (!response.nextStep.actions || response.nextStep.actions.length === 0) {
-                        return {
-                            step: 'failed',
-                            errorMessage: 'Actions not specified'
-                        };
+                        retVal.step = 'failed';
+                        retVal.errorMessage = 'Actions not specified for action type';
                     }
-                    return {
-                        step: 'actions',
-                        actions: response.nextStep.actions.map(action => ({
+                    else {
+                        retVal.step = 'actions',
+                        retVal.actions = response.nextStep.actions.map(action => ({
                             id: action.id,
                             name: action.name,
                             params: action.params
                         }))
-                    };
-
-                case 'chat':
-                    if (!response.nextStep.userMessage) {
-                        return {
-                            step: 'failed',
-                            errorMessage: 'Chat type specified but no user message provided'
-                        };
                     }
-                    return {
-                        step: 'chat',
-                        userMessage: response.nextStep.userMessage
-                    };
-
+                    break;
+                case 'chat':
+                    if (!response.message) {
+                        retVal.step = 'failed';
+                        retVal.errorMessage = 'Chat type specified but no user message provided';
+                    }
+                    else {
+                        retVal.step = 'chat';
+                        retVal.userMessage = response.message;
+                        retVal.terminate = true; // when chat request, this agent needs to return back to the caller/user
+                    }
+                    break;
                 default:
-                    return {
-                        step: 'failed',
-                        errorMessage: `Unknown next step type: ${response.nextStep.type}`
-                    };
+                    retVal.step = 'failed';
+                    retVal.errorMessage = `Unknown next step type: ${response.nextStep.type}`;
+                    break;
             }
-
+            return retVal as BaseAgentNextStep<LoopAgentResponse>;
         } catch (error) {
             LogError(`Error in LoopAgentType.DetermineNextStep: ${error.message}`);
             return {
+                terminate: false,
                 step: 'failed',
                 errorMessage: `Failed to parse loop agent response: ${error.message}`
             };
@@ -354,11 +229,6 @@ export class LoopAgentType extends BaseAgentType {
 
             if (response.nextStep.type === 'sub-agent' && !response.nextStep.subAgent) {
                 LogError('LoopAgentResponse requires subAgent object for sub-agent type');
-                return false;
-            }
-
-            if (response.nextStep.type === 'chat' && !response.nextStep.userMessage) {
-                LogError('LoopAgentResponse requires userMessage for chat type');
                 return false;
             }
         }

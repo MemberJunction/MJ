@@ -756,6 +756,84 @@ Support environment-specific values:
 - `@env:VARIABLE_NAME`
 - Useful for different environments (dev/staging/prod)
 
+### {@include} References in Files (NEW)
+Enable content composition within non-JSON files (like .md, .html, .txt) using JSDoc-style include syntax:
+- Pattern: `{@include path/to/file.ext}`
+- Supports relative paths from the containing file
+- Recursive includes (includes within includes)
+- Circular reference detection prevents infinite loops
+- Works seamlessly with `@file:` references
+
+#### How It Works
+When a JSON metadata file uses `@file:` to reference an external file, the MetadataSync tool:
+1. Loads the referenced file
+2. Scans for `{@include}` patterns
+3. Recursively resolves all includes
+4. Returns the fully composed content
+
+#### Example Usage
+```markdown
+# My Prompt Template
+
+## System Instructions
+{@include ./shared/system-instructions.md}
+
+## Context
+{@include ../common/context-header.md}
+
+## Task
+Please analyze the following...
+```
+
+#### Complex Example with Nested Includes
+Directory structure:
+```
+prompts/
+├── customer-service/
+│   ├── greeting.json          # Uses @file:greeting.md
+│   ├── greeting.md            # Contains {@include} references
+│   └── shared/
+│       ├── tone.md
+│       └── guidelines.md
+└── common/
+    ├── company-info.md
+    └── legal-disclaimer.md
+```
+
+greeting.json:
+```json
+{
+  "fields": {
+    "Name": "Customer Greeting",
+    "Prompt": "@file:greeting.md"
+  }
+}
+```
+
+greeting.md:
+```markdown
+# Customer Service Greeting
+
+{@include ./shared/tone.md}
+
+## Guidelines
+{@include ./shared/guidelines.md}
+
+## Company Information
+{@include ../common/company-info.md}
+
+## Legal
+{@include ../common/legal-disclaimer.md}
+```
+
+The final content pushed to the database will have all includes fully resolved.
+
+Benefits:
+- **DRY Principle**: Share common content across multiple files
+- **Maintainability**: Update shared content in one place
+- **Flexibility**: Build complex documents from modular parts
+- **Validation**: Automatic checking of included file existence and circular references
+
 ### @template: References (NEW)
 Enable JSON template composition for reusable configurations:
 

@@ -382,8 +382,8 @@ export class RunViewGenericInput {
 
 @ObjectType()
 export class RunViewResultRow {
-  @Field(() => Int)
-  ID: number;
+  @Field(() => String)
+  ID: string;
 
   @Field(() => String)
   EntityID: string;

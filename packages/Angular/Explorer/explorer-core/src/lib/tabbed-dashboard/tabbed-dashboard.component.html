@@ -1,91 +1,86 @@
+@if (loading) {
+  <div class="loading-overlay">
+    <kendo-loader type="converging-spinner" [themeColor]="'primary'"></kendo-loader>
+  </div>
+}
 <div class="tabbed-dashboard-container">
   <!-- Dashboard Preferences Button -->
-  <button type="button" 
-          class="preferences-button"
-          (click)="openPreferencesDialog()"
-          title="Dashboard Preferences">
+  <button type="button" class="preferences-button" (click)="openPreferencesDialog()" title="Dashboard Preferences">
     <i class="fa-solid fa-cog"></i>
   </button>
 
-  @if (loading) {
-    <div class="loading-indicator">
-      Loading dashboards...
-      <kendo-loader></kendo-loader>
-    </div>
-  }
-  
   @if (error) {
-    <div class="error-message">
-      {{ error }}
-    </div>
+  <div class="error-message">
+    {{ error }}
+  </div>
   }
-  
+
   @if (!loading && !error) {
-    <div #tabstripContainer >
-      @if (dashboards.length === 0) {
-        <!-- Show default content without any tabs, if no dashboards are set for this user, cleaner this way -->
-        <div #noTabsContainer></div>
+  <div #tabstripContainer>
+    @if (dashboards.length === 0) {
+    <!-- Show default content without any tabs, if no dashboards are set for this user, cleaner this way -->
+    <div #noTabsContainer></div>
+    }
+    @else {
+    <!-- Show tab strip with dashboards -->
+    <mj-tabstrip #tabstrip (TabSelected)="onTabSelect($event.index)">
+      <!-- Show default tab if no dashboards are available -->
+      @if (DefaultDashboardPosition === 'first') {
+      <mj-tab [Name]="DefaultTabName">
+        <span class="fa-solid tab-icon"></span>
+        {{ DefaultTabName }}
+      </mj-tab>
       }
-      @else {
-        <!-- Show tab strip with dashboards -->
-        <mj-tabstrip #tabstrip (TabSelected)="onTabSelect($event.index)" >
-          <!-- Show default tab if no dashboards are available -->
-          @if (DefaultDashboardPosition === 'first') {
-            <mj-tab [Name]="DefaultTabName">
-              <span class="fa-solid tab-icon"></span>
-              {{ DefaultTabName }}
-            </mj-tab>
-          }
-          
-          <!-- Show dashboard tabs -->
-          @for (dashboard of dashboards; track dashboard.ID; let i = $index) {
-            <mj-tab [Name]="dashboard.Name">
-              <span class="fa-solid fa-grip tab-icon"></span>
-              {{ dashboard.Name }}
-            </mj-tab>
-          }
 
-          @if (DefaultDashboardPosition === 'last') {
-            <mj-tab [Name]="DefaultTabName">
-              <span class="fa-solid tab-icon"></span>
-              {{ DefaultTabName }}
-            </mj-tab>
-          }
-
-          <!-- ****** -->
-          <!-- TAB BODIES -->
-          <!-- ****** -->
-          
-          <!-- Default tab body when it is shown first -->
-          @if (DefaultDashboardPosition === 'first') {
-            <mj-tab-body>
-              <div class="dashboard-container" >
-                <div #tabContainer ></div>
-              </div>
-            </mj-tab-body>
-          }
-          
-          <!-- Dashboard tab bodies -->
-          @for (dashboard of dashboards; track dashboard.ID; let i = $index) {
-            <mj-tab-body>
-              <div class="dashboard-container" >
-                <div id="dashboard-{{ dashboard.ID }}" class="dashboard-instance" >
-                </div>
-              </div>
-            </mj-tab-body>
-          }
-
-          <!-- Default tab body, when it is shown last -->
-          @if (DefaultDashboardPosition === 'last') {
-            <mj-tab-body>
-              <div class="dashboard-container" >
-                <div #tabContainer ></div>
-              </div>
-            </mj-tab-body>
-          }
-        </mj-tabstrip>
+      <!-- Show dashboard tabs -->
+      @for (dashboard of dashboards; track dashboard.ID; let i = $index) {
+      <mj-tab [Name]="dashboard.Name">
+        <span class="fa-solid fa-grip tab-icon"></span>
+        {{ dashboard.Name }}
+      </mj-tab>
       }
-    </div>
+
+      @if (DefaultDashboardPosition === 'last') {
+      <mj-tab [Name]="DefaultTabName">
+        <span class="fa-solid tab-icon"></span>
+        {{ DefaultTabName }}
+      </mj-tab>
+      }
+
+      <!-- ****** -->
+      <!-- TAB BODIES -->
+      <!-- ****** -->
+
+      <!-- Default tab body when it is shown first -->
+      @if (DefaultDashboardPosition === 'first') {
+      <mj-tab-body>
+        <div class="dashboard-container">
+          <div #tabContainer></div>
+        </div>
+      </mj-tab-body>
+      }
+
+      <!-- Dashboard tab bodies -->
+      @for (dashboard of dashboards; track dashboard.ID; let i = $index) {
+      <mj-tab-body>
+        <div class="dashboard-container">
+          <div id="dashboard-{{ dashboard.ID }}" class="dashboard-instance">
+          </div>
+        </div>
+      </mj-tab-body>
+      }
+
+      <!-- Default tab body, when it is shown last -->
+      @if (DefaultDashboardPosition === 'last') {
+      <mj-tab-body>
+        <div class="dashboard-container">
+          <div #tabContainer></div>
+        </div>
+      </mj-tab-body>
+      }
+    </mj-tabstrip>
+    }
+  </div>
   }
 </div>
 

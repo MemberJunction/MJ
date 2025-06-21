@@ -12,9 +12,8 @@
 
 import { LogError, LogStatus } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
-import { AIEngine, ExecuteAgentResult } from '@memberjunction/aiengine';
+import { AIEngine, ExecuteAgentResult, ExecuteAgentParams } from '@memberjunction/aiengine';
 import { BaseAgent } from './base-agent';
-import { ExecuteAgentParams } from './types';
 
 /**
  * AgentRunner provides a thin wrapper for executing AI agents.
@@ -45,11 +44,13 @@ export class AgentRunner {
      * 3. Calls Execute on the agent instance and returns the result
      * 
      * @param {ExecuteAgentParams} params - Parameters for agent execution (same as BaseAgent.Execute)
-     * @returns {Promise<ExecuteAgentResult>} The execution result (same as BaseAgent.Execute)
+     * @template C - The type of the agent's context as provided in the ExecuteAgentParams 
+     * @template R - The type of the agent's result as returned in ExecuteAgentResult
+     * @returns {Promise<ExecuteAgentResult<T>>} The execution result (same as BaseAgent.Execute)
      * 
      * @throws {Error} Throws if agent type loading fails or agent instantiation fails
      */
-    public async RunAgent(params: ExecuteAgentParams): Promise<ExecuteAgentResult> {
+    public async RunAgent<C = any, R = any>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
         try {
             LogStatus(`AgentRunner: Starting execution for agent: ${params.agent.Name} (ID: ${params.agent.ID})`);
             
