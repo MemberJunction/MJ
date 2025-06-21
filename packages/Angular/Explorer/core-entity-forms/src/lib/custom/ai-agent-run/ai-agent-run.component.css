@@ -51,6 +51,24 @@
   color: #6c757d;
 }
 
+.parent-run {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.parent-link {
+  color: #ff6358;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.parent-link:hover {
+  color: #ff4444;
+  text-decoration: underline;
+}
+
 .agent-name {
   font-weight: 500;
   color: #495057;
@@ -704,6 +722,7 @@
   flex-direction: column;
   gap: 10px;
   min-height: 0;
+  overflow: hidden;
 }
 
 .json-toolbar {

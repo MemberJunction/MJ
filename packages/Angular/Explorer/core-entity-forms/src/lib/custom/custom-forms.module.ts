@@ -40,6 +40,8 @@ import { AgentExecutionMonitorComponent } from "./ai-test-harness/agent-executio
 import { ExecutionNodeComponent } from "./ai-test-harness/agent-execution-node.component";
 import { JsonViewerWindowComponent } from "./ai-test-harness/json-viewer-window.component";
 import { AIAgentRunFormComponent } from "./ai-agent-run/ai-agent-run.component";
+import { AIAgentRunTimelineComponent } from "./ai-agent-run/ai-agent-run-timeline.component";
+import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-node.component";
 
 @NgModule({
     declarations: [
@@ -63,6 +65,8 @@ import { AIAgentRunFormComponent } from "./ai-agent-run/ai-agent-run.component";
         ActionParamDialogComponent,
         JsonViewerWindowComponent,
         AIAgentRunFormComponent,
+        AIAgentRunTimelineComponent,
+        AIAgentRunStepNodeComponent,
     ],
     imports: [
         CommonModule,
@@ -115,6 +119,8 @@ import { AIAgentRunFormComponent } from "./ai-agent-run/ai-agent-run.component";
         ActionExecutionLogFormComponentExtended,
         ExecutionNodeComponent,
         AIAgentRunFormComponent,
+        AIAgentRunTimelineComponent,
+        AIAgentRunStepNodeComponent,
     ],
     providers: [
         TestHarnessDialogService

@@ -12,6 +12,10 @@
             <div class="meta-info">
               <span class="agent-name" *ngIf="agent">{{ agent.Name }}</span>
               <span class="run-id">{{ record.ID }}</span>
+              <span class="parent-run" *ngIf="record.ParentRunID">
+                <i class="fas fa-level-up-alt"></i>
+                <a (click)="navigateToParentRun()" class="parent-link">Parent Run</a>
+              </span>
             </div>
           </div>
         </div>
@@ -66,97 +70,13 @@
         <kendo-splitter style="height: 100%;" orientation="horizontal">
           <!-- Timeline Pane -->
           <kendo-splitter-pane [min]="'400px'">
-            <div class="timeline-container" *ngIf="!loading && (timelineItems$ | async) as items">
-          <div class="timeline" *ngIf="items.length > 0">
-            <ng-container *ngFor="let item of items">
-              <div class="timeline-item" 
-                   [class.selected]="selectedTimelineItem?.id === item.id"
-                   [attr.data-status]="item.status"
-                   [attr.data-type]="item.type"
-                   [style.margin-left.px]="item.level * 40"
-                   (click)="selectTimelineItem(item)">
-                
-                <div class="timeline-marker" [attr.data-color]="item.color">
-                  <i class="fas" [ngClass]="item.icon"></i>
-                </div>
-                
-                <div class="timeline-content">
-                  <div class="timeline-header">
-                    <h4>{{ item.title }}</h4>
-                    <span class="timeline-time">{{ item.startTime | date:'h:mm:ss a' }}</span>
-                  </div>
-                  <div class="timeline-subtitle">{{ item.subtitle }}</div>
-                  <div class="timeline-meta">
-                    <span class="duration" *ngIf="item.duration">
-                      <i class="fas fa-clock"></i> {{ item.duration }}
-                    </span>
-                    <span class="status" [attr.data-status]="item.status">
-                      {{ item.status }}
-                    </span>
-                  </div>
-                </div>
-                
-                <div class="timeline-actions" *ngIf="item.type === 'subrun'">
-                  <button class="btn-link" (click)="navigateToSubRun(item.id); $event.stopPropagation()">
-                    <i class="fas fa-external-link-alt"></i> View Run
-                  </button>
-                </div>
-              </div>
-              
-              <!-- Children items -->
-              <ng-container *ngIf="item.children && item.children.length > 0">
-                <div class="timeline-children">
-                  <div class="timeline-item child-item"
-                       *ngFor="let child of item.children"
-                       [class.selected]="selectedTimelineItem?.id === child.id"
-                       [attr.data-status]="child.status"
-                       [attr.data-type]="child.type"
-                       [style.margin-left.px]="child.level * 40"
-                       (click)="selectTimelineItem(child); $event.stopPropagation()">
-                    
-                    <div class="timeline-marker small" [attr.data-color]="child.color">
-                      <i class="fas" [ngClass]="child.icon"></i>
-                    </div>
-                    
-                    <div class="timeline-content">
-                      <div class="timeline-header">
-                        <h5>{{ child.title }}</h5>
-                        <span class="timeline-time">{{ child.startTime | date:'h:mm:ss a' }}</span>
-                      </div>
-                      <div class="timeline-subtitle">{{ child.subtitle }}</div>
-                      <div class="timeline-meta">
-                        <span class="duration" *ngIf="child.duration">
-                          <i class="fas fa-clock"></i> {{ child.duration }}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    <div class="timeline-actions" *ngIf="child.type === 'subrun'">
-                      <button class="btn-link" (click)="navigateToSubRun(child.id); $event.stopPropagation()">
-                        <i class="fas fa-external-link-alt"></i>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </ng-container>
-            </ng-container>
-          </div>
-          
-          <div class="empty-state" *ngIf="items.length === 0">
-            <i class="fas fa-stream fa-3x"></i>
-            <p>No execution steps found</p>
-          </div>
-        </div>
-        
-        <div class="loading-state" *ngIf="loading">
-          <i class="fas fa-spinner fa-spin fa-2x"></i>
-          <p>Loading timeline...</p>
-        </div>
-        
-            <div class="error-state" *ngIf="error">
-              <i class="fas fa-exclamation-triangle fa-2x"></i>
-              <p>{{ error }}</p>
-            </div>
+            <mj-ai-agent-run-timeline
+              [aiAgentRunId]="record.ID"
+              [autoRefresh]="record.Status === 'Running'"
+              [refreshInterval]="3000"
+              (itemSelected)="selectTimelineItem($event)"
+              (navigateToEntity)="navigateToEntityRecord($event)">
+            </mj-ai-agent-run-timeline>
           </kendo-splitter-pane>
           
           <!-- JSON Detail Pane -->

@@ -1,0 +1,39 @@
+<div class="timeline-container" *ngIf="!loading && (timelineItems$ | async) as items">
+  <div class="timeline" *ngIf="items.length > 0">
+    <ng-container *ngFor="let item of items">
+      <!-- Main Timeline Item -->
+      <mj-ai-agent-run-step-node
+        [item]="item"
+        [isSelected]="selectedItem?.id === item.id"
+        (itemClick)="selectItem(item)"
+        (expandToggle)="toggleItemExpansion(item, $event)"
+        (navigateToEntity)="navigateToEntity.emit($event)">
+      </mj-ai-agent-run-step-node>
+      
+      <!-- Sub-Run Timeline (Recursive) -->
+      <div class="sub-timeline" *ngIf="item.type === 'subrun' && item.isExpanded && item.data?.ID">
+        <mj-ai-agent-run-timeline
+          [aiAgentRunId]="item.data.ID"
+          [autoRefresh]="false"
+          (itemSelected)="selectItem($event)"
+          (navigateToEntity)="navigateToEntity.emit($event)">
+        </mj-ai-agent-run-timeline>
+      </div>
+    </ng-container>
+  </div>
+  
+  <div class="empty-state" *ngIf="items.length === 0">
+    <i class="fas fa-stream fa-3x"></i>
+    <p>No execution steps found</p>
+  </div>
+</div>
+
+<div class="loading-state" *ngIf="loading">
+  <i class="fas fa-spinner fa-spin fa-2x"></i>
+  <p>Loading timeline...</p>
+</div>
+
+<div class="error-state" *ngIf="error">
+  <i class="fas fa-exclamation-triangle fa-2x"></i>
+  <p>{{ error }}</p>
+</div>
