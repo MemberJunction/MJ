@@ -205,7 +205,6 @@ const mjServerConfig = {
     orgID: process.env.ASK_SKIP_ORGANIZATION_ID,
     apiKey: process.env.ASK_SKIP_API_KEY,  
     organizationInfo: process.env.ASK_SKIP_ORGANIZATION_INFO,
-    baseUrl: process.env.GRAPHQL_BASE_URL ?? 'http://localhost',
     entitiesToSendSkip: {
       excludeSchemas: ['__mj'],
       includeEntitiesFromExcludedSchemas: [
@@ -265,6 +264,8 @@ const config = {
   auth0Domain: process.env.AUTH0_DOMAIN,
   auth0WebClientID: process.env.AUTH0_CLIENT_ID,
   auth0ClientSecret: process.env.AUTH0_CLIENT_SECRET,
+  apiKey: process.env.MJ_API_KEY,
+  baseUrl: process.env.GRAPHQL_BASE_URL ?? 'http://localhost',
 
   // Used only for MJCLI
   migrationsLocation: process.env.MIGRATIONS_LOCATION ?? 'filesystem:./migrations',
