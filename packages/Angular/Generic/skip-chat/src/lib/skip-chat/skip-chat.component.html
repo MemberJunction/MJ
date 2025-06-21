@@ -2,10 +2,10 @@
     <!-- Left Sidebar -->
     <div class="skip-sidebar" [class.skip-sidebar-collapsed]="!IsConversationListVisible">
         <div class="skip-sidebar-header">
-            <button class="skip-new-chat-btn" *ngIf="AllowNewConversations" (click)="CreateNewConversation()">
+            <kendo-button themecolor="primary" rounded="medium" size="large" *ngIf="AllowNewConversations" (click)="CreateNewConversation()">
                 <i class="fas fa-plus"></i>
                 <span>New chat</span>
-            </button>
+            </kendo-button>
             <button class="skip-sidebar-toggle" (click)="DisplayConversationList(false)">
                 <i class="fas fa-chevron-left"></i>
             </button>

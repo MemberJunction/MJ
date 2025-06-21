@@ -37,54 +37,6 @@
     background: linear-gradient(135deg, #f8f9fa 0%, var(--gray-600) 100%);
 }
 
-.skip-new-chat-btn {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 16px;
-    background: var(--mj-blue);
-    border: 2px solid var(--mj-blue);
-    border-radius: var(--border-radius);
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--white-color);
-    cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-    overflow: hidden;
-}
-
-.skip-new-chat-btn::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-    transition: left 0.5s ease;
-}
-
-.skip-new-chat-btn:hover {
-    background: var(--navy);
-    border-color: var(--navy);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 118, 182, 0.3);
-}
-
-.skip-new-chat-btn:hover::before {
-    left: 100%;
-}
-
-.skip-new-chat-btn:active {
-    transform: translateY(0);
-}
-
-.skip-new-chat-btn i {
-    font-size: 16px;
-}
-
 .skip-sidebar-toggle {
     width: 36px;
     height: 36px;
@@ -843,12 +795,12 @@
 
 /* Ensure smooth transitions when sidebar collapses */
 .skip-sidebar * {
-    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .skip-sidebar-collapsed * {
     opacity: 0;
-    transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Prevent text selection during drag/animations */
