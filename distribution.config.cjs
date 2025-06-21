@@ -161,6 +161,16 @@ const codegenConfig = {
     appendToFile: true,
     convertCoreSchemaToFlywayMigrationFile: true,
   },
+  forceRegeneration: {
+    enabled: false,  // Set to true to force regeneration even without schema changes
+    baseViews: false,
+    spCreate: false,  // Set this to true to regenerate all spCreate procedures
+    spUpdate: false,
+    spDelete: false,
+    allStoredProcedures: false,  // Overrides individual SP flags when true
+    indexes: false,
+    fullTextSearch: false,
+  },
 };
 
 /** @type {MJServerConfig} */
@@ -195,6 +205,7 @@ const mjServerConfig = {
     orgID: process.env.ASK_SKIP_ORGANIZATION_ID,
     apiKey: process.env.ASK_SKIP_API_KEY,  
     organizationInfo: process.env.ASK_SKIP_ORGANIZATION_INFO,
+    baseUrl: process.env.GRAPHQL_BASE_URL ?? 'http://localhost',
     entitiesToSendSkip: {
       excludeSchemas: ['__mj'],
       includeEntitiesFromExcludedSchemas: [

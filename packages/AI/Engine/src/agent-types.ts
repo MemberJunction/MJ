@@ -371,6 +371,8 @@ export type AgentExecutionProgressCallback = (progress: {
     message: string;
     /** Additional metadata about the current step */
     metadata?: Record<string, unknown>;
+    /** When this progress message should be displayed */
+    displayMode?: 'live' | 'historical' | 'both';
 }) => void;
 
 /**
@@ -405,7 +407,7 @@ export type AgentExecutionStreamingCallback = (chunk: {
  * @property {AgentExecutionStreamingCallback} [onStreaming] - Optional callback for receiving streaming content updates
  * @property {string[]} [parentAgentHierarchy] - Optional parent agent hierarchy for sub-agent execution
  * @property {number} [parentDepth] - Optional parent depth for sub-agent execution
- * @property {Record<string, any>} [data] - Optional data context for template rendering and prompt execution
+ * @property {Record<string, any>} [data] - Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents
  * @property {TContext} [context] - Optional additional context data to pass to the agent execution.
  *                                  This context is propagated to all sub-agents and actions throughout 
  *                                  the execution hierarchy. Use this for runtime-specific data such as:

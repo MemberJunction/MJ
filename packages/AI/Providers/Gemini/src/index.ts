@@ -10,6 +10,19 @@ import { RegisterClass } from "@memberjunction/global";
 @RegisterClass(BaseLLM, "GeminiLLM")
 export class GeminiLLM extends BaseLLM {
     private _gemini: GoogleGenAI;
+    
+    // State tracking for streaming thinking extraction
+    private _streamingState: {
+        accumulatedThinking: string;
+        inThinkingBlock: boolean;
+        pendingContent: string;
+        thinkingComplete: boolean;
+    } = {
+        accumulatedThinking: '',
+        inThinkingBlock: false,
+        pendingContent: '',
+        thinkingComplete: false
+    };
 
     constructor(apiKey: string) {
         super(apiKey);
@@ -116,7 +129,19 @@ export class GeminiLLM extends BaseLLM {
                 ...modelOptions
             });
             
-            const responseContent = result.candidates?.[0]?.content?.parts?.find(part => part.text)?.text || '';
+            const rawContent = result.candidates?.[0]?.content?.parts?.find(part => part.text)?.text || '';
+            
+            // Extract thinking content if present
+            let content: string = rawContent.trim();
+            let thinkingContent: string | undefined = undefined;
+            if (content.startsWith('<think>') && content.includes('</think>')) {
+                // extract thinking content
+                const thinkStart = content.indexOf('<think>') + '<think>'.length;
+                const thinkEnd = content.indexOf('</think>');
+                thinkingContent = content.substring(thinkStart, thinkEnd).trim();
+                // remove thinking content from main content
+                content = content.substring(thinkEnd + '</think>'.length).trim();
+            }
             
             const endTime = new Date();
             return {
@@ -127,7 +152,11 @@ export class GeminiLLM extends BaseLLM {
                 timeElapsed: endTime.getTime() - startTime.getTime(),
                 data: {
                     choices: [{
-                        message: { role: 'assistant', content: responseContent },
+                        message: { 
+                            role: 'assistant', 
+                            content: content,
+                            thinking: thinkingContent || undefined
+                        },
                         finish_reason: "completed",
                         index: 0
                     }],
@@ -155,9 +184,23 @@ export class GeminiLLM extends BaseLLM {
     }
     
     /**
+     * Reset streaming state for a new request
+     */
+    private resetStreamingState(): void {
+        this._streamingState = {
+            accumulatedThinking: '',
+            inThinkingBlock: false,
+            pendingContent: '',
+            thinkingComplete: false
+        };
+    }
+    
+    /**
      * Create a streaming request for Gemini
      */
     protected async createStreamingRequest(params: ChatParams): Promise<any> {
+        // Reset streaming state for new request
+        this.resetStreamingState();
         const modelName = params.model || "gemini-pro";
         
         const allMessagesButLast = params.messages.slice(0, params.messages.length - 1);
@@ -231,8 +274,10 @@ export class GeminiLLM extends BaseLLM {
         finishReason?: string;
         usage?: any;
     } {
-        // Extract text from the chunk with the new SDK
         let content = '';
+        let finishReason = undefined;
+        
+        // Extract text from the chunk with the new SDK
         if (chunk.candidates && 
             chunk.candidates[0] && 
             chunk.candidates[0].content && 
@@ -241,15 +286,107 @@ export class GeminiLLM extends BaseLLM {
             
             // Find the text part
             const textPart = chunk.candidates[0].content[0].parts.find((part: any) => part.text);
-            content = textPart?.text || '';
+            if (textPart?.text) {
+                const rawContent = textPart.text;
+                
+                // Add raw content to pending content for processing
+                this._streamingState.pendingContent += rawContent;
+                
+                // Process the pending content to extract thinking
+                content = this.processThinkingInStreamingContent();
+            }
         }
         
-        // Gemini doesn't provide finish reason or usage in chunks
+        // Check for finish reason if available
+        if (chunk.candidates && chunk.candidates[0] && chunk.candidates[0].finishReason) {
+            finishReason = chunk.candidates[0].finishReason;
+        }
+        
+        // Gemini doesn't provide usage in chunks
         return {
             content,
-            finishReason: undefined,
+            finishReason,
             usage: null
         };
+    }
+    
+    /**
+     * Process pending content to extract thinking blocks
+     * Returns content that should be emitted to the user
+     */
+    private processThinkingInStreamingContent(): string {
+        const state = this._streamingState;
+        let outputContent = '';
+        
+        // If thinking is already complete, just pass through content
+        if (state.thinkingComplete) {
+            outputContent = state.pendingContent;
+            state.pendingContent = '';
+            return outputContent;
+        }
+        
+        // Check if we're currently in a thinking block
+        if (state.inThinkingBlock) {
+            // Look for end of thinking block
+            const endIndex = state.pendingContent.indexOf('</think>');
+            
+            if (endIndex !== -1) {
+                // Found end of thinking block
+                state.accumulatedThinking += state.pendingContent.substring(0, endIndex);
+                state.inThinkingBlock = false;
+                state.thinkingComplete = true;
+                
+                // Keep remaining content after </think> for output
+                state.pendingContent = state.pendingContent.substring(endIndex + '</think>'.length);
+                outputContent = state.pendingContent.trim();
+                state.pendingContent = '';
+            } else {
+                // Still in thinking block, accumulate all content
+                state.accumulatedThinking += state.pendingContent;
+                state.pendingContent = '';
+            }
+        } else {
+            // Not in thinking block, check if one is starting
+            const startIndex = state.pendingContent.indexOf('<think>');
+            
+            if (startIndex !== -1) {
+                // Found start of thinking block
+                if (startIndex === 0) {
+                    // Thinking starts at beginning
+                    state.inThinkingBlock = true;
+                    state.pendingContent = state.pendingContent.substring('<think>'.length);
+                    
+                    // Process again to check for end tag in same chunk
+                    return this.processThinkingInStreamingContent();
+                } else {
+                    // There's content before thinking block - this shouldn't happen
+                    // with Gemini models, but handle it just in case
+                    outputContent = state.pendingContent.substring(0, startIndex);
+                    state.pendingContent = state.pendingContent.substring(startIndex);
+                    state.inThinkingBlock = true;
+                    state.pendingContent = state.pendingContent.substring('<think>'.length);
+                }
+            } else {
+                // No thinking block found
+                // Check if we might be at the start of a partial tag
+                if (state.pendingContent.endsWith('<') || 
+                    state.pendingContent.endsWith('<t') ||
+                    state.pendingContent.endsWith('<th') ||
+                    state.pendingContent.endsWith('<thi') ||
+                    state.pendingContent.endsWith('<thin')) {
+                    // Hold back content that might be start of tag
+                    const lastOpenBracket = state.pendingContent.lastIndexOf('<');
+                    outputContent = state.pendingContent.substring(0, lastOpenBracket);
+                    state.pendingContent = state.pendingContent.substring(lastOpenBracket);
+                } else {
+                    // No thinking block and no partial tag, output all content
+                    outputContent = state.pendingContent;
+                    state.pendingContent = '';
+                }
+            }
+        }
+        
+        return outputContent;
     }
     
     /**
@@ -260,7 +397,11 @@ export class GeminiLLM extends BaseLLM {
         lastChunk: any | null | undefined,
         usage: any | null | undefined
     ): ChatResult {
-        // Gemini doesn't provide usage information in streaming
+        // Extract finish reason from last chunk if available
+        let finishReason = 'stop';
+        if (lastChunk?.candidates && lastChunk.candidates.length > 0 && lastChunk.candidates[0].finishReason) {
+            finishReason = lastChunk.candidates[0].finishReason;
+        }
         
         // Create dates (will be overridden by base class)
         const now = new Date();
@@ -268,14 +409,18 @@ export class GeminiLLM extends BaseLLM {
         // Create a proper ChatResult instance with constructor params
         const result = new ChatResult(true, now, now);
         
+        // Get thinking content from streaming state
+        const thinkingContent = this._streamingState.accumulatedThinking.trim();
+        
         // Set all properties
         result.data = {
             choices: [{
                 message: {
                     role: 'assistant',
-                    content: accumulatedContent ? accumulatedContent : ''
+                    content: accumulatedContent ? accumulatedContent : '',
+                    thinking: thinkingContent || undefined
                 },
-                finish_reason: 'stop',
+                finish_reason: finishReason,
                 index: 0
             }],
             usage: new ModelUsage(0, 0) // Gemini doesn't provide detailed token usage

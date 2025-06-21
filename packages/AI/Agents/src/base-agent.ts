@@ -428,12 +428,12 @@ export class BaseAgent {
         params: ExecuteAgentParams
     ): Promise<AIPromptParams> {
         // Gather context data
-        const contextData = await this.gatherContextData(params.agent, params.contextUser);
+        const promptTemplateData = await this.gatherPromptTemplateData(params.agent, params.contextUser, params.data);
 
         // Set up the hierarchical prompt execution
         const promptParams = new AIPromptParams();
         promptParams.prompt = systemPrompt;
-        promptParams.data = contextData;
+        promptParams.data = promptTemplateData;
         promptParams.contextUser = params.contextUser;
         promptParams.conversationMessages = params.conversationMessages;
         promptParams.templateMessageRole = 'system';
@@ -443,7 +443,7 @@ export class BaseAgent {
             new ChildPromptParam(
                 {
                     prompt: childPrompt,
-                    data: contextData,
+                    data: promptTemplateData,
                     contextUser: params.contextUser,
                     conversationMessages: params.conversationMessages,
                     templateMessageRole: 'user'
@@ -558,6 +558,7 @@ export class BaseAgent {
      * 
      * @param {AIAgentEntity} agent - The agent to gather context for
      * @param {UserInfo} [_contextUser] - Optional user context (reserved for future use)
+     * @param {any} [extraData] - Optional extra data to include in the context, if provided and keys conflict within the agent context data, the extraData will override the agent context data.
      * 
      * @returns {Promise<AgentContextData>} Structured context data for prompts
      * 
@@ -565,7 +566,7 @@ export class BaseAgent {
      * 
      * @private
      */
-    private async gatherContextData(agent: AIAgentEntity, _contextUser?: UserInfo): Promise<AgentContextData> {
+    private async gatherPromptTemplateData(agent: AIAgentEntity, _contextUser?: UserInfo, extraData?: any): Promise<AgentContextData> {
         try {
             const engine = AIEngine.Instance;
             
@@ -587,7 +588,15 @@ export class BaseAgent {
                 actionDetails: this.formatActionDetails(activeActions),
             };
 
-            return contextData;
+            if (extraData) {
+                return {
+                    ...contextData,
+                    ...extraData
+                }
+            }
+            else {
+                return contextData;
+            }
         } catch (error) {
             throw new Error(`Error gathering context data: ${error.message}`);
         }
@@ -1305,7 +1314,8 @@ export class BaseAgent {
                     promptId: config.childPrompt?.ID,
                     isRetry,
                     promptName: config.childPrompt?.Name
-                }
+                },
+                displayMode: 'live' // Only show in live mode
             });
 
             // Prepare prompt parameters
@@ -1355,7 +1365,8 @@ export class BaseAgent {
             params.onProgress?.({
                 step: 'decision_processing',
                 percentage: 70,
-                message: this.formatHierarchicalMessage('Analyzing response and determining next steps')
+                message: this.formatHierarchicalMessage('Analyzing response and determining next steps'),
+                displayMode: 'both' // Show in both live and historical modes
             });
             
             // Determine next step using agent type
@@ -1614,7 +1625,8 @@ export class BaseAgent {
             metadata: { 
                 actionCount: actions.length,
                 actionNames: actions.map(a => a.name)
-            }
+            },
+            displayMode: 'live' // Only show in live mode
         });
         
         // Add assistant message indicating we're executing actions with more detail
@@ -1802,6 +1814,14 @@ export class BaseAgent {
             this._agentRun.CompletedAt = new Date();
             this._agentRun.Success = false;
             this._agentRun.ErrorMessage = errorMessage;
+            
+            // Calculate total tokens even for failed runs
+            const tokenStats = this.calculateTokenStats();
+            this._agentRun.TotalTokensUsed = tokenStats.totalTokens;
+            this._agentRun.TotalPromptTokensUsed = tokenStats.promptTokens;
+            this._agentRun.TotalCompletionTokensUsed = tokenStats.completionTokens;
+            this._agentRun.TotalCost = tokenStats.totalCost;
+            
             await this._agentRun.Save();
         }
         
@@ -1827,6 +1847,14 @@ export class BaseAgent {
             this._agentRun.CompletedAt = new Date();
             this._agentRun.Success = false;
             this._agentRun.ErrorMessage = message;
+            
+            // Calculate total tokens even for cancelled runs
+            const tokenStats = this.calculateTokenStats();
+            this._agentRun.TotalTokensUsed = tokenStats.totalTokens;
+            this._agentRun.TotalPromptTokensUsed = tokenStats.promptTokens;
+            this._agentRun.TotalCompletionTokensUsed = tokenStats.completionTokens;
+            this._agentRun.TotalCost = tokenStats.totalCost;
+            
             await this._agentRun.Save();
         }
         
@@ -1852,6 +1880,14 @@ export class BaseAgent {
             this._agentRun.CompletedAt = new Date();
             this._agentRun.Success = finalStep === 'success';
             this._agentRun.Result = returnValue ? JSON.stringify(returnValue) : null;
+            
+            // Calculate total tokens from all prompts and sub-agents
+            const tokenStats = this.calculateTokenStats();
+            this._agentRun.TotalTokensUsed = tokenStats.totalTokens;
+            this._agentRun.TotalPromptTokensUsed = tokenStats.promptTokens;
+            this._agentRun.TotalCompletionTokensUsed = tokenStats.completionTokens;
+            this._agentRun.TotalCost = tokenStats.totalCost;
+            
             await this._agentRun.Save();
         }
         
@@ -1880,6 +1916,43 @@ export class BaseAgent {
             }
         }
         return count;
+    }
+
+    /**
+     * Calculate total token statistics from execution chain.
+     * 
+     * @returns Token statistics including totals and costs
+     * @private
+     */
+    private calculateTokenStats(): { totalTokens: number; promptTokens: number; completionTokens: number; totalCost: number } {
+        let totalTokens = 0;
+        let promptTokens = 0;
+        let completionTokens = 0;
+        let totalCost = 0;
+
+        // Iterate through execution chain to sum up tokens
+        for (const step of this._executionChain) {
+            if (step.executionType === 'prompt' && step.executionResult.type === 'prompt') {
+                const promptResult = step.executionResult as PromptExecutionResult;
+                if (promptResult.result) {
+                    totalTokens += promptResult.result.tokensUsed || 0;
+                    promptTokens += promptResult.result.promptTokens || 0;
+                    completionTokens += promptResult.result.completionTokens || 0;
+                    totalCost += promptResult.result.cost || 0;
+                }
+            } else if (step.executionType === 'sub-agent' && step.executionResult.type === 'sub-agent') {
+                const subAgentResult = step.executionResult as SubAgentExecutionResult;
+                if (subAgentResult.result?.agentRun) {
+                    // Add tokens from sub-agent runs (these should already be calculated recursively)
+                    totalTokens += subAgentResult.result.agentRun.TotalTokensUsed || 0;
+                    promptTokens += subAgentResult.result.agentRun.TotalPromptTokensUsed || 0;
+                    completionTokens += subAgentResult.result.agentRun.TotalCompletionTokensUsed || 0;
+                    totalCost += subAgentResult.result.agentRun.TotalCost || 0;
+                }
+            }
+        }
+
+        return { totalTokens, promptTokens, completionTokens, totalCost };
     }
 
     /**

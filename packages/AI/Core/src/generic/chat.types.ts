@@ -64,6 +64,12 @@ export type ChatCompletionMessage = {
      * Content of the message, can be any string 
      */
     content: string;
+
+    /**
+     * When using a reasoning model, this field can contain the reasoning behind the response.
+     * Not all providers/models support this field.
+     */
+    thinking?: string | null;
 }
 
 /**

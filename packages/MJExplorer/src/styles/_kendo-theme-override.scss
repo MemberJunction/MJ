@@ -521,35 +521,6 @@ kendo-buttongroup button[kendoButton],
   }
 }
 
-// ===================================
-// DARK MODE SUPPORT (if needed)
-// ===================================
-
-@media (prefers-color-scheme: dark) {
-  .k-button-group {
-    background: #1a1a1a;
-    border-color: #333;
-    
-    .k-button {
-      background: #1a1a1a;
-      color: #e0e0e0;
-      
-      &:not(:last-child) {
-        border-right-color: #333 !important;
-      }
-      
-      &:not(.k-selected):hover {
-        background: #2a2a2a;
-        color: var(--light-blue);
-      }
-      
-      &.k-selected {
-        background: var(--mj-blue);
-        color: var(--white-color);
-      }
-    }
-  }
-}
 
 // ===================================
 // PRINT STYLES
@@ -644,7 +615,7 @@ kendo-buttongroup {
 .k-input {
   border-radius: var(--border-radius);
   border: 2px solid var(--gray-700);
-  padding: 12px 16px;
+  padding: 8px;
   font-size: 16px;
   background: var(--white-color);
   transition: var(--transition-time);
@@ -659,6 +630,13 @@ kendo-buttongroup {
 
   &::placeholder {
     color: var(--gray-800);
+  }
+  button {
+    padding: 0 !important;
+    background: transparent;
+    border: none;
+    min-width: 0 !important;
+    min-height: 0 !important;
   }
 }
 
@@ -727,7 +705,6 @@ kendo-buttongroup {
 .k-dropdown-popup,
 .k-list-container {
   border: 2px solid var(--mj-blue);
-  border-radius: 16px;
   background: var(--white-color);
   box-shadow: 
     0 20px 40px rgba(0, 0, 0, 0.15),
@@ -1035,8 +1012,18 @@ kendo-buttongroup {
 // KENDO LOADERS - Enhanced automatically
 // ===================================
 
+.loading-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 9999;
+}
+
 .k-loader {
-  color: var(--mj-blue);
+    color: var(--mj-blue);
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%);
 }
 
 // ===================================
@@ -1060,7 +1047,7 @@ kendo-buttongroup {
 
       &.k-active {
         color: var(--mj-blue);
-        border-bottom: 3px solid var(--mj-blue);
+        border-bottom: 3px solid var(--mj-blue) !important;
         font-weight: 600;
         background: var(--white-color);
       }
