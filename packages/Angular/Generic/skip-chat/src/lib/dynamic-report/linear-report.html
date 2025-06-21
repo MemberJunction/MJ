@@ -42,22 +42,22 @@
 
         <!-- Bottom Bar with Explanation -->
         @if (SkipData.userExplanation || SkipData.analysis) {
-            <div style="border-top: 2px solid #e0e0e0; background-color: #f8f9fa;">
+            <div>
                 @if (SkipData.userExplanation) {
-                    <div style="padding: 15px 20px; border-bottom: 1px solid #e0e0e0;">
-                        <div style="display: flex; align-items: flex-start; gap: 10px;">
-                            <strong style="color: #333; font-size: 14px; min-width: 90px;">Explanation:</strong>
-                            <div style="color: #555; line-height: 1.5;">{{SkipData.userExplanation}}</div>
+                    <div>
+                        <div>
+                            <strong>Explanation:</strong>
+                            <div>{{SkipData.userExplanation}}</div>
                         </div>
                     </div>
                 }
                 @if (SkipData.analysis) {
-                    <div style="padding: 15px 20px; max-height: 300px; overflow-y: auto;">
-                        <div style="margin-bottom: 10px;">
-                            <strong style="color: #333; font-size: 14px;">Analysis:</strong>
+                    <div>
+                        <div>
+                            <strong>Analysis:</strong>
                         </div>
-                        <div style="padding-left: 10px; border-left: 3px solid #007bff; margin-left: 5px;">
-                            <markdown [data]="SkipData.analysis" style="display: block; color: #444; line-height: 1.6;"></markdown>
+                        <div>
+                            <markdown [data]="SkipData.analysis"></markdown>
                         </div>
                     </div>
                 }

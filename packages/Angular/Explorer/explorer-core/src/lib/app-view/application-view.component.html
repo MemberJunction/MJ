@@ -44,7 +44,7 @@
         <div class="mj-entity-buttons">
             <button
                 *ngFor="let item of SelectedAppEntities"
-                class="mj-entity-btn"
+                class="mj-btn mj-btn-secondary"
                 [class.mj-entity-btn-active]="IsEntitySelected(item)"
                 (click)="onAppEntityButtonClicked(item)"
                 [title]="item.Description || item.Name"
