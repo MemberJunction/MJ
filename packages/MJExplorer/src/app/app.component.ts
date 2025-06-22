@@ -6,7 +6,7 @@ import { setupGraphQLClient, GraphQLProviderConfigData, GraphQLDataProvider } fr
 import { lastValueFrom } from 'rxjs';
 import { take } from 'rxjs/operators';
 import { environment } from '../environments/environment';
-import { NavigationComponent } from '@memberjunction/ng-explorer-core';
+import { NavigationComponent, StartupValidationService } from '@memberjunction/ng-explorer-core';
 import { LoadGeneratedEntities } from 'mj_generatedentities'
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -25,10 +25,16 @@ export class AppComponent implements OnInit {
   public ErrorMessage: any = '';
   public environment = environment;
   public subHeaderText: string = "Welcome back! Please log in to your account.";
+  public showValidationOnly = false;
 
   @ViewChild(NavigationComponent, { static: false }) nav!: NavigationComponent;
 
-  constructor(private router: Router, @Inject(DOCUMENT) public document: Document, public authBase: MJAuthBase) { }
+  constructor(
+    private router: Router, 
+    @Inject(DOCUMENT) public document: Document, 
+    public authBase: MJAuthBase,
+    private startupValidationService: StartupValidationService
+  ) { }
 
   async handleLogin(token: string, claims: any) {
     if (token) {
@@ -64,12 +70,19 @@ export class AppComponent implements OnInit {
 
         // Check to see if the user has access... 
         const md = new Metadata();
+        
         if (!md.CurrentUser) {
           // if user doens't have access do this stuff
           this.HasError = true;
           this.ErrorMessage = `You don't have access to the application, contact your system administrator.`
           throw this.ErrorMessage;
         }
+        
+        // We need a small delay to ensure everything is initialized
+        setTimeout(() => {
+          // Run validation checks to identify potential issues
+          this.startupValidationService.validateSystemSetup();
+        }, 500);
 
 
         localStorage.removeItem('jwt-retry-ts');
@@ -85,10 +98,27 @@ export class AppComponent implements OnInit {
         } else {
           this.router.navigateByUrl(this.initalPath, { replaceUrl: true });
         }
-      } catch (err) {
+      } catch (err: any) {
         const retryKey = 'auth-retry-dt';
         const lastRetryDateTime = localStorage.getItem(retryKey);
         const yesterday = +new Date(Date.now() - 1 * 24 * 60 * 60 * 1000);
+
+        // First, check if this is related to missing user roles
+        // Using our enhanced error checking function
+        const isNoRolesError = this.isNoUserRolesError(err);
+        
+        if (isNoRolesError) {
+          
+          // Instead of showing a generic error message, use our validation service
+          this.showValidationOnly = true;
+          this.HasError = true; // Still set HasError to hide the navigation
+          
+          // Add the validation issue through our service
+          this.startupValidationService.addNoRolesValidationIssue();
+          
+          // Don't throw, just return to allow the UI to show our validation banner
+          return;
+        }
 
         const retriedRecently = lastRetryDateTime && +new Date(lastRetryDateTime) > yesterday;
         const expiryError = this.authBase.checkExpiredTokenError((err as any)?.response?.errors?.[0]?.message);
@@ -160,5 +190,50 @@ export class AppComponent implements OnInit {
 
   public toggleDrawer(args: any): void {
     this.nav.toggle();
+  }
+  
+  /**
+   * Helper function to safely check if an error is related to missing user roles
+   */
+  private isNoUserRolesError(err: any): boolean {
+    try {
+      // Check if error has response with errors array
+      if (!err || typeof err !== 'object') return false;
+      
+      // Check for GraphQL-style errors
+      if (err.response && Array.isArray(err.response.errors)) {
+        return err.response.errors.some((e: any) => 
+          e && e.message && typeof e.message === 'string' && 
+          e.message.includes('does not have read permissions on User Roles')
+        );
+      }
+      
+      // Check for specific "ResourceTypes" error which happens when user has no roles
+      if (err.toString && typeof err.toString === 'function') {
+        const errorString = err.toString();
+        
+        // This is the specific error we're seeing that indicates no roles
+        if (errorString.includes("Cannot read properties of undefined (reading 'ResourceTypes')")) {
+          return true;
+        }
+      }
+      
+      // Check for error message directly on the error object
+      if (err.message && typeof err.message === 'string') {
+        const message = err.message;
+        return message.includes('does not have read permissions on User Roles') || 
+               message.includes("Cannot read properties of undefined (reading 'ResourceTypes')");
+      }
+      
+      // Check for nested error object
+      if (err.error && typeof err.error === 'object') {
+        return this.isNoUserRolesError(err.error);
+      }
+      
+      return false;
+    } catch (e) {
+      console.error('Error while checking for user roles error:', e);
+      return false;
+    }
   }
 }

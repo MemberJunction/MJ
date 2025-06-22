@@ -1,7 +1,3 @@
-.user-view-grid-wrap {
-    height: calc(100vh - 20px);
-}
-
 .user-view-grid-column-header {
     background-color: #fff;
     font-size: 20pt;
@@ -15,22 +11,26 @@
     padding: 14px 0;
     border-bottom: 1px solid var(--med-gray);
 }
- .title-wrapper h4 {
+
+.title-wrapper h4 {
     margin: 0;
     font-size: 24px;
     line-height: 28px;
- }
- .main-fav-wrapper {
+}
+
+.main-fav-wrapper {
     background: #fff;
     padding: 20px;
- }
- .filter-wrapper {
+}
+
+.filter-wrapper {
     display: flex;
     justify-content: flex-start;
     gap: 14px;
     align-items: center;
 }
- .title-wrapper .search  input {
+
+.title-wrapper .search input {
     width: 100%;
     height: 100%;
     font-size: 16px;
@@ -39,23 +39,28 @@
     box-sizing: border-box;
     padding-left: 40px;
 
- }
-    .title-wrapper .search  {
+}
+
+.title-wrapper .search {
     background: var(--light-shade);
     width: 360px;
     height: 44px;
     position: relative;
     border-radius: 10px;
- }
- .title-wrapper .search svg {
+}
+
+.title-wrapper .search svg {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
     left: 12px;
 }
+
 .k-table-td {
     border-right: none !important;
-}.btn-cmn {
+}
+
+.btn-cmn {
     width: 44px;
     height: 44px;
     min-width: 44px;
@@ -63,26 +68,31 @@
     border-radius: 8px;
     border: 1px solid var(--gray-color);
 }
+
 .btn-cmn.active {
     border: 1px solid var(--border-blue);
 }
+
 ::ng-deep .title-wrapper .filter-wrapper .k-dropdown-button .k-button {
     border: 1px solid var(--gray-color);
-    border-radius: 8px;   padding: 10px 25px;
+    border-radius: 8px;
+    padding: 10px 25px;
     background: var(--white-color);
     color: var(--sideNav);
 }
+
 ::ng-deep .user-view-grid-wrap .k-grid-aria-root .k-grid-header .k-grid-header-table thead tr th {
     border-right: none;
     border-inline-start-width: 0;
     color: var(--thead-color);
 }
-::ng-deep .user-view-grid-wrap .k-grid-aria-root kendo-grid-list .k-grid-table tbody tr td { 
+
+::ng-deep .user-view-grid-wrap .k-grid-aria-root kendo-grid-list .k-grid-table tbody tr td {
     border-inline-start-width: 0;
     color: var(--tdata-color);
     font-weight: 500;
     border-bottom-width: 1px;
-}  
+}
 
 .overflow-y-scroll {
     overflow-y: auto;
@@ -116,6 +126,7 @@
 .list-text {
     font-size: large;
 }
+
 .list-selected {
     font-weight: bold;
     color: var(--border-blue);

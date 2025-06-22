@@ -1,5 +1,5 @@
 import { IMetadataProvider, LogError, UserInfo, ValidationErrorInfo } from "@memberjunction/core";
-import { TemplateContentEntity } from "@memberjunction/core-entities";
+import { TemplateContentEntity, TemplateParamEntity } from "@memberjunction/core-entities";
 import * as nunjucks from 'nunjucks';
 import { MJGlobal } from "@memberjunction/global";
 import { TemplateExtensionBase } from "./extensions/TemplateExtensionBase";
@@ -122,7 +122,8 @@ export class TemplateEngineServer extends TemplateEngineBase {
             }
     
             if(!SkipValidation){
-                const valResult = templateEntity.ValidateTemplateInput(data);
+                // Validate using content-specific parameters
+                const valResult = templateEntity.ValidateTemplateInput(data, templateContent.ID);
                 if (!valResult.Success) {
                     return {
                         Success: false,
@@ -133,9 +134,12 @@ export class TemplateEngineServer extends TemplateEngineBase {
                     };
                 }
             }
+            
+            // Merge default values from parameters applicable to this content
+            const mergedData = this.mergeDefaultValues(templateEntity, templateContent.ID, data);
      
             const template = this.getNunjucksTemplate(templateContent.ID, templateContent.TemplateText, true);
-            const result = await this.renderTemplateAsync(template, data); 
+            const result = await this.renderTemplateAsync(template, mergedData); 
             return {
                 Success: true,
                 Output: result,
@@ -230,5 +234,75 @@ export class TemplateEngineServer extends TemplateEngineBase {
                 }
             });
         });
+    }
+
+    /**
+     * Merges default values from template parameters with the provided data.
+     * Content-specific parameters take precedence over global parameters when both define the same parameter name.
+     * 
+     * @param templateEntity - The template entity containing parameter definitions
+     * @param contentId - The ID of the template content being rendered
+     * @param data - The input data provided by the caller
+     * @returns A new object containing merged data with defaults applied
+     * 
+     * @remarks
+     * - Only applies defaults for parameters that are not already present in the input data
+     * - Handles all parameter types: Scalar, Array, Object, Record, Entity
+     * - Content-specific parameter defaults override global parameter defaults
+     */
+    protected mergeDefaultValues(templateEntity: TemplateEntityExtended, contentId: string, data: any): any {
+        // Create a shallow copy of the input data
+        const mergedData = { ...data };
+        
+        // Get all parameters applicable to this content
+        const params = templateEntity.GetParametersForContent(contentId);
+        
+        // Group parameters by name to handle precedence
+        const paramsByName = new Map<string, TemplateParamEntity>();
+        
+        // First add global parameters
+        params.filter(p => !(p as any).TemplateContentID).forEach(p => {
+            paramsByName.set(p.Name, p);
+        });
+        
+        // Then add/override with content-specific parameters
+        params.filter(p => (p as any).TemplateContentID === contentId).forEach(p => {
+            paramsByName.set(p.Name, p);
+        });
+        
+        // Apply default values for missing parameters
+        paramsByName.forEach((param, name) => {
+            // Only apply default if the parameter is not already provided
+            if (mergedData[name] === undefined && param.DefaultValue !== null && param.DefaultValue !== undefined) {
+                try {
+                    // Handle different parameter types
+                    switch (param.Type) {
+                        case 'Array':
+                        case 'Object':
+                        case 'Record':
+                        case 'Entity':
+                            // Try to parse as JSON for complex types
+                            try {
+                                mergedData[name] = JSON.parse(param.DefaultValue);
+                            } catch {
+                                // If not valid JSON, use as-is
+                                mergedData[name] = param.DefaultValue;
+                            }
+                            break;
+                        
+                        case 'Scalar':
+                        default:
+                            // For scalar types, use the value directly
+                            mergedData[name] = param.DefaultValue;
+                            break;
+                    }
+                } catch (error) {
+                    // Log warning but continue - don't fail the entire render
+                    LogError(`Failed to apply default value for parameter '${name}': ${error.message}`);
+                }
+            }
+        });
+        
+        return mergedData;
     }
 }

@@ -98,10 +98,36 @@ export class OpenAILLM extends BaseLLM {
         return {
             data: {
                 choices: result.choices.map((c: any) => {
+                    // Extract thinking/reasoning content if present
+                    let thinking: string | undefined = undefined;
+                    let content = c.message.content;
+                    
+                    // For o1 models, OpenAI may include reasoning in a specific field or format
+                    // Check if the message has any reasoning-related data
+                    if (c.message.reasoning_content) {
+                        thinking = c.message.reasoning_content;
+                    } else if (c.message.reasoning) {
+                        thinking = c.message.reasoning;
+                    }
+                    
+                    // Some o1 models might include reasoning in the content with special markers
+                    // Check for common reasoning patterns in the content itself
+                    if (!thinking && content && typeof content === 'string') {
+                        // Check for thinking tags similar to Anthropic's format
+                        if (content.startsWith('<thinking>') && content.includes('</thinking>')) {
+                            const thinkStart = content.indexOf('<thinking>') + '<thinking>'.length;
+                            const thinkEnd = content.indexOf('</thinking>');
+                            thinking = content.substring(thinkStart, thinkEnd).trim();
+                            // Remove thinking content from main content
+                            content = content.substring(thinkEnd + '</thinking>'.length).trim();
+                        }
+                    }
+                    
                     return {
                         message: {
                             role: ChatMessageRole.assistant,
-                            content: c.message.content
+                            content: content,
+                            thinking: thinking
                         },
                         finish_reason: c.finish_reason,
                         index: c.index,
@@ -124,6 +150,8 @@ export class OpenAILLM extends BaseLLM {
      * Create a streaming request for OpenAI
      */
     protected async createStreamingRequest(params: ChatParams): Promise<any> {
+        // Reset streaming state for new request
+        this.resetStreamingState();
         const messages = this.ConvertMJToOpenAIChatMessages(params.messages);
         
         const openAIParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
@@ -178,6 +206,31 @@ export class OpenAILLM extends BaseLLM {
         return this.OpenAI.chat.completions.create(openAIParams);
     }
     
+    // State tracking for streaming thinking extraction
+    private _streamingState: {
+        accumulatedThinking: string;
+        inThinkingBlock: boolean;
+        pendingContent: string;
+        thinkingComplete: boolean;
+    } = {
+        accumulatedThinking: '',
+        inThinkingBlock: false,
+        pendingContent: '',
+        thinkingComplete: false
+    };
+
+    /**
+     * Reset streaming state for a new request
+     */
+    private resetStreamingState(): void {
+        this._streamingState = {
+            accumulatedThinking: '',
+            inThinkingBlock: false,
+            pendingContent: '',
+            thinkingComplete: false
+        };
+    }
+
     /**
      * Process a streaming chunk from OpenAI
      */
@@ -187,8 +240,49 @@ export class OpenAILLM extends BaseLLM {
         usage?: any;
     } {
         // Handle potential null/undefined values safely
-        const content = chunk?.choices?.[0]?.delta?.content || '';
+        let content = '';
         const usage = chunk?.usage || null;
+        
+        // Check if chunk contains reasoning content (for o1 models)
+        const delta = chunk?.choices?.[0]?.delta;
+        if (delta) {
+            // Check for reasoning fields specific to o1 models
+            if (delta.reasoning_content) {
+                this._streamingState.accumulatedThinking += delta.reasoning_content;
+                // Don't emit reasoning as regular content
+                return {
+                    content: '',
+                    finishReason: chunk?.choices?.[0]?.finish_reason,
+                    usage: usage ? {
+                        promptTokens: usage.prompt_tokens || 0,
+                        completionTokens: usage.completion_tokens || 0,
+                        totalTokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0)
+                    } : null
+                };
+            } else if (delta.reasoning) {
+                this._streamingState.accumulatedThinking += delta.reasoning;
+                // Don't emit reasoning as regular content
+                return {
+                    content: '',
+                    finishReason: chunk?.choices?.[0]?.finish_reason,
+                    usage: usage ? {
+                        promptTokens: usage.prompt_tokens || 0,
+                        completionTokens: usage.completion_tokens || 0,
+                        totalTokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0)
+                    } : null
+                };
+            }
+            
+            // Process regular content
+            const rawContent = delta.content || '';
+            if (rawContent) {
+                // Add raw content to pending content for processing
+                this._streamingState.pendingContent += rawContent;
+                
+                // Process the pending content to extract thinking
+                content = this.processThinkingInStreamingContent();
+            }
+        }
         
         return {
             content,
@@ -199,6 +293,87 @@ export class OpenAILLM extends BaseLLM {
                 totalTokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0)
             } : null
         };
+    }
+
+    /**
+     * Process pending content to extract thinking blocks
+     * Returns content that should be emitted to the user
+     */
+    private processThinkingInStreamingContent(): string {
+        const state = this._streamingState;
+        let outputContent = '';
+        
+        // If thinking is already complete, just pass through content
+        if (state.thinkingComplete) {
+            outputContent = state.pendingContent;
+            state.pendingContent = '';
+            return outputContent;
+        }
+        
+        // Check if we're currently in a thinking block
+        if (state.inThinkingBlock) {
+            // Look for end of thinking block
+            const endIndex = state.pendingContent.indexOf('</thinking>');
+            
+            if (endIndex !== -1) {
+                // Found end of thinking block
+                state.accumulatedThinking += state.pendingContent.substring(0, endIndex);
+                state.inThinkingBlock = false;
+                state.thinkingComplete = true;
+                
+                // Keep remaining content after </thinking> for output
+                state.pendingContent = state.pendingContent.substring(endIndex + '</thinking>'.length);
+                outputContent = state.pendingContent.trim();
+                state.pendingContent = '';
+            } else {
+                // Still in thinking block, accumulate all content
+                state.accumulatedThinking += state.pendingContent;
+                state.pendingContent = '';
+            }
+        } else {
+            // Not in thinking block, check if one is starting
+            const startIndex = state.pendingContent.indexOf('<thinking>');
+            
+            if (startIndex !== -1) {
+                // Found start of thinking block
+                if (startIndex === 0) {
+                    // Thinking starts at beginning
+                    state.inThinkingBlock = true;
+                    state.pendingContent = state.pendingContent.substring('<thinking>'.length);
+                    
+                    // Process again to check for end tag in same chunk
+                    return this.processThinkingInStreamingContent();
+                } else {
+                    // There's content before thinking block - emit it first
+                    outputContent = state.pendingContent.substring(0, startIndex);
+                    state.pendingContent = state.pendingContent.substring(startIndex);
+                    state.inThinkingBlock = true;
+                    state.pendingContent = state.pendingContent.substring('<thinking>'.length);
+                }
+            } else {
+                // No thinking block found
+                // Check if we might be at the start of a partial tag
+                if (state.pendingContent.endsWith('<') || 
+                    state.pendingContent.endsWith('<t') ||
+                    state.pendingContent.endsWith('<th') ||
+                    state.pendingContent.endsWith('<thi') ||
+                    state.pendingContent.endsWith('<thin') ||
+                    state.pendingContent.endsWith('<think') ||
+                    state.pendingContent.endsWith('<thinki') ||
+                    state.pendingContent.endsWith('<thinkin')) {
+                    // Hold back content that might be start of tag
+                    const lastOpenBracket = state.pendingContent.lastIndexOf('<');
+                    outputContent = state.pendingContent.substring(0, lastOpenBracket);
+                    state.pendingContent = state.pendingContent.substring(lastOpenBracket);
+                } else {
+                    // No thinking block and no partial tag, output all content
+                    outputContent = state.pendingContent;
+                    state.pendingContent = '';
+                }
+            }
+        }
+        
+        return outputContent;
     }
     
     /**
@@ -220,12 +395,16 @@ export class OpenAILLM extends BaseLLM {
         // Create a proper ChatResult instance with constructor params
         const result = new ChatResult(true, now, now);
         
+        // Get thinking content from streaming state
+        const thinkingContent = this._streamingState.accumulatedThinking.trim();
+        
         // Set all properties
         result.data = {
             choices: [{
                 message: {
                     role: 'assistant',
-                    content: content
+                    content: content,
+                    thinking: thinkingContent || undefined
                 },
                 finish_reason: lastChunk?.choices?.[0]?.finish_reason || 'stop',
                 index: 0

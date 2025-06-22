@@ -92,6 +92,9 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     
     /** Array of recent execution records for history display */
     public recentExecutions: AIAgentRunEntity[] = [];
+    
+    /** Track which execution cards are expanded */
+    public expandedExecutions: { [key: string]: boolean } = {};
 
     constructor(
         elementRef: ElementRef,
@@ -445,6 +448,69 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      */
     public navigateToEntity(entityName: string, recordId: string) {
         this.sharedService.OpenEntityRecord(entityName, CompositeKey.FromID(recordId));
+    }
+    
+    /**
+     * Toggles the expanded state of an execution card
+     */
+    public toggleExecutionExpanded(executionId: string) {
+        this.expandedExecutions[executionId] = !this.expandedExecutions[executionId];
+    }
+    
+    /**
+     * Opens the full execution record in a new view
+     */
+    public openExecutionRecord(executionId: string) {
+        this.sharedService.OpenEntityRecord('MJ: AI Agent Runs', CompositeKey.FromID(executionId));
+    }
+    
+    /**
+     * Gets a preview of the execution result for collapsed view
+     */
+    public getExecutionResultPreview(execution: AIAgentRunEntity): string {
+        try {
+            if (!execution.Result) return 'No result';
+            
+            // Try to parse the result as JSON
+            const parsed = JSON.parse(execution.Result);
+            
+            // Extract the user message if it exists
+            if (parsed.returnValue?.nextStep?.userMessage) {
+                const message = parsed.returnValue.nextStep.userMessage;
+                return message.length > 120 ? message.substring(0, 120) + '...' : message;
+            }
+            
+            // Otherwise return the stringified result
+            const stringified = JSON.stringify(parsed);
+            return stringified.length > 120 ? stringified.substring(0, 120) + '...' : stringified;
+        } catch {
+            // If not JSON, just return the string
+            const result = execution.Result || '';
+            return result.length > 120 ? result.substring(0, 120) + '...' : result;
+        }
+    }
+    
+    /**
+     * Gets the full execution result message for expanded view
+     */
+    public getExecutionResultMessage(execution: AIAgentRunEntity): string {
+        try {
+            if (!execution.Result) return 'No result';
+            
+            // Try to parse the result as JSON
+            const parsed = JSON.parse(execution.Result);
+            
+            // Extract the user message if it exists
+            if (parsed.returnValue?.nextStep?.userMessage) {
+                return parsed.returnValue.nextStep.userMessage;
+            }
+            
+            // Otherwise return the pretty-printed JSON
+            return JSON.stringify(parsed, null, 2);
+        } catch {
+            // If not JSON, just return the string
+            return execution.Result || '';
+        }
     }
 
     /**

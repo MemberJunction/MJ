@@ -50,7 +50,7 @@
                     <kendo-textbox [(ngModel)]="Value"  />
                 }
                 @case ('textarea') {
-                    <kendo-textarea [(ngModel)]="Value" mjFillContainer [fillWidth]="ShowLabel ? false : true" [fillHeight]="ShowLabel ? false : true" ></kendo-textarea>
+                    <kendo-textarea [(ngModel)]="Value"></kendo-textarea>
                 }
                 @case ('numerictextbox') {
                     <kendo-numerictextbox [(value)]="Value" class="narrower-component" />

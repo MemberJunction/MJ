@@ -1,0 +1,196 @@
+.template-params-grid {
+    padding: 20px;
+}
+
+.params-header {
+    margin-bottom: 20px;
+}
+
+.params-header h3 {
+    margin: 0 0 8px 0;
+    color: #333;
+    font-size: 1.2em;
+}
+
+.params-header h3 i {
+    margin-right: 8px;
+    color: #007bff;
+}
+
+.params-description {
+    margin: 0;
+    color: #666;
+    font-size: 0.9em;
+}
+
+.param-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.required-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background-color: #dc3545;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 500;
+}
+
+.required-badge i {
+    font-size: 0.6em;
+}
+
+.param-type {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #495057;
+}
+
+.param-type i {
+    color: #6c757d;
+}
+
+.param-description {
+    color: #666;
+    font-size: 0.9em;
+    line-height: 1.4;
+}
+
+.default-value {
+    background-color: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.85em;
+    color: #495057;
+    word-break: break-word;
+}
+
+.text-muted {
+    color: #6c757d;
+    font-style: italic;
+    font-size: 0.9em;
+}
+
+.text-success {
+    color: #28a745;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.no-params-message {
+    text-align: center;
+    padding: 40px 20px;
+    color: #6c757d;
+}
+
+.no-params-message i {
+    font-size: 2em;
+    margin-bottom: 10px;
+    color: #adb5bd;
+}
+
+.no-params-message p {
+    margin: 5px 0;
+}
+
+/* Help Section */
+.params-help {
+    margin-top: 30px;
+    padding: 20px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+}
+
+.params-help h4 {
+    margin: 0 0 15px 0;
+    color: #333;
+    font-size: 1em;
+}
+
+.params-help h4 i {
+    margin-right: 6px;
+    color: #17a2b8;
+}
+
+.params-help ul {
+    margin: 10px 0;
+    padding-left: 25px;
+}
+
+.params-help li {
+    margin-bottom: 8px;
+    color: #495057;
+    font-size: 0.9em;
+}
+
+.params-help strong {
+    color: #333;
+}
+
+.help-note {
+    margin-top: 15px;
+    padding: 10px 15px;
+    background-color: #e7f3ff;
+    border-left: 4px solid #007bff;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.help-note i {
+    margin-right: 6px;
+    color: #007bff;
+}
+
+.help-note code {
+    background-color: #fff;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    color: #d73a49;
+}
+
+/* Grid action buttons */
+.k-grid-content button {
+    margin-right: 4px;
+}
+
+/* Form validation */
+.k-invalid-msg {
+    display: block;
+    color: #dc3545;
+    font-size: 0.85em;
+    margin-top: 4px;
+}
+
+/* Kendo overrides for consistent styling */
+.k-grid .k-toolbar {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    padding: 12px;
+}
+
+.k-grid-header th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    color: #495057;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .template-params-grid {
+        padding: 10px;
+    }
+    
+    .params-help {
+        padding: 15px;
+    }
+}

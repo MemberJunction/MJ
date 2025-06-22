@@ -1,5 +1,32 @@
 # Change Log - @memberjunction/aiengine
 
+## 2.54.0
+
+### Patch Changes
+
+- a6f553e: Various
+- 0f6e995: improvements
+- 0046359: More generics
+- Updated dependencies [20f424d]
+  - @memberjunction/core@2.54.0
+  - @memberjunction/ai-engine-base@2.54.0
+  - @memberjunction/actions-base@2.54.0
+  - @memberjunction/core-entities@2.54.0
+  - @memberjunction/ai@2.54.0
+  - @memberjunction/global@2.54.0
+
+## 2.53.0
+
+### Patch Changes
+
+- Updated dependencies [bddc4ea]
+  - @memberjunction/core@2.53.0
+  - @memberjunction/core-entities@2.53.0
+  - @memberjunction/ai-engine-base@2.53.0
+  - @memberjunction/actions-base@2.53.0
+  - @memberjunction/ai@2.53.0
+  - @memberjunction/global@2.53.0
+
 ## 2.52.0
 
 ### Minor Changes

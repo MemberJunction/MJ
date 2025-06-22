@@ -1,4 +1,4 @@
-<div mjFillContainer class="wrapper">
+<div  class="wrapper">
     @if(isLoading) {
         <kendo-loader></kendo-loader>        
     }
@@ -27,7 +27,7 @@
             </tbody>
         </table>         
 
-        <mj-tabstrip mjFillContainer [bottomMargin]="150" (ResizeContainer)="InvokeManualResize()">
+        <mj-tabstrip (ResizeContainer)="InvokeManualResize()">
             <mj-tab>
                 Users
             </mj-tab>
@@ -39,7 +39,7 @@
                 Entity Permissions
             </mj-tab>
             <mj-tab-body>
-                <mj-entity-permissions-grid *ngIf="RoleRecord && RoleRecord.Name" Mode="Role" [RoleName]="RoleRecord.Name" mjFillContainer></mj-entity-permissions-grid>
+                <mj-entity-permissions-grid *ngIf="RoleRecord && RoleRecord.Name" Mode="Role" [RoleName]="RoleRecord.Name" ></mj-entity-permissions-grid>
             </mj-tab-body>
         </mj-tabstrip>
     }

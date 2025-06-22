@@ -1,4 +1,4 @@
-<div class="agent-editor-container" mjFillContainer [rightMargin]="8" [bottomMargin]="8">
+<div class="agent-editor-container">
   <!-- Header -->
   <div class="editor-header">
     <div class="header-info">
@@ -101,11 +101,11 @@
 
   <!-- Tab Content -->
   @if (!isLoading && !error && currentAgent) {
-    <div class="tab-content" mjFillContainer>
+    <div class="tab-content" >
       
       <!-- Hierarchy Tab -->
       @if (activeTab === 'hierarchy') {
-        <div class="hierarchy-section" mjFillContainer>
+        <div class="hierarchy-section" >
           <div class="section-header">
             <h3>
               <i class="fa-solid fa-sitemap"></i>
@@ -154,7 +154,7 @@
             </div>
           </div>
           
-          <div class="hierarchy-chart" #hierarchyChart mjFillContainer>
+          <div class="hierarchy-chart" #hierarchyChart >
             <!-- Help text overlay -->
             @if (hierarchyData && (hasChildren() || hasParent())) {
               <div class="chart-help">
@@ -183,7 +183,7 @@
       
       <!-- Prompts Tab -->
       @if (activeTab === 'prompts') {
-        <div class="prompts-section" mjFillContainer>
+        <div class="prompts-section" >
           <div class="section-header">
             <h3>
               <i class="fa-solid fa-comment-dots"></i>
@@ -234,7 +234,7 @@
       
       <!-- Properties Tab -->
       @if (activeTab === 'properties') {
-        <div class="properties-section" mjFillContainer>
+        <div class="properties-section" >
           <div class="section-header">
             <h3>
               <i class="fa-solid fa-cog"></i>

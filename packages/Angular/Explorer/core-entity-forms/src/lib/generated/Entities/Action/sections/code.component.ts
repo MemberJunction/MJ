@@ -9,7 +9,7 @@ import { ActionEntity } from '@memberjunction/core-entities';
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
-        <mj-form-field mjFillContainer
+        <mj-form-field 
             [record]="record"
             [ShowLabel]="false"
             FieldName="Code"

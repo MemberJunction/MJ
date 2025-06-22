@@ -1,5 +1,52 @@
 # @memberjunction/ai-agents
 
+## 2.54.0
+
+### Minor Changes
+
+- 08b032c: agent type metadata updates
+
+### Patch Changes
+
+- a6f553e: Various
+- 81913a6: fix JSON of prompt params
+- c96d6dd: various
+- 0f6e995: improvements
+- e267cc4: more generics
+- 98ef1f7: Loop Agent Type improvement + Metadata Sync tool Feeature for @include
+- 5e2cfa1: export interface properly
+- 0046359: More generics
+- 91dd7d8: patch data context passing
+- Updated dependencies [20f424d]
+- Updated dependencies [a6f553e]
+- Updated dependencies [c96d6dd]
+- Updated dependencies [0f6e995]
+- Updated dependencies [0046359]
+  - @memberjunction/core@2.54.0
+  - @memberjunction/aiengine@2.54.0
+  - @memberjunction/ai-prompts@2.54.0
+  - @memberjunction/actions-base@2.54.0
+  - @memberjunction/actions@2.54.0
+  - @memberjunction/core-entities@2.54.0
+  - @memberjunction/ai@2.54.0
+  - @memberjunction/global@2.54.0
+
+## 2.53.0
+
+### Patch Changes
+
+- Updated dependencies [bddc4ea]
+- Updated dependencies [390f587]
+- Updated dependencies [b5560c0]
+  - @memberjunction/core@2.53.0
+  - @memberjunction/core-entities@2.53.0
+  - @memberjunction/actions@2.53.0
+  - @memberjunction/aiengine@2.53.0
+  - @memberjunction/ai-prompts@2.53.0
+  - @memberjunction/actions-base@2.53.0
+  - @memberjunction/ai@2.53.0
+  - @memberjunction/global@2.53.0
+
 ## 2.52.0
 
 ### Minor Changes

@@ -1,72 +1,69 @@
-<div>
+<!-- dashboard-browser.component.html -->
+<div class="mj-page-container">
     <mj-resource-browser
-    #resourceBrowserDashboard
-    ResourceTypeName="Dashboards"
-    [EnableCategories]="true"
-    [CurrentCategoryID]="selectedFolderID"
-    Title="Dashboards"
-    DisplayMode="Tile"
-    [NewItemOptions]="NewItemOptions"
-    (ResourceSelected)="onItemClick($event)"
-    (NavigateToParentEvent)="navigateToParentFolder()"
-    (EditItemEvent)="onBeforeUpdateItemEvent($event)"
+        #resourceBrowserDashboard
+        ResourceTypeName="Dashboards"
+        [EnableCategories]="true"
+        [CurrentCategoryID]="selectedFolderID"
+        Title="Dashboards"
+        DisplayMode="Tile"
+        [NewItemOptions]="NewItemOptions"
+        (ResourceSelected)="onItemClick($event)"
+        (NavigateToParentEvent)="navigateToParentFolder()"
+        (EditItemEvent)="onBeforeUpdateItemEvent($event)"
     />
+
+    <!-- Dashboard Creation/Edit Dialog -->
     <kendo-dialog 
-    [title]="selectedDashboard ? 'Update Dashboard' : 'Create New Dashboard'" 
-    *ngIf="upsertDashboardDialogVisible" 
-    (close)="toggleUpsertDashboardDialog(false)"
-    [minWidth]="250"
-    [width]="450"
-    class="dialog-wrapper"
-  >
-  <div class="search">
-    <kendo-label text="Name">
-      <kendo-textbox class="dashboard-name-input" [value]="upsertDashboardName" placeholder="Enter a name" (valueChange)="onUpsertDashboardNameKeyup($event)"/>
-    </kendo-label>
-  </div>
-  <br>
-  <div class="search">
-    <kendo-label text="Description">
-      <kendo-textbox [value]="upsertDashboardDescription" placeholder="Enter a Description" (valueChange)="onUpsertDashboardDescriptionKeyup($event)"/>
-    </kendo-label>
-  </div>
-  <kendo-dialog-actions class="popup-actions-btn">
-    @if(selectedDashboard){
-        <button class="cancel-btn" (click)="updateDashboard()" kendoButton themeColor="info">
-            Update
-        </button>
-    }
-    @else {
-        <button class="cancel-btn" (click)="createDashboard()" kendoButton themeColor="info">
-            Create
-        </button>
-    }
-    <button  class="yes-btn" (click)="toggleUpsertDashboardDialog(false)" kendoButton fillMode="outline" themeColor="info">
-      Cancel
-    </button>
-  </kendo-dialog-actions>
+        [title]="selectedDashboard ? 'Update Dashboard' : 'Create New Dashboard'" 
+        *ngIf="upsertDashboardDialogVisible" 
+        (close)="toggleUpsertDashboardDialog(false)"
+        [minWidth]="400"
+        [width]="500"
+    >
+        <kendo-formfield orientation="vertical" class="mb-3">
+            <kendo-label text="Name" [for]="dashboardNameInput"></kendo-label>
+            <kendo-textbox 
+                #dashboardNameInput
+                [value]="upsertDashboardName" 
+                placeholder="Enter dashboard name" 
+                [clearButton]="true"
+                rounded="medium"
+                (valueChange)="onUpsertDashboardNameKeyup($event)"
+            />
+        </kendo-formfield>
+        
+        <kendo-formfield orientation="vertical">
+            <kendo-label text="Description" [for]="dashboardDescInput"></kendo-label>
+            <kendo-textbox 
+                #dashboardDescInput
+                [value]="upsertDashboardDescription" 
+                placeholder="Enter description" 
+                [clearButton]="true"
+                rounded="medium"
+                (valueChange)="onUpsertDashboardDescriptionKeyup($event)"
+            />
+        </kendo-formfield>
+        
+        <kendo-dialog-actions>
+            <kendo-button 
+                themeColor="primary"
+                rounded="medium"
+                (click)="selectedDashboard ? updateDashboard() : createDashboard()">
+                <span class="button-content">
+                    <i class="fas fa-check"></i>
+                    {{ selectedDashboard ? 'Update' : 'Create' }}
+                </span>
+            </kendo-button>
+            <kendo-button 
+                fillMode="outline"
+                rounded="medium"
+                (click)="toggleUpsertDashboardDialog(false)"> 
+                <span class="button-content">
+                    <i class="fas fa-times"></i>
+                    Cancel
+                </span>
+            </kendo-button>
+        </kendo-dialog-actions>
     </kendo-dialog>
 </div>
-<!--
-<app-generic-browser-list 
-    title="Dashboards" 
-    itemType="dashboard" 
-    iconName="aggregateFields" 
-    [items]="items" 
-    [extraDropdownOptions]="extraDropdownOptions"
-    addText="Create New Dashboard"
-    ItemEntityName="Dashboards"
-    resourceName="Dashboard"
-    CategoryEntityName="Dashboard Categories"
-    (itemClickEvent)="itemClick($event)" 
-    (AfterAddFolderEvent)="onEvent($event)"
-    (AfterAddItemEvent)="onEvent($event)"
-    (AfterDeleteItemEvent)="onEvent($event)"
-    (AfterDeleteFolderEvent)="onEvent($event)"
-    (BeforeUpdateItemEvent)="onBeforeUpdateItemEvent($event)"
-    [selectedFolderID]="selectedFolderID"
-    [showLoader]="showLoader"
-    [displayAsGrid]="displayAsGrid"
-    (viewModeChangeEvent)="onViewModeChange($event)"
-/>
--->

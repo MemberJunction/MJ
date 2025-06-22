@@ -88,7 +88,7 @@
                                     <kendo-label text="Smart Filter" class="smart-filter-label"></kendo-label>
                                     <kendo-switch [(ngModel)]="record.SmartFilterEnabled" [disabled]="!UserCanEdit"></kendo-switch>
                                 </div>
-                                <div *ngIf="record.SmartFilterEnabled" class="smart-filter-prompt" mjFillContainer [fillHeight]="true">
+                                <div *ngIf="record.SmartFilterEnabled" class="smart-filter-prompt"  [fillHeight]="true">
                                     <mj-find-record-dialog #findRecordDialog
                                         (RecordSelected)="onFindRecordSelected($event)"
                                         (DialogClosed)="onFindRecordDialogClosed($event)"

@@ -1,5 +1,45 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.54.0
+
+### Patch Changes
+
+- b21ba9e: This PR addresses multiple UI issues and improvements across the MemberJunction Explorer and Angular components, enhancing user experience and visual consistency throughout the platform.
+- cc9daf7: tweaks to UI
+- Updated dependencies [20f424d]
+- Updated dependencies [b21ba9e]
+- Updated dependencies [cc9daf7]
+  - @memberjunction/core@2.54.0
+  - @memberjunction/ng-tabstrip@2.54.0
+  - @memberjunction/ng-explorer-core@2.54.0
+  - @memberjunction/ai-engine-base@2.54.0
+  - @memberjunction/ng-base-forms@2.54.0
+  - @memberjunction/ng-form-toolbar@2.54.0
+  - @memberjunction/ng-code-editor@2.54.0
+  - @memberjunction/ng-container-directives@2.54.0
+  - @memberjunction/ng-join-grid@2.54.0
+  - @memberjunction/ng-timeline@2.54.0
+  - @memberjunction/core-entities@2.54.0
+
+## 2.53.0
+
+### Patch Changes
+
+- Updated dependencies [bddc4ea]
+- Updated dependencies [51fe03b]
+- Updated dependencies [e00127a]
+  - @memberjunction/core@2.53.0
+  - @memberjunction/core-entities@2.53.0
+  - @memberjunction/ng-explorer-core@2.53.0
+  - @memberjunction/ng-container-directives@2.53.0
+  - @memberjunction/ng-tabstrip@2.53.0
+  - @memberjunction/ai-engine-base@2.53.0
+  - @memberjunction/ng-base-forms@2.53.0
+  - @memberjunction/ng-form-toolbar@2.53.0
+  - @memberjunction/ng-code-editor@2.53.0
+  - @memberjunction/ng-join-grid@2.53.0
+  - @memberjunction/ng-timeline@2.53.0
+
 ## 2.52.0
 
 ### Patch Changes

@@ -1,243 +1,304 @@
-::ng-deep .card-header-entity .title-wrap h1 {
-    margin: 0 !important;
-    font-size: 36px !important;
-    line-height: 42px !important;
-    color: var(--black) !important;
-}
- ::ng-deep .card-header-entity .add-item .k-button {
-    border: 1px solid var(--border-blue) !important;
-    background: var(--white-color) !important;
-    color: var(--border-blue);
-    font-weight: 500 ;
-    font-size: 16px ;
-    border-radius: 10px;
-    line-height: 34px;
-}
-::ng-deep .card-header-entity .add-item .k-button:hover {
-    background: var(--border-blue) !important;
-    color: var(--white-color);
-}
-::ng-deep .card-header-entity .add-item .k-button:hover .k-button-text svg path {
-    fill: var(--white-color) !important;
-}
- .title-wrapper {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 14px 0;
-    border-bottom: 1px solid var(--med-gray);
-}
- .title-wrapper h4 {
-    margin: 0;
-    font-size: 24px;
-    line-height: 28px;
- }
- .main-fav-wrapper {
-    background: #fff;
-    padding: 20px;
- }
- .filter-wrapper {
-    display: flex;
-    justify-content: flex-start;
-    gap: 14px;
-    align-items: center;
-}
- .title-wrapper .search  input {
-    width: 100%;
-    height: 100%;
-    font-size: 16px;
-    background: transparent;
-    border: none;
-    box-sizing: border-box;
-    padding-left: 40px;
+/* ===================================
+   RESOURCE BROWSER COMPONENT - STANDARDIZED
+   =================================== */
 
- }
-    .title-wrapper .search  {
-    background: var(--light-shade);
-    width: 360px;
-    height: 44px;
-    position: relative;
-    border-radius: 10px;
- }
- .title-wrapper .search svg {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    left: 12px;
+.generic-browser-list-container {
+    @extend .mj-page-container;
 }
-::ng-deep .main-fav-wrapper .title-wrapper .k-dropdown-button .k-button {
-    background: var(--border-blue);
-    color: var(--white-color);
-    font-size: 16px;
-    border: none;
-    padding: 8px 25px;
-    border-radius: 10px;
+
+/* Header Section */
+.title-wrapper {
+    @extend .mj-toolbar;
+    margin-bottom: 20px;
 }
-::ng-deep .main-fav-wrapper .title-wrapper .k-dropdown-button .k-button .k-button-text, ::ng-deep .card-header-entity .add-item .k-button .k-button-text {
+
+.title-flex-display {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 15px;
 }
-.btn-cmn {
+
+.title-folder {
     width: 44px;
     height: 44px;
-    min-width: 44px;
-    background: transparent;
-    border-radius: 8px;
-    border: 1px solid var(--gray-color);
-}
-.btn-cmn.active {
-    border: 1px solid var(--border-blue);
-}
-::ng-deep .main-fav-wrapper .title-wrapper .filter-wrapper .k-dropdown-button .k-button {
-    border: 1px solid var(--gray-color);
-    border-radius: 8px;   padding: 10px 25px;
-    background: var(--white-color);
-    color: var(--sideNav);
-}
-::ng-deep .main-area .card-list .card-wrapper .k-card-body {
-    padding: 16px !important;
-    position: relative;
-}
-::ng-deep .main-fav-wrapper .main-area .card-list .card-wrapper .list-item-icon {
-    position: absolute;
     display: flex;
     align-items: center;
-    gap: 8px;
-    top:12px;
-    right: 12px;
-    z-index: 9;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: var(--border-radius);
+    transition: var(--transition-time);
+    color: var(--mj-blue);
 }
+
+.title-folder:hover {
+    background: var(--gray-600);
+    color: var(--navy);
+}
+
+.title-wrapper h4 {
+    @extend .mj-toolbar-title;
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--navy);
+}
+
+/* Search and Filter Section */
+.title-wrapper:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+    margin-bottom: 30px;
+}
+
+.search {
+    @extend .mj-search;
+    max-width: 360px;
+}
+
+.filter-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.btn-cmn {
+    @extend .mj-btn-icon-only;
+    
+    &.active {
+        background: var(--mj-blue);
+        color: var(--white-color);
+        border-color: var(--mj-blue);
+    }
+}
+
+/* Create New Dropdown */
+::ng-deep .title-wrapper .k-dropdown-button .k-button {
+    @extend .mj-btn-primary;
+    
+    .k-button-text {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+}
+
+/* Main Content Area */
+.main-area {
+    position: relative;
+}
+
+.main-area kendo-loader {
+    @extend .mj-loading;
+}
+
+/* Navigation Container (Tile View) */
+.nav-container {
+    @extend .mj-grid-responsive;
+}
+
+.nav-item {
+    @extend .mj-card;
+    @extend .mj-grid-item;
+    position: relative;
+}
+
+.nav-item-icon {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 16px;
+    
+    i, span {
+        font-size: 3rem;
+        color: var(--mj-blue);
+        transition: var(--transition-time);
+    }
+}
+
+.nav-item-content {
+    @extend .mj-card-body;
+    text-align: center;
+    padding-top: 0;
+}
+
+.nav-item-title {
+    margin: 0 0 8px 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--navy);
+    cursor: pointer;
+    transition: var(--transition-time);
+}
+
+.nav-item-title:hover {
+    color: var(--mj-blue);
+    text-decoration: underline;
+}
+
+.nav-item-subtitle {
+    margin: 0 0 16px 0;
+    font-size: 0.9rem;
+    color: var(--gray-800);
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.nav-item-edit {
+    @extend .mj-card-actions;
+    position: static;
+    opacity: 1;
+    justify-content: center;
+    margin-top: 12px;
+}
+
+.nav-item:hover .nav-item-edit {
+    opacity: 1;
+}
+
+/* List Item Buttons */
+.list-btn {
+    @extend .mj-btn-icon-only;
+    @extend .mj-btn-sm;
+    
+    &:hover {
+        color: var(--white-color);
+        background: var(--mj-blue);
+        border-color: var(--mj-blue);
+    }
+}
+
+/* Card Hover Effects */
+.nav-item:hover {
+    .nav-item-icon i,
+    .nav-item-icon span {
+        color: var(--navy);
+        transform: scale(1.1);
+    }
+    
+    .nav-item-title {
+        color: var(--mj-blue);
+    }
+}
+
+/* Grid View Styles */
+.kendo-grid {
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+
 .grid-wrapper {
     display: flex;
     align-items: center;
     gap: 8px;
-}
-::ng-deep .main-fav-wrapper .main-area .card-list .card-wrapper .list-item-icon .common-btn, .list-btn {
-    width: 38px;
-    height: 38px;
-    background: #000;
-    min-width: 38px;
-    border: 1px solid var(--gray-color);
-    border-radius: 8px; 
-    display: flex;
     justify-content: center;
-    align-items: center;
-    background: transparent;
-    cursor: pointer;
-}
-::ng-deep .main-fav-wrapper .main-area .card-list .card-wrapper .k-card-body .list-item-icon:hover, .list-btn:hover {
-    border: 1px solid var(--border-active);
 }
 
+/* Dialog Styles */
+.dialog-wrapper {
+    .k-window-content {
+        padding: 0;
+    }
+}
 
-::ng-deep .main-area .card-list .card-wrapper:hover {
-    box-shadow: 0px 0px 20px 0px rgba(60, 73, 99, 0.2);
-    border: 1px solid var(--border-active);
-}
-::ng-deep .main-area .card-list .card-wrapper:hover .k-card-body .view-card-content-list h5 {
-    color: var(--border-blue);
-}
-::ng-deep .main-area .card-list .card-wrapper .k-card-body .view-card-content-list p {
-    color: var(--sideNav);
-    font-size: 14px;
-    line-height: 16px;
-    height: auto;
-    text-overflow: ellipsis;
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-
-}
-::ng-deep .main-area .card-list .card-wrapper .k-card-body .view-card-content-list h5 {
-    font-size: 18px;
-    line-height: 21px;
-    color: var(--text-darked);
+.dialog-wrapper .k-window-title {
+    font-size: 1.5rem;
     font-weight: 600;
-}
-.breadcrumb-wrap {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 0;
-}
-.breadcrumb-wrap span {
-    font-size: 16px;
-    line-height: 18px;
-    font-weight: 400;
-    color: var(--black);
-}
-::ng-deep .k-menu-popup {
-    box-shadow: 0px 0px 20px 0px rgba(60, 73, 99, 0.2);
-    border-radius: 10px;
-    padding: 16px;
+    color: var(--navy);
+    margin: 0;
 }
 
-::ng-deep .k-menu-popup kendo-button-list ul li .k-menu-link {
-    box-shadow: none !important;
-} 
-::ng-deep .k-menu-popup kendo-button-list ul li .k-menu-link:active {
-    background: transparent !important;
+.dialog-wrapper p {
+    font-size: 1rem;
+    color: var(--gray-900);
+    line-height: 1.5;
+    margin: 0;
 }
-::ng-deep .k-menu-popup kendo-button-list ul li .k-menu-link .k-menu-link-text:hover {
-    color: var(--primary-color);
-    background: transparent !important;
 
+.popup-actions-btn {
+    @extend .mj-card-footer;
+    gap: 12px;
 }
-::ng-deep .dialog-wrapper .popup-actions-btn button {
+
+.popup-actions-btn .cancel-btn {
+    @extend .mj-btn-primary;
     flex: 1;
 }
-::ng-deep .dialog-wrapper .popup-actions-btn {
+
+.popup-actions-btn .yes-btn {
+    @extend .mj-btn-secondary;
+    flex: 1;
+}
+
+/* Form Styles */
+.dialog-wrapper .search {
+    margin-bottom: 20px;
+}
+
+.dialog-wrapper .search kendo-label {
     display: flex;
-}
-::ng-deep .dialog-wrapper .popup-actions-btn .cancel-btn {
-    background: var(--primary-color);
-    color: var(--white-color);
-    font-size: 16px;
-    font-weight: 700;
-    line-height: 34px;
-    text-align: center;
-    border-radius: 10px;
-    border: 1px solid transparent;
-
-}
-::ng-deep .dialog-wrapper .popup-actions-btn .yes-btn {
-    border:1px solid var(--primary-color);
-    background: transparent;
-    color: var(--primary-color);
-    font-size: 16px;
-    font-weight: 700;
-    line-height: 34px;
-    text-align: center;
-    border-radius: 10px;
-    box-shadow: none;
-}
-::ng-deep .dialog-wrapper .popup-actions-btn .yes-btn:focus {
-    box-shadow: none !important;
-}
-::ng-deep .dialog-wrapper .k-window-title {
-    font-size: 30px;
-    font-weight: 500;
-    line-height: 36px;
-    text-align: left;
-    color: var(--text-darked);
-}
-::ng-deep .dialog-wrapper p {
-    font-size: 16px;
-    font-weight: 500;
-    line-height: 20px;
-    text-align: left;
-    color: var(--black);
+    flex-direction: column;
+    gap: 8px;
+    
+    .k-label {
+        color: var(--navy);
+        font-size: 14px;
+        font-weight: 500;
+    }
 }
 
+.dialog-wrapper kendo-textbox {
+    width: 100%;
+    
+    .k-input {
+        border-radius: var(--border-radius);
+        border: 1px solid var(--gray-700);
+        padding: 10px 12px;
+        font-size: 16px;
+        transition: var(--transition-time);
+        
+        &:focus {
+            border-color: var(--mj-blue);
+            box-shadow: 0 0 0 2px rgba(0, 118, 182, 0.2);
+        }
+    }
+}
+
+/* Breadcrumb */
+.breadcrumb-wrap {
+    @extend .mj-breadcrumb;
+}
+
+.breadcrumb-icon:hover {
+    color: var(--mj-blue);
+}
+
+/* Context Menu */
+::ng-deep .k-menu-popup {
+    background: var(--white-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--gray-700);
+    padding: 8px 0;
+}
+
+::ng-deep .k-menu-popup .k-menu-link {
+    padding: 10px 16px;
+    color: var(--navy);
+    transition: var(--transition-time);
+    border-radius: 0;
+}
+
+::ng-deep .k-menu-popup .k-menu-link:hover {
+    background: var(--gray-600);
+    color: var(--mj-blue);
+}
+
+/* Utility Classes */
 .margin-left-small {
     margin-left: 10px;
-}
-
-.card-wrapper {
-    min-width: 230px;
-    height: 150px;
-    min-height: 125px;
 }
 
 .padding-top-small {
@@ -248,19 +309,57 @@
     cursor: pointer;
 }
 
-.title-folder {
-    padding-right: 20px;
-    margin: auto;
+/* Card Wrapper Override for Legacy Support */
+.card-wrapper {
+    min-width: 280px;
+    min-height: 200px;
 }
 
-.title-flex-display {
-    display: flex;
-    flex-direction: row;
+/* Legacy Card Header Overrides */
+::ng-deep .card-header-entity .title-wrap h1 {
+    @extend .mj-header-title;
+    font-size: 2.25rem !important;
+    line-height: 1.2 !important;
+    color: var(--navy) !important;
+    margin: 0 !important;
 }
 
-.breadcrumb-icon {
-    cursor: pointer;
+::ng-deep .card-header-entity .add-item .k-button {
+    @extend .mj-btn-primary;
 }
-.breacrumb-icon:hover {
-    color: var(--primary-color);
+
+::ng-deep .card-header-entity .add-item .k-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 118, 182, 0.3);
+}
+
+/* ===================================
+   RESPONSIVE DESIGN
+   =================================== */
+
+@media (max-width: 768px) {
+    .title-wrapper {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 15px;
+    }
+    
+    .filter-wrapper {
+        justify-content: space-between;
+    }
+    
+    .search {
+        max-width: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .title-flex-display {
+        gap: 10px;
+    }
+    
+    .filter-wrapper {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
 }

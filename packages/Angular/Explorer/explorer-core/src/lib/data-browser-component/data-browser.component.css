@@ -1,96 +1,80 @@
-.data-browser-container {
-   padding: 15px;
-}
-.main-area .card-list .card-item {
-    background: #fff;
-    border-radius: 10px;
-    height: 200px;
-    border: 3px solid transparent;
+/* Data Browser Component - Minimal Custom Styles */
+/* Leveraging global styles from the MJ design system */
+
+/* Only component-specific overrides that can't be handled by global styles */
+
+/* Record Selector Dialog - Two column layout */
+::ng-deep mj-record-selector-dialog {
+    .mj-record-selector-content {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+    }
+    
+    /* Responsive - single column on mobile */
+    @media (max-width: 768px) {
+        .mj-record-selector-content {
+            grid-template-columns: 1fr;
+        }
+    }
 }
 
-.main-area .card-list .card-item:hover {
-    border: 3px solid var(--border-active);
-    box-shadow: 0px 0px 20px 0px rgba(60, 73, 99, 0.2);
+/* Header title with icon - specific to this page */
+.mj-header .mj-header-title h1 {
+    &::before {
+        content: '\f5fd'; /* Font Awesome server icon */
+        font-family: 'Font Awesome 6 Free', 'FontAwesome';
+        font-weight: 900;
+        font-size: 2.5rem;
+        margin-right: 1rem;
+        color: var(--mj-blue);
+    }
+}
 
- }
- .main-area .card-list .card-item:hover .view-card-content h2 {
-    color: var(--border-active);
- }
- .view-card-content h2 {
-    font-size: 36px;
-    text-align: center;
-    line-height: 42px;
+/* App status indicator - component specific */
+.mj-app-status {
+    margin-top: auto;
+    padding-top: 16px;
+    font-size: 0.875rem;
+    color: var(--mj-blue);
     font-weight: 500;
-    color: var(--text-darked);
- }
- .view-card-content p {
-    text-align: center;
-    font-size: 18px;
-    line-height: 28px;
-    color: var(--text-darked);
- }
- 
-.view-card-content .icon {
-   position: absolute;
-   top: 20px; 
-   left: 20px;  
-   font-size: 32px;
-}
-.card-list .card-item {
-   position: relative;  
-}
-
- .card-wrapper {
-    height: 100%;
-    border: none;
- }
- .card-wrapper .k-card-body {
     display: flex;
-    justify-content: center;    
     align-items: center;
- }
-
- .card-header-entity {
-   display: flex;
-   justify-content: space-between;
-   align-items: center;
+    justify-content: center;
+    gap: 6px;
+    
+    i {
+        font-size: 0.75rem;
+    }
 }
 
-.title-wrap {
-   flex-grow: 1;
-   font-size: 24px;
-}
-.title-wrap-inner {
-   display: block;
-}
-
-.breadcrumb {
-   color: darkblue;
-   cursor: pointer;
-   display: inline;
-   margin-left: 5px;
-   margin-right: 5px;
+/* Ensure consistent card body height in grid */
+.mj-kendo-icon-card .k-card-body {
+    min-height: 280px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
-.breadcrumb-end {
-   display: inline;
-   margin-left: 5px;
+/* Responsive adjustments for card height */
+@media (max-width: 1024px) {
+    .mj-kendo-icon-card .k-card-body {
+        min-height: 240px;
+    }
 }
 
-.breadcrumb-separator {
-   font-size: 14px;
-   display: inline;
-   margin-left: 5px;
-   margin-right: 5px;
+@media (max-width: 768px) {
+    .mj-kendo-icon-card .k-card-body {
+        min-height: 200px;
+    }
+    
+    .mj-header .mj-header-title h1::before {
+        font-size: 1.875rem;
+    }
 }
 
-.home-icon {
-   margin-right: 5px;
-   font-size: 18px;
-   vertical-align: middle;
-}
-
-.config-button {
-   display: flex;
-   align-items: center;
+@media (max-width: 480px) {
+    .mj-header .mj-header-title h1::before {
+        display: none; /* Hide icon on very small screens */
+    }
 }

@@ -47,4 +47,9 @@ export * from './lib/query-browser-component/query-browser.component'
 export * from './lib/single-query/single-query.component'
 export * from './lib/resource-wrappers/query-resource.component'
 
+// Validation services
+export * from './lib/services/system-validation.service'
+export * from './lib/services/startup-validation.service'
+export * from './lib/system-validation/system-validation-banner.component'
+
 export * from './module';

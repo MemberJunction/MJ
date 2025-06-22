@@ -9,7 +9,7 @@ import { ThreadEntity } from 'mj_generatedentities';
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
-        <mj-form-field mjFillContainer
+        <mj-form-field 
             [record]="record"
             [ShowLabel]="false"
             FieldName="Name"

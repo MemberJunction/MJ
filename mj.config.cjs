@@ -393,6 +393,7 @@ const config = {
   auth0WebClientID: process.env.AUTH0_CLIENT_ID,
   auth0ClientSecret: process.env.AUTH0_CLIENT_SECRET,
   apiKey: process.env.MJ_API_KEY,
+  baseUrl: process.env.GRAPHQL_BASE_URL ?? 'http://localhost',
 
   // Used only for MJCLI
   migrationsLocation: process.env.MIGRATIONS_LOCATION ?? 'filesystem:./migrations',

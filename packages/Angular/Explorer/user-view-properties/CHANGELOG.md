@@ -1,5 +1,31 @@
 # Change Log - @memberjunction/ng-user-view-properties
 
+## 2.54.0
+
+### Patch Changes
+
+- Updated dependencies [20f424d]
+  - @memberjunction/core@2.54.0
+  - @memberjunction/ng-base-forms@2.54.0
+  - @memberjunction/ng-shared@2.54.0
+  - @memberjunction/ng-find-record@2.54.0
+  - @memberjunction/ng-resource-permissions@2.54.0
+  - @memberjunction/core-entities@2.54.0
+  - @memberjunction/global@2.54.0
+
+## 2.53.0
+
+### Patch Changes
+
+- Updated dependencies [bddc4ea]
+  - @memberjunction/core@2.53.0
+  - @memberjunction/core-entities@2.53.0
+  - @memberjunction/ng-base-forms@2.53.0
+  - @memberjunction/ng-shared@2.53.0
+  - @memberjunction/ng-find-record@2.53.0
+  - @memberjunction/ng-resource-permissions@2.53.0
+  - @memberjunction/global@2.53.0
+
 ## 2.52.0
 
 ### Patch Changes

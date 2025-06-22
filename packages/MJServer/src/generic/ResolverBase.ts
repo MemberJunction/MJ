@@ -740,7 +740,7 @@ export class ResolverBase {
         input.OldValues___?.forEach((item) => (oldValues[item.Key] = item.Value));
 
         // 1) load the old values, this will be the initial state of the object
-        entityObject.LoadFromData(oldValues);
+        await entityObject.LoadFromData(oldValues);
 
         // 2) set the new values from the input, not including the OldValues property
         entityObject.SetMany(clientNewValues);

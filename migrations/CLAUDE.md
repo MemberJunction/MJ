@@ -15,6 +15,27 @@ V[YYYYMMDDHHMM]__v[VERSION].x_[DESCRIPTION].sql
 - Example: `V202506130552__v2.49.x_Add_AIAgent_Status_And_DriverClass_Columns.sql`
 - This ensures Flyway executes migrations in the correct order
 
+## CRITICAL: Migration Content Rules
+
+**MIGRATIONS MUST ONLY CONTAIN:**
+1. **DDL Operations** (CREATE, ALTER, DROP for tables, columns, indexes, constraints)
+2. **sp_addextendedproperty** calls for column/table descriptions
+3. **Schema changes only** - NO data manipulation beyond what's required for the schema change
+
+**NEVER INCLUDE IN MIGRATIONS:**
+- View creation/updates (handled by CodeGen)
+- EntityField inserts/updates (handled by CodeGen)
+- Entity metadata changes (handled by CodeGen)
+- Stored procedure creation/updates (handled by CodeGen)
+- Any MemberJunction metadata updates (handled by CodeGen)
+
+**The MemberJunction CodeGen system automatically handles:**
+- Creating/updating all views based on schema changes
+- Updating EntityField records for new columns
+- Generating stored procedures
+- Updating all metadata based on schema and extended properties
+- Synchronizing everything with the database schema
+
 ## Best Practices
 
 ### 1. Use Hardcoded UUIDs

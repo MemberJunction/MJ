@@ -4,7 +4,7 @@
   "defaults": {},
   "pull": {
     "createNewFileIfNotFound": true,
-    "newFileName": ".prompts.json",
+    "newFileName": ".agent-type.json",
     "appendRecordsToExistingFile": true,
     "updateExistingRecords": true,
     "mergeStrategy": "merge",

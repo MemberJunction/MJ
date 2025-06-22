@@ -45,12 +45,61 @@ export class TemplateEntityExtended extends TemplateEntity {
     }
 
     /**
-     * This method is different from the Validate() method which validates the state of the Template itself. This method validates the data object provided meets the requirements for the template's parameter definitions.
-     * @param data - the data object to validate against the template's parameter definitions
+     * Returns all parameters that apply to a specific template content.
+     * This includes both global parameters (where TemplateContentID is NULL) 
+     * and content-specific parameters for the given contentId.
+     * 
+     * @param contentId - The ID of the template content. If not provided, returns only global parameters.
+     * @returns Array of TemplateParamEntity objects that apply to the specified content
+     * 
+     * @example
+     * // Get all parameters for a specific content
+     * const params = template.GetParametersForContent('content-uuid');
+     * 
+     * @example
+     * // Get only global parameters (that apply to all contents)
+     * const globalParams = template.GetParametersForContent();
      */
-    public ValidateTemplateInput(data: any): ValidationResult {
+    public GetParametersForContent(contentId?: string): TemplateParamEntity[] {
+        if (!contentId) {
+            // Return only global parameters (TemplateContentID is null)
+            return this.Params.filter(p => !(p as any).TemplateContentID);
+        }
+        
+        // Return both global parameters and content-specific parameters
+        return this.Params.filter(p => 
+            !(p as any).TemplateContentID || // Global param (applies to all contents)
+            (p as any).TemplateContentID === contentId // Content-specific param
+        );
+    }
+
+    /**
+     * This method is different from the Validate() method which validates the state of the Template itself. 
+     * This method validates the data object provided meets the requirements for the template's parameter definitions.
+     * 
+     * @param data - the data object to validate against the template's parameter definitions
+     * @param contentId - Optional: The ID of the template content to validate against. 
+     *                    If provided, validates against parameters specific to that content.
+     *                    If not provided, validates against all parameters.
+     * @returns ValidationResult with success status and any validation errors
+     * 
+     * @example
+     * // Validate against all parameters
+     * const result = template.ValidateTemplateInput(inputData);
+     * 
+     * @example
+     * // Validate against parameters for a specific content
+     * const result = template.ValidateTemplateInput(inputData, 'content-uuid');
+     */
+    public ValidateTemplateInput(data: any, contentId?: string): ValidationResult {
         const result = new ValidationResult();
-        this.Params.forEach((p) => {
+        
+        // Get the relevant parameters based on contentId
+        const paramsToValidate = contentId ? 
+            this.GetParametersForContent(contentId) : 
+            this.Params;
+        
+        paramsToValidate.forEach((p) => {
             if (p.IsRequired) {
                 if (!data ||
                     data[p.Name] === undefined || 
@@ -64,7 +113,7 @@ export class TemplateEntityExtended extends TemplateEntity {
                     });
             }
         });
-        // now set result's top level success falg based on the existence of ANY failure record within the errors collection
+        // now set result's top level success flag based on the existence of ANY failure record within the errors collection
         result.Success = result.Errors.some(e => e.Type === 'Failure') ? false : true;
         return result;
     }

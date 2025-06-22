@@ -1,8 +1,8 @@
-<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
-    <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" >
                     
                     <mj-tab Name="Details">
                         Details
@@ -27,7 +27,7 @@
                             [NewRecordValues]="NewRecordValues('Deals')"
                             [AllowLoad]="IsCurrentTab('Deals')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -42,7 +42,7 @@
                             [NewRecordValues]="NewRecordValues('Activities')"
                             [AllowLoad]="IsCurrentTab('Activities')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -57,7 +57,7 @@
                             [NewRecordValues]="NewRecordValues('Invoices')"
                             [AllowLoad]="IsCurrentTab('Invoices')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>

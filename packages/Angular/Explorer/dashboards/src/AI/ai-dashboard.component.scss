@@ -11,13 +11,13 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  
+
   .header-info {
     flex: 1;
     display: flex;
     align-items: center;
   }
-  
+
   .current-tab-info {
     font-size: 12px;
     color: #2196f3;
@@ -27,11 +27,11 @@
     border-radius: 4px;
     border: 1px solid rgba(33, 150, 243, 0.2);
   }
-  
+
   .header-controls {
     display: flex;
     gap: 8px;
-    
+
     .control-btn {
       padding: 8px 12px;
       border: 1px solid #ccc;
@@ -43,28 +43,28 @@
       align-items: center;
       gap: 6px;
       transition: all 0.2s;
-      
+
       &:hover {
         background-color: #f0f0f0;
         border-color: #2196f3;
       }
-      
+
       &.active {
         background-color: #2196f3;
         border-color: #2196f3;
         color: white;
       }
-      
+
       &:disabled {
         opacity: 0.5;
         cursor: not-allowed;
-        
+
         &:hover {
           background-color: white;
           border-color: #ccc;
         }
       }
-      
+
       .fa-solid {
         font-size: 14px;
       }
@@ -79,7 +79,7 @@
   justify-content: center;
   background: #fafafa;
   flex: 1;
-  
+
   p {
     color: #666;
     font-size: 14px;
@@ -96,15 +96,20 @@
 .dashboard-content {
   overflow: hidden;
   flex: 1;
+  margin-bottom: 60px;
 }
 
 .ai-dashboard-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
   flex-shrink: 0;
   display: flex;
   background: white;
   border-top: 1px solid #e0e0e0;
   padding: 0;
-  
+
   .nav-item {
     flex: 1;
     display: flex;
@@ -117,32 +122,32 @@
     color: #666;
     font-size: 12px;
     border-right: 1px solid #e0e0e0;
-    
+
     &:last-child {
       border-right: none;
     }
-    
+
     &:hover {
       background-color: #f5f5f5;
       color: #2196f3;
     }
-    
+
     &.active {
       background-color: #e3f2fd;
       color: #2196f3;
       font-weight: 600;
-      
+
       i {
         color: #2196f3;
       }
     }
-    
+
     i {
       font-size: 18px;
       margin-bottom: 4px;
       color: inherit;
     }
-    
+
     span {
       font-size: 11px;
       text-align: center;
@@ -171,18 +176,18 @@
   border: 3px solid transparent;
   border-radius: 50%;
   animation: spin 1.5s linear infinite;
-  
+
   &:nth-child(1) {
     border-top-color: #2196f3;
     animation-delay: 0s;
   }
-  
+
   &:nth-child(2) {
     border-top-color: #9c27b0;
     animation-delay: 0.3s;
     transform: scale(0.8);
   }
-  
+
   &:nth-child(3) {
     border-top-color: #ff6b35;
     animation-delay: 0.6s;
@@ -198,6 +203,11 @@
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }

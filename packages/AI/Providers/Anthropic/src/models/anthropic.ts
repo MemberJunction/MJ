@@ -8,6 +8,19 @@ import { RegisterClass } from "@memberjunction/global";
 @RegisterClass(BaseLLM, 'AnthropicLLM')
 export class AnthropicLLM extends BaseLLM {
     private _anthropic: Anthropic;
+    
+    // State tracking for streaming thinking extraction
+    private _streamingState: {
+        accumulatedThinking: string;
+        inThinkingBlock: boolean;
+        pendingContent: string;
+        thinkingComplete: boolean;
+    } = {
+        accumulatedThinking: '',
+        inThinkingBlock: false,
+        pendingContent: '',
+        thinkingComplete: false
+    };
 
     constructor(apiKey: string) {
         super(apiKey);
@@ -221,13 +234,30 @@ export class AnthropicLLM extends BaseLLM {
             result = await stream.finalMessage();
             const endTime = new Date();
             
+            // Extract thinking content if present
+            let content: string = result.content[0].text;
+            let thinkingContent: string | undefined = undefined;
+            
+            // Check if content contains thinking tags
+            if (content.startsWith('<thinking>') && content.includes('</thinking>')) {
+                // Extract thinking content
+                const thinkStart = content.indexOf('<thinking>') + '<thinking>'.length;
+                const thinkEnd = content.indexOf('</thinking>');
+                thinkingContent = content.substring(thinkStart, thinkEnd).trim();
+                // Remove thinking content from main content
+                content = content.substring(0, content.indexOf('<thinking>')) + 
+                         content.substring(thinkEnd + '</thinking>'.length);
+                content = content.trim();
+            }
+            
             const chatResult: ChatResult = {
                 data: {
                     choices: [
                         {
                             message: {
                                 role: "assistant",
-                                content: result.content[0].text
+                                content: content,
+                                thinking: thinkingContent
                             },
                             finish_reason: "completed",
                             index: 0
@@ -273,9 +303,23 @@ export class AnthropicLLM extends BaseLLM {
     }
     
     /**
+     * Reset streaming state for a new request
+     */
+    private resetStreamingState(): void {
+        this._streamingState = {
+            accumulatedThinking: '',
+            inThinkingBlock: false,
+            pendingContent: '',
+            thinkingComplete: false
+        };
+    }
+    
+    /**
      * Create a streaming request for Anthropic
      */
     protected async createStreamingRequest(params: ChatParams): Promise<any> {
+        // Reset streaming state for new request
+        this.resetStreamingState();
         // Find system message and non-system messages
         const systemMsg = params.messages.find(m => m.role === "system");
         const nonSystemMsgs = params.messages.filter(m => m.role !== "system");
@@ -352,16 +396,123 @@ export class AnthropicLLM extends BaseLLM {
         usage?: any;
     } {
         let content = '';
+        let finishReason = undefined;
+        
+        // Check for thinking_delta event (Anthropic specific)
+        if (chunk && chunk.type === 'thinking_delta' && chunk.delta && 'text' in chunk.delta) {
+            // Directly accumulate thinking content
+            this._streamingState.accumulatedThinking += chunk.delta.text || '';
+            // Don't emit any content for thinking deltas
+            return {
+                content: '',
+                finishReason: undefined,
+                usage: null
+            };
+        }
+        
+        // Process regular content deltas
         if (chunk && chunk.type === 'content_block_delta' && chunk.delta && 'text' in chunk.delta) {
-            content = chunk.delta.text || '';
+            const rawContent = chunk.delta.text || '';
+            
+            // Add raw content to pending content for processing
+            this._streamingState.pendingContent += rawContent;
+            
+            // Process the pending content to extract thinking
+            content = this.processThinkingInStreamingContent();
+        }
+        
+        // Check for message stop
+        if (chunk && chunk.type === 'message_stop') {
+            finishReason = 'stop';
         }
         
         // Anthropic doesn't provide usage info in the stream
         return {
             content,
-            finishReason: chunk && chunk.type === 'message_stop' ? 'stop' : undefined,
+            finishReason,
             usage: null
         };
+    }
+    
+    /**
+     * Process pending content to extract thinking blocks
+     * Returns content that should be emitted to the user
+     */
+    private processThinkingInStreamingContent(): string {
+        const state = this._streamingState;
+        let outputContent = '';
+        
+        // If thinking is already complete, just pass through content
+        if (state.thinkingComplete) {
+            outputContent = state.pendingContent;
+            state.pendingContent = '';
+            return outputContent;
+        }
+        
+        // Check if we're currently in a thinking block
+        if (state.inThinkingBlock) {
+            // Look for end of thinking block
+            const endIndex = state.pendingContent.indexOf('</thinking>');
+            
+            if (endIndex !== -1) {
+                // Found end of thinking block
+                state.accumulatedThinking += state.pendingContent.substring(0, endIndex);
+                state.inThinkingBlock = false;
+                state.thinkingComplete = true;
+                
+                // Keep remaining content after </thinking> for output
+                state.pendingContent = state.pendingContent.substring(endIndex + '</thinking>'.length);
+                outputContent = state.pendingContent.trim();
+                state.pendingContent = '';
+            } else {
+                // Still in thinking block, accumulate all content
+                state.accumulatedThinking += state.pendingContent;
+                state.pendingContent = '';
+            }
+        } else {
+            // Not in thinking block, check if one is starting
+            const startIndex = state.pendingContent.indexOf('<thinking>');
+            
+            if (startIndex !== -1) {
+                // Found start of thinking block
+                if (startIndex === 0) {
+                    // Thinking starts at beginning
+                    state.inThinkingBlock = true;
+                    state.pendingContent = state.pendingContent.substring('<thinking>'.length);
+                    
+                    // Process again to check for end tag in same chunk
+                    return this.processThinkingInStreamingContent();
+                } else {
+                    // There's content before thinking block - emit it first
+                    outputContent = state.pendingContent.substring(0, startIndex);
+                    state.pendingContent = state.pendingContent.substring(startIndex);
+                    state.inThinkingBlock = true;
+                    state.pendingContent = state.pendingContent.substring('<thinking>'.length);
+                }
+            } else {
+                // No thinking block found
+                // Check if we might be at the start of a partial tag
+                if (state.pendingContent.endsWith('<') || 
+                    state.pendingContent.endsWith('<t') ||
+                    state.pendingContent.endsWith('<th') ||
+                    state.pendingContent.endsWith('<thi') ||
+                    state.pendingContent.endsWith('<thin') ||
+                    state.pendingContent.endsWith('<think') ||
+                    state.pendingContent.endsWith('<thinki') ||
+                    state.pendingContent.endsWith('<thinkin')) {
+                    // Hold back content that might be start of tag
+                    const lastOpenBracket = state.pendingContent.lastIndexOf('<');
+                    outputContent = state.pendingContent.substring(0, lastOpenBracket);
+                    state.pendingContent = state.pendingContent.substring(lastOpenBracket);
+                } else {
+                    // No thinking block and no partial tag, output all content
+                    outputContent = state.pendingContent;
+                    state.pendingContent = '';
+                }
+            }
+        }
+        
+        return outputContent;
     }
     
     /**
@@ -383,12 +534,16 @@ export class AnthropicLLM extends BaseLLM {
         // Create a proper ChatResult instance with constructor params
         const result = new ChatResult(true, now, now);
         
+        // Get thinking content from streaming state
+        const thinkingContent = this._streamingState.accumulatedThinking.trim();
+        
         // Set all properties
         result.data = {
             choices: [{
                 message: {
                     role: 'assistant',
-                    content: content
+                    content: content,
+                    thinking: thinkingContent || undefined
                 },
                 finish_reason: 'stop',
                 index: 0

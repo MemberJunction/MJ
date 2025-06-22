@@ -72,7 +72,7 @@ export class FileResolver extends FileResolverBase {
 
     // Save the file record with the updated input
     const mapper = new FieldMapper();
-    fileEntity.LoadFromData(mapper.ReverseMapFields({ ...input }));
+    await fileEntity.LoadFromData(mapper.ReverseMapFields({ ...input }));
     fileEntity.SetMany(mapper.ReverseMapFields({ ...updatedInput }));
     await fileEntity.Save();
     const File = mapper.MapFields({ ...fileEntity.GetAll() });

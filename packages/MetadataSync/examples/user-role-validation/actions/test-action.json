@@ -1,0 +1,9 @@
+{
+  "fields": {
+    "Name": "Test Action with User Validation",
+    "Description": "This action demonstrates user role validation",
+    "Type": "Custom",
+    "UserID": "00000000-0000-0000-0000-000000000001",
+    "CategoryID": "@lookup:Action Categories.Name=General?create"
+  }
+}

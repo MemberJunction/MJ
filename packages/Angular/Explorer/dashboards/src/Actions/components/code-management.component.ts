@@ -3,7 +3,7 @@ import { Component, Output, EventEmitter } from '@angular/core';
 @Component({
   selector: 'mj-code-management',
   template: `
-    <div class="code-management-placeholder" mjFillContainer>
+    <div class="code-management-placeholder" >
       <div class="placeholder-content">
         <i class="fa-solid fa-code"></i>
         <h3>Code Management</h3>

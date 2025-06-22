@@ -1,4 +1,4 @@
-<div class="tabstrip-container" mjFillContainer [fillWidth]="FillWidth" [fillHeight]="FillHeight">
+<div class="tabstrip-container">
     <!-- Tab Headers -->
     <div class="tab-header-outer">
       <div *ngIf="showLeftButton" class="tab-scroll-button tab-scroll-button-left" (click)="scrollLeft()">
@@ -12,7 +12,7 @@
       </div>
     </div>
     <!-- Tab Content -->
-    <div class="tab-bodies" mjFillContainer [fillWidth]="FillWidth" [fillHeight]="FillHeight">
+    <div class="tab-bodies">
       <ng-content select="mj-tab-body"></ng-content> <!-- Where <mj-tab-body> components are projected -->
     </div>
 </div>

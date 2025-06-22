@@ -305,8 +305,20 @@ export class Metadata {
             throw new Error('GetEntityObject: entityName must be a non-empty string');
         }
         // validate that contextUser is either null/undefined or a UserInfo object
-        if (contextUser && !(contextUser instanceof UserInfo)) {
-            throw new Error('GetEntityObject: contextUser must be a UserInfo object or null/undefined');
+        if (contextUser) {
+            // contextUser has been specified. We need to make sure the shape of the object
+            // is correct to allow objects that are not true instances of UserInfo but have the
+            // same shape - e.g. duck typing
+            if (!(contextUser instanceof UserInfo)) {
+                const u = contextUser as any;
+                if (u && u.ID && u.Name && u.Email && u.UserRoles) {
+                    // we have a UserInfo-like object, so we can use it
+                    contextUser = new UserInfo(Metadata.Provider, u);
+                }
+                else {
+                    throw new Error('GetEntityObject: contextUser must be null/undefined, a UserInfo instance, or an object that has the same shape as UserInfo, notably having the following properties: ID, Name, Email, and UserRoles');
+                }
+            }
         }
         
         return await Metadata.Provider.GetEntityObject(entityName, contextUser);

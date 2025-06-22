@@ -111,7 +111,7 @@ const configInfoSchema = z.object({
   sqlLogging: sqlLoggingSchema.optional(),
 
   apiKey: z.string().optional(),
-  baseUrl: z.string().optional(),
+  baseUrl: z.string().default('http://localhost'),
 
   dbHost: z.string().default('localhost'),
   dbDatabase: z.string(),

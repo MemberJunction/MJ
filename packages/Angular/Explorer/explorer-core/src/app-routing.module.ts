@@ -14,6 +14,7 @@ import {
   QueryBrowserComponent,
   ListViewComponent,
 } from './public-api';
+import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test.component';
 import { SettingsComponent } from '@memberjunction/ng-explorer-settings';
 import { LogError, Metadata } from '@memberjunction/core';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
@@ -258,6 +259,7 @@ const routes: Routes = [
     ],
   },
   { path: 'notifications', component: UserNotificationsComponent, canActivate: [AuthGuard] },
+  { path: 'style-guide-test', component: StyleGuideTestComponent, canActivate: [AuthGuard] },
   { path: 'app/:appName', component: SingleApplicationComponent, canActivate: [AuthGuard] },
   { path: 'app/:appName/:entityName', component: SingleApplicationComponent, canActivate: [AuthGuard] },
   { path: 'app/:appName/:entityName/:folderID', component: SingleApplicationComponent, canActivate: [AuthGuard] },

@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/ng-link-directives
 
+## 2.54.0
+
+### Patch Changes
+
+- Updated dependencies [20f424d]
+  - @memberjunction/core@2.54.0
+
+## 2.53.0
+
+### Patch Changes
+
+- Updated dependencies [bddc4ea]
+  - @memberjunction/core@2.53.0
+
 ## 2.52.0
 
 ### Patch Changes

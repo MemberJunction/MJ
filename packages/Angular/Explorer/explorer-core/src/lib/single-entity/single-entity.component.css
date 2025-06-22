@@ -54,37 +54,7 @@
     margin: 0;
     box-shadow: none;
   }
-  .card-header-entity {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    padding-bottom: 20px;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-  }
-  
-  .card-header-entity .title-wrap h1 {
-    color: #424242;
-    font-size: 28px;
-    font-style: normal;
-    font-weight: 300;
-    line-height: 28px;
-    margin-bottom: 15px;
-  }
-  .card-header-entity .title-wrap {
-    display: flex;
-    flex-direction: column;
-  }
-  .card-header-entity .title-wrap p {
-    margin: 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: #424242;
-    font-size: 14px;
-    font-style: normal;
-    font-weight: 400;
-    line-height: 20px;
-  }
+
   .main-area .card-list {
     display: grid;
     grid-template-columns: repeat(4, 1fr);

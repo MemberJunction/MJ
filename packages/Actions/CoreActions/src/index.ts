@@ -3,6 +3,12 @@ export * from './generated/action_subclasses';
 // Communication Actions
 export * from './custom/communication/send-single-message.action';
 
+// CRUD Actions
+export * from './custom/crud/create-record.action';
+export * from './custom/crud/get-record.action';
+export * from './custom/crud/update-record.action';
+export * from './custom/crud/delete-record.action';
+
 // Demo Actions
 export * from './custom/demo/get-weather.action';
 export * from './custom/demo/get-stock-price.action';
@@ -27,6 +33,10 @@ export * from './custom/web/url-metadata-extractor.action';
 
 // Import Load functions to prevent tree shaking of @RegisterClass decorators
 import { LoadSendSingleMessageAction } from './custom/communication/send-single-message.action';
+import { LoadCreateRecordAction } from './custom/crud/create-record.action';
+import { LoadGetRecordAction } from './custom/crud/get-record.action';
+import { LoadUpdateRecordAction } from './custom/crud/update-record.action';
+import { LoadDeleteRecordAction } from './custom/crud/delete-record.action';
 import { LoadGetWeatherAction } from './custom/demo/get-weather.action';
 import { LoadGetStockPriceAction } from './custom/demo/get-stock-price.action';
 import { LoadCalculateExpressionAction } from './custom/demo/calculate-expression.action';
@@ -47,6 +57,10 @@ import { LoadURLMetadataExtractorAction } from './custom/web/url-metadata-extrac
 // Call all Load functions to ensure @RegisterClass decorators execute
 // This prevents tree shaking from removing the action classes
 LoadSendSingleMessageAction();
+LoadCreateRecordAction();
+LoadGetRecordAction();
+LoadUpdateRecordAction();
+LoadDeleteRecordAction();
 LoadGetWeatherAction();
 LoadGetStockPriceAction();
 LoadCalculateExpressionAction();

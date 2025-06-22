@@ -251,6 +251,293 @@ export class GraphQLSystemUserClient {
         }     
     }
 
+    /**
+     * Runs a view by name using the RunViewByNameSystemUser resolver.
+     * @param input - View input parameters for running by name
+     * @returns Promise containing the view execution results
+     */
+    public async RunViewByNameSystemUser(input: RunViewByNameSystemUserInput): Promise<RunViewSystemUserResult> {
+        try {
+            const query = `query RunViewByNameSystemUser($input: RunViewByNameInput!) {
+                RunViewByNameSystemUser(input: $input) {
+                    Results {
+                        ID
+                        EntityID
+                        Data
+                    }
+                    UserViewRunID
+                    RowCount
+                    TotalRowCount
+                    ExecutionTime
+                    ErrorMessage
+                    Success
+                }
+            }`
+
+            const result = await this.Client.request(query, { input }) as { RunViewByNameSystemUser: RunViewSystemUserResult };
+            if (result && result.RunViewByNameSystemUser) {
+                return result.RunViewByNameSystemUser;
+            } else {
+                return {
+                    Results: [],
+                    Success: false,
+                    ErrorMessage: 'Failed to execute view by name'
+                };
+            }
+        }
+        catch (e) {
+            LogError(`GraphQLSystemUserClient::RunViewByNameSystemUser - Error running view by name - ${e}`);
+            return {
+                Results: [],
+                Success: false,
+                ErrorMessage: e.toString()
+            };
+        }
+    }
+
+    /**
+     * Runs a view by ID using the RunViewByIDSystemUser resolver.
+     * @param input - View input parameters for running by ID
+     * @returns Promise containing the view execution results
+     */
+    public async RunViewByIDSystemUser(input: RunViewByIDSystemUserInput): Promise<RunViewSystemUserResult> {
+        try {
+            const query = `query RunViewByIDSystemUser($input: RunViewByIDInput!) {
+                RunViewByIDSystemUser(input: $input) {
+                    Results {
+                        ID
+                        EntityID
+                        Data
+                    }
+                    UserViewRunID
+                    RowCount
+                    TotalRowCount
+                    ExecutionTime
+                    ErrorMessage
+                    Success
+                }
+            }`
+
+            const result = await this.Client.request(query, { input }) as { RunViewByIDSystemUser: RunViewSystemUserResult };
+            if (result && result.RunViewByIDSystemUser) {
+                return result.RunViewByIDSystemUser;
+            } else {
+                return {
+                    Results: [],
+                    Success: false,
+                    ErrorMessage: 'Failed to execute view by ID'
+                };
+            }
+        }
+        catch (e) {
+            LogError(`GraphQLSystemUserClient::RunViewByIDSystemUser - Error running view by ID - ${e}`);
+            return {
+                Results: [],
+                Success: false,
+                ErrorMessage: e.toString()
+            };
+        }
+    }
+
+    /**
+     * Runs a dynamic view using the RunDynamicViewSystemUser resolver.
+     * @param input - View input parameters for dynamic view execution
+     * @returns Promise containing the view execution results
+     */
+    public async RunDynamicViewSystemUser(input: RunDynamicViewSystemUserInput): Promise<RunViewSystemUserResult> {
+        try {
+            const query = `query RunDynamicViewSystemUser($input: RunDynamicViewInput!) {
+                RunDynamicViewSystemUser(input: $input) {
+                    Results {
+                        ID
+                        EntityID
+                        Data
+                    }
+                    UserViewRunID
+                    RowCount
+                    TotalRowCount
+                    ExecutionTime
+                    ErrorMessage
+                    Success
+                }
+            }`
+
+            const result = await this.Client.request(query, { input }) as { RunDynamicViewSystemUser: RunViewSystemUserResult };
+            if (result && result.RunDynamicViewSystemUser) {
+                return result.RunDynamicViewSystemUser;
+            } else {
+                return {
+                    Results: [],
+                    Success: false,
+                    ErrorMessage: 'Failed to execute dynamic view'
+                };
+            }
+        }
+        catch (e) {
+            LogError(`GraphQLSystemUserClient::RunDynamicViewSystemUser - Error running dynamic view - ${e}`);
+            return {
+                Results: [],
+                Success: false,
+                ErrorMessage: e.toString()
+            };
+        }
+    }
+
+    /**
+     * Runs multiple views using the RunViewsSystemUser resolver. This method allows system users
+     * to execute view queries with the same functionality as regular users but with system-level privileges.
+     * @param input - Array of view input parameters
+     * @returns Promise containing the results from all view executions
+     */
+    public async RunViewsSystemUser(input: RunViewSystemUserInput[]): Promise<RunViewSystemUserResult[]> {
+        try {
+            const query = `query RunViewsSystemUser($input: [RunViewGenericInput!]!) {
+                RunViewsSystemUser(input: $input) {
+                    Results {
+                        ID
+                        EntityID
+                        Data
+                    }
+                    UserViewRunID
+                    RowCount
+                    TotalRowCount
+                    ExecutionTime
+                    ErrorMessage
+                    Success
+                }
+            }`
+
+            const result = await this.Client.request(query, { input }) as { RunViewsSystemUser: RunViewSystemUserResult[] };
+            if (result && result.RunViewsSystemUser) {
+                return result.RunViewsSystemUser;
+            } else {
+                return [];
+            }
+        }
+        catch (e) {
+            LogError(`GraphQLSystemUserClient::RunViewsSystemUser - Error running views - ${e}`);
+            return [];
+        }
+    }
+
+    /**
+     * Executes a stored query by ID using the GetQueryDataSystemUser resolver.
+     * @param queryId - The ID of the query to execute
+     * @param categoryId - Optional category ID filter
+     * @param categoryName - Optional category name filter
+     * @returns Promise containing the query execution results
+     */
+    public async GetQueryDataSystemUser(queryId: string, categoryId?: string, categoryName?: string): Promise<RunQuerySystemUserResult> {
+        try {
+            const query = `query GetQueryDataSystemUser($QueryID: String!, $CategoryID: String, $CategoryName: String) {
+                GetQueryDataSystemUser(QueryID: $QueryID, CategoryID: $CategoryID, CategoryName: $CategoryName) {
+                    QueryID
+                    QueryName
+                    Success
+                    Results
+                    RowCount
+                    ExecutionTime
+                    ErrorMessage
+                }
+            }`
+
+            const result = await this.Client.request(query, { 
+                QueryID: queryId, 
+                CategoryID: categoryId, 
+                CategoryName: categoryName 
+            }) as { GetQueryDataSystemUser: RunQuerySystemUserResult };
+            
+            if (result && result.GetQueryDataSystemUser) {
+                // Parse the JSON results for easier consumption
+                return {
+                    ...result.GetQueryDataSystemUser,
+                    Results: result.GetQueryDataSystemUser.Results ? SafeJSONParse(result.GetQueryDataSystemUser.Results) : null
+                };
+            } else {
+                return {
+                    QueryID: queryId,
+                    QueryName: '',
+                    Success: false,
+                    Results: null,
+                    RowCount: 0,
+                    ExecutionTime: 0,
+                    ErrorMessage: 'Query execution failed'
+                };
+            }
+        }
+        catch (e) {
+            LogError(`GraphQLSystemUserClient::GetQueryDataSystemUser - Error executing query - ${e}`);
+            return {
+                QueryID: queryId,
+                QueryName: '',
+                Success: false,
+                Results: null,
+                RowCount: 0,
+                ExecutionTime: 0,
+                ErrorMessage: e.toString()
+            };
+        }
+    }
+
+    /**
+     * Executes a stored query by name using the GetQueryDataByNameSystemUser resolver.
+     * @param queryName - The name of the query to execute
+     * @param categoryId - Optional category ID filter
+     * @param categoryName - Optional category name filter
+     * @returns Promise containing the query execution results
+     */
+    public async GetQueryDataByNameSystemUser(queryName: string, categoryId?: string, categoryName?: string): Promise<RunQuerySystemUserResult> {
+        try {
+            const query = `query GetQueryDataByNameSystemUser($QueryName: String!, $CategoryID: String, $CategoryName: String) {
+                GetQueryDataByNameSystemUser(QueryName: $QueryName, CategoryID: $CategoryID, CategoryName: $CategoryName) {
+                    QueryID
+                    QueryName
+                    Success
+                    Results
+                    RowCount
+                    ExecutionTime
+                    ErrorMessage
+                }
+            }`
+
+            const result = await this.Client.request(query, { 
+                QueryName: queryName, 
+                CategoryID: categoryId, 
+                CategoryName: categoryName 
+            }) as { GetQueryDataByNameSystemUser: RunQuerySystemUserResult };
+            
+            if (result && result.GetQueryDataByNameSystemUser) {
+                // Parse the JSON results for easier consumption
+                return {
+                    ...result.GetQueryDataByNameSystemUser,
+                    Results: result.GetQueryDataByNameSystemUser.Results ? SafeJSONParse(result.GetQueryDataByNameSystemUser.Results) : null
+                };
+            } else {
+                return {
+                    QueryID: '',
+                    QueryName: queryName,
+                    Success: false,
+                    Results: null,
+                    RowCount: 0,
+                    ExecutionTime: 0,
+                    ErrorMessage: 'Query execution failed'
+                };
+            }
+        }
+        catch (e) {
+            LogError(`GraphQLSystemUserClient::GetQueryDataByNameSystemUser - Error executing query - ${e}`);
+            return {
+                QueryID: '',
+                QueryName: queryName,
+                Success: false,
+                Results: null,
+                RowCount: 0,
+                ExecutionTime: 0,
+                ErrorMessage: e.toString()
+            };
+        }
+    }
+
 }
 
 /**
@@ -315,6 +602,121 @@ export class SimpleRemoteEntityField {
     Type: string;
     AllowsNull: boolean;
     MaxLength: number;
+}
+
+/**
+ * Input type for RunViewByNameSystemUser method calls
+ */
+export interface RunViewByNameSystemUserInput {
+    ViewName: string;
+    ExtraFilter?: string;
+    OrderBy?: string;
+    Fields?: string[];
+    UserSearchString?: string;
+    ExcludeUserViewRunID?: string;
+    OverrideExcludeFilter?: string;
+    SaveViewResults?: boolean;
+    ExcludeDataFromAllPriorViewRuns?: boolean;
+    IgnoreMaxRows?: boolean;
+    MaxRows?: number;
+    ForceAuditLog?: boolean;
+    AuditLogDescription?: string;
+    ResultType?: string;
+    StartRow?: number;
+}
+
+/**
+ * Input type for RunViewByIDSystemUser method calls
+ */
+export interface RunViewByIDSystemUserInput {
+    ViewID: string;
+    ExtraFilter?: string;
+    OrderBy?: string;
+    Fields?: string[];
+    UserSearchString?: string;
+    ExcludeUserViewRunID?: string;
+    OverrideExcludeFilter?: string;
+    SaveViewResults?: boolean;
+    ExcludeDataFromAllPriorViewRuns?: boolean;
+    IgnoreMaxRows?: boolean;
+    MaxRows?: number;
+    ForceAuditLog?: boolean;
+    AuditLogDescription?: string;
+    ResultType?: string;
+    StartRow?: number;
+}
+
+/**
+ * Input type for RunDynamicViewSystemUser method calls
+ */
+export interface RunDynamicViewSystemUserInput {
+    EntityName: string;
+    ExtraFilter?: string;
+    OrderBy?: string;
+    Fields?: string[];
+    UserSearchString?: string;
+    ExcludeUserViewRunID?: string;
+    OverrideExcludeFilter?: string;
+    IgnoreMaxRows?: boolean;
+    MaxRows?: number;
+    ForceAuditLog?: boolean;
+    AuditLogDescription?: string;
+    ResultType?: string;
+    StartRow?: number;
+}
+
+/**
+ * Input type for RunViewsSystemUser method calls
+ */
+export interface RunViewSystemUserInput {
+    EntityName: string;
+    ExtraFilter?: string;
+    OrderBy?: string;
+    Fields?: string[];
+    UserSearchString?: string;
+    ExcludeUserViewRunID?: string;
+    OverrideExcludeFilter?: string;
+    IgnoreMaxRows?: boolean;
+    MaxRows?: number;
+    ForceAuditLog?: boolean;
+    AuditLogDescription?: string;
+    ResultType?: string;
+    StartRow?: number;
+}
+
+/**
+ * Result row type for view execution results
+ */
+export interface RunViewSystemUserResultRow {
+    ID: string;
+    EntityID: string;
+    Data: string;
+}
+
+/**
+ * Result type for RunViewsSystemUser method calls
+ */
+export interface RunViewSystemUserResult {
+    Results: RunViewSystemUserResultRow[];
+    UserViewRunID?: string;
+    RowCount?: number;
+    TotalRowCount?: number;
+    ExecutionTime?: number;
+    ErrorMessage?: string;
+    Success: boolean;
+}
+
+/**
+ * Result type for query execution methods
+ */
+export interface RunQuerySystemUserResult {
+    QueryID: string;
+    QueryName: string;
+    Success: boolean;
+    Results: any;
+    RowCount: number;
+    ExecutionTime: number;
+    ErrorMessage: string;
 }
 
  

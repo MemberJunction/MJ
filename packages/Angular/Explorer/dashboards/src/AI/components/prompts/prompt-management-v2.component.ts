@@ -156,8 +156,10 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
       // Combine the data
       this.prompts = (promptResults.Results as AIPromptEntity[]).map(prompt => {
         const template = templateMap.get(prompt.ID);
+        
+        // Use GetAll() to get all properties as a plain object since BaseEntity uses getters
         return {
-          ...prompt,
+          ...prompt.GetAll(),
           TemplateEntity: template,
           TemplateContents: template ? (templateContentMap.get(template.ID) || []) : [],
           CategoryName: prompt.CategoryID ? categoryMap.get(prompt.CategoryID) || 'Unknown' : 'Uncategorized',

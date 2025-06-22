@@ -1,12 +1,13 @@
 import { NgModule } from "@angular/core";
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { InputsModule, TextBoxModule, TextAreaModule, NumericTextBoxModule, SwitchModule } from '@progress/kendo-angular-inputs';
 import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { ButtonsModule, ButtonModule, SplitButtonModule } from '@progress/kendo-angular-buttons';
 import { DropDownsModule, ComboBoxModule } from '@progress/kendo-angular-dropdowns';
 import { LayoutModule, ExpansionPanelModule, TabStripModule, SplitterModule } from '@progress/kendo-angular-layout';
 import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
+import { GridModule } from '@progress/kendo-angular-grid';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { FormToolbarModule } from '@memberjunction/ng-form-toolbar';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
@@ -18,6 +19,7 @@ import { ActionTopComponentExtended, LoadActionExtendedTopComponent } from "./Ac
 import { EntityActionExtendedFormComponent, LoadEntityActionExtendedFormComponent } from "./EntityActions/entityaction.form.component";
 import { TemplatesFormExtendedComponent, LoadTemplatesFormExtendedComponent } from "./Templates/templates-form.component";
 import { TemplateParamDialogComponent } from "./Templates/template-param-dialog.component";
+import { TemplateParamsGridComponent } from "./Templates/template-params-grid.component";
 import { TemplateEditorComponent } from "../shared/components/template-editor.component";
 import { AIPromptFormComponentExtended, LoadAIPromptFormComponentExtended } from "./AIPrompts/ai-prompt-form.component";
 import { AIAgentFormComponentExtended, LoadAIAgentFormComponentExtended } from "./AIAgents/ai-agent-form.component";
@@ -37,6 +39,9 @@ import { ActionParamDialogComponent } from "./Actions/action-param-dialog.compon
 import { AgentExecutionMonitorComponent } from "./ai-test-harness/agent-execution-monitor.component";
 import { ExecutionNodeComponent } from "./ai-test-harness/agent-execution-node.component";
 import { JsonViewerWindowComponent } from "./ai-test-harness/json-viewer-window.component";
+import { AIAgentRunFormComponent } from "./ai-agent-run/ai-agent-run.component";
+import { AIAgentRunTimelineComponent } from "./ai-agent-run/ai-agent-run-timeline.component";
+import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-node.component";
 
 @NgModule({
     declarations: [
@@ -45,6 +50,7 @@ import { JsonViewerWindowComponent } from "./ai-test-harness/json-viewer-window.
         ActionTopComponentExtended,
         TemplatesFormExtendedComponent,
         TemplateParamDialogComponent,
+        TemplateParamsGridComponent,
         TemplateEditorComponent,
         AIPromptFormComponentExtended,
         AIAgentFormComponentExtended,
@@ -58,18 +64,23 @@ import { JsonViewerWindowComponent } from "./ai-test-harness/json-viewer-window.
         ActionExecutionLogFormComponentExtended,
         ActionParamDialogComponent,
         JsonViewerWindowComponent,
+        AIAgentRunFormComponent,
+        AIAgentRunTimelineComponent,
+        AIAgentRunStepNodeComponent,
     ],
     imports: [
         CommonModule,
         AgentExecutionMonitorComponent,
         ExecutionNodeComponent,
         FormsModule,
+        ReactiveFormsModule,
         LayoutModule,
         ExpansionPanelModule,
         TabStripModule,
         SplitterModule,
         DialogsModule,
         WindowModule,
+        GridModule,
         InputsModule,
         TextBoxModule,
         TextAreaModule,
@@ -107,6 +118,9 @@ import { JsonViewerWindowComponent } from "./ai-test-harness/json-viewer-window.
         ActionTestHarnessDialogComponent,
         ActionExecutionLogFormComponentExtended,
         ExecutionNodeComponent,
+        AIAgentRunFormComponent,
+        AIAgentRunTimelineComponent,
+        AIAgentRunStepNodeComponent,
     ],
     providers: [
         TestHarnessDialogService
@@ -119,6 +133,11 @@ export function LoadActionExecutionLogFormComponentExtended() {
     // This function is called to ensure the form is loaded
 }
 
+// Loader function for AIAgentRunFormComponent
+export function LoadAIAgentRunFormComponent() {
+    // This function is called to ensure the form is loaded
+}
+
 export function LoadCoreCustomForms() {
     LoadEntitiesFormComponent()
     LoadActionExtendedTopComponent();
@@ -128,4 +147,5 @@ export function LoadCoreCustomForms() {
     LoadAIAgentFormComponentExtended();
     LoadActionExecutionLogFormComponentExtended();
     LoadActionFormComponentExtended();
+    LoadAIAgentRunFormComponent();
 }

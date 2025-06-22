@@ -9,8 +9,8 @@
  * @since 2.49.0
  */
 
-export * from './types';
 export * from './agent-types/base-agent-type';
+export * from './agent-types/loop-agent-response-type';
 export * from './base-agent';
 export * from './agent-types';
 export * from './AgentRunner';

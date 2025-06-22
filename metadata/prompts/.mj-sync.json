@@ -4,6 +4,10 @@
   "defaults": {
     "CategoryID": "@lookup:AI Prompt Categories.Name=Agent Type System Prompts?create&Description=System Prompts for Agent Types"
   },
+  "ignoreDirectories": [
+    "output",
+    "templates"
+  ],
   "pull": {
     "createNewFileIfNotFound": true,
     "newFileName": ".prompts.json",

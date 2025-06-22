@@ -22,6 +22,12 @@
   - Never insert __mj timestamp columns
   - Use `${flyway:defaultSchema}` placeholder
 
+## Entity Version Control
+- MemberJunction includes built-in version control called "Record Changes" for all entities
+- This feature tracks all changes to entity records unless explicitly disabled
+- No need to implement custom versioning - it's handled automatically by the framework
+- Access historical versions through the Record Changes entities
+
 ## Development Workflow
 - **CRITICAL**: After making code changes, always compile the affected package by running `npm run build` in that package's directory to check for TypeScript errors
 - Fix all compilation errors before proceeding with additional changes
@@ -87,6 +93,31 @@ Look for packages that depend on each other:
 - Error handling: use try/catch blocks and provide meaningful error messages
 - Document public APIs with TSDoc comments
 - Follow single responsibility principle
+
+## Object-Oriented Design Principles
+
+### Code Reuse and DRY (Don't Repeat Yourself)
+- **ALWAYS** look for repeated code patterns and refactor them into base classes or shared utilities
+- When you notice similar code in multiple places (e.g., parameter validation, error handling, common operations):
+  - Create abstract base classes for shared functionality
+  - Extract common methods into utility functions
+  - Use inheritance and composition to reduce duplication
+- Example patterns to watch for:
+  - Multiple actions with similar parameter extraction logic → Create base action class
+  - Repeated error handling code → Create shared error analysis methods
+  - Common entity operations → Create entity helper utilities
+- Benefits of proper OOD:
+  - Easier maintenance (fix bugs in one place)
+  - Better consistency across the codebase
+  - Improved testability
+  - Clearer separation of concerns
+
+### When to Create Base Classes
+- 3+ classes with similar structure/behavior
+- Shared validation or processing logic
+- Common error handling patterns
+- Repeated boilerplate code
+- Clear "is-a" relationships between classes
 
 ## Entity Metadata Best Practices (CRITICAL)
 
@@ -292,6 +323,29 @@ const entity = new TemplateContentEntity();
 const md = new Metadata();
 const entity = await md.GetEntityObject<TemplateContentEntity>('Template Contents');
 ```
+
+### BaseEntity Spread Operator Limitation
+**CRITICAL**: Never use the spread operator (`...`) directly on BaseEntity-derived classes. BaseEntity properties are implemented as getters/setters, not plain JavaScript properties, so they won't be captured by the spread operator.
+
+```typescript
+// ❌ Wrong - spread operator doesn't capture getter properties
+const promptData = {
+  ...promptEntity,  // This will NOT include ID, Name, etc.
+  extraField: 'value'
+};
+
+// ✅ Correct - use GetAll() to get plain object with all properties
+const promptData = {
+  ...promptEntity.GetAll(),  // Returns { ID: '...', Name: '...', etc. }
+  extraField: 'value'
+};
+```
+
+**Why this matters:**
+- BaseEntity uses getter/setter methods for all entity fields
+- JavaScript spread operator only copies enumerable own properties
+- Getters are not enumerable properties, so they're skipped
+- `GetAll()` returns a plain object with all field values
 
 ### Server-Side Context User Requirements
 When working on server-side code, **ALWAYS** pass `contextUser` to `GetEntityObject` and `RunView` methods:

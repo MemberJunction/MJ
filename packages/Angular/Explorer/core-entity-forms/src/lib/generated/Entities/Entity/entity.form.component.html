@@ -1,14 +1,14 @@
-<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
-    <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
-        <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()" mjFillContainer>
+        <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()" >
             <kendo-splitter-pane [collapsible]="true" [size]="TopAreaHeight">
                 <div #topArea class="record-form-group">
                     <mj-form-section Entity="Entities" Section="top-area" [record]="record" [EditMode]="this.EditMode"></mj-form-section>
                 </div>
             </kendo-splitter-pane>
             <kendo-splitter-pane>
-                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer (ResizeContainer)="InvokeManualResize()">
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
                     
                     <mj-tab Name="Details">
                         Details
@@ -79,7 +79,7 @@
                             [NewRecordValues]="NewRecordValues('Audit Logs')"
                             [AllowLoad]="IsCurrentTab('Audit Logs')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -92,7 +92,7 @@
                             [NewRecordValues]="NewRecordValues('Template Params')"
                             [AllowLoad]="IsCurrentTab('Template Params')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -105,7 +105,7 @@
                             [NewRecordValues]="NewRecordValues('Dataset Items')"
                             [AllowLoad]="IsCurrentTab('Dataset Items')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -118,7 +118,7 @@
                             [NewRecordValues]="NewRecordValues('Users')"
                             [AllowLoad]="IsCurrentTab('Users')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -131,7 +131,7 @@
                             [NewRecordValues]="NewRecordValues('Company Integration Record Maps')"
                             [AllowLoad]="IsCurrentTab('Company Integration Record Maps')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -144,7 +144,7 @@
                             [NewRecordValues]="NewRecordValues('Entities')"
                             [AllowLoad]="IsCurrentTab('Entities')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -157,7 +157,7 @@
                             [NewRecordValues]="NewRecordValues('User View Categories')"
                             [AllowLoad]="IsCurrentTab('User View Categories')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -170,7 +170,7 @@
                             [NewRecordValues]="NewRecordValues('Entity AI Actions')"
                             [AllowLoad]="IsCurrentTab('AI Actions')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -183,7 +183,7 @@
                             [NewRecordValues]="NewRecordValues('Entity Actions')"
                             [AllowLoad]="IsCurrentTab('Entity Actions')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -196,7 +196,7 @@
                             [NewRecordValues]="NewRecordValues('Conversations')"
                             [AllowLoad]="IsCurrentTab('Conversations')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -209,7 +209,7 @@
                             [NewRecordValues]="NewRecordValues('Duplicate Runs')"
                             [AllowLoad]="IsCurrentTab('Duplicate Runs')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -222,7 +222,7 @@
                             [NewRecordValues]="NewRecordValues('Tagged Items')"
                             [AllowLoad]="IsCurrentTab('Tagged Items')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -235,7 +235,7 @@
                             [NewRecordValues]="NewRecordValues('Record Merge Logs')"
                             [AllowLoad]="IsCurrentTab('Record Merge Logs')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -248,7 +248,7 @@
                             [NewRecordValues]="NewRecordValues('User Application Entities')"
                             [AllowLoad]="IsCurrentTab('User Application Entities')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -261,7 +261,7 @@
                             [NewRecordValues]="NewRecordValues('Query Fields')"
                             [AllowLoad]="IsCurrentTab('Query Fields')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -274,7 +274,7 @@
                             [NewRecordValues]="NewRecordValues('User Views')"
                             [AllowLoad]="IsCurrentTab('User Views')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -287,7 +287,7 @@
                             [NewRecordValues]="NewRecordValues('Recommendation Items')"
                             [AllowLoad]="IsCurrentTab('Recommendation Items')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -300,7 +300,7 @@
                             [NewRecordValues]="NewRecordValues('Entity Permissions')"
                             [AllowLoad]="IsCurrentTab('Permissions')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -313,7 +313,7 @@
                             [NewRecordValues]="NewRecordValues('Lists')"
                             [AllowLoad]="IsCurrentTab('Lists')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -326,7 +326,7 @@
                             [NewRecordValues]="NewRecordValues('User Record Logs')"
                             [AllowLoad]="IsCurrentTab('User Record Logs')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -339,7 +339,7 @@
                             [NewRecordValues]="NewRecordValues('Entity Documents')"
                             [AllowLoad]="IsCurrentTab('Entity Documents')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -352,7 +352,7 @@
                             [NewRecordValues]="NewRecordValues('Recommendations')"
                             [AllowLoad]="IsCurrentTab('Recommendations')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -365,7 +365,7 @@
                             [NewRecordValues]="NewRecordValues('File Entity Record Links')"
                             [AllowLoad]="IsCurrentTab('File Entity Record Links')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -378,7 +378,7 @@
                             [NewRecordValues]="NewRecordValues('Entity Settings')"
                             [AllowLoad]="IsCurrentTab('Entity Settings')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -391,7 +391,7 @@
                             [NewRecordValues]="NewRecordValues('Entity Relationships')"
                             [AllowLoad]="IsCurrentTab('Relationships')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -404,7 +404,7 @@
                             [NewRecordValues]="NewRecordValues('Company Integration Run Details')"
                             [AllowLoad]="IsCurrentTab('Company Integration Run Details')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -417,7 +417,7 @@
                             [NewRecordValues]="NewRecordValues('Data Context Items')"
                             [AllowLoad]="IsCurrentTab('Data Context Items')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -430,7 +430,7 @@
                             [NewRecordValues]="NewRecordValues('Integration URL Formats')"
                             [AllowLoad]="IsCurrentTab('Integration URL Formats')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -443,7 +443,7 @@
                             [NewRecordValues]="NewRecordValues('Entity Fields')"
                             [AllowLoad]="IsCurrentTab('Fields')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -456,7 +456,7 @@
                             [NewRecordValues]="NewRecordValues('User Favorites')"
                             [AllowLoad]="IsCurrentTab('User Favorites')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -469,7 +469,7 @@
                             [NewRecordValues]="NewRecordValues('Entity Communication Message Types')"
                             [AllowLoad]="IsCurrentTab('Entity Communication Message Types')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -482,7 +482,7 @@
                             [NewRecordValues]="NewRecordValues('Entity Record Documents')"
                             [AllowLoad]="IsCurrentTab('Entity Record Documents')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -495,7 +495,7 @@
                             [NewRecordValues]="NewRecordValues('Record Changes')"
                             [AllowLoad]="IsCurrentTab('Record Changes')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -508,7 +508,7 @@
                             [NewRecordValues]="NewRecordValues('Application Entities')"
                             [AllowLoad]="IsCurrentTab('Application Entities')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -521,7 +521,7 @@
                             [NewRecordValues]="NewRecordValues('Resource Types')"
                             [AllowLoad]="IsCurrentTab('Resource Types')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -534,7 +534,7 @@
                             [NewRecordValues]="NewRecordValues('Query Entities')"
                             [AllowLoad]="IsCurrentTab('Query Entities')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -547,7 +547,7 @@
                             [NewRecordValues]="NewRecordValues('Generated Codes')"
                             [AllowLoad]="IsCurrentTab('Generated Codes')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>

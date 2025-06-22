@@ -24,6 +24,8 @@ export * from "./generic/compositeKey";
 export * from "./generic/authEvaluator";
 export * from "./generic/metadataUtil";
 
+export * from "./generic/databaseProviderBase";
+
 export function SetProvider(provider) {
     Metadata.Provider = provider;
     BaseEntity.Provider = provider;

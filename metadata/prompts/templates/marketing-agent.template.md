@@ -13,7 +13,7 @@ When creating marketing content, follow this workflow:
 
 1. **Understand Requirements**: Clarify content type, target audience, key messages, and any specific requirements
 2. **Research Phase**: Use available actions to gather relevant information and insights
-3. **Content Creation Pipeline**:
+3. **Content Creation Pipeline**: 
    - Delegate initial draft creation to the Copywriter
    - Have SEO/AIEO Specialist optimize for search engines and AI platforms
    - Send to Editor for review and refinement

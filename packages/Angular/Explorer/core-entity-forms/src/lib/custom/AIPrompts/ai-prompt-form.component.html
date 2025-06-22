@@ -1,5 +1,5 @@
-<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
-    <form *ngIf="record" class="record-form" #form="ngForm" mjFillContainer>
+<div class="record-form-container">
+    <form *ngIf="record" class="record-form" #form="ngForm" >
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
         <!-- Main Content Area - Template Editor and Configuration -->
@@ -211,6 +211,147 @@
                         }
                     </div>
                 </kendo-expansionpanel>                
+
+                <!-- Template Parameters Expansion Panel -->
+                @if (template && templateParams.length > 0) {
+                    <kendo-expansionpanel 
+                        [expanded]="true"
+                        style="margin-bottom: 12px;">
+                        <ng-template kendoExpansionPanelTitleDirective>
+                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                <i class="fa-solid fa-sliders" style="color: #6c757d;"></i>
+                                Template Parameters
+                                <span class="badge" style="background: #6f42c1; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                                    {{ templateParams.length }}
+                                </span>
+                                <span style="color: #6c757d; font-size: 0.8em; font-weight: normal; margin-left: 8px;">
+                                    <i class="fa-solid fa-info-circle" title="These parameters are defined in the template and will be available when executing this prompt"></i>
+                                    Parameters defined in the template
+                                </span>
+                            </span>
+                        </ng-template>
+                        
+                        <!-- Template Parameters Display -->
+                        <div style="padding: 16px 0;">
+                            @if (isLoadingTemplateParams) {
+                                <div class="loading-state" style="padding: 20px; text-align: center; color: #6c757d;">
+                                    <i class="fa-solid fa-spinner fa-spin"></i> Loading template parameters...
+                                </div>
+                            } @else if (templateParams.length === 0) {
+                                <div class="empty-state" style="padding: 20px; text-align: center; color: #6c757d;">
+                                    <i class="fa-solid fa-info-circle"></i> This template has no parameters defined
+                                </div>
+                            } @else {
+                                <!-- Parameters Grid -->
+                                <div style="display: grid; gap: 12px;">
+                                    @for (param of templateParams; track param.ID) {
+                                        <div class="parameter-card" 
+                                             style="border: 1px solid #e9ecef; border-radius: 8px; padding: 16px; background: #f8f9fa; transition: all 0.2s;"
+                                             [style.border-left]="'4px solid ' + getParamTypeColor(param.Type)">
+                                            
+                                            <!-- Parameter Header -->
+                                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                                                <div style="display: flex; align-items: center; gap: 8px;">
+                                                    <i [class]="'fa-solid ' + getParamTypeIcon(param.Type)" 
+                                                       [style.color]="getParamTypeColor(param.Type)"
+                                                       style="font-size: 1.2em;"></i>
+                                                    <h6 style="margin: 0; color: #495057; font-weight: 600;">
+                                                        {{ param.Name }}
+                                                        @if (param.IsRequired) {
+                                                            <span style="color: #dc3545; font-size: 0.9em; margin-left: 4px;">*</span>
+                                                        }
+                                                    </h6>
+                                                </div>
+                                                <div style="display: flex; align-items: center; gap: 8px;">
+                                                    <span class="type-badge" 
+                                                          [style.background-color]="getParamTypeColor(param.Type)"
+                                                          style="color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.75em; font-weight: 500;">
+                                                        {{ param.Type }}
+                                                    </span>
+                                                    @if (param.IsRequired) {
+                                                        <span style="color: #dc3545; font-size: 0.85em; font-weight: 500;">Required</span>
+                                                    } @else {
+                                                        <span style="color: #6c757d; font-size: 0.85em;">Optional</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Parameter Description -->
+                                            @if (param.Description) {
+                                                <p style="margin: 0 0 8px 0; color: #6c757d; font-size: 0.9em; line-height: 1.4;">
+                                                    {{ param.Description }}
+                                                </p>
+                                            }
+                                            
+                                            <!-- Type-specific Information -->
+                                            <div style="font-size: 0.85em; color: #495057;">
+                                                <span style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
+                                                    <i class="fa-solid fa-info-circle" style="color: #6c757d;"></i>
+                                                    {{ getParamTypeDescription(param) }}
+                                                </span>
+                                            </div>
+                                            
+                                            <!-- Additional Parameter Details -->
+                                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 12px;">
+                                                @if (param.DefaultValue) {
+                                                    <div style="background: white; padding: 8px 12px; border-radius: 4px; border: 1px solid #dee2e6;">
+                                                        <label style="display: block; font-size: 0.8em; color: #6c757d; margin-bottom: 2px;">Default Value</label>
+                                                        <code style="font-size: 0.85em; color: #495057; word-break: break-all;">{{ param.DefaultValue }}</code>
+                                                    </div>
+                                                }
+                                                
+                                                @if (param.EntityID) {
+                                                    <div style="background: white; padding: 8px 12px; border-radius: 4px; border: 1px solid #dee2e6;">
+                                                        <label style="display: block; font-size: 0.8em; color: #6c757d; margin-bottom: 2px;">Entity</label>
+                                                        <span style="font-size: 0.85em; color: #495057;">{{ param.Entity || 'Entity ID: ' + param.EntityID }}</span>
+                                                    </div>
+                                                }
+                                                
+                                                @if (param.LinkedParameterName) {
+                                                    <div style="background: white; padding: 8px 12px; border-radius: 4px; border: 1px solid #dee2e6;">
+                                                        <label style="display: block; font-size: 0.8em; color: #6c757d; margin-bottom: 2px;">Linked To</label>
+                                                        <span style="font-size: 0.85em; color: #495057;">
+                                                            {{ param.LinkedParameterName }}
+                                                            @if (param.LinkedParameterField) {
+                                                                ({{ param.LinkedParameterField }})
+                                                            }
+                                                        </span>
+                                                    </div>
+                                                }
+                                                
+                                                @if (param.ExtraFilter) {
+                                                    <div style="background: white; padding: 8px 12px; border-radius: 4px; border: 1px solid #dee2e6;">
+                                                        <label style="display: block; font-size: 0.8em; color: #6c757d; margin-bottom: 2px;">Filter</label>
+                                                        <code style="font-size: 0.8em; color: #495057; word-break: break-all;">{{ param.ExtraFilter }}</code>
+                                                    </div>
+                                                }
+                                                
+                                                @if (param.RecordID) {
+                                                    <div style="background: white; padding: 8px 12px; border-radius: 4px; border: 1px solid #dee2e6;">
+                                                        <label style="display: block; font-size: 0.8em; color: #6c757d; margin-bottom: 2px;">Record ID</label>
+                                                        <code style="font-size: 0.85em; color: #495057;">{{ param.RecordID }}</code>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                                
+                                <!-- Help Text -->
+                                <div style="margin-top: 16px; padding: 12px; background: #e3f2fd; border-radius: 6px; border: 1px solid #bbdefb;">
+                                    <div style="display: flex; align-items: flex-start; gap: 8px;">
+                                        <i class="fa-solid fa-lightbulb" style="color: #1976d2; margin-top: 2px;"></i>
+                                        <div style="flex: 1; font-size: 0.85em; color: #1565c0; line-height: 1.5;">
+                                            <strong>Using Template Parameters:</strong> When executing this prompt, you'll be prompted to provide values for all required parameters. 
+                                            Parameters can be simple values (text, numbers) or complex data structures (JSON objects, database records, or entire entity collections).
+                                            The template will use these parameters to generate dynamic content based on the values provided at execution time.
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </kendo-expansionpanel>
+                }
 
                 <!-- Model Configuration Expansion Panel -->
                 @if (record.IsSaved) {
@@ -819,7 +960,6 @@
                                 [NewRecordValues]="NewRecordValues('AI Result Cache')"
                                 [AllowLoad]="true"
                                 [EditMode]="GridEditMode()"  
-                                [BottomMargin]="0"
                                 style="height: 300px;">
                             </mj-user-view-grid>
                         </div>
@@ -849,7 +989,6 @@
                                         [NewRecordValues]="NewRecordValues('MJ: AI Agent Prompts')"
                                         [AllowLoad]="true"
                                         [EditMode]="GridEditMode()"  
-                                        [BottomMargin]="0"
                                         style="height: 200px;">
                                     </mj-user-view-grid>
                                 </div>
@@ -862,7 +1001,6 @@
                                         [NewRecordValues]="NewRecordValues('AI Prompts')"
                                         [AllowLoad]="true"
                                         [EditMode]="GridEditMode()"  
-                                        [BottomMargin]="0"
                                         style="height: 200px;">
                                     </mj-user-view-grid>
                                 </div>

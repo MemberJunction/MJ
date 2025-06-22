@@ -83,14 +83,8 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
         const rolesWithNoPermissions = roles.filter(r => !existingPermissions.some(p => p.RoleID === r.ID));
         for (const r of rolesWithNoPermissions) {
           const p = await md.GetEntityObject<EntityPermissionEntity>('Entity Permissions')
-          // p.NewRecord();
-          // p.EntityID = e!.ID;
-          // p.RoleName = r.Name;
-          // p.CanRead = false;
-          // p.CanCreate = false;
-          // p.CanUpdate = false;
-          // p.CanDelete = false;
-          p.LoadFromData({
+           
+          await p.LoadFromData({
             ID: null,
             Entity: entity!.Name,
             EntityID: entity!.ID,
@@ -109,15 +103,8 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
         const entitiesWithNoPermissions = md.Entities.filter(e => !existingPermissions.some(p => p.EntityID === e.ID));
         for (const e of entitiesWithNoPermissions) {
           const p = await md.GetEntityObject<EntityPermissionEntity>('Entity Permissions')
-          // p.NewRecord();
-          // p.EntityID = e.ID;
-          // p.Set('Entity', e.Name); // this is a virtual field (not in the database, but we need it for the grid to display properly)
-          // p.RoleName = r!.Name;
-          // p.CanRead = false;
-          // p.CanCreate = false;
-          // p.CanUpdate = false;
-          // p.CanDelete = false;
-          p.LoadFromData({
+          
+          await p.LoadFromData({
             ID: null,
             Entity: e.Name,
             EntityID: e.ID,

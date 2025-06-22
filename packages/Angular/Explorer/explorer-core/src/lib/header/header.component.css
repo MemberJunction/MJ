@@ -1,128 +1,267 @@
-.header-wrap {
-  flex: auto;
+
+.header-bg {
+  color: #FFF;
+  background: var(--navy);
+  box-shadow: var(--shadow);
+}
+
+.header {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+}
+
+.header .nav-container {    
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--white);
+    padding: 0 1rem;
+    height: 80px;
 }
 
 .title {
-  font-size: x-large;  
+    display: flex;
+    flex: 1 0 auto;
+    flex-direction: column;
+    align-items: flex-start;
+    margin-left: 10px;
 }
+
+.k-avatar {
+    display: block;
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+    margin: 0 25px;
+    box-shadow: 0 0 0px 1px #FFF;
+}
+
 .app-logo {
-  width: 297px;
+  width: 290px;
+  height: 40px;
+  background: url(assets/MJ_logo.svg);
 }
+
 .user-info {
   display: flex;
   align-items: center;
 }
 
-.user-info kendo-dropdownlist {
-  border: none;
-  background: transparent;
-  width: auto;
-  color: #fff;
+.user-dropdown-wrapper {
+  position: relative;
 }
+
+.user-avatar {
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.user-avatar:hover {
+  opacity: 0.8;
+}
+
+/* Custom dropdown menu styles */
+.user-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  min-width: 200px;
+  background: #fff;
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+  z-index: 1000;
+  display: none;
+  overflow: hidden;
+}
+
+.user-dropdown-menu.dropdown-open {
+  display: block;
+}
+
+.user-dropdown-header {
+  padding: 12px 16px;
+  background: var(--gray-600);
+}
+
+.user-name {
+  font-weight: 600;
+  color: #333;
+  font-size: 14px;
+}
+
+.user-dropdown-divider {
+  height: 1px;
+  background: #e9ecef;
+  margin: 0;
+}
+
+.user-dropdown-item {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: 0.2s ease;
+  color: #333;
+  font-size: 14px;
+}
+
+.user-dropdown-item:hover {
+  color: #FFF;
+  background: var(--mj-blue);
+}
+
+.user-dropdown-item i {
+  width: 16px;
+  color: #666;
+  transition: 0.2s ease;
+}
+
+.user-dropdown-item:hover i {
+  color: #FFF;
+}
+
 .user-info-wrapper {
   display: flex;
   gap: 40px;
   align-items: center;
+  position: relative; /* Added for positioning context */
 }
+
 .icon-inbox {
   position: relative;
   cursor: pointer;
 }
+
 .icon-inbox .k-svg-icon {
   width: 28px;
   height: 28px;
   min-width: 28px;
 }
-/* .icon-inbox .notification {
-  position: absolute;
-  top: -8px;
-  right: -8px;
-  width: 16px;
-  height: 16px;
-  min-width: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #ff6358;
-  border-radius: 50%;
-  color: #fff;
-  font-size: 10px;
-} */
+
 .user-info-wrapper .header .k-avatar {
   padding-left: 25px;
   border-left: 2px solid #fff;
 }
-.search-wrapper {
+
+/* Search toggle icon styles */
+.search-toggle-icon {
+  cursor: pointer;
   display: flex;
   align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border-radius: 4px;
+  margin-right: -.5rem; /* make spacing look more consistent in relation to absolute position notification box */
+  transition: background-color 0.2s ease;
+}
+
+.search-toggle-icon:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.search-toggle-icon .k-icon {
+  color: #fff;
+}
+
+/* Search wrapper - now positioned absolutely */
+.search-wrapper-toggle {
+  position: absolute;
+  top: 100%;
+  right: 1rem;
+  display: none;
+  /* Hidden by default */
+  width: 526px;
+  padding: 1rem;
+  background: var(--gray-600);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+  z-index: 1000;
+  margin-top: 8px;
+}
+
+/* Show search wrapper when open */
+.search-wrapper-toggle.search-open {
+  display: block;
+}
+
+.search-wrapper {
   position: relative;
-  max-width: 526px;
+  display: flex;
+  border: 2px solid var(--gray-700);
+  border-radius: var(--border-radius);
+}
+
+.search-wrapper .k-input {
+  background: #FFF;
   width: 100%;
-  height: 44px;
+  height: 50px;
+  border: none;
+  border-top-right-radius: var(--border-radius);
+  border-bottom-right-radius: var(--border-radius);
+
 }
-::ng-deep .search-wrapper #txtSearch::placeholder, ::ng-deep .search-wrapper input::placeholder {
-  color: #54585F;
-}
-.search-wrapper .k-input::placeholder {
-  color: #54585F;
-}
-.search-wrapper .k-input{
-background: var(--light-gray);
-border-radius: 0 10px 10px 0;
-width: 360px;
-height: 44px;
-color: var(--text-darked);
-}
+
 .search-wrapper .k-dropdownlist {
-  width: 170px; 
-  height: 100%;
-  background: var(--gray-color);
-  border-radius: 10px 0px 0px 10px;
+  width: 215px;
+  background: var(--gray-700);
   margin: 0;
   font-size: 16px;
   font-weight: 600;
   line-height: 19px;
   letter-spacing: 0em;
   text-align: center;
-  color: var(--text-darked);
+  color: var(--navy);
+  border: none;
+  border-top-left-radius: var(--border-radius);
+  border-bottom-left-radius: var(--border-radius);
 }
-.search-wrapper .k-icon {
+
+/* Updated search submit icon positioning */
+.search-submit-icon {
   color: var(--text-darked);
   position: absolute;
   right: 10px;
   top: 50%;
   transform: translateY(-50%);
   z-index: 9;
-    cursor: pointer;
+  cursor: pointer;
   margin-right: 2px;
-} 
+}
+
 .k-input {
   color: black;
 }
 
+/* Overlay to close search when clicking outside */
+.search-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 999;
+  background: transparent;
+}
 
 /*RESPONSIVE STUFF HERE */
-@media (max-width: 1700px) {
-  .title {
-    font-size: x-small; /* or any other size you prefer */
-  }
-  /* .app-logo {
-    width: 50px;
-    height: 25px;
-  } */
-}
-@media (max-width: 1200px) {
-  .title {
-    display: none;
-  }
+
+@media (max-width: 768px) {
+
   .app-logo {
-    display: none
+    width: 60px;
   }
 
-  .search-wrapper {
-    width: 350px;
-  }  
-  .search-entity-list {
-    width: 150px; 
+  .search-wrapper-toggle {
+    left: .5rem;
+    right: .5rem;
+    width: auto;
   }
+
+  .search-wrapper .k-dropdownlist {
+    width: 275px;
+  }
+
 }

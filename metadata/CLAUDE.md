@@ -78,7 +78,10 @@ Agent prompt templates receive these standard variables:
 - Keep specialization instructions in the agent-specific prompt
 
 ### 7. Using References
-- **@lookup**: For entity relationships (e.g., `@lookup:Actions.Name=Web Search`)
+- **@lookup**: For entity relationships
+  - Single field: `@lookup:Actions.Name=Web Search`
+  - Multi-field: `@lookup:AI Prompt Categories.Name=Actions&Status=Active`
+  - With creation: `@lookup:Categories.Name=New Category?create&Description=Auto-created`
 - **@file**: For external file content (e.g., `@file:templates/agent-prompt.md`)
 - **@parent**: For parent entity fields in nested structures (e.g., `@parent:ID`)
 - **@root**: For root entity fields in deeply nested structures

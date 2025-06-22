@@ -1,4 +1,4 @@
-<div class="entity-admin-dashboard-container" mjFillContainer [rightMargin]="8" [bottomMargin]="8">
+<div class="entity-admin-dashboard-container">
   <div class="dashboard-header">
     <div class="header-info">
       <span class="visible-entities-count">{{ filteredEntities.length }} visible entities</span>
@@ -43,7 +43,7 @@
         (userStateChange)="onUserStateChange($event)"
         (entityOpened)="onEntityOpened($event)"
         (openRecord)="onOpenRecord($event)"
-        mjFillContainer>
+        >
       </mj-erd-composite>
     </div>
   }

@@ -1,13 +1,38 @@
+// Core style imports
 @import './variables';
 @import './typography';
-@import './common';
 
+// Import Kendo theme BEFORE our overrides
+// Try different import paths based on your setup:
+// Option 1: If using SCSS version
+// @import '@progress/kendo-theme-default/scss/all';
+// Option 2: If SCSS not available, comment out and use CSS in angular.json
+// For now, let's comment it out and rely on the CSS import in angular.json
+
+// Apply our theme overrides to Kendo components
+@import './kendo-theme-override';
+
+// Import remaining custom styles
+@import './common';
+@import './badges';
+@import './utilities';
+
+// Ensure button groups have correct colors (override any conflicting styles)
+kendo-buttongroup button,
+kendo-buttongroup .k-button {
+    color: var(--navy) !important;
+    
+    &[aria-pressed="true"],
+    &.k-selected {
+        color: var(--white-color) !important;
+    }
+}
 
 .link-text {
     cursor: pointer;
     color: darkblue;
     font-size: 14px;
-  }
+}
   
 //Grid
 .customer-photo {
@@ -32,32 +57,6 @@
 
 .red {
     color: #d9534f;
-}
-
-.text-bold {
-    font-weight: 600;
-}
-
-.badge {
-    display: inline-block;
-    padding: 0.25em 0.4em;
-    font-size: 75%;
-    font-weight: 700;
-    line-height: 1;
-    text-align: center;
-    white-space: nowrap;
-    vertical-align: baseline;
-    border-radius: 0.25rem;
-}
-
-.badge-success {
-    color: #fff;
-    background-color: #28a745;
-}
-
-.badge-danger {
-    color: #fff;
-    background-color: #dc3545;
 }
 
 // Chart
@@ -137,61 +136,62 @@ kendo-recurrence-frequency-editor .k-edit-field {
 }
 
 .searchBox {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-bottom: 10px;
-  padding-right: 10px;
-  padding-left: 0px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 10px;
+    padding-right: 10px;
+    padding-left: 0px;
 
-  #txtSearch {
-    width: 300px;
-    height: 30px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    margin-right: 5px;
-    margin-left: 10px;
-  }
+    #txtSearch {
+        width: 300px;
+        height: 30px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        margin-right: 5px;
+        margin-left: 10px;
+    }
 }
 
 .item {
-  border: 1px solid #e1e0e1;
-  border-radius: 5px;
-  padding: 12px 10px;
-  font-size: 16px;
-  outline: none;
-  cursor: move;
-  margin-bottom: 10px;
+    border: 1px solid #e1e0e1;
+    border-radius: 5px;
+    padding: 12px 10px;
+    font-size: 16px;
+    outline: none;
+    cursor: move;
+    margin-bottom: 10px;
 }
 
 .item:hover,
 .employee:hover {
-  opacity: 0.8;
+    opacity: 0.8;
 }
 
 .item.active,
 .employee.active {
-  background-color: #f55f54;
-  color: #fff;
-  border-color: #f55f54;
-  z-index: 10;
+    background-color: #f55f54;
+    color: #fff;
+    border-color: #f55f54;
+    z-index: 10;
 }
 
 .item.disabled {
-  opacity: 0.5;
-  cursor: default;
+    opacity: 0.5;
+    cursor: default;
 }
 
 .empty {
-  height: 150px;
+    height: 150px;
 }
 
 .disabled-div {
     pointer-events: none;
-    opacity: 0.4; /* you can adjust this as needed */
+    opacity: 0.4;
 }
  
-.k-tabstrip-items-wrapper .k-item {
+// Tab-specific styling - should not affect button groups
+.k-tabstrip .k-tabstrip-items-wrapper .k-item {
     color: black;
     font-weight: normal;
     border: solid 1px transparent;
@@ -204,4 +204,3 @@ kendo-recurrence-frequency-editor .k-edit-field {
     background-color: white;
     z-index: 1;
 }
-   

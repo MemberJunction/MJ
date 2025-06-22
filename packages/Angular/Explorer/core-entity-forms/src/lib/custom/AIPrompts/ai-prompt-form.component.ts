@@ -1,6 +1,6 @@
 import { Component, OnInit, ViewChild, ChangeDetectorRef, ElementRef } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
-import { AIPromptEntity, TemplateEntity, TemplateContentEntity, AIPromptModelEntity, AIModelEntity, AIVendorEntity, AIPromptCategoryEntity, AIModelVendorEntity, AIPromptTypeEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
+import { AIPromptEntity, TemplateEntity, TemplateContentEntity, TemplateParamEntity, AIPromptModelEntity, AIModelEntity, AIVendorEntity, AIPromptCategoryEntity, AIModelVendorEntity, AIPromptTypeEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -20,7 +20,9 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     public record!: AIPromptEntity;
     public template: TemplateEntity | null = null;
     public templateContent: TemplateContentEntity | null = null;
+    public templateParams: TemplateParamEntity[] = [];
     public isLoadingTemplate = true; // Default to loading state
+    public isLoadingTemplateParams = false;
     public templateNotFoundInDatabase = false;
     public showTestHarness = false;
     
@@ -150,8 +152,11 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
                 this.templateNotFoundInDatabase = true; // Set flag when template not found
                 console.warn(`Template with ID ${this.record.TemplateID} not found`);
             } else {
-                // Load template content
-                await this.loadTemplateContent();
+                // Load template content and parameters
+                await Promise.all([
+                    this.loadTemplateContent(),
+                    this.loadTemplateParams()
+                ]);
             }
 
         } catch (error) {
@@ -176,6 +181,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             await this.loadTemplate();
         } else {
             this.template = null;
+            this.templateParams = [];
         }
     }
 
@@ -266,6 +272,34 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         } catch (error) {
             console.error('Error loading template content:', error);
             this.templateContent = null;
+        }
+    }
+
+    /**
+     * Loads template parameters for the current template
+     */
+    private async loadTemplateParams() {
+        if (!this.template?.ID) {
+            this.templateParams = [];
+            return;
+        }
+
+        this.isLoadingTemplateParams = true;
+        try {
+            const rv = new RunView();
+            const results = await rv.RunView<TemplateParamEntity>({
+                EntityName: 'Template Params',
+                ExtraFilter: `TemplateID = '${this.template.ID}'`,
+                OrderBy: 'Name ASC',
+                ResultType: 'entity_object'
+            });
+            
+            this.templateParams = results.Results || [];
+        } catch (error) {
+            console.error('Error loading template params:', error);
+            this.templateParams = [];
+        } finally {
+            this.isLoadingTemplateParams = false;
         }
     }
 
@@ -1214,6 +1248,60 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         if (success === true) return 'fa-check-circle';
         if (success === false) return 'fa-times-circle';
         return 'fa-spinner fa-spin';
+    }
+
+    /**
+     * Gets the icon for a template parameter type
+     */
+    public getParamTypeIcon(type: string): string {
+        switch (type) {
+            case 'Scalar': return 'fa-font';
+            case 'Array': return 'fa-list';
+            case 'Object': return 'fa-cube';
+            case 'Record': return 'fa-file-alt';
+            case 'Entity': return 'fa-table';
+            default: return 'fa-question';
+        }
+    }
+
+    /**
+     * Gets the color for a template parameter type
+     */
+    public getParamTypeColor(type: string): string {
+        switch (type) {
+            case 'Scalar': return '#17a2b8';
+            case 'Array': return '#28a745';
+            case 'Object': return '#6f42c1';
+            case 'Record': return '#fd7e14';
+            case 'Entity': return '#dc3545';
+            default: return '#6c757d';
+        }
+    }
+
+    /**
+     * Gets a friendly description of the parameter type
+     */
+    public getParamTypeDescription(param: TemplateParamEntity): string {
+        switch (param.Type) {
+            case 'Scalar': 
+                return 'Single value (text, number, date, etc.)';
+            case 'Array': 
+                return 'List of values';
+            case 'Object': 
+                return 'JSON object with multiple properties';
+            case 'Record': 
+                if (param.EntityID) {
+                    return `Single record from entity`;
+                }
+                return 'Single database record';
+            case 'Entity': 
+                if (param.EntityID) {
+                    return `Multiple records from entity`;
+                }
+                return 'Entity data collection';
+            default: 
+                return 'Unknown type';
+        }
     }
 }
 

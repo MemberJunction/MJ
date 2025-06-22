@@ -369,7 +369,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                         if (changeItem) {
                             // found the match, update latest Record
                             const record = await md.GetEntityObject(changeItem.Entity.Name, this.ContextUser);
-                            record.LoadFromData(r);
+                            await record.LoadFromData(r);
                             changeItem.LatestRecord = record;
                         }
                     }
@@ -638,7 +638,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                     const latestRCData = await this.GetLatestRecordChangesDataForEntityRecord(change);
                     if (latestRCData && latestRCData.FullRecordJSON?.length > 0) {
                         const obj = JSON.parse(latestRCData.FullRecordJSON);
-                        entityObject.LoadFromData(obj); // loaded up from the latest data in the Record Change table
+                        await entityObject.LoadFromData(obj); // loaded up from the latest data in the Record Change table
                     }
                     else {
                         // we have an issue becuase we don't have data in the RecordChange table so we can't replay the DELETE, so mark that in the error for the RecordChange

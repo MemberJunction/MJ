@@ -1,8 +1,19 @@
-import { Component, Input, OnChanges, SimpleChanges, OnDestroy, ViewChild, ElementRef, AfterViewInit, ChangeDetectorRef, ChangeDetectionStrategy, ViewContainerRef, ComponentRef } from '@angular/core';
+import { Component, Input, OnChanges, SimpleChanges, OnDestroy, ViewChild, ElementRef, AfterViewInit, ChangeDetectorRef, ChangeDetectionStrategy, ViewContainerRef, ComponentRef, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subject, interval, Subscription } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ExecutionNodeComponent } from './agent-execution-node.component';
+
+/**
+ * Progress message with display mode
+ */
+export interface ProgressMessage {
+    id: string;
+    message: string;
+    timestamp: Date;
+    displayMode: 'live' | 'historical' | 'both';
+    metadata?: Record<string, unknown>;
+}
 
 /**
  * Represents a node in the execution tree with all necessary display information
@@ -27,6 +38,7 @@ export interface ExecutionTreeNode {
     detailsMarkdown?: string;
     detailsExpanded?: boolean;
     promptCount?: number;
+    displayMode?: 'live' | 'historical' | 'both';
 }
 
 /**
@@ -89,6 +101,12 @@ export interface ExecutionStats {
                         <span class="agent-path">{{ formatAgentPath(currentStep.agentPath) }}</span>
                         <span class="step-name">{{ currentStep.name }}</span>
                     </div>
+                }
+                @if (mode === 'historical' && runId && isExecutionComplete()) {
+                    <button class="view-run-btn" (click)="onViewRunClick()">
+                        <i class="fa-solid fa-external-link-alt"></i>
+                        View {{ runType === 'agent' ? 'Agent' : 'Prompt' }} Run
+                    </button>
                 }
             </div>
 
@@ -559,6 +577,33 @@ export interface ExecutionStats {
             background: #e3f2fd;
             color: #2196f3;
         }
+        
+        /* View Run Button */
+        .view-run-btn {
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+            margin-left: auto;
+        }
+        
+        .view-run-btn:hover {
+            background: #1976d2;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .view-run-btn i {
+            font-size: 12px;
+        }
 
         /* Responsive */
         @media (max-width: 768px) {
@@ -590,6 +635,10 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     @Input() mode: ExecutionMonitorMode = 'historical';
     @Input() executionData: any = null; // Can be live updates or historical data
     @Input() autoExpand: boolean = true; // Auto-expand nodes in live mode
+    @Input() runId: string | null = null; // ID of the run (agent or prompt)
+    @Input() runType: 'agent' | 'prompt' = 'agent'; // Type of run
+    
+    @Output() viewRunClick = new EventEmitter<{ runId: string; runType: 'agent' | 'prompt' }>();
     
     @ViewChild('executionTreeContainer') executionTreeContainer!: ElementRef<HTMLDivElement>;
     @ViewChild('executionNodesContainer', { read: ViewContainerRef }) executionNodesContainer!: ViewContainerRef;
@@ -748,15 +797,15 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         // Clear existing components for full rebuild
         this.clearNodeComponents();
         
-        // Handle executionTree format
+        // Handle executionTree format - historical mode should only use saved database data
         if (this.executionData.executionTree) {
-            this.executionTree = this.convertExecutionTree(this.executionData.executionTree);
-        } else if (this.executionData.liveSteps) {
-            // Handle live steps that have been converted to historical
-            this.executionTree = this.convertLiveStepsToTree(this.executionData.liveSteps);
+            const allNodes = this.convertExecutionTree(this.executionData.executionTree);
+            // Filter out live-only nodes in historical mode
+            this.executionTree = this.filterNodesForMode(allNodes, 'historical');
         } else if (this.executionData.steps) {
             // Handle legacy steps format
-            this.executionTree = this.convertLegacySteps(this.executionData.steps);
+            const allNodes = this.convertLegacySteps(this.executionData.steps);
+            this.executionTree = this.filterNodesForMode(allNodes, 'historical');
         } else {
             this.executionTree = [];
         }
@@ -843,6 +892,18 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                 }
             }
             
+            // Determine display mode based on the step content
+            let displayMode: 'live' | 'historical' | 'both' = 'both';
+            
+            // Progress messages that should only show in live mode
+            if (name.includes('Executing') && name.includes('action') && !name.startsWith('Execute Action:')) {
+                displayMode = 'live';
+            } else if (name.includes("Executing agent's initial prompt")) {
+                displayMode = 'live';
+            } else if (name.includes('Re-executing agent prompt with additional context')) {
+                displayMode = 'live';
+            }
+            
             const treeNode: ExecutionTreeNode = {
                 id: node.step?.ID || `node-${Date.now()}-${index}`,
                 name: name,
@@ -861,7 +922,8 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                 cost: this.extractCost(node.outputData),
                 detailsMarkdown: detailsMarkdown,
                 detailsExpanded: false,
-                children: node.children ? this.convertExecutionTree(node.children, node.depth !== undefined ? node.depth + 1 : depth + 1) : undefined
+                children: node.children ? this.convertExecutionTree(node.children, node.depth !== undefined ? node.depth + 1 : depth + 1) : undefined,
+                displayMode: displayMode
             };
             
             return treeNode;
@@ -1217,14 +1279,25 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             totalPrompts: 0
         };
         
+        // Check if we have agent run data with token information
+        if (this.executionData?.agentRun) {
+            // Use token data from agent run if available
+            this.stats.totalTokens = this.executionData.agentRun.TotalTokensUsed || 0;
+            this.stats.totalCost = this.executionData.agentRun.TotalCost || 0;
+        }
+        
         const processNode = (node: ExecutionTreeNode) => {
             this.stats.totalSteps++;
             
             if (node.status === 'completed') this.stats.completedSteps++;
             if (node.status === 'failed') this.stats.failedSteps++;
             
-            if (node.tokensUsed) this.stats.totalTokens += node.tokensUsed;
-            if (node.cost) this.stats.totalCost += node.cost;
+            // Only accumulate tokens if we don't have agent run data
+            if (!this.executionData?.agentRun) {
+                if (node.tokensUsed) this.stats.totalTokens += node.tokensUsed;
+                if (node.cost) this.stats.totalCost += node.cost;
+            }
+            
             if (node.duration) this.stats.totalDuration! += node.duration;
             
             this.stats.stepsByType[node.type] = (this.stats.stepsByType[node.type] || 0) + 1;
@@ -1643,6 +1716,29 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     }
     
     /**
+     * Filter nodes based on display mode
+     */
+    private filterNodesForMode(nodes: ExecutionTreeNode[], mode: ExecutionMonitorMode): ExecutionTreeNode[] {
+        return nodes.filter(node => {
+            // If no displayMode is set, default to showing in both modes
+            if (!node.displayMode) {
+                return true;
+            }
+            
+            // Show if displayMode is 'both' or matches current mode
+            if (node.displayMode === 'both' || node.displayMode === mode) {
+                // Filter children recursively
+                if (node.children) {
+                    node.children = this.filterNodesForMode(node.children, mode);
+                }
+                return true;
+            }
+            
+            return false;
+        });
+    }
+    
+    /**
      * Build a map of nodes by ID for quick lookup
      */
     private buildNodeMap(nodes: ExecutionTreeNode[], map: Map<string, ExecutionTreeNode>): void {
@@ -1682,6 +1778,23 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             }
         }
         
+        // Determine display mode based on the step content
+        let displayMode: 'live' | 'historical' | 'both' = 'both';
+        
+        // Progress messages that should only show in live mode
+        if (name.includes('Executing') && name.includes('action') && !name.startsWith('Execute Action:')) {
+            displayMode = 'live';
+        } else if (name.includes("Executing agent's initial prompt")) {
+            displayMode = 'live';
+        } else if (name.includes('Re-executing agent prompt with additional context')) {
+            displayMode = 'live';
+        }
+        
+        // Check displayMode from metadata if available
+        if (step.metadata?.displayMode) {
+            displayMode = step.metadata.displayMode;
+        }
+        
         return {
             id: step.step?.ID || this.generateStepId(step),
             name: name,
@@ -1698,7 +1811,8 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             inputPreview: this.createPreview(step.inputData),
             outputPreview: this.createPreview(step.outputData),
             tokensUsed: this.extractTokens(step.outputData),
-            cost: this.extractCost(step.outputData)
+            cost: this.extractCost(step.outputData),
+            displayMode: displayMode
         };
     }
     
@@ -1755,6 +1869,23 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             if (node.children) {
                 this.restoreExpandedState(node.children, expandedState, detailsExpandedState);
             }
+        }
+    }
+    
+    /**
+     * Check if execution is complete
+     */
+    isExecutionComplete(): boolean {
+        return this.stats.completedSteps > 0 && 
+               this.stats.completedSteps === this.stats.totalSteps - this.stats.failedSteps;
+    }
+    
+    /**
+     * Handle view run button click
+     */
+    onViewRunClick(): void {
+        if (this.runId) {
+            this.viewRunClick.emit({ runId: this.runId, runType: this.runType });
         }
     }
     

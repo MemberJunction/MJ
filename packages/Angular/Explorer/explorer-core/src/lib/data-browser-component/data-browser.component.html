@@ -1,55 +1,97 @@
-<div  class="data-browser-container">
-  <div class="card-header-entity">
-      <div class="title-wrap">
-        <div class="title-wrap-inner">
-          <span class="breadcrumb" (click)="GoHome($event)">
-            <span class="fa-solid fa-house home-icon"></span>Home
-          </span>
-          <span class="breadcrumb-separator"><span class="fa-solid fa-chevron-right"></span></span>
-          <span class="breadcrumb-end">Applications</span>
+<!-- Enhanced Data Browser Component -->
+<div class="mj-page-container">
+    <!-- Breadcrumb Navigation -->
+    <nav class="mj-breadcrumb">
+        <span class="mj-breadcrumb-item" (click)="GoHome($event)">
+            <i class="fas fa-home"></i>
+            Home
+        </span>
+        <i class="fas fa-chevron-right mj-breadcrumb-separator"></i>
+        <span class="mj-breadcrumb-current">Applications</span>
+    </nav>
+
+    <!-- Header using global styles -->
+    <div class="mj-header">
+        <div class="mj-header-title">
+            <h1>Applications</h1>
         </div>
-      </div>
-      <div class="config-button">
-        <button kendoButton (click)="ShowAppSelectionDialog()"><span class="fa-solid fa-gear"></span></button>
-        <mj-record-selector-dialog [AvailableRecords]="AllApplications" 
-                                   [SelectedRecords]="SelectedApplications" 
-                                   [UnselectedRecords]="UnselectedApplications"
-                                   [DialogVisible]="AppSelectionDialogVisible"
-                                   DisplayField="Name"
-                                   DisplayIconField="Icon"
-                                   (DialogClosed)="OnAppSelectionDialogClosed($event)">
-        </mj-record-selector-dialog>
-      </div>
-  </div>
-  <div class="main-area"> 
-      <kendo-loader *ngIf="showLoader" type="converging-spinner" ></kendo-loader>
-      <div class="card-list k-d-flex k-flex-row k-h-full k-flex-wrap" *ngIf="!showLoader">
-        <div class="card-item" *ngFor="let app of SelectedApplications"  (click)="appItemClick(app)">
-          <kendo-card class="card-wrapper">
+        <div class="mj-header-actions">
+            <kendo-button 
+                fillMode="flat"
+                rounded="full"
+                size="large"
+                themeColor="primary"
+                [title]="'Configure Applications'"
+                (click)="ShowAppSelectionDialog()">
+                <i class="fas fa-cog"></i>
+            </kendo-button>
+        </div>
+    </div>
+
+    <!-- Loading State using global styles -->
+    <div class="mj-loading mj-loading-overlay" *ngIf="showLoader">
+        <kendo-loader 
+            type="converging-spinner" 
+            themeColor="primary" 
+            size="large">
+        </kendo-loader>
+    </div>
+
+    <!-- Applications Grid using global grid and icon card styles -->
+    <div class="mj-grid mj-grid-responsive" *ngIf="!showLoader && SelectedApplications.length > 0">
+        <kendo-card 
+            class="mj-kendo-icon-card mj-kendo-icon-card-clickable" 
+            *ngFor="let app of SelectedApplications"  
+            (click)="appItemClick(app)"
+            [attr.tabindex]="0"
+            [attr.role]="'button'"
+            [attr.aria-label]="'Open ' + app.Name + ' application'">
             <kendo-card-body>
-              <div class="view-card-content k-cursor-pointer">
-                @if (app.Icon && app.Icon.length > 0) {
-                  <span [ngClass]="app.Icon + ' icon'"></span>
-                }
-                <h2 kendoCardTitle>{{ app.Name }}</h2>
-                <p kendoCardSubtitle>{{ app.Description }}</p>
-              </div>
-            </kendo-card-body>
-          </kendo-card>
-        </div>
-        @if (SelectedApplications.length === 0 && !showLoader) {
-          <div class="card-item" (click)="ShowAppSelectionDialog()">
-            <kendo-card class="card-wrapper">
-              <kendo-card-body>
-                <div class="view-card-content k-cursor-pointer">
-                  <span class="fa-solid fa-gear"></span>
-                  <h2 kendoCardTitle>Select Apps</h2>
-                  <p kendoCardSubtitle>No apps selected yet, click here to add some</p>
+                <i *ngIf="app.Icon && app.Icon.length > 0" 
+                   [ngClass]="app.Icon" 
+                   class="mj-card-icon-large"
+                   [attr.aria-hidden]="true"></i>
+                <i *ngIf="!app.Icon || app.Icon.length === 0" 
+                   class="fas fa-cube mj-card-icon-large"
+                   [attr.aria-hidden]="true"></i>
+                <h3>{{ app.Name }}</h3>
+                <p *ngIf="app.Description">{{ app.Description }}</p>
+                <p *ngIf="!app.Description" class="text-muted">No description available</p>
+                <div class="mj-app-status" *ngIf="app.DefaultForNewUser">
+                    <i class="fas fa-star"></i>
+                    Default App
                 </div>
-              </kendo-card-body>
-            </kendo-card>
-          </div>
-        }
-      </div>
-  </div>
+            </kendo-card-body>
+        </kendo-card>
+    </div>
+
+    <!-- Empty State using global styles -->
+    <div class="mj-empty-state" *ngIf="SelectedApplications.length === 0 && !showLoader">
+        <i class="fas fa-server mj-empty-icon"></i>
+        <h3>No Applications Selected</h3>
+        <p>Choose which applications you'd like to access from your dashboard</p>
+        <kendo-button 
+            themeColor="primary"
+            rounded="medium"
+            size="large"
+            (click)="ShowAppSelectionDialog()">
+            <span class="button-content">
+                <i class="fas fa-cog"></i>
+                Configure Applications
+            </span>
+        </kendo-button>
+    </div>
+
+    <!-- Application Selection Dialog -->
+    <mj-record-selector-dialog 
+        EntityName="Applications"
+        [AvailableRecords]="AllApplications" 
+        [SelectedRecords]="SelectedApplications" 
+        [UnselectedRecords]="UnselectedApplications"
+        [DialogVisible]="AppSelectionDialogVisible"
+        DisplayField="Name"
+        DisplayIconField="Icon"
+        DialogTitle="Select Applications"
+        (DialogClosed)="OnAppSelectionDialogClosed($event)">
+    </mj-record-selector-dialog>
 </div>

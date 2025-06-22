@@ -11,7 +11,7 @@ export function LoadRecordResource() {
 @RegisterClass(BaseResourceComponent, 'Records')
 @Component({
     selector: 'mj-record-resource',
-    template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" [newRecordValues]="Data.Configuration.NewRecordValues" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" mjFillContainer></mj-single-record>`
+    template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" [newRecordValues]="Data.Configuration.NewRecordValues" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" ></mj-single-record>`
 })
 export class EntityRecordResource extends BaseResourceComponent {
     public get PrimaryKey(): CompositeKey {
@@ -39,8 +39,8 @@ export class EntityRecordResource extends BaseResourceComponent {
             let pk: CompositeKey = EntityRecordResource.GetPrimaryKey(data);
             if (pk.HasValue) {
                 const name = await md.GetEntityRecordName(data.Configuration.Entity, pk);
-                const displayId = pk.KeyValuePairs.length > 1 ? pk.Values() : pk.GetValueByIndex(0);         
-                return (name ? name : data.Configuration.Entity) + ` (${displayId})`;    
+                //const displayId = pk.KeyValuePairs.length > 1 ? pk.Values() : pk.GetValueByIndex(0);         
+                return (name ? name : data.Configuration.Entity);// + ` (${displayId})`;    
             }
             else 
                 return `New ${data.Configuration.Entity} Record`;
