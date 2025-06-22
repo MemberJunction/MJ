@@ -14,11 +14,13 @@ A2A is an open protocol developed by Google that enables communication and inter
 
 - Implements the Google A2A protocol specification
 - Exposes MemberJunction entities as agent capabilities
+- Executes MemberJunction AI agents through A2A protocol
 - Supports CRUD operations on entities (Get, Create, Update, Delete, Query)
 - Task-based interaction model with message and artifact handling
 - Server-Sent Events (SSE) support for streaming responses
 - Configurable entity access permissions
-- Wildcard pattern matching for entity capability configuration
+- Wildcard pattern matching for entity and agent capability configuration
+- Agent discovery, execution, monitoring, and cancellation
 
 ## Installation
 
@@ -77,6 +79,22 @@ module.exports = {
         delete: false,
         runView: true
       }
+    ],
+    agentCapabilities: [
+      {
+        agentName: "*",          // Wildcard patterns supported
+        discover: true,
+        execute: true,
+        monitor: true,
+        cancel: true
+      },
+      {
+        agentName: "Analysis*",  // Pattern matching (e.g., AnalysisAgent, AnalysisReportAgent)
+        discover: true,
+        execute: true,
+        monitor: true,
+        cancel: false
+      }
     ]
   }
 }
@@ -93,6 +111,7 @@ module.exports = {
 - `streamingEnabled` (boolean): Enable SSE streaming responses. Default: `true`
 - `userEmail` (string, optional): Email of the user context for entity operations
 - `entityCapabilities` (array): Configure which entities and operations to expose
+- `agentCapabilities` (array): Configure which AI agents and operations to expose
 
 #### Entity Capabilities
 
@@ -104,6 +123,15 @@ Each capability configuration supports:
 - `update` (boolean): Allow updating existing records
 - `delete` (boolean): Allow deleting records
 - `runView` (boolean): Allow querying/listing records
+
+#### Agent Capabilities
+
+Each agent capability configuration supports:
+- `agentName` (string): Agent name pattern (supports wildcards: `*`, `prefix*`, `*suffix`, `*contains*`)
+- `discover` (boolean): Allow discovering available agents
+- `execute` (boolean): Allow executing agents
+- `monitor` (boolean): Allow monitoring agent run status
+- `cancel` (boolean): Allow cancelling agent runs
 
 ## Usage
 
@@ -160,6 +188,69 @@ Get the current status and details of a task.
 Cancel a running task.
 
 ### Message Format Examples
+
+#### Agent Operations
+
+```typescript
+// Discover agents
+{
+  "message": {
+    "parts": [{
+      "type": "text",
+      "content": "Discover agents matching 'Analysis*'"
+    }]
+  }
+}
+
+// Execute agent
+{
+  "message": {
+    "parts": [{
+      "type": "data",
+      "content": {
+        "operation": "executeAgent",
+        "agentNameOrId": "DataAnalysisAgent",
+        "parameters": {
+          "conversationHistory": [
+            { "role": "user", "content": "Analyze sales data for Q4" }
+          ],
+          "templateData": {
+            "quarter": "Q4",
+            "year": 2024
+          },
+          "waitForCompletion": true
+        }
+      }
+    }]
+  }
+}
+
+// Check agent run status
+{
+  "message": {
+    "parts": [{
+      "type": "data",
+      "content": {
+        "operation": "getAgentRunStatus",
+        "runId": "run-123456"
+      }
+    }]
+  }
+}
+
+// Cancel agent run
+{
+  "message": {
+    "parts": [{
+      "type": "data",
+      "content": {
+        "operation": "cancelAgentRun",
+        "runId": "run-123456"
+      }
+    }]
+  }
+}
+```
 
 #### Text-based Operations
 
@@ -228,6 +319,18 @@ Cancel a running task.
 
 ### Classes
 
+#### `AgentOperations`
+
+Handles all agent-related operations for the A2A server.
+
+**Methods:**
+
+- `discoverAgents(pattern?: string): Promise<AgentInfo[]>` - Discover available agents
+- `executeAgent(agentNameOrId: string, parameters: AgentExecutionParameters): Promise<AgentExecutionResult>` - Execute an agent
+- `getAgentRunStatus(runId: string): Promise<AgentRunStatus>` - Get agent run status
+- `cancelAgentRun(runId: string): Promise<CancelResult>` - Cancel an agent run
+- `processOperation(operation: string, parameters: any): Promise<OperationResult>` - Process any agent operation
+
 #### `EntityOperations`
 
 Handles all entity-related operations for the A2A server.
@@ -254,6 +357,35 @@ interface OperationResult {
 }
 ```
 
+#### `AgentExecutionParameters`
+```typescript
+interface AgentExecutionParameters {
+  conversationHistory?: ChatMessage[];
+  templateData?: Record<string, any>;
+  waitForCompletion?: boolean;
+}
+```
+
+#### `AgentExecutionResult`
+```typescript
+interface AgentExecutionResult {
+  success: boolean;
+  runId?: string;
+  status?: string;
+  returnValues?: any;
+  errorMessage?: string;
+}
+```
+
+#### `AgentRunStatus`
+```typescript
+interface AgentRunStatus {
+  status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
+  completedAt?: string;
+  errorMessage?: string;
+}
+```
+
 #### `OperationParameters`
 ```typescript
 interface OperationParameters {
@@ -274,12 +406,20 @@ interface OperationParameters {
 
 ## Integration with MemberJunction
 
-The A2A server integrates deeply with MemberJunction's entity system:
+The A2A server integrates deeply with MemberJunction's systems:
 
-1. **Entity Metadata**: Automatically discovers and exposes configured entities
-2. **Security**: Respects MemberJunction's user permissions and security model
-3. **Data Access**: Uses MemberJunction's data access patterns for all operations
-4. **Type Safety**: Leverages TypeScript for type-safe entity operations
+1. **Entity System**: 
+   - Automatically discovers and exposes configured entities
+   - Uses MemberJunction's data access patterns for all operations
+   - Respects user permissions and security model
+
+2. **AI Agent System**:
+   - Integrates with AIEngine for agent discovery
+   - Uses AgentRunner for agent execution
+   - Tracks runs with AIAgentRunEntity
+   - Supports conversation history and template data
+
+3. **Type Safety**: Leverages TypeScript for type-safe operations
 
 ## Error Handling
 
