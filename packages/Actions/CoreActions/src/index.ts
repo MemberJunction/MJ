@@ -31,6 +31,13 @@ export * from './custom/web/web-page-content.action';
 export * from './custom/web/url-link-validator.action';
 export * from './custom/web/url-metadata-extractor.action';
 
+// Data Transformation Actions
+export * from './custom/data/csv-parser.action';
+export * from './custom/data/json-transform.action';
+export * from './custom/data/xml-parser.action';
+export * from './custom/data/aggregate-data.action';
+export * from './custom/data/data-mapper.action';
+
 // Import Load functions to prevent tree shaking of @RegisterClass decorators
 import { LoadSendSingleMessageAction } from './custom/communication/send-single-message.action';
 import { LoadCreateRecordAction } from './custom/crud/create-record.action';
@@ -53,6 +60,11 @@ import { LoadWebSearchAction } from './custom/web/web-search.action';
 import { LoadWebPageContentAction } from './custom/web/web-page-content.action';
 import { LoadURLLinkValidatorAction } from './custom/web/url-link-validator.action';
 import { LoadURLMetadataExtractorAction } from './custom/web/url-metadata-extractor.action';
+import { LoadCSVParserAction } from './custom/data/csv-parser.action';
+import { LoadJSONTransformAction } from './custom/data/json-transform.action';
+import { LoadXMLParserAction } from './custom/data/xml-parser.action';
+import { LoadAggregateDataAction } from './custom/data/aggregate-data.action';
+import { LoadDataMapperAction } from './custom/data/data-mapper.action';
 
 // Call all Load functions to ensure @RegisterClass decorators execute
 // This prevents tree shaking from removing the action classes
@@ -77,3 +89,8 @@ LoadWebSearchAction();
 LoadWebPageContentAction();
 LoadURLLinkValidatorAction();
 LoadURLMetadataExtractorAction();
+LoadCSVParserAction();
+LoadJSONTransformAction();
+LoadXMLParserAction();
+LoadAggregateDataAction();
+LoadDataMapperAction();
