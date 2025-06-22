@@ -4,6 +4,7 @@ import { BaseFileHandlerAction } from "../utilities/base-file-handler";
 import * as xml2js from "xml2js";
 import * as xpath from "xpath";
 import { DOMParser } from "@xmldom/xmldom";
+import { JSONParamHelper } from "../utilities/json-param-helper";
 
 /**
  * Action that parses XML data and extracts content using XPath expressions
@@ -74,7 +75,7 @@ export class XMLParserAction extends BaseFileHandlerAction {
             
             // Get parameters
             const xpathExpression = this.getParamValue(params, 'xpathexpression');
-            const namespaceMapParam = this.getParamValue(params, 'namespacemap');
+            const namespaceMap = JSONParamHelper.getJSONParam(params, 'namespacemap') || {};
             const returnType = (this.getParamValue(params, 'returntype') || 'string').toLowerCase();
             const preserveAttributes = this.getBooleanParam(params, 'preserveattributes', true);
             const explicitArray = this.getBooleanParam(params, 'explicitarray', false);
@@ -92,24 +93,6 @@ export class XMLParserAction extends BaseFileHandlerAction {
                     Message: "XML data is empty",
                     ResultCode: "EMPTY_DATA"
                 };
-            }
-
-            // Parse namespace map if provided
-            let namespaceMap: Record<string, string> = {};
-            if (namespaceMapParam) {
-                if (typeof namespaceMapParam === 'string') {
-                    try {
-                        namespaceMap = JSON.parse(namespaceMapParam);
-                    } catch (e) {
-                        return {
-                            Success: false,
-                            Message: "NamespaceMap must be a valid JSON object",
-                            ResultCode: "INVALID_NAMESPACE_MAP"
-                        };
-                    }
-                } else {
-                    namespaceMap = namespaceMapParam;
-                }
             }
 
             let result: any;

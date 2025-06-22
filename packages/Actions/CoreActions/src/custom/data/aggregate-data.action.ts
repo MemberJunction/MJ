@@ -1,6 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
+import { JSONParamHelper } from "../utilities/json-param-helper";
 
 /**
  * Action that performs aggregation operations on arrays of data
@@ -65,45 +66,33 @@ export class AggregateDataAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             // Extract parameters
-            const inputDataParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'inputdata');
+            let inputData: any[];
+            let aggregations: any[];
+            
+            try {
+                inputData = JSONParamHelper.getRequiredJSONParam(params, 'InputData');
+            } catch (error) {
+                return {
+                    Success: false,
+                    Message: error instanceof Error ? error.message : String(error),
+                    ResultCode: "MISSING_PARAMETERS"
+                };
+            }
+
+            try {
+                aggregations = JSONParamHelper.getRequiredJSONParam(params, 'Aggregations');
+            } catch (error) {
+                return {
+                    Success: false,
+                    Message: error instanceof Error ? error.message : String(error),
+                    ResultCode: "MISSING_PARAMETERS"
+                };
+            }
+
             const groupByParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'groupby');
-            const aggregationsParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'aggregations');
             const includeEmptyGroupsParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'includeemptygroups');
             const sortByParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'sortby');
             const sortOrderParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'sortorder');
-
-            // Validate required parameters
-            if (!inputDataParam?.Value) {
-                return {
-                    Success: false,
-                    Message: "InputData parameter is required",
-                    ResultCode: "MISSING_PARAMETERS"
-                };
-            }
-
-            if (!aggregationsParam?.Value) {
-                return {
-                    Success: false,
-                    Message: "Aggregations parameter is required",
-                    ResultCode: "MISSING_PARAMETERS"
-                };
-            }
-
-            // Parse input data
-            let inputData: any[];
-            if (typeof inputDataParam.Value === 'string') {
-                try {
-                    inputData = JSON.parse(inputDataParam.Value);
-                } catch (e) {
-                    return {
-                        Success: false,
-                        Message: "InputData must be a valid JSON array",
-                        ResultCode: "INVALID_INPUT_DATA"
-                    };
-                }
-            } else {
-                inputData = inputDataParam.Value;
-            }
 
             if (!Array.isArray(inputData)) {
                 return {
@@ -129,21 +118,6 @@ export class AggregateDataAction extends BaseAction {
                 }
             }
 
-            // Parse aggregations
-            let aggregations: any[];
-            if (typeof aggregationsParam.Value === 'string') {
-                try {
-                    aggregations = JSON.parse(aggregationsParam.Value);
-                } catch (e) {
-                    return {
-                        Success: false,
-                        Message: "Aggregations must be a valid JSON array",
-                        ResultCode: "INVALID_AGGREGATIONS"
-                    };
-                }
-            } else {
-                aggregations = aggregationsParam.Value;
-            }
 
             if (!Array.isArray(aggregations)) {
                 return {

@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import * as nunjucks from "nunjucks";
+import { JSONParamHelper } from "../utilities/json-param-helper";
 
 /**
  * Action that transforms data using Nunjucks templates
@@ -150,56 +151,33 @@ export class DataMapperAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             // Extract parameters
-            const sourceDataParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'sourcedata');
-            const mappingTemplateParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'mappingtemplate');
+            let sourceData: any;
+            let mappingTemplate: any;
+            
+            try {
+                sourceData = JSONParamHelper.getRequiredJSONParam(params, 'SourceData');
+            } catch (error) {
+                return {
+                    Success: false,
+                    Message: error instanceof Error ? error.message : String(error),
+                    ResultCode: "MISSING_PARAMETERS"
+                };
+            }
+
+            try {
+                mappingTemplate = JSONParamHelper.getRequiredJSONParam(params, 'MappingTemplate');
+            } catch (error) {
+                return {
+                    Success: false,
+                    Message: error instanceof Error ? error.message : String(error),
+                    ResultCode: "MISSING_PARAMETERS"
+                };
+            }
+
             const templateTypeParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'templatetype');
             const iterateArraysParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'iteratearrays');
             const customFiltersParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'customfilters');
             const strictVariablesParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'strictvariables');
-
-            // Validate required parameters
-            if (!sourceDataParam?.Value) {
-                return {
-                    Success: false,
-                    Message: "SourceData parameter is required",
-                    ResultCode: "MISSING_PARAMETERS"
-                };
-            }
-
-            if (!mappingTemplateParam?.Value) {
-                return {
-                    Success: false,
-                    Message: "MappingTemplate parameter is required",
-                    ResultCode: "MISSING_PARAMETERS"
-                };
-            }
-
-            // Parse source data
-            let sourceData: any;
-            if (typeof sourceDataParam.Value === 'string') {
-                try {
-                    sourceData = JSON.parse(sourceDataParam.Value);
-                } catch (e) {
-                    // If not JSON, treat as string
-                    sourceData = sourceDataParam.Value;
-                }
-            } else {
-                sourceData = sourceDataParam.Value;
-            }
-
-            // Parse mapping template
-            let mappingTemplate: any;
-            if (typeof mappingTemplateParam.Value === 'string') {
-                // Try to parse as JSON first
-                try {
-                    mappingTemplate = JSON.parse(mappingTemplateParam.Value);
-                } catch (e) {
-                    // If not JSON, treat as string template
-                    mappingTemplate = mappingTemplateParam.Value;
-                }
-            } else {
-                mappingTemplate = mappingTemplateParam.Value;
-            }
 
             // Get other parameters
             const templateType = (templateTypeParam?.Value?.toString() || 'object').toLowerCase();
@@ -210,11 +188,8 @@ export class DataMapperAction extends BaseAction {
             this.nunjucksEnv.opts.throwOnUndefined = strictVariables;
 
             // Add custom filters if provided
-            if (customFiltersParam?.Value) {
-                const customFilters = typeof customFiltersParam.Value === 'string' 
-                    ? JSON.parse(customFiltersParam.Value) 
-                    : customFiltersParam.Value;
-                
+            const customFilters = JSONParamHelper.getJSONParam(params, 'CustomFilters');
+            if (customFilters) {
                 for (const [name, filterFunc] of Object.entries(customFilters)) {
                     if (typeof filterFunc === 'function') {
                         this.nunjucksEnv.addFilter(name, filterFunc);

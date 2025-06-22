@@ -2,6 +2,8 @@ export * from './generated/action_subclasses';
 
 // Communication Actions
 export * from './custom/communication/send-single-message.action';
+export * from './custom/communication/slack-webhook.action';
+export * from './custom/communication/teams-webhook.action';
 
 // CRUD Actions
 export * from './custom/crud/create-record.action';
@@ -38,8 +40,36 @@ export * from './custom/data/xml-parser.action';
 export * from './custom/data/aggregate-data.action';
 export * from './custom/data/data-mapper.action';
 
+// File Operation Actions
+export * from './custom/files/pdf-generator.action';
+export * from './custom/files/pdf-extractor.action';
+export * from './custom/files/excel-reader.action';
+export * from './custom/files/excel-writer.action';
+export * from './custom/files/file-compress.action';
+
+// Integration Actions
+export * from './custom/integration/http-request.action';
+export * from './custom/integration/graphql-query.action';
+export * from './custom/integration/oauth-flow.action';
+export * from './custom/integration/api-rate-limiter.action';
+
+// Security Actions
+export * from './custom/security/password-strength.action';
+
+// Workflow Control Actions
+export * from './custom/workflow/conditional.action';
+export * from './custom/workflow/loop.action';
+export * from './custom/workflow/parallel-execute.action';
+export * from './custom/workflow/retry.action';
+export * from './custom/workflow/delay.action';
+
+// AI Actions
+export * from './custom/ai/execute-ai-prompt.action';
+
 // Import Load functions to prevent tree shaking of @RegisterClass decorators
 import { LoadSendSingleMessageAction } from './custom/communication/send-single-message.action';
+import { LoadSlackWebhookAction } from './custom/communication/slack-webhook.action';
+import { LoadTeamsWebhookAction } from './custom/communication/teams-webhook.action';
 import { LoadCreateRecordAction } from './custom/crud/create-record.action';
 import { LoadGetRecordAction } from './custom/crud/get-record.action';
 import { LoadUpdateRecordAction } from './custom/crud/update-record.action';
@@ -65,10 +95,28 @@ import { LoadJSONTransformAction } from './custom/data/json-transform.action';
 import { LoadXMLParserAction } from './custom/data/xml-parser.action';
 import { LoadAggregateDataAction } from './custom/data/aggregate-data.action';
 import { LoadDataMapperAction } from './custom/data/data-mapper.action';
+import { LoadPDFGeneratorAction } from './custom/files/pdf-generator.action';
+import { LoadPDFExtractorAction } from './custom/files/pdf-extractor.action';
+import { LoadExcelReaderAction } from './custom/files/excel-reader.action';
+import { LoadExcelWriterAction } from './custom/files/excel-writer.action';
+import { LoadFileCompressAction } from './custom/files/file-compress.action';
+import { LoadHTTPRequestAction } from './custom/integration/http-request.action';
+import { LoadGraphQLQueryAction } from './custom/integration/graphql-query.action';
+import { LoadOAuthFlowAction } from './custom/integration/oauth-flow.action';
+import { LoadAPIRateLimiterAction } from './custom/integration/api-rate-limiter.action';
+import { LoadPasswordStrengthAction } from './custom/security/password-strength.action';
+import { LoadConditionalAction } from './custom/workflow/conditional.action';
+import { LoadLoopAction } from './custom/workflow/loop.action';
+import { LoadParallelExecuteAction } from './custom/workflow/parallel-execute.action';
+import { LoadRetryAction } from './custom/workflow/retry.action';
+import { LoadDelayAction } from './custom/workflow/delay.action';
+import { LoadExecuteAIPromptAction } from './custom/ai/execute-ai-prompt.action';
 
 // Call all Load functions to ensure @RegisterClass decorators execute
 // This prevents tree shaking from removing the action classes
 LoadSendSingleMessageAction();
+LoadSlackWebhookAction();
+LoadTeamsWebhookAction();
 LoadCreateRecordAction();
 LoadGetRecordAction();
 LoadUpdateRecordAction();
@@ -94,3 +142,19 @@ LoadJSONTransformAction();
 LoadXMLParserAction();
 LoadAggregateDataAction();
 LoadDataMapperAction();
+LoadPDFGeneratorAction();
+LoadPDFExtractorAction();
+LoadExcelReaderAction();
+LoadExcelWriterAction();
+LoadFileCompressAction();
+LoadHTTPRequestAction();
+LoadGraphQLQueryAction();
+LoadOAuthFlowAction();
+LoadAPIRateLimiterAction();
+LoadPasswordStrengthAction();
+LoadConditionalAction();
+LoadLoopAction();
+LoadParallelExecuteAction();
+LoadRetryAction();
+LoadDelayAction();
+LoadExecuteAIPromptAction();

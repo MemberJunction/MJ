@@ -3,6 +3,7 @@ import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import { JSONPath } from "jsonpath-plus";
 import * as jmespath from "jmespath";
+import { JSONParamHelper } from "../utilities/json-param-helper";
 
 /**
  * Action that transforms JSON data using JSONPath or JMESPath expressions
@@ -57,7 +58,17 @@ export class JSONTransformAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             // Extract parameters
-            const inputDataParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'inputdata');
+            let inputData: any;
+            try {
+                inputData = JSONParamHelper.getRequiredJSONParam(params, 'InputData');
+            } catch (error) {
+                return {
+                    Success: false,
+                    Message: error instanceof Error ? error.message : String(error),
+                    ResultCode: "MISSING_PARAMETERS"
+                };
+            }
+
             const expressionParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'expression');
             const transformTypeParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'transformtype');
             const multipleParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'multiple');
@@ -65,33 +76,12 @@ export class JSONTransformAction extends BaseAction {
             const wrapScalarParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'wrapscalar');
 
             // Validate required parameters
-            if (!inputDataParam?.Value) {
-                return {
-                    Success: false,
-                    Message: "InputData parameter is required",
-                    ResultCode: "MISSING_PARAMETERS"
-                };
-            }
-
             if (!expressionParam?.Value) {
                 return {
                     Success: false,
                     Message: "Expression parameter is required",
                     ResultCode: "MISSING_PARAMETERS"
                 };
-            }
-
-            // Parse input data
-            let inputData: any;
-            if (typeof inputDataParam.Value === 'string') {
-                try {
-                    inputData = JSON.parse(inputDataParam.Value);
-                } catch (e) {
-                    // If it's not valid JSON, treat it as a string value
-                    inputData = inputDataParam.Value;
-                }
-            } else {
-                inputData = inputDataParam.Value;
             }
 
             const expression = expressionParam.Value.toString();
