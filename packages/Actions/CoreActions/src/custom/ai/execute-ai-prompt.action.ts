@@ -3,7 +3,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { Metadata, RunView } from "@memberjunction/core";
 import { AIPromptEntity } from "@memberjunction/core-entities";
-import { PromptEngine } from "@memberjunction/ai-prompts";
+import { AIPromptRunner, AIPromptParams } from "@memberjunction/ai-prompts";
 
 /**
  * Action that executes MemberJunction AI prompts
@@ -120,37 +120,42 @@ export class ExecuteAIPromptAction extends BaseAction {
             }
 
             // Prepare prompt configuration
-            const promptConfig: any = {
-                promptId: prompt.ID,
-                variables: variables
-            };
+            const promptParams = new AIPromptParams();
+            promptParams.prompt = prompt;
+            promptParams.data = variables;
+            promptParams.contextUser = params.ContextUser;
 
             // Apply overrides if provided
             if (modelOverride) {
-                promptConfig.modelOverride = modelOverride;
+                // We'll need to handle model override through additionalParameters
+                promptParams.additionalParameters = promptParams.additionalParameters || {};
+                promptParams.additionalParameters.model = modelOverride;
             }
 
             if (temperatureOverride !== undefined && temperatureOverride !== null) {
-                promptConfig.temperatureOverride = temperatureOverride;
+                promptParams.additionalParameters = promptParams.additionalParameters || {};
+                promptParams.additionalParameters.temperature = temperatureOverride;
             }
 
             if (maxTokensOverride) {
-                promptConfig.maxTokensOverride = maxTokensOverride;
+                promptParams.additionalParameters = promptParams.additionalParameters || {};
+                promptParams.additionalParameters.max_tokens = maxTokensOverride;
             }
 
             if (systemPromptOverride) {
-                promptConfig.systemPromptOverride = systemPromptOverride;
+                promptParams.additionalParameters = promptParams.additionalParameters || {};
+                promptParams.additionalParameters.system = systemPromptOverride;
             }
 
             // Execute the prompt
             try {
-                const engine = new PromptEngine();
-                const result = await engine.ExecutePrompt(promptConfig, params.ContextUser);
+                const runner = new AIPromptRunner();
+                const result = await runner.ExecutePrompt(promptParams);
 
-                if (!result.Success) {
+                if (!result.success) {
                     return {
                         Success: false,
-                        Message: `Prompt execution failed: ${result.ErrorMessage || 'Unknown error'}`,
+                        Message: `Prompt execution failed: ${result.errorMessage || 'Unknown error'}`,
                         ResultCode: "PROMPT_EXECUTION_FAILED"
                     };
                 }
@@ -159,19 +164,19 @@ export class ExecuteAIPromptAction extends BaseAction {
                 params.Params.push({
                     Name: 'Response',
                     Type: 'Output',
-                    Value: result.Response
+                    Value: result.rawResult || result.result
                 });
 
                 params.Params.push({
                     Name: 'Model',
                     Type: 'Output',
-                    Value: result.Model || modelOverride || prompt.Model
+                    Value: result.modelInfo?.modelName || result.chatResult?.data?.model || modelOverride || prompt.AIModelType
                 });
 
                 params.Params.push({
                     Name: 'TokensUsed',
                     Type: 'Output',
-                    Value: result.TokensUsed
+                    Value: (result.promptTokens || 0) + (result.completionTokens || 0)
                 });
 
                 if (includeMetadata) {
@@ -182,9 +187,9 @@ export class ExecuteAIPromptAction extends BaseAction {
                             promptId: prompt.ID,
                             promptName: prompt.Name,
                             promptType: prompt.Type,
-                            model: result.Model || modelOverride || prompt.Model,
+                            model: result.modelInfo?.modelName || result.chatResult?.data?.model || modelOverride || prompt.AIModelType,
                             temperature: temperatureOverride !== undefined ? temperatureOverride : prompt.Temperature,
-                            maxTokens: maxTokensOverride || prompt.MaxTokens
+                            maxTokens: maxTokensOverride || null
                         }
                     });
                 }
@@ -193,9 +198,9 @@ export class ExecuteAIPromptAction extends BaseAction {
                 const responseData: any = {
                     message: "AI prompt executed successfully",
                     promptName: promptName,
-                    model: result.Model || modelOverride || prompt.Model,
-                    tokensUsed: result.TokensUsed,
-                    response: result.Response
+                    model: result.modelInfo?.modelName || result.chatResult?.data?.model || modelOverride || prompt.AIModelType,
+                    tokensUsed: (result.promptTokens || 0) + (result.completionTokens || 0),
+                    response: result.rawResult || result.result
                 };
 
                 if (includeMetadata) {
@@ -203,7 +208,7 @@ export class ExecuteAIPromptAction extends BaseAction {
                         promptId: prompt.ID,
                         promptType: prompt.Type,
                         temperature: temperatureOverride !== undefined ? temperatureOverride : prompt.Temperature,
-                        maxTokens: maxTokensOverride || prompt.MaxTokens,
+                        maxTokens: maxTokensOverride || null,
                         streaming: stream
                     };
                 }
