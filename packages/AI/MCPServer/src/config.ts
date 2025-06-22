@@ -30,10 +30,19 @@ const mcpServerActionToolInfoSchema = z.object({
   actionCategory: z.string().optional(),
 });
 
+const mcpServerAgentToolInfoSchema = z.object({
+  agentName: z.string().optional(),
+  discover: z.boolean().optional().default(false),
+  execute: z.boolean().optional().default(false),
+  status: z.boolean().optional().default(false),
+  cancel: z.boolean().optional().default(false),
+});
+
 const mcpServerInfoSchema = z.object({
   port: z.coerce.number().optional().default(3100),
   entityTools: z.array(mcpServerEntityToolInfoSchema).optional(),
   actionTools: z.array(mcpServerActionToolInfoSchema).optional(),
+  agentTools: z.array(mcpServerAgentToolInfoSchema).optional(),
   enableMCPServer: z.boolean().optional().default(false),
 });
 

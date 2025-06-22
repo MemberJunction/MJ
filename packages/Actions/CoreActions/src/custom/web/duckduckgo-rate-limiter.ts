@@ -42,7 +42,7 @@ export class DuckDuckGoRateLimiter {
         maxConcurrent: 1, // When queue is active, serialize requests
         queueTimeout: 30000, // 30 seconds timeout for queued requests
         retryDelay: 2000, // 2 seconds between retries
-        maxRetries: 3,
+        maxRetries: 4,
         resetQueueAfterMs: 10000 // Reset queue after 10 seconds of success
     };
     
