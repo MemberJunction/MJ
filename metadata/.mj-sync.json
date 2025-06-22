@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
   "push": {
-    "autoCreateMissingRecords": true
+    "autoCreateMissingRecords": false
   },
   "directoryOrder": [
     "action-categories",
