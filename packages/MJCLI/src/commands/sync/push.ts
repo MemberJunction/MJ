@@ -13,11 +13,8 @@ import {
   getSystemUser,
   resetSyncEngine,
   configManager,
-  getDataProvider,
 } from '@memberjunction/metadata-sync';
-import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import path from 'path';
-import fs from 'fs-extra';
 
 export default class Push extends Command {
   static description = 'Push local file changes to the database';
@@ -50,9 +47,9 @@ export default class Push extends Command {
         this.error('No mj.config.cjs found in current directory or parent directories');
       }
 
-      // Load sync config
+      // Load sync config (currently only used internally by PushService)
       const syncConfigDir = flags.dir ? path.resolve(configManager.getOriginalCwd(), flags.dir) : configManager.getOriginalCwd();
-      const syncConfig = await loadSyncConfig(syncConfigDir);
+      await loadSyncConfig(syncConfigDir);
 
       // Stop spinner before provider initialization
       spinner.stop();
