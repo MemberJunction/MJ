@@ -573,7 +573,7 @@ export default class Push extends Command {
     }
     
     // First, process all JSON files in this directory
-    await this.processJsonFiles(jsonFiles, entityDir, entityConfig, syncEngine, flags, result, fileBackupManager);
+    await this.processJsonFiles(jsonFiles, entityDir, entityConfig, syncEngine, flags, result, fileBackupManager, syncConfig);
     
     // Then, recursively process subdirectories
     const entries = await fs.readdir(entityDir, { withFileTypes: true });
@@ -651,7 +651,8 @@ export default class Push extends Command {
     syncEngine: SyncEngine,
     flags: any,
     result: { created: number; updated: number; unchanged: number; errors: number },
-    fileBackupManager?: FileBackupManager
+    fileBackupManager?: FileBackupManager,
+    syncConfig?: any
   ): Promise<void> {
     if (jsonFiles.length === 0) {
       return;
@@ -700,7 +701,8 @@ export default class Push extends Command {
             flags.verbose,
             isArray ? i : undefined,
             fileBackupManager,
-            recordLineNumber
+            recordLineNumber,
+            syncConfig
           );
           
           if (!flags['dry-run']) {
@@ -764,7 +766,8 @@ export default class Push extends Command {
     verbose: boolean = false,
     arrayIndex?: number,
     fileBackupManager?: FileBackupManager,
-    lineNumber?: number
+    lineNumber?: number,
+    syncConfig?: any
   ): Promise<{ isNew: boolean; wasActuallyUpdated: boolean; isDuplicate: boolean; relatedStats?: { created: number; updated: number; unchanged: number } }> {
     // Load or create entity
     let entity: BaseEntity | null = null;
@@ -779,8 +782,7 @@ export default class Push extends Command {
           .map(([key, value]) => `${key}=${value}`)
           .join(', ');
         
-        // Load sync config to check autoCreateMissingRecords setting
-        const syncConfig = await loadSyncConfig(configManager.getOriginalCwd());
+        // Use passed sync config to check autoCreateMissingRecords setting
         const autoCreate = syncConfig?.push?.autoCreateMissingRecords ?? false;
         
         if (!autoCreate) {
@@ -931,7 +933,8 @@ export default class Push extends Command {
         fileBackupManager,
         1, // indentLevel
         fullFilePath,
-        arrayIndex
+        arrayIndex,
+        syncConfig
       );
     }
     
@@ -978,7 +981,8 @@ export default class Push extends Command {
     fileBackupManager?: FileBackupManager,
     indentLevel: number = 1,
     parentFilePath?: string,
-    parentArrayIndex?: number
+    parentArrayIndex?: number,
+    syncConfig?: any
   ): Promise<{ created: number; updated: number; unchanged: number }> {
     const indent = '  '.repeat(indentLevel);
     const stats = { created: 0, updated: 0, unchanged: 0 };
@@ -1003,8 +1007,7 @@ export default class Push extends Command {
                 .map(([key, value]) => `${key}=${value}`)
                 .join(', ');
               
-              // Load sync config to check autoCreateMissingRecords setting
-              const syncConfig = await loadSyncConfig(configManager.getOriginalCwd());
+              // Use passed sync config to check autoCreateMissingRecords setting
               const autoCreate = syncConfig?.push?.autoCreateMissingRecords ?? false;
               
               if (!autoCreate) {
@@ -1184,7 +1187,8 @@ export default class Push extends Command {
               fileBackupManager,
               indentLevel + 1,
               parentFilePath,
-              parentArrayIndex
+              parentArrayIndex,
+              syncConfig
             );
             
             // Accumulate nested stats
