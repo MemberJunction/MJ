@@ -2832,6 +2832,43 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     }
     
     /**
+     * Gets the icon class for the current entity
+     */
+    public getEntityIconClass(): string {
+        if (!this.entity) {
+            return this.mode === 'agent' ? 'fa-solid fa-robot' : 'fa-solid fa-comment-dots';
+        }
+        
+        if (this.isAgentEntity(this.entity)) {
+            // Agent entity - check for IconClass
+            return (this.entity as any).IconClass || 'fa-solid fa-robot';
+        }
+        
+        // Prompt entity - use default prompt icon
+        return 'fa-solid fa-comment-dots';
+    }
+    
+    /**
+     * Checks if the entity has a logo URL
+     */
+    public hasEntityLogo(): boolean {
+        if (!this.entity || !this.isAgentEntity(this.entity)) {
+            return false;
+        }
+        return !!(this.entity as any).LogoURL;
+    }
+    
+    /**
+     * Gets the logo URL for the entity (agent only)
+     */
+    public getEntityLogoURL(): string {
+        if (!this.entity || !this.isAgentEntity(this.entity)) {
+            return '';
+        }
+        return (this.entity as any).LogoURL || '';
+    }
+    
+    /**
      * Updates stop sequences from the textarea input
      */
     public updateStopSequences() {

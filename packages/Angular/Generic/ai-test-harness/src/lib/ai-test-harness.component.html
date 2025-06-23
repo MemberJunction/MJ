@@ -4,7 +4,11 @@
             @if (entity) {
                 <div class="agent-info">
                     <div class="agent-details">
-                        <i class="fa-solid" [class.fa-robot]="mode === 'agent'" [class.fa-comment-dots]="mode === 'prompt'"></i>
+                        @if (hasEntityLogo()) {
+                            <img [src]="getEntityLogoURL()" [alt]="getEntityName() + ' logo'" class="entity-logo">
+                        } @else {
+                            <i [class]="getEntityIconClass()"></i>
+                        }
                         <div>
                             <h3>{{ getEntityName() }}</h3>
                             @if (entity.Description) {
@@ -91,7 +95,12 @@
                                     @if (message.role === 'user') {
                                         <i class="fa-solid fa-user"></i> You
                                     } @else {
-                                        <i class="fa-solid fa-robot"></i> {{ getEntityName() || 'Assistant' }}
+                                        @if (hasEntityLogo()) {
+                                            <img [src]="getEntityLogoURL()" [alt]="getEntityName() + ' logo'" class="message-role-logo">
+                                        } @else {
+                                            <i [class]="getEntityIconClass()"></i>
+                                        }
+                                        {{ getEntityName() || 'Assistant' }}
                                     }
                                 </span>
                                 <span class="message-time">{{ formatTimestamp(message.timestamp) }}</span>

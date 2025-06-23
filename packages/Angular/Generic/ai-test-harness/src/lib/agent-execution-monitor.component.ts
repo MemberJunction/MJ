@@ -39,6 +39,15 @@ export interface ExecutionTreeNode {
     detailsExpanded?: boolean;
     promptCount?: number;
     displayMode?: 'live' | 'historical' | 'both';
+    // Agent metadata for icon display
+    agentName?: string;
+    agentId?: string;
+    agentIconClass?: string;
+    agentLogoURL?: string;
+    // Action metadata for icon display
+    actionName?: string;
+    actionId?: string;
+    actionIconClass?: string;
 }
 
 /**
@@ -674,6 +683,10 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     // Track which nodes were added in the current update
     private newlyAddedNodeIds = new Set<string>();
     
+    // Temporary storage for parsed metadata
+    private lastParsedAgentData: any = null;
+    private lastParsedActionData: any = null;
+    
     private destroy$ = new Subject<void>();
     private updateSubscription?: Subscription;
     
@@ -904,6 +917,14 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                 displayMode = 'live';
             }
             
+            // Clear metadata storage before creating previews
+            this.lastParsedAgentData = null;
+            this.lastParsedActionData = null;
+            
+            // Create previews which will populate metadata if available
+            const inputPreview = this.createPreview(node.inputData);
+            const outputPreview = this.createPreview(node.outputData);
+            
             const treeNode: ExecutionTreeNode = {
                 id: node.step?.ID || `node-${Date.now()}-${index}`,
                 name: name,
@@ -913,8 +934,8 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                 endTime: node.endTime ? new Date(node.endTime) : undefined,
                 duration: node.durationMs,
                 agentPath: node.agentHierarchy || [],
-                inputPreview: this.createPreview(node.inputData),
-                outputPreview: this.createPreview(node.outputData),
+                inputPreview: inputPreview,
+                outputPreview: outputPreview,
                 error: node.step?.ErrorMessage,
                 expanded: false,
                 depth: node.depth !== undefined ? node.depth : depth,  // Use node.depth if available, fallback to recursion depth
@@ -925,6 +946,21 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                 children: node.children ? this.convertExecutionTree(node.children, node.depth !== undefined ? node.depth + 1 : depth + 1) : undefined,
                 displayMode: displayMode
             };
+            
+            // Add agent metadata if this is a sub-agent node
+            if (treeNode.type === 'sub-agent' && this.lastParsedAgentData) {
+                treeNode.agentName = this.lastParsedAgentData.agentName;
+                treeNode.agentId = this.lastParsedAgentData.agentId;
+                treeNode.agentIconClass = this.lastParsedAgentData.agentIconClass;
+                treeNode.agentLogoURL = this.lastParsedAgentData.agentLogoURL;
+            }
+            
+            // Add action metadata if this is an action node
+            if (treeNode.type === 'action' && this.lastParsedActionData) {
+                treeNode.actionName = this.lastParsedActionData.actionName;
+                treeNode.actionId = this.lastParsedActionData.actionId;
+                treeNode.actionIconClass = this.lastParsedActionData.actionIconClass;
+            }
             
             return treeNode;
         });
@@ -1008,10 +1044,27 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         try {
             const parsed = typeof data === 'string' ? JSON.parse(data) : data;
             
-            // Extract meaningful preview
+            // Extract meaningful preview and store metadata
             if (parsed.promptName) return `Prompt: ${parsed.promptName}`;
-            if (parsed.actionName) return `Action: ${parsed.actionName}`;
-            if (parsed.subAgentName) return `Sub-agent: ${parsed.subAgentName}`;
+            if (parsed.actionName) {
+                // Store action metadata if available
+                this.lastParsedActionData = {
+                    actionName: parsed.actionName,
+                    actionId: parsed.actionId,
+                    actionIconClass: parsed.actionIconClass
+                };
+                return `Action: ${parsed.actionName}`;
+            }
+            if (parsed.subAgentName) {
+                // Store agent metadata if available
+                this.lastParsedAgentData = {
+                    agentName: parsed.subAgentName,
+                    agentId: parsed.subAgentId || parsed.agentId,
+                    agentIconClass: parsed.subAgentIconClass || parsed.agentIconClass,
+                    agentLogoURL: parsed.subAgentLogoURL || parsed.agentLogoURL
+                };
+                return `Sub-agent: ${parsed.subAgentName}`;
+            }
             if (parsed.message) return parsed.message;
             if (parsed.userMessage) return parsed.userMessage;
             
@@ -1795,10 +1848,20 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             displayMode = step.metadata.displayMode;
         }
         
-        return {
+        // Clear metadata storage before creating previews
+        this.lastParsedAgentData = null;
+        this.lastParsedActionData = null;
+        
+        // Create previews which will populate metadata if available
+        const inputPreview = this.createPreview(step.inputData);
+        const outputPreview = this.createPreview(step.outputData);
+        
+        const nodeType = this.mapStepType(step.executionType || step.step?.StepType);
+        
+        const node: ExecutionTreeNode = {
             id: step.step?.ID || this.generateStepId(step),
             name: name,
-            type: this.mapStepType(step.executionType || step.step?.StepType),
+            type: nodeType,
             status: status,
             startTime: step.startTime ? new Date(step.startTime) : new Date(),
             endTime: step.endTime ? new Date(step.endTime) : undefined,
@@ -1808,12 +1871,29 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             depth: step.depth || 0,
             detailsMarkdown: detailsMarkdown,
             detailsExpanded: false,
-            inputPreview: this.createPreview(step.inputData),
-            outputPreview: this.createPreview(step.outputData),
+            inputPreview: inputPreview,
+            outputPreview: outputPreview,
             tokensUsed: this.extractTokens(step.outputData),
             cost: this.extractCost(step.outputData),
             displayMode: displayMode
         };
+        
+        // Add agent metadata if this is a sub-agent node
+        if (nodeType === 'sub-agent' && this.lastParsedAgentData) {
+            node.agentName = this.lastParsedAgentData.agentName;
+            node.agentId = this.lastParsedAgentData.agentId;
+            node.agentIconClass = this.lastParsedAgentData.agentIconClass;
+            node.agentLogoURL = this.lastParsedAgentData.agentLogoURL;
+        }
+        
+        // Add action metadata if this is an action node
+        if (nodeType === 'action' && this.lastParsedActionData) {
+            node.actionName = this.lastParsedActionData.actionName;
+            node.actionId = this.lastParsedActionData.actionId;
+            node.actionIconClass = this.lastParsedActionData.actionIconClass;
+        }
+        
+        return node;
     }
     
     /**

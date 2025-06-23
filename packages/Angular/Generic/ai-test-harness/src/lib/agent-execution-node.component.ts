@@ -42,7 +42,7 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
                 </span>
                 
                 <!-- Type Icon -->
-                <span class="type-icon" [title]="node.type">
+                <span class="type-icon" [title]="getNodeTitle()">
                     @switch (node.type) {
                         @case ('validation') {
                             <i class="fa-solid fa-shield-halved"></i>
@@ -51,10 +51,20 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
                             <i class="fa-solid fa-brain"></i>
                         }
                         @case ('action') {
-                            <i class="fa-solid fa-bolt"></i>
+                            @if (node.actionIconClass) {
+                                <i [class]="node.actionIconClass"></i>
+                            } @else {
+                                <i class="fa-solid fa-bolt"></i>
+                            }
                         }
                         @case ('sub-agent') {
-                            <i class="fa-solid fa-sitemap"></i>
+                            @if (node.agentLogoURL) {
+                                <img [src]="node.agentLogoURL" [alt]="node.agentName || 'Agent'" class="agent-logo-icon">
+                            } @else if (node.agentIconClass) {
+                                <i [class]="node.agentIconClass"></i>
+                            } @else {
+                                <i class="fa-solid fa-sitemap"></i>
+                            }
                         }
                         @case ('decision') {
                             <i class="fa-solid fa-code-branch"></i>
@@ -209,8 +219,18 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
         .type-icon {
             width: 20px;
             text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             font-size: 14px;
             color: #666;
+        }
+        
+        .agent-logo-icon {
+            width: 16px;
+            height: 16px;
+            object-fit: cover;
+            border-radius: 3px;
         }
         
         .node-name {
@@ -404,6 +424,16 @@ export class ExecutionNodeComponent {
         const minutes = Math.floor(ms / 60000);
         const seconds = Math.floor((ms % 60000) / 1000);
         return `${minutes}m ${seconds}s`;
+    }
+    
+    getNodeTitle(): string {
+        if (this.node.type === 'sub-agent' && this.node.agentName) {
+            return `Sub-agent: ${this.node.agentName}`;
+        }
+        if (this.node.type === 'action' && this.node.actionName) {
+            return `Action: ${this.node.actionName}`;
+        }
+        return this.node.type;
     }
     
     formatMarkdown(markdown: string): string {

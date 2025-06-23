@@ -9,7 +9,11 @@
             <div class="agent-header-content">
                 <div class="agent-overview">
                     <div class="agent-icon-wrapper">
-                        <i class="fa-solid fa-robot"></i>
+                        @if (hasLogoURL()) {
+                            <img [src]="record.LogoURL" [alt]="record.Name + ' logo'" class="agent-logo">
+                        } @else {
+                            <i [class]="getAgentIcon()"></i>
+                        }
                     </div>
                     <div class="agent-info">
                         @if (EditMode) {
@@ -255,7 +259,11 @@
                                         @for (subAgent of subAgents; track subAgent.ID) {
                                             <div class="entity-item sub-agent-item" (click)="navigateToEntity('AI Agents', subAgent.ID)">
                                                 <div class="item-icon">
-                                                    <i class="fa-solid fa-robot"></i>
+                                                    @if (hasSubAgentLogoURL(subAgent)) {
+                                                        <img [src]="subAgent.LogoURL" [alt]="subAgent.Name + ' logo'" class="sub-agent-logo">
+                                                    } @else {
+                                                        <i [class]="getSubAgentIcon(subAgent)"></i>
+                                                    }
                                                 </div>
                                                 <div class="item-content">
                                                     <div class="item-title">{{ subAgent.Name || 'Untitled Sub-Agent' }}</div>

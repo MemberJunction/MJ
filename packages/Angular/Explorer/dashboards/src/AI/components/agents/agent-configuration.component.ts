@@ -241,4 +241,23 @@ export class AgentConfigurationComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * Gets the agent's display icon
+   * Prioritizes LogoURL, falls back to IconClass, then default robot icon
+   */
+  public getAgentIcon(agent: AIAgentEntity): string {
+    if (agent?.LogoURL) {
+      // LogoURL is used in img tag, not here
+      return '';
+    }
+    return agent?.IconClass || 'fa-solid fa-robot';
+  }
+
+  /**
+   * Checks if the agent has a logo URL (for image display)
+   */
+  public hasLogoURL(agent: AIAgentEntity): boolean {
+    return !!agent?.LogoURL;
+  }
+
 }

@@ -122,7 +122,11 @@
                       <div class="card-header" (click)="toggleAgentExpansion(agent.ID)">
                         <div class="agent-info">
                           <div class="agent-icon" [style.background-color]="getAgentIconColor(agent)">
-                            <i [class]="getExecutionModeIcon(agent.ExecutionMode)"></i>
+                            @if (hasLogoURL(agent)) {
+                              <img [src]="agent.LogoURL" [alt]="agent.Name + ' logo'" class="agent-logo">
+                            } @else {
+                              <i [class]="getAgentIcon(agent)"></i>
+                            }
                           </div>
                           <div class="agent-details">
                             <h4 class="agent-name">{{ agent.Name }}</h4>
@@ -229,7 +233,11 @@
                           <td>
                             <div class="agent-name-cell">
                               <div class="agent-icon-small" [style.background-color]="getAgentIconColor(agent)">
-                                <i [class]="getExecutionModeIcon(agent.ExecutionMode)"></i>
+                                @if (hasLogoURL(agent)) {
+                                  <img [src]="agent.LogoURL" [alt]="agent.Name + ' logo'" class="agent-logo-small">
+                                } @else {
+                                  <i [class]="getAgentIcon(agent)"></i>
+                                }
                               </div>
                               <div>
                                 <div class="agent-name">{{ agent.Name }}</div>
