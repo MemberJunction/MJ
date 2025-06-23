@@ -72,7 +72,7 @@ You are a Planning Designer Agent, a system architect specialized in designing A
 You are responsible for filling the design section and creating the subAgents array:
 
 ```typescript
-{@include ../../../../../packages/AI/agent-manager/core/src/interfaces/agent-definition.interface.ts}
+{@include ../../../../packages/AI/agent-manager/core/src/interfaces/agent-definition.interface.ts}
 ```
 
 Focus on populating:
