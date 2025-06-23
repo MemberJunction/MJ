@@ -8252,6 +8252,76 @@ export const AIPromptRunSchema = z.object({
         * * Display Name: Descendant Cost
         * * SQL Data Type: decimal(18, 6)
     * * Description: The total cost of all descendant (child and grandchild) prompt runs, excluding this run's own cost. For leaf nodes (no children), this is 0. Updated when child costs change.`),
+    ValidationAttemptCount: z.number().nullable().describe(`
+        * * Field Name: ValidationAttemptCount
+        * * Display Name: Validation Attempt Count
+        * * SQL Data Type: int
+    * * Description: Total number of validation attempts made (including the initial attempt)`),
+    SuccessfulValidationCount: z.number().nullable().describe(`
+        * * Field Name: SuccessfulValidationCount
+        * * Display Name: Successful Validation Count
+        * * SQL Data Type: int
+    * * Description: Number of validation attempts that passed validation`),
+    FinalValidationPassed: z.boolean().nullable().describe(`
+        * * Field Name: FinalValidationPassed
+        * * Display Name: Final Validation Passed
+        * * SQL Data Type: bit
+    * * Description: Whether validation ultimately passed (1) or failed (0)`),
+    ValidationBehavior: z.string().nullable().describe(`
+        * * Field Name: ValidationBehavior
+        * * Display Name: Validation Behavior
+        * * SQL Data Type: nvarchar(50)
+    * * Description: Validation behavior used: Strict, Warn, or None`),
+    RetryStrategy: z.string().nullable().describe(`
+        * * Field Name: RetryStrategy
+        * * Display Name: Retry Strategy
+        * * SQL Data Type: nvarchar(50)
+    * * Description: Retry strategy used: Fixed, Linear, or Exponential`),
+    MaxRetriesConfigured: z.number().nullable().describe(`
+        * * Field Name: MaxRetriesConfigured
+        * * Display Name: Max Retries Configured
+        * * SQL Data Type: int
+    * * Description: Maximum number of retries configured on the prompt`),
+    FinalValidationError: z.string().nullable().describe(`
+        * * Field Name: FinalValidationError
+        * * Display Name: Final Validation Error
+        * * SQL Data Type: nvarchar(500)
+    * * Description: The final validation error message if validation failed`),
+    ValidationErrorCount: z.number().nullable().describe(`
+        * * Field Name: ValidationErrorCount
+        * * Display Name: Validation Error Count
+        * * SQL Data Type: int
+    * * Description: Number of validation errors on the final attempt`),
+    CommonValidationError: z.string().nullable().describe(`
+        * * Field Name: CommonValidationError
+        * * Display Name: Common Validation Error
+        * * SQL Data Type: nvarchar(255)
+    * * Description: Most frequent validation error across all attempts`),
+    FirstAttemptAt: z.date().nullable().describe(`
+        * * Field Name: FirstAttemptAt
+        * * Display Name: First Attempt At
+        * * SQL Data Type: datetime
+    * * Description: Timestamp of the first validation attempt`),
+    LastAttemptAt: z.date().nullable().describe(`
+        * * Field Name: LastAttemptAt
+        * * Display Name: Last Attempt At
+        * * SQL Data Type: datetime
+    * * Description: Timestamp of the last validation attempt`),
+    TotalRetryDurationMS: z.number().nullable().describe(`
+        * * Field Name: TotalRetryDurationMS
+        * * Display Name: Total Retry Duration MS
+        * * SQL Data Type: int
+    * * Description: Total time spent on retries in milliseconds (excluding first attempt)`),
+    ValidationAttempts: z.string().nullable().describe(`
+        * * Field Name: ValidationAttempts
+        * * Display Name: Validation Attempts
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array containing detailed information about each validation attempt`),
+    ValidationSummary: z.string().nullable().describe(`
+        * * Field Name: ValidationSummary
+        * * Display Name: Validation Summary
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing summary information about the validation process`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -34253,6 +34323,188 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     }
     set DescendantCost(value: number | null) {
         this.Set('DescendantCost', value);
+    }
+
+    /**
+    * * Field Name: ValidationAttemptCount
+    * * Display Name: Validation Attempt Count
+    * * SQL Data Type: int
+    * * Description: Total number of validation attempts made (including the initial attempt)
+    */
+    get ValidationAttemptCount(): number | null {
+        return this.Get('ValidationAttemptCount');
+    }
+    set ValidationAttemptCount(value: number | null) {
+        this.Set('ValidationAttemptCount', value);
+    }
+
+    /**
+    * * Field Name: SuccessfulValidationCount
+    * * Display Name: Successful Validation Count
+    * * SQL Data Type: int
+    * * Description: Number of validation attempts that passed validation
+    */
+    get SuccessfulValidationCount(): number | null {
+        return this.Get('SuccessfulValidationCount');
+    }
+    set SuccessfulValidationCount(value: number | null) {
+        this.Set('SuccessfulValidationCount', value);
+    }
+
+    /**
+    * * Field Name: FinalValidationPassed
+    * * Display Name: Final Validation Passed
+    * * SQL Data Type: bit
+    * * Description: Whether validation ultimately passed (1) or failed (0)
+    */
+    get FinalValidationPassed(): boolean | null {
+        return this.Get('FinalValidationPassed');
+    }
+    set FinalValidationPassed(value: boolean | null) {
+        this.Set('FinalValidationPassed', value);
+    }
+
+    /**
+    * * Field Name: ValidationBehavior
+    * * Display Name: Validation Behavior
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Validation behavior used: Strict, Warn, or None
+    */
+    get ValidationBehavior(): string | null {
+        return this.Get('ValidationBehavior');
+    }
+    set ValidationBehavior(value: string | null) {
+        this.Set('ValidationBehavior', value);
+    }
+
+    /**
+    * * Field Name: RetryStrategy
+    * * Display Name: Retry Strategy
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Retry strategy used: Fixed, Linear, or Exponential
+    */
+    get RetryStrategy(): string | null {
+        return this.Get('RetryStrategy');
+    }
+    set RetryStrategy(value: string | null) {
+        this.Set('RetryStrategy', value);
+    }
+
+    /**
+    * * Field Name: MaxRetriesConfigured
+    * * Display Name: Max Retries Configured
+    * * SQL Data Type: int
+    * * Description: Maximum number of retries configured on the prompt
+    */
+    get MaxRetriesConfigured(): number | null {
+        return this.Get('MaxRetriesConfigured');
+    }
+    set MaxRetriesConfigured(value: number | null) {
+        this.Set('MaxRetriesConfigured', value);
+    }
+
+    /**
+    * * Field Name: FinalValidationError
+    * * Display Name: Final Validation Error
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The final validation error message if validation failed
+    */
+    get FinalValidationError(): string | null {
+        return this.Get('FinalValidationError');
+    }
+    set FinalValidationError(value: string | null) {
+        this.Set('FinalValidationError', value);
+    }
+
+    /**
+    * * Field Name: ValidationErrorCount
+    * * Display Name: Validation Error Count
+    * * SQL Data Type: int
+    * * Description: Number of validation errors on the final attempt
+    */
+    get ValidationErrorCount(): number | null {
+        return this.Get('ValidationErrorCount');
+    }
+    set ValidationErrorCount(value: number | null) {
+        this.Set('ValidationErrorCount', value);
+    }
+
+    /**
+    * * Field Name: CommonValidationError
+    * * Display Name: Common Validation Error
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Most frequent validation error across all attempts
+    */
+    get CommonValidationError(): string | null {
+        return this.Get('CommonValidationError');
+    }
+    set CommonValidationError(value: string | null) {
+        this.Set('CommonValidationError', value);
+    }
+
+    /**
+    * * Field Name: FirstAttemptAt
+    * * Display Name: First Attempt At
+    * * SQL Data Type: datetime
+    * * Description: Timestamp of the first validation attempt
+    */
+    get FirstAttemptAt(): Date | null {
+        return this.Get('FirstAttemptAt');
+    }
+    set FirstAttemptAt(value: Date | null) {
+        this.Set('FirstAttemptAt', value);
+    }
+
+    /**
+    * * Field Name: LastAttemptAt
+    * * Display Name: Last Attempt At
+    * * SQL Data Type: datetime
+    * * Description: Timestamp of the last validation attempt
+    */
+    get LastAttemptAt(): Date | null {
+        return this.Get('LastAttemptAt');
+    }
+    set LastAttemptAt(value: Date | null) {
+        this.Set('LastAttemptAt', value);
+    }
+
+    /**
+    * * Field Name: TotalRetryDurationMS
+    * * Display Name: Total Retry Duration MS
+    * * SQL Data Type: int
+    * * Description: Total time spent on retries in milliseconds (excluding first attempt)
+    */
+    get TotalRetryDurationMS(): number | null {
+        return this.Get('TotalRetryDurationMS');
+    }
+    set TotalRetryDurationMS(value: number | null) {
+        this.Set('TotalRetryDurationMS', value);
+    }
+
+    /**
+    * * Field Name: ValidationAttempts
+    * * Display Name: Validation Attempts
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array containing detailed information about each validation attempt
+    */
+    get ValidationAttempts(): string | null {
+        return this.Get('ValidationAttempts');
+    }
+    set ValidationAttempts(value: string | null) {
+        this.Set('ValidationAttempts', value);
+    }
+
+    /**
+    * * Field Name: ValidationSummary
+    * * Display Name: Validation Summary
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing summary information about the validation process
+    */
+    get ValidationSummary(): string | null {
+        return this.Get('ValidationSummary');
+    }
+    set ValidationSummary(value: string | null) {
+        this.Set('ValidationSummary', value);
     }
 
     /**
