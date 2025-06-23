@@ -162,12 +162,12 @@ const codegenConfig = {
     convertCoreSchemaToFlywayMigrationFile: true,
   },
   forceRegeneration: {
-    enabled: false,  // Set to true to force regeneration even without schema changes
+    enabled: false, // Set to true to force regeneration even without schema changes
     baseViews: false,
-    spCreate: false,  // Set this to true to regenerate all spCreate procedures
+    spCreate: false, // Set this to true to regenerate all spCreate procedures
     spUpdate: false,
     spDelete: false,
-    allStoredProcedures: false,  // Overrides individual SP flags when true
+    allStoredProcedures: false, // Overrides individual SP flags when true
     indexes: false,
     fullTextSearch: false,
   },
@@ -203,7 +203,7 @@ const mjServerConfig = {
     learningCycleEnabled: process.env.ASK_SKIP_RUN_LEARNING_CYCLES,
     learningCycleRunUponStartup: process.env.ASK_SKIP_RUN_LEARNING_CYCLES_UPON_STARTUP,
     orgID: process.env.ASK_SKIP_ORGANIZATION_ID,
-    apiKey: process.env.ASK_SKIP_API_KEY,  
+    apiKey: process.env.ASK_SKIP_API_KEY,
     organizationInfo: process.env.ASK_SKIP_ORGANIZATION_INFO,
     entitiesToSendSkip: {
       excludeSchemas: ['__mj'],
@@ -271,4 +271,7 @@ const config = {
   migrationsLocation: process.env.MIGRATIONS_LOCATION ?? 'filesystem:./migrations',
 };
 
+// Export configuration for use in other modules
+// Note: This export was added to support the integrated MJCLI package
+// which needs access to the distribution configuration
 module.exports = config;

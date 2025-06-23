@@ -13,7 +13,7 @@ import fs from 'fs-extra';
 import crypto from 'crypto';
 import axios from 'axios';
 import { EntityInfo, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
-import { uuidv4 } from '@memberjunction/global';
+import { v4 as uuidv4 } from 'uuid';
 import { EntityConfig, FolderConfig } from '../config';
 
 /**
