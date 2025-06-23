@@ -50,7 +50,7 @@ always use our designated response format shown below
 # Response Format
 You will be using JSON to respond in compliance with this TypeScript:
 ```ts
-{@include ../../../packages/AI/Agents/src/agent-types/loop-agent-response-type.ts }
+{@include ../../../../packages/AI/Agents/src/agent-types/loop-agent-response-type.ts }
 ```
 Here is an example of how this JSON might look, but always **refer to the TypeScript shown above as the reference for what to return**.
 ```json
