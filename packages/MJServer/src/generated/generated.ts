@@ -2114,6 +2114,10 @@ export class AIAgent_ {
     @MaxLength(510)
     DriverClass?: string;
         
+    @Field({nullable: true, description: `Font Awesome icon class (e.g., fa-robot, fa-brain) for the agent. Used as fallback when LogoURL is not set or fails to load.`}) 
+    @MaxLength(200)
+    IconClass?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -2207,6 +2211,9 @@ export class CreateAIAgentInput {
 
     @Field({ nullable: true })
     DriverClass: string | null;
+
+    @Field({ nullable: true })
+    IconClass: string | null;
 }
     
 
@@ -2259,6 +2266,9 @@ export class UpdateAIAgentInput {
 
     @Field({ nullable: true })
     DriverClass?: string | null;
+
+    @Field({ nullable: true })
+    IconClass?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -26458,6 +26468,10 @@ export class Action_ {
     @MaxLength(16)
     ParentID?: string;
         
+    @Field({nullable: true, description: `Font Awesome icon class (e.g., fa-cog, fa-play, fa-search) for visual representation of the action.`}) 
+    @MaxLength(200)
+    IconClass?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Category?: string;
@@ -26563,6 +26577,9 @@ export class CreateActionInput {
 
     @Field({ nullable: true })
     ParentID: string | null;
+
+    @Field({ nullable: true })
+    IconClass: string | null;
 }
     
 
@@ -26627,6 +26644,9 @@ export class UpdateActionInput {
 
     @Field({ nullable: true })
     ParentID?: string | null;
+
+    @Field({ nullable: true })
+    IconClass?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
