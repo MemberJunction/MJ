@@ -1,0 +1,25 @@
+{
+  "action": "call_subagent",
+  "subagent": "Requirements Analyst Agent",
+  "input": {
+    "userRequest": "Create an agent that can analyze customer feedback and generate weekly summary reports",
+    "context": {
+      "currentAgents": [],
+      "availableDataSources": ["Customer Feedback Database", "Support Tickets", "Product Reviews"]
+    }
+  },
+  "reasoning": "Starting with requirements gathering to fully understand the needs for the customer feedback analysis agent before proceeding with design.",
+  "expectedNextSteps": "## Next Steps\n\n1. **Requirements Gathering** - Requirements Analyst will clarify:\n   - Business objectives and success criteria\n   - Technical requirements and constraints\n   - Stakeholder needs and expectations\n\n2. **Agent Design** - Planning Designer will create:\n   - Agent hierarchy and structure\n   - Action selection and configuration\n   - Data flow and execution strategy\n\n3. **Prompt Engineering** - Prompt Designer will craft:\n   - System prompts for each agent\n   - Template variables and examples\n   - Optimization recommendations\n\n4. **Implementation** - Agent Manager will:\n   - Create agents using metadata actions\n   - Configure prompts and associations\n   - Validate complete configuration",
+  "agentManagerContext": {
+    "agent": null,
+    "processStage": "requirements",
+    "session": {
+      "id": "session-12345",
+      "startedAt": "2024-01-15T10:00:00Z",
+      "userId": "user-789",
+      "userName": "admin@example.com",
+      "purpose": "Create an agent that can analyze customer feedback and generate weekly summary reports",
+      "notes": "## Session Notes\n\n- User requested customer feedback analysis capability\n- Weekly reporting cadence specified\n- Multiple data sources available for integration"
+    }
+  }
+}

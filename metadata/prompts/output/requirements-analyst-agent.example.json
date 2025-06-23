@@ -1,0 +1,25 @@
+{
+  "action": "return_to_parent",
+  "output": {
+    "agentDefinition": {
+      "name": "Customer Feedback Analyzer",
+      "description": "Analyzes customer feedback from multiple sources and generates comprehensive weekly reports with actionable insights.",
+      "type": "Loop",
+      "purpose": "Automate customer feedback analysis to enable data-driven product improvements and customer satisfaction monitoring",
+      "requirements": {
+        "businessGoal": "Automate the analysis of customer feedback to provide actionable insights through weekly summary reports, enabling data-driven product improvements and customer satisfaction monitoring.",
+        "functionalRequirements": "## Functional Requirements\n\n- Aggregate customer feedback from multiple sources (database, support tickets, reviews)\n- Perform sentiment analysis on all feedback items\n- Categorize feedback by product feature, issue type, and severity\n- Generate weekly summary reports with key metrics and trends\n- Identify recurring themes and emerging issues\n- Provide actionable recommendations based on analysis",
+        "technicalRequirements": "## Technical Requirements\n\n- Connect to Customer Feedback Database via SQL\n- Access Support Ticket system through API\n- Parse and process unstructured text data\n- Implement NLP for sentiment analysis\n- Store analysis results for historical tracking\n- Generate reports in multiple formats (PDF, HTML, JSON)",
+        "dataRequirements": "## Data Requirements\n\n- Customer feedback text and metadata\n- Support ticket content and resolution data\n- Product review ratings and comments\n- Historical trend data for comparison\n- Product feature mapping for categorization",
+        "integrationRequirements": "## Integration Requirements\n\n- Read access to Customer Feedback Database\n- API access to Support Ticket system\n- Write access to Report Storage system\n- Email integration for report distribution",
+        "assumptions": "- Feedback data is available in structured format\n- Historical data exists for trend analysis\n- Stakeholders will act on report insights\n- English language support is sufficient for v1\n- Existing infrastructure can support the solution",
+        "risks": "## Technical Risks\n\n- **Data Quality**: Inconsistent feedback formats may affect analysis accuracy\n- **API Limitations**: Rate limits could delay processing during peak times\n- **Scale**: Large feedback volumes may exceed performance constraints\n\n## Business Risks\n\n- **Adoption**: Stakeholders may not act on insights\n- **Accuracy**: False insights could lead to poor decisions\n- **Maintenance**: Ongoing tuning required for accuracy",
+        "outOfScope": "- Real-time feedback analysis (batch processing only)\n- Direct customer response automation\n- Feedback collection mechanisms\n- Multi-language support (English only for v1)\n- Integration with external analytics platforms\n- Custom visualization dashboards\n- Predictive analytics or forecasting"
+      },
+      "successCriteria": "## Primary Success Criteria\n\n1. 95% of feedback items successfully analyzed each week\n2. Reports delivered by Monday 9 AM each week\n3. Sentiment analysis accuracy above 85%\n\n## Secondary Success Criteria\n\n- Report generation time under 5 minutes\n- Zero PII data exposure in reports\n- Actionable insights identified in 80% of reports\n\n## Key Metrics\n\n- Number of feedback items processed\n- Sentiment analysis accuracy rate\n- Report delivery timeliness\n- User satisfaction with report insights"
+    }
+  },
+  "reasoning": "Comprehensive requirements gathered through iterative refinement. All key aspects covered including functional needs, technical requirements, constraints, and success criteria. Ready for design phase.",
+  "questionsAnswered": 15,
+  "requirementsComplete": true
+}

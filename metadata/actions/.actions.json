@@ -3511,5 +3511,693 @@
       "lastModified": "2025-06-22T16:28:46.778Z",
       "checksum": "1492d96c31df59b41a69d1b8a0f843bdd5bdd87b64dc6cc83e496fa31235b44d"
     }
+  },
+  {
+    "fields": {
+      "Name": "Create Agent",
+      "Description": "Creates a new AI agent with specified configuration. Supports creating both top-level agents and sub-agents. Optionally creates and associates a system prompt if PromptText is provided. Restricted to Agent Manager agent only.",
+      "DriverClass": "Create Agent",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Name",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the new agent",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Description",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Detailed description of the agent's purpose and capabilities",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TypeID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the AI Agent Type. Either Type or TypeID must be provided",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Type",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the AI Agent Type (e.g., 'Loop'). Either Type or TypeID must be provided",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ParentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the parent agent if this is a sub-agent",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PromptText",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "System prompt text that defines the agent's behavior. If provided, creates and associates a prompt with the agent",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the newly created agent",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PromptID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the created prompt (if PromptText was provided)",
+            "IsRequired": false
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Update Agent",
+      "Description": "Updates an existing AI agent's configuration. Optionally updates the agent's prompt text if provided. Restricted to Agent Manager agent only.",
+      "DriverClass": "Update Agent",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the agent to update",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Name",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "New name for the agent",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Description",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "New description for the agent",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PromptText",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "New system prompt text for the agent. Updates existing prompt or creates new one if none exists",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Status",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "New status (Active, Inactive, etc.)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Success",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "True if update was successful",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PromptID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the updated or created prompt (if PromptText was provided)",
+            "IsRequired": false
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "List Agents",
+      "Description": "Lists AI agents with optional filtering. Restricted to Agent Manager agent only.",
+      "DriverClass": "__ListAgents",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeInactive",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include inactive agents in results",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ParentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter by parent agent ID",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TypeID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter by agent type ID",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Agents",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of agent objects",
+            "IsRequired": false
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Deactivate Agent",
+      "Description": "Marks an agent as inactive (soft delete). Restricted to Agent Manager agent only.",
+      "DriverClass": "__DeactivateAgent",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the agent to deactivate",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Reason",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Reason for deactivation",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Success",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "True if deactivation was successful",
+            "IsRequired": false
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Associate Action With Agent",
+      "Description": "Associates an action with an agent. Restricted to Agent Manager agent only.",
+      "DriverClass": "__AssociateActionWithAgent",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the agent",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ActionID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the action to associate",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Status",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Status of the association (Active/Inactive)",
+            "IsRequired": false,
+            "DefaultValue": "Active"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AssociationID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the created association",
+            "IsRequired": false
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Create Sub Agent",
+      "Description": "Creates a new agent as a child of another agent. Restricted to Agent Manager agent only.",
+      "DriverClass": "__CreateSubAgent",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ParentAgentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the parent agent",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Name",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the sub-agent",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Description",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Description of the sub-agent",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TypeID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the AI Agent Type",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SystemPrompt",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "System prompt for the sub-agent",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExecutionOrder",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Execution order among sibling agents",
+            "IsRequired": false,
+            "DefaultValue": "1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SubAgentID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the newly created sub-agent",
+            "IsRequired": false
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Set Agent Prompt",
+      "Description": "Associates or updates a prompt for an agent. Restricted to Agent Manager agent only.",
+      "DriverClass": "__SetAgentPrompt",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the agent",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PromptID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the prompt to associate",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExecutionOrder",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Order of prompt execution",
+            "IsRequired": false,
+            "DefaultValue": "0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Status",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Status of the prompt association",
+            "IsRequired": false,
+            "DefaultValue": "Active"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AssociationID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the prompt association",
+            "IsRequired": false
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Validate Agent Configuration",
+      "Description": "Validates that an agent has all required prompts and actions configured. Restricted to Agent Manager agent only.",
+      "DriverClass": "__ValidateAgentConfiguration",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the agent to validate",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IsValid",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "True if agent configuration is valid",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ValidationErrors",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Array of validation error messages",
+            "IsRequired": false
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Export Agent Bundle",
+      "Description": "Exports an agent with all sub-agents and configurations as metadata. Restricted to Agent Manager agent only.",
+      "DriverClass": "__ExportAgentBundle",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the agent to export",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeSubAgents",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include all sub-agents in export",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludePrompts",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include associated prompts",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeActions",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include associated actions",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Bundle",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Exported agent bundle as JSON",
+            "IsRequired": false
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "List Actions",
+      "Description": "Lists available actions that can be associated with agents. Used by Planning Designer Agent.",
+      "DriverClass": "__ListActions",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CategoryID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter by action category ID",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExcludeAgentManagement",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Exclude agent management actions from results",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Actions",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of available actions",
+            "IsRequired": false
+          }
+        }
+      ]
+    }
   }
 ]

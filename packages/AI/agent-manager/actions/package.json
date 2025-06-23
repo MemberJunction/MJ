@@ -1,0 +1,34 @@
+{
+  "name": "@memberjunction/actions-agent-management",
+  "version": "0.0.1",
+  "description": "Agent Management actions for creating and managing AI agents in MemberJunction",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "clean": "rimraf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "memberjunction",
+    "actions",
+    "agent-management",
+    "ai-agents"
+  ],
+  "author": "MemberJunction",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/actions": "~1.9.8",
+    "@memberjunction/actions-base": "~1.9.8",
+    "@memberjunction/core": "~1.9.8",
+    "@memberjunction/core-entities": "~1.9.8",
+    "@memberjunction/global": "~1.9.8",
+    "@memberjunction/agent-manager-core": "~0.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^18.11.0",
+    "rimraf": "^3.0.2",
+    "typescript": "^5.0.0"
+  }
+}

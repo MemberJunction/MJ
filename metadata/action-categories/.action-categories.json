@@ -28,5 +28,13 @@
       "lastModified": "2025-06-22T16:28:45.948Z",
       "checksum": "7079caf593c8c2ac1153bc053e85262e4e7dfba1513c81b7fdbe54a9f50a44c2"
     }
+  },
+  {
+    "fields": {
+      "Name": "Agent Management",
+      "Description": "Actions for creating, managing, and configuring AI agents. Restricted to Agent Manager agent only.",
+      "ParentID": "@lookup:Action Categories.Name=System&ParentID=null",
+      "Status": "Active"
+    }
   }
 ]

@@ -649,5 +649,190 @@
       "lastModified": "2025-06-22T16:28:50.159Z",
       "checksum": "445fee258518ef910575ac820322cda604288c0e068490975070eced65d0b891"
     }
+  },
+  {
+    "fields": {
+      "Name": "Agent Manager",
+      "Description": "Top-level orchestrator agent responsible for creating, editing, and managing other AI agents in the MemberJunction system. Uses specialized sub-agents to gather requirements, design architecture, and craft prompts.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExecutionOrder": 0,
+      "ExposeAsAction": true
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Agent Manager - Main Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          }
+        }
+      ],
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Create Agent",
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Update Agent",
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=List Agents",
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Deactivate Agent",
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Associate Action With Agent",
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Create Sub Agent",
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Set Agent Prompt",
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Validate Agent Configuration",
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Export Agent Bundle",
+            "Status": "Active"
+          }
+        }
+      ],
+      "AI Agents": [
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Requirements Analyst Agent",
+            "Description": "MBA-type business analyst with technical expertise, specialized in gathering and clarifying detailed requirements through iterative conversations. Ensures clear definition of agent objectives before design begins.",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExecutionOrder": 1,
+            "ExposeAsAction": false
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:AI Prompts.Name=Requirements Analyst Agent - Main Prompt",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                }
+              }
+            ],
+            "AI Agent Actions": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Text Analyzer",
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Planning Designer Agent",
+            "Description": "System architect specialized in designing agent hierarchies, selecting appropriate actions from the library, and creating optimal agent structures based on requirements.",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExecutionOrder": 2,
+            "ExposeAsAction": false
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:AI Prompts.Name=Planning Designer Agent - Main Prompt",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                }
+              }
+            ],
+            "AI Agent Actions": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=List Actions",
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Prompt Designer Agent",
+            "Description": "Expert prompt engineer specialized in crafting high-quality, effective prompts for AI agents. Creates system prompts that leverage agent type control structures and business logic.",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExecutionOrder": 3,
+            "ExposeAsAction": false
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:AI Prompts.Name=Prompt Designer Agent - Main Prompt",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                }
+              }
+            ],
+            "AI Agent Actions": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Text Analyzer",
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
   }
 ]
