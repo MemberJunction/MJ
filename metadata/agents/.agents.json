@@ -803,6 +803,20 @@
             "lastModified": "2025-06-23T16:39:42.750Z",
             "checksum": "bf8ce06da4bc4c931eb373d69b6ed4175e852e2e3d6778d7888a04d6361053e1"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Get Agent Details",
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Get Action Details",
+            "Status": "Active"
+          }
         }
       ],
       "AI Agents": [

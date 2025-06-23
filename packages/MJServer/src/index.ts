@@ -37,6 +37,9 @@ LoadGeneratedActions(); // prevent tree shaking for this dynamic module
 import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
 LoadCoreEntitiesServerSubClasses(); // prevent tree shaking for this dynamic module
 
+import { LoadAgentManagementActions } from '@memberjunction/ai-agent-manager-actions';
+LoadAgentManagementActions();
+
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;

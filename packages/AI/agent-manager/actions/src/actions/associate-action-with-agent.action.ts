@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { AIAgentActionEntity } from "@memberjunction/core-entities";
 import { BaseAgentManagementAction } from "./base-agent-management.action";
+import { BaseAction } from "@memberjunction/actions";
 
 /**
  * Associates an action with an agent.
@@ -20,7 +21,7 @@ import { BaseAgentManagementAction } from "./base-agent-management.action";
  * // Returns AgentActionID in output params
  * ```
  */
-@RegisterClass(BaseAgentManagementAction, "Associate Action With Agent")
+@RegisterClass(BaseAction, "Associate Action With Agent")
 export class AssociateActionWithAgentAction extends BaseAgentManagementAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {

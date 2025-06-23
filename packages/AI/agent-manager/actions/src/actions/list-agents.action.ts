@@ -3,6 +3,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { RunView } from "@memberjunction/core";
 import { AIAgentEntity } from "@memberjunction/core-entities";
 import { BaseAgentManagementAction } from "./base-agent-management.action";
+import { BaseAction } from "@memberjunction/actions";
 
 /**
  * Lists AI agents with optional filtering.
@@ -21,7 +22,7 @@ import { BaseAgentManagementAction } from "./base-agent-management.action";
  * // Returns Agents array in output params
  * ```
  */
-@RegisterClass(BaseAgentManagementAction, "List Agents")
+@RegisterClass(BaseAction, "List Agents")
 export class ListAgentsAction extends BaseAgentManagementAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {

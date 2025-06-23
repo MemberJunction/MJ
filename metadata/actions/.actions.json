@@ -4648,5 +4648,89 @@
       "lastModified": "2025-06-23T16:39:41.390Z",
       "checksum": "45d4f8946bed5cbcf5b92530505cd6ecd6170500e9aafef28cb2356ab02543db"
     }
+  },
+  {
+    "fields": {
+      "Name": "Get Agent Details",
+      "Description": "Gets detailed information about a specific agent including its full hierarchy (sub-agents, sub-sub-agents, etc.) and associated actions at each level. Restricted to Agent Manager agent only.",
+      "DriverClass": "Get Agent Details",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the agent to get details for",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludePrompts",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include prompt details in the response",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentDetails",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Full agent details including hierarchy and actions",
+            "IsRequired": false
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Action Details",
+      "Description": "Gets detailed information about a specific action including all metadata, parameters, and result codes. Restricted to Agent Manager agent only.",
+      "DriverClass": "Get Action Details",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ActionID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the action to get details for",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ActionDetails",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Full action details including parameters and result codes",
+            "IsRequired": false
+          }
+        }
+      ]
+    }
   }
 ]
