@@ -3,7 +3,6 @@ import { FormControl } from '@angular/forms';
 import { Subject, BehaviorSubject, combineLatest, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
 import { RunView } from '@memberjunction/core';
 import { ActionEntity, ActionCategoryEntity, ActionParamEntity, ActionResultCodeEntity } from '@memberjunction/core-entities';
-import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 
 export interface ActionGalleryConfig {
   selectionMode?: boolean;
@@ -79,9 +78,7 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
   totalActions = 0;
   categoryCounts = new Map<string, number>();
   
-  constructor(
-    private testHarnessService: AITestHarnessDialogService
-  ) {}
+  constructor() {}
   
   ngOnInit() {
     // Set initial view mode
@@ -373,14 +370,8 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
     event.stopPropagation();
     
     if (this.config.enableQuickTest) {
-      this.testHarnessService.openForAction(action.ID).subscribe({
-        next: (result) => {
-          console.log('Test result:', result);
-        },
-        error: (error) => {
-          console.error('Test error:', error);
-        }
-      });
+      // TODO: Implement test harness integration
+      console.log('Test action:', action.Name);
     }
     
     this.actionTestRequested.emit(action);

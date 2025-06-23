@@ -38,12 +38,12 @@ import { AIPromptRunFormComponentExtended } from "./AIPromptRuns/ai-prompt-run-f
 import { ActionFormComponentExtended, LoadActionFormComponentExtended } from "./Actions/action-form.component";
 import { ActionTestHarnessComponent } from "./Actions/action-test-harness.component";
 import { ActionTestHarnessDialogComponent } from "./Actions/action-test-harness-dialog.component";
-import { ActionExecutionLogFormComponentExtended } from "./Actions/action-execution-log-form.component";
+import { ActionExecutionLogFormComponentExtended, LoadActionExecutionLogFormComponentExtended } from "./Actions/action-execution-log-form.component";
 import { ActionParamDialogComponent } from "./Actions/action-param-dialog.component";
 import { AgentExecutionMonitorComponent } from "./ai-test-harness/agent-execution-monitor.component";
 import { ExecutionNodeComponent } from "./ai-test-harness/agent-execution-node.component";
 import { JsonViewerWindowComponent } from "./ai-test-harness/json-viewer-window.component";
-import { AIAgentRunFormComponent } from "./ai-agent-run/ai-agent-run.component";
+import { AIAgentRunFormComponentExtended, LoadAIAgentRunFormComponent } from "./ai-agent-run/ai-agent-run.component";
 import { AIAgentRunTimelineComponent } from "./ai-agent-run/ai-agent-run-timeline.component";
 import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-node.component";
 
@@ -69,7 +69,7 @@ import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-no
         ActionExecutionLogFormComponentExtended,
         ActionParamDialogComponent,
         JsonViewerWindowComponent,
-        AIAgentRunFormComponent,
+        AIAgentRunFormComponentExtended,
         AIAgentRunTimelineComponent,
         AIAgentRunStepNodeComponent,
     ],
@@ -125,7 +125,7 @@ import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-no
         ActionTestHarnessDialogComponent,
         ActionExecutionLogFormComponentExtended,
         ExecutionNodeComponent,
-        AIAgentRunFormComponent,
+        AIAgentRunFormComponentExtended,
         AIAgentRunTimelineComponent,
         AIAgentRunStepNodeComponent,
     ],
@@ -135,16 +135,6 @@ import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-no
     ]
 })
 export class MemberJunctionCoreEntityFormsModule { }
-
-// Loader function for ActionExecutionLogFormComponentExtended
-export function LoadActionExecutionLogFormComponentExtended() {
-    // This function is called to ensure the form is loaded
-}
-
-// Loader function for AIAgentRunFormComponent
-export function LoadAIAgentRunFormComponent() {
-    // This function is called to ensure the form is loaded
-}
 
 export function LoadCoreCustomForms() {
     LoadEntitiesFormComponent()
