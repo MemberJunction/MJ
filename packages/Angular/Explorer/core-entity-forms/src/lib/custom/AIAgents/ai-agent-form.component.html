@@ -103,7 +103,7 @@
                                                     <i class="fa-solid fa-comment-dots"></i>
                                                 </div>
                                                 <div class="item-content">
-                                                    <div class="item-title">{{ prompt.Type || 'System Prompt' }}</div>
+                                                    <div class="item-title">{{ prompt.Name }}</div>
                                                     @if (prompt.TemplateText) {
                                                         <div class="item-preview">{{ prompt.TemplateText.substring(0, 120) }}{{ prompt.TemplateText.length > 120 ? '...' : '' }}</div>
                                                     }

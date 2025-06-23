@@ -2399,6 +2399,24 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     }
 
     /**
+     * Checks if the payload should be displayed (not null, undefined, or empty object)
+     * @param payload - The payload to check
+     * @returns true if the payload has content, false otherwise
+     */
+    public hasPayload(payload: any): boolean {
+        if (!payload) {
+            return false;
+        }
+        
+        // Check if it's an empty object
+        if (typeof payload === 'object' && Object.keys(payload).length === 0) {
+            return false;
+        }
+        
+        return true;
+    }
+
+    /**
      * Toggles the collapsed state of a message's payload section
      * @param message - The message to toggle payload visibility for
      */

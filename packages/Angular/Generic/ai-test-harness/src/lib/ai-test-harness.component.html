@@ -126,7 +126,7 @@
                                         {{ message.error }}
                                     </div>
                                 }
-                                @if (message.payload && mode === 'agent' && message.role === 'assistant') {
+                                @if (hasPayload(message.payload) && mode === 'agent' && message.role === 'assistant') {
                                     <div class="payload-section" [class.collapsed]="message.payloadCollapsed">
                                         <div class="payload-header" (click)="togglePayloadCollapse(message)">
                                             <span class="payload-label">
@@ -734,7 +734,7 @@
                                             {{ message.error }}
                                         </div>
                                     }
-                                    @if (message.payload && mode === 'agent' && message.role === 'assistant') {
+                                    @if (hasPayload(message.payload) && mode === 'agent' && message.role === 'assistant') {
                                         <div class="payload-section" [class.collapsed]="message.payloadCollapsed">
                                             <div class="payload-header" (click)="togglePayloadCollapse(message)">
                                                 <span class="payload-label">
