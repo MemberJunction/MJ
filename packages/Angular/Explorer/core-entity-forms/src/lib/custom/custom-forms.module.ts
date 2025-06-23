@@ -23,9 +23,13 @@ import { TemplateParamsGridComponent } from "./Templates/template-params-grid.co
 import { TemplateEditorComponent } from "../shared/components/template-editor.component";
 import { AIPromptFormComponentExtended, LoadAIPromptFormComponentExtended } from "./AIPrompts/ai-prompt-form.component";
 import { AIAgentFormComponentExtended, LoadAIAgentFormComponentExtended } from "./AIAgents/ai-agent-form.component";
+import { NewAgentDialogComponent } from "./AIAgents/new-agent-dialog.component";
+import { NewAgentDialogService } from "./AIAgents/new-agent-dialog.service";
 import { AITestHarnessComponent } from "./ai-test-harness/ai-test-harness.component";
 import { AITestHarnessDialogComponent } from "./ai-test-harness/ai-test-harness-dialog.component";
 import { TestHarnessDialogService } from "./test-harness-dialog.service";
+import { AITestHarnessModule } from "@memberjunction/ng-ai-test-harness";
+import { ActionGalleryModule } from "@memberjunction/ng-action-gallery";
 import { JoinGridModule } from "@memberjunction/ng-join-grid";
 import { CodeEditorModule } from "@memberjunction/ng-code-editor";
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
@@ -54,6 +58,7 @@ import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-no
         TemplateEditorComponent,
         AIPromptFormComponentExtended,
         AIAgentFormComponentExtended,
+        NewAgentDialogComponent,
         AITestHarnessComponent,
         EntitySelectorDialogComponent,
         AITestHarnessDialogComponent,
@@ -100,7 +105,9 @@ import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-no
         MJTabStripModule,
         ContainerDirectivesModule,
         CodeEditorModule,
-        TreeViewModule
+        TreeViewModule,
+        AITestHarnessModule,
+        ActionGalleryModule
     ],
     exports: [
         EntityFormExtendedComponent,
@@ -123,7 +130,8 @@ import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-no
         AIAgentRunStepNodeComponent,
     ],
     providers: [
-        TestHarnessDialogService
+        TestHarnessDialogService,
+        NewAgentDialogService
     ]
 })
 export class MemberJunctionCoreEntityFormsModule { }

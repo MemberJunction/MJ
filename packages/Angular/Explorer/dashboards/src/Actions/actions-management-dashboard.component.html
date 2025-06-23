@@ -26,7 +26,8 @@
             (openEntityRecord)="onOpenEntityRecord($event)"
             (showActionsListView)="onShowActionsListView()"
             (showExecutionsListView)="onShowExecutionsListView()"
-            (showCategoriesListView)="onShowCategoriesListView()">
+            (showCategoriesListView)="onShowCategoriesListView()"
+            (showActionGalleryView)="onShowActionGalleryView()">
           </mj-actions-overview>
         }
         
@@ -89,6 +90,19 @@
             <mj-categories-list-view
               (openEntityRecord)="onOpenEntityRecord($event)">
             </mj-categories-list-view>
+          }
+          
+          @if (subView === 'action-gallery') {
+            <mj-action-gallery
+              [config]="{
+                selectionMode: false,
+                showCategories: true,
+                showSearch: true,
+                enableQuickTest: true,
+                defaultView: 'grid'
+              }"
+              (actionTestRequested)="onOpenEntityRecord({entityName: 'Actions', recordId: $event.ID})">
+            </mj-action-gallery>
           }
         </div>
       }

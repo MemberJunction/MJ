@@ -33,4 +33,8 @@ export {
 // } from './lib/custom/AIPrompts/ai-prompt-test-harness-dialog.component';
 
 export { TestHarnessDialogService } from './lib/custom/test-harness-dialog.service';
+
+// Export Agent Dialog components and service
+export { NewAgentDialogComponent } from './lib/custom/AIAgents/new-agent-dialog.component';
+export { NewAgentDialogService } from './lib/custom/AIAgents/new-agent-dialog.service';
  

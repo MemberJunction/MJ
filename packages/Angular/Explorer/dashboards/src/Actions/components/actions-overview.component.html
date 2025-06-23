@@ -100,6 +100,21 @@
         </div>
       </div>
     </div>
+    
+    <div class="metric-card gallery clickable" (click)="onActionGalleryClick()">
+      <div class="metric-icon">
+        <i class="fa-solid fa-th"></i>
+      </div>
+      <div class="metric-content">
+        <div class="metric-value">
+          <i class="fa-solid fa-sparkles"></i>
+        </div>
+        <div class="metric-label">Action Gallery</div>
+        <div class="metric-breakdown">
+          <span>Visual action browser</span>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Content Grid -->
@@ -217,12 +232,12 @@
                       </mj-code-editor>
                     </div>
                     <div class="execution-actions">
-                      <kendo-button 
+                      <button kendoButton 
                         themeColor="primary" 
                         size="small"
                         (click)="openExecution(execution)">
                         <i class="fa-solid fa-external-link"></i> Open Details
-                      </kendo-button>
+                      </button>
                     </div>
                   </div>
                 }

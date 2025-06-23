@@ -143,7 +143,7 @@ export interface SavedConversation {
  * ```
  */
 @Component({
-    selector: 'mj-ai-test-harness-old',
+    selector: 'mj-ai-test-harness',
     templateUrl: './ai-test-harness.component.html',
     styleUrls: ['./ai-test-harness.component.css']
 })

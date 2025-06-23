@@ -168,6 +168,10 @@ export class ActionsManagementDashboardComponent extends BaseDashboard implement
   public onShowCategoriesListView(): void {
     this.showSubView('categories-list');
   }
+  
+  public onShowActionGalleryView(): void {
+    this.showSubView('action-gallery');
+  }
 }
 
 export function LoadActionsManagementDashboard() {

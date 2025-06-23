@@ -40,6 +40,7 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
   @Output() showActionsListView = new EventEmitter<void>();
   @Output() showExecutionsListView = new EventEmitter<void>();
   @Output() showCategoriesListView = new EventEmitter<void>();
+  @Output() showActionGalleryView = new EventEmitter<void>();
 
   public isLoading = true;
   public metrics: ActionMetrics = {
@@ -352,6 +353,10 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
   public onAIGeneratedClick(): void {
     // Filter to show AI generated actions in the current view
     this.selectedType$.next('Generated');
+  }
+  
+  public onActionGalleryClick(): void {
+    this.showActionGalleryView.emit();
   }
 
   public toggleExecutionExpanded(execution: ExecutionWithExpanded): void {

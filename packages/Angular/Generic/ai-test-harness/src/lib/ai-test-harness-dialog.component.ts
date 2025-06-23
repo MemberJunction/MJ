@@ -1,0 +1,268 @@
+import { Component, Input, Output, EventEmitter, OnInit, ViewChild, ChangeDetectorRef, AfterViewInit } from '@angular/core';
+import { AIAgentEntity, AIPromptEntity } from '@memberjunction/core-entities';
+import { Metadata } from '@memberjunction/core';
+import { AITestHarnessComponent } from './ai-test-harness.component';
+
+/**
+ * Configuration data interface for the AI Test Harness Dialog.
+ * Provides all necessary options for initializing the dialog with appropriate
+ * agent/prompt data, dimensions, and initial variable configurations.
+ */
+export interface AITestHarnessDialogData {
+    /** ID of the AI agent to load (alternative to providing agent entity) */
+    agentId?: string;
+    /** Pre-loaded AI agent entity (alternative to providing agentId) */
+    agent?: AIAgentEntity;
+    /** ID of the AI prompt to load (alternative to providing prompt entity) */
+    promptId?: string;
+    /** Pre-loaded AI prompt entity (alternative to providing promptId) */
+    prompt?: AIPromptEntity;
+    /** Custom dialog title (defaults to agent/prompt name) */
+    title?: string;
+    /** Dialog width in CSS units or viewport percentage */
+    width?: string | number;
+    /** Dialog height in CSS units or viewport percentage */
+    height?: string | number;
+    /** Initial data context variables for agent execution */
+    initialDataContext?: Record<string, any>;
+    /** Initial template data variables for prompt rendering */
+    initialTemplateData?: Record<string, any>;
+    /** Initial template variables for prompt execution */
+    initialTemplateVariables?: Record<string, any>;
+    /** Pre-selected AI model ID for prompt execution */
+    selectedModelId?: string;
+    /** Mode of operation - 'agent' or 'prompt' */
+    mode?: 'agent' | 'prompt';
+}
+
+/**
+ * Dialog wrapper component for the AI Agent Test Harness.
+ * Provides a modal dialog interface with proper sizing, header, and close functionality.
+ * Automatically loads agent data and initializes the test harness with provided configuration.
+ * 
+ * ## Features:
+ * - **Automatic Agent Loading**: Loads agent by ID or uses provided entity
+ * - **Configurable Dimensions**: Supports custom dialog sizing
+ * - **Initial Data Setup**: Pre-populates data context and template variables
+ * - **Clean Dialog Interface**: Professional header with close button
+ * - **Responsive Layout**: Adapts to content and screen size
+ * 
+ * ## Usage:
+ * This component is typically opened through the `TestHarnessDialogService` rather than directly:
+ * ```typescript
+ * const dialogRef = this.testHarnessService.openAgentTestHarness({
+ *   agentId: 'agent-123',
+ *   initialDataContext: { userId: 'user-456' }
+ * });
+ * ```
+ */
+@Component({
+    selector: 'mj-ai-test-harness-dialog',
+    template: `
+        <div class="test-harness-dialog">
+            <div class="dialog-header">
+                <h2>{{ title }}</h2>
+                <button class="close-button" (click)="close()">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <div class="dialog-content">
+                <mj-ai-test-harness 
+                    #testHarness
+                    [mode]="mode"
+                    [entity]="mode === 'agent' ? agent : prompt"
+                    [isVisible]="true">
+                </mj-ai-test-harness>
+            </div>
+        </div>
+    `,
+    styles: [`
+        .test-harness-dialog {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+        }
+
+        .dialog-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            border-bottom: 1px solid #e0e0e0;
+            background-color: #f5f5f5;
+        }
+
+        .dialog-header h2 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 500;
+        }
+
+        .close-button {
+            position: relative;
+            top: -4px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        
+        .close-button:hover {
+            background-color: rgba(0, 0, 0, 0.04);
+        }
+
+        .dialog-content {
+            flex: 1;
+            overflow: hidden;
+            padding: 0;
+        }
+
+        :host ::ng-deep .test-harness-container {
+            height: 100%;
+        }
+    `]
+})
+export class AITestHarnessDialogComponent implements OnInit, AfterViewInit {
+    /** Reference to the embedded test harness component */
+    @ViewChild('testHarness', { static: false }) testHarness!: AITestHarnessComponent;
+    
+    /** The loaded AI agent entity for testing */
+    agent: AIAgentEntity | null = null;
+    
+    /** The loaded AI prompt entity for testing */
+    prompt: AIPromptEntity | null = null;
+    
+    /** The mode of operation - either 'agent' or 'prompt' */
+    mode: 'agent' | 'prompt' = 'agent';
+    
+    /** Display title for the dialog header */
+    title: string = 'AI Test Harness';
+    
+    /** Configuration data passed from the dialog service */
+    @Input() data: AITestHarnessDialogData = {};
+    
+    /** Event emitted when the dialog should be closed */
+    @Output() closeDialog = new EventEmitter<void>();
+    
+    constructor(private cdr: ChangeDetectorRef) {}
+    
+    /**
+     * Initializes the dialog component by loading agent/prompt data and configuring
+     * the embedded test harness with initial variables and settings.
+     */
+    async ngOnInit() {
+        // Set mode from data
+        if (this.data.mode) {
+            this.mode = this.data.mode;
+        }
+        
+        if (this.data.title) {
+            this.title = this.data.title;
+        }
+        
+        const md = new Metadata();
+        
+        // Load entity based on mode
+        if (this.mode === 'agent' || (!this.data.promptId && !this.data.prompt)) {
+            // Agent mode
+            if (this.data.agentId && !this.data.agent) {
+                this.agent = await md.GetEntityObject<AIAgentEntity>('AI Agents');
+                await this.agent.Load(this.data.agentId);
+                
+                if (this.agent) {
+                    this.title = this.title || `Test Harness: ${this.agent.Name}`;
+                }
+            } else if (this.data.agent) {
+                this.agent = this.data.agent;
+                this.title = this.title || `Test Harness: ${this.agent.Name}`;
+            }
+        } else {
+            // Prompt mode
+            this.mode = 'prompt';
+            if (this.data.promptId && !this.data.prompt) {
+                this.prompt = await md.GetEntityObject<AIPromptEntity>('AI Prompts');
+                await this.prompt.Load(this.data.promptId);
+                
+                if (this.prompt) {
+                    this.title = this.title || `Test Harness: ${this.prompt.Name}`;
+                }
+            } else if (this.data.prompt) {
+                this.prompt = this.data.prompt;
+                this.title = this.title || `Test Harness: ${this.prompt.Name}`;
+            }
+        }
+    }
+    
+    /**
+     * AfterViewInit lifecycle hook to set initial data after view is initialized
+     */
+    ngAfterViewInit(): void {
+        if (this.testHarness) {
+            if (this.mode === 'agent') {
+                // Agent mode: set agent variables
+                if (this.data.initialDataContext) {
+                    const variables = Object.entries(this.data.initialDataContext).map(([name, value]) => ({
+                        name,
+                        value: typeof value === 'object' ? JSON.stringify(value) : String(value),
+                        type: this.detectVariableType(value)
+                    }));
+                    this.testHarness.agentVariables = variables;
+                }
+                
+                if (this.data.initialTemplateData) {
+                    const templateVariables = Object.entries(this.data.initialTemplateData).map(([name, value]) => ({
+                        name,
+                        value: typeof value === 'object' ? JSON.stringify(value) : String(value),
+                        type: this.detectVariableType(value)
+                    }));
+                    this.testHarness.agentVariables = [...this.testHarness.agentVariables, ...templateVariables];
+                }
+            } else {
+                // Prompt mode: set template variables
+                if (this.data.initialTemplateVariables) {
+                    const variables = Object.entries(this.data.initialTemplateVariables).map(([name, value]) => ({
+                        name,
+                        value: typeof value === 'object' ? JSON.stringify(value) : String(value),
+                        type: this.detectVariableType(value)
+                    }));
+                    this.testHarness.templateVariables = variables;
+                }
+                
+                // Set selected model if provided
+                if (this.data.selectedModelId) {
+                    this.testHarness.selectedModelId = this.data.selectedModelId;
+                }
+            }
+            
+            // Trigger change detection to ensure view updates
+            this.cdr.detectChanges();
+        }
+    }
+    
+    /**
+     * Determines the appropriate variable type for initial data configuration.
+     * @param value - The value to analyze for type detection
+     * @returns The detected variable type
+     * @private
+     */
+    private detectVariableType(value: any): 'string' | 'number' | 'boolean' | 'object' {
+        if (typeof value === 'boolean') return 'boolean';
+        if (typeof value === 'number') return 'number';
+        if (typeof value === 'object') return 'object';
+        return 'string';
+    }
+    
+    /**
+     * Closes the dialog by emitting the close event.
+     * This method is called by the close button in the header.
+     */
+    close(): void {
+        this.closeDialog.emit();
+    }
+}
