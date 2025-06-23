@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/entity-communications-client
 
+## 2.55.0
+
+### Patch Changes
+
+- Updated dependencies [659f892]
+  - @memberjunction/core-entities@2.55.0
+  - @memberjunction/entity-communications-base@2.55.0
+  - @memberjunction/graphql-dataprovider@2.55.0
+  - @memberjunction/core@2.55.0
+  - @memberjunction/global@2.55.0
+
 ## 2.54.0
 
 ### Patch Changes

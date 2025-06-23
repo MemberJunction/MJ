@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/ai
 
+## 2.55.0
+
+### Minor Changes
+
+- c3a49ff: Agent Manager + SQL Server fix + fix deps in core-entity-forms
+- 659f892: Various
+
+### Patch Changes
+
+- @memberjunction/global@2.55.0
+
 ## 2.54.0
 
 ### Patch Changes

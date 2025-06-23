@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/core-actions
 
+## 2.55.0
+
+### Patch Changes
+
+- f672320: web search rate limiter
+- Updated dependencies [659f892]
+  - @memberjunction/core-entities@2.55.0
+  - @memberjunction/ai-vector-sync@2.55.0
+  - @memberjunction/actions@2.55.0
+  - @memberjunction/content-autotagging@2.55.0
+  - @memberjunction/external-change-detection@2.55.0
+  - @memberjunction/communication-engine@2.55.0
+  - @memberjunction/core@2.55.0
+  - @memberjunction/global@2.55.0
+
 ## 2.54.0
 
 ### Patch Changes

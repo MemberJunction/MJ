@@ -1,5 +1,24 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.55.0
+
+### Patch Changes
+
+- 9232ce9: Revert to prior method for naming conflicting entities (e.g. where same table name already has an entity in another schema)
+- Updated dependencies [c3a49ff]
+- Updated dependencies [659f892]
+  - @memberjunction/ai@2.55.0
+  - @memberjunction/sqlserver-dataprovider@2.55.0
+  - @memberjunction/aiengine@2.55.0
+  - @memberjunction/core-entities@2.55.0
+  - @memberjunction/ai-anthropic@2.55.0
+  - @memberjunction/ai-groq@2.55.0
+  - @memberjunction/ai-mistral@2.55.0
+  - @memberjunction/ai-openai@2.55.0
+  - @memberjunction/actions@2.55.0
+  - @memberjunction/core@2.55.0
+  - @memberjunction/global@2.55.0
+
 ## 2.54.0
 
 ### Patch Changes
