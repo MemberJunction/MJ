@@ -90,7 +90,7 @@
     font-weight: 500;
 }
 
-.prompt-name, .model-name {
+.prompt-name, .model-name, .vendor-name {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -103,7 +103,7 @@
     transition: all 0.2s;
 }
 
-.prompt-name:hover, .model-name:hover {
+.prompt-name:hover, .model-name:hover, .vendor-name:hover {
     background: #dee2e6;
     color: #007bff;
     transform: translateY(-1px);
@@ -190,6 +190,8 @@
 
 .panel-content {
     padding: 20px;
+    max-height: none !important;
+    overflow: visible !important;
 }
 
 /* JSON Editor Container */
@@ -467,6 +469,9 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 24px;
+    width: 100%;
+    min-height: auto;
+    overflow: visible;
 }
 
 .detail-field {
@@ -525,6 +530,15 @@
     opacity: 1;
 }
 
+.detail-value.null-value {
+    color: #adb5bd;
+    font-style: italic;
+}
+
+.detail-value.null-value i:first-child {
+    opacity: 0.5;
+}
+
 /* Kendo Overrides */
 kendo-panelbar {
     border: none !important;
@@ -550,6 +564,8 @@ kendo-panelbar-item .k-panelbar-header:hover {
 kendo-panelbar-item .k-panelbar-content {
     border: none !important;
     padding: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
 }
 
 /* Validation Panel Styles */

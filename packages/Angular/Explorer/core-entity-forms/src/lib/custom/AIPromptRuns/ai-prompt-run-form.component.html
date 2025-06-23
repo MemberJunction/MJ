@@ -40,6 +40,12 @@
                                         {{ model.Name }}
                                     </span>
                                 }
+                                @if (record.Vendor) {
+                                    <span class="vendor-name" (click)="navigateToEntity('MJ: AI Vendors', record.VendorID)" title="View Vendor">
+                                        <i class="fa-solid fa-building"></i>
+                                        {{ record.Vendor }}
+                                    </span>
+                                }
                             </div>
                         </div>
                     </div>
@@ -417,6 +423,23 @@
                                             </div>
                                         </div>
                                     }
+                                    
+                                    <!-- Validation Attempts JSON -->
+                                    @if (record.ValidationAttempts) {
+                                        <div class="validation-json">
+                                            <h4>Validation Attempts (Raw JSON)</h4>
+                                            <div class="json-viewer-container">
+                                                <mj-code-editor 
+                                                    [(ngModel)]="formattedValidationAttempts"
+                                                    name="formattedValidationAttempts"
+                                                    [readonly]="true"
+                                                    [language]="'json'"
+                                                    [lineWrapping]="true"
+                                                    style="height: 300px; width: 100%;">
+                                                </mj-code-editor>
+                                            </div>
+                                        </div>
+                                    }
                                 </div>
                             </ng-template>
                         </kendo-panelbar-item>
@@ -507,17 +530,6 @@
                         <ng-template kendoPanelBarContent>
                             <div class="panel-content">
                                 <div class="detail-fields-grid">
-                                    @if (record.VendorID) {
-                                        <div class="detail-field">
-                                            <label>Vendor</label>
-                                            <div class="detail-value clickable" (click)="navigateToEntity('MJ: AI Vendors', record.VendorID)" title="View Vendor">
-                                                <i class="fa-solid fa-building"></i>
-                                                {{ record.Vendor || 'Unknown' }}
-                                                <i class="fa-solid fa-external-link"></i>
-                                            </div>
-                                        </div>
-                                    }
-                                    
                                     @if (record.AgentID) {
                                         <div class="detail-field">
                                             <label>Agent</label>
@@ -538,6 +550,82 @@
                                             </div>
                                         </div>
                                     }
+                                    
+                                    @if (record.RunType) {
+                                        <div class="detail-field">
+                                            <label>Run Type</label>
+                                            <div class="detail-value">
+                                                <i [class]="'fa-solid ' + getRunTypeIcon(record.RunType)"></i>
+                                                {{ record.RunType }}
+                                            </div>
+                                        </div>
+                                    }
+                                    
+                                    @if (record.ResponseFormat) {
+                                        <div class="detail-field">
+                                            <label>Response Format</label>
+                                            <div class="detail-value">
+                                                <i class="fa-solid fa-code"></i>
+                                                {{ record.ResponseFormat }}
+                                            </div>
+                                        </div>
+                                    }
+                                    
+                                    <div class="detail-field">
+                                        <label>Temperature</label>
+                                        <div class="detail-value" [class.null-value]="record.Temperature === null || record.Temperature === undefined">
+                                            <i class="fa-solid fa-temperature-high"></i>
+                                            {{ record.Temperature !== null && record.Temperature !== undefined ? record.Temperature : '—' }}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="detail-field">
+                                        <label>Top P</label>
+                                        <div class="detail-value" [class.null-value]="record.TopP === null || record.TopP === undefined">
+                                            <i class="fa-solid fa-percentage"></i>
+                                            {{ record.TopP !== null && record.TopP !== undefined ? record.TopP : '—' }}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="detail-field">
+                                        <label>Top K</label>
+                                        <div class="detail-value" [class.null-value]="record.TopK === null || record.TopK === undefined">
+                                            <i class="fa-solid fa-list-ol"></i>
+                                            {{ record.TopK !== null && record.TopK !== undefined ? record.TopK : '—' }}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="detail-field">
+                                        <label>Min P</label>
+                                        <div class="detail-value" [class.null-value]="record.MinP === null || record.MinP === undefined">
+                                            <i class="fa-solid fa-filter"></i>
+                                            {{ record.MinP !== null && record.MinP !== undefined ? record.MinP : '—' }}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="detail-field">
+                                        <label>Frequency Penalty</label>
+                                        <div class="detail-value" [class.null-value]="record.FrequencyPenalty === null || record.FrequencyPenalty === undefined">
+                                            <i class="fa-solid fa-repeat"></i>
+                                            {{ record.FrequencyPenalty !== null && record.FrequencyPenalty !== undefined ? record.FrequencyPenalty : '—' }}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="detail-field">
+                                        <label>Presence Penalty</label>
+                                        <div class="detail-value" [class.null-value]="record.PresencePenalty === null || record.PresencePenalty === undefined">
+                                            <i class="fa-solid fa-plus-circle"></i>
+                                            {{ record.PresencePenalty !== null && record.PresencePenalty !== undefined ? record.PresencePenalty : '—' }}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="detail-field">
+                                        <label>Seed</label>
+                                        <div class="detail-value" [class.null-value]="record.Seed === null || record.Seed === undefined">
+                                            <i class="fa-solid fa-seedling"></i>
+                                            {{ record.Seed !== null && record.Seed !== undefined ? record.Seed : '—' }}
+                                        </div>
+                                    </div>
                                     
                                     @if (record.RunAt) {
                                         <div class="detail-field">

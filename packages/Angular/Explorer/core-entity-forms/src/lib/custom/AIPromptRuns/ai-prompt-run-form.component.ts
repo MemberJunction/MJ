@@ -34,6 +34,7 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent {
     public formattedMessages = '';
     public formattedResult = '';
     public formattedValidationSummary = '';
+    public formattedValidationAttempts = '';
     
     // Validation data
     public validationAttempts: any[] = [];
@@ -261,12 +262,15 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent {
         if (this.record.ValidationAttempts) {
             try {
                 this.validationAttempts = JSON.parse(this.record.ValidationAttempts);
+                this.formattedValidationAttempts = JSON.stringify(this.validationAttempts, null, 2);
             } catch (error) {
                 console.error('Error parsing ValidationAttempts:', error);
                 this.validationAttempts = [];
+                this.formattedValidationAttempts = '';
             }
         } else {
             this.validationAttempts = [];
+            this.formattedValidationAttempts = '';
         }
         
         // Parse validation summary if available
