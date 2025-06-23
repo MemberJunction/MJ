@@ -328,7 +328,7 @@ export class AIPromptRunner {
     }
 
     // Execute with retry logic for validation failures
-    const { modelResult, parsedResult, validationAttempts } = await this.executeWithValidationRetries(
+    const { modelResult, parsedResult, validationAttempts, cumulativeTokens } = await this.executeWithValidationRetries(
       selectedModel,
       renderedPromptText,
       prompt,
@@ -340,8 +340,8 @@ export class AIPromptRunner {
     const endTime = new Date();
     const executionTimeMS = endTime.getTime() - startTime.getTime();
 
-    // Update the prompt run with results including validation attempts
-    await this.updatePromptRun(promptRun, modelResult, parsedResult, endTime, executionTimeMS, validationAttempts);
+    // Update the prompt run with results including validation attempts and cumulative tokens
+    await this.updatePromptRun(promptRun, modelResult, parsedResult, endTime, executionTimeMS, validationAttempts, cumulativeTokens);
 
     const chatResult = modelResult as ChatResult;
     const usage = chatResult.data?.usage;
@@ -353,14 +353,15 @@ export class AIPromptRunner {
       chatResult,
       promptRun,
       executionTimeMS,
-      promptTokens: usage?.promptTokens,
-      completionTokens: usage?.completionTokens,
-      tokensUsed: (usage?.promptTokens || 0) + (usage?.completionTokens || 0),
-      cost: usage?.cost,
+      // Use cumulative tokens if retries occurred, otherwise use single attempt tokens
+      promptTokens: cumulativeTokens.promptTokens || usage?.promptTokens,
+      completionTokens: cumulativeTokens.completionTokens || usage?.completionTokens,
+      tokensUsed: (cumulativeTokens.promptTokens + cumulativeTokens.completionTokens) || ((usage?.promptTokens || 0) + (usage?.completionTokens || 0)),
+      cost: cumulativeTokens.totalCost || usage?.cost,
       costCurrency: usage?.costCurrency,
       validationResult: parsedResult.validationResult,
       validationAttempts,
-      combinedTokensUsed: (usage?.promptTokens || 0) + (usage?.completionTokens || 0) // For single execution, same as tokensUsed
+      combinedTokensUsed: (cumulativeTokens.promptTokens + cumulativeTokens.completionTokens) || ((usage?.promptTokens || 0) + (usage?.completionTokens || 0))
     };
   }
 
@@ -1032,6 +1033,15 @@ export class AIPromptRunner {
         });
       }
 
+      // Populate new retry tracking columns with initial values
+      promptRun.ValidationBehavior = prompt.ValidationBehavior || 'Warn';
+      promptRun.RetryStrategy = prompt.RetryStrategy || 'Fixed';
+      promptRun.MaxRetriesConfigured = prompt.MaxRetries || 0;
+      promptRun.FirstAttemptAt = startTime;
+      promptRun.ValidationAttemptCount = 0; // Will be updated during execution
+      promptRun.SuccessfulValidationCount = 0;
+      promptRun.FinalValidationPassed = false; // Will be updated after execution
+
       const saveResult = await promptRun.Save();
       if (!saveResult) {
         const error = `Failed to save AIPromptRun: ${promptRun.LatestResult?.Message || 'Unknown error'}`;
@@ -1241,10 +1251,20 @@ export class AIPromptRunner {
     modelResult: ChatResult;
     parsedResult: { result: unknown; validationResult?: ValidationResult };
     validationAttempts: ValidationAttempt[];
+    cumulativeTokens: {
+      promptTokens: number;
+      completionTokens: number;
+      totalCost: number;
+    };
   }> {
     const validationAttempts: ValidationAttempt[] = [];
     const maxRetries = Math.max(0, prompt.MaxRetries || 0);
     let lastError: Error | null = null;
+    
+    // Track cumulative token usage across all attempts
+    let cumulativePromptTokens = 0;
+    let cumulativeCompletionTokens = 0;
+    let cumulativeCost = 0;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
@@ -1268,6 +1288,13 @@ export class AIPromptRunner {
           params.templateMessageRole || 'system',
           params.cancellationToken,
         );
+
+        // Accumulate token usage from this attempt
+        if (modelResult.data?.usage) {
+          cumulativePromptTokens += modelResult.data.usage.promptTokens || 0;
+          cumulativeCompletionTokens += modelResult.data.usage.completionTokens || 0;
+          cumulativeCost += modelResult.data.usage.cost || 0;
+        }
 
         // Parse and validate the result
         const { result, validationResult, validationErrors } = await this.parseAndValidateResultEnhanced(
@@ -1297,10 +1324,16 @@ export class AIPromptRunner {
             modelResult,
             parsedResult: { result, validationResult },
             validationAttempts,
+            cumulativeTokens: {
+              promptTokens: cumulativePromptTokens,
+              completionTokens: cumulativeCompletionTokens,
+              totalCost: cumulativeCost,
+            },
           };
         }
 
         // Validation failed, check if we should retry
+        // BUG FIX: Only retry in Strict mode, not in Warn or None modes
         if (prompt.ValidationBehavior === 'Strict' && attempt < maxRetries) {
           lastError = new Error(`Validation failed: ${validationErrors?.map(e => e.Message).join('; ')}`);
           LogStatus(`⚠️ Validation failed on attempt ${attempt + 1}, will retry (Strict mode)`);
@@ -1308,13 +1341,18 @@ export class AIPromptRunner {
         } else {
           // Either not strict mode or no more retries, return what we have
           const reason = prompt.ValidationBehavior !== 'Strict' 
-            ? `${prompt.ValidationBehavior} mode - continuing with invalid output`
+            ? `${prompt.ValidationBehavior || 'None'} mode - continuing with invalid output (no retry)`
             : 'max retries exceeded';
           LogStatus(`⚠️ Validation failed on attempt ${attempt + 1}, stopping retries (${reason})`);
           return {
             modelResult,
             parsedResult: { result, validationResult },
             validationAttempts,
+            cumulativeTokens: {
+              promptTokens: cumulativePromptTokens,
+              completionTokens: cumulativeCompletionTokens,
+              totalCost: cumulativeCost,
+            },
           };
         }
       } catch (error) {
@@ -1886,14 +1924,31 @@ export class AIPromptRunner {
     endTime: Date,
     executionTimeMS: number,
     validationAttempts?: ValidationAttempt[],
+    cumulativeTokens?: {
+      promptTokens: number;
+      completionTokens: number;
+      totalCost: number;
+    },
   ): Promise<void> {
     try {
       promptRun.CompletedAt = endTime;
       promptRun.ExecutionTimeMS = executionTimeMS;
       promptRun.Result = typeof parsedResult.result === 'string' ? parsedResult.result : JSON.stringify(parsedResult.result);
 
-      // Extract token usage and cost if available
-      if (modelResult.data?.usage) {
+      // Extract token usage and cost - use cumulative if retries occurred
+      if (cumulativeTokens && validationAttempts && validationAttempts.length > 1) {
+        // Multiple attempts occurred, use cumulative totals
+        promptRun.TokensPrompt = cumulativeTokens.promptTokens;
+        promptRun.TokensCompletion = cumulativeTokens.completionTokens;
+        promptRun.TokensUsed = cumulativeTokens.promptTokens + cumulativeTokens.completionTokens;
+        promptRun.Cost = cumulativeTokens.totalCost;
+        
+        // Cost currency from the last model result
+        if (modelResult.data?.usage?.costCurrency !== undefined) {
+          promptRun.CostCurrency = modelResult.data.usage.costCurrency;
+        }
+      } else if (modelResult.data?.usage) {
+        // Single attempt, use standard token tracking
         promptRun.TokensUsed = modelResult.data.usage.totalTokens;
         promptRun.TokensPrompt = modelResult.data.usage.promptTokens;
         promptRun.TokensCompletion = modelResult.data.usage.completionTokens;
@@ -1907,8 +1962,69 @@ export class AIPromptRunner {
         }
       }
 
-      // Add validation information to Messages field
+      // Populate retry tracking columns
       if (validationAttempts && validationAttempts.length > 0) {
+        // Update retry tracking columns
+        promptRun.ValidationAttemptCount = validationAttempts.length;
+        promptRun.SuccessfulValidationCount = validationAttempts.filter(a => a.success).length;
+        promptRun.FinalValidationPassed = parsedResult.validationResult?.Success === true;
+        promptRun.LastAttemptAt = endTime;
+        
+        // Calculate total retry duration (excluding first attempt)
+        if (validationAttempts.length > 1) {
+          const firstAttemptTime = validationAttempts[0].timestamp;
+          const lastAttemptTime = validationAttempts[validationAttempts.length - 1].timestamp;
+          promptRun.TotalRetryDurationMS = lastAttemptTime.getTime() - firstAttemptTime.getTime();
+        } else {
+          promptRun.TotalRetryDurationMS = 0;
+        }
+        
+        // Get final validation error if any
+        const finalAttempt = validationAttempts[validationAttempts.length - 1];
+        if (!finalAttempt.success && finalAttempt.errorMessage) {
+          promptRun.FinalValidationError = finalAttempt.errorMessage.substring(0, 500); // Truncate to fit column
+          promptRun.ValidationErrorCount = finalAttempt.validationErrors?.length || 0;
+        }
+        
+        // Find most common validation error
+        if (validationAttempts.some(a => !a.success)) {
+          const errorCounts = new Map<string, number>();
+          validationAttempts.forEach(attempt => {
+            if (!attempt.success && attempt.errorMessage) {
+              const count = errorCounts.get(attempt.errorMessage) || 0;
+              errorCounts.set(attempt.errorMessage, count + 1);
+            }
+          });
+          
+          if (errorCounts.size > 0) {
+            const [commonError] = [...errorCounts.entries()].sort((a, b) => b[1] - a[1])[0];
+            promptRun.CommonValidationError = commonError.substring(0, 255); // Truncate to fit column
+          }
+        }
+        
+        // Store detailed attempts in JSON columns
+        promptRun.ValidationAttempts = JSON.stringify(validationAttempts.map(a => ({
+          attemptNumber: a.attemptNumber,
+          success: a.success,
+          errorMessage: a.errorMessage,
+          validationErrorCount: a.validationErrors?.length || 0,
+          timestamp: a.timestamp.toISOString(),
+          outputLength: a.rawOutput?.length || 0
+        })));
+        
+        promptRun.ValidationSummary = JSON.stringify({
+          totalAttempts: validationAttempts.length,
+          successfulAttempts: validationAttempts.filter(a => a.success).length,
+          finalSuccess: parsedResult.validationResult?.Success || false,
+          validationBehavior: promptRun.ValidationBehavior,
+          retryStrategy: promptRun.RetryStrategy,
+          maxRetriesConfigured: promptRun.MaxRetriesConfigured,
+          actualRetriesUsed: validationAttempts.length - 1,
+          totalDurationMS: executionTimeMS,
+          retryDurationMS: promptRun.TotalRetryDurationMS || 0
+        });
+        
+        // Also add validation information to Messages field for backward compatibility
         try {
           const currentMessages = promptRun.Messages ? JSON.parse(promptRun.Messages) : {};
           
@@ -1917,12 +2033,12 @@ export class AIPromptRunner {
             totalAttempts: validationAttempts.length,
             successfulAttempts: validationAttempts.filter(a => a.success).length,
             finalValidationSuccess: parsedResult.validationResult?.Success || false,
-            validationBehavior: promptRun.Messages ? 'Logged during execution' : 'Updated at completion',
+            validationBehavior: promptRun.ValidationBehavior,
             outputType: currentMessages.data?.prompt?.OutputType || 'unknown',
             hasOutputExample: !!(currentMessages.data?.prompt?.OutputExample),
             schemaValidationUsed: !!(currentMessages.data?.prompt?.OutputExample && currentMessages.data?.prompt?.OutputType === 'object'),
-            retryStrategy: currentMessages.data?.prompt?.RetryStrategy || 'Fixed',
-            maxRetries: currentMessages.data?.prompt?.MaxRetries || 0,
+            retryStrategy: promptRun.RetryStrategy,
+            maxRetries: promptRun.MaxRetriesConfigured,
             finalValidationErrors: parsedResult.validationResult?.Errors?.map(e => ({
               source: e.Source,
               message: e.Message,
@@ -1932,7 +2048,7 @@ export class AIPromptRunner {
             validationDecision: this.getValidationDecisionDescription(
               parsedResult.validationResult?.Success || false,
               validationAttempts.length,
-              currentMessages.data?.prompt?.ValidationBehavior || 'Warn'
+              promptRun.ValidationBehavior || 'Warn'
             )
           };
 
@@ -1941,6 +2057,13 @@ export class AIPromptRunner {
         } catch (jsonError) {
           LogError(`Error updating Messages field with validation info: ${jsonError.message}`);
         }
+      } else {
+        // No validation attempts (possibly skipped validation)
+        promptRun.ValidationAttemptCount = 1; // At least one attempt was made
+        promptRun.SuccessfulValidationCount = parsedResult.validationResult?.Success !== false ? 1 : 0;
+        promptRun.FinalValidationPassed = parsedResult.validationResult?.Success !== false;
+        promptRun.LastAttemptAt = endTime;
+        promptRun.TotalRetryDurationMS = 0;
       }
 
       // Set Success flag based on validation result
