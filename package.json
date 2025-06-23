@@ -5,10 +5,12 @@
   "workspaces": [
     "packages/*",
     "packages/Actions/*",
+    "packages/Actions/BizApps/*",
     "packages/AI/*",
     "packages/AI/Providers/*",
     "packages/AI/Recommendations/*",
     "packages/AI/Vectors/*",
+    "packages/AI/agent-manager/*",
     "packages/Communication/*",
     "packages/Communication/providers/*",
     "packages/Templates/*",

@@ -1,6 +1,6 @@
 {
-  "name": "@memberjunction/agent-manager-core",
-  "version": "0.0.1",
+  "name": "@memberjunction/ai-agent-manager",
+  "version": "2.54.0",
   "description": "Core interfaces and types for the MemberJunction Agent Manager system",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

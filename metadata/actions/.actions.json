@@ -3709,7 +3709,7 @@
     "fields": {
       "Name": "List Agents",
       "Description": "Lists AI agents with optional filtering. Restricted to Agent Manager agent only.",
-      "DriverClass": "__ListAgents",
+      "DriverClass": "List Agents",
       "Type": "Custom",
       "CategoryID": "@lookup:Action Categories.Name=Agent Management",
       "Status": "Active"
@@ -3815,7 +3815,7 @@
     "fields": {
       "Name": "Associate Action With Agent",
       "Description": "Associates an action with an agent. Restricted to Agent Manager agent only.",
-      "DriverClass": "__AssociateActionWithAgent",
+      "DriverClass": "Associate Action With Agent",
       "Type": "Custom",
       "CategoryID": "@lookup:Action Categories.Name=Agent Management",
       "Status": "Active"
@@ -3859,11 +3859,11 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "AssociationID",
+            "Name": "AgentActionID",
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "ID of the created association",
+            "Description": "ID of the created agent-action association",
             "IsRequired": false
           }
         }
@@ -4156,7 +4156,7 @@
     "fields": {
       "Name": "List Actions",
       "Description": "Lists available actions that can be associated with agents. Used by Planning Designer Agent.",
-      "DriverClass": "__ListActions",
+      "DriverClass": "List Actions",
       "Type": "Custom",
       "CategoryID": "@lookup:Action Categories.Name=Agent Management",
       "Status": "Active"
