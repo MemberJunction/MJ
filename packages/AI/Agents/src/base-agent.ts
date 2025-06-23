@@ -1695,7 +1695,7 @@ export class BaseAgent {
             return {
                 actionName: result.action.name,
                 actionId: result.action.id,
-                params: result.action.params,
+                params: result.result.Params || {},
                 success: result.success,
                 resultCode: actionResult?.Result?.ResultCode || (result.success ? 'SUCCESS' : 'ERROR'),
                 message: result.success ? actionResult?.Message || 'Action completed' : result.error
