@@ -544,23 +544,4 @@
         </div>
     </form>
 
-    <!-- AI Agent Test Harness -->
-    @if (showTestHarness) {
-        <kendo-window 
-            [width]="1200" 
-            [height]="800" 
-            [minWidth]="800"
-            [minHeight]="600"
-            [draggable]="true"
-            [resizable]="true"
-            [state]="'default'"
-            (close)="onTestHarnessVisibilityChanged(false)"
-            title="Run AI Agent - {{ record.Name || 'Untitled' }}">
-            <mj-ai-test-harness
-                [aiAgent]="record"
-                [isVisible]="showTestHarness"
-                (visibilityChange)="onTestHarnessVisibilityChanged($event)">
-            </mj-ai-test-harness>
-        </kendo-window>
-    }
 </div>

@@ -25,9 +25,6 @@ import { AIPromptFormComponentExtended, LoadAIPromptFormComponentExtended } from
 import { AIAgentFormComponentExtended, LoadAIAgentFormComponentExtended } from "./AIAgents/ai-agent-form.component";
 import { NewAgentDialogComponent } from "./AIAgents/new-agent-dialog.component";
 import { NewAgentDialogService } from "./AIAgents/new-agent-dialog.service";
-import { AITestHarnessComponent } from "./ai-test-harness/ai-test-harness.component";
-import { AITestHarnessDialogComponent } from "./ai-test-harness/ai-test-harness-dialog.component";
-import { TestHarnessDialogService } from "./test-harness-dialog.service";
 import { AITestHarnessModule } from "@memberjunction/ng-ai-test-harness";
 import { ActionGalleryModule } from "@memberjunction/ng-action-gallery";
 import { JoinGridModule } from "@memberjunction/ng-join-grid";
@@ -40,9 +37,6 @@ import { ActionTestHarnessComponent } from "./Actions/action-test-harness.compon
 import { ActionTestHarnessDialogComponent } from "./Actions/action-test-harness-dialog.component";
 import { ActionExecutionLogFormComponentExtended, LoadActionExecutionLogFormComponentExtended } from "./Actions/action-execution-log-form.component";
 import { ActionParamDialogComponent } from "./Actions/action-param-dialog.component";
-import { AgentExecutionMonitorComponent } from "./ai-test-harness/agent-execution-monitor.component";
-import { ExecutionNodeComponent } from "./ai-test-harness/agent-execution-node.component";
-import { JsonViewerWindowComponent } from "./ai-test-harness/json-viewer-window.component";
 import { AIAgentRunFormComponentExtended, LoadAIAgentRunFormComponent } from "./ai-agent-run/ai-agent-run.component";
 import { AIAgentRunTimelineComponent } from "./ai-agent-run/ai-agent-run-timeline.component";
 import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-node.component";
@@ -59,24 +53,19 @@ import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-no
         AIPromptFormComponentExtended,
         AIAgentFormComponentExtended,
         NewAgentDialogComponent,
-        AITestHarnessComponent,
         EntitySelectorDialogComponent,
-        AITestHarnessDialogComponent,
         AIPromptRunFormComponentExtended,
         ActionFormComponentExtended,
         ActionTestHarnessComponent,
         ActionTestHarnessDialogComponent,
         ActionExecutionLogFormComponentExtended,
         ActionParamDialogComponent,
-        JsonViewerWindowComponent,
         AIAgentRunFormComponentExtended,
         AIAgentRunTimelineComponent,
         AIAgentRunStepNodeComponent,
     ],
     imports: [
         CommonModule,
-        AgentExecutionMonitorComponent,
-        ExecutionNodeComponent,
         FormsModule,
         ReactiveFormsModule,
         LayoutModule,
@@ -117,20 +106,16 @@ import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-no
         TemplateEditorComponent,
         AIPromptFormComponentExtended,
         AIAgentFormComponentExtended,
-        AITestHarnessComponent,
-        AITestHarnessDialogComponent,
         AIPromptRunFormComponentExtended,
         ActionFormComponentExtended,
         ActionTestHarnessComponent,
         ActionTestHarnessDialogComponent,
         ActionExecutionLogFormComponentExtended,
-        ExecutionNodeComponent,
         AIAgentRunFormComponentExtended,
         AIAgentRunTimelineComponent,
         AIAgentRunStepNodeComponent,
     ],
     providers: [
-        TestHarnessDialogService,
         NewAgentDialogService
     ]
 })
