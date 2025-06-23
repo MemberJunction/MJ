@@ -3100,3 +3100,52 @@ EXEC [${flyway:defaultSchema}].spUpdateAIPromptModel @PromptID = 'FF7D441F-36E1-
 @ID = '0F7988B5-668A-4B53-A071-DFD0CEF7B762';
 
 GO
+
+
+
+
+-- Save MJ: AI Prompt Models (core SP call only)
+EXEC [__mj].spUpdateAIPromptModel @PromptID = 'FF7D441F-36E1-458A-B548-0FC2208923BE',
+@ModelID = '9604B1A4-3A21-F011-8B3D-7C1E5249773E',
+@VendorID = 'D8A5CCEC-6A37-EF11-86D4-000D3A4E707E',
+@ConfigurationID = NULL,
+@Priority = 10,
+@ExecutionGroup = 0,
+@ModelParameters = NULL,
+@Status = 'Active',
+@ParallelizationMode = 'None',
+@ParallelCount = 1,
+@ParallelConfigParam = NULL,
+@ID = '354C0AC9-9196-4E9E-A6DA-7E0CEBE1EA92';
+
+GO
+
+-- Save MJ: AI Prompt Models (core SP call only)
+EXEC [__mj].spUpdateAIPromptModel @PromptID = 'FF7D441F-36E1-458A-B548-0FC2208923BE',
+@ModelID = 'C496B988-4EA4-4D7E-A6DD-255F56D93933',
+@VendorID = 'E3A5CCEC-6A37-EF11-86D4-000D3A4E707E',
+@ConfigurationID = NULL,
+@Priority = 13,
+@ExecutionGroup = 0,
+@ModelParameters = NULL,
+@Status = 'Active',
+@ParallelizationMode = 'None',
+@ParallelCount = 1,
+@ParallelConfigParam = NULL,
+@ID = 'A72A6CC0-1AB7-4088-B53C-AE8A88B7E4A7';
+
+GO
+
+-- Save MJ: AI Prompt Models (core SP call only)
+EXEC [__mj].spUpdateAIPromptModel @PromptID = 'FF7D441F-36E1-458A-B548-0FC2208923BE',
+@ModelID = '287E317F-BF26-F011-A770-AC1A3D21423D',
+@VendorID = 'D8A5CCEC-6A37-EF11-86D4-000D3A4E707E',
+@ConfigurationID = NULL,
+@Priority = 12,
+@ExecutionGroup = 0,
+@ModelParameters = NULL,
+@Status = 'Active',
+@ParallelizationMode = 'None',
+@ParallelCount = 1,
+@ParallelConfigParam = NULL,
+@ID = '0F7988B5-668A-4B53-A071-DFD0CEF7B762';
