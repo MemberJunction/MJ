@@ -210,6 +210,10 @@ export class AIPromptRunEntityServer extends AIPromptRunEntity {
         super.DescendantCost = value; // call the base class setter
         this.UpdateTotalCost(); // update total cost
     }
+    // need both getters and setters to ensure consistency
+    public get DescendantCost(): number {
+        return super.DescendantCost; // call the base class getter
+    }
 
     /**
      * Override setter for Cost to automatically update TotalCost whenever it changes.
@@ -220,7 +224,10 @@ export class AIPromptRunEntityServer extends AIPromptRunEntity {
         super.Cost = value; // call the base class setter
         this.UpdateTotalCost(); // update total cost
     }
-
+    // need both getters and setters to ensure consistency
+    public get Cost(): number {
+        return super.Cost; // call the base class getter
+    }
     /**
      * Updates the TotalCost field by summing Cost and DescendantCost.
      * This method is called automatically by the Cost and DescendantCost setters
