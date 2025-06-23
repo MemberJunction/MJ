@@ -90,7 +90,7 @@ export class ListAgentsAction extends BaseAgentManagementAction {
                 return {
                     Success: true,
                     ResultCode: 'SUCCESS',
-                    Message: `Found ${agents.length} agent${agents.length !== 1 ? 's' : ''}`,
+                    Message: `Found ${agents.length} agent${agents.length !== 1 ? 's' : ''}. Details are in the output parameter 'Agents'.`,
                     Params: params.Params
                 };
             } else {
