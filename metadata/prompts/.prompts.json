@@ -4,14 +4,14 @@
       "Name": "Loop Agent Type: System Prompt",
       "Description": "Basic control structure for the Loop Agent Type.",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",
-      "TemplateText": "@file:templates/loop-agent-type-system-prompt.template.md",
+      "TemplateText": "@file:templates/system/loop-agent-type-system-prompt.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
       "OutputType": "object",
-      "OutputExample": "@file:output/loop-agent-type-system-prompt-output.example.json",
+      "OutputExample": "@file:output/system/loop-agent-type-system-prompt-output.example.json",
       "ValidationBehavior": "Strict",
       "MaxRetries": 2,
       "RetryDelayMS": 1000,
@@ -33,7 +33,7 @@
             "ID": "354C0AC9-9196-4E9E-A6DA-7E0CEBE1EA92"
           },
           "sync": {
-            "lastModified": "2025-06-22T16:28:49.635Z",
+            "lastModified": "2025-06-23T16:39:42.174Z",
             "checksum": "64f60620606b7834c66c6962fb641f72a6ddb35a9da9ac335719388d874b9a7d"
           }
         },
@@ -48,7 +48,7 @@
             "ID": "A72A6CC0-1AB7-4088-B53C-AE8A88B7E4A7"
           },
           "sync": {
-            "lastModified": "2025-06-22T16:28:49.646Z",
+            "lastModified": "2025-06-23T16:39:42.180Z",
             "checksum": "b0d7d8ebdc2c718424279c547142362da4d0b2ea25422ad8c44fa14919eda956"
           }
         },
@@ -63,7 +63,7 @@
             "ID": "0F7988B5-668A-4B53-A071-DFD0CEF7B762"
           },
           "sync": {
-            "lastModified": "2025-06-22T16:28:49.651Z",
+            "lastModified": "2025-06-23T16:39:42.186Z",
             "checksum": "33282cc46a9cda534cbff8811e8248647c1571078a37bed5d8fd142752c3ae7e"
           }
         }
@@ -73,8 +73,8 @@
       "ID": "FF7D441F-36E1-458A-B548-0FC2208923BE"
     },
     "sync": {
-      "lastModified": "2025-06-22T16:28:49.651Z",
-      "checksum": "caeded9a46eae371be8fdb9e9a69a1772cc14ea598c432a1f39d3136586c48f9"
+      "lastModified": "2025-06-23T16:39:42.186Z",
+      "checksum": "0bf8c3c0cbd8fe8a243ec5f34cdaab56e16871ef1c50c6c132d41ac484214523"
     }
   },
   {
@@ -82,14 +82,14 @@
       "Name": "Demo Loop Agent - Main Prompt",
       "Description": "Demo for the main prompt for the agent.",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",
-      "TemplateText": "@file:templates/demo-loop-agent.template.md",
+      "TemplateText": "@file:templates/demo-loop/demo-loop-agent.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
       "OutputType": "object",
-      "OutputExample": "@file:output/demo-loop-agent.example.json",
+      "OutputExample": "@file:output/demo-loop/demo-loop-agent.example.json",
       "ValidationBehavior": "Strict",
       "MaxRetries": 2,
       "RetryDelayMS": 1000,
@@ -111,7 +111,7 @@
             "ID": "15157529-4E12-4FE1-A313-979D236EF8FD"
           },
           "sync": {
-            "lastModified": "2025-06-22T16:28:49.664Z",
+            "lastModified": "2025-06-23T16:39:42.203Z",
             "checksum": "6b6154f0c49d785c4e5b90e56012aa3cd00ff1a13d77a526dd3f5945ac7e29fd"
           }
         }
@@ -121,8 +121,8 @@
       "ID": "B4053E4F-165C-4AED-8E14-3A0A25A28EFE"
     },
     "sync": {
-      "lastModified": "2025-06-22T16:28:49.664Z",
-      "checksum": "6db8baccfd7c998333ed11ad3286059762c526cb1cc815e8acc3e1097be538d9"
+      "lastModified": "2025-06-23T16:39:42.203Z",
+      "checksum": "bd2883bddf54ea258a806bb80891726513ba2983634b4f83ba9bc9b65889c5e3"
     }
   },
   {
@@ -130,7 +130,7 @@
       "Name": "Marketing Agent - Main Prompt",
       "Description": "System prompt for the Marketing Agent that orchestrates content creation workflows.",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",
-      "TemplateText": "@file:templates/marketing-agent.template.md",
+      "TemplateText": "@file:templates/marketing/marketing-agent.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
       "SelectionStrategy": "Specific",
@@ -159,7 +159,7 @@
             "ID": "922159C2-21EE-421E-A5A9-13FEA8FDB908"
           },
           "sync": {
-            "lastModified": "2025-06-22T16:28:49.691Z",
+            "lastModified": "2025-06-23T16:39:42.218Z",
             "checksum": "6b6154f0c49d785c4e5b90e56012aa3cd00ff1a13d77a526dd3f5945ac7e29fd"
           }
         }
@@ -169,8 +169,8 @@
       "ID": "26949743-4535-4DA6-86F4-0AD76250E17A"
     },
     "sync": {
-      "lastModified": "2025-06-22T16:28:49.691Z",
-      "checksum": "c8c87cab8bcd378ec69cb32a30d1598b9f4e2227a5ca792e076743e918f60110"
+      "lastModified": "2025-06-23T16:39:42.218Z",
+      "checksum": "f55ad56b7cd6d7f58c3b5a33239016d0b7c47b15ea094710d298e787f54c665d"
     }
   },
   {
@@ -178,7 +178,7 @@
       "Name": "Copywriter Agent - Main Prompt",
       "Description": "System prompt for the Copywriter Agent that creates initial marketing content drafts.",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",
-      "TemplateText": "@file:templates/copywriter-agent.template.md",
+      "TemplateText": "@file:templates/marketing/copywriter-agent.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
       "SelectionStrategy": "Specific",
@@ -207,7 +207,7 @@
             "ID": "F6581BA4-049E-4FCD-A064-8E6E34A500DD"
           },
           "sync": {
-            "lastModified": "2025-06-22T16:28:49.718Z",
+            "lastModified": "2025-06-23T16:39:42.233Z",
             "checksum": "6b6154f0c49d785c4e5b90e56012aa3cd00ff1a13d77a526dd3f5945ac7e29fd"
           }
         }
@@ -217,8 +217,8 @@
       "ID": "1B078367-9AE8-4CB8-BC32-CAAD5DE506D5"
     },
     "sync": {
-      "lastModified": "2025-06-22T16:28:49.718Z",
-      "checksum": "61b9a0fecc556b8facc8453b80fae42d8d42d241e8713a90fc42ce068a1f92f3"
+      "lastModified": "2025-06-23T16:39:42.233Z",
+      "checksum": "1d04241bc97bb8c54d8d4cb42c20ff8f0f6bcddb0a7d24add8501f058b52b4f8"
     }
   },
   {
@@ -226,7 +226,7 @@
       "Name": "SEO AIEO Specialist Agent - Main Prompt",
       "Description": "System prompt for the SEO/AIEO Specialist Agent that optimizes content for search engines and AI platforms.",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",
-      "TemplateText": "@file:templates/seo-aieo-specialist-agent.template.md",
+      "TemplateText": "@file:templates/marketing/seo-aieo-specialist-agent.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
       "SelectionStrategy": "Specific",
@@ -255,7 +255,7 @@
             "ID": "D363C45F-A8DE-40F1-8CB8-0F737DC0F6F2"
           },
           "sync": {
-            "lastModified": "2025-06-22T16:28:49.744Z",
+            "lastModified": "2025-06-23T16:39:42.248Z",
             "checksum": "6b6154f0c49d785c4e5b90e56012aa3cd00ff1a13d77a526dd3f5945ac7e29fd"
           }
         }
@@ -265,8 +265,8 @@
       "ID": "D9CF490A-5F1B-4B78-A93C-021707D107A2"
     },
     "sync": {
-      "lastModified": "2025-06-22T16:28:49.744Z",
-      "checksum": "0ddccf28f624b212d07eee4711448d59326a841d1a528ebd7490595d9141fa73"
+      "lastModified": "2025-06-23T16:39:42.248Z",
+      "checksum": "d7ce46b032c3e72de6a352c6ca5cba3d2db13fd4af5e9ef29c4033fc41dc8aac"
     }
   },
   {
@@ -274,7 +274,7 @@
       "Name": "Editor Agent - Main Prompt",
       "Description": "System prompt for the Editor Agent that reviews and refines marketing content.",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",
-      "TemplateText": "@file:templates/editor-agent.template.md",
+      "TemplateText": "@file:templates/marketing/editor-agent.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
       "SelectionStrategy": "Specific",
@@ -303,7 +303,7 @@
             "ID": "876700E8-BCB5-428F-9647-C8DC4E3A3148"
           },
           "sync": {
-            "lastModified": "2025-06-22T16:28:49.773Z",
+            "lastModified": "2025-06-23T16:39:42.265Z",
             "checksum": "6b6154f0c49d785c4e5b90e56012aa3cd00ff1a13d77a526dd3f5945ac7e29fd"
           }
         }
@@ -313,8 +313,8 @@
       "ID": "DDBD7727-0E89-47D5-AA24-C581648775A0"
     },
     "sync": {
-      "lastModified": "2025-06-22T16:28:49.773Z",
-      "checksum": "c01066d2f0c25e85f786c440163246f75c11a1c0c23c4c52370db9bd13e9d234"
+      "lastModified": "2025-06-23T16:39:42.265Z",
+      "checksum": "b2fd1e4a023ae94139a8c1b691f831f32cb02ce1d4b3e594cb8cdb2e29578d6f"
     }
   },
   {
@@ -322,7 +322,7 @@
       "Name": "Brand Guardian Agent - Main Prompt",
       "Description": "System prompt for the Brand Guardian Agent that ensures brand consistency and compliance.",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",
-      "TemplateText": "@file:templates/brand-guardian-agent.template.md",
+      "TemplateText": "@file:templates/marketing/brand-guardian-agent.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
       "SelectionStrategy": "Specific",
@@ -351,7 +351,7 @@
             "ID": "C4E749A0-9674-4FC4-969D-C9C93569033C"
           },
           "sync": {
-            "lastModified": "2025-06-22T16:28:49.800Z",
+            "lastModified": "2025-06-23T16:39:42.278Z",
             "checksum": "6b6154f0c49d785c4e5b90e56012aa3cd00ff1a13d77a526dd3f5945ac7e29fd"
           }
         }
@@ -361,8 +361,8 @@
       "ID": "D536DD1C-84C0-46B6-8AC7-7B332E2B0273"
     },
     "sync": {
-      "lastModified": "2025-06-22T16:28:49.800Z",
-      "checksum": "8fe812588f4d89958763d4aecfb7b86091053f37c067e797c63d2e37b7768999"
+      "lastModified": "2025-06-23T16:39:42.279Z",
+      "checksum": "153cd02011ecc5e09637eac6486cbff923564457fbf42a037f3c01305b25c4aa"
     }
   },
   {
@@ -370,7 +370,7 @@
       "Name": "Publisher Agent - Main Prompt",
       "Description": "System prompt for the Publisher Agent that handles content distribution (currently in development).",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",
-      "TemplateText": "@file:templates/publisher-agent.template.md",
+      "TemplateText": "@file:templates/marketing/publisher-agent.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
       "SelectionStrategy": "Specific",
@@ -399,7 +399,7 @@
             "ID": "8427B90E-D304-43BD-9037-1A7C8228C99A"
           },
           "sync": {
-            "lastModified": "2025-06-22T16:28:49.826Z",
+            "lastModified": "2025-06-23T16:39:42.292Z",
             "checksum": "6b6154f0c49d785c4e5b90e56012aa3cd00ff1a13d77a526dd3f5945ac7e29fd"
           }
         }
@@ -409,8 +409,8 @@
       "ID": "5182F85B-C86F-4FCB-A38E-90687F8D0CD2"
     },
     "sync": {
-      "lastModified": "2025-06-22T16:28:49.826Z",
-      "checksum": "034fc33219f7d292975ae9bfedfc4683821055e565de017d69a3200077b06022"
+      "lastModified": "2025-06-23T16:39:42.292Z",
+      "checksum": "5d8e87034bc9cd2085deeb50f9119e2c6866c4d69d9b2a5d5612b82b4d23c796"
     }
   },
   {
@@ -418,7 +418,7 @@
       "Name": "Generate Action Code",
       "Description": "Generates TypeScript code for MemberJunction Actions based on user requirements. Supports both base actions and child actions that orchestrate parent actions",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",
-      "TemplateText": "@file:templates/action-generation.template.md",
+      "TemplateText": "@file:templates/system/action-generation.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
       "SelectionStrategy": "Specific",
@@ -447,7 +447,7 @@
             "ID": "CE4822A0-CEF2-4398-8CFA-9AF4564AF0B1"
           },
           "sync": {
-            "lastModified": "2025-06-22T16:28:49.842Z",
+            "lastModified": "2025-06-23T16:39:42.307Z",
             "checksum": "6b6154f0c49d785c4e5b90e56012aa3cd00ff1a13d77a526dd3f5945ac7e29fd"
           }
         }
@@ -457,15 +457,15 @@
       "ID": "2222B834-50D9-49B2-9206-FA714FE9124A"
     },
     "sync": {
-      "lastModified": "2025-06-22T16:28:49.842Z",
-      "checksum": "2eeb1c392257de97958187fad8f2991c0ae2f0364eeb5d6188d245309e256a29"
+      "lastModified": "2025-06-23T16:39:42.307Z",
+      "checksum": "c2f86da4dee28a6cf43dcdec1e3a9e3ca6c75bdd48de307c4d5a3dff3254a279"
     }
   },
   {
     "fields": {
       "Name": "Template Parameter Extraction",
       "Description": "Extracts Nunjucks variables and their types from template strings. Analyzes template content to identify all parameters used and infers their expected data types.",
-      "TemplateText": "@file:templates/template-param-extraction.template.md",
+      "TemplateText": "@file:templates/system/template-param-extraction.template.md",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",
       "Status": "Active",
       "ResponseFormat": "JSON",
@@ -479,7 +479,7 @@
       "RetryStrategy": "Fixed",
       "PromptRole": "System",
       "PromptPosition": "First",
-      "OutputExample": "@file:output/template-param-extraction.example.json",
+      "OutputExample": "@file:output/system/template-param-extraction.example.json",
       "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
     },
     "relatedEntities": {
@@ -495,7 +495,7 @@
             "ID": "85E70E19-4C33-43E0-A150-016D122E0AA6"
           },
           "sync": {
-            "lastModified": "2025-06-22T16:28:49.889Z",
+            "lastModified": "2025-06-23T16:39:42.341Z",
             "checksum": "36b85609a1dbe4487e7f611a68fdb8d4bf5e2993b8b1e2cfe75a8185b6da6105"
           }
         }
@@ -505,8 +505,200 @@
       "ID": "C1D7FE6B-287B-4B3F-8618-4CDBCF1394BB"
     },
     "sync": {
-      "lastModified": "2025-06-22T16:28:49.889Z",
-      "checksum": "b7195908afc108908ede97b612b370246feed9adebdf267245a3ed8264bf2dfa"
+      "lastModified": "2025-06-23T16:39:42.341Z",
+      "checksum": "adfec2e80b43344b688bcae0d384832063199a2d46a1c853e51bacacdfc4fd9a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Agent Manager - Main Prompt",
+      "Description": "System prompt for the Agent Manager agent that orchestrates creation and management of other agents.",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/agent-manager/agent-manager.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "@file:output/agent-manager/agent-manager.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Agent Management?create&Description=Prompts for Agent Management System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 4.1",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "3BF5F393-10C4-4470-8783-2131F18E4196"
+          },
+          "sync": {
+            "lastModified": "2025-06-23T16:39:42.378Z",
+            "checksum": "33282cc46a9cda534cbff8811e8248647c1571078a37bed5d8fd142752c3ae7e"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "96BCAE1C-B1F0-4FC4-9988-54B067BC962A"
+    },
+    "sync": {
+      "lastModified": "2025-06-23T16:39:42.378Z",
+      "checksum": "5076ee0f6c6a305f6b6beeaf0d51c3d34d4b27666e1350dc7dcea78a045f56de"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Requirements Analyst Agent - Main Prompt",
+      "Description": "System prompt for the Requirements Analyst sub-agent that gathers and clarifies agent requirements.",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/agent-manager/requirements-analyst-agent.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "@file:output/agent-manager/requirements-analyst-agent.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Agent Management"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 4.1",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "219CC484-E76A-4982-9DF7-82A543B560BB"
+          },
+          "sync": {
+            "lastModified": "2025-06-23T16:39:42.413Z",
+            "checksum": "33282cc46a9cda534cbff8811e8248647c1571078a37bed5d8fd142752c3ae7e"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B41F7FAD-49F5-4897-92C9-4904C79DD5F5"
+    },
+    "sync": {
+      "lastModified": "2025-06-23T16:39:42.413Z",
+      "checksum": "20fc26a931a63e1ac3103741941db3dc1d04e224f38e302e1aab8e4cb216ce12"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Planning Designer Agent - Main Prompt",
+      "Description": "System prompt for the Planning Designer sub-agent that designs agent hierarchies and selects actions.",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/agent-manager/planning-designer-agent.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "@file:output/agent-manager/planning-designer-agent.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Agent Management"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 4.1",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "831C9661-5268-4606-B9DF-3656EBA960CC"
+          },
+          "sync": {
+            "lastModified": "2025-06-23T16:39:42.446Z",
+            "checksum": "33282cc46a9cda534cbff8811e8248647c1571078a37bed5d8fd142752c3ae7e"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "2B405BA2-A446-4F1E-9402-D88C51CC8F9F"
+    },
+    "sync": {
+      "lastModified": "2025-06-23T16:39:42.446Z",
+      "checksum": "083cd8a68207a978d260dc250182842f02c78572e935c6b82ea22a2ec76bb4cd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Prompt Designer Agent - Main Prompt",
+      "Description": "System prompt for the Prompt Designer sub-agent that crafts effective prompts for agents.",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/agent-manager/prompt-designer-agent.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "@file:output/agent-manager/prompt-designer-agent.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Agent Management"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 4.1",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "67100A77-DB8B-4163-AF29-525153DEE29B"
+          },
+          "sync": {
+            "lastModified": "2025-06-23T16:39:42.480Z",
+            "checksum": "33282cc46a9cda534cbff8811e8248647c1571078a37bed5d8fd142752c3ae7e"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "04EB71C7-718A-4B6E-A8BB-35D9AF8AB94D"
+    },
+    "sync": {
+      "lastModified": "2025-06-23T16:39:42.480Z",
+      "checksum": "3f3820b18ba288dc5451caad39ff9c481b4584b419d1a9d7e7c6119a56f7309e"
     }
   }
 ]

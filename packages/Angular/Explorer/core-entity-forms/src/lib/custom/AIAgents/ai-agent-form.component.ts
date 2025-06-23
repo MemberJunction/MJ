@@ -53,8 +53,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /** The AI Agent entity being edited */
     public record!: AIAgentEntity;
     
-    /** Whether the test harness is currently visible */
-    public showTestHarness = false;
     
     // === Related Entity Counts ===
     /** Number of sub-agents under this agent */
@@ -224,7 +222,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             return;
         }
 
-        this.showTestHarness = true;
+        // Use the new test harness dialog service
+        this.testHarnessService.openForAgent(this.record.ID);
     }
 
     /**
@@ -246,9 +245,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * Updates the component state when the test harness is opened or closed.
      * @param isVisible - Whether the test harness is currently visible
      */
-    public onTestHarnessVisibilityChanged(isVisible: boolean) {
-        this.showTestHarness = isVisible;
-    }
 
     /**
      * Gets the count of sub-agents

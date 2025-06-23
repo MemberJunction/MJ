@@ -1011,8 +1011,15 @@ export class SQLServerDataProvider
   }
 
   protected validateUserProvidedSQLClause(clause: string): boolean {
+    // First, remove all string literals from the clause to avoid false positives
+    // This regex matches both single and double quoted strings, handling escaped quotes
+    const stringLiteralPattern = /(['"])(?:(?=(\\?))\2[\s\S])*?\1/g;
+    
+    // Replace all string literals with empty strings for validation purposes
+    const clauseWithoutStrings = clause.replace(stringLiteralPattern, '');
+    
     // convert the clause to lower case to make the keyword search case-insensitive
-    const lowerClause = clause.toLowerCase();
+    const lowerClause = clauseWithoutStrings.toLowerCase();
 
     // Define forbidden keywords and characters as whole words using regular expressions
     const forbiddenPatterns: RegExp[] = [
