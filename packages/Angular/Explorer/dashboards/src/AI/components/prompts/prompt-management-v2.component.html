@@ -225,9 +225,13 @@
                           </div>
 
                           <div class="card-footer">
-                            <button class="action-button" (click)="openPrompt(prompt.ID); $event.stopPropagation()">
-                              <i class="fa-solid fa-edit"></i>
-                              Edit
+                            <button class="action-button primary" (click)="testPrompt(prompt.ID, $event)" [disabled]="prompt.Status !== 'Active'" title="Run Prompt">
+                              <i class="fa-solid fa-play"></i>
+                              Run
+                            </button>
+                            <button class="action-button" (click)="openPrompt(prompt.ID); $event.stopPropagation()" title="Edit Prompt">
+                              <i class="fa-solid fa-external-link-alt"></i>
+                              Open
                             </button>
                           </div>
                         </div>
@@ -274,8 +278,11 @@
                             }
                           </td>
                           <td>
-                            <button class="action-button small" (click)="openPrompt(prompt.ID)">
-                              <i class="fa-solid fa-edit"></i>
+                            <button class="action-button small primary" (click)="testPrompt(prompt.ID, $event)" [disabled]="prompt.Status !== 'Active'" title="Run Prompt">
+                              <i class="fa-solid fa-play"></i>
+                            </button>
+                            <button class="action-button small" (click)="openPrompt(prompt.ID)" title="Edit Prompt">
+                              <i class="fa-solid fa-external-link-alt"></i>
                             </button>
                           </td>
                         </tr>
@@ -300,3 +307,24 @@
     </kendo-splitter>
   }
 </div>
+
+<!-- AI Prompt Test Harness -->
+@if (selectedPromptForTest) {
+    <kendo-window 
+        [width]="1200" 
+        [height]="800" 
+        [minWidth]="800"
+        [minHeight]="600"
+        [draggable]="true"
+        [resizable]="true"
+        [state]="'default'"
+        (close)="closeTestHarness()"
+        title="Run AI Prompt - {{ selectedPromptForTest.Name || 'Untitled' }}">
+        <mj-ai-test-harness
+            [mode]="'prompt'"
+            [entity]="selectedPromptForTest"
+            [isVisible]="true"
+            (visibilityChange)="closeTestHarness()">
+        </mj-ai-test-harness>
+    </kendo-window>
+}

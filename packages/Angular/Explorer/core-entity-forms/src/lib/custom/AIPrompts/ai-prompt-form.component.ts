@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild, ChangeDetectorRef, ElementRef } from '@angular/core';
+import { Component, OnInit, ViewChild, ChangeDetectorRef, ElementRef, ViewContainerRef } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
 import { AIPromptEntity, TemplateEntity, TemplateContentEntity, TemplateParamEntity, AIPromptModelEntity, AIModelEntity, AIVendorEntity, AIPromptCategoryEntity, AIModelVendorEntity, AIPromptTypeEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
@@ -9,6 +9,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { TemplateEditorConfig, TemplateEditorComponent } from '../../shared/components/template-editor.component';
 import { AIPromptFormComponent } from '../../generated/Entities/AIPrompt/aiprompt.form.component';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 
 @RegisterClass(BaseFormComponent, 'AI Prompts')
 @Component({
@@ -71,7 +72,9 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         sharedService: SharedService,
         router: Router,
         route: ActivatedRoute,
-        public cdr: ChangeDetectorRef
+        public cdr: ChangeDetectorRef,
+        private testHarnessService: AITestHarnessDialogService,
+        private viewContainerRef: ViewContainerRef
     ) {
         super(elementRef, sharedService, router, route, cdr);
     }
@@ -342,7 +345,28 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             return;
         }
 
-        this.showTestHarness = true;
+        // Use the dialog service instead of inline
+        this.testHarnessService.openForPrompt(this.record.ID, this.viewContainerRef).subscribe({
+            next: (result) => {
+                if (result.success) {
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        'Prompt test completed successfully',
+                        'success',
+                        3000
+                    );
+                    // Reload execution history
+                    this.loadExecutionHistory();
+                }
+            },
+            error: (error) => {
+                console.error('Test harness error:', error);
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Test failed: ' + error.message,
+                    'error',
+                    5000
+                );
+            }
+        });
     }
 
     /**

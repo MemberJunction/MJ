@@ -23,9 +23,13 @@ import { TemplateParamsGridComponent } from "./Templates/template-params-grid.co
 import { TemplateEditorComponent } from "../shared/components/template-editor.component";
 import { AIPromptFormComponentExtended, LoadAIPromptFormComponentExtended } from "./AIPrompts/ai-prompt-form.component";
 import { AIAgentFormComponentExtended, LoadAIAgentFormComponentExtended } from "./AIAgents/ai-agent-form.component";
+import { NewAgentDialogComponent } from "./AIAgents/new-agent-dialog.component";
+import { NewAgentDialogService } from "./AIAgents/new-agent-dialog.service";
 import { AITestHarnessComponent } from "./ai-test-harness/ai-test-harness.component";
 import { AITestHarnessDialogComponent } from "./ai-test-harness/ai-test-harness-dialog.component";
 import { TestHarnessDialogService } from "./test-harness-dialog.service";
+import { AITestHarnessModule } from "@memberjunction/ng-ai-test-harness";
+import { ActionGalleryModule } from "@memberjunction/ng-action-gallery";
 import { JoinGridModule } from "@memberjunction/ng-join-grid";
 import { CodeEditorModule } from "@memberjunction/ng-code-editor";
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
@@ -34,12 +38,12 @@ import { AIPromptRunFormComponentExtended } from "./AIPromptRuns/ai-prompt-run-f
 import { ActionFormComponentExtended, LoadActionFormComponentExtended } from "./Actions/action-form.component";
 import { ActionTestHarnessComponent } from "./Actions/action-test-harness.component";
 import { ActionTestHarnessDialogComponent } from "./Actions/action-test-harness-dialog.component";
-import { ActionExecutionLogFormComponentExtended } from "./Actions/action-execution-log-form.component";
+import { ActionExecutionLogFormComponentExtended, LoadActionExecutionLogFormComponentExtended } from "./Actions/action-execution-log-form.component";
 import { ActionParamDialogComponent } from "./Actions/action-param-dialog.component";
 import { AgentExecutionMonitorComponent } from "./ai-test-harness/agent-execution-monitor.component";
 import { ExecutionNodeComponent } from "./ai-test-harness/agent-execution-node.component";
 import { JsonViewerWindowComponent } from "./ai-test-harness/json-viewer-window.component";
-import { AIAgentRunFormComponent } from "./ai-agent-run/ai-agent-run.component";
+import { AIAgentRunFormComponentExtended, LoadAIAgentRunFormComponent } from "./ai-agent-run/ai-agent-run.component";
 import { AIAgentRunTimelineComponent } from "./ai-agent-run/ai-agent-run-timeline.component";
 import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-node.component";
 
@@ -54,6 +58,7 @@ import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-no
         TemplateEditorComponent,
         AIPromptFormComponentExtended,
         AIAgentFormComponentExtended,
+        NewAgentDialogComponent,
         AITestHarnessComponent,
         EntitySelectorDialogComponent,
         AITestHarnessDialogComponent,
@@ -64,7 +69,7 @@ import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-no
         ActionExecutionLogFormComponentExtended,
         ActionParamDialogComponent,
         JsonViewerWindowComponent,
-        AIAgentRunFormComponent,
+        AIAgentRunFormComponentExtended,
         AIAgentRunTimelineComponent,
         AIAgentRunStepNodeComponent,
     ],
@@ -100,7 +105,9 @@ import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-no
         MJTabStripModule,
         ContainerDirectivesModule,
         CodeEditorModule,
-        TreeViewModule
+        TreeViewModule,
+        AITestHarnessModule,
+        ActionGalleryModule
     ],
     exports: [
         EntityFormExtendedComponent,
@@ -118,25 +125,16 @@ import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-no
         ActionTestHarnessDialogComponent,
         ActionExecutionLogFormComponentExtended,
         ExecutionNodeComponent,
-        AIAgentRunFormComponent,
+        AIAgentRunFormComponentExtended,
         AIAgentRunTimelineComponent,
         AIAgentRunStepNodeComponent,
     ],
     providers: [
-        TestHarnessDialogService
+        TestHarnessDialogService,
+        NewAgentDialogService
     ]
 })
 export class MemberJunctionCoreEntityFormsModule { }
-
-// Loader function for ActionExecutionLogFormComponentExtended
-export function LoadActionExecutionLogFormComponentExtended() {
-    // This function is called to ensure the form is loaded
-}
-
-// Loader function for AIAgentRunFormComponent
-export function LoadAIAgentRunFormComponent() {
-    // This function is called to ensure the form is loaded
-}
 
 export function LoadCoreCustomForms() {
     LoadEntitiesFormComponent()

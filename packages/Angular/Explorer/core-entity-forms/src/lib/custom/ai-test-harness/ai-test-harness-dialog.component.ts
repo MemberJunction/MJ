@@ -47,7 +47,7 @@ export interface AITestHarnessDialogData {
  * ```
  */
 @Component({
-    selector: 'mj-ai-test-harness-dialog',
+    selector: 'mj-ai-test-harness-dialog-old',
     template: `
         <div class="test-harness-dialog">
             <div class="dialog-header">

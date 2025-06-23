@@ -1907,7 +1907,8 @@ export class BaseAgent {
                     totalTokens += promptResult.result.tokensUsed || 0;
                     promptTokens += promptResult.result.promptTokens || 0;
                     completionTokens += promptResult.result.completionTokens || 0;
-                    totalCost += promptResult.result.cost || 0;
+                    // Use the TotalCost from the promptRun entity which includes proper cost calculation
+                    totalCost += promptResult.result.promptRun?.TotalCost || 0;
                 }
             } else if (step.executionType === 'sub-agent' && step.executionResult.type === 'sub-agent') {
                 const subAgentResult = step.executionResult as SubAgentExecutionResult;

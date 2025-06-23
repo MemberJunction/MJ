@@ -9,7 +9,10 @@ import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEnt
          AIVendorEntity,
          AIModelVendorEntity,
          AIModelTypeEntity,
-         AIPromptEntityExtended} from "@memberjunction/core-entities";
+         AIPromptEntityExtended,
+         AIModelCostEntity,
+         AIModelPriceTypeEntity,
+         AIModelPriceUnitTypeEntity} from "@memberjunction/core-entities";
  
 // this class handles execution of AI Actions
 export class AIEngineBase extends BaseEngine<AIEngineBase> {
@@ -30,6 +33,9 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _vendorTypeDefinitions: AIVendorTypeDefinitionEntity[] = [];
     private _vendors: AIVendorEntity[] = [];
     private _modelVendors: AIModelVendorEntity[] = [];
+    private _modelCosts: AIModelCostEntity[] = [];
+    private _modelPriceTypes: AIModelPriceTypeEntity[] = [];
+    private _modelPriceUnitTypes: AIModelPriceUnitTypeEntity[] = [];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const params = [
@@ -100,6 +106,18 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agentPrompts',
                 EntityName: 'MJ: AI Agent Prompts'
+            },
+            {
+                PropertyName: '_modelCosts',
+                EntityName: 'MJ: AI Model Costs'
+            },
+            {
+                PropertyName: '_modelPriceTypes',
+                EntityName: 'MJ: AI Model Price Types'
+            },
+            {
+                PropertyName: '_modelPriceUnitTypes',
+                EntityName: 'MJ: AI Model Price Unit Types'
             }            
         ];
         return await this.Load(params, provider, forceRefresh, contextUser);
@@ -170,6 +188,36 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      */
     public async GetHighestPowerLLM(vendorName?: string, contextUser?: UserInfo): Promise<AIModelEntityExtended> {
         return await this.GetHighestPowerModel(vendorName, 'LLM', contextUser);
+    }
+
+    /**
+     * Gets the active cost configuration for a specific model and vendor combination
+     * @param modelID - The ID of the AI model
+     * @param vendorID - The ID of the vendor
+     * @param processingType - 'Realtime' or 'Batch' (defaults to 'Realtime')
+     * @returns The active AIModelCostEntity or null if none found
+     */
+    public GetActiveModelCost(modelID: string, vendorID: string, processingType: 'Realtime' | 'Batch' = 'Realtime'): AIModelCostEntity | null {
+        const now = new Date();
+        const activeCosts = this._modelCosts.filter(cost => 
+            cost.ModelID === modelID && 
+            cost.VendorID === vendorID &&
+            cost.ProcessingType === processingType &&
+            cost.Status === 'Active' &&
+            (!cost.StartedAt || new Date(cost.StartedAt) <= now) &&
+            (!cost.EndedAt || new Date(cost.EndedAt) > now)
+        );
+        
+        // If multiple active costs exist, return the most recently started one
+        if (activeCosts.length > 0) {
+            return activeCosts.sort((a, b) => {
+                const aStart = a.StartedAt ? new Date(a.StartedAt).getTime() : 0;
+                const bStart = b.StartedAt ? new Date(b.StartedAt).getTime() : 0;
+                return bStart - aStart;
+            })[0];
+        }
+        
+        return null;
     }
  
 
@@ -255,6 +303,18 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get VectorDatabases(): VectorDatabaseEntity[] {
         return this._vectorDatabases;
+    }
+
+    public get ModelCosts(): AIModelCostEntity[] {
+        return this._modelCosts;
+    }
+
+    public get ModelPriceTypes(): AIModelPriceTypeEntity[] {
+        return this._modelPriceTypes;
+    }
+
+    public get ModelPriceUnitTypes(): AIModelPriceUnitTypeEntity[] {
+        return this._modelPriceUnitTypes;
     }
 
     /**
