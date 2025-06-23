@@ -341,7 +341,7 @@ export class AIPromptRunner {
     const executionTimeMS = endTime.getTime() - startTime.getTime();
 
     // Update the prompt run with results including validation attempts and cumulative tokens
-    await this.updatePromptRun(promptRun, modelResult, parsedResult, endTime, executionTimeMS, validationAttempts, cumulativeTokens);
+    await this.updatePromptRun(promptRun, prompt, modelResult, parsedResult, endTime, executionTimeMS, validationAttempts, cumulativeTokens);
 
     const chatResult = modelResult as ChatResult;
     const usage = chatResult.data?.usage;
@@ -1417,33 +1417,11 @@ export class AIPromptRunner {
     totalAttempts: number,
   ): Promise<void> {
     try {
-      // Update the Messages field with validation progress
-      const currentMessages = promptRun.Messages ? JSON.parse(promptRun.Messages) : {};
+      // We no longer update the Messages field with validation information
+      // since we have dedicated validation columns now
       
-      if (!currentMessages.validationAttempts) {
-        currentMessages.validationAttempts = [];
-      }
-      
-      currentMessages.validationAttempts.push({
-        attempt: currentAttempt,
-        totalAttempts,
-        success: attempt.success,
-        timestamp: attempt.timestamp.toISOString(),
-        errorMessage: attempt.errorMessage,
-        validationErrorCount: attempt.validationErrors?.length || 0,
-        rawOutput: attempt.rawOutput?.substring(0, 500) + (attempt.rawOutput?.length > 500 ? '...' : ''), // Truncate for storage
-        parsedOutput: attempt.parsedOutput ? JSON.stringify(attempt.parsedOutput).substring(0, 500) : undefined,
-        validationErrors: attempt.validationErrors?.map(e => ({
-          source: e.Source,
-          message: e.Message,
-          type: e.Type,
-          value: typeof e.Value === 'string' ? e.Value.substring(0, 100) : e.Value
-        })) || []
-      });
-
-      promptRun.Messages = JSON.stringify(currentMessages);
-      
-      // Don't save yet - we'll save at the end with final results
+      // Just log the attempt for now - the full validation data will be saved
+      // at the end in the dedicated validation columns
       LogStatus(`Recorded validation attempt ${currentAttempt}/${totalAttempts} for prompt run ${promptRun.ID}`);
     } catch (error) {
       LogError(`Error updating prompt run with validation attempt: ${error.message}`);
@@ -1919,6 +1897,7 @@ export class AIPromptRunner {
    */
   private async updatePromptRun(
     promptRun: AIPromptRunEntity,
+    prompt: AIPromptEntity,
     modelResult: ChatResult,
     parsedResult: { result: unknown; validationResult?: ValidationResult },
     endTime: Date,
@@ -2021,42 +2000,24 @@ export class AIPromptRunner {
           maxRetriesConfigured: promptRun.MaxRetriesConfigured,
           actualRetriesUsed: validationAttempts.length - 1,
           totalDurationMS: executionTimeMS,
-          retryDurationMS: promptRun.TotalRetryDurationMS || 0
+          retryDurationMS: promptRun.TotalRetryDurationMS || 0,
+          outputType: prompt.OutputType || 'unknown',
+          hasOutputExample: !!(prompt.OutputExample),
+          schemaValidationUsed: !!(prompt.OutputExample && prompt.OutputType === 'object'),
+          finalValidationErrors: parsedResult.validationResult?.Errors?.map(e => ({
+            source: e.Source,
+            message: e.Message,
+            type: e.Type,
+            value: e.Value
+          })) || [],
+          validationDecision: this.getValidationDecisionDescription(
+            parsedResult.validationResult?.Success || false,
+            validationAttempts.length,
+            promptRun.ValidationBehavior || 'Warn'
+          )
         });
         
-        // Also add validation information to Messages field for backward compatibility
-        try {
-          const currentMessages = promptRun.Messages ? JSON.parse(promptRun.Messages) : {};
-          
-          // Add final validation summary
-          currentMessages.validationSummary = {
-            totalAttempts: validationAttempts.length,
-            successfulAttempts: validationAttempts.filter(a => a.success).length,
-            finalValidationSuccess: parsedResult.validationResult?.Success || false,
-            validationBehavior: promptRun.ValidationBehavior,
-            outputType: currentMessages.data?.prompt?.OutputType || 'unknown',
-            hasOutputExample: !!(currentMessages.data?.prompt?.OutputExample),
-            schemaValidationUsed: !!(currentMessages.data?.prompt?.OutputExample && currentMessages.data?.prompt?.OutputType === 'object'),
-            retryStrategy: promptRun.RetryStrategy,
-            maxRetries: promptRun.MaxRetriesConfigured,
-            finalValidationErrors: parsedResult.validationResult?.Errors?.map(e => ({
-              source: e.Source,
-              message: e.Message,
-              type: e.Type,
-              value: e.Value
-            })) || [],
-            validationDecision: this.getValidationDecisionDescription(
-              parsedResult.validationResult?.Success || false,
-              validationAttempts.length,
-              promptRun.ValidationBehavior || 'Warn'
-            )
-          };
-
-          promptRun.Messages = JSON.stringify(currentMessages);
-          LogStatus(`Updated prompt run ${promptRun.ID} with ${validationAttempts.length} validation attempts`);
-        } catch (jsonError) {
-          LogError(`Error updating Messages field with validation info: ${jsonError.message}`);
-        }
+        LogStatus(`Updated prompt run ${promptRun.ID} with ${validationAttempts.length} validation attempts`);
       } else {
         // No validation attempts (possibly skipped validation)
         promptRun.ValidationAttemptCount = 1; // At least one attempt was made
