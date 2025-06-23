@@ -1,6 +1,7 @@
-import { Component, Output, EventEmitter, OnInit, OnDestroy, Inject, Optional, Input } from '@angular/core';
-import { RunView, CompositeKey } from '@memberjunction/core';
+import { Component, Output, EventEmitter, OnInit, OnDestroy, Input, ViewContainerRef } from '@angular/core';
+import { RunView } from '@memberjunction/core';
 import { AIAgentEntity } from '@memberjunction/core-entities';
+import { NewAgentDialogService } from '@memberjunction/ng-core-entity-forms';
 
 interface AgentFilter {
   searchTerm: string;
@@ -38,7 +39,12 @@ export class AgentConfigurationComponent implements OnInit, OnDestroy {
     exposeAsAction: 'all'
   };
 
-  constructor() {}
+  public selectedAgentForTest: AIAgentEntity | null = null;
+
+  constructor(
+    private newAgentDialogService: NewAgentDialogService,
+    private viewContainerRef: ViewContainerRef
+  ) {}
 
   ngOnInit(): void {
     if (this.initialState) {
@@ -70,14 +76,15 @@ export class AgentConfigurationComponent implements OnInit, OnDestroy {
     try {
       this.isLoading = true;
       const rv = new RunView();
-      const result = await rv.RunView({
+      const result = await rv.RunView<AIAgentEntity>({
         EntityName: 'AI Agents',
         ExtraFilter: '',
         OrderBy: 'Name',
-        MaxRows: 1000
+        MaxRows: 1000,
+        ResultType: 'entity_object'
       });
       
-      this.agents = result.Results as AIAgentEntity[];
+      this.agents = result.Results || [];
       this.filteredAgents = [...this.agents];
     } catch (error) {
       console.error('Error loading AI agents:', error);
@@ -191,14 +198,20 @@ export class AgentConfigurationComponent implements OnInit, OnDestroy {
   }
 
   public createNewAgent(): void {
-    // Emit event to open a new agent form
-    const compositeKey = new CompositeKey([]);
-    this.openEntityRecord.emit({ entityName: 'AI Agents', recordId: '' });
+    this.newAgentDialogService.openForNewAgent(this.viewContainerRef).subscribe(result => {
+      if (result.action === 'created' && result.agent) {
+        // Reload the agents list to show the new agent
+        this.loadAgents();
+      }
+    });
   }
 
-  public async runAgent(agent: AIAgentEntity): Promise<void> {
-    // Emit event to open test harness for the agent
-    this.openEntityRecord.emit({ entityName: 'AI Agents', recordId: agent.ID });
+  public runAgent(agent: AIAgentEntity): void {
+    this.selectedAgentForTest = agent;
+  }
+
+  public closeTestHarness(): void {
+    this.selectedAgentForTest = null;
   }
 
   public getAgentIconColor(agent: AIAgentEntity): string {

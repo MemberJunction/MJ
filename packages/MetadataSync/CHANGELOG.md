@@ -1,5 +1,22 @@
 # @memberjunction/metadata-sync
 
+## 2.55.0
+
+### Minor Changes
+
+- 49a4bd2: Migration file for new metadata for demo marketing agent along with metadata sync tool improvement
+
+### Patch Changes
+
+- Updated dependencies [c3a49ff]
+- Updated dependencies [659f892]
+  - @memberjunction/sqlserver-dataprovider@2.55.0
+  - @memberjunction/core-entities@2.55.0
+  - @memberjunction/core-entities-server@2.55.0
+  - @memberjunction/graphql-dataprovider@2.55.0
+  - @memberjunction/core@2.55.0
+  - @memberjunction/global@2.55.0
+
 ## 2.54.0
 
 ### Patch Changes

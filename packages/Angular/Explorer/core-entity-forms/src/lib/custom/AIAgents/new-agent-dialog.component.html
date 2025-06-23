@@ -1,0 +1,168 @@
+<div class="new-agent-dialog">
+  <form [formGroup]="form" (ngSubmit)="onSubmit()">
+    <!-- Parent Agent Info (if creating sub-agent) -->
+    @if (config.parentAgentId) {
+      <div class="parent-info">
+        <i class="fa-solid fa-robot"></i>
+        <span>Creating sub-agent for: <strong>{{ config.parentAgentName || 'Parent Agent' }}</strong></span>
+      </div>
+    }
+    
+    <!-- Loading State -->
+    @if (isLoading$ | async) {
+      <div class="loading-overlay">
+        <div class="spinner">Loading...</div>
+      </div>
+    }
+    
+    <!-- Form Fields -->
+    <div class="form-fields">
+      <!-- Agent Name -->
+      <div class="form-group">
+        <label class="required">Agent Name</label>
+        <kendo-textbox 
+          formControlName="name" 
+          placeholder="Enter a descriptive name for your agent"
+          [clearButton]="true"
+          class="full-width">
+        </kendo-textbox>
+        @if (form.get('name')?.invalid && form.get('name')?.touched) {
+          <div class="error-message">
+            <i class="fa-solid fa-exclamation-circle"></i>
+            Agent name is required
+          </div>
+        }
+      </div>
+      
+      <!-- Description -->
+      <div class="form-group">
+        <label>Description</label>
+        <kendo-textarea 
+          formControlName="description" 
+          placeholder="Describe what this agent does..."
+          [rows]="3"
+          class="full-width">
+        </kendo-textarea>
+      </div>
+      
+      <!-- AI Model Selection -->
+      <div class="form-group">
+        <label class="required">AI Model</label>
+        <kendo-dropdownlist 
+          formControlName="modelId"
+          [data]="models$ | async"
+          textField="Name"
+          valueField="ID"
+          placeholder="Select an AI model..."
+          class="full-width">
+          <ng-template kendoDropDownListItemTemplate let-dataItem>
+            <div class="model-item">
+              <div class="model-icon">
+                <i class="fa-solid fa-microchip"></i>
+              </div>
+              <div class="model-details">
+                <span class="model-name">{{ dataItem.Name }}</span>
+                <span class="model-vendor">{{ dataItem.Vendor }}</span>
+              </div>
+            </div>
+          </ng-template>
+        </kendo-dropdownlist>
+        @if (form.get('modelId')?.invalid && form.get('modelId')?.touched) {
+          <div class="error-message">
+            <i class="fa-solid fa-exclamation-circle"></i>
+            Please select an AI model
+          </div>
+        }
+      </div>
+      
+      <!-- System Prompt -->
+      <div class="form-group">
+        <label>System Prompt</label>
+        <kendo-textarea 
+          formControlName="systemPrompt" 
+          placeholder="Define the agent's behavior and personality..."
+          [rows]="4"
+          class="full-width">
+        </kendo-textarea>
+        <div class="field-hint">
+          <i class="fa-solid fa-info-circle"></i>
+          This sets the agent's context and behavior
+        </div>
+      </div>
+      
+      <!-- Advanced Settings -->
+      <div class="advanced-settings">
+        <div class="section-header">
+          <i class="fa-solid fa-cog"></i>
+          Advanced Settings
+        </div>
+        
+        <div class="advanced-grid">
+          <!-- Temperature -->
+          <div class="setting-group">
+            <label>Temperature</label>
+            <div class="slider-container">
+              <kendo-slider 
+                formControlName="temperature"
+                [min]="0"
+                [max]="2"
+                [smallStep]="0.1"
+                [showButtons]="true"
+                class="temperature-slider">
+              </kendo-slider>
+              <span class="slider-value">{{ form.get('temperature')?.value }}</span>
+            </div>
+            <div class="field-hint">Higher values make output more creative</div>
+          </div>
+          
+          <!-- Max Tokens -->
+          <div class="setting-group">
+            <label>Max Tokens</label>
+            <kendo-numerictextbox 
+              formControlName="maxTokens"
+              [min]="1"
+              [max]="8000"
+              [step]="100"
+              [format]="'n0'"
+              class="full-width">
+            </kendo-numerictextbox>
+            <div class="field-hint">Maximum response length</div>
+          </div>
+          
+          <!-- Enable Streaming -->
+          <div class="setting-group checkbox-group">
+            <label>
+              <input type="checkbox" formControlName="enableStreaming" kendoCheckBox />
+              <span>Enable Response Streaming</span>
+            </label>
+            <div class="field-hint">Stream responses in real-time</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Dialog Actions -->
+    <div class="dialog-actions">
+      <button 
+        type="button" 
+        kendoButton 
+        (click)="onCancel()"
+        [disabled]="isSubmitting">
+        Cancel
+      </button>
+      <button 
+        type="submit" 
+        kendoButton 
+        themeColor="primary"
+        [disabled]="form.invalid || isSubmitting">
+        @if (isSubmitting) {
+          <span class="spinner-small"></span>
+          <span>Creating...</span>
+        } @else {
+          <i class="fa-solid fa-plus-circle"></i>
+          <span>Create Agent</span>
+        }
+      </button>
+    </div>
+  </form>
+</div>

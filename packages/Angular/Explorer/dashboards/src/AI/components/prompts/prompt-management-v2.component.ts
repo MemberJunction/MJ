@@ -54,6 +54,7 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
   private loadingMessageInterval: any;
 
   private destroy$ = new Subject<void>();
+  public selectedPromptForTest: AIPromptEntity | null = null;
 
   constructor(
     private sharedService: SharedService
@@ -153,18 +154,17 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
       const categoryMap = new Map(this.categories.map(c => [c.ID, c.Name]));
       const typeMap = new Map(this.types.map(t => [t.ID, t.Name]));
 
-      // Combine the data
+      // Combine the data - keep the actual entity objects
       this.prompts = (promptResults.Results as AIPromptEntity[]).map(prompt => {
         const template = templateMap.get(prompt.ID);
         
-        // Use GetAll() to get all properties as a plain object since BaseEntity uses getters
-        return {
-          ...prompt.GetAll(),
-          TemplateEntity: template,
-          TemplateContents: template ? (templateContentMap.get(template.ID) || []) : [],
-          CategoryName: prompt.CategoryID ? categoryMap.get(prompt.CategoryID) || 'Unknown' : 'Uncategorized',
-          TypeName: prompt.TypeID ? typeMap.get(prompt.TypeID) || 'Unknown' : 'Untyped'
-        } as PromptWithTemplate;
+        // Add the extra properties directly to the entity
+        (prompt as any).TemplateEntity = template;
+        (prompt as any).TemplateContents = template ? (templateContentMap.get(template.ID) || []) : [];
+        (prompt as any).CategoryName = prompt.CategoryID ? categoryMap.get(prompt.CategoryID) || 'Unknown' : 'Uncategorized';
+        (prompt as any).TypeName = prompt.TypeID ? typeMap.get(prompt.TypeID) || 'Unknown' : 'Untyped';
+        
+        return prompt as PromptWithTemplate;
       });
 
       this.filteredPrompts = [...this.prompts];
@@ -273,6 +273,22 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
     });
   }
 
+  public testPrompt(promptId: string, event?: Event): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    
+    // Find the prompt to test - it's already an AIPromptEntity
+    const prompt = this.prompts.find(p => p.ID === promptId);
+    if (prompt) {
+      this.selectedPromptForTest = prompt as AIPromptEntity;
+    }
+  }
+
+  public closeTestHarness(): void {
+    this.selectedPromptForTest = null;
+  }
+
   public async createNewPrompt(): Promise<void> {
     try {
       const md = new Metadata();
@@ -333,8 +349,8 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
   }
 
   public get filteredPromptsAsEntities(): AIPromptEntity[] {
-    // Cast PromptWithTemplate[] to AIPromptEntity[] for the priority matrix
-    return this.filteredPrompts as unknown as AIPromptEntity[];
+    // The prompts are already AIPromptEntity instances with extra properties
+    return this.filteredPrompts as AIPromptEntity[];
   }
 
   public clearFilters(): void {

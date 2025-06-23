@@ -50,6 +50,14 @@
             {{ record.Success ? 'Success' : 'Failed' }}
           </span>
         </div>
+        <div class="stat" *ngIf="record.TotalTokensUsed">
+          <span class="label">Tokens</span>
+          <span class="value">{{ record.TotalTokensUsed | number:'1.0-0' }}</span>
+        </div>
+        <div class="stat" *ngIf="record.TotalCost != null && record.TotalCost > 0">
+          <span class="label">Cost</span>
+          <span class="value">${{ record.TotalCost | number:'1.2-4' }}</span>
+        </div>
       </div>
     </div>
 
@@ -187,6 +195,29 @@
                 <div class="detail-item full-width" *ngIf="record.ErrorMessage">
                   <label>Error Message</label>
                   <div class="error-message">{{ record.ErrorMessage }}</div>
+                </div>
+              </div>
+            </ng-template>
+          </kendo-panelbar-item>
+          
+          <kendo-panelbar-item title="Usage & Cost">
+            <ng-template kendoPanelBarContent>
+              <div class="details-grid">
+                <div class="detail-item">
+                  <label>Total Tokens Used</label>
+                  <span>{{ record.TotalTokensUsed ? (record.TotalTokensUsed | number:'1.0-0') : 'N/A' }}</span>
+                </div>
+                <div class="detail-item">
+                  <label>Prompt Tokens</label>
+                  <span>{{ record.TotalPromptTokensUsed ? (record.TotalPromptTokensUsed | number:'1.0-0') : 'N/A' }}</span>
+                </div>
+                <div class="detail-item">
+                  <label>Completion Tokens</label>
+                  <span>{{ record.TotalCompletionTokensUsed ? (record.TotalCompletionTokensUsed | number:'1.0-0') : 'N/A' }}</span>
+                </div>
+                <div class="detail-item">
+                  <label>Total Cost</label>
+                  <span>{{ record.TotalCost != null ? ('$' + (record.TotalCost | number:'1.2-4')) : 'N/A' }}</span>
                 </div>
               </div>
             </ng-template>

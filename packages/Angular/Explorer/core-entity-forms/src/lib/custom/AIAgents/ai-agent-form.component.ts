@@ -9,6 +9,9 @@ import { AIAgentFormComponent } from '../../generated/Entities/AIAgent/aiagent.f
 import { DialogService } from '@progress/kendo-angular-dialog';
 import { SharedService } from '@memberjunction/ng-shared';
 import { EntitySelectorDialogComponent, EntitySelectorConfig } from '../shared/entity-selector-dialog.component';
+import { NewAgentDialogService } from './new-agent-dialog.service';
+import { ActionGalleryDialogService } from '@memberjunction/ng-action-gallery';
+import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 
 /**
  * Enhanced AI Agent form component that extends the auto-generated base form
@@ -50,8 +53,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /** The AI Agent entity being edited */
     public record!: AIAgentEntity;
     
-    /** Whether the test harness is currently visible */
-    public showTestHarness = false;
     
     // === Related Entity Counts ===
     /** Number of sub-agents under this agent */
@@ -103,7 +104,10 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         route: ActivatedRoute,
         cdr: ChangeDetectorRef,
         private dialogService: DialogService,
-        private viewContainerRef: ViewContainerRef
+        private viewContainerRef: ViewContainerRef,
+        private newAgentDialogService: NewAgentDialogService,
+        private actionGalleryService: ActionGalleryDialogService,
+        private testHarnessService: AITestHarnessDialogService
     ) {
         super(elementRef, sharedService, router, route, cdr);
     }
@@ -218,7 +222,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             return;
         }
 
-        this.showTestHarness = true;
+        // Use the new test harness dialog service
+        this.testHarnessService.openForAgent(this.record.ID);
     }
 
     /**
@@ -240,9 +245,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * Updates the component state when the test harness is opened or closed.
      * @param isVisible - Whether the test harness is currently visible
      */
-    public onTestHarnessVisibilityChanged(isVisible: boolean) {
-        this.showTestHarness = isVisible;
-    }
 
     /**
      * Gets the count of sub-agents
@@ -328,35 +330,34 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     }
 
     /**
-     * Opens the action configuration dialog
+     * Opens the enhanced action gallery for selecting actions
      */
     public async configureActions() {
-        const config: EntitySelectorConfig = {
-            entityName: 'Actions',
-            title: 'Select Action',
-            displayField: 'Name',
-            descriptionField: 'Description',
-            statusField: 'Status',
-            filters: `Status='Active'`,
-            orderBy: 'Name ASC',
-            icon: 'fa-solid fa-bolt'
-        };
-
-        const dialogRef = this.dialogService.open({
-            content: EntitySelectorDialogComponent
+        // Get currently linked action IDs for pre-selection
+        const linkedActionIds = this.agentActions.map(aa => aa.ID);
+        
+        this.actionGalleryService.openForMultiSelection({
+            preSelectedActions: linkedActionIds,
+            showCategories: true,
+            enableQuickTest: true,
+            title: 'Select Actions for Agent',
+            submitButtonText: 'Add Selected Actions'
+        }, this.viewContainerRef).subscribe(async (selectedActions) => {
+            if (selectedActions && selectedActions.length > 0) {
+                // Find newly selected actions (not already linked)
+                const newActions = selectedActions.filter(action => 
+                    !linkedActionIds.includes(action.ID)
+                );
+                
+                // Link each new action to the agent
+                for (const action of newActions) {
+                    await this.linkActionToAgent(action);
+                }
+                
+                // Reload the actions list
+                await this.loadRelatedCounts();
+            }
         });
-
-        const componentInstance = dialogRef.content.instance as EntitySelectorDialogComponent;
-        componentInstance.config = config;
-
-        const result = await dialogRef.result;
-        if (result && (result as any).entity) {
-            // User selected an existing action
-            await this.linkActionToAgent((result as any).entity);
-        } else if (result && (result as any).createNew) {
-            // User wants to create a new action
-            await this.createNewAction();
-        }
     }
 
     /**
@@ -750,6 +751,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             }
         }
     }
+    
 }
 
 export function LoadAIAgentFormComponentExtended() {

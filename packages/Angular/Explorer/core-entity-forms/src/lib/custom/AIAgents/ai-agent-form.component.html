@@ -1,4 +1,6 @@
 <div class="record-form-container">
+    <!-- Dialog container for Kendo dialogs -->
+    <div kendoDialogContainer></div>
     <form *ngIf="record" class="record-form" #form="ngForm">
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
@@ -542,23 +544,4 @@
         </div>
     </form>
 
-    <!-- AI Agent Test Harness -->
-    @if (showTestHarness) {
-        <kendo-window 
-            [width]="1200" 
-            [height]="800" 
-            [minWidth]="800"
-            [minHeight]="600"
-            [draggable]="true"
-            [resizable]="true"
-            [state]="'default'"
-            (close)="onTestHarnessVisibilityChanged(false)"
-            title="Run AI Agent - {{ record.Name || 'Untitled' }}">
-            <mj-ai-test-harness
-                [aiAgent]="record"
-                [isVisible]="showTestHarness"
-                (visibilityChange)="onTestHarnessVisibilityChanged($event)">
-            </mj-ai-test-harness>
-        </kendo-window>
-    }
 </div>

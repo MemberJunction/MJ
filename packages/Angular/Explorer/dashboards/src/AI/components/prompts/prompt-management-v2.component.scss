@@ -574,6 +574,9 @@ kendo-splitter {
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   
   &:hover {
     background-color: #e9ecef;
@@ -581,13 +584,49 @@ kendo-splitter {
     color: #212529;
   }
   
+  &.primary {
+    background: #17a2b8;
+    border-color: #17a2b8;
+    color: white;
+    
+    &:hover:not(:disabled) {
+      background: #1485a3;
+      border-color: #1485a3;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(23, 162, 184, 0.3);
+    }
+    
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      
+      &:hover {
+        transform: none;
+        box-shadow: none;
+        background: #17a2b8;
+      }
+    }
+  }
+  
   &.small {
     padding: 4px 8px;
     font-size: 12px;
+    
+    &.primary {
+      background: #17a2b8;
+      border-color: #17a2b8;
+      color: white;
+      
+      &:hover:not(:disabled) {
+        background: #1485a3;
+        border-color: #1485a3;
+      }
+    }
   }
   
-  i {
-    margin-right: 4px;
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 }
 

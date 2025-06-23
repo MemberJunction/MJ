@@ -46,6 +46,7 @@ export class PushService {
   private contextUser: UserInfo;
   private warnings: string[] = [];
   private processedRecords: Map<string, { filePath: string; arrayIndex?: number; lineNumber?: number }> = new Map();
+  private syncConfig: any;
   
   constructor(syncEngine: SyncEngine, contextUser: UserInfo) {
     this.syncEngine = syncEngine;
@@ -58,9 +59,9 @@ export class PushService {
     
     const fileBackupManager = new FileBackupManager();
     
-    // Load sync config for SQL logging settings
-    const syncConfig = await loadSyncConfig(configManager.getOriginalCwd());
-    const sqlLogger = new SQLLogger(syncConfig);
+    // Load sync config for SQL logging settings and autoCreateMissingRecords flag
+    this.syncConfig = await loadSyncConfig(configManager.getOriginalCwd());
+    const sqlLogger = new SQLLogger(this.syncConfig);
     const transactionManager = new TransactionManager(sqlLogger);
     
     try {
@@ -296,7 +297,7 @@ export class PushService {
     }
     
     // Get or create entity instance
-    const entity = await metadata.GetEntityObject(entityConfig.entity, this.contextUser);
+    let entity = await metadata.GetEntityObject(entityConfig.entity, this.contextUser);
     if (!entity) {
       throw new Error(`Failed to create entity object for ${entityConfig.entity}`);
     }
@@ -334,6 +335,23 @@ export class PushService {
       existingEntity = await metadata.GetEntityObject(entityConfig.entity, this.contextUser);
       if (existingEntity) {
         exists = await existingEntity.InnerLoad(compositeKey);
+        
+        // Check autoCreateMissingRecords flag if record not found
+        if (!exists) {
+          const autoCreate = this.syncConfig?.push?.autoCreateMissingRecords ?? false;
+          const pkDisplay = Object.entries(primaryKey)
+            .map(([key, value]) => `${key}=${value}`)
+            .join(', ');
+          
+          if (!autoCreate) {
+            const warning = `Record not found: ${entityConfig.entity} with primaryKey {${pkDisplay}}. To auto-create missing records, set push.autoCreateMissingRecords=true in .mj-sync.json`;
+            this.warnings.push(warning);
+            callbacks?.onWarn?.(warning);
+            return 'error';
+          } else if (options.verbose) {
+            callbacks?.onLog?.(`Auto-creating missing ${entityConfig.entity} record with primaryKey {${pkDisplay}}`);
+          }
+        }
       }
     }
     
@@ -344,6 +362,19 @@ export class PushService {
       } else {
         callbacks?.onLog?.(`[DRY RUN] Would create ${entityConfig.entity} record`);
         return 'created';
+      }
+    }
+    
+    // Use existing entity if found, otherwise create new one
+    if (!exists) {
+      entity = existingEntity || entity;
+      entity.NewRecord();
+      
+      // Set primary key values for new records if provided
+      if (primaryKey) {
+        for (const [pkField, pkValue] of Object.entries(primaryKey)) {
+          entity.Set(pkField, pkValue);
+        }
       }
     }
     

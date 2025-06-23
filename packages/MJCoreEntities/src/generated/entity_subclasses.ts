@@ -8106,7 +8106,7 @@ export const AIPromptRunSchema = z.object({
         * * Field Name: TotalCost
         * * Display Name: Total Cost
         * * SQL Data Type: decimal(18, 6)
-    * * Description: Total cost including this execution and all child/grandchild executions. For leaf nodes (no children), this equals Cost. For parent nodes, this includes the sum of all descendant costs. Note: This assumes all costs are in the same currency for accurate rollup. Currency conversions should be handled at the application layer if needed.`),
+    * * Description: Total cost of this prompt run including its own cost plus all descendant costs. Calculated as Cost + DescendantCost. This value is stored (not computed) for query performance. Currency is specified in CostCurrency field.`),
     Success: z.boolean().describe(`
         * * Field Name: Success
         * * Display Name: Success
@@ -8237,6 +8237,11 @@ export const AIPromptRunSchema = z.object({
         * * Display Name: Top Log Probs
         * * SQL Data Type: int
     * * Description: Number of top log probabilities requested per token (if LogProbs is true)`),
+    DescendantCost: z.number().nullable().describe(`
+        * * Field Name: DescendantCost
+        * * Display Name: Descendant Cost
+        * * SQL Data Type: decimal(18, 6)
+    * * Description: The total cost of all descendant (child and grandchild) prompt runs, excluding this run's own cost. For leaf nodes (no children), this is 0. Updated when child costs change.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -29649,7 +29654,6 @@ export class FileEntity extends BaseEntity<FileEntityType> {
  * * Schema: __mj
  * * Base Table: GeneratedCodeCategory
  * * Base View: vwGeneratedCodeCategories
- * * @description Categorization for generated code, including optional parent-child relationships.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -33877,7 +33881,7 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     * * Field Name: TotalCost
     * * Display Name: Total Cost
     * * SQL Data Type: decimal(18, 6)
-    * * Description: Total cost including this execution and all child/grandchild executions. For leaf nodes (no children), this equals Cost. For parent nodes, this includes the sum of all descendant costs. Note: This assumes all costs are in the same currency for accurate rollup. Currency conversions should be handled at the application layer if needed.
+    * * Description: Total cost of this prompt run including its own cost plus all descendant costs. Calculated as Cost + DescendantCost. This value is stored (not computed) for query performance. Currency is specified in CostCurrency field.
     */
     get TotalCost(): number | null {
         return this.Get('TotalCost');
@@ -34200,6 +34204,19 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     }
     set TopLogProbs(value: number | null) {
         this.Set('TopLogProbs', value);
+    }
+
+    /**
+    * * Field Name: DescendantCost
+    * * Display Name: Descendant Cost
+    * * SQL Data Type: decimal(18, 6)
+    * * Description: The total cost of all descendant (child and grandchild) prompt runs, excluding this run's own cost. For leaf nodes (no children), this is 0. Updated when child costs change.
+    */
+    get DescendantCost(): number | null {
+        return this.Get('DescendantCost');
+    }
+    set DescendantCost(value: number | null) {
+        this.Set('DescendantCost', value);
     }
 
     /**

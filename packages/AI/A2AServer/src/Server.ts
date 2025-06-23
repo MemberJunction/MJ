@@ -5,6 +5,9 @@ import * as sql from 'mssql';
 import { z } from "zod";
 import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate, a2aServerSettings } from './config.js';
 import { EntityOperations, OperationResult } from './EntityOperations.js';
+import { AgentOperations } from './AgentOperations.js';
+import { AIEngine } from "@memberjunction/aiengine";
+import { AIAgentEntity } from "@memberjunction/core-entities";
 
 // A2A Server Configuration
 const a2aServerPort = a2aServerSettings?.port || 3200;
@@ -85,6 +88,10 @@ interface AgentCard {
             schema: string;
             operations: string[];
         }[];
+        agents?: {
+            name: string;
+            operations: string[];
+        }[];
     };
 }
 
@@ -127,8 +134,8 @@ export async function initializeA2AServer() {
 
 function setupRoutes() {
     // Agent Card endpoint
-    app.get('/a2a/agent-card', (req, res) => {
-        const agentCard = generateAgentCard();
+    app.get('/a2a/agent-card', async (req, res) => {
+        const agentCard = await generateAgentCard();
         res.json(agentCard);
     });
 
@@ -195,10 +202,11 @@ function setupRoutes() {
     });
 }
 
-function generateAgentCard(): AgentCard {
+async function generateAgentCard(): Promise<AgentCard> {
     const contextUser = UserCache.Instance.Users[0];
     const md = new Metadata();
     const entityCapabilities = getEntityCapabilities(md.Entities, contextUser);
+    const agentCapabilities = await getAgentCapabilities(contextUser);
 
     return {
         name: a2aServerSettings?.agentName || "MemberJunction",
@@ -212,7 +220,8 @@ function generateAgentCard(): AgentCard {
             streaming: !!a2aServerSettings?.streamingEnabled,
             asynchronous: false,
             multimedia: false,
-            entities: entityCapabilities
+            entities: entityCapabilities,
+            agents: agentCapabilities
         }
     };
 }
@@ -239,6 +248,77 @@ function getEntityCapabilities(allEntities: EntityInfo[], contextUser: UserInfo)
                     operations: operations
                 });
             }
+        }
+    }
+
+    return capabilities;
+}
+
+async function getAgentCapabilities(contextUser: UserInfo) {
+    const capabilities = [];
+    const agentCapabilitiesConfig = a2aServerSettings?.agentCapabilities || [];
+
+    // Ensure AIEngine is configured
+    const aiEngine = AIEngine.Instance;
+    await aiEngine.Config(false, contextUser);
+
+    for (const config of agentCapabilitiesConfig) {
+        const agentPattern = config.agentName || "*";
+        
+        try {
+            const allAgents = aiEngine.Agents;
+            let agents: AIAgentEntity[] = [];
+            
+            if (agentPattern === '*') {
+                agents = allAgents;
+            } else {
+                const isWildcardPattern = agentPattern.includes('*');
+                if (!isWildcardPattern) {
+                    // Exact match
+                    agents = allAgents.filter(a => a.Name === agentPattern);
+                } else {
+                    // Convert wildcard pattern to regex
+                    const regexPattern = agentPattern
+                        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&') // Escape special chars except *
+                        .replace(/\*/g, '.*'); // Convert * to .*
+                    
+                    const regex = new RegExp(`^${regexPattern}$`, 'i');
+                    agents = allAgents.filter(a => a.Name && regex.test(a.Name));
+                }
+            }
+            
+            for (const agent of agents) {
+                const operations = [];
+                if (config.discover) operations.push('discover');
+                if (config.execute) operations.push('execute');
+                if (config.monitor) operations.push('monitor');
+                if (config.cancel) operations.push('cancel');
+
+                if (operations.length > 0 && agent.Name) {
+                    capabilities.push({
+                        name: agent.Name,
+                        operations: operations
+                    });
+                }
+            }
+        } catch (error) {
+            LogError('Failed to discover agents', '', error);
+        }
+    }
+
+    // Add general agent operations if any capability is enabled
+    const hasAnyCapability = agentCapabilitiesConfig.some(c => c.discover || c.execute || c.monitor || c.cancel);
+    if (hasAnyCapability) {
+        const generalOps = [];
+        if (agentCapabilitiesConfig.some(c => c.discover)) generalOps.push('discoverAgents');
+        if (agentCapabilitiesConfig.some(c => c.monitor)) generalOps.push('getAgentRunStatus');
+        if (agentCapabilitiesConfig.some(c => c.cancel)) generalOps.push('cancelAgentRun');
+        
+        if (generalOps.length > 0) {
+            capabilities.push({
+                name: '_general',
+                operations: generalOps
+            });
         }
     }
 
@@ -433,8 +513,9 @@ async function processTask(task: Task) {
             throw new Error("No user message found");
         }
 
-        // Initialize entity operations
+        // Initialize operations handlers
         const entityOps = new EntityOperations();
+        const agentOps = new AgentOperations(UserCache.Instance.Users[0]);
 
         // Extract text content and parse operation
         const textParts = lastMessage.parts.filter(p => p.type === 'text');
@@ -467,11 +548,19 @@ async function processTask(task: Task) {
         let operationResult: OperationResult;
 
         try {
-            if (!entityName) {
-                throw new Error("Entity name not specified");
+            // Check if this is an agent operation
+            const agentOperations = ['discoverAgents', 'executeAgent', 'getAgentRunStatus', 'cancelAgentRun'];
+            
+            if (agentOperations.includes(operation)) {
+                // Agent operation
+                operationResult = await agentOps.processOperation(operation, parameters);
+            } else {
+                // Regular entity operation
+                if (!entityName) {
+                    throw new Error("Entity name not specified");
+                }
+                operationResult = await entityOps.processOperation(operation, entityName, parameters);
             }
-
-            operationResult = await entityOps.processOperation(operation, entityName, parameters);
         } catch (error) {
             operationResult = {
                 success: false,

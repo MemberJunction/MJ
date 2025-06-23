@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/skip-types
 
+## 2.55.0
+
+### Patch Changes
+
+- Updated dependencies [659f892]
+  - @memberjunction/core-entities@2.55.0
+  - @memberjunction/data-context@2.55.0
+
 ## 2.54.0
 
 ### Patch Changes
