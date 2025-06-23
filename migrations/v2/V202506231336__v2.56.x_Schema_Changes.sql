@@ -2965,3 +2965,138 @@ GO
 -- Completed: 2025-06-23T19:20:33.888Z
 -- Duration: 3290ms
 -- Total Statements: 37
+
+
+
+
+
+-- Save AI Prompts (core SP call only)
+EXEC [${flyway:defaultSchema}].spUpdateAIPrompt @Name = 'Loop Agent Type: System Prompt',
+@Description = 'Basic control structure for the Loop Agent Type.',
+@TemplateID = '8E5F83E5-837B-4C53-9171-08272BF605A4',
+@CategoryID = 'A19D433E-F36B-1410-8DB1-00021F8B792E',
+@TypeID = 'A6DA423E-F36B-1410-8DAC-00021F8B792E',
+@Status = 'Active',
+@ResponseFormat = 'JSON',
+@ModelSpecificResponseFormat = NULL,
+@AIModelTypeID = NULL,
+@MinPowerRank = 0,
+@SelectionStrategy = 'Specific',
+@PowerPreference = 'Highest',
+@ParallelizationMode = 'None',
+@ParallelCount = NULL,
+@ParallelConfigParam = NULL,
+@OutputType = 'object',
+@OutputExample = '{
+  "taskComplete": "[BOOLEAN: true if task is fully complete, false if more steps needed]",
+  "message": "[STRING: Human-readable message about current status or final result - this is what the user/caller sees - they do NOT see what is in the payload, so include EVERYTHING here that is important for the user even if it overlaps with the payload]",
+  "payload*": {
+    "[KEY]": "[VALUE: Your agent-specific data structure goes here]",
+    "[EXAMPLE_STRUCTURE]": {
+      "resultsFound": "[NUMBER or other data]",
+      "processedItems": "[Array of processed data]",
+      "customField": "[Any structure your agent needs to return]"
+    },
+    "[NOTE]": "This payload structure is completely flexible based on your agent''s purpose"
+  },
+  "reasoning": "[STRING: Your internal explanation of why you made this decision - helps with debugging]",
+  "confidence?": "[OPTIONAL NUMBER: 0.0 to 1.0 indicating confidence in this decision]",
+  "nextStep?": {
+    "type": "[REQUIRED if taskComplete=false: Must be exactly one of: ''action'' | ''sub-agent'' | ''chat'']",
+    "actions?": [
+      {
+        "id": "[UUID: The exact ID from available actions list]",
+        "name": "[STRING: The exact name from available actions list]",
+        "params*": {
+          "[PARAM_NAME]": "[PARAM_VALUE: Must match action''s expected parameters]",
+          "[ANOTHER_PARAM]": "[Value matching the action''s parameter type]"
+        }
+      }
+    ],
+    "subAgent?": {
+      "id": "[UUID: The exact ID from available sub-agents list]",
+      "name": "[STRING: The exact name from available sub-agents list]",
+      "message": "[STRING: Complete context and instructions for the sub-agent - they don''t see conversation history]",
+      "templateParameters*": {
+        "[TEMPLATE_PARAM_NAME]": "[VALUE: If sub-agent has template parameters, provide values here]"
+      },
+      "terminateAfter": "[BOOLEAN: true to end parent agent after sub-agent completes, false to continue]"
+    }
+  }
+}',
+@ValidationBehavior = 'Strict',
+@MaxRetries = 2,
+@RetryDelayMS = 1000,
+@RetryStrategy = 'Fixed',
+@ResultSelectorPromptID = NULL,
+@EnableCaching = 0,
+@CacheTTLSeconds = NULL,
+@CacheMatchType = 'Exact',
+@CacheSimilarityThreshold = NULL,
+@CacheMustMatchModel = 1,
+@CacheMustMatchVendor = 1,
+@CacheMustMatchAgent = 0,
+@CacheMustMatchConfig = 0,
+@PromptRole = 'System',
+@PromptPosition = 'First',
+@Temperature = NULL,
+@TopP = NULL,
+@TopK = NULL,
+@MinP = NULL,
+@FrequencyPenalty = NULL,
+@PresencePenalty = NULL,
+@Seed = NULL,
+@StopSequences = NULL,
+@IncludeLogProbs = 0,
+@TopLogProbs = NULL,
+@ID = 'FF7D441F-36E1-458A-B548-0FC2208923BE';
+
+GO
+
+-- Save MJ: AI Prompt Models (core SP call only)
+EXEC [${flyway:defaultSchema}].spUpdateAIPromptModel @PromptID = 'FF7D441F-36E1-458A-B548-0FC2208923BE',
+@ModelID = '9604B1A4-3A21-F011-8B3D-7C1E5249773E',
+@VendorID = 'D8A5CCEC-6A37-EF11-86D4-000D3A4E707E',
+@ConfigurationID = NULL,
+@Priority = 3,
+@ExecutionGroup = 0,
+@ModelParameters = NULL,
+@Status = 'Active',
+@ParallelizationMode = 'None',
+@ParallelCount = 1,
+@ParallelConfigParam = NULL,
+@ID = '354C0AC9-9196-4E9E-A6DA-7E0CEBE1EA92';
+
+GO
+
+-- Save MJ: AI Prompt Models (core SP call only)
+EXEC [${flyway:defaultSchema}].spUpdateAIPromptModel @PromptID = 'FF7D441F-36E1-458A-B548-0FC2208923BE',
+@ModelID = 'C496B988-4EA4-4D7E-A6DD-255F56D93933',
+@VendorID = 'E3A5CCEC-6A37-EF11-86D4-000D3A4E707E',
+@ConfigurationID = NULL,
+@Priority = 2,
+@ExecutionGroup = 0,
+@ModelParameters = NULL,
+@Status = 'Active',
+@ParallelizationMode = 'None',
+@ParallelCount = 1,
+@ParallelConfigParam = NULL,
+@ID = 'A72A6CC0-1AB7-4088-B53C-AE8A88B7E4A7';
+
+GO
+
+-- Save MJ: AI Prompt Models (core SP call only)
+EXEC [${flyway:defaultSchema}].spUpdateAIPromptModel @PromptID = 'FF7D441F-36E1-458A-B548-0FC2208923BE',
+@ModelID = '287E317F-BF26-F011-A770-AC1A3D21423D',
+@VendorID = 'D8A5CCEC-6A37-EF11-86D4-000D3A4E707E',
+@ConfigurationID = NULL,
+@Priority = 10,
+@ExecutionGroup = 0,
+@ModelParameters = NULL,
+@Status = 'Active',
+@ParallelizationMode = 'None',
+@ParallelCount = 1,
+@ParallelConfigParam = NULL,
+@ID = '0F7988B5-668A-4B53-A071-DFD0CEF7B762';
+
+GO
