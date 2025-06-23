@@ -10,30 +10,71 @@ The Actions Framework provides a flexible, extensible architecture for implement
 
 ### Core Framework Packages
 
-- **[@memberjunction/actions-base](./Base)** - Base classes and interfaces for the Actions framework, including `ActionEngineBase`, `EntityActionEngineBase`, and the `BaseAction` abstract class that all actions extend.
+- **[@memberjunction/actions-base](./Base)** - Base classes and interfaces for the Actions framework
+  - Singleton patterns: `ActionEngineBase` and `EntityActionEngineBase`
+  - Type-safe context support for multi-user environments
+  - Extended entity classes with lazy-loaded relationships
+  - Code generation integration
+  - [See full documentation](./Base/README.md)
 
-- **[@memberjunction/actions](./Engine)** - The main Actions execution engine that coordinates action discovery, filtering, execution, and logging. Includes server-side implementations and entity action support.
+- **[@memberjunction/actions](./Engine)** - The main Actions execution engine
+  - Server-side action discovery and execution
+  - Entity lifecycle action support (Create/Update/Delete)
+  - Transaction management and error handling
+  - AI-powered code generation for new actions
+  - Action filtering and permission system
+  - [See full documentation](./Engine/readme.md)
 
 ### Action Implementation Packages
 
-- **[@memberjunction/core-actions](./CoreActions)** - Core system actions including:
-  - Send Single Message - Send communications through various providers
-  - Vectorize Entity - Create AI embeddings for entity data
-  - External Change Detection - Detect and replay external database changes
+- **[@memberjunction/core-actions](./CoreActions)** - Comprehensive collection of 40+ pre-built actions across 11 categories:
+  - **Communication**: Send messages via email/SMS, Slack/Teams webhooks
+  - **AI Integration**: Execute AI prompts, create vector embeddings
+  - **Data Transformation**: Parse CSV/JSON/XML, aggregate data, map fields
+  - **File Operations**: Generate/extract PDFs, read/write Excel, compress files
+  - **Web Integration**: Search web, extract metadata, validate URLs
+  - **Integration**: HTTP requests, GraphQL queries, OAuth flows, API rate limiting
+  - **Workflow Control**: Conditional logic, loops, parallel execution, retry mechanisms
+  - **Utilities**: External change detection, QR codes, business days calculator
+  - **Security**: Password strength evaluation
+  - **Demo Actions**: Weather, stock prices, unit conversion, text analysis
+  - [See detailed documentation](./CoreActions/readme.md) for complete action reference
 
 - **[@memberjunction/generated-actions](../GeneratedActions)** - Auto-generated action subclasses based on database metadata. This package is automatically maintained by the MemberJunction code generation system.
 
 ### Integration Actions
 
-- **[@memberjunction/actions-apollo](./ApolloEnrichment)** - Integration with Apollo.io for enriching organization and contact data. Includes batch processing and technology tracking capabilities.
+- **[@memberjunction/actions-apollo](./ApolloEnrichment)** - Apollo.io data enrichment integration
+  - Enrich accounts with company information and technology stacks
+  - Enrich contacts with verified emails and employment history
+  - Batch processing with automatic rate limit handling
+  - Technology detection and tracking
+  - [See full documentation](./ApolloEnrichment/README.md)
 
-- **[@memberjunction/actions-content-autotag](./ContentAutotag)** - Content autotagging and vectorization action that can process local files, RSS feeds, and websites to automatically categorize and create searchable embeddings.
+- **[@memberjunction/actions-content-autotag](./ContentAutotag)** - Automated content tagging and vectorization
+  - Process local files, RSS feeds, and websites
+  - Automatic categorization using configurable tagging strategies
+  - Optional AI vector embeddings for searchability
+  - Combined autotag + vectorize action for efficiency
+  - [See full documentation](./ContentAutotag/README.md)
 
 ### Scheduling and Automation
 
-- **[@memberjunction/scheduled-actions](./ScheduledActions)** - Engine for scheduling actions to run at specific times or intervals using cron expressions or predefined schedules (daily, weekly, monthly, yearly).
+- **[@memberjunction/scheduled-actions](./ScheduledActions)** - Scheduling engine for recurring action execution
+  - Cron expression support for complex schedules
+  - Predefined schedules (daily, weekly, monthly, yearly)
+  - Dynamic parameter population via SQL queries
+  - Timezone-aware scheduling
+  - Integration with MJ metadata system
+  - [See full documentation](./ScheduledActions/README.md)
 
-- **[@memberjunction/scheduled-actions-server](./ScheduledActionsServer)** - HTTP server that executes scheduled actions based on database configuration. Provides REST API for manual execution and monitoring.
+- **[@memberjunction/scheduled-actions-server](./ScheduledActionsServer)** - HTTP server for scheduled action execution
+  - Express-based REST API
+  - Manual and automated execution endpoints
+  - Concurrent execution control
+  - Environment-based configuration
+  - Security with optional API key authentication
+  - [See full documentation](./ScheduledActionsServer/README.md)
 
 ## Key Concepts
 
@@ -65,7 +106,37 @@ Actions that run automatically:
 - Track execution history and status
 - Handle failures with configurable retry logic
 
+## Available Actions
+
+The MemberJunction Actions Framework includes 40+ pre-built actions. Here are some highlights:
+
+### Most Commonly Used Actions
+
+1. **Send Single Message** - Universal communication across providers (email, SMS, etc.)
+2. **Execute AI Prompt** - Run MemberJunction AI prompts with model selection
+3. **HTTP Request** - Make API calls with authentication support
+4. **Vectorize Entity** - Create searchable AI embeddings for any entity
+5. **Web Search** - Search the web using DuckDuckGo API
+6. **Data Mapper** - Transform data between different formats
+7. **Conditional** - Control flow based on conditions
+8. **Loop** - Iterate over collections or ranges
+
+For the complete list of actions with detailed documentation, see the [Core Actions README](./CoreActions/readme.md).
+
 ## Getting Started
+
+### Installation
+
+```bash
+# Install the core framework
+npm install @memberjunction/actions @memberjunction/actions-base
+
+# Install pre-built actions
+npm install @memberjunction/core-actions
+
+# For scheduled actions
+npm install @memberjunction/scheduled-actions @memberjunction/scheduled-actions-server
+```
 
 ### Basic Action Implementation
 
@@ -103,6 +174,11 @@ const engine = ActionEngineServer.Instance;
 const result = await engine.RunAction('MyCustomAction', [
     { Name: 'InputParam', Value: 'test data' }
 ]);
+
+// Execute with context (for multi-user environments)
+const contextResult = await engine.RunAction('MyCustomAction', [
+    { Name: 'InputParam', Value: 'test data' }
+], contextUser);
 ```
 
 ## Architecture
@@ -148,14 +224,75 @@ The Actions Framework integrates with:
 - **Scheduled Jobs** - Run actions on a schedule
 - **API Layer** - Expose actions through GraphQL/REST endpoints
 
+## Quick Reference
+
+### Common Action Patterns
+
+```typescript
+// Execute multiple actions in sequence
+await engine.RunAction('Loop', [
+    { Name: 'Items', Value: ['item1', 'item2', 'item3'] },
+    { Name: 'ActionName', Value: 'ProcessItem' }
+]);
+
+// Conditional execution
+await engine.RunAction('Conditional', [
+    { Name: 'Condition', Value: 'user.role === "admin"' },
+    { Name: 'TrueAction', Value: 'AdminAction' },
+    { Name: 'FalseAction', Value: 'UserAction' }
+]);
+
+// Parallel execution
+await engine.RunAction('Parallel Execute', [
+    { Name: 'Actions', Value: ['Action1', 'Action2', 'Action3'] }
+]);
+
+// Send notifications
+await engine.RunAction('Send Single Message', [
+    { Name: 'MessageTypeID', Value: 'email-type-id' },
+    { Name: 'RecipientEmail', Value: 'user@example.com' },
+    { Name: 'Subject', Value: 'Notification' },
+    { Name: 'Body', Value: 'Your message here' }
+]);
+```
+
+### Useful Resources
+
+- **Detailed Package Documentation**: Each package has comprehensive README
+- **Core Actions Catalog**: [40+ pre-built actions](./CoreActions/readme.md)
+- **API Reference**: Generated TypeDoc documentation in each package
+- **Examples**: Demo actions in [CoreActions/src/custom/demo](./CoreActions/src/custom/demo)
+
 ## Contributing
 
 When contributing to the Actions Framework:
-1. Follow the established patterns in existing actions
-2. Include comprehensive documentation
-3. Add unit tests for new functionality
-4. Update this README if adding new packages
-5. Ensure backward compatibility
+
+### For New Actions
+1. Choose the appropriate package or create a new one
+2. Extend `BaseAction` from `@memberjunction/actions`
+3. Use `@RegisterClass` decorator for automatic discovery
+4. Define clear parameter schemas
+5. Implement comprehensive error handling
+6. Add detailed JSDoc comments
+7. Create unit tests
+
+### For Framework Improvements
+1. Follow TypeScript best practices
+2. Maintain backward compatibility
+3. Update relevant documentation
+4. Add migration guides for breaking changes
+5. Include performance considerations
+
+### Documentation Standards
+- Include code examples for all features
+- Document all parameters and return types
+- Add troubleshooting sections
+- Keep README files up to date
+
+### Testing Requirements
+- Unit tests for all new functionality
+- Integration tests for complex actions
+- Performance tests for data-intensive operations
 
 ## License
 

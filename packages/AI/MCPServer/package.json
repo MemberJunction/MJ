@@ -20,6 +20,7 @@
     "@memberjunction/global": "2.54.0",
     "@memberjunction/core-entities": "2.54.0",
     "@memberjunction/sqlserver-dataprovider": "2.54.0",
+    "@memberjunction/ai-agents": "2.54.0",
     "@modelcontextprotocol/sdk": "^1.8.0",
     "cosmiconfig": "9.0.0",
     "dotenv": "^16.4.1",

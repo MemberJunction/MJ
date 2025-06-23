@@ -1,4 +1,4 @@
-import { Component, AfterViewInit, OnDestroy, ViewChild } from '@angular/core';
+import { Component, AfterViewInit, OnDestroy, ViewChild, ChangeDetectorRef } from '@angular/core';
 import { BaseDashboard } from '../generic/base-dashboard';
 import { RegisterClass } from '@memberjunction/global';
 import { CompositeKey } from '@memberjunction/core';
@@ -25,7 +25,7 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
   
   public isLoading = false;
   public activeTab = 'monitoring'; // Default tab changed to monitoring
-  public selectedIndex = 0; // Track selected navigation index
+  public selectedIndex = 0; // Track selected navigation index - default to monitoring (index 0)
   
   // Component states
   public modelManagementState: any = null;
@@ -82,10 +82,11 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
     this.activeTab = tabId;
     const index = this.navigationItems.indexOf(tabId);
     
-    // Defer selectedIndex update to avoid change detection issues
+    // Update selectedIndex immediately
+    this.selectedIndex = index >= 0 ? index : 0;
+    
+    // Defer only the resize operation
     setTimeout(() => {
-      this.selectedIndex = index >= 0 ? index : 0;
-      
       // Invoke manual resize after tab change to fix rendering issues
       // TODO: Remove this when resize issues are properly fixed
       SharedService.Instance.InvokeManualResize();
@@ -167,11 +168,8 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
       this.activeTab = state.activeTab;
       const index = this.navigationItems.indexOf(state.activeTab);
       
-      // Defer selectedIndex update to avoid change detection issues
-      setTimeout(() => {
-        // Ensure we don't set selectedIndex to -1
-        this.selectedIndex = index >= 0 ? index : 0;
-      });
+      // Update selectedIndex immediately - ensure we don't set to -1
+      this.selectedIndex = index >= 0 ? index : 0;
       
       // Mark the tab as visited
       this.visitedTabs.add(state.activeTab);

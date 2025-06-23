@@ -1744,8 +1744,8 @@ export class ManageMetadataBase {
             const existingEntityInNewEntityList = ManageMetadataBase.newEntityList.find(e => e === newEntityName); // check the newly created entity list to make sure we didn't create the new entity name along the way in this RUN of CodeGen as it wouldn't yet be in our metadata above
             if (existingEntity || existingEntityInNewEntityList) {
                // the generated name is already in place, so we need another name
-               // use SchemaName: Entity Name instead of just the table name as basis
-               newEntityName = `${newEntity.SchemaName}: ${newEntityName}` 
+               suffix = '__' + newEntity.SchemaName;
+               newEntityName = newEntityName + suffix
                LogError(`   >>>> WARNING: Entity name already exists, so using ${newEntityName} instead. If you did not intend for this, please rename the ${newEntity.SchemaName}.${newEntity.TableName} table in the database.`)
             }
 

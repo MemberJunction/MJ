@@ -346,7 +346,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
             let refreshCount = 0;
             for (const config of this.Configs) {
                 if (config.AutoRefresh && config.Type === 'entity' && config.EntityName?.trim().toLowerCase() === entityName) {
-                    LogStatus(`>>> Refreshing metadata for ${config.PropertyName} due to BaseEntity ${event.type} event for: ${event.baseEntity.EntityInfo.Name}, pkey: ${event.baseEntity.PrimaryKey.ToString()}`);
+                    // LogStatus(`>>> Refreshing metadata for ${config.PropertyName} due to BaseEntity ${event.type} event for: ${event.baseEntity.EntityInfo.Name}, pkey: ${event.baseEntity.PrimaryKey.ToString()}`);
                     await this.LoadSingleConfig(config, this._contextUser);
                     refreshCount++;
                 }

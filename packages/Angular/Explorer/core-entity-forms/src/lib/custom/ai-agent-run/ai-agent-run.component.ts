@@ -8,6 +8,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
 import { SharedService } from '@memberjunction/ng-shared';
 import { TimelineItem } from './ai-agent-run-timeline.component';
+import { AIAgentRunFormComponent } from '../../generated/Entities/AIAgentRun/aiagentrun.form.component';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Runs') 
 @Component({
@@ -15,7 +16,7 @@ import { TimelineItem } from './ai-agent-run-timeline.component';
   templateUrl: './ai-agent-run.component.html',
   styleUrls: ['./ai-agent-run.component.css']
 })
-export class AIAgentRunFormComponent extends BaseFormComponent implements OnInit, OnDestroy {
+export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent implements OnInit, OnDestroy {
   public record!: AIAgentRunEntity;
   
   private destroy$ = new Subject<void>();
@@ -137,4 +138,10 @@ export class AIAgentRunFormComponent extends BaseFormComponent implements OnInit
       console.error('Failed to copy to clipboard:', err);
     }
   }
+}
+
+
+// Loader function for AIAgentRunFormComponent
+export function LoadAIAgentRunFormComponent() {
+    // This function is called to ensure the form is loaded
 }

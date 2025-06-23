@@ -10,6 +10,7 @@ The MCP (Model Context Protocol) Server enables AI models to interact with Membe
 
 - **MCP Implementation**: Full implementation of the Model Context Protocol (MCP) for AI model tool integration
 - **Entity Access**: Expose MemberJunction entities to AI models through a consistent tooling interface
+- **Agent Execution**: Execute MemberJunction AI agents with conversation history and template data support
 - **Configurable Tools**: Generate tools dynamically based on configuration with wildcard support
 - **CRUD Operations**: Support for creating, reading, updating, and deleting entity records
 - **View Execution**: Run entity views with filtering, sorting, and field selection
@@ -79,7 +80,19 @@ module.exports = {
     ],
     
     // Configure action tools (not yet implemented)
-    actionTools: []
+    actionTools: [],
+    
+    // Configure agent tools
+    agentTools: [
+      {
+        // Expose all agents
+        agentName: '*',
+        discover: true,
+        execute: true,
+        status: true,
+        cancel: true
+      }
+    ]
   }
 }
 ```
@@ -123,6 +136,61 @@ await initializeServer();
 When installed globally or locally, the package provides a `MemberJunction` executable that starts the MCP server. The server automatically initializes when the module is loaded.
 
 ## Tool Configuration
+
+### Agent Tools
+
+Agent tools allow AI models to discover and execute MemberJunction AI agents.
+
+```javascript
+agentTools: [
+  {
+    // Agent matching (supports wildcards)
+    agentName: 'DataAnalysis*',  // Agent name pattern (use '*' for all agents)
+    
+    // Operations to enable
+    discover: true,   // Enable agent discovery
+    execute: true,    // Enable agent execution
+    status: true,     // Enable run status checking
+    cancel: true      // Enable run cancellation
+  }
+]
+```
+
+#### Agent Tool Naming
+
+The server generates tools with these naming conventions:
+
+- `Discover_Agents`: Lists available agents based on a name pattern
+- `Run_Agent`: General tool to execute any agent by name or ID
+- `Execute_[AgentName]_Agent`: Specific tools for each configured agent
+- `Get_Agent_Run_Status`: Check the status of an agent execution
+- `Cancel_Agent_Run`: Cancel a running agent execution
+
+#### Agent Tool Parameters and Responses
+
+**Discover_Agents**
+- Parameters: `pattern` (optional) - Wildcard pattern to match agent names
+- Returns: Array of agent metadata (ID, name, description, typeID, parentID)
+
+**Run_Agent**
+- Parameters:
+  - `agentNameOrId`: Agent name or ID to execute
+  - `conversationHistory` (optional): Array of chat messages
+  - `templateData` (optional): Data to pass to agent templates
+  - `waitForCompletion` (optional): Whether to wait for completion
+- Returns: `{ success: boolean, runId?: string, status?: string, returnValues?: any, errorMessage?: string }`
+
+**Execute_[AgentName]_Agent**
+- Parameters: Same as Run_Agent minus agentNameOrId
+- Returns: Same as Run_Agent
+
+**Get_Agent_Run_Status**
+- Parameters: `runId` - The ID of the agent run to check
+- Returns: `{ status: string, completedAt?: string, errorMessage?: string }`
+
+**Cancel_Agent_Run**
+- Parameters: `runId` - The ID of the agent run to cancel
+- Returns: `{ success: boolean, errorMessage?: string }`
 
 ### Entity Tools
 
@@ -332,6 +400,7 @@ http://localhost:3100/mcp
 
 With the above configuration, your AI model will have access to tools like:
 
+**Entity Tools:**
 - `Get_All_Entities` - Get all entity metadata
 - `Get_UserEntity_Record` - Get a user by ID
 - `Run_UserEntity_View` - Query users with filters
@@ -341,6 +410,14 @@ With the above configuration, your AI model will have access to tools like:
 - `Delete_CompanyEntity_Record` - Delete a company
 - `Run_CompanyEntity_View` - Query companies
 - And many more for all entities in your database
+
+**Agent Tools:**
+- `Discover_Agents` - Find available agents
+- `Run_Agent` - Execute any agent by name or ID
+- `Execute_DataAnalysisAgent_Agent` - Execute the Data Analysis agent
+- `Execute_ReportGeneratorAgent_Agent` - Execute the Report Generator agent
+- `Get_Agent_Run_Status` - Check agent execution status
+- `Cancel_Agent_Run` - Cancel a running agent
 
 ## Field Type Support
 

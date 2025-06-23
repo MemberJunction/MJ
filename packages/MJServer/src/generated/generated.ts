@@ -694,7 +694,7 @@ export class ExplorerNavigationItemResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Generated Code Categories
 //****************************************************************************
-@ObjectType({ description: `Categorization for generated code, including optional parent-child relationships.` })
+@ObjectType()
 export class GeneratedCodeCategory_ {
     @Field() 
     @MaxLength(16)
@@ -37536,7 +37536,7 @@ export class AIPromptRun_ {
     @Field(() => Int, {nullable: true, description: `Number of tokens in the completion/result.`}) 
     TokensCompletion?: number;
         
-    @Field(() => Float, {nullable: true, description: `Total cost including this execution and all child/grandchild executions. For leaf nodes (no children), this equals Cost. For parent nodes, this includes the sum of all descendant costs. Note: This assumes all costs are in the same currency for accurate rollup. Currency conversions should be handled at the application layer if needed.`}) 
+    @Field(() => Float, {nullable: true, description: `Total cost of this prompt run including its own cost plus all descendant costs. Calculated as Cost + DescendantCost. This value is stored (not computed) for query performance. Currency is specified in CostCurrency field.`}) 
     TotalCost?: number;
         
     @Field(() => Boolean, {description: `Whether the execution was successful.`}) 
@@ -37617,6 +37617,9 @@ export class AIPromptRun_ {
         
     @Field(() => Int, {nullable: true, description: `Number of top log probabilities requested per token (if LogProbs is true)`}) 
     TopLogProbs?: number;
+        
+    @Field(() => Float, {nullable: true, description: `The total cost of all descendant (child and grandchild) prompt runs, excluding this run's own cost. For leaf nodes (no children), this is 0. Updated when child costs change.`}) 
+    DescendantCost?: number;
         
     @Field() 
     @MaxLength(510)
@@ -37761,6 +37764,9 @@ export class CreateAIPromptRunInput {
 
     @Field(() => Int, { nullable: true })
     TopLogProbs: number | null;
+
+    @Field(() => Float, { nullable: true })
+    DescendantCost: number | null;
 }
     
 
@@ -37879,6 +37885,9 @@ export class UpdateAIPromptRunInput {
 
     @Field(() => Int, { nullable: true })
     TopLogProbs?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    DescendantCost?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
