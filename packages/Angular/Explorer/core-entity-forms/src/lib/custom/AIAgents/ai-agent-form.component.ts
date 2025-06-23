@@ -311,6 +311,14 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         }
         return subAgent?.IconClass || 'fa-solid fa-robot';
     }
+    
+    /**
+     * Gets the icon class for an action
+     * Falls back to default bolt icon if no IconClass is set
+     */
+    public getActionIcon(action: ActionEntity): string {
+        return action?.IconClass || 'fa-solid fa-bolt';
+    }
 
     /**
      * Checks if a sub-agent has a logo URL

@@ -178,7 +178,7 @@
                                         @for (action of agentActions; track action.ID) {
                                             <div class="entity-item action-item" (click)="navigateToEntity('Actions', action.ID)">
                                                 <div class="item-icon">
-                                                    <i class="fa-solid fa-bolt"></i>
+                                                    <i [class]="getActionIcon(action)"></i>
                                                 </div>
                                                 <div class="item-content">
                                                     <div class="item-title">{{ action.Name || 'Untitled Action' }}</div>
