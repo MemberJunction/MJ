@@ -133,30 +133,50 @@ export class ActionEngineServer extends ActionEngineBase {
          logEntry = await this.StartActionLog(params);
       }
 
-      const action = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(BaseAction, params.Action.DriverClass || params.Action.Name, params.ContextUser);
-      if (!action || action.constructor === BaseAction) {
-         throw new Error(`Could not find a class for action ${params.Action.Name}.`);
+      try {
+         const action = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(BaseAction, params.Action.DriverClass || params.Action.Name, params.ContextUser);
+         if (!action || action.constructor === BaseAction) {
+            throw new Error(`Could not find a class for action ${params.Action.Name}.`);
+         }
+         
+         // we now have the action class for this particular action, so run it
+         const simpleResult: ActionResultSimple = await action.Run(params);
+
+         const resultCodeEntity: ActionResultCodeEntity | undefined = this.ActionResultCodes.find(r => r.ActionID === params.Action.ID && 
+                                                               r.ResultCode.trim().toLowerCase() === simpleResult.ResultCode.trim().toLowerCase());
+         const result: ActionResult = {
+            RunParams: params,
+            Success: simpleResult.Success,
+            Message: simpleResult.Message,
+            LogEntry: logEntry,
+            Params: simpleResult.Params,
+            Result: resultCodeEntity
+         };
+
+         if(logEntry){
+            await this.EndActionLog(logEntry, params, result);
+         }
+
+         return result;
       }
-      
-      // we now have the action class for this particular action, so run it
-      const simpleResult: ActionResultSimple = await action.Run(params);
+      catch (e) {
+         // if we get here, something went wrong in the action code
+         LogError(`Error running action ${params.Action.Name}:`, e);
+         const result: ActionResult = {
+            RunParams: params,
+            Success: false,
+            Message: `Error running action ${params.Action.Name}: ${e.message}`,
+            LogEntry: logEntry,
+            Params: params.Params,
+            Result: undefined
+         };
 
-      const resultCodeEntity: ActionResultCodeEntity | undefined = this.ActionResultCodes.find(r => r.ActionID === params.Action.ID && 
-                                                            r.ResultCode.trim().toLowerCase() === simpleResult.ResultCode.trim().toLowerCase());
-      const result: ActionResult = {
-         RunParams: params,
-         Success: simpleResult.Success,
-         Message: simpleResult.Message,
-         LogEntry: logEntry,
-         Params: simpleResult.Params,
-         Result: resultCodeEntity
-      };
+         if(logEntry){
+            await this.EndActionLog(logEntry, params, result);
+         }
 
-      if(logEntry){
-         await this.EndActionLog(logEntry, params, result);
+         return result;
       }
-
-      return result;
    }
 
    protected async StartActionLog(params: RunActionParams, saveRecord: boolean = true): Promise<ActionExecutionLogEntity> {
