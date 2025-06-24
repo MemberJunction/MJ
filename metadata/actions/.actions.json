@@ -257,7 +257,7 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-envelope",
-      "CategoryID": "@lookup:Action Categories.Name=Communication?create&Description=Communication Actions"
+      "CategoryID": "@lookup:Action Categories.Name=Communication"
     },
     "relatedEntities": {
       "Action Params": [
@@ -419,7 +419,7 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-cloud-sun",
-      "CategoryID": "@lookup:Action Categories.Name=Demo?create&Description=Demo Actions"
+      "CategoryID": "@lookup:Action Categories.Name=Demo"
     },
     "relatedEntities": {
       "Action Params": [
@@ -557,7 +557,7 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-chart-area",
-      "CategoryID": "@lookup:Action Categories.Name=Demo?create&Description=Demo Actions"
+      "CategoryID": "@lookup:Action Categories.Name=Demo"
     },
     "relatedEntities": {
       "Action Params": [
@@ -658,7 +658,7 @@
       "DriverClass": "__CalculateExpression",
       "Type": "Custom",
       "Status": "Active",
-      "CategoryID": "@lookup:Action Categories.Name=Demo?create&Description=Demo Actions"
+      "CategoryID": "@lookup:Action Categories.Name=Demo"
     },
     "relatedEntities": {
       "Action Params": [
@@ -745,7 +745,7 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-palette",
-      "CategoryID": "@lookup:Action Categories.Name=Demo?create&Description=Demo Actions"
+      "CategoryID": "@lookup:Action Categories.Name=Demo"
     },
     "relatedEntities": {
       "Action Params": [
@@ -862,7 +862,7 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-microscope",
-      "CategoryID": "@lookup:Action Categories.Name=Demo?create&Description=Demo Actions"
+      "CategoryID": "@lookup:Action Categories.Name=Demo"
     },
     "relatedEntities": {
       "Action Params": [
@@ -967,7 +967,7 @@
       "DriverClass": "__UnitConverter",
       "Type": "Custom",
       "Status": "Active",
-      "CategoryID": "@lookup:Action Categories.Name=Demo?create&Description=Demo Actions"
+      "CategoryID": "@lookup:Action Categories.Name=Demo"
     },
     "relatedEntities": {
       "Action Params": [
@@ -1135,7 +1135,7 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-calendar-alt",
-      "CategoryID": "@lookup:Action Categories.Name=Utilities?create&Description=Utility Actions"
+      "CategoryID": "@lookup:Action Categories.Name=Utilities"
     },
     "relatedEntities": {
       "Action Params": [
@@ -1358,7 +1358,7 @@
       "DriverClass": "__IPGeolocation",
       "Type": "Custom",
       "Status": "Active",
-      "CategoryID": "@lookup:Action Categories.Name=Utilities?create&Description=Utility Actions"
+      "CategoryID": "@lookup:Action Categories.Name=Utilities"
     },
     "relatedEntities": {
       "Action Params": [
@@ -1460,7 +1460,7 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-users",
-      "CategoryID": "@lookup:Action Categories.Name=Utilities?create&Description=Utility Actions"
+      "CategoryID": "@lookup:Action Categories.Name=Utilities"
     },
     "relatedEntities": {
       "Action Params": [
@@ -1647,7 +1647,7 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-search",
-      "CategoryID": "@lookup:Action Categories.Name=Web?create&Description=Web Actions"
+      "CategoryID": "@lookup:Action Categories.Name=Web"
     },
     "relatedEntities": {
       "Action Params": [
@@ -1855,7 +1855,7 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-globe",
-      "CategoryID": "@lookup:Action Categories.Name=Web?create&Description=Web Actions"
+      "CategoryID": "@lookup:Action Categories.Name=Web"
     },
     "relatedEntities": {
       "Action Params": [
@@ -2093,7 +2093,7 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-check-double",
-      "CategoryID": "@lookup:Action Categories.Name=Web?create&Description=Web Actions"
+      "CategoryID": "@lookup:Action Categories.Name=Web"
     },
     "relatedEntities": {
       "Action Params": [
@@ -2270,7 +2270,7 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-tags",
-      "CategoryID": "@lookup:Action Categories.Name=Web?create&Description=Web Actions"
+      "CategoryID": "@lookup:Action Categories.Name=Web"
     },
     "relatedEntities": {
       "Action Params": [
@@ -2527,7 +2527,7 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-qrcode",
-      "CategoryID": "@lookup:Action Categories.Name=Utilities?create&Description=Utility Actions"
+      "CategoryID": "@lookup:Action Categories.Name=Utilities"
     },
     "relatedEntities": {
       "Action Params": [

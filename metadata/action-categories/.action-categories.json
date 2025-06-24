@@ -43,5 +43,61 @@
       "lastModified": "2025-06-23T21:11:29.135Z",
       "checksum": "b2701057cbbf7e1b75b47943657c7d4b1a20b64364d04889b6084c4a2bcfcd11"
     }
+  },
+  {
+    "fields": {
+      "Name": "Communication",
+      "Description": "Communication Actions",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "65E048AA-5220-4E4D-920A-A3D9349902A7"
+    },
+    "sync": {
+      "lastModified": "2025-06-23T21:11:29.135Z",
+      "checksum": "b2701057cbbf7e1b75b47943657c7d4b1a20b64364d04889b6084c4a2bcfcd11"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Demo",
+      "Description": "Demo Actions",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B51957C7-990F-4CA7-BBFF-93ED507CE466"
+    },
+    "sync": {
+      "lastModified": "2025-06-23T21:11:29.135Z",
+      "checksum": "b2701057cbbf7e1b75b47943657c7d4b1a20b64364d04889b6084c4a2bcfcd11"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Utilities",
+      "Description": "Utility Actions",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "E959A850-7842-456D-AB51-F232DF12E709"
+    },
+    "sync": {
+      "lastModified": "2025-06-23T21:11:29.135Z",
+      "checksum": "b2701057cbbf7e1b75b47943657c7d4b1a20b64364d04889b6084c4a2bcfcd11"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Web",
+      "Description": "Web Actions",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "095EC184-0AAB-4122-A9B9-B64F0215F7DA"
+    },
+    "sync": {
+      "lastModified": "2025-06-23T21:11:29.135Z",
+      "checksum": "b2701057cbbf7e1b75b47943657c7d4b1a20b64364d04889b6084c4a2bcfcd11"
+    }
   }
 ]
