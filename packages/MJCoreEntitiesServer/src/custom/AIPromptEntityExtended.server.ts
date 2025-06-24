@@ -128,7 +128,10 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
             await this.UpdateLinkedTemplateContents(md);
         }
         // now save the AI Prompt itself
-        return await super.Save(options);
+        if (await super.Save(options) ) {
+            this._originalTemplateText = this.TemplateText; // store the original text for comparison later
+            return true;
+        }
     }
 
     /**

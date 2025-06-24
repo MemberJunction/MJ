@@ -7,6 +7,7 @@ export class AIPromptEntityExtended extends AIPromptEntity {
     /**
      * private property to hold the template text.
      */
+    protected _originalTemplateText: string = "";
     private _templateText: string = "";
     /**
      * Virtual property to hold the template text.
@@ -18,6 +19,13 @@ export class AIPromptEntityExtended extends AIPromptEntity {
     }
     public set TemplateText(value: string) {
         this._templateText = value;
+    }
+    public get TemplateTextDirty(): boolean {
+        return this._templateText !== this._originalTemplateText;        
+    }
+
+    override get Dirty(): boolean {
+        return super.Dirty || this.TemplateTextDirty;
     }
 
     /**
@@ -70,11 +78,13 @@ export class AIPromptEntityExtended extends AIPromptEntity {
                     // we found the Template Contents, set the TemplateText property
                     this.TemplateText = templateContentResult.Results[0].TemplateText || "";
                 }
+                this._originalTemplateText = this.TemplateText; // store the original text for comparison later
                 return true; // we successfully loaded the Template Contents
             }
             else {
                 // if we did not find any Template Contents, we can set the TemplateText to an empty string
                 this.TemplateText = "";
+                this._originalTemplateText = ""; // reset original text
                 return false; // should be able to load Template Contents even if not found
             }
         }
