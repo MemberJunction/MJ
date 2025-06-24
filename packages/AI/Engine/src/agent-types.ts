@@ -11,7 +11,7 @@
  */
 
 import { AIPromptRunResult } from '@memberjunction/ai';
-import { AIAgentRunEntity, AIAgentRunStepEntity } from '@memberjunction/core-entities';
+import { AIAgentRunEntity, AIAgentRunStepEntity, AIAgentTypeEntity, AIPromptEntity } from '@memberjunction/core-entities';
 import { ActionResult, ActionResultSimple } from '@memberjunction/actions-base';
 import { ChatMessage } from '@memberjunction/ai';
 import { AIAgentEntity } from '@memberjunction/core-entities';
@@ -420,6 +420,19 @@ export type AgentExecutionStreamingCallback = (chunk: {
  *                                  Note: Avoid including sensitive data like passwords or API keys 
  *                                  unless absolutely necessary, as context may be passed to multiple 
  *                                  agents and actions.
+ * @property {{modelId?: string, vendorId?: string}} [override] - Optional runtime override for agent execution.
+ *                                  When specified, these values take precedence over all other model selection methods.
+ *                                  Currently supports model and vendor overrides, but can be extended in the future.
+ *                                  
+ *                                  Model selection precedence (highest to lowest):
+ *                                  1. Runtime override (this parameter)
+ *                                  2. Agent's ModelSelectionMode configuration:
+ *                                     - If "Agent": Uses the agent's specific prompt model configuration
+ *                                     - If "Agent Type" (default): Uses the agent type's system prompt model configuration
+ *                                  3. Default model selection based on prompt configuration
+ *                                  
+ *                                  This override is passed to all prompt executions within the agent, allowing
+ *                                  consistent model usage throughout the agent's execution hierarchy.
  * 
  * @example
  * // Define a typed context
@@ -452,6 +465,10 @@ export type ExecuteAgentParams<TContext = any> = {
     parentRun?: AIAgentRunEntity;
     data?: Record<string, any>; // Additional data to pass through execution
     context?: TContext;
+    override?: {
+        modelId?: string;
+        vendorId?: string;
+    }; // Optional runtime override for agent execution
 }
 
 /**
@@ -491,9 +508,9 @@ export type AgentContextData = {
 export type AgentConfiguration = {
     success: boolean;
     errorMessage?: string;
-    agentType?: any;
-    systemPrompt?: any;
-    childPrompt?: any;
+    agentType?: AIAgentTypeEntity;
+    systemPrompt?: AIPromptEntity;
+    childPrompt?: AIPromptEntity;
 }
 
 /**
