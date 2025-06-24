@@ -4,6 +4,7 @@ import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { AIPromptEntity, AIPromptTypeEntity, AIPromptCategoryEntity, TemplateEntity, TemplateContentEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
+import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 
 interface PromptWithTemplate extends Omit<AIPromptEntity, 'Template'> {
   Template: string; // From AIPromptEntity (view field)
@@ -57,7 +58,8 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
   public selectedPromptForTest: AIPromptEntity | null = null;
 
   constructor(
-    private sharedService: SharedService
+    private sharedService: SharedService,
+    private testHarnessService: AITestHarnessDialogService
   ) {}
 
   ngOnInit(): void {
@@ -278,14 +280,12 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
       event.stopPropagation();
     }
     
-    // Find the prompt to test - it's already an AIPromptEntity
-    const prompt = this.prompts.find(p => p.ID === promptId);
-    if (prompt) {
-      this.selectedPromptForTest = prompt as AIPromptEntity;
-    }
+    // Use the test harness service for window management features
+    this.testHarnessService.openForPrompt(promptId);
   }
 
   public closeTestHarness(): void {
+    // No longer needed - window manages its own closure
     this.selectedPromptForTest = null;
   }
 

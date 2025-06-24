@@ -193,9 +193,14 @@ async function executeSQLCore(
     
     return result;
   } catch (error: any) {
-    // Log all errors
-    LogError(error);
+    // Log all errors along with the query and parameters
+    const errorMessage = `Error executing SQL 
+    Error: ${error?.message ? error.message : error}
+    Query: ${query}
+    Parameters: ${parameters ? JSON.stringify(parameters) : 'None'}`;
     
+    LogError(errorMessage);
+
     // Re-throw all errors
     throw error;
   }

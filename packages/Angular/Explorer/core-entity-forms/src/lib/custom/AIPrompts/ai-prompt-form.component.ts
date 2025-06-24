@@ -346,14 +346,10 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         }
 
         // Use the dialog service instead of inline
-        this.testHarnessService.openForPrompt(this.record.ID, this.viewContainerRef).subscribe({
+        // Don't pass viewContainerRef so window is top-level
+        this.testHarnessService.openForPrompt(this.record.ID).subscribe({
             next: (result) => {
                 if (result.success) {
-                    MJNotificationService.Instance.CreateSimpleNotification(
-                        'Prompt test completed successfully',
-                        'success',
-                        3000
-                    );
                     // Reload execution history
                     this.loadExecutionHistory();
                 }
@@ -671,7 +667,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             const results = await rv.RunView<AIPromptModelEntity>({
                 EntityName: 'MJ: AI Prompt Models',
                 ExtraFilter: `PromptID='${this.record.ID}'`,
-                OrderBy: 'Priority ASC, __mj_CreatedAt ASC',
+                OrderBy: 'Priority DESC, __mj_CreatedAt ASC',
                 ResultType: 'entity_object'
             });
             
@@ -701,11 +697,13 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             const newModel = await this._metadata.GetEntityObject<AIPromptModelEntity>('MJ: AI Prompt Models');
             newModel.PromptID = this.record.ID;
             
-            // Set priority to highest existing priority + 1
-            const maxPriority = this.promptModels.length > 0 
-                ? Math.max(...this.promptModels.map(pm => pm.Priority || 0))
-                : 0;
-            newModel.Priority = maxPriority + 1;
+            // Set priority to 1 (lowest) for new models added at the end
+            newModel.Priority = 1;
+            
+            // Generate a temporary ID for tracking if the model doesn't have one
+            if (!newModel.ID) {
+                (newModel as any)._tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            }
             
             // ModelID will be set by user
             
@@ -1050,11 +1048,18 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             [newModels[index - 1], newModels[index]] = 
             [newModels[index], newModels[index - 1]];
             
-            // Replace the array
-            this.promptModels = newModels;
+            // Replace the array and force full re-render
+            this.promptModels = [...newModels];
             
             this.updateModelPriorities();
+            
+            // Force Angular to re-evaluate all bindings
             this.cdr.detectChanges();
+            
+            // Additional force update for Kendo dropdowns
+            setTimeout(() => {
+                this.cdr.detectChanges();
+            }, 0);
         }
     }
 
@@ -1070,11 +1075,18 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             [newModels[index], newModels[index + 1]] = 
             [newModels[index + 1], newModels[index]];
             
-            // Replace the array
-            this.promptModels = newModels;
+            // Replace the array and force full re-render
+            this.promptModels = [...newModels];
             
             this.updateModelPriorities();
+            
+            // Force Angular to re-evaluate all bindings
             this.cdr.detectChanges();
+            
+            // Additional force update for Kendo dropdowns
+            setTimeout(() => {
+                this.cdr.detectChanges();
+            }, 0);
         }
     }
 
@@ -1082,9 +1094,18 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
      * Updates priority values based on array order
      */
     private updateModelPriorities() {
+        // Update priorities based on position (higher priority for items at top)
+        const maxPriority = this.promptModels.length;
         this.promptModels.forEach((model, index) => {
-            model.Priority = index + 1;
+            model.Priority = maxPriority - index;
         });
+    }
+    
+    /**
+     * Gets a stable identifier for a model (for form tracking)
+     */
+    public getModelTrackId(model: AIPromptModelEntity): string {
+        return model.ID || (model as any)._tempId || '';
     }
 
     /**
@@ -1120,12 +1141,19 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             // Insert at new position
             newModels.splice(dropIndex, 0, draggedItem);
             
-            // Replace the array
-            this.promptModels = newModels;
+            // Replace the array and force full re-render
+            this.promptModels = [...newModels];
             
             // Update priorities
             this.updateModelPriorities();
+            
+            // Force Angular to re-evaluate all bindings
             this.cdr.detectChanges();
+            
+            // Additional force update for Kendo dropdowns
+            setTimeout(() => {
+                this.cdr.detectChanges();
+            }, 0);
         }
         
         this.draggedIndex = -1;

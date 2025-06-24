@@ -28,10 +28,17 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent {
     public resultExpanded = true;
     public metricsExpanded = false;
     public hierarchyExpanded = false;
+    public validationExpanded = true; // Expand validation panel by default if there are retries
     
     // Formatted values
     public formattedMessages = '';
     public formattedResult = '';
+    public formattedValidationSummary = '';
+    public formattedValidationAttempts = '';
+    
+    // Validation data
+    public validationAttempts: any[] = [];
+    public validationSummary: any = null;
     
     constructor(
         elementRef: ElementRef,
@@ -48,6 +55,7 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent {
         if (this.record?.ID) {
             await this.loadRelatedData();
             this.formatJsonFields();
+            this.loadValidationData();
         }
     }
     
@@ -245,6 +253,42 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent {
             await this.record.Load(this.record.ID);
             await this.loadRelatedData();
             this.formatJsonFields();
+            this.loadValidationData();
         }
+    }
+    
+    private loadValidationData() {
+        // Parse validation attempts if available
+        if (this.record.ValidationAttempts) {
+            try {
+                this.validationAttempts = JSON.parse(this.record.ValidationAttempts);
+                this.formattedValidationAttempts = JSON.stringify(this.validationAttempts, null, 2);
+            } catch (error) {
+                console.error('Error parsing ValidationAttempts:', error);
+                this.validationAttempts = [];
+                this.formattedValidationAttempts = '';
+            }
+        } else {
+            this.validationAttempts = [];
+            this.formattedValidationAttempts = '';
+        }
+        
+        // Parse validation summary if available
+        if (this.record.ValidationSummary) {
+            try {
+                this.validationSummary = JSON.parse(this.record.ValidationSummary);
+                this.formattedValidationSummary = JSON.stringify(this.validationSummary, null, 2);
+            } catch (error) {
+                console.error('Error parsing ValidationSummary:', error);
+                this.validationSummary = null;
+                this.formattedValidationSummary = '';
+            }
+        } else {
+            this.validationSummary = null;
+            this.formattedValidationSummary = '';
+        }
+        
+        // Set validation panel expansion based on whether there were retries
+        this.validationExpanded = (this.record.ValidationAttemptCount || 0) > 1;
     }
 }

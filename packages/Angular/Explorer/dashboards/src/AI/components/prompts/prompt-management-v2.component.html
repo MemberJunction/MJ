@@ -308,23 +308,4 @@
   }
 </div>
 
-<!-- AI Prompt Test Harness -->
-@if (selectedPromptForTest) {
-    <kendo-window 
-        [width]="1200" 
-        [height]="800" 
-        [minWidth]="800"
-        [minHeight]="600"
-        [draggable]="true"
-        [resizable]="true"
-        [state]="'default'"
-        (close)="closeTestHarness()"
-        title="Run AI Prompt - {{ selectedPromptForTest.Name || 'Untitled' }}">
-        <mj-ai-test-harness
-            [mode]="'prompt'"
-            [entity]="selectedPromptForTest"
-            [isVisible]="true"
-            (visibilityChange)="closeTestHarness()">
-        </mj-ai-test-harness>
-    </kendo-window>
-}
+<!-- AI Prompt Test Harness - Now handled by service with minimize support -->

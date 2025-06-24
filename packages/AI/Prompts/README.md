@@ -2007,6 +2007,33 @@ const defaultPrompt = {
 };
 ```
 
+### Model Priority Behavior
+
+When multiple models are configured for a prompt (using `AIPromptModel` entries), the execution engine uses the `Priority` field to determine the order in which models are tried:
+
+- **Higher priority numbers are executed first** (e.g., Priority 10 before Priority 5)
+- The engine sorts models by `Priority DESC` to establish execution order
+- For models with the same priority, creation date is used as a tiebreaker
+- The first successful model execution is used (fail-fast approach)
+
+```typescript
+// Example: Models are tried in this order based on Priority
+const promptModels = [
+    { ModelID: 'gpt-4-id', Priority: 100 },      // Tried first
+    { ModelID: 'claude-3-id', Priority: 50 },    // Tried second
+    { ModelID: 'gpt-3.5-id', Priority: 10 }      // Tried third
+];
+
+// The PromptRunner sorts internally using:
+// models.sort((a, b) => b.Priority - a.Priority)
+```
+
+This priority system allows you to:
+- Set preferred models with higher priorities
+- Configure fallback models with lower priorities
+- Ensure expensive/powerful models are only used when necessary
+- Control the exact execution order for cost optimization
+
 For additional configuration options and advanced use cases, refer to the source code and entity definitions in the MemberJunction core system.
 
 ## System Prompt Embedding

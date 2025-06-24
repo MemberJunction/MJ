@@ -11,7 +11,7 @@
     "[NOTE]": "This payload structure is completely flexible based on your agent's purpose"
   },
   "reasoning": "[STRING: Your internal explanation of why you made this decision - helps with debugging]",
-  "confidence": "[OPTIONAL NUMBER: 0.0 to 1.0 indicating confidence in this decision]",
+  "confidence?": "[OPTIONAL NUMBER: 0.0 to 1.0 indicating confidence in this decision]",
   "nextStep?": {
     "type": "[REQUIRED if taskComplete=false: Must be exactly one of: 'action' | 'sub-agent' | 'chat']",
     "actions?": [

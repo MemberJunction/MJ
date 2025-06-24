@@ -4,7 +4,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 
 // Kendo UI Modules
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { DialogsModule } from '@progress/kendo-angular-dialog';
+import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { InputsModule } from '@progress/kendo-angular-inputs';
 import { LayoutModule } from '@progress/kendo-angular-layout';
@@ -21,18 +21,24 @@ import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 // Components
 import { AITestHarnessComponent } from './lib/ai-test-harness.component';
 import { AITestHarnessDialogComponent } from './lib/ai-test-harness-dialog.component';
+import { AITestHarnessWindowComponent } from './lib/ai-test-harness-window.component';
+import { TestHarnessCustomWindowComponent } from './lib/test-harness-custom-window.component';
 import { AgentExecutionMonitorComponent } from './lib/agent-execution-monitor.component';
 import { ExecutionNodeComponent } from './lib/agent-execution-node.component';
 import { JsonViewerWindowComponent } from './lib/json-viewer-window.component';
+import { WindowDockService } from './lib/window-dock.service';
 
 // Services
 import { AITestHarnessDialogService } from './lib/ai-test-harness-dialog.service';
-import { TestHarnessDialogService } from './lib/test-harness-dialog.service';
+import { TestHarnessWindowService } from './lib/test-harness-window.service';
+import { TestHarnessWindowManagerService } from './lib/test-harness-window-manager.service';
 
 @NgModule({
   declarations: [
     AITestHarnessComponent,
     AITestHarnessDialogComponent,
+    AITestHarnessWindowComponent,
+    TestHarnessCustomWindowComponent,
     JsonViewerWindowComponent
   ],
   imports: [
@@ -42,6 +48,7 @@ import { TestHarnessDialogService } from './lib/test-harness-dialog.service';
     // Kendo UI
     ButtonsModule,
     DialogsModule,
+    WindowModule,
     DropDownsModule,
     InputsModule,
     LayoutModule,
@@ -59,13 +66,17 @@ import { TestHarnessDialogService } from './lib/test-harness-dialog.service';
   exports: [
     AITestHarnessComponent,
     AITestHarnessDialogComponent,
+    AITestHarnessWindowComponent,
+    TestHarnessCustomWindowComponent,
     AgentExecutionMonitorComponent,
     ExecutionNodeComponent,
     JsonViewerWindowComponent
   ],
   providers: [
     AITestHarnessDialogService,
-    TestHarnessDialogService
+    TestHarnessWindowService,
+    TestHarnessWindowManagerService,
+    WindowDockService
   ]
 })
 export class AITestHarnessModule { }

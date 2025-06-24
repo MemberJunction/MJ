@@ -1,6 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { CreateAgentAction } from "./create-agent.action";
+import { BaseAction } from "@memberjunction/actions";
 
 /**
  * Creates a new agent as a child of another agent.
@@ -23,7 +24,7 @@ import { CreateAgentAction } from "./create-agent.action";
  * // Returns AgentID and optionally PromptID in output params
  * ```
  */
-@RegisterClass(CreateAgentAction, "Create Sub Agent")
+@RegisterClass(BaseAction, "Create Sub Agent")
 export class CreateSubAgentAction extends CreateAgentAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         // First check for ParentAgentID parameter (required for sub-agents)
