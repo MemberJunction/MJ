@@ -34,14 +34,14 @@ export class TransactionManager {
       throw new Error('No data provider available');
     }
     
-    // Check if provider supports transactions
-    if (typeof (provider as any).beginTransaction !== 'function') {
+    // Check if provider supports transactions (PascalCase method names)
+    if (typeof (provider as any).BeginTransaction !== 'function') {
       // Provider doesn't support transactions, operate without them
       return;
     }
     
     try {
-      await (provider as any).beginTransaction(options?.isolationLevel);
+      await (provider as any).BeginTransaction(options?.isolationLevel);
       this.inTransaction = true;
       this.sqlLogger?.logTransaction('BEGIN');
     } catch (error) {
@@ -62,14 +62,14 @@ export class TransactionManager {
       throw new Error('No data provider available');
     }
     
-    // Check if provider supports transactions
-    if (typeof (provider as any).commitTransaction !== 'function') {
+    // Check if provider supports transactions (PascalCase method names)
+    if (typeof (provider as any).CommitTransaction !== 'function') {
       this.inTransaction = false;
       return;
     }
     
     try {
-      await (provider as any).commitTransaction();
+      await (provider as any).CommitTransaction();
       this.inTransaction = false;
       this.sqlLogger?.logTransaction('COMMIT');
     } catch (error) {
@@ -90,14 +90,14 @@ export class TransactionManager {
       throw new Error('No data provider available');
     }
     
-    // Check if provider supports transactions
-    if (typeof (provider as any).rollbackTransaction !== 'function') {
+    // Check if provider supports transactions (PascalCase method names)
+    if (typeof (provider as any).RollbackTransaction !== 'function') {
       this.inTransaction = false;
       return;
     }
     
     try {
-      await (provider as any).rollbackTransaction();
+      await (provider as any).RollbackTransaction();
       this.inTransaction = false;
       this.sqlLogger?.logTransaction('ROLLBACK');
     } catch (error) {
