@@ -72,6 +72,40 @@ module.exports = {
 
 ## Commands
 
+### `mj sync`
+
+Manages MemberJunction metadata synchronization between database and local files. This suite of commands enables version control, IDE-based editing, and CI/CD integration for MJ metadata.
+
+```bash
+mj sync [COMMAND] [OPTIONS]
+```
+
+Available sync commands:
+- `validate` - Validate metadata files for correctness
+- `init` - Initialize a directory for metadata sync
+- `pull` - Pull metadata from database to local files
+- `push` - Push local file changes to database
+- `status` - Show status of local vs database metadata
+- `watch` - Watch for changes and auto-sync
+- `file-reset` - Reset file checksums after manual edits
+
+For detailed documentation on metadata sync, see the [MetadataSync README](../MetadataSync/README.md).
+
+#### Quick Examples:
+```bash
+# Validate all metadata files
+mj sync validate
+
+# Pull AI Prompts from database
+mj sync pull --entity="AI Prompts"
+
+# Push changes to database
+mj sync push
+
+# Watch for changes
+mj sync watch
+```
+
 ### `mj install`
 
 Performs a complete installation of MemberJunction, including:
