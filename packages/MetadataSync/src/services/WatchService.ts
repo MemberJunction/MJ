@@ -1,10 +1,12 @@
 import fs from 'fs-extra';
 import path from 'path';
 import chokidar from 'chokidar';
-import { BaseEntity } from '@memberjunction/core';
+import { BaseEntity, Metadata } from '@memberjunction/core';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
-import { loadEntityConfig } from '../config';
+import { loadEntityConfig, loadSyncConfig } from '../config';
 import { findEntityDirectories } from '../lib/provider-utils';
+import { configManager } from '../lib/config-manager';
+import type { SqlLoggingSession } from '@memberjunction/sqlserver-dataprovider';
 
 export interface WatchOptions {
   dir?: string;
@@ -32,6 +34,7 @@ export interface WatchResult {
 export class WatchService {
   private syncEngine: SyncEngine;
   private debounceTimers: Map<string, NodeJS.Timeout> = new Map();
+  private sqlLoggingSession: SqlLoggingSession | null = null;
   
   constructor(syncEngine: SyncEngine) {
     this.syncEngine = syncEngine;
@@ -45,6 +48,9 @@ export class WatchService {
     }
     
     callbacks?.onLog?.(`Watching ${entityDirs.length} entity ${entityDirs.length === 1 ? 'directory' : 'directories'} for changes`);
+    
+    // Setup SQL logging session
+    await this.setupSqlLogging(callbacks);
     
     // Set up watchers
     const watchers: chokidar.FSWatcher[] = [];
@@ -111,6 +117,17 @@ export class WatchService {
         
         // Close all watchers
         await Promise.all(watchers.map(w => w.close()));
+        
+        // Dispose SQL logging session
+        if (this.sqlLoggingSession) {
+          try {
+            callbacks?.onLog?.(`📝 SQL log written to: ${this.sqlLoggingSession.filePath}`);
+            await this.sqlLoggingSession.dispose();
+            this.sqlLoggingSession = null;
+          } catch (error) {
+            callbacks?.onWarn?.(`Failed to close SQL logging session: ${error}`);
+          }
+        }
       }
     };
   }
@@ -168,6 +185,9 @@ export class WatchService {
   ): Promise<void> {
     const recordData: RecordData = await fs.readJson(filePath);
     
+    // Keep original fields for file writing
+    const originalFields = { ...recordData.fields };
+    
     // Build defaults
     const defaults = await this.syncEngine.buildDefaults(filePath, entityConfig);
     
@@ -193,7 +213,7 @@ export class WatchService {
       }
     }
     
-    // Apply record fields
+    // Apply record fields with processed values for database operations
     for (const [field, value] of Object.entries(recordData.fields)) {
       if (field in entity) {
         const processedValue = await this.syncEngine.processFieldValue(value, path.dirname(filePath));
@@ -207,7 +227,7 @@ export class WatchService {
     
     if (!isNew && entity.Dirty) {
       // Record is dirty, get the changes
-      changes = (entity as any).GetChangesSinceLastSave();
+      changes = entity.GetChangesSinceLastSave();
       const changeKeys = Object.keys(changes);
       if (changeKeys.length > 0) {
         wasActuallyUpdated = true;
@@ -261,21 +281,27 @@ export class WatchService {
       callbacks?.onLog?.(`No changes detected for ${entityConfig.entity} record - skipped update`);
     }
     
-    // Update the local file with new primary key if created
-    if (isNew) {
+    // Update the local file with primary key and sync metadata
+    if (wasActuallyUpdated) {
       const entityInfo = this.syncEngine.getEntityInfo(entityConfig.entity);
       if (entityInfo) {
-        const newPrimaryKey: Record<string, any> = {};
-        for (const pk of entityInfo.PrimaryKeys) {
-          newPrimaryKey[pk.Name] = entity.Get(pk.Name);
+        // Update primary key for new records
+        if (isNew) {
+          const newPrimaryKey: Record<string, any> = {};
+          for (const pk of entityInfo.PrimaryKeys) {
+            newPrimaryKey[pk.Name] = entity.Get(pk.Name);
+          }
+          recordData.primaryKey = newPrimaryKey;
         }
-        recordData.primaryKey = newPrimaryKey;
         
-        // Update sync metadata
+        // Always update sync metadata when the record was updated - use original fields for checksum
         recordData.sync = {
           lastModified: new Date().toISOString(),
-          checksum: this.syncEngine.calculateChecksum(recordData.fields)
+          checksum: this.syncEngine.calculateChecksum(originalFields)
         };
+        
+        // Restore original field values to preserve @ references
+        recordData.fields = originalFields;
         
         // Write back to file
         await fs.writeJson(filePath, recordData, { spaces: 2 });
@@ -310,6 +336,43 @@ export class WatchService {
         
         callbacks?.onLog?.(`Updated sync metadata for ${jsonFileName} due to external file change`);
       }
+    }
+  }
+  
+  private async setupSqlLogging(callbacks?: WatchCallbacks): Promise<void> {
+    try {
+      // Load sync config for SQL logging settings
+      const syncConfig = await loadSyncConfig(configManager.getOriginalCwd());
+      
+      if (syncConfig?.sqlLogging?.enabled) {
+        const provider = Metadata.Provider as any; // SQLServerDataProvider
+        
+        if (provider && typeof provider.CreateSqlLogger === 'function') {
+          // Generate filename with timestamp
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+          const filename = syncConfig.sqlLogging?.formatAsMigration 
+            ? `MetadataSync_Watch_${timestamp}.sql`
+            : `watch_${timestamp}.sql`;
+          
+          // Use .sql-log-watch directory in the working directory
+          const outputDir = path.join(configManager.getOriginalCwd(), '.sql-log-watch');
+          const filepath = path.join(outputDir, filename);
+          
+          // Ensure the directory exists
+          await fs.ensureDir(outputDir);
+          
+          // Create the SQL logging session
+          this.sqlLoggingSession = await provider.CreateSqlLogger(filepath, {
+            formatAsMigration: syncConfig.sqlLogging?.formatAsMigration || false,
+            description: 'MetadataSync watch operation',
+            logRecordChangeMetadata: true
+          });
+          
+          callbacks?.onLog?.(`📝 SQL logging enabled: ${filepath}`);
+        }
+      }
+    } catch (error) {
+      callbacks?.onWarn?.(`Failed to setup SQL logging: ${error}`);
     }
   }
 }

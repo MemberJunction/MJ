@@ -8,7 +8,7 @@ import { FileBackupManager } from '../lib/file-backup-manager';
 import { configManager } from '../lib/config-manager';
 import { SQLLogger } from '../lib/sql-logger';
 import { TransactionManager } from '../lib/transaction-manager';
-import type { SqlLoggingSession } from '@memberjunction/sqlserver-dataprovider';
+import type { SqlLoggingSession, SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
 export interface PushOptions {
   dir?: string;
@@ -61,9 +61,24 @@ export class PushService {
     const fileBackupManager = new FileBackupManager();
     
     // Load sync config for SQL logging settings and autoCreateMissingRecords flag
-    this.syncConfig = await loadSyncConfig(configManager.getOriginalCwd());
+    // If dir option is specified, load from that directory, otherwise use original CWD
+    const configDir = options.dir ? path.resolve(configManager.getOriginalCwd(), options.dir) : configManager.getOriginalCwd();
+    this.syncConfig = await loadSyncConfig(configDir);
+    
+    if (options.verbose) {
+      callbacks?.onLog?.(`Original working directory: ${configManager.getOriginalCwd()}`);
+      callbacks?.onLog?.(`Config directory (with dir option): ${configDir}`);
+      callbacks?.onLog?.(`Config file path: ${path.join(configDir, '.mj-sync.json')}`);
+      callbacks?.onLog?.(`Full sync config loaded: ${JSON.stringify(this.syncConfig, null, 2)}`);
+      callbacks?.onLog?.(`SQL logging config: ${JSON.stringify(this.syncConfig?.sqlLogging)}`);
+    }
+    
     const sqlLogger = new SQLLogger(this.syncConfig);
     const transactionManager = new TransactionManager(sqlLogger);
+    
+    if (options.verbose) {
+      callbacks?.onLog?.(`SQLLogger enabled status: ${sqlLogger.enabled}`);
+    }
     
     // Setup SQL logging session with the provider if enabled
     let sqlLoggingSession: SqlLoggingSession | null = null;
@@ -71,23 +86,24 @@ export class PushService {
     try {
       // Initialize SQL logger if enabled and not dry-run
       if (sqlLogger.enabled && !options.dryRun) {
-        const provider = Metadata.Provider as any; // SQLServerDataProvider
+        const provider = Metadata.Provider as SQLServerDataProvider;
         
         if (options.verbose) {
+          callbacks?.onLog?.(`SQL logging enabled: ${sqlLogger.enabled}`);
           callbacks?.onLog?.(`Provider type: ${provider?.constructor?.name || 'Unknown'}`);
           callbacks?.onLog?.(`Has CreateSqlLogger: ${typeof provider?.CreateSqlLogger === 'function'}`);
         }
         
         if (provider && typeof provider.CreateSqlLogger === 'function') {
           // Generate filename with timestamp
-          const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
           const filename = this.syncConfig.sqlLogging?.formatAsMigration 
             ? `MetadataSync_Push_${timestamp}.sql`
             : `push_${timestamp}.sql`;
-          const filepath = path.join(
-            this.syncConfig.sqlLogging?.outputDirectory || './sql_logging',
-            filename
-          );
+          
+          // Use .sql-log-push directory in the config directory (where sync was initiated)
+          const outputDir = path.join(configDir, this.syncConfig?.sqlLogging?.outputDirectory || './sql-log-push');
+          const filepath = path.join(outputDir, filename);
           
           // Ensure the directory exists
           await fs.ensureDir(path.dirname(filepath));
@@ -96,7 +112,8 @@ export class PushService {
           sqlLoggingSession = await provider.CreateSqlLogger(filepath, {
             formatAsMigration: this.syncConfig.sqlLogging?.formatAsMigration || false,
             description: 'MetadataSync push operation',
-            logRecordChangeMetadata: true
+            statementTypes: "mutations",
+            prettyPrint: true,            
           });
           
           if (options.verbose) {
@@ -110,7 +127,7 @@ export class PushService {
       }
       
       // Find entity directories to process
-      const entityDirs = this.findEntityDirectories(configManager.getOriginalCwd(), options.dir);
+      const entityDirs = this.findEntityDirectories(configDir);
       
       if (entityDirs.length === 0) {
         throw new Error('No entity directories found');
@@ -300,8 +317,11 @@ export class PushService {
           }
           
           try {
+            // For arrays, work with a deep copy to avoid modifying the original
+            const recordToProcess = isArray ? JSON.parse(JSON.stringify(recordData)) : recordData;
+            
             const result = await this.processRecord(
-              recordData,
+              recordToProcess,
               entityConfig,
               entityDir,
               options,
@@ -313,6 +333,18 @@ export class PushService {
             if (result === 'created') created++;
             else if (result === 'updated') updated++;
             else if (result === 'unchanged') unchanged++;
+            
+            // For arrays, update the original record's primaryKey and sync only
+            if (isArray && (result === 'created' || result === 'updated')) {
+              // Update primaryKey if it was created
+              if (recordToProcess.primaryKey) {
+                records[i].primaryKey = recordToProcess.primaryKey;
+              }
+              // Update sync metadata
+              if (recordToProcess.sync) {
+                records[i].sync = recordToProcess.sync;
+              }
+            }
             
             // Track processed record
             const recordKey = this.getRecordKey(recordData, entityConfig.entity);
@@ -363,13 +395,14 @@ export class PushService {
     // Apply defaults from configuration
     const defaults = { ...entityConfig.defaults };
     
-    // Build full record data
+    // Build full record data - keep original values for file writing
+    const originalFields = { ...recordData.fields };
     const fullData = {
       ...defaults,
       ...recordData.fields
     };
     
-    // Process field values
+    // Process field values for database operations
     const processedData: Record<string, any> = {};
     for (const [fieldName, fieldValue] of Object.entries(fullData)) {
       const processedValue = await this.syncEngine.processFieldValue(
@@ -461,11 +494,14 @@ export class PushService {
       }
     }
     
-    // Always update sync metadata
+    // Always update sync metadata - use original fields for checksum
     recordData.sync = {
       lastModified: new Date().toISOString(),
-      checksum: this.syncEngine.calculateChecksum(recordData.fields)
+      checksum: this.syncEngine.calculateChecksum(originalFields)
     };
+    
+    // Restore original field values to preserve @ references
+    recordData.fields = originalFields;
     
     // Write back to file only if it's a single record (not part of an array)
     if (filePath && arrayIndex === undefined && !options.dryRun) {
@@ -501,7 +537,7 @@ export class PushService {
     // 4. Support nested related entities recursively
     for (const [key, records] of Object.entries(relatedEntities)) {
       for (const relatedRecord of records) {
-        // Process @parent references
+        // Process @parent references but DON'T modify the original fields
         const processedFields: Record<string, any> = {};
         for (const [fieldName, fieldValue] of Object.entries(relatedRecord.fields)) {
           if (typeof fieldValue === 'string' && fieldValue.startsWith('@parent:')) {
@@ -517,8 +553,9 @@ export class PushService {
           }
         }
         
-        // Save related entity (simplified - full implementation needed)
-        relatedRecord.fields = processedFields;
+        // TODO: Actually save the related entity with processedFields
+        // For now, we're just processing the values but not saving
+        // This needs to be implemented to actually create/update the related entities
       }
     }
   }
