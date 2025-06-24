@@ -202,6 +202,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /** Event emitted when the visibility state changes, allowing parent components to react */
     @Output() visibilityChange = new EventEmitter<boolean>();
     
+    /**
+     * Emitted when the user navigates to view a run (agent or prompt)
+     */
+    @Output() runOpened = new EventEmitter<{ runId: string; runType: 'agent' | 'prompt' }>();
+    
     /** Reference to the scrollable messages container for auto-scrolling functionality */
     @ViewChild('messagesContainer') private messagesContainer!: ElementRef;
     
@@ -2325,6 +2330,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         } else {
             SharedService.Instance.OpenEntityRecord('MJ: AI Prompt Runs', CompositeKey.FromID(event.runId));
         }
+        
+        // Emit event so parent window can minimize
+        this.runOpened.emit(event);
     }
     
     /**

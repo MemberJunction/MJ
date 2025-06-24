@@ -89,7 +89,8 @@ export interface CustomWindowData {
                     <mj-ai-test-harness
                         [entity]="(agent || prompt) || null"
                         [mode]="mode"
-                        [isVisible]="true">
+                        [isVisible]="true"
+                        (runOpened)="onRunOpened($event)">
                     </mj-ai-test-harness>
                 }
             </div>
@@ -346,6 +347,11 @@ export class TestHarnessCustomWindowComponent implements OnInit, OnDestroy, Afte
             // Use a small delay to ensure the DOM has updated
             setTimeout(() => this.adjustContentHeight(), 50);
         }
+    }
+    
+    onRunOpened(event: { runId: string; runType: 'agent' | 'prompt' }) {
+        // Auto-minimize the test harness window when a run is opened
+        this.minimize();
     }
     
     minimize() {
