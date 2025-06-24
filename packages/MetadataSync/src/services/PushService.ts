@@ -8,6 +8,7 @@ import { FileBackupManager } from '../lib/file-backup-manager';
 import { configManager } from '../lib/config-manager';
 import { SQLLogger } from '../lib/sql-logger';
 import { TransactionManager } from '../lib/transaction-manager';
+import type { SqlLoggingSession } from '@memberjunction/sqlserver-dataprovider';
 
 export interface PushOptions {
   dir?: string;
@@ -64,12 +65,47 @@ export class PushService {
     const sqlLogger = new SQLLogger(this.syncConfig);
     const transactionManager = new TransactionManager(sqlLogger);
     
+    // Setup SQL logging session with the provider if enabled
+    let sqlLoggingSession: SqlLoggingSession | null = null;
+    
     try {
-      // Initialize SQL logger if enabled
+      // Initialize SQL logger if enabled and not dry-run
       if (sqlLogger.enabled && !options.dryRun) {
-        await sqlLogger.initialize();
+        const provider = Metadata.Provider as any; // SQLServerDataProvider
+        
         if (options.verbose) {
-          callbacks?.onLog?.('📝 SQL logging enabled');
+          callbacks?.onLog?.(`Provider type: ${provider?.constructor?.name || 'Unknown'}`);
+          callbacks?.onLog?.(`Has CreateSqlLogger: ${typeof provider?.CreateSqlLogger === 'function'}`);
+        }
+        
+        if (provider && typeof provider.CreateSqlLogger === 'function') {
+          // Generate filename with timestamp
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
+          const filename = this.syncConfig.sqlLogging?.formatAsMigration 
+            ? `MetadataSync_Push_${timestamp}.sql`
+            : `push_${timestamp}.sql`;
+          const filepath = path.join(
+            this.syncConfig.sqlLogging?.outputDirectory || './sql_logging',
+            filename
+          );
+          
+          // Ensure the directory exists
+          await fs.ensureDir(path.dirname(filepath));
+          
+          // Create the SQL logging session
+          sqlLoggingSession = await provider.CreateSqlLogger(filepath, {
+            formatAsMigration: this.syncConfig.sqlLogging?.formatAsMigration || false,
+            description: 'MetadataSync push operation',
+            logRecordChangeMetadata: true
+          });
+          
+          if (options.verbose) {
+            callbacks?.onLog?.(`📝 SQL logging enabled: ${filepath}`);
+          }
+        } else {
+          if (options.verbose) {
+            callbacks?.onWarn?.('SQL logging requested but provider does not support it');
+          }
         }
       }
       
@@ -172,11 +208,12 @@ export class PushService {
         }
       }
       
-      // Write SQL log if enabled
+      // Close SQL logging session if it was created
       let sqlLogPath: string | undefined;
-      if (sqlLogger.enabled && !options.dryRun) {
-        sqlLogPath = await sqlLogger.writeLog();
-        if (sqlLogPath && options.verbose) {
+      if (sqlLoggingSession) {
+        sqlLogPath = sqlLoggingSession.filePath;
+        await sqlLoggingSession.dispose();
+        if (options.verbose) {
           callbacks?.onLog?.(`📝 SQL log written to: ${sqlLogPath}`);
         }
       }
@@ -200,6 +237,16 @@ export class PushService {
           callbacks?.onWarn?.(`Failed to rollback file backups: ${rollbackError}`);
         }
       }
+      
+      // Close SQL logging session on error
+      if (sqlLoggingSession) {
+        try {
+          await sqlLoggingSession.dispose();
+        } catch (disposeError) {
+          callbacks?.onWarn?.(`Failed to close SQL logging session: ${disposeError}`);
+        }
+      }
+      
       throw error;
     }
   }
@@ -234,14 +281,20 @@ export class PushService {
     // Process each file
     for (const filePath of files) {
       try {
+        // Backup the file before any modifications (unless dry-run)
+        if (!options.dryRun) {
+          await fileBackupManager.backupFile(filePath);
+        }
+        
         const fileData = await fs.readJson(filePath);
         const records = Array.isArray(fileData) ? fileData : [fileData];
+        const isArray = Array.isArray(fileData);
         
         for (let i = 0; i < records.length; i++) {
           const recordData = records[i];
           
           if (!this.isValidRecordData(recordData)) {
-            callbacks?.onWarn?.(`Invalid record format in ${filePath}${Array.isArray(fileData) ? ` at index ${i}` : ''}`);
+            callbacks?.onWarn?.(`Invalid record format in ${filePath}${isArray ? ` at index ${i}` : ''}`);
             errors++;
             continue;
           }
@@ -252,7 +305,9 @@ export class PushService {
               entityConfig,
               entityDir,
               options,
-              callbacks
+              callbacks,
+              filePath,
+              isArray ? i : undefined
             );
             
             if (result === 'created') created++;
@@ -263,15 +318,20 @@ export class PushService {
             const recordKey = this.getRecordKey(recordData, entityConfig.entity);
             this.processedRecords.set(recordKey, {
               filePath,
-              arrayIndex: Array.isArray(fileData) ? i : undefined,
+              arrayIndex: isArray ? i : undefined,
               lineNumber: i + 1 // Simple line number approximation
             });
             
           } catch (recordError) {
-            const errorMsg = `Error processing record in ${filePath}${Array.isArray(fileData) ? ` at index ${i}` : ''}: ${recordError}`;
+            const errorMsg = `Error processing record in ${filePath}${isArray ? ` at index ${i}` : ''}: ${recordError}`;
             callbacks?.onError?.(errorMsg);
             errors++;
           }
+        }
+        
+        // Write back the entire file if it's an array (after processing all records)
+        if (isArray && !options.dryRun) {
+          await fs.writeJson(filePath, records, { spaces: 2 });
         }
       } catch (fileError) {
         const errorMsg = `Error reading file ${filePath}: ${fileError}`;
@@ -288,7 +348,9 @@ export class PushService {
     entityConfig: any,
     entityDir: string,
     options: PushOptions,
-    callbacks?: PushCallbacks
+    callbacks?: PushCallbacks,
+    filePath?: string,
+    arrayIndex?: number
   ): Promise<'created' | 'updated' | 'unchanged' | 'error'> {
     const metadata = new Metadata();
     
@@ -322,6 +384,7 @@ export class PushService {
     // Check if record exists
     const primaryKey = recordData.primaryKey;
     let exists = false;
+    let isNew = false;
     
     if (primaryKey && Object.keys(primaryKey).length > 0) {
       // Try to load existing record
@@ -359,6 +422,7 @@ export class PushService {
     
     if (!exists) {
       entity.NewRecord(); // make sure our record starts out fresh
+      isNew = true;
       // Set primary key values for new records if provided, this is important for the auto-create logic
       if (primaryKey) {
         for (const [pkField, pkValue] of Object.entries(primaryKey)) {
@@ -383,6 +447,29 @@ export class PushService {
     
     if (!saveResult) {
       throw new Error(`Failed to save ${entityConfig.entity} record: ${entity.LatestResult?.Message || 'Unknown error'}`);
+    }
+    
+    // Update primaryKey for new records
+    if (isNew) {
+      const entityInfo = this.syncEngine.getEntityInfo(entityConfig.entity);
+      if (entityInfo) {
+        const newPrimaryKey: Record<string, any> = {};
+        for (const pk of entityInfo.PrimaryKeys) {
+          newPrimaryKey[pk.Name] = entity.Get(pk.Name);
+        }
+        recordData.primaryKey = newPrimaryKey;
+      }
+    }
+    
+    // Always update sync metadata
+    recordData.sync = {
+      lastModified: new Date().toISOString(),
+      checksum: this.syncEngine.calculateChecksum(recordData.fields)
+    };
+    
+    // Write back to file only if it's a single record (not part of an array)
+    if (filePath && arrayIndex === undefined && !options.dryRun) {
+      await fs.writeJson(filePath, recordData, { spaces: 2 });
     }
     
     // Process related entities after parent save
