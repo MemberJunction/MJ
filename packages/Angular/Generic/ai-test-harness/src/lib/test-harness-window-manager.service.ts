@@ -110,19 +110,44 @@ export class TestHarnessWindowManagerService {
         // Handle minimize event
         componentRef.instance.minimizeWindow.subscribe(() => {
             const title = componentRef.instance.windowTitle;
-            const icon = 'fa-solid fa-flask';
+            let icon: string | undefined = 'fa-solid fa-flask'; // default
+            let iconUrl: string | undefined;
             
-            // Add to dock
+            // Get the appropriate icon based on mode and entity
+            if (componentRef.instance.mode === 'agent' && componentRef.instance.agent) {
+                // For agents, use LogoURL since AIAgentEntity doesn't have IconClass
+                if (componentRef.instance.agent.LogoURL) {
+                    iconUrl = componentRef.instance.agent.LogoURL;
+                    icon = undefined; // Clear icon when using URL
+                } else {
+                    icon = 'fa-solid fa-robot'; // Default agent icon
+                }
+            } else if (componentRef.instance.mode === 'prompt') {
+                icon = 'fa-solid fa-comment-dots'; // Default prompt icon
+            }
+            
+            // Add to dock with icon or iconUrl
             this.dockService.addWindow(windowId, title, icon, () => {
                 // Restore callback
                 componentRef.instance.restoreFromMinimized();
-            });
+            }, iconUrl);
         });
         
         // Handle restore event
         componentRef.instance.restoreWindow.subscribe(() => {
             // Remove from dock
             this.dockService.removeWindow(windowId);
+        });
+        
+        // Handle execution state changes
+        componentRef.instance.executionStateChange.subscribe((state) => {
+            if (state.isExecuting) {
+                // Show indeterminate progress (spinning/pulsing)
+                this.dockService.updateWindowProgress(windowId, 50); // 50% for indeterminate animation
+            } else {
+                // Clear progress
+                this.dockService.updateWindowProgress(windowId, undefined);
+            }
         });
         
         // Attach to DOM

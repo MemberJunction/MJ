@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, ViewChild, OnDestroy, A
 import { WindowComponent } from '@progress/kendo-angular-dialog';
 import { AIAgentEntity, AIPromptEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
+import { AITestHarnessComponent } from './ai-test-harness.component';
 
 export interface CustomWindowData {
     agentId?: string;
@@ -26,6 +27,8 @@ export interface CustomWindowData {
             [title]="windowTitle"
             [width]="width"
             [height]="height"
+            [top]="windowTop"
+            [left]="windowLeft"
             [minWidth]="isMinimized ? 400 : 800"
             [minHeight]="isMinimized ? 60 : 600"
             [draggable]="true"
@@ -37,9 +40,7 @@ export interface CustomWindowData {
             
             <kendo-window-titlebar>
                 <div class="window-title">
-                    @if (mode === 'agent' && agent?.IconClass) {
-                        <i [class]="agent?.IconClass + ' title-icon'"></i>
-                    } @else if (mode === 'agent' && agent?.LogoURL) {
+                    @if (mode === 'agent' && agent?.LogoURL) {
                         <img [src]="agent?.LogoURL" class="title-logo" alt="Agent logo" />
                     } @else if (mode === 'agent') {
                         <i class="fa-solid fa-robot title-icon"></i>
@@ -190,16 +191,18 @@ export interface CustomWindowData {
 })
 export class TestHarnessCustomWindowComponent implements OnInit, OnDestroy, AfterViewInit {
     @ViewChild('kendoWindow', { static: false }) kendoWindow!: WindowComponent;
+    @ViewChild(AITestHarnessComponent, { static: false }) testHarness?: AITestHarnessComponent;
     @Input() data: CustomWindowData = {};
     @Output() closeWindow = new EventEmitter<void>();
     @Output() minimizeWindow = new EventEmitter<void>();
     @Output() restoreWindow = new EventEmitter<void>();
+    @Output() executionStateChange = new EventEmitter<{ windowId?: string; isExecuting: boolean }>();
     
     windowTitle = 'AI Test Harness';
     width: number = 1200;
     height: number = 800;
-    windowTop?: number;
-    windowLeft?: number;
+    windowTop: number = 100;
+    windowLeft: number = 100;
     loading = true;
     error = '';
     windowState: 'default' | 'minimized' | 'maximized' = 'default';
@@ -209,8 +212,8 @@ export class TestHarnessCustomWindowComponent implements OnInit, OnDestroy, Afte
     // Store original dimensions for restore
     private originalWidth: number = 1200;
     private originalHeight: number = 800;
-    private originalTop?: number;
-    private originalLeft?: number;
+    private originalTop: number = 100;
+    private originalLeft: number = 100;
     
     // Minimized dimensions
     private readonly MINIMIZED_WIDTH = 400;
@@ -235,6 +238,16 @@ export class TestHarnessCustomWindowComponent implements OnInit, OnDestroy, Afte
         // Store original dimensions
         this.originalWidth = this.width;
         this.originalHeight = this.height;
+        
+        // Calculate centered position
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        this.windowLeft = Math.max(0, (windowWidth - this.width) / 2);
+        this.windowTop = Math.max(0, (windowHeight - this.height) / 2);
+        
+        // Store original position
+        this.originalLeft = this.windowLeft;
+        this.originalTop = this.windowTop;
         
         // Determine mode
         this.mode = this.data.mode || (this.data.promptId || this.data.prompt ? 'prompt' : 'agent');
@@ -404,9 +417,37 @@ export class TestHarnessCustomWindowComponent implements OnInit, OnDestroy, Afte
         setTimeout(() => {
             this.updateWindowPosition();
         }, 100);
+        
+        // Set up execution tracking
+        this.setupExecutionTracking();
+    }
+    
+    private setupExecutionTracking() {
+        // Use a timer to check the test harness execution state
+        // This is needed because the test harness doesn't emit events for execution state changes
+        if (this.testHarness) {
+            // Initial state
+            let lastExecutingState = false;
+            
+            // Check execution state periodically
+            const checkInterval = setInterval(() => {
+                if (this.testHarness && this.testHarness.isExecuting !== lastExecutingState) {
+                    lastExecutingState = this.testHarness.isExecuting;
+                    this.executionStateChange.emit({ isExecuting: lastExecutingState });
+                }
+            }, 100);
+            
+            // Store interval for cleanup
+            (this as any).executionCheckInterval = checkInterval;
+        }
     }
     
     ngOnDestroy() {
+        // Clean up execution tracking interval
+        if ((this as any).executionCheckInterval) {
+            clearInterval((this as any).executionCheckInterval);
+        }
+        
         // Ensure window is properly closed and cleaned up
         if (this.kendoWindow) {
             this.kendoWindow.close.emit();

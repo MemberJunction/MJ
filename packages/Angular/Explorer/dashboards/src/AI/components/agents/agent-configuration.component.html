@@ -292,22 +292,4 @@
   </div>
 </div>
 
-<!-- AI Agent Test Harness -->
-@if (selectedAgentForTest) {
-    <kendo-window 
-        [width]="1200" 
-        [height]="800" 
-        [minWidth]="800"
-        [minHeight]="600"
-        [draggable]="true"
-        [resizable]="true"
-        [state]="'default'"
-        (close)="closeTestHarness()"
-        title="Run AI Agent - {{ selectedAgentForTest.Name || 'Untitled' }}">
-        <mj-ai-test-harness
-            [aiAgent]="selectedAgentForTest"
-            [isVisible]="true"
-            (visibilityChange)="closeTestHarness()">
-        </mj-ai-test-harness>
-    </kendo-window>
-}
+<!-- AI Agent Test Harness - Now handled by service with minimize support -->

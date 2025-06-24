@@ -346,7 +346,8 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         }
 
         // Use the dialog service instead of inline
-        this.testHarnessService.openForPrompt(this.record.ID, this.viewContainerRef).subscribe({
+        // Don't pass viewContainerRef so window is top-level
+        this.testHarnessService.openForPrompt(this.record.ID).subscribe({
             next: (result) => {
                 if (result.success) {
                     // Reload execution history

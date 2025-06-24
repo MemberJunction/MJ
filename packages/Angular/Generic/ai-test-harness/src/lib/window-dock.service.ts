@@ -3,8 +3,10 @@ import { Injectable, Component, ComponentRef, ApplicationRef, Injector, createCo
 export interface DockItem {
     windowId: string;
     title: string;
-    icon: string;
+    icon?: string;
+    iconUrl?: string;
     restoreCallback: () => void;
+    progress?: number; // 0-100 for progress indicator
 }
 
 @Component({
@@ -75,6 +77,34 @@ export interface DockItem {
                 text-overflow: ellipsis;
                 white-space: nowrap;
             }
+            
+            .dock-item-progress {
+                position: absolute;
+                bottom: 2px;
+                left: 2px;
+                right: 2px;
+                height: 3px;
+                background: rgba(0, 0, 0, 0.1);
+                border-radius: 2px;
+                overflow: hidden;
+            }
+            
+            .dock-item-progress-bar {
+                height: 100%;
+                background: #0076B6; /* MJ blue color */
+                transition: width 0.3s ease;
+            }
+            
+            /* Pulse animation for indeterminate progress (50%) */
+            .dock-item-progress-bar[style*="width: 50%"] {
+                animation: pulse-progress 1.5s ease-in-out infinite;
+            }
+        }
+        
+        @keyframes pulse-progress {
+            0% { opacity: 0.6; width: 30%; }
+            50% { opacity: 1; width: 70%; }
+            100% { opacity: 0.6; width: 30%; }
         }
     `]
 })
@@ -127,14 +157,16 @@ export class WindowDockService {
         }
     }
     
-    addWindow(windowId: string, title: string, icon: string, restoreCallback: () => void) {
+    addWindow(windowId: string, title: string, icon?: string, restoreCallback?: () => void, iconUrl?: string, progress?: number) {
         this.ensureDockExists();
         if (this.dockComponent) {
             this.dockComponent.instance.addItem({
                 windowId,
                 title,
                 icon,
-                restoreCallback
+                iconUrl,
+                restoreCallback: restoreCallback || (() => {}),
+                progress
             });
         }
     }
@@ -148,6 +180,15 @@ export class WindowDockService {
                 this.appRef.detachView(this.dockComponent.hostView);
                 this.dockComponent.destroy();
                 this.dockComponent = undefined;
+            }
+        }
+    }
+    
+    updateWindowProgress(windowId: string, progress: number | undefined) {
+        if (this.dockComponent) {
+            const item = this.dockComponent.instance.dockItems.find(i => i.windowId === windowId);
+            if (item) {
+                item.progress = progress;
             }
         }
     }

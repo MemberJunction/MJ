@@ -223,6 +223,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         }
 
         // Use the new test harness dialog service
+        // Don't pass viewContainerRef so window is top-level
         this.testHarnessService.openForAgent(this.record.ID);
     }
 
