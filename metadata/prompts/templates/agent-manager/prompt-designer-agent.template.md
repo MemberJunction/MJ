@@ -123,7 +123,7 @@ Standard variables available:
 You are responsible for filling the prompt section of the AgentDefinition:
 
 ```typescript
-{@include ../../../../packages/AI/agent-manager/core/src/interfaces/agent-definition.interface.ts}
+{@include ../../../../packages/AI/AgentManager/core/src/interfaces/agent-definition.interface.ts}
 ```
 
 Focus on populating:
