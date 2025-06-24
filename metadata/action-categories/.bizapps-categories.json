@@ -1,0 +1,66 @@
+[
+  {
+    "fields": {
+      "Name": "Business Apps",
+      "Description": "Integration actions for business applications including CRM, LMS, and Accounting systems",
+      "ParentID": null,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "CRM",
+      "Description": "Customer Relationship Management system integrations for managing contacts, companies, deals, and sales activities",
+      "ParentID": "@lookup:Action Categories.Name=Business Apps&ParentID=null",
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "LMS",
+      "Description": "Learning Management System integrations for managing users, courses, enrollments, and educational content",
+      "ParentID": "@lookup:Action Categories.Name=Business Apps&ParentID=null",
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Accounting",
+      "Description": "Accounting and financial system integrations for managing GL accounts, transactions, invoices, and financial reporting",
+      "ParentID": "@lookup:Action Categories.Name=Business Apps&ParentID=null",
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "HubSpot",
+      "Description": "HubSpot CRM integration for managing contacts, companies, deals, tasks, and sales activities",
+      "ParentID": "@lookup:Action Categories.Name=CRM&Parent=Business Apps",
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "LearnWorlds",
+      "Description": "LearnWorlds LMS integration for managing online courses, user enrollments, progress tracking, and certificates",
+      "ParentID": "@lookup:Action Categories.Name=LMS&Parent=Business Apps",
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "QuickBooks",
+      "Description": "QuickBooks accounting integration for managing GL accounts, journal entries, transactions, and financial reporting",
+      "ParentID": "@lookup:Action Categories.Name=Accounting&Parent=Business Apps",
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Business Central",
+      "Description": "Microsoft Dynamics 365 Business Central integration for enterprise accounting, GL management, and financial operations",
+      "ParentID": "@lookup:Action Categories.Name=Accounting&Parent=Business Apps",
+      "Status": "Active"
+    }
+  }
+]
