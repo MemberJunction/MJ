@@ -478,38 +478,53 @@ export class PushService {
       // Process specific directory
       const fullPath = path.resolve(baseDir, specificDir);
       if (fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory()) {
-        dirs.push(fullPath);
+        // Check if this directory has an entity configuration
+        const configPath = path.join(fullPath, '.mj-sync.json');
+        if (fs.existsSync(configPath)) {
+          try {
+            const config = fs.readJsonSync(configPath);
+            if (config.entity) {
+              // It's an entity directory, add it
+              dirs.push(fullPath);
+            } else {
+              // It's a container directory, search its subdirectories
+              this.findEntityDirectoriesRecursive(fullPath, dirs);
+            }
+          } catch {
+            // Invalid config, skip
+          }
+        }
       }
     } else {
       // Find all entity directories
-      const searchDirs = (dir: string) => {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        
-        for (const entry of entries) {
-          if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
-            const fullPath = path.join(dir, entry.name);
-            const configPath = path.join(fullPath, '.mj-sync.json');
-            
-            if (fs.existsSync(configPath)) {
-              try {
-                const config = fs.readJsonSync(configPath);
-                if (config.entity) {
-                  dirs.push(fullPath);
-                }
-              } catch {
-                // Skip invalid config files
-              }
-            } else {
-              // Recurse into subdirectories
-              searchDirs(fullPath);
-            }
-          }
-        }
-      };
-      
-      searchDirs(baseDir);
+      this.findEntityDirectoriesRecursive(baseDir, dirs);
     }
     
     return dirs;
+  }
+
+  private findEntityDirectoriesRecursive(dir: string, dirs: string[]): void {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    
+    for (const entry of entries) {
+      if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
+        const fullPath = path.join(dir, entry.name);
+        const configPath = path.join(fullPath, '.mj-sync.json');
+        
+        if (fs.existsSync(configPath)) {
+          try {
+            const config = fs.readJsonSync(configPath);
+            if (config.entity) {
+              dirs.push(fullPath);
+            }
+          } catch {
+            // Skip invalid config files
+          }
+        } else {
+          // Recurse into subdirectories
+          this.findEntityDirectoriesRecursive(fullPath, dirs);
+        }
+      }
+    }
   }
 }
