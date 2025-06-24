@@ -5701,6 +5701,28 @@ export class EmployeeCompanyIntegration_ {
 // INPUT TYPE for Employee Company Integrations
 //****************************************************************************
 @InputType()
+export class CreateEmployeeCompanyIntegrationInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    EmployeeID?: string;
+
+    @Field({ nullable: true })
+    CompanyIntegrationID?: string;
+
+    @Field({ nullable: true })
+    ExternalSystemRecordID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Employee Company Integrations
+//****************************************************************************
+@InputType()
 export class UpdateEmployeeCompanyIntegrationInput {
     @Field()
     ID: string;
@@ -5779,6 +5801,16 @@ export class EmployeeCompanyIntegrationResolver extends ResolverBase {
     }
     
     @Mutation(() => EmployeeCompanyIntegration_)
+    async CreateEmployeeCompanyIntegration(
+        @Arg('input', () => CreateEmployeeCompanyIntegrationInput) input: CreateEmployeeCompanyIntegrationInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Employee Company Integrations', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => EmployeeCompanyIntegration_)
     async UpdateEmployeeCompanyIntegration(
         @Arg('input', () => UpdateEmployeeCompanyIntegrationInput) input: UpdateEmployeeCompanyIntegrationInput,
         @Ctx() { dataSources, userPayload }: AppContext,
@@ -5786,6 +5818,13 @@ export class EmployeeCompanyIntegrationResolver extends ResolverBase {
     ) {
         const connPool = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Employee Company Integrations', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => EmployeeCompanyIntegration_)
+    async DeleteEmployeeCompanyIntegration(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Employee Company Integrations', key, options, connPool, userPayload, pubSub);
     }
     
 }
@@ -5820,6 +5859,22 @@ export class EmployeeRole_ {
     Role: string;
         
 }
+
+//****************************************************************************
+// INPUT TYPE for Employee Roles
+//****************************************************************************
+@InputType()
+export class CreateEmployeeRoleInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    EmployeeID?: string;
+
+    @Field({ nullable: true })
+    RoleID?: string;
+}
+    
 
 //****************************************************************************
 // INPUT TYPE for Employee Roles
@@ -5897,6 +5952,16 @@ export class EmployeeRoleResolver extends ResolverBase {
     }
     
     @Mutation(() => EmployeeRole_)
+    async CreateEmployeeRole(
+        @Arg('input', () => CreateEmployeeRoleInput) input: CreateEmployeeRoleInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Employee Roles', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => EmployeeRole_)
     async UpdateEmployeeRole(
         @Arg('input', () => UpdateEmployeeRoleInput) input: UpdateEmployeeRoleInput,
         @Ctx() { dataSources, userPayload }: AppContext,
@@ -5945,6 +6010,22 @@ export class EmployeeSkill_ {
     Skill: string;
         
 }
+
+//****************************************************************************
+// INPUT TYPE for Employee Skills
+//****************************************************************************
+@InputType()
+export class CreateEmployeeSkillInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    EmployeeID?: string;
+
+    @Field({ nullable: true })
+    SkillID?: string;
+}
+    
 
 //****************************************************************************
 // INPUT TYPE for Employee Skills
@@ -6021,6 +6102,16 @@ export class EmployeeSkillResolver extends ResolverBase {
         return result;
     }
     
+    @Mutation(() => EmployeeSkill_)
+    async CreateEmployeeSkill(
+        @Arg('input', () => CreateEmployeeSkillInput) input: CreateEmployeeSkillInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Employee Skills', input, connPool, userPayload, pubSub)
+    }
+        
     @Mutation(() => EmployeeSkill_)
     async UpdateEmployeeSkill(
         @Arg('input', () => UpdateEmployeeSkillInput) input: UpdateEmployeeSkillInput,
@@ -6330,6 +6421,41 @@ export class Skill_ {
     Skills_ParentIDArray: Skill_[]; // Link to Skills
     
 }
+
+//****************************************************************************
+// INPUT TYPE for Skills
+//****************************************************************************
+@InputType()
+export class CreateSkillInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    ParentID: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Skills
+//****************************************************************************
+@InputType()
+export class UpdateSkillInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
 //****************************************************************************
 // RESOLVER for Skills
 //****************************************************************************
@@ -6417,6 +6543,33 @@ export class SkillResolver extends ResolverBase {
         return result;
     }
         
+    @Mutation(() => Skill_)
+    async CreateSkill(
+        @Arg('input', () => CreateSkillInput) input: CreateSkillInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Skills', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => Skill_)
+    async UpdateSkill(
+        @Arg('input', () => UpdateSkillInput) input: UpdateSkillInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('Skills', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => Skill_)
+    async DeleteSkill(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Skills', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -6464,6 +6617,28 @@ export class IntegrationURLFormat_ {
     FullURLFormat?: string;
         
 }
+
+//****************************************************************************
+// INPUT TYPE for Integration URL Formats
+//****************************************************************************
+@InputType()
+export class CreateIntegrationURLFormatInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    IntegrationID?: string;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    URLFormat?: string;
+
+    @Field({ nullable: true })
+    Comments: string | null;
+}
+    
 
 //****************************************************************************
 // INPUT TYPE for Integration URL Formats
@@ -6557,6 +6732,16 @@ export class IntegrationURLFormatResolver extends ResolverBase {
     }
     
     @Mutation(() => IntegrationURLFormat_)
+    async CreateIntegrationURLFormat(
+        @Arg('input', () => CreateIntegrationURLFormatInput) input: CreateIntegrationURLFormatInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Integration URL Formats', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => IntegrationURLFormat_)
     async UpdateIntegrationURLFormat(
         @Arg('input', () => UpdateIntegrationURLFormatInput) input: UpdateIntegrationURLFormatInput,
         @Ctx() { dataSources, userPayload }: AppContext,
@@ -6628,6 +6813,37 @@ export class Integration_ {
     RecordChanges_IntegrationIDArray: RecordChange_[]; // Link to RecordChanges
     
 }
+
+//****************************************************************************
+// INPUT TYPE for Integrations
+//****************************************************************************
+@InputType()
+export class CreateIntegrationInput {
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    NavigationBaseURL: string | null;
+
+    @Field({ nullable: true })
+    ClassName: string | null;
+
+    @Field({ nullable: true })
+    ImportPath: string | null;
+
+    @Field(() => Int, { nullable: true })
+    BatchMaxRequestCount?: number;
+
+    @Field(() => Int, { nullable: true })
+    BatchRequestWaitTime?: number;
+
+    @Field({ nullable: true })
+    ID?: string;
+}
+    
 
 //****************************************************************************
 // INPUT TYPE for Integrations
@@ -6760,6 +6976,16 @@ export class IntegrationResolver extends ResolverBase {
     }
         
     @Mutation(() => Integration_)
+    async CreateIntegration(
+        @Arg('input', () => CreateIntegrationInput) input: CreateIntegrationInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Integrations', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => Integration_)
     async UpdateIntegration(
         @Arg('input', () => UpdateIntegrationInput) input: UpdateIntegrationInput,
         @Ctx() { dataSources, userPayload }: AppContext,
@@ -6882,6 +7108,52 @@ export class CompanyIntegration_ {
     EmployeeCompanyIntegrations_CompanyIntegrationIDArray: EmployeeCompanyIntegration_[]; // Link to EmployeeCompanyIntegrations
     
 }
+
+//****************************************************************************
+// INPUT TYPE for Company Integrations
+//****************************************************************************
+@InputType()
+export class CreateCompanyIntegrationInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    CompanyID?: string;
+
+    @Field({ nullable: true })
+    IntegrationID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive: boolean | null;
+
+    @Field({ nullable: true })
+    AccessToken: string | null;
+
+    @Field({ nullable: true })
+    RefreshToken: string | null;
+
+    @Field({ nullable: true })
+    TokenExpirationDate: Date | null;
+
+    @Field({ nullable: true })
+    APIKey: string | null;
+
+    @Field({ nullable: true })
+    ExternalSystemID: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsExternalSystemReadOnly?: boolean;
+
+    @Field({ nullable: true })
+    ClientID: string | null;
+
+    @Field({ nullable: true })
+    ClientSecret: string | null;
+
+    @Field({ nullable: true })
+    CustomAttribute1: string | null;
+}
+    
 
 //****************************************************************************
 // INPUT TYPE for Company Integrations
@@ -7026,6 +7298,16 @@ export class CompanyIntegrationResolver extends ResolverBase {
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Company Integrations', rows);
         return result;
+    }
+        
+    @Mutation(() => CompanyIntegration_)
+    async CreateCompanyIntegration(
+        @Arg('input', () => CreateCompanyIntegrationInput) input: CreateCompanyIntegrationInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Company Integrations', input, connPool, userPayload, pubSub)
     }
         
     @Mutation(() => CompanyIntegration_)
@@ -9942,6 +10224,34 @@ export class UserRecordLog_ {
 // INPUT TYPE for User Record Logs
 //****************************************************************************
 @InputType()
+export class CreateUserRecordLogInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    RecordID?: string;
+
+    @Field({ nullable: true })
+    EarliestAt?: Date;
+
+    @Field({ nullable: true })
+    LatestAt?: Date;
+
+    @Field(() => Int, { nullable: true })
+    TotalCount?: number;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for User Record Logs
+//****************************************************************************
+@InputType()
 export class UpdateUserRecordLogInput {
     @Field()
     ID: string;
@@ -10026,6 +10336,16 @@ export class UserRecordLogResolver extends ResolverBase {
     }
     
     @Mutation(() => UserRecordLog_)
+    async CreateUserRecordLog(
+        @Arg('input', () => CreateUserRecordLogInput) input: CreateUserRecordLogInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('User Record Logs', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => UserRecordLog_)
     async UpdateUserRecordLog(
         @Arg('input', () => UpdateUserRecordLogInput) input: UpdateUserRecordLogInput,
         @Ctx() { dataSources, userPayload }: AppContext,
@@ -10033,6 +10353,13 @@ export class UserRecordLogResolver extends ResolverBase {
     ) {
         const connPool = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('User Record Logs', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => UserRecordLog_)
+    async DeleteUserRecordLog(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('User Record Logs', key, options, connPool, userPayload, pubSub);
     }
     
 }
@@ -10658,6 +10985,13 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
         return this.UpdateRecord('Company Integration Runs', input, connPool, userPayload, pubSub);
     }
     
+    @Mutation(() => CompanyIntegrationRun_)
+    async DeleteCompanyIntegrationRun(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Company Integration Runs', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -10862,6 +11196,13 @@ export class CompanyIntegrationRunDetailResolver extends ResolverBase {
         return this.UpdateRecord('Company Integration Run Details', input, connPool, userPayload, pubSub);
     }
     
+    @Mutation(() => CompanyIntegrationRunDetail_)
+    async DeleteCompanyIntegrationRunDetail(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Company Integration Run Details', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -11058,6 +11399,13 @@ export class ErrorLogResolver extends ResolverBase {
     ) {
         const connPool = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Error Logs', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ErrorLog_)
+    async DeleteErrorLog(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Error Logs', key, options, connPool, userPayload, pubSub);
     }
     
 }
@@ -12287,6 +12635,13 @@ export class CompanyIntegrationRunAPILogResolver extends ResolverBase {
         return this.UpdateRecord('Company Integration Run API Logs', input, connPool, userPayload, pubSub);
     }
     
+    @Mutation(() => CompanyIntegrationRunAPILog_)
+    async DeleteCompanyIntegrationRunAPILog(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Company Integration Run API Logs', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -12871,6 +13226,13 @@ export class UserViewRunResolver extends ResolverBase {
         return this.UpdateRecord('User View Runs', input, connPool, userPayload, pubSub);
     }
     
+    @Mutation(() => UserViewRun_)
+    async DeleteUserViewRun(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('User View Runs', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -13019,6 +13381,13 @@ export class UserViewRunDetailResolver extends ResolverBase {
         return this.UpdateRecord('User View Run Details', input, connPool, userPayload, pubSub);
     }
     
+    @Mutation(() => UserViewRunDetail_)
+    async DeleteUserViewRunDetail(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('User View Run Details', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -13070,6 +13439,34 @@ export class WorkflowRun_ {
     WorkflowEngineName: string;
         
 }
+
+//****************************************************************************
+// INPUT TYPE for Workflow Runs
+//****************************************************************************
+@InputType()
+export class CreateWorkflowRunInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    WorkflowID?: string;
+
+    @Field({ nullable: true })
+    ExternalSystemRecordID?: string;
+
+    @Field({ nullable: true })
+    StartedAt?: Date;
+
+    @Field({ nullable: true })
+    EndedAt: Date | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    Results: string | null;
+}
+    
 
 //****************************************************************************
 // INPUT TYPE for Workflow Runs
@@ -13159,6 +13556,16 @@ export class WorkflowRunResolver extends ResolverBase {
     }
     
     @Mutation(() => WorkflowRun_)
+    async CreateWorkflowRun(
+        @Arg('input', () => CreateWorkflowRunInput) input: CreateWorkflowRunInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Workflow Runs', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => WorkflowRun_)
     async UpdateWorkflowRun(
         @Arg('input', () => UpdateWorkflowRunInput) input: UpdateWorkflowRunInput,
         @Ctx() { dataSources, userPayload }: AppContext,
@@ -13166,6 +13573,13 @@ export class WorkflowRunResolver extends ResolverBase {
     ) {
         const connPool = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Workflow Runs', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => WorkflowRun_)
+    async DeleteWorkflowRun(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Workflow Runs', key, options, connPool, userPayload, pubSub);
     }
     
 }
@@ -13226,6 +13640,40 @@ export class Workflow_ {
     WorkflowRuns_WorkflowNameArray: WorkflowRun_[]; // Link to WorkflowRuns
     
 }
+
+//****************************************************************************
+// INPUT TYPE for Workflows
+//****************************************************************************
+@InputType()
+export class CreateWorkflowInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    WorkflowEngineID?: string;
+
+    @Field({ nullable: true })
+    ExternalSystemRecordID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoRunEnabled?: boolean;
+
+    @Field({ nullable: true })
+    AutoRunIntervalUnits: string | null;
+
+    @Field(() => Int, { nullable: true })
+    AutoRunInterval: number | null;
+
+    @Field({ nullable: true })
+    SubclassName: string | null;
+}
+    
 
 //****************************************************************************
 // INPUT TYPE for Workflows
@@ -13341,6 +13789,16 @@ export class WorkflowResolver extends ResolverBase {
     }
         
     @Mutation(() => Workflow_)
+    async CreateWorkflow(
+        @Arg('input', () => CreateWorkflowInput) input: CreateWorkflowInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Workflows', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => Workflow_)
     async UpdateWorkflow(
         @Arg('input', () => UpdateWorkflowInput) input: UpdateWorkflowInput,
         @Ctx() { dataSources, userPayload }: AppContext,
@@ -13348,6 +13806,13 @@ export class WorkflowResolver extends ResolverBase {
     ) {
         const connPool = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Workflows', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => Workflow_)
+    async DeleteWorkflow(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Workflows', key, options, connPool, userPayload, pubSub);
     }
     
 }
@@ -13388,6 +13853,28 @@ export class WorkflowEngine_ {
     Workflows_WorkflowEngineNameArray: Workflow_[]; // Link to Workflows
     
 }
+
+//****************************************************************************
+// INPUT TYPE for Workflow Engines
+//****************************************************************************
+@InputType()
+export class CreateWorkflowEngineInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    DriverPath?: string;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+}
+    
 
 //****************************************************************************
 // INPUT TYPE for Workflow Engines
@@ -13478,6 +13965,16 @@ export class WorkflowEngineResolver extends ResolverBase {
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Workflows', rows);
         return result;
+    }
+        
+    @Mutation(() => WorkflowEngine_)
+    async CreateWorkflowEngine(
+        @Arg('input', () => CreateWorkflowEngineInput) input: CreateWorkflowEngineInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Workflow Engines', input, connPool, userPayload, pubSub)
     }
         
     @Mutation(() => WorkflowEngine_)
@@ -13764,6 +14261,13 @@ export class RecordChangeResolver extends ResolverBase {
         return this.UpdateRecord('Record Changes', input, connPool, userPayload, pubSub);
     }
     
+    @Mutation(() => RecordChange_)
+    async DeleteRecordChange(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Record Changes', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -13814,6 +14318,25 @@ export class CreateUserRoleInput {
 
     @Field({ nullable: true })
     RoleID?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for User Roles
+//****************************************************************************
+@InputType()
+export class UpdateUserRoleInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    RoleID?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
 }
     
 //****************************************************************************
@@ -13894,6 +14417,16 @@ export class UserRoleResolver extends ResolverBase {
     }
         
     @Mutation(() => UserRole_)
+    async UpdateUserRole(
+        @Arg('input', () => UpdateUserRoleInput) input: UpdateUserRoleInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('User Roles', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => UserRole_)
     async DeleteUserRole(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const connPool = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
@@ -13933,6 +14466,47 @@ export class RowLevelSecurityFilter_ {
     EntityPermissions_ReadRLSFilterIDArray: EntityPermission_[]; // Link to EntityPermissions
     
 }
+
+//****************************************************************************
+// INPUT TYPE for Row Level Security Filters
+//****************************************************************************
+@InputType()
+export class CreateRowLevelSecurityFilterInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    FilterText: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Row Level Security Filters
+//****************************************************************************
+@InputType()
+export class UpdateRowLevelSecurityFilterInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    FilterText?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
 //****************************************************************************
 // RESOLVER for Row Level Security Filters
 //****************************************************************************
@@ -14010,6 +14584,33 @@ export class RowLevelSecurityFilterResolver extends ResolverBase {
         return result;
     }
         
+    @Mutation(() => RowLevelSecurityFilter_)
+    async CreateRowLevelSecurityFilter(
+        @Arg('input', () => CreateRowLevelSecurityFilterInput) input: CreateRowLevelSecurityFilterInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Row Level Security Filters', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => RowLevelSecurityFilter_)
+    async UpdateRowLevelSecurityFilter(
+        @Arg('input', () => UpdateRowLevelSecurityFilterInput) input: UpdateRowLevelSecurityFilterInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('Row Level Security Filters', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => RowLevelSecurityFilter_)
+    async DeleteRowLevelSecurityFilter(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Row Level Security Filters', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -14224,6 +14825,13 @@ export class AuditLogResolver extends ResolverBase {
         return this.UpdateRecord('Audit Logs', input, connPool, userPayload, pubSub);
     }
     
+    @Mutation(() => AuditLog_)
+    async DeleteAuditLog(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Audit Logs', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -14280,6 +14888,59 @@ export class Authorization_ {
     AuditLogTypes_AuthorizationNameArray: AuditLogType_[]; // Link to AuditLogTypes
     
 }
+
+//****************************************************************************
+// INPUT TYPE for Authorizations
+//****************************************************************************
+@InputType()
+export class CreateAuthorizationInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ParentID: string | null;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    UseAuditLog?: boolean;
+
+    @Field({ nullable: true })
+    Description: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Authorizations
+//****************************************************************************
+@InputType()
+export class UpdateAuthorizationInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    UseAuditLog?: boolean;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
 //****************************************************************************
 // RESOLVER for Authorizations
 //****************************************************************************
@@ -14397,6 +15058,33 @@ export class AuthorizationResolver extends ResolverBase {
         return result;
     }
         
+    @Mutation(() => Authorization_)
+    async CreateAuthorization(
+        @Arg('input', () => CreateAuthorizationInput) input: CreateAuthorizationInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Authorizations', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => Authorization_)
+    async UpdateAuthorization(
+        @Arg('input', () => UpdateAuthorizationInput) input: UpdateAuthorizationInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('Authorizations', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => Authorization_)
+    async DeleteAuthorization(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Authorizations', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -14437,6 +15125,47 @@ export class AuthorizationRole_ {
     Role: string;
         
 }
+
+//****************************************************************************
+// INPUT TYPE for Authorization Roles
+//****************************************************************************
+@InputType()
+export class CreateAuthorizationRoleInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    AuthorizationID?: string;
+
+    @Field({ nullable: true })
+    RoleID?: string;
+
+    @Field({ nullable: true })
+    Type?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Authorization Roles
+//****************************************************************************
+@InputType()
+export class UpdateAuthorizationRoleInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    AuthorizationID?: string;
+
+    @Field({ nullable: true })
+    RoleID?: string;
+
+    @Field({ nullable: true })
+    Type?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
 //****************************************************************************
 // RESOLVER for Authorization Roles
 //****************************************************************************
@@ -14504,6 +15233,33 @@ export class AuthorizationRoleResolver extends ResolverBase {
         return result;
     }
     
+    @Mutation(() => AuthorizationRole_)
+    async CreateAuthorizationRole(
+        @Arg('input', () => CreateAuthorizationRoleInput) input: CreateAuthorizationRoleInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Authorization Roles', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => AuthorizationRole_)
+    async UpdateAuthorizationRole(
+        @Arg('input', () => UpdateAuthorizationRoleInput) input: UpdateAuthorizationRoleInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('Authorization Roles', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => AuthorizationRole_)
+    async DeleteAuthorizationRole(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Authorization Roles', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -14553,6 +15309,53 @@ export class AuditLogType_ {
     AuditLogs_AuditLogTypeNameArray: AuditLog_[]; // Link to AuditLogs
     
 }
+
+//****************************************************************************
+// INPUT TYPE for Audit Log Types
+//****************************************************************************
+@InputType()
+export class CreateAuditLogTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    ParentID: string | null;
+
+    @Field({ nullable: true })
+    AuthorizationID: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Audit Log Types
+//****************************************************************************
+@InputType()
+export class UpdateAuditLogTypeInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
+
+    @Field({ nullable: true })
+    AuthorizationID?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
 //****************************************************************************
 // RESOLVER for Audit Log Types
 //****************************************************************************
@@ -14640,6 +15443,33 @@ export class AuditLogTypeResolver extends ResolverBase {
         return result;
     }
         
+    @Mutation(() => AuditLogType_)
+    async CreateAuditLogType(
+        @Arg('input', () => CreateAuditLogTypeInput) input: CreateAuditLogTypeInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Audit Log Types', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => AuditLogType_)
+    async UpdateAuditLogType(
+        @Arg('input', () => UpdateAuditLogTypeInput) input: UpdateAuditLogTypeInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('Audit Log Types', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => AuditLogType_)
+    async DeleteAuditLogType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Audit Log Types', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -14690,6 +15520,31 @@ export class EntityFieldValue_ {
     EntityID: string;
         
 }
+
+//****************************************************************************
+// INPUT TYPE for Entity Field Values
+//****************************************************************************
+@InputType()
+export class CreateEntityFieldValueInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    EntityFieldID?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    Value?: string;
+
+    @Field({ nullable: true })
+    Code: string | null;
+
+    @Field({ nullable: true })
+    Description: string | null;
+}
+    
 
 //****************************************************************************
 // INPUT TYPE for Entity Field Values
@@ -14786,6 +15641,16 @@ export class EntityFieldValueResolver extends ResolverBase {
     }
     
     @Mutation(() => EntityFieldValue_)
+    async CreateEntityFieldValue(
+        @Arg('input', () => CreateEntityFieldValueInput) input: CreateEntityFieldValueInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Entity Field Values', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => EntityFieldValue_)
     async UpdateEntityFieldValue(
         @Arg('input', () => UpdateEntityFieldValueInput) input: UpdateEntityFieldValueInput,
         @Ctx() { dataSources, userPayload }: AppContext,
@@ -14793,6 +15658,13 @@ export class EntityFieldValueResolver extends ResolverBase {
     ) {
         const connPool = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Entity Field Values', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => EntityFieldValue_)
+    async DeleteEntityFieldValue(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Field Values', key, options, connPool, userPayload, pubSub);
     }
     
 }
@@ -16085,6 +16957,59 @@ export class QueueType_ {
     Queues_QueueTypeIDArray: Queue_[]; // Link to Queues
     
 }
+
+//****************************************************************************
+// INPUT TYPE for Queue Types
+//****************************************************************************
+@InputType()
+export class CreateQueueTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    DriverImportPath: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Queue Types
+//****************************************************************************
+@InputType()
+export class UpdateQueueTypeInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    DriverImportPath?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
 //****************************************************************************
 // RESOLVER for Queue Types
 //****************************************************************************
@@ -16152,6 +17077,33 @@ export class QueueTypeResolver extends ResolverBase {
         return result;
     }
         
+    @Mutation(() => QueueType_)
+    async CreateQueueType(
+        @Arg('input', () => CreateQueueTypeInput) input: CreateQueueTypeInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Queue Types', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => QueueType_)
+    async UpdateQueueType(
+        @Arg('input', () => UpdateQueueTypeInput) input: UpdateQueueTypeInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('Queue Types', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => QueueType_)
+    async DeleteQueueType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Queue Types', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -16446,6 +17398,13 @@ export class QueueResolver extends ResolverBase {
         return this.UpdateRecord('Queues', input, connPool, userPayload, pubSub);
     }
     
+    @Mutation(() => Queue_)
+    async DeleteQueue(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Queues', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -16653,6 +17612,13 @@ export class QueueTaskResolver extends ResolverBase {
     ) {
         const connPool = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Queue Tasks', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => QueueTask_)
+    async DeleteQueueTask(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Queue Tasks', key, options, connPool, userPayload, pubSub);
     }
     
 }
@@ -16957,6 +17923,41 @@ export class OutputTriggerType_ {
     Reports_OutputTriggerTypeIDArray: Report_[]; // Link to Reports
     
 }
+
+//****************************************************************************
+// INPUT TYPE for Output Trigger Types
+//****************************************************************************
+@InputType()
+export class CreateOutputTriggerTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Output Trigger Types
+//****************************************************************************
+@InputType()
+export class UpdateOutputTriggerTypeInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
 //****************************************************************************
 // RESOLVER for Output Trigger Types
 //****************************************************************************
@@ -17024,6 +18025,33 @@ export class OutputTriggerTypeResolver extends ResolverBase {
         return result;
     }
         
+    @Mutation(() => OutputTriggerType_)
+    async CreateOutputTriggerType(
+        @Arg('input', () => CreateOutputTriggerTypeInput) input: CreateOutputTriggerTypeInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Output Trigger Types', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => OutputTriggerType_)
+    async UpdateOutputTriggerType(
+        @Arg('input', () => UpdateOutputTriggerTypeInput) input: UpdateOutputTriggerTypeInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('Output Trigger Types', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => OutputTriggerType_)
+    async DeleteOutputTriggerType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Output Trigger Types', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -17057,6 +18085,47 @@ export class OutputFormatType_ {
     Reports_OutputFormatTypeIDArray: Report_[]; // Link to Reports
     
 }
+
+//****************************************************************************
+// INPUT TYPE for Output Format Types
+//****************************************************************************
+@InputType()
+export class CreateOutputFormatTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    DisplayFormat: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Output Format Types
+//****************************************************************************
+@InputType()
+export class UpdateOutputFormatTypeInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    DisplayFormat?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
 //****************************************************************************
 // RESOLVER for Output Format Types
 //****************************************************************************
@@ -17124,6 +18193,33 @@ export class OutputFormatTypeResolver extends ResolverBase {
         return result;
     }
         
+    @Mutation(() => OutputFormatType_)
+    async CreateOutputFormatType(
+        @Arg('input', () => CreateOutputFormatTypeInput) input: CreateOutputFormatTypeInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Output Format Types', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => OutputFormatType_)
+    async UpdateOutputFormatType(
+        @Arg('input', () => UpdateOutputFormatTypeInput) input: UpdateOutputFormatTypeInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('Output Format Types', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => OutputFormatType_)
+    async DeleteOutputFormatType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Output Format Types', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -17154,6 +18250,41 @@ export class OutputDeliveryType_ {
     Reports_OutputDeliveryTypeIDArray: Report_[]; // Link to Reports
     
 }
+
+//****************************************************************************
+// INPUT TYPE for Output Delivery Types
+//****************************************************************************
+@InputType()
+export class CreateOutputDeliveryTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Output Delivery Types
+//****************************************************************************
+@InputType()
+export class UpdateOutputDeliveryTypeInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
 //****************************************************************************
 // RESOLVER for Output Delivery Types
 //****************************************************************************
@@ -17221,6 +18352,33 @@ export class OutputDeliveryTypeResolver extends ResolverBase {
         return result;
     }
         
+    @Mutation(() => OutputDeliveryType_)
+    async CreateOutputDeliveryType(
+        @Arg('input', () => CreateOutputDeliveryTypeInput) input: CreateOutputDeliveryTypeInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Output Delivery Types', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => OutputDeliveryType_)
+    async UpdateOutputDeliveryType(
+        @Arg('input', () => UpdateOutputDeliveryTypeInput) input: UpdateOutputDeliveryTypeInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('Output Delivery Types', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => OutputDeliveryType_)
+    async DeleteOutputDeliveryType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Output Delivery Types', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -17803,6 +18961,65 @@ export class ResourceType_ {
     ResourcePermissions_ResourceTypeIDArray: ResourcePermission_[]; // Link to ResourcePermissions
     
 }
+
+//****************************************************************************
+// INPUT TYPE for Resource Types
+//****************************************************************************
+@InputType()
+export class CreateResourceTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    DisplayName?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    Icon: string | null;
+
+    @Field({ nullable: true })
+    EntityID: string | null;
+
+    @Field({ nullable: true })
+    CategoryEntityID: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Resource Types
+//****************************************************************************
+@InputType()
+export class UpdateResourceTypeInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    DisplayName?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    Icon?: string | null;
+
+    @Field({ nullable: true })
+    EntityID?: string | null;
+
+    @Field({ nullable: true })
+    CategoryEntityID?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
 //****************************************************************************
 // RESOLVER for Resource Types
 //****************************************************************************
@@ -17900,6 +19117,33 @@ export class ResourceTypeResolver extends ResolverBase {
         return result;
     }
         
+    @Mutation(() => ResourceType_)
+    async CreateResourceType(
+        @Arg('input', () => CreateResourceTypeInput) input: CreateResourceTypeInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Resource Types', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ResourceType_)
+    async UpdateResourceType(
+        @Arg('input', () => UpdateResourceTypeInput) input: UpdateResourceTypeInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('Resource Types', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ResourceType_)
+    async DeleteResourceType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Resource Types', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -17945,6 +19189,53 @@ export class Tag_ {
     TaggedItems_TagIDArray: TaggedItem_[]; // Link to TaggedItems
     
 }
+
+//****************************************************************************
+// INPUT TYPE for Tags
+//****************************************************************************
+@InputType()
+export class CreateTagInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    ParentID: string | null;
+
+    @Field({ nullable: true })
+    DisplayName?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Tags
+//****************************************************************************
+@InputType()
+export class UpdateTagInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
+
+    @Field({ nullable: true })
+    DisplayName?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
 //****************************************************************************
 // RESOLVER for Tags
 //****************************************************************************
@@ -18022,6 +19313,33 @@ export class TagResolver extends ResolverBase {
         return result;
     }
         
+    @Mutation(() => Tag_)
+    async CreateTag(
+        @Arg('input', () => CreateTagInput) input: CreateTagInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Tags', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => Tag_)
+    async UpdateTag(
+        @Arg('input', () => UpdateTagInput) input: UpdateTagInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('Tags', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => Tag_)
+    async DeleteTag(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Tags', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -18062,6 +19380,47 @@ export class TaggedItem_ {
     Entity: string;
         
 }
+
+//****************************************************************************
+// INPUT TYPE for Tagged Items
+//****************************************************************************
+@InputType()
+export class CreateTaggedItemInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    TagID?: string;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    RecordID?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Tagged Items
+//****************************************************************************
+@InputType()
+export class UpdateTaggedItemInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    TagID?: string;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    RecordID?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
 //****************************************************************************
 // RESOLVER for Tagged Items
 //****************************************************************************
@@ -18117,6 +19476,33 @@ export class TaggedItemResolver extends ResolverBase {
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Tagged Items', rows && rows.length > 0 ? rows[0] : {})
         return result;
+    }
+    
+    @Mutation(() => TaggedItem_)
+    async CreateTaggedItem(
+        @Arg('input', () => CreateTaggedItemInput) input: CreateTaggedItemInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Tagged Items', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => TaggedItem_)
+    async UpdateTaggedItem(
+        @Arg('input', () => UpdateTaggedItemInput) input: UpdateTaggedItemInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('Tagged Items', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => TaggedItem_)
+    async DeleteTaggedItem(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Tagged Items', key, options, connPool, userPayload, pubSub);
     }
     
 }
@@ -18524,6 +19910,41 @@ export class Dataset_ {
     DatasetItems_DatasetNameArray: DatasetItem_[]; // Link to DatasetItems
     
 }
+
+//****************************************************************************
+// INPUT TYPE for Datasets
+//****************************************************************************
+@InputType()
+export class CreateDatasetInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Datasets
+//****************************************************************************
+@InputType()
+export class UpdateDatasetInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
 //****************************************************************************
 // RESOLVER for Datasets
 //****************************************************************************
@@ -18591,6 +20012,33 @@ export class DatasetResolver extends ResolverBase {
         return result;
     }
         
+    @Mutation(() => Dataset_)
+    async CreateDataset(
+        @Arg('input', () => CreateDatasetInput) input: CreateDatasetInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Datasets', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => Dataset_)
+    async UpdateDataset(
+        @Arg('input', () => UpdateDatasetInput) input: UpdateDatasetInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('Datasets', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => Dataset_)
+    async DeleteDataset(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Datasets', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -18647,6 +20095,77 @@ export class DatasetItem_ {
     Entity: string;
         
 }
+
+//****************************************************************************
+// INPUT TYPE for Dataset Items
+//****************************************************************************
+@InputType()
+export class CreateDatasetItemInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Code?: string;
+
+    @Field({ nullable: true })
+    DatasetID?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    WhereClause: string | null;
+
+    @Field({ nullable: true })
+    DateFieldToCheck?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    Columns: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Dataset Items
+//****************************************************************************
+@InputType()
+export class UpdateDatasetItemInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Code?: string;
+
+    @Field({ nullable: true })
+    DatasetID?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    WhereClause?: string | null;
+
+    @Field({ nullable: true })
+    DateFieldToCheck?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    Columns?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
 //****************************************************************************
 // RESOLVER for Dataset Items
 //****************************************************************************
@@ -18702,6 +20221,33 @@ export class DatasetItemResolver extends ResolverBase {
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('Dataset Items', rows && rows.length > 0 ? rows[0] : {})
         return result;
+    }
+    
+    @Mutation(() => DatasetItem_)
+    async CreateDatasetItem(
+        @Arg('input', () => CreateDatasetItemInput) input: CreateDatasetItemInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Dataset Items', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => DatasetItem_)
+    async UpdateDatasetItem(
+        @Arg('input', () => UpdateDatasetItemInput) input: UpdateDatasetItemInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('Dataset Items', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => DatasetItem_)
+    async DeleteDatasetItem(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Dataset Items', key, options, connPool, userPayload, pubSub);
     }
     
 }
@@ -19646,6 +21192,13 @@ export class SchemaInfoResolver extends ResolverBase {
         return this.UpdateRecord('Schema Info', input, connPool, userPayload, pubSub);
     }
     
+    @Mutation(() => SchemaInfo_)
+    async DeleteSchemaInfo(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Schema Info', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -19808,6 +21361,13 @@ export class CompanyIntegrationRecordMapResolver extends ResolverBase {
     ) {
         const connPool = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Company Integration Record Maps', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => CompanyIntegrationRecordMap_)
+    async DeleteCompanyIntegrationRecordMap(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Company Integration Record Maps', key, options, connPool, userPayload, pubSub);
     }
     
 }
@@ -20066,6 +21626,13 @@ export class RecordMergeLogResolver extends ResolverBase {
         return this.UpdateRecord('Record Merge Logs', input, connPool, userPayload, pubSub);
     }
     
+    @Mutation(() => RecordMergeLog_)
+    async DeleteRecordMergeLog(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Record Merge Logs', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -20223,6 +21790,13 @@ export class RecordMergeDeletionLogResolver extends ResolverBase {
     ) {
         const connPool = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Record Merge Deletion Logs', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => RecordMergeDeletionLog_)
+    async DeleteRecordMergeDeletionLog(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Record Merge Deletion Logs', key, options, connPool, userPayload, pubSub);
     }
     
 }
@@ -21624,6 +23198,13 @@ export class EntityDocumentRunResolver extends ResolverBase {
         return this.UpdateRecord('Entity Document Runs', input, connPool, userPayload, pubSub);
     }
     
+    @Mutation(() => EntityDocumentRun_)
+    async DeleteEntityDocumentRun(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Document Runs', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -22026,6 +23607,13 @@ export class EntityRecordDocumentResolver extends ResolverBase {
         return this.UpdateRecord('Entity Record Documents', input, connPool, userPayload, pubSub);
     }
     
+    @Mutation(() => EntityRecordDocument_)
+    async DeleteEntityRecordDocument(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Record Documents', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -22291,6 +23879,13 @@ export class EntityDocumentResolver extends ResolverBase {
     ) {
         const connPool = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Entity Documents', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => EntityDocument_)
+    async DeleteEntityDocument(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Documents', key, options, connPool, userPayload, pubSub);
     }
     
 }
@@ -23590,7 +25185,7 @@ export class File_ {
     ProviderID: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(510)
     ContentType?: string;
         
     @Field({nullable: true}) 
@@ -24330,6 +25925,13 @@ export class VersionInstallationResolver extends ResolverBase {
         return this.UpdateRecord('Version Installations', input, connPool, userPayload, pubSub);
     }
     
+    @Mutation(() => VersionInstallation_)
+    async DeleteVersionInstallation(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Version Installations', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -24547,6 +26149,13 @@ export class DuplicateRunDetailMatchResolver extends ResolverBase {
     ) {
         const connPool = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Duplicate Run Detail Matches', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => DuplicateRunDetailMatch_)
+    async DeleteDuplicateRunDetailMatch(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Duplicate Run Detail Matches', key, options, connPool, userPayload, pubSub);
     }
     
 }
@@ -25134,6 +26743,13 @@ export class DuplicateRunResolver extends ResolverBase {
         return this.UpdateRecord('Duplicate Runs', input, connPool, userPayload, pubSub);
     }
     
+    @Mutation(() => DuplicateRun_)
+    async DeleteDuplicateRun(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Duplicate Runs', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -25332,6 +26948,13 @@ export class DuplicateRunDetailResolver extends ResolverBase {
     ) {
         const connPool = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Duplicate Run Details', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => DuplicateRunDetail_)
+    async DeleteDuplicateRunDetail(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Duplicate Run Details', key, options, connPool, userPayload, pubSub);
     }
     
 }
@@ -29122,6 +30745,13 @@ export class CommunicationRunResolver extends ResolverBase {
         return this.UpdateRecord('Communication Runs', input, connPool, userPayload, pubSub);
     }
     
+    @Mutation(() => CommunicationRun_)
+    async DeleteCommunicationRun(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Communication Runs', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -29523,6 +31153,13 @@ export class CommunicationLogResolver extends ResolverBase {
     ) {
         const connPool = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Communication Logs', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => CommunicationLog_)
+    async DeleteCommunicationLog(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Communication Logs', key, options, connPool, userPayload, pubSub);
     }
     
 }
@@ -30978,6 +32615,13 @@ export class RecommendationResolver extends ResolverBase {
         return this.UpdateRecord('Recommendations', input, connPool, userPayload, pubSub);
     }
     
+    @Mutation(() => Recommendation_)
+    async DeleteRecommendation(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Recommendations', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -31337,6 +32981,13 @@ export class RecommendationRunResolver extends ResolverBase {
         return this.UpdateRecord('Recommendation Runs', input, connPool, userPayload, pubSub);
     }
     
+    @Mutation(() => RecommendationRun_)
+    async DeleteRecommendationRun(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Recommendation Runs', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -31498,6 +33149,13 @@ export class RecommendationItemResolver extends ResolverBase {
     ) {
         const connPool = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Recommendation Items', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => RecommendationItem_)
+    async DeleteRecommendationItem(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Recommendation Items', key, options, connPool, userPayload, pubSub);
     }
     
 }
@@ -32010,6 +33668,13 @@ export class RecordChangeReplayRunResolver extends ResolverBase {
         return this.UpdateRecord('Record Change Replay Runs', input, connPool, userPayload, pubSub);
     }
     
+    @Mutation(() => RecordChangeReplayRun_)
+    async DeleteRecordChangeReplayRun(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Record Change Replay Runs', key, options, connPool, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -32331,6 +33996,13 @@ export class EntityRelationshipDisplayComponentResolver extends ResolverBase {
     ) {
         const connPool = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Entity Relationship Display Components', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => EntityRelationshipDisplayComponent_)
+    async DeleteEntityRelationshipDisplayComponent(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Relationship Display Components', key, options, connPool, userPayload, pubSub);
     }
     
 }
