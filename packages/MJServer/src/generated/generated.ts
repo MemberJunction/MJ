@@ -2114,6 +2114,10 @@ export class AIAgent_ {
     @MaxLength(510)
     DriverClass?: string;
         
+    @Field({nullable: true, description: `Font Awesome icon class (e.g., fa-robot, fa-brain) for the agent. Used as fallback when LogoURL is not set or fails to load.`}) 
+    @MaxLength(200)
+    IconClass?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -2207,6 +2211,9 @@ export class CreateAIAgentInput {
 
     @Field({ nullable: true })
     DriverClass: string | null;
+
+    @Field({ nullable: true })
+    IconClass: string | null;
 }
     
 
@@ -2259,6 +2266,9 @@ export class UpdateAIAgentInput {
 
     @Field({ nullable: true })
     DriverClass?: string | null;
+
+    @Field({ nullable: true })
+    IconClass?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -26458,6 +26468,10 @@ export class Action_ {
     @MaxLength(16)
     ParentID?: string;
         
+    @Field({nullable: true, description: `Font Awesome icon class (e.g., fa-cog, fa-play, fa-search) for visual representation of the action.`}) 
+    @MaxLength(200)
+    IconClass?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Category?: string;
@@ -26563,6 +26577,9 @@ export class CreateActionInput {
 
     @Field({ nullable: true })
     ParentID: string | null;
+
+    @Field({ nullable: true })
+    IconClass: string | null;
 }
     
 
@@ -26627,6 +26644,9 @@ export class UpdateActionInput {
 
     @Field({ nullable: true })
     ParentID?: string | null;
+
+    @Field({ nullable: true })
+    IconClass?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -37621,6 +37641,54 @@ export class AIPromptRun_ {
     @Field(() => Float, {nullable: true, description: `The total cost of all descendant (child and grandchild) prompt runs, excluding this run's own cost. For leaf nodes (no children), this is 0. Updated when child costs change.`}) 
     DescendantCost?: number;
         
+    @Field(() => Int, {nullable: true, description: `Total number of validation attempts made (including the initial attempt)`}) 
+    ValidationAttemptCount?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Number of validation attempts that passed validation`}) 
+    SuccessfulValidationCount?: number;
+        
+    @Field(() => Boolean, {nullable: true, description: `Whether validation ultimately passed (1) or failed (0)`}) 
+    FinalValidationPassed?: boolean;
+        
+    @Field({nullable: true, description: `Validation behavior used: Strict, Warn, or None`}) 
+    @MaxLength(100)
+    ValidationBehavior?: string;
+        
+    @Field({nullable: true, description: `Retry strategy used: Fixed, Linear, or Exponential`}) 
+    @MaxLength(100)
+    RetryStrategy?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Maximum number of retries configured on the prompt`}) 
+    MaxRetriesConfigured?: number;
+        
+    @Field({nullable: true, description: `The final validation error message if validation failed`}) 
+    @MaxLength(1000)
+    FinalValidationError?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Number of validation errors on the final attempt`}) 
+    ValidationErrorCount?: number;
+        
+    @Field({nullable: true, description: `Most frequent validation error across all attempts`}) 
+    @MaxLength(510)
+    CommonValidationError?: string;
+        
+    @Field({nullable: true, description: `Timestamp of the first validation attempt`}) 
+    @MaxLength(8)
+    FirstAttemptAt?: Date;
+        
+    @Field({nullable: true, description: `Timestamp of the last validation attempt`}) 
+    @MaxLength(8)
+    LastAttemptAt?: Date;
+        
+    @Field(() => Int, {nullable: true, description: `Total time spent on retries in milliseconds (excluding first attempt)`}) 
+    TotalRetryDurationMS?: number;
+        
+    @Field({nullable: true, description: `JSON array containing detailed information about each validation attempt`}) 
+    ValidationAttempts?: string;
+        
+    @Field({nullable: true, description: `JSON object containing summary information about the validation process`}) 
+    ValidationSummary?: string;
+        
     @Field() 
     @MaxLength(510)
     Prompt: string;
@@ -37767,6 +37835,48 @@ export class CreateAIPromptRunInput {
 
     @Field(() => Float, { nullable: true })
     DescendantCost: number | null;
+
+    @Field(() => Int, { nullable: true })
+    ValidationAttemptCount: number | null;
+
+    @Field(() => Int, { nullable: true })
+    SuccessfulValidationCount: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    FinalValidationPassed: boolean | null;
+
+    @Field({ nullable: true })
+    ValidationBehavior: string | null;
+
+    @Field({ nullable: true })
+    RetryStrategy: string | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxRetriesConfigured: number | null;
+
+    @Field({ nullable: true })
+    FinalValidationError: string | null;
+
+    @Field(() => Int, { nullable: true })
+    ValidationErrorCount: number | null;
+
+    @Field({ nullable: true })
+    CommonValidationError: string | null;
+
+    @Field({ nullable: true })
+    FirstAttemptAt: Date | null;
+
+    @Field({ nullable: true })
+    LastAttemptAt: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalRetryDurationMS: number | null;
+
+    @Field({ nullable: true })
+    ValidationAttempts: string | null;
+
+    @Field({ nullable: true })
+    ValidationSummary: string | null;
 }
     
 
@@ -37888,6 +37998,48 @@ export class UpdateAIPromptRunInput {
 
     @Field(() => Float, { nullable: true })
     DescendantCost?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    ValidationAttemptCount?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    SuccessfulValidationCount?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    FinalValidationPassed?: boolean | null;
+
+    @Field({ nullable: true })
+    ValidationBehavior?: string | null;
+
+    @Field({ nullable: true })
+    RetryStrategy?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxRetriesConfigured?: number | null;
+
+    @Field({ nullable: true })
+    FinalValidationError?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    ValidationErrorCount?: number | null;
+
+    @Field({ nullable: true })
+    CommonValidationError?: string | null;
+
+    @Field({ nullable: true })
+    FirstAttemptAt?: Date | null;
+
+    @Field({ nullable: true })
+    LastAttemptAt?: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalRetryDurationMS?: number | null;
+
+    @Field({ nullable: true })
+    ValidationAttempts?: string | null;
+
+    @Field({ nullable: true })
+    ValidationSummary?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

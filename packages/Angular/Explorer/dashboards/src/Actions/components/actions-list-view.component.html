@@ -52,7 +52,7 @@
       @for (action of filteredActions; track action.ID) {
         <div class="action-card" (click)="openAction(action)">
           <div class="action-icon">
-            <i [class]="getTypeIcon(action.Type)"></i>
+            <i [class]="getActionIcon(action)"></i>
           </div>
           
           <div class="action-main">

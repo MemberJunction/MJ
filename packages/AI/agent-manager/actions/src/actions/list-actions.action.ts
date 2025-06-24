@@ -3,6 +3,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { RunView } from "@memberjunction/core";
 import { ActionEntity } from "@memberjunction/core-entities";
 import { BaseAgentManagementAction } from "./base-agent-management.action";
+import { BaseAction } from "@memberjunction/actions";
 
 /**
  * Lists available actions that can be associated with agents.
@@ -20,7 +21,7 @@ import { BaseAgentManagementAction } from "./base-agent-management.action";
  * // Returns Actions array in output params
  * ```
  */
-@RegisterClass(BaseAgentManagementAction, "List Actions")
+@RegisterClass(BaseAction, "List Actions")
 export class ListActionsAction extends BaseAgentManagementAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {

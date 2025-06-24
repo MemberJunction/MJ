@@ -202,6 +202,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /** Event emitted when the visibility state changes, allowing parent components to react */
     @Output() visibilityChange = new EventEmitter<boolean>();
     
+    /**
+     * Emitted when the user navigates to view a run (agent or prompt)
+     */
+    @Output() runOpened = new EventEmitter<{ runId: string; runType: 'agent' | 'prompt' }>();
+    
     /** Reference to the scrollable messages container for auto-scrolling functionality */
     @ViewChild('messagesContainer') private messagesContainer!: ElementRef;
     
@@ -2325,6 +2330,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         } else {
             SharedService.Instance.OpenEntityRecord('MJ: AI Prompt Runs', CompositeKey.FromID(event.runId));
         }
+        
+        // Emit event so parent window can minimize
+        this.runOpened.emit(event);
     }
     
     /**
@@ -2396,6 +2404,24 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         } catch {
             return typeof content === 'string' ? content : JSON.stringify(content);
         }
+    }
+
+    /**
+     * Checks if the payload should be displayed (not null, undefined, or empty object)
+     * @param payload - The payload to check
+     * @returns true if the payload has content, false otherwise
+     */
+    public hasPayload(payload: any): boolean {
+        if (!payload) {
+            return false;
+        }
+        
+        // Check if it's an empty object
+        if (typeof payload === 'object' && Object.keys(payload).length === 0) {
+            return false;
+        }
+        
+        return true;
     }
 
     /**
@@ -2811,6 +2837,43 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     public getEntityName(): string {
         if (!this.entity) return '';
         return this.entity.Name || 'Untitled';
+    }
+    
+    /**
+     * Gets the icon class for the current entity
+     */
+    public getEntityIconClass(): string {
+        if (!this.entity) {
+            return this.mode === 'agent' ? 'fa-solid fa-robot' : 'fa-solid fa-comment-dots';
+        }
+        
+        if (this.isAgentEntity(this.entity)) {
+            // Agent entity - check for IconClass
+            return (this.entity as any).IconClass || 'fa-solid fa-robot';
+        }
+        
+        // Prompt entity - use default prompt icon
+        return 'fa-solid fa-comment-dots';
+    }
+    
+    /**
+     * Checks if the entity has a logo URL
+     */
+    public hasEntityLogo(): boolean {
+        if (!this.entity || !this.isAgentEntity(this.entity)) {
+            return false;
+        }
+        return !!(this.entity as any).LogoURL;
+    }
+    
+    /**
+     * Gets the logo URL for the entity (agent only)
+     */
+    public getEntityLogoURL(): string {
+        if (!this.entity || !this.isAgentEntity(this.entity)) {
+            return '';
+        }
+        return (this.entity as any).LogoURL || '';
     }
     
     /**

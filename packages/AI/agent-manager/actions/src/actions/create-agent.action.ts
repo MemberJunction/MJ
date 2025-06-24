@@ -3,6 +3,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { AIAgentEntity, AIPromptEntityExtended, AIAgentPromptEntity } from "@memberjunction/core-entities";
 import { BaseAgentManagementAction } from "./base-agent-management.action";
 import { AIEngineBase } from "@memberjunction/ai-engine-base";
+import { BaseAction } from "@memberjunction/actions";
 
 /**
  * Creates a new AI agent with specified configuration.
@@ -26,7 +27,7 @@ import { AIEngineBase } from "@memberjunction/ai-engine-base";
  * // Returns AgentID and optionally PromptID in output params
  * ```
  */
-@RegisterClass(BaseAgentManagementAction, "Create Agent")
+@RegisterClass(BaseAction, "Create Agent")
 export class CreateAgentAction extends BaseAgentManagementAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {

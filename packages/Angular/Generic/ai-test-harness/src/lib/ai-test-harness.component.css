@@ -237,6 +237,13 @@
     color: #17a2b8;
 }
 
+.agent-details .entity-logo {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
 .agent-details h3 {
     margin: 0;
     font-size: 20px;
@@ -353,6 +360,15 @@
 
 .message-role i {
     font-size: 14px;
+}
+
+.message-role .message-role-logo {
+    width: 16px;
+    height: 16px;
+    object-fit: cover;
+    border-radius: 3px;
+    display: inline-block;
+    vertical-align: middle;
 }
 
 .message-user .message-role {

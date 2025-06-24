@@ -13,7 +13,7 @@
                         <!-- Left: Action Info -->
                         <div style="flex: 1; min-width: 0;">
                             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-                                <i [class]="'fa-solid ' + getTypeIcon()" [style.color]="getTypeColor()" style="font-size: 1.4em;"></i>
+                                <i [class]="getActionIcon()" [style.color]="getTypeColor()" style="font-size: 1.4em;"></i>
                                 @if (EditMode) {
                                     <kendo-textbox [(ngModel)]="record.Name" 
                                                   name="actionName"

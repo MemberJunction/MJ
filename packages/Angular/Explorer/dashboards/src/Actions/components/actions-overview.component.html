@@ -165,7 +165,7 @@
             @for (action of recentActions; track action.ID) {
               <div class="action-item" (click)="openAction(action)">
                 <div class="action-icon">
-                  <i [class]="getTypeIcon(action.Type)"></i>
+                  <i [class]="getActionIcon(action)"></i>
                 </div>
                 <div class="action-info">
                   <div class="action-name">{{ action.Name }}</div>

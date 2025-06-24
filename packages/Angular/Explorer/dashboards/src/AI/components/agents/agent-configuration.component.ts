@@ -2,6 +2,7 @@ import { Component, Output, EventEmitter, OnInit, OnDestroy, Input, ViewContaine
 import { RunView } from '@memberjunction/core';
 import { AIAgentEntity } from '@memberjunction/core-entities';
 import { NewAgentDialogService } from '@memberjunction/ng-core-entity-forms';
+import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 
 interface AgentFilter {
   searchTerm: string;
@@ -43,7 +44,8 @@ export class AgentConfigurationComponent implements OnInit, OnDestroy {
 
   constructor(
     private newAgentDialogService: NewAgentDialogService,
-    private viewContainerRef: ViewContainerRef
+    private viewContainerRef: ViewContainerRef,
+    private testHarnessService: AITestHarnessDialogService
   ) {}
 
   ngOnInit(): void {
@@ -207,10 +209,12 @@ export class AgentConfigurationComponent implements OnInit, OnDestroy {
   }
 
   public runAgent(agent: AIAgentEntity): void {
-    this.selectedAgentForTest = agent;
+    // Use the test harness service for window management features
+    this.testHarnessService.openForAgent(agent.ID);
   }
 
   public closeTestHarness(): void {
+    // No longer needed - window manages its own closure
     this.selectedAgentForTest = null;
   }
 
@@ -239,6 +243,25 @@ export class AgentConfigurationComponent implements OnInit, OnDestroy {
       case 'Parallel': return 'fa-solid fa-layer-group';
       default: return 'fa-solid fa-robot';
     }
+  }
+
+  /**
+   * Gets the agent's display icon
+   * Prioritizes LogoURL, falls back to IconClass, then default robot icon
+   */
+  public getAgentIcon(agent: AIAgentEntity): string {
+    if (agent?.LogoURL) {
+      // LogoURL is used in img tag, not here
+      return '';
+    }
+    return agent?.IconClass || 'fa-solid fa-robot';
+  }
+
+  /**
+   * Checks if the agent has a logo URL (for image display)
+   */
+  public hasLogoURL(agent: AIAgentEntity): boolean {
+    return !!agent?.LogoURL;
   }
 
 }
