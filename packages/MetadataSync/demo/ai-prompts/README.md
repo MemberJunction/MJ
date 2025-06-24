@@ -37,7 +37,7 @@ Check the `.mj-sync.json` file in this directory to see:
 
 2. Someone updates the prompt in the database
 
-3. When you run `mj-sync pull`:
+3. When you run `mj sync pull`:
    - Other fields (Name, Description, etc.) get updated from the database
    - But your custom Prompt path is preserved!
 

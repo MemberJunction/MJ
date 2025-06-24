@@ -40,6 +40,12 @@
                                         {{ model.Name }}
                                     </span>
                                 }
+                                @if (record.Vendor) {
+                                    <span class="vendor-name" (click)="navigateToEntity('MJ: AI Vendors', record.VendorID)" title="View Vendor">
+                                        <i class="fa-solid fa-building"></i>
+                                        {{ record.Vendor }}
+                                    </span>
+                                }
                             </div>
                         </div>
                     </div>
@@ -285,6 +291,160 @@
                         </ng-template>
                     </kendo-panelbar-item>
                     
+                    <!-- Validation & Retry Panel -->
+                    @if (record && ((record.ValidationAttemptCount && record.ValidationAttemptCount > 0) || record.ValidationBehavior)) {
+                        <kendo-panelbar-item [expanded]="validationExpanded">
+                            <ng-template kendoPanelBarItemTitle>
+                                <span class="panel-title">
+                                    <i class="fa-solid fa-shield-check"></i>
+                                    Validation & Retries
+                                    @if (record && record.ValidationAttemptCount && record.ValidationAttemptCount > 1) {
+                                        <span class="panel-count">({{ record.ValidationAttemptCount }} attempts)</span>
+                                    }
+                                    @if (record.FinalValidationPassed) {
+                                        <span class="panel-badge success">Passed</span>
+                                    } @else if (record.FinalValidationPassed === false) {
+                                        <span class="panel-badge error">Failed</span>
+                                    }
+                                </span>
+                            </ng-template>
+                            <ng-template kendoPanelBarContent>
+                                <div class="panel-content">
+                                    <!-- Validation Summary -->
+                                    <div class="validation-summary">
+                                        <div class="summary-header">
+                                            <h4>Validation Summary</h4>
+                                            <div class="validation-status" [class.success]="record.FinalValidationPassed" [class.failed]="!record.FinalValidationPassed">
+                                                <i [class]="record.FinalValidationPassed ? 'fa-solid fa-check-circle' : 'fa-solid fa-times-circle'"></i>
+                                                {{ record.FinalValidationPassed ? 'Validation Passed' : 'Validation Failed' }}
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="validation-metrics">
+                                            <div class="metric-card small">
+                                                <div class="metric-label">Total Attempts</div>
+                                                <div class="metric-value">{{ record.ValidationAttemptCount || 0 }}</div>
+                                            </div>
+                                            <div class="metric-card small">
+                                                <div class="metric-label">Successful</div>
+                                                <div class="metric-value">{{ record.SuccessfulValidationCount || 0 }}</div>
+                                            </div>
+                                            <div class="metric-card small">
+                                                <div class="metric-label">Behavior</div>
+                                                <div class="metric-value">{{ record.ValidationBehavior || 'Not set' }}</div>
+                                            </div>
+                                            <div class="metric-card small">
+                                                <div class="metric-label">Retry Strategy</div>
+                                                <div class="metric-value">{{ record.RetryStrategy || 'Not set' }}</div>
+                                            </div>
+                                        </div>
+                                        
+                                        @if (record.FinalValidationError) {
+                                            <div class="validation-error">
+                                                <h5><i class="fa-solid fa-exclamation-triangle"></i> Final Validation Error</h5>
+                                                <p>{{ record.FinalValidationError }}</p>
+                                                @if (record && record.ValidationErrorCount && record.ValidationErrorCount > 0) {
+                                                    <span class="error-count">{{ record.ValidationErrorCount }} validation errors</span>
+                                                }
+                                            </div>
+                                        }
+                                        
+                                        @if (record.CommonValidationError && record.CommonValidationError !== record.FinalValidationError) {
+                                            <div class="common-error">
+                                                <h5><i class="fa-solid fa-repeat"></i> Most Common Error</h5>
+                                                <p>{{ record.CommonValidationError }}</p>
+                                            </div>
+                                        }
+                                    </div>
+                                    
+                                    <!-- Retry Timeline -->
+                                    @if (record && record.ValidationAttemptCount && record.ValidationAttemptCount > 1) {
+                                        <div class="retry-timeline">
+                                            <h4>Retry Timeline</h4>
+                                            <div class="timeline-info">
+                                                <div class="timeline-stat">
+                                                    <i class="fa-solid fa-clock"></i>
+                                                    <span>First Attempt: {{ record.FirstAttemptAt | date:'short' }}</span>
+                                                </div>
+                                                <div class="timeline-stat">
+                                                    <i class="fa-solid fa-flag-checkered"></i>
+                                                    <span>Last Attempt: {{ record.LastAttemptAt | date:'short' }}</span>
+                                                </div>
+                                                <div class="timeline-stat">
+                                                    <i class="fa-solid fa-stopwatch"></i>
+                                                    <span>Total Retry Duration: {{ formatDuration(record.TotalRetryDurationMS) }}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                    
+                                    <!-- Validation Attempts Details -->
+                                    @if (validationAttempts && validationAttempts.length > 0) {
+                                        <div class="validation-attempts">
+                                            <h4>Validation Attempts</h4>
+                                            <div class="attempts-list">
+                                                @for (attempt of validationAttempts; track attempt.attemptNumber) {
+                                                    <div class="attempt-item" [class.success]="attempt.success" [class.failed]="!attempt.success">
+                                                        <div class="attempt-number">
+                                                            <i [class]="attempt.success ? 'fa-solid fa-check' : 'fa-solid fa-times'"></i>
+                                                            Attempt #{{ attempt.attemptNumber }}
+                                                        </div>
+                                                        <div class="attempt-details">
+                                                            <span class="attempt-time">{{ attempt.timestamp }}</span>
+                                                            @if (!attempt.success) {
+                                                                <span class="attempt-error">{{ attempt.errorMessage || 'Unknown error' }}</span>
+                                                                @if (attempt.validationErrorCount > 0) {
+                                                                    <span class="error-count">({{ attempt.validationErrorCount }} errors)</span>
+                                                                }
+                                                            }
+                                                            @if (attempt.outputLength) {
+                                                                <span class="output-length">Output: {{ attempt.outputLength }} chars</span>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                    
+                                    <!-- Validation Summary JSON -->
+                                    @if (validationSummary) {
+                                        <div class="validation-json">
+                                            <h4>Validation Summary Details</h4>
+                                            <div class="json-viewer-container">
+                                                <mj-code-editor 
+                                                    [(ngModel)]="formattedValidationSummary"
+                                                    name="formattedValidationSummary"
+                                                    [readonly]="true"
+                                                    [language]="'json'"
+                                                    [lineWrapping]="true"
+                                                    style="height: 200px; width: 100%;">
+                                                </mj-code-editor>
+                                            </div>
+                                        </div>
+                                    }
+                                    
+                                    <!-- Validation Attempts JSON -->
+                                    @if (record.ValidationAttempts) {
+                                        <div class="validation-json">
+                                            <h4>Validation Attempts (Raw JSON)</h4>
+                                            <div class="json-viewer-container">
+                                                <mj-code-editor 
+                                                    [(ngModel)]="formattedValidationAttempts"
+                                                    name="formattedValidationAttempts"
+                                                    [readonly]="true"
+                                                    [language]="'json'"
+                                                    [lineWrapping]="true"
+                                                    style="height: 300px; width: 100%;">
+                                                </mj-code-editor>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </ng-template>
+                        </kendo-panelbar-item>
+                    }
+                    
                     <!-- Hierarchy Panel (for parent/child relationships) -->
                     @if (record.ParentID || childRuns.length > 0) {
                         <kendo-panelbar-item [expanded]="hierarchyExpanded">
@@ -370,17 +530,6 @@
                         <ng-template kendoPanelBarContent>
                             <div class="panel-content">
                                 <div class="detail-fields-grid">
-                                    @if (record.VendorID) {
-                                        <div class="detail-field">
-                                            <label>Vendor</label>
-                                            <div class="detail-value clickable" (click)="navigateToEntity('MJ: AI Vendors', record.VendorID)" title="View Vendor">
-                                                <i class="fa-solid fa-building"></i>
-                                                {{ record.Vendor || 'Unknown' }}
-                                                <i class="fa-solid fa-external-link"></i>
-                                            </div>
-                                        </div>
-                                    }
-                                    
                                     @if (record.AgentID) {
                                         <div class="detail-field">
                                             <label>Agent</label>
@@ -401,6 +550,82 @@
                                             </div>
                                         </div>
                                     }
+                                    
+                                    @if (record.RunType) {
+                                        <div class="detail-field">
+                                            <label>Run Type</label>
+                                            <div class="detail-value">
+                                                <i [class]="'fa-solid ' + getRunTypeIcon(record.RunType)"></i>
+                                                {{ record.RunType }}
+                                            </div>
+                                        </div>
+                                    }
+                                    
+                                    @if (record.ResponseFormat) {
+                                        <div class="detail-field">
+                                            <label>Response Format</label>
+                                            <div class="detail-value">
+                                                <i class="fa-solid fa-code"></i>
+                                                {{ record.ResponseFormat }}
+                                            </div>
+                                        </div>
+                                    }
+                                    
+                                    <div class="detail-field">
+                                        <label>Temperature</label>
+                                        <div class="detail-value" [class.null-value]="record.Temperature === null || record.Temperature === undefined">
+                                            <i class="fa-solid fa-temperature-high"></i>
+                                            {{ record.Temperature !== null && record.Temperature !== undefined ? record.Temperature : '—' }}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="detail-field">
+                                        <label>Top P</label>
+                                        <div class="detail-value" [class.null-value]="record.TopP === null || record.TopP === undefined">
+                                            <i class="fa-solid fa-percentage"></i>
+                                            {{ record.TopP !== null && record.TopP !== undefined ? record.TopP : '—' }}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="detail-field">
+                                        <label>Top K</label>
+                                        <div class="detail-value" [class.null-value]="record.TopK === null || record.TopK === undefined">
+                                            <i class="fa-solid fa-list-ol"></i>
+                                            {{ record.TopK !== null && record.TopK !== undefined ? record.TopK : '—' }}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="detail-field">
+                                        <label>Min P</label>
+                                        <div class="detail-value" [class.null-value]="record.MinP === null || record.MinP === undefined">
+                                            <i class="fa-solid fa-filter"></i>
+                                            {{ record.MinP !== null && record.MinP !== undefined ? record.MinP : '—' }}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="detail-field">
+                                        <label>Frequency Penalty</label>
+                                        <div class="detail-value" [class.null-value]="record.FrequencyPenalty === null || record.FrequencyPenalty === undefined">
+                                            <i class="fa-solid fa-repeat"></i>
+                                            {{ record.FrequencyPenalty !== null && record.FrequencyPenalty !== undefined ? record.FrequencyPenalty : '—' }}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="detail-field">
+                                        <label>Presence Penalty</label>
+                                        <div class="detail-value" [class.null-value]="record.PresencePenalty === null || record.PresencePenalty === undefined">
+                                            <i class="fa-solid fa-plus-circle"></i>
+                                            {{ record.PresencePenalty !== null && record.PresencePenalty !== undefined ? record.PresencePenalty : '—' }}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="detail-field">
+                                        <label>Seed</label>
+                                        <div class="detail-value" [class.null-value]="record.Seed === null || record.Seed === undefined">
+                                            <i class="fa-solid fa-seedling"></i>
+                                            {{ record.Seed !== null && record.Seed !== undefined ? record.Seed : '—' }}
+                                        </div>
+                                    </div>
                                     
                                     @if (record.RunAt) {
                                         <div class="detail-field">

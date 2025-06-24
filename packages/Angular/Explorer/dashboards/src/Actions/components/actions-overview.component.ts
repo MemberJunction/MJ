@@ -374,4 +374,13 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
       return params;
     }
   }
+
+
+  /**
+   * Gets the icon class for an action
+   * Falls back to type-based icon if no IconClass is set
+   */
+  public getActionIcon(action: ActionEntity): string {
+    return action?.IconClass || this.getTypeIcon(action.Type);
+  }
 }

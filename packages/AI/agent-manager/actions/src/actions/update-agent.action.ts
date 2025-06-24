@@ -3,6 +3,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { BaseAgentManagementAction } from "./base-agent-management.action";
 import { AIPromptEntityExtended, AIAgentPromptEntity } from "@memberjunction/core-entities";
 import { RunView } from "@memberjunction/core";
+import { BaseAction } from "@memberjunction/actions";
 
 /**
  * Updates an existing AI agent's configuration.
@@ -23,7 +24,7 @@ import { RunView } from "@memberjunction/core";
  * });
  * ```
  */
-@RegisterClass(BaseAgentManagementAction, "Update Agent")
+@RegisterClass(BaseAction, "Update Agent")
 export class UpdateAgentAction extends BaseAgentManagementAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {

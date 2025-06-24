@@ -606,6 +606,14 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             }
         }
     }
+    
+    /**
+     * Gets the action's display icon
+     * Falls back to default cog icon if no IconClass is set
+     */
+    public getActionIcon(): string {
+        return this.record?.IconClass || 'fa-solid fa-cog';
+    }
 }
 
 // Loader function required for the component to be properly registered

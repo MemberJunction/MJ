@@ -1,126 +1,42 @@
 import { Injectable, ViewContainerRef } from '@angular/core';
-import { DialogRef } from '@progress/kendo-angular-dialog';
-import { Observable, Subject } from 'rxjs';
-import { TestHarnessDialogService } from './test-harness-dialog.service';
-
-export interface TestResult {
-  success: boolean;
-  result?: any;
-  error?: string;
-  executionTime?: number;
-  tokensUsed?: number;
-  cost?: number;
-}
+import { Observable } from 'rxjs';
+import { TestHarnessWindowManagerService } from './test-harness-window-manager.service';
+import { TestResult } from './test-harness-window.service';
 
 /**
- * Service for opening AI test harness dialogs for agents and prompts.
- * This service wraps the TestHarnessDialogService to provide a simpler API
+ * Service for opening AI test harness windows for agents and prompts.
+ * This service wraps the TestHarnessWindowManagerService to provide a simpler API
  * that matches the expected interface in consuming components.
  */
 @Injectable({
   providedIn: 'root'
 })
 export class AITestHarnessDialogService {
-  constructor(private testHarnessService: TestHarnessDialogService) {}
+  constructor(private testHarnessService: TestHarnessWindowManagerService) {}
 
   /**
-   * Opens the test harness dialog for an AI Agent
+   * Opens the test harness window for an AI Agent
    */
   openForAgent(agentId: string, viewContainerRef?: ViewContainerRef): Observable<TestResult> {
-    const resultSubject = new Subject<TestResult>();
-    
-    try {
-      const dialogRef = this.testHarnessService.openAgentTestHarness({
-        agentId: agentId,
-        title: 'Test AI Agent',
-        width: '80vw',
-        height: '80vh'
-      });
-      
-      // Convert dialog close to test result
-      dialogRef.result.subscribe({
-        next: (result) => {
-          if (result) {
-            resultSubject.next({
-              success: true,
-              result: result,
-              executionTime: 0
-            });
-          } else {
-            resultSubject.next({
-              success: false,
-              error: 'Test cancelled'
-            });
-          }
-          resultSubject.complete();
-        },
-        error: (error) => {
-          resultSubject.next({
-            success: false,
-            error: error.message || 'Test failed'
-          });
-          resultSubject.complete();
-        }
-      });
-    } catch (error: any) {
-      resultSubject.next({
-        success: false,
-        error: error.message || 'Failed to open test harness'
-      });
-      resultSubject.complete();
-    }
-    
-    return resultSubject.asObservable();
+    return this.testHarnessService.openAgentTestHarness({
+      agentId: agentId,
+      // Don't pass title - let the window component generate it with the agent name
+      width: '80vw',
+      height: '80vh',
+      viewContainerRef: viewContainerRef
+    });
   }
 
   /**
-   * Opens the test harness dialog for an AI Prompt
+   * Opens the test harness window for an AI Prompt
    */
   openForPrompt(promptId: string, viewContainerRef?: ViewContainerRef): Observable<TestResult> {
-    const resultSubject = new Subject<TestResult>();
-    
-    try {
-      // Use the prompt-specific test harness method
-      const dialogRef = this.testHarnessService.openPromptTestHarness({
-        promptId: promptId,
-        title: 'Test AI Prompt',
-        width: '80vw',
-        height: '80vh'
-      });
-      
-      // Convert dialog close to test result
-      dialogRef.result.subscribe({
-        next: (result) => {
-          if (result) {
-            resultSubject.next({
-              success: true,
-              result: result,
-              executionTime: 0
-            });
-          } else {
-            resultSubject.next({
-              success: false,
-              error: 'Test cancelled'
-            });
-          }
-          resultSubject.complete();
-        },
-        error: (error) => {
-          resultSubject.next({
-            success: false,
-            error: error.message || 'Test failed'
-          });
-          resultSubject.complete();
-        }
-      });
-    } catch (error: any) {
-      resultSubject.next({
-        success: false,
-        error: error.message || 'Failed to open test harness'
-      });
-      resultSubject.complete();
-    }
-    
-    return resultSubject.asObservable();
+    return this.testHarnessService.openPromptTestHarness({
+      promptId: promptId,
+      // Don't pass title - let the window component generate it with the prompt name
+      width: '80vw',
+      height: '80vh',
+      viewContainerRef: viewContainerRef
+    });
   }
 }

@@ -4,8 +4,10 @@ export * from './actions/create-agent.action';
 export * from './actions/create-sub-agent.action';
 export * from './actions/update-agent.action';
 export * from './actions/list-agents.action';
+export * from './actions/get-agent-details.action';
 export * from './actions/associate-action-with-agent.action';
 export * from './actions/list-actions.action';
+export * from './actions/get-action-details.action';
 
 // Core types should be imported from the core package directly
 
@@ -14,8 +16,10 @@ import { LoadCreateAgentAction } from './actions/create-agent.action';
 import { LoadCreateSubAgentAction } from './actions/create-sub-agent.action';
 import { LoadUpdateAgentAction } from './actions/update-agent.action';
 import { LoadListAgentsAction } from './actions/list-agents.action';
+import { LoadGetAgentDetailsAction } from './actions/get-agent-details.action';
 import { LoadAssociateActionWithAgentAction } from './actions/associate-action-with-agent.action';
 import { LoadListActionsAction } from './actions/list-actions.action';
+import { LoadGetActionDetailsAction } from './actions/get-action-details.action';
 
 // Execute all loaders to register actions
 export function LoadAgentManagementActions() {
@@ -23,8 +27,10 @@ export function LoadAgentManagementActions() {
     LoadCreateSubAgentAction();
     LoadUpdateAgentAction();
     LoadListAgentsAction();
+    LoadGetAgentDetailsAction();
     LoadAssociateActionWithAgentAction();
     LoadListActionsAction();
+    LoadGetActionDetailsAction();
     
     // Additional actions to be implemented:
     // - DeactivateAgentAction

@@ -223,6 +223,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         }
 
         // Use the new test harness dialog service
+        // Don't pass viewContainerRef so window is top-level
         this.testHarnessService.openForAgent(this.record.ID);
     }
 
@@ -279,6 +280,52 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             default:
                 return 'fa-solid fa-robot';
         }
+    }
+
+    /**
+     * Gets the agent's display icon
+     * Prioritizes LogoURL, falls back to IconClass, then default robot icon
+     */
+    public getAgentIcon(): string {
+        if (this.record?.LogoURL) {
+            // LogoURL is used in img tag, not here
+            return '';
+        }
+        return this.record?.IconClass || 'fa-solid fa-robot';
+    }
+
+    /**
+     * Checks if the agent has a logo URL (for image display)
+     */
+    public hasLogoURL(): boolean {
+        return !!this.record?.LogoURL;
+    }
+
+    /**
+     * Gets the icon for a sub-agent
+     * Prioritizes LogoURL, falls back to IconClass, then default robot icon
+     */
+    public getSubAgentIcon(subAgent: AIAgentEntity): string {
+        if (subAgent?.LogoURL) {
+            // LogoURL is used in img tag, not here
+            return '';
+        }
+        return subAgent?.IconClass || 'fa-solid fa-robot';
+    }
+    
+    /**
+     * Gets the icon class for an action
+     * Falls back to default bolt icon if no IconClass is set
+     */
+    public getActionIcon(action: ActionEntity): string {
+        return action?.IconClass || 'fa-solid fa-bolt';
+    }
+
+    /**
+     * Checks if a sub-agent has a logo URL
+     */
+    public hasSubAgentLogoURL(subAgent: AIAgentEntity): boolean {
+        return !!subAgent?.LogoURL;
     }
 
     /**
