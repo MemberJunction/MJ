@@ -1,6 +1,19 @@
 # MemberJunction Metadata Sync
 
-A library for synchronizing MemberJunction database metadata with local file system representations. This library is integrated into the MemberJunction CLI (`mj`) and enables developers and non-technical users to manage MJ metadata using their preferred editors and version control systems while maintaining the database as the source of truth.
+A library for synchronizing MemberJunction database metadata with local file system representations. This library is integrated into the MemberJunction CLI (`mj`) and is accessed through `mj sync` commands. It enables developers and non-technical users to manage MJ metadata using their preferred editors and version control systems while maintaining the database as the source of truth.
+
+## Installation
+
+MetadataSync is included with the MemberJunction CLI. Install the CLI globally:
+
+```bash
+npm install -g @memberjunction/cli
+```
+
+Then use the sync commands:
+```bash
+mj sync --help
+```
 
 ## Purpose
 
@@ -896,7 +909,7 @@ Templates can reference other templates:
 
 ## CLI Commands
 
-All MetadataSync commands are available through the MemberJunction CLI under the `sync` namespace:
+All MetadataSync functionality is accessed through the MemberJunction CLI (`mj`) under the `sync` namespace. The commands previously available through `mj-sync` are now integrated as `mj sync` commands:
 
 ```bash
 # Validate all metadata files
@@ -912,7 +925,7 @@ mj sync validate --verbose
 mj sync validate --format=json
 
 # Save validation report to markdown file
-mj-sync validate --save-report
+mj sync validate --save-report
 
 # Initialize a directory for metadata sync
 mj sync init
@@ -952,6 +965,9 @@ mj sync push --ci
 # Push/Pull without validation
 mj sync push --no-validate
 mj sync pull --entity="AI Prompts" --no-validate
+
+# Reset file checksums after manual edits
+mj sync file-reset
 ```
 
 ## Configuration
@@ -1639,12 +1655,13 @@ Processing AI Prompts in demo/ai-prompts
 ## Use Cases
 
 ### Developer Workflow
-1. `mj sync pull --entity="AI Prompts"` to get latest prompts with their models
-2. Edit prompts and adjust model configurations in VS Code
-3. Test locally with `mj sync push --dry-run`
-4. Commit changes to Git
-5. PR review with diff visualization
-6. CI/CD runs `mj sync push --ci` on merge
+1. Install the MJ CLI: `npm install -g @memberjunction/cli`
+2. `mj sync pull --entity="AI Prompts"` to get latest prompts with their models
+3. Edit prompts and adjust model configurations in VS Code
+4. Test locally with `mj sync push --dry-run`
+5. Commit changes to Git
+6. PR review with diff visualization
+7. CI/CD runs `mj sync push --ci` on merge
 
 ### Content Team Workflow
 1. Pull prompts to local directory
@@ -2098,3 +2115,25 @@ export async function validateBeforeDeploy(metadataPath: string): Promise<boolea
 - Team collaboration features
 - Bidirectional sync for related entities
 - Custom transformation pipelines
+
+## Migration from Standalone MetadataSync
+
+If you were previously using the standalone `mj-sync` command:
+
+1. **Update your installation**: Install the MJ CLI instead of standalone MetadataSync
+   ```bash
+   npm install -g @memberjunction/cli
+   ```
+
+2. **Update your scripts**: Replace `mj-sync` with `mj sync` in all scripts and documentation
+   ```bash
+   # Old command (standalone package)
+   mj-sync push --dir="metadata"
+   
+   # New command
+   mj sync push --dir="metadata"
+   ```
+
+3. **Configuration unchanged**: All `.mj-sync.json` configuration files work exactly the same
+
+4. **Same functionality**: The underlying MetadataSync library is identical, just accessed through the unified CLI

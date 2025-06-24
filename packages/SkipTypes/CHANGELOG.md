@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/skip-types
 
+## 2.56.0
+
+### Patch Changes
+
+- Updated dependencies [bf24cae]
+  - @memberjunction/core-entities@2.56.0
+  - @memberjunction/data-context@2.56.0
+
 ## 2.55.0
 
 ### Patch Changes
