@@ -73,8 +73,8 @@
       "type": "node",
       "request": "launch",
       "name": "MetadataSync CLI - Push",
-      "program": "${workspaceFolder}/packages/MetadataSync/bin/run.js",
-      "args": ["push", "--dir", "${input:metadataSyncDirectory}"],
+      "program": "${workspaceFolder}/packages/MJCLI/bin/dev",
+      "args": ["sync", "push", "--dir", "${input:metadataSyncDirectory}"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "sourceMaps": true,
@@ -100,8 +100,9 @@
       "type": "node",
       "request": "launch",
       "name": "MetadataSync CLI - Pull",
-      "program": "${workspaceFolder}/packages/MetadataSync/bin/run.js",
+      "program": "${workspaceFolder}/packages/MJCLI/bin/dev",
       "args": [
+        "sync",
         "pull",
         "--entity", "AI Prompts"
       ],
