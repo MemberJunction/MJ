@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, ViewChild, OnDestroy, AfterViewInit, Renderer2, ElementRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, ViewChild, OnDestroy, AfterViewInit, Renderer2, ElementRef, ChangeDetectorRef } from '@angular/core';
 import { WindowComponent } from '@progress/kendo-angular-dialog';
 import { AIAgentEntity, AIPromptEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
@@ -36,7 +36,8 @@ export interface CustomWindowData {
             [state]="windowState"
             [class.minimized-window]="isMinimized"
             (close)="onClose()"
-            (stateChange)="onStateChange($event)">
+            (stateChange)="onStateChange($event)"
+            (resize)="onWindowResize()">
             
             <kendo-window-titlebar>
                 <div class="window-title">
@@ -187,6 +188,12 @@ export interface CustomWindowData {
             flex: 1;
             overflow: hidden;
         }
+        
+        /* Ensure Kendo Window content wrapper maintains proper height */
+        ::ng-deep .k-window-content {
+            display: flex;
+            flex-direction: column;
+        }
     `]
 })
 export class TestHarnessCustomWindowComponent implements OnInit, OnDestroy, AfterViewInit {
@@ -227,7 +234,8 @@ export class TestHarnessCustomWindowComponent implements OnInit, OnDestroy, Afte
     
     constructor(
         private renderer: Renderer2,
-        private elementRef: ElementRef
+        private elementRef: ElementRef,
+        private cdr: ChangeDetectorRef
     ) {}
     
     ngOnInit() {
@@ -325,6 +333,19 @@ export class TestHarnessCustomWindowComponent implements OnInit, OnDestroy, Afte
         if (this.isMinimized && state !== 'minimized') {
             this.restoreFromMinimized();
         }
+        
+        // Adjust content height on any state change
+        if (state !== 'minimized') {
+            setTimeout(() => this.adjustContentHeight(), 100);
+        }
+    }
+    
+    onWindowResize() {
+        // Handle Kendo Window resize event
+        if (!this.isMinimized) {
+            // Use a small delay to ensure the DOM has updated
+            setTimeout(() => this.adjustContentHeight(), 50);
+        }
     }
     
     minimize() {
@@ -368,7 +389,21 @@ export class TestHarnessCustomWindowComponent implements OnInit, OnDestroy, Afte
         }
         
         // Update position after state change
-        setTimeout(() => this.updateWindowPosition(), 50);
+        setTimeout(() => {
+            this.updateWindowPosition();
+            
+            // Force Angular change detection
+            this.cdr.detectChanges();
+            
+            // Force the Kendo Window to recalculate its internal dimensions
+            if (this.kendoWindow) {
+                // Trigger resize event to fix content sizing
+                window.dispatchEvent(new Event('resize'));
+                
+                // Use the shared method to adjust content height
+                this.adjustContentHeight();
+            }
+        }, 100);
         
         // Emit restore event
         this.restoreWindow.emit();
@@ -416,12 +451,72 @@ export class TestHarnessCustomWindowComponent implements OnInit, OnDestroy, Afte
         // Set initial position if needed
         setTimeout(() => {
             this.updateWindowPosition();
+            this.adjustContentHeight();
         }, 100);
         
         // Set up execution tracking
         this.setupExecutionTracking();
+        
+        // Set up window resize listener
+        this.setupResizeListener();
     }
     
+    private adjustContentHeight() {
+        // Ensure the window content wrapper has proper height
+        const contentWrapper = this.elementRef.nativeElement.querySelector('.k-window-content');
+        if (contentWrapper && this.kendoWindow) {
+            // Get the actual window element to check current dimensions
+            const windowElement = this.elementRef.nativeElement.querySelector('.k-window') ||
+                                 this.elementRef.nativeElement.closest('.k-window');
+            
+            // Update our tracked dimensions if the window has been resized
+            if (windowElement) {
+                const rect = windowElement.getBoundingClientRect();
+                if (rect.width > 0) this.width = rect.width;
+                if (rect.height > 0) this.height = rect.height;
+            }
+            
+            // Calculate the actual content height (window height minus titlebar and some padding)
+            const windowHeight = this.height;
+            const titlebarHeight = 40; // Titlebar height
+            const bottomPadding = 10; // Extra space to prevent clipping
+            const contentHeight = windowHeight - titlebarHeight - bottomPadding;
+            
+            this.renderer.setStyle(contentWrapper, 'height', `${contentHeight}px`);
+            this.renderer.setStyle(contentWrapper, 'display', 'flex');
+            this.renderer.setStyle(contentWrapper, 'flex-direction', 'column');
+        }
+        
+        // Also update the test harness container
+        const testHarnessContainer = this.elementRef.nativeElement.querySelector('mj-ai-test-harness');
+        if (testHarnessContainer) {
+            this.renderer.setStyle(testHarnessContainer, 'flex', '1');
+            this.renderer.setStyle(testHarnessContainer, 'height', '100%');
+            this.renderer.setStyle(testHarnessContainer, 'overflow', 'hidden');
+        }
+    }
+    
+    private setupResizeListener() {
+        // Debounced resize handler
+        let resizeTimeout: any;
+        const handleResize = () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                if (!this.isMinimized) {
+                    this.adjustContentHeight();
+                }
+            }, 100);
+        };
+        
+        // Listen for window resize events
+        window.addEventListener('resize', handleResize);
+        
+        // Store the handler for cleanup
+        (this as any).resizeHandler = handleResize;
+        
+        // Note: Kendo Window resize events are handled by the (resize) event binding in the template
+    }
+
     private setupExecutionTracking() {
         // Use a timer to check the test harness execution state
         // This is needed because the test harness doesn't emit events for execution state changes
@@ -446,6 +541,11 @@ export class TestHarnessCustomWindowComponent implements OnInit, OnDestroy, Afte
         // Clean up execution tracking interval
         if ((this as any).executionCheckInterval) {
             clearInterval((this as any).executionCheckInterval);
+        }
+        
+        // Clean up resize listener
+        if ((this as any).resizeHandler) {
+            window.removeEventListener('resize', (this as any).resizeHandler);
         }
         
         // Ensure window is properly closed and cleaned up
