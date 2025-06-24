@@ -1,3 +1,5 @@
+import { LoadAIPromptEntityExtendedServerSubClass } from '@memberjunction/core-entities-server';
+
 // Core library exports
 export { FileBackupManager } from './lib/file-backup-manager';
 export { SyncEngine } from './lib/sync-engine';
@@ -59,3 +61,5 @@ export type {
   ReferenceType,
   ParsedReference
 } from './types/validation';
+
+LoadAIPromptEntityExtendedServerSubClass();

@@ -297,7 +297,7 @@ export class WatchService {
         // Always update sync metadata when the record was updated - use original fields for checksum
         recordData.sync = {
           lastModified: new Date().toISOString(),
-          checksum: this.syncEngine.calculateChecksum(originalFields)
+          checksum: await this.syncEngine.calculateChecksumWithFileContent(originalFields, path.dirname(filePath))
         };
         
         // Restore original field values to preserve @ references

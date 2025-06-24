@@ -476,7 +476,46 @@ export class PushService {
     }
     
     // Check if the record is actually dirty before considering it changed
-    const isDirty = entity.Dirty;
+    let isDirty = entity.Dirty;
+    
+    // Also check if file content has changed (for @file references)
+    if (!isDirty && !isNew && recordData.sync) {
+      const currentChecksum = await this.syncEngine.calculateChecksumWithFileContent(originalFields, entityDir);
+      if (currentChecksum !== recordData.sync.checksum) {
+        isDirty = true;
+        if (options.verbose) {
+          callbacks?.onLog?.(`📄 File content changed for ${entityConfig.entity} record (checksum mismatch)`);
+        }
+      }
+    }
+    
+    // If updating an existing record that's dirty, show what changed
+    if (!isNew && isDirty) {
+      const changes = entity.GetChangesSinceLastSave();
+      const changeKeys = Object.keys(changes);
+      if (changeKeys.length > 0) {
+        // Get primary key info for display
+        const entityInfo = this.syncEngine.getEntityInfo(entityConfig.entity);
+        const primaryKeyDisplay: string[] = [];
+        if (entityInfo) {
+          for (const pk of entityInfo.PrimaryKeys) {
+            primaryKeyDisplay.push(`${pk.Name}: ${entity.Get(pk.Name)}`);
+          }
+        }
+        
+        callbacks?.onLog?.(`📝 Updating ${entityConfig.entity} record:`);
+        if (primaryKeyDisplay.length > 0) {
+          callbacks?.onLog?.(`   Primary Key: ${primaryKeyDisplay.join(', ')}`);
+        }
+        callbacks?.onLog?.(`   Changes:`);
+        for (const fieldName of changeKeys) {
+          const field = entity.GetFieldByName(fieldName);
+          const oldValue = field ? field.OldValue : undefined;
+          const newValue = (changes as any)[fieldName];
+          callbacks?.onLog?.(`     ${fieldName}: ${this.formatFieldValue(oldValue)} → ${this.formatFieldValue(newValue)}`);
+        }
+      }
+    }
     
     // Save the record (always call Save, but track if it was actually dirty)
     const saveResult = await entity.Save();
@@ -501,7 +540,7 @@ export class PushService {
     if (isNew || isDirty) {
       recordData.sync = {
         lastModified: new Date().toISOString(),
-        checksum: this.syncEngine.calculateChecksum(originalFields)
+        checksum: await this.syncEngine.calculateChecksumWithFileContent(originalFields, entityDir)
       };
     }
     
@@ -591,6 +630,17 @@ export class PushService {
     // Generate a key from fields if no primary key
     const fieldKeys = Object.keys(recordData.fields).sort().join(',');
     return `${entityName}|fields:${fieldKeys}`;
+  }
+  
+  private formatFieldValue(value: any, maxLength: number = 50): string {
+    let strValue = JSON.stringify(value);
+    strValue = strValue.trim();
+
+    if (strValue.length > maxLength) {
+      return strValue.substring(0, maxLength) + '...';
+    }
+
+    return strValue;
   }
   
   private findEntityDirectories(baseDir: string, specificDir?: string): string[] {
