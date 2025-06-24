@@ -2118,6 +2118,10 @@ export class AIAgent_ {
     @MaxLength(200)
     IconClass?: string;
         
+    @Field({description: `Controls whether model selection is driven by the Agent Type's system prompt or the Agent's specific prompt. Default is Agent Type for backward compatibility.`}) 
+    @MaxLength(100)
+    ModelSelectionMode: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -2214,6 +2218,9 @@ export class CreateAIAgentInput {
 
     @Field({ nullable: true })
     IconClass: string | null;
+
+    @Field({ nullable: true })
+    ModelSelectionMode?: string;
 }
     
 
@@ -2269,6 +2276,9 @@ export class UpdateAIAgentInput {
 
     @Field({ nullable: true })
     IconClass?: string | null;
+
+    @Field({ nullable: true })
+    ModelSelectionMode?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

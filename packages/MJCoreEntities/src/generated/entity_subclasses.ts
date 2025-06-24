@@ -1118,6 +1118,16 @@ export const AIAgentSchema = z.object({
         * * Display Name: Icon Class
         * * SQL Data Type: nvarchar(100)
     * * Description: Font Awesome icon class (e.g., fa-robot, fa-brain) for the agent. Used as fallback when LogoURL is not set or fails to load.`),
+    ModelSelectionMode: z.union([z.literal('Agent Type'), z.literal('Agent')]).describe(`
+        * * Field Name: ModelSelectionMode
+        * * Display Name: Model Selection Mode
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Agent Type
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Agent Type
+    *   * Agent
+    * * Description: Controls whether model selection is driven by the Agent Type's system prompt or the Agent's specific prompt. Default is Agent Type for backward compatibility.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -15183,6 +15193,24 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     }
     set IconClass(value: string | null) {
         this.Set('IconClass', value);
+    }
+
+    /**
+    * * Field Name: ModelSelectionMode
+    * * Display Name: Model Selection Mode
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Agent Type
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Agent Type
+    *   * Agent
+    * * Description: Controls whether model selection is driven by the Agent Type's system prompt or the Agent's specific prompt. Default is Agent Type for backward compatibility.
+    */
+    get ModelSelectionMode(): 'Agent Type' | 'Agent' {
+        return this.Get('ModelSelectionMode');
+    }
+    set ModelSelectionMode(value: 'Agent Type' | 'Agent') {
+        this.Set('ModelSelectionMode', value);
     }
 
     /**
