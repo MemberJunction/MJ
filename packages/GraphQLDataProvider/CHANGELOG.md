@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 2.55.0
+
+### Patch Changes
+
+- Updated dependencies [659f892]
+  - @memberjunction/core-entities@2.55.0
+  - @memberjunction/actions-base@2.55.0
+  - @memberjunction/core@2.55.0
+  - @memberjunction/global@2.55.0
+
 ## 2.54.0
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @memberjunction/communication-gmail
 
+## 2.55.0
+
+### Patch Changes
+
+- @memberjunction/communication-types@2.55.0
+- @memberjunction/core@2.55.0
+- @memberjunction/global@2.55.0
+
 ## 2.54.0
 
 ### Patch Changes
