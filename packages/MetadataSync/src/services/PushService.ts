@@ -223,6 +223,7 @@ export class PushService {
       cwd: entityDir,
       absolute: true,
       onlyFiles: true,
+      dot: true,
       ignore: ['**/node_modules/**', '**/.mj-*.json']
     });
     
