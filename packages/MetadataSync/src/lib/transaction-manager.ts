@@ -10,7 +10,6 @@ import { getDataProvider } from './provider-utils';
 import { SQLLogger } from './sql-logger';
 
 export interface TransactionOptions {
-  isolationLevel?: 'READ_UNCOMMITTED' | 'READ_COMMITTED' | 'REPEATABLE_READ' | 'SERIALIZABLE';
 }
 
 export class TransactionManager {
@@ -35,15 +34,9 @@ export class TransactionManager {
     }
     
     // Check if provider supports transactions (PascalCase method names)
-    if (typeof (provider as any).BeginTransaction !== 'function') {
-      // Provider doesn't support transactions, operate without them
-      return;
-    }
-    
     try {
-      await (provider as any).BeginTransaction(options?.isolationLevel);
+      await provider.BeginTransaction();
       this.inTransaction = true;
-      this.sqlLogger?.logTransaction('BEGIN');
     } catch (error) {
       throw new Error(`Failed to begin transaction: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -62,16 +55,9 @@ export class TransactionManager {
       throw new Error('No data provider available');
     }
     
-    // Check if provider supports transactions (PascalCase method names)
-    if (typeof (provider as any).CommitTransaction !== 'function') {
-      this.inTransaction = false;
-      return;
-    }
-    
     try {
-      await (provider as any).CommitTransaction();
+      await provider.CommitTransaction();
       this.inTransaction = false;
-      this.sqlLogger?.logTransaction('COMMIT');
     } catch (error) {
       throw new Error(`Failed to commit transaction: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -90,16 +76,9 @@ export class TransactionManager {
       throw new Error('No data provider available');
     }
     
-    // Check if provider supports transactions (PascalCase method names)
-    if (typeof (provider as any).RollbackTransaction !== 'function') {
-      this.inTransaction = false;
-      return;
-    }
-    
     try {
-      await (provider as any).RollbackTransaction();
+      await provider.RollbackTransaction();
       this.inTransaction = false;
-      this.sqlLogger?.logTransaction('ROLLBACK');
     } catch (error) {
       // Log but don't throw - we're already in an error state
       console.error('Failed to rollback transaction:', error);
