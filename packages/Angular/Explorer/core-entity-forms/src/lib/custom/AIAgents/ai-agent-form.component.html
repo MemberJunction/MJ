@@ -70,81 +70,7 @@
         <div class="form-content">
             <kendo-panelbar>
 
-                <!-- Prompts (High Priority - Expanded by default for existing agents) -->
-                @if (record.ID) {
-                    <kendo-panelbar-item [expanded]="true">
-                        <ng-template kendoPanelBarItemTitle>
-                            <i class="fa-solid fa-comments"></i> Prompts{{ promptCount > 0 ? ' (' + promptCount + ')' : '' }}
-                        </ng-template>
-                        <ng-template kendoPanelBarContent>
-                            <div class="panel-content">
-                                <div class="section-header">
-                                    <div class="header-actions">
-                                        @if (EditMode) {
-                                            <kendo-button themeColor="primary" size="small" (click)="addPrompt()">
-                                                <i class="fa-solid fa-plus"></i> Add Prompt
-                                            </kendo-button>
-                                        }
-                                    </div>
-                                </div>
-                                
-                                @if (promptCount === 0) {
-                                    <div class="empty-state">
-                                        <i class="fa-solid fa-comments"></i>
-                                        <h4>No Prompts Configured</h4>
-                                        <p>Add prompts to define how this agent processes requests and generates responses.</p>
-                                        @if (EditMode) {
-                                            <kendo-button themeColor="primary" (click)="addPrompt()">
-                                                <i class="fa-solid fa-plus"></i> Create First Prompt
-                                            </kendo-button>
-                                        }
-                                    </div>
-                                } @else {
-                                    <div class="entity-list">
-                                        @for (prompt of agentPrompts; track prompt.ID) {
-                                            <div class="entity-item prompt-item" (click)="navigateToEntity('AI Prompts', prompt.ID)">
-                                                <div class="item-icon">
-                                                    <i class="fa-solid fa-comment-dots"></i>
-                                                </div>
-                                                <div class="item-content">
-                                                    <div class="item-title">{{ prompt.Name }}</div>
-                                                    @if (prompt.TemplateText) {
-                                                        <div class="item-preview">{{ prompt.TemplateText.substring(0, 120) }}{{ prompt.TemplateText.length > 120 ? '...' : '' }}</div>
-                                                    }
-                                                    <div class="item-meta">
-                                                        @if (prompt.PromptRole) {
-                                                            <span class="meta-tag">{{ prompt.PromptRole }}</span>
-                                                        }
-                                                    </div>
-                                                </div>
-                                                <div class="item-actions">
-                                                    @if (EditMode) {
-                                                        <kendo-button 
-                                                            fillMode="flat" 
-                                                            themeColor="error" 
-                                                            size="small"
-                                                            (click)="removePrompt(prompt, $event)"
-                                                            title="Remove prompt">
-                                                            <i class="fa-solid fa-trash"></i>
-                                                        </kendo-button>
-                                                    }
-                                                    <i class="fa-solid fa-external-link"></i>
-                                                </div>
-                                            </div>
-                                        }
-                                        @if (promptCount > agentPrompts.length) {
-                                            <div class="view-more-item" (click)="navigateToEntity('AI Prompts', '')">
-                                                <span>View all {{ promptCount }} prompts...</span>
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                            </div>
-                        </ng-template>
-                    </kendo-panelbar-item>
-                }
-
-                <!-- Actions (High Priority - Expanded by default for existing agents) -->
+                <!-- Actions (First Panel - Expanded by default) -->
                 @if (record.ID) {
                     <kendo-panelbar-item [expanded]="actionCount > 0">
                         <ng-template kendoPanelBarItemTitle>
@@ -222,7 +148,7 @@
                     </kendo-panelbar-item>
                 }
 
-                <!-- Sub-Agents (High Priority - Expanded by default for existing agents) -->
+                <!-- Sub-Agents (Second Panel) -->
                 @if (record.ID) {
                     <kendo-panelbar-item [expanded]="subAgentCount > 0">
                         <ng-template kendoPanelBarItemTitle>
@@ -289,6 +215,102 @@
                                         @if (subAgentCount > subAgents.length) {
                                             <div class="view-more-item" (click)="navigateToEntity('AI Agents', '')">
                                                 <span>View all {{ subAgentCount }} sub-agents...</span>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </ng-template>
+                    </kendo-panelbar-item>
+                }
+
+                <!-- Prompts (Third Panel - With Model Selection) -->
+                @if (record.ID) {
+                    <kendo-panelbar-item [expanded]="true">
+                        <ng-template kendoPanelBarItemTitle>
+                            <i class="fa-solid fa-comments"></i> Prompts{{ promptCount > 0 ? ' (' + promptCount + ')' : '' }}
+                        </ng-template>
+                        <ng-template kendoPanelBarContent>
+                            <div class="panel-content">
+                                <div class="section-header">
+                                    <div class="prompt-controls">
+                                        <!-- Model Selection Mode Control -->
+                                        <div class="model-selection-mode">
+                                            <label class="model-selection-label">
+                                                <i class="fa-solid fa-sliders"></i>
+                                                Model Selection:
+                                            </label>
+                                            @if (EditMode) {
+                                                <kendo-dropdownlist
+                                                    [(ngModel)]="record.ModelSelectionMode"
+                                                    name="modelSelectionMode"
+                                                    [data]="modelSelectionModes"
+                                                    textField="text"
+                                                    valueField="value"
+                                                    [valuePrimitive]="true"
+                                                    class="model-selection-dropdown">
+                                                </kendo-dropdownlist>
+                                            } @else {
+                                                <span class="model-selection-value">{{ record.ModelSelectionMode || 'Agent Type' }}</span>
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="header-actions">
+                                        @if (EditMode) {
+                                            <kendo-button themeColor="primary" size="small" (click)="addPrompt()">
+                                                <i class="fa-solid fa-plus"></i> Add Prompt
+                                            </kendo-button>
+                                        }
+                                    </div>
+                                </div>
+                                
+                                @if (promptCount === 0) {
+                                    <div class="empty-state">
+                                        <i class="fa-solid fa-comments"></i>
+                                        <h4>No Prompts Configured</h4>
+                                        <p>Add prompts to define how this agent processes requests and generates responses.</p>
+                                        @if (EditMode) {
+                                            <kendo-button themeColor="primary" (click)="addPrompt()">
+                                                <i class="fa-solid fa-plus"></i> Create First Prompt
+                                            </kendo-button>
+                                        }
+                                    </div>
+                                } @else {
+                                    <div class="entity-list">
+                                        @for (prompt of agentPrompts; track prompt.ID) {
+                                            <div class="entity-item prompt-item" (click)="navigateToEntity('AI Prompts', prompt.ID)">
+                                                <div class="item-icon">
+                                                    <i class="fa-solid fa-comment-dots"></i>
+                                                </div>
+                                                <div class="item-content">
+                                                    <div class="item-title">{{ prompt.Name }}</div>
+                                                    @if (prompt.TemplateText) {
+                                                        <div class="item-preview">{{ prompt.TemplateText.substring(0, 120) }}{{ prompt.TemplateText.length > 120 ? '...' : '' }}</div>
+                                                    }
+                                                    <div class="item-meta">
+                                                        @if (prompt.PromptRole) {
+                                                            <span class="meta-tag">{{ prompt.PromptRole }}</span>
+                                                        }
+                                                    </div>
+                                                </div>
+                                                <div class="item-actions">
+                                                    @if (EditMode) {
+                                                        <kendo-button 
+                                                            fillMode="flat" 
+                                                            themeColor="error" 
+                                                            size="small"
+                                                            (click)="removePrompt(prompt, $event)"
+                                                            title="Remove prompt">
+                                                            <i class="fa-solid fa-trash"></i>
+                                                        </kendo-button>
+                                                    }
+                                                    <i class="fa-solid fa-external-link"></i>
+                                                </div>
+                                            </div>
+                                        }
+                                        @if (promptCount > agentPrompts.length) {
+                                            <div class="view-more-item" (click)="navigateToEntity('AI Prompts', '')">
+                                                <span>View all {{ promptCount }} prompts...</span>
                                             </div>
                                         }
                                     </div>
