@@ -1,5 +1,11 @@
 # @memberjunction/ai-agent-manager
 
+## 2.56.0
+
+### Minor Changes
+
+- bf24cae: Various
+
 ## 2.55.0
 
 ### Minor Changes

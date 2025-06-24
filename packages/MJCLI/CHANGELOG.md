@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/cli
 
+## 2.56.0
+
+### Patch Changes
+
+- 17c7634: Integrate MetadataSync commands into MJCLI
+
+  - Refactored MetadataSync from standalone CLI to reusable library
+  - Moved all sync commands under `mj sync` namespace in MJCLI
+  - Added service-based architecture for better modularity
+  - Removed oclif dependencies from MetadataSync package
+
+- Updated dependencies [17c7634]
+  - @memberjunction/metadata-sync@2.56.0
+  - @memberjunction/codegen-lib@2.56.0
+  - @memberjunction/sqlserver-dataprovider@2.56.0
+
 ## 2.55.0
 
 ### Patch Changes

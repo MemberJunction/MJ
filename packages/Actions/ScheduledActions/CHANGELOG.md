@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/scheduled-actions
 
+## 2.56.0
+
+### Patch Changes
+
+- Updated dependencies [bf24cae]
+  - @memberjunction/core-actions@2.56.0
+  - @memberjunction/actions@2.56.0
+  - @memberjunction/core-entities@2.56.0
+  - @memberjunction/sqlserver-dataprovider@2.56.0
+  - @memberjunction/core@2.56.0
+  - @memberjunction/global@2.56.0
+
 ## 2.55.0
 
 ### Patch Changes

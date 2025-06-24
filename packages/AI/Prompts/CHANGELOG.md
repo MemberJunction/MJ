@@ -1,5 +1,18 @@
 # @memberjunction/ai-prompts
 
+## 2.56.0
+
+### Patch Changes
+
+- Updated dependencies [bf24cae]
+  - @memberjunction/core-entities@2.56.0
+  - @memberjunction/aiengine@2.56.0
+  - @memberjunction/templates-base-types@2.56.0
+  - @memberjunction/templates@2.56.0
+  - @memberjunction/ai@2.56.0
+  - @memberjunction/core@2.56.0
+  - @memberjunction/global@2.56.0
+
 ## 2.55.0
 
 ### Patch Changes
