@@ -65,7 +65,6 @@ export class FileResolver extends FileResolverBase {
     );
     const NameExists = Boolean(sameName);
 
-    // const fileRecord = (await super.CreateFile({ ...input, Status: 'Pending' }, context, pubSub)) as File_;
     const success = fileEntity.NewRecord(FieldValueCollection.FromObject({ ...input, Status: 'Pending' }));
 
     // If there's a problem creating the file record, the base resolver will return null
