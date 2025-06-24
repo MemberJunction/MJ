@@ -1690,8 +1690,6 @@ export class SQLServerDataProvider
 
       const logRecordChangeSQL = this.GetLogRecordChangeSQL(entity.GetAll(false), oldData, entity.EntityInfo.Name, '@ID', entity.EntityInfo, bNewRecord ? 'Create' : 'Update', user, false);
       if (logRecordChangeSQL === null) {
-        //why does loop agent prompt always come here - was same issue for template param extractor prompt
-
         // if we don't have any record changes to log, just return the simple SQL to run which will do nothing but update __mj_UpdatedAt
         // this can happen if a subclass overrides the Dirty() flag to make the object dirty due to factors outside of the
         // array of fields that are directly stored in the DB and we need to respect that but this will blow up if we try

@@ -125,7 +125,6 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
         }
         else if (this.TemplateID && this.TemplateText?.trim().length > 0 && this.TemplateTextDirty) {
             // we have a linked Template, so update the Template Contents associated with it
-            compareStringsByLine(this._originalTemplateText, this.TemplateText)
             await this.UpdateLinkedTemplateContents(md);
         }
         // now save the AI Prompt itself
