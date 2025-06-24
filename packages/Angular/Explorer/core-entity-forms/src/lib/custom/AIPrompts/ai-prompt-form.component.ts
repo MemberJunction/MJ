@@ -349,11 +349,6 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         this.testHarnessService.openForPrompt(this.record.ID, this.viewContainerRef).subscribe({
             next: (result) => {
                 if (result.success) {
-                    MJNotificationService.Instance.CreateSimpleNotification(
-                        'Prompt test completed successfully',
-                        'success',
-                        3000
-                    );
                     // Reload execution history
                     this.loadExecutionHistory();
                 }

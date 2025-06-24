@@ -48,6 +48,7 @@ import { AskSkipModule } from '@memberjunction/ng-ask-skip';
 import { SkipChatModule } from '@memberjunction/ng-skip-chat';
 import { DashboardsModule } from '@memberjunction/ng-dashboards';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
+import { AITestHarnessModule } from '@memberjunction/ng-ai-test-harness';
 import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
 import { AuthButtonComponent } from './lib/auth-button/auth-button.component';
 import { DashboardBrowserComponent } from './lib/dashboard-browser-component/dashboard-browser.component';
@@ -194,7 +195,8 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     DateInputsModule,
     DragDropModule,
     CardModule,
-    AvatarModule
+    AvatarModule,
+    AITestHarnessModule
   ],
   exports: [
     FormToolbarComponent,
