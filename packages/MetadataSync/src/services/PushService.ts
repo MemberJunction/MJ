@@ -291,11 +291,6 @@ export class PushService {
     callbacks?: PushCallbacks
   ): Promise<'created' | 'updated' | 'unchanged' | 'error'> {
     const metadata = new Metadata();
-    const entityInfo = metadata.EntityByName(entityConfig.entity);
-    
-    if (!entityInfo) {
-      throw new Error(`Entity ${entityConfig.entity} not found in metadata`);
-    }
     
     // Get or create entity instance
     let entity = await metadata.GetEntityObject(entityConfig.entity, this.contextUser);
@@ -327,31 +322,27 @@ export class PushService {
     // Check if record exists
     const primaryKey = recordData.primaryKey;
     let exists = false;
-    let existingEntity: BaseEntity | null = null;
     
     if (primaryKey && Object.keys(primaryKey).length > 0) {
       // Try to load existing record
       const compositeKey = new CompositeKey();
       compositeKey.LoadFromSimpleObject(primaryKey);
-      existingEntity = await metadata.GetEntityObject(entityConfig.entity, this.contextUser);
-      if (existingEntity) {
-        exists = await existingEntity.InnerLoad(compositeKey);
+      exists = await entity.InnerLoad(compositeKey);
+      
+      // Check autoCreateMissingRecords flag if record not found
+      if (!exists) {
+        const autoCreate = this.syncConfig?.push?.autoCreateMissingRecords ?? false;
+        const pkDisplay = Object.entries(primaryKey)
+          .map(([key, value]) => `${key}=${value}`)
+          .join(', ');
         
-        // Check autoCreateMissingRecords flag if record not found
-        if (!exists) {
-          const autoCreate = this.syncConfig?.push?.autoCreateMissingRecords ?? false;
-          const pkDisplay = Object.entries(primaryKey)
-            .map(([key, value]) => `${key}=${value}`)
-            .join(', ');
-          
-          if (!autoCreate) {
-            const warning = `Record not found: ${entityConfig.entity} with primaryKey {${pkDisplay}}. To auto-create missing records, set push.autoCreateMissingRecords=true in .mj-sync.json`;
-            this.warnings.push(warning);
-            callbacks?.onWarn?.(warning);
-            return 'error';
-          } else if (options.verbose) {
-            callbacks?.onLog?.(`Auto-creating missing ${entityConfig.entity} record with primaryKey {${pkDisplay}}`);
-          }
+        if (!autoCreate) {
+          const warning = `Record not found: ${entityConfig.entity} with primaryKey {${pkDisplay}}. To auto-create missing records, set push.autoCreateMissingRecords=true in .mj-sync.json`;
+          this.warnings.push(warning);
+          callbacks?.onWarn?.(warning);
+          return 'error';
+        } else if (options.verbose) {
+          callbacks?.onLog?.(`Auto-creating missing ${entityConfig.entity} record with primaryKey {${pkDisplay}}`);
         }
       }
     }
@@ -366,12 +357,9 @@ export class PushService {
       }
     }
     
-    // Use existing entity if found, otherwise create new one
     if (!exists) {
-      entity = existingEntity || entity;
-      entity.NewRecord();
-      
-      // Set primary key values for new records if provided
+      entity.NewRecord(); // make sure our record starts out fresh
+      // Set primary key values for new records if provided, this is important for the auto-create logic
       if (primaryKey) {
         for (const [pkField, pkValue] of Object.entries(primaryKey)) {
           entity.Set(pkField, pkValue);
@@ -383,7 +371,7 @@ export class PushService {
     for (const [fieldName, fieldValue] of Object.entries(processedData)) {
       entity.Set(fieldName, fieldValue);
     }
-    
+
     // Handle related entities
     if (recordData.relatedEntities) {
       // Store related entities to process after parent save
@@ -391,8 +379,6 @@ export class PushService {
     }
     
     // Save the record
-    // TODO: Hook into BaseEntity SQL execution for SQL logging
-    // Currently SQL logging requires deeper integration with MJ core
     const saveResult = await entity.Save();
     
     if (!saveResult) {
