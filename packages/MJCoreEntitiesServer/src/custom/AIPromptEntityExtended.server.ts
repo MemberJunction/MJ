@@ -1,5 +1,5 @@
 import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, IRunViewProvider, RunView, TransactionGroupBase } from "@memberjunction/core";
-import { RegisterClass, uuidv4 } from "@memberjunction/global";
+import { compareStringsByLine, RegisterClass, uuidv4 } from "@memberjunction/global";
 import { TemplateCategoryEntity, TemplateContentEntity, TemplateContentTypeEntity, TemplateEntity, AIPromptEntityExtended } from "@memberjunction/core-entities";
 
 /**
@@ -123,8 +123,9 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
                 this.TemplateID = template.ID; // link the Template to this AI Prompt
             }
         }
-        else if (this.TemplateID && this.TemplateText?.trim().length > 0) {
+        else if (this.TemplateID && this.TemplateText?.trim().length > 0 && this.TemplateTextDirty) {
             // we have a linked Template, so update the Template Contents associated with it
+            compareStringsByLine(this._originalTemplateText, this.TemplateText)
             await this.UpdateLinkedTemplateContents(md);
         }
         // now save the AI Prompt itself

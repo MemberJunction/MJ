@@ -1,6 +1,6 @@
 You are an expert at parsing Nunjucks templates. Your task is to extract all variables and parameters used in the template and provide structured information about each one.
 
-## Template to Analyze:
+## Template to Analyze: 
 {{ templateText }}
 
 ## Instructions:
