@@ -335,12 +335,12 @@ export class PushService {
             else if (result === 'unchanged') unchanged++;
             
             // For arrays, update the original record's primaryKey and sync only
-            if (isArray && (result === 'created' || result === 'updated')) {
-              // Update primaryKey if it was created
+            if (isArray) {
+              // Update primaryKey if it exists (for new records)
               if (recordToProcess.primaryKey) {
                 records[i].primaryKey = recordToProcess.primaryKey;
               }
-              // Update sync metadata
+              // Update sync metadata only if it was updated (dirty records only)
               if (recordToProcess.sync) {
                 records[i].sync = recordToProcess.sync;
               }
@@ -475,7 +475,10 @@ export class PushService {
       (entity as any).__pendingRelatedEntities = recordData.relatedEntities;
     }
     
-    // Save the record
+    // Check if the record is actually dirty before considering it changed
+    const isDirty = entity.Dirty;
+    
+    // Save the record (always call Save, but track if it was actually dirty)
     const saveResult = await entity.Save();
     
     if (!saveResult) {
@@ -494,11 +497,13 @@ export class PushService {
       }
     }
     
-    // Always update sync metadata - use original fields for checksum
-    recordData.sync = {
-      lastModified: new Date().toISOString(),
-      checksum: this.syncEngine.calculateChecksum(originalFields)
-    };
+    // Only update sync metadata if the record was actually dirty (changed)
+    if (isNew || isDirty) {
+      recordData.sync = {
+        lastModified: new Date().toISOString(),
+        checksum: this.syncEngine.calculateChecksum(originalFields)
+      };
+    }
     
     // Restore original field values to preserve @ references
     recordData.fields = originalFields;
@@ -519,7 +524,14 @@ export class PushService {
       );
     }
     
-    return exists ? 'updated' : 'created';
+    // Return the actual status based on whether the record was dirty
+    if (isNew) {
+      return 'created';
+    } else if (isDirty) {
+      return 'updated';
+    } else {
+      return 'unchanged';
+    }
   }
   
   private async processRelatedEntities(
