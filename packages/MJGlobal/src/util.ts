@@ -533,3 +533,60 @@ export function InvokeManualResize(delay: number = 50, component: any = null) {
 export function uuidv4(): string {
     return v4();
 }
+
+
+/**
+ * Compares two strings line by line and logs the differences to the console.
+ * This function is useful for debugging purposes to identify discrepancies between two text inputs.
+ * It will print the total number of lines in each string, and for each line that differs,
+ * it will log the line number, the content of each line, and the first character difference
+ * along with its position and character codes.
+ * @param str1 
+ * @param str2 
+ * @returns An array of strings representing the differences found between the two input strings. If array is empty, it means no differences were found.
+ */
+export function compareStringsByLine(str1: string, str2: string, logToConsole: boolean = true): string[] {
+    const lines1 = str1.split('\n');
+    const lines2 = str2.split('\n');
+    const maxLines = Math.max(lines1.length, lines2.length);
+    const returnArray: string[] = [];
+    function emit (message: string) {
+        if (logToConsole) {
+            console.log(message);
+        }
+        returnArray.push(message);
+    }
+
+    if (lines1.length !== lines2.length) {
+        emit(`Total lines: ${lines1.length} vs ${lines2.length}`);
+    }
+
+    for (let i = 0; i < maxLines; i++) {
+        const line1 = lines1[i] || '';
+        const line2 = lines2[i] || '';
+
+        if (line1 !== line2) {
+            emit(`\n🔴 Difference at line ${i + 1}:`);
+            emit(`Line 1: "${line1}"`);
+            emit(`Line 2: "${line2}"`);
+
+            // Find exact character difference within the line
+            for (let j = 0; j < Math.max(line1.length, line2.length); j++) {
+                if (line1[j] !== line2[j]) {
+                    emit(`  First diff at column ${j + 1}:`);
+                    emit(`  Char 1: "${line1[j]}" (code: ${line1.charCodeAt(j) || 'undefined'})`);
+                    emit(`  Char 2: "${line2[j]}" (code: ${line2.charCodeAt(j) || 'undefined'})`);
+                    emit(`  Context: "${line1.substring(Math.max(0, j - 10), j + 10)}"`);
+                    break;
+                }
+            }
+
+            // Show first few differences only to avoid spam
+            if (i > 5) {
+                emit(`\n... and ${maxLines - i - 1} more lines with differences`);
+                break;
+            }
+        }
+    }
+    return returnArray;
+}

@@ -440,6 +440,77 @@ export class SyncEngine {
     hash.update(JSON.stringify(data, null, 2));
     return hash.digest('hex');
   }
+
+  /**
+   * Calculate checksum including resolved file content
+   * 
+   * Enhanced checksum calculation that resolves @file references and includes
+   * the actual file content (with @include directives processed) in the checksum.
+   * This ensures that changes to referenced files are detected.
+   * 
+   * @param data - Fields object that may contain @file references
+   * @param entityDir - Directory for resolving relative file paths
+   * @returns Promise resolving to checksum string
+   */
+  async calculateChecksumWithFileContent(data: any, entityDir: string): Promise<string> {
+    const processedData = await this.resolveFileReferencesForChecksum(data, entityDir);
+    return this.calculateChecksum(processedData);
+  }
+
+  /**
+   * Resolve @file references for checksum calculation
+   * 
+   * Recursively processes an object and replaces @file references with their
+   * actual content (including resolved @include directives). This ensures the
+   * checksum reflects the actual content, not just the reference.
+   * 
+   * @param obj - Object to process
+   * @param entityDir - Directory for resolving relative paths
+   * @returns Promise resolving to processed object
+   * @private
+   */
+  private async resolveFileReferencesForChecksum(obj: any, entityDir: string): Promise<any> {
+    if (!obj || typeof obj !== 'object') {
+      return obj;
+    }
+
+    if (Array.isArray(obj)) {
+      return Promise.all(obj.map(item => this.resolveFileReferencesForChecksum(item, entityDir)));
+    }
+
+    const result: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (typeof value === 'string' && value.startsWith('@file:')) {
+        // Process @file reference and include actual content
+        try {
+          const filePath = value.substring(6);
+          const fullPath = path.isAbsolute(filePath) ? filePath : path.join(entityDir, filePath);
+          
+          if (await fs.pathExists(fullPath)) {
+            const content = await fs.readFile(fullPath, 'utf-8');
+            // Process any @include directives within the file
+            const processedContent = await this.processFileContentWithIncludes(content, fullPath);
+            result[key] = {
+              _checksumType: 'file',
+              _reference: value,
+              _content: processedContent
+            };
+          } else {
+            // File doesn't exist, keep the reference
+            result[key] = value;
+          }
+        } catch (error) {
+          // Error reading file, keep the reference
+          result[key] = value;
+        }
+      } else if (typeof value === 'object') {
+        result[key] = await this.resolveFileReferencesForChecksum(value, entityDir);
+      } else {
+        result[key] = value;
+      }
+    }
+    return result;
+  }
   
   /**
    * Get entity metadata information by name

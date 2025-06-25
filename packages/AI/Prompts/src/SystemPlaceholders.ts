@@ -180,14 +180,14 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_MODEL_ID',
         description: 'The AI model ID being used for this execution',
         getValue: async (params: AIPromptParams) => {
-            return params.modelId || '';
+            return params.override?.modelId || '';
         }
     },
     {
         name: '_VENDOR_ID',
         description: 'The AI vendor ID being used for this execution',
         getValue: async (params: AIPromptParams) => {
-            return params.vendorId || '';
+            return params.override?.vendorId || '';
         }
     },
     {

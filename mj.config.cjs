@@ -216,6 +216,7 @@ const codegenConfig = {
   },
   forceRegeneration: {
     enabled: false,  // Set to true to force regeneration even without schema changes
+    entityWhereClause: "", // example - can be any where clause you want "__mj_UpdatedAt>='2025-06-24 23:36:30.4900000 +00:00'",  // Optional WHERE clause to filter entities for regeneration
     baseViews: false,
     spCreate: false,  // Set this to true to regenerate all spCreate procedures
     spUpdate: false,

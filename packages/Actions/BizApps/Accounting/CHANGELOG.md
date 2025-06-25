@@ -1,5 +1,15 @@
 # @memberjunction/actions-bizapps-accounting
 
+## 2.57.0
+
+### Patch Changes
+
+- Updated dependencies [0ba485f]
+  - @memberjunction/core@2.57.0
+  - @memberjunction/core-entities@2.57.0
+  - @memberjunction/global@2.57.0
+  - @memberjunction/actions@2.57.0
+
 ## 2.56.0
 
 ### Minor Changes

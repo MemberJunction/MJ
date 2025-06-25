@@ -83,16 +83,6 @@ export class AIPromptParams {
   data?: Record<string, unknown>;
 
   /**
-   * Optional specific model to use (overrides prompt's model selection)
-   */
-  modelId?: string;
-
-  /**
-   * Optional specific vendor to use for inference routing
-   */
-  vendorId?: string;
-
-  /**
    * Optional configuration ID for environment-specific behavior
    */
   configurationId?: string;
@@ -197,6 +187,49 @@ export class AIPromptParams {
    * The AIPromptRunner will pass these through when building model-specific parameters.
    */
   additionalParameters?: Record<string, any>;
+
+  /**
+   * Optional prompt to use for model selection instead of the main prompt.
+   * When executing hierarchical prompts, this allows using a child prompt's model
+   * selection configuration instead of the parent prompt's configuration.
+   * If not specified, the main prompt's model selection will be used.
+   */
+  modelSelectionPrompt?: AIPromptEntity;
+
+  /**
+   * Optional runtime override for prompt execution.
+   * When specified, these values take precedence over any model selection
+   * configuration in the prompt or modelSelectionPrompt.
+   * Currently supports model and vendor overrides, but can be extended for future needs.
+   * 
+   * Model selection precedence (highest to lowest):
+   * 1. override (this parameter) - Runtime override, highest priority
+   * 2. modelSelectionPrompt - If specified, uses this prompt's model configuration
+   * 3. Main prompt's model configuration - Based on:
+   *    - AIPromptModels associations (if SelectionStrategy is 'Specific')
+   *    - AIModelTypeID filtering (if specified)
+   *    - SelectionStrategy ('Default', 'Specific', or 'ByPower')
+   *    - PowerPreference and MinPowerRank settings
+   * 
+   * For agents, the modelSelectionPrompt is determined by the agent's ModelSelectionMode:
+   * - "Agent": Uses the agent's specific prompt for model selection
+   * - "Agent Type": Uses the agent type's system prompt for model selection
+   * 
+   * @example
+   * ```typescript
+   * // Override model at runtime
+   * const params = new AIPromptParams();
+   * params.prompt = myPrompt;
+   * params.override = {
+   *   modelId: 'specific-model-id',
+   *   vendorId: 'specific-vendor-id'
+   * };
+   * ```
+   */
+  override?: {
+    modelId?: string;
+    vendorId?: string;
+  };
 }
 
 // Types now imported from @memberjunction/ai to avoid circular dependencies

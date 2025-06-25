@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/actions
 
+## 2.57.0
+
+### Patch Changes
+
+- Updated dependencies [0ba485f]
+  - @memberjunction/core@2.57.0
+  - @memberjunction/core-entities@2.57.0
+  - @memberjunction/global@2.57.0
+  - @memberjunction/aiengine@2.57.0
+  - @memberjunction/ai-prompts@2.57.0
+  - @memberjunction/actions-base@2.57.0
+  - @memberjunction/doc-utils@2.57.0
+  - @memberjunction/ai@2.57.0
+
 ## 2.56.0
 
 ### Minor Changes

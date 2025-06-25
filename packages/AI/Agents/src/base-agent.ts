@@ -11,8 +11,8 @@
  * @since 2.49.0
  */
 
-import { AIAgentEntity, AIAgentTypeEntity, AIAgentRunEntity, AIAgentRunStepEntity, TemplateParamEntity } from '@memberjunction/core-entities';
-import { UserInfo, Metadata, RunView } from '@memberjunction/core';
+import { AIAgentEntity, AIAgentTypeEntity, AIAgentRunEntity, AIAgentRunStepEntity, TemplateParamEntity, AIPromptEntity, ActionParamEntity } from '@memberjunction/core-entities';
+import { UserInfo, Metadata, RunView, LogStatus } from '@memberjunction/core';
 import { AIPromptRunner, AIPromptParams, ChildPromptParam } from '@memberjunction/ai-prompts';
 import { ChatMessage, AIPromptRunResult } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
@@ -404,8 +404,8 @@ export class BaseAgent {
      */
     protected async preparePromptParams(
         agentType: AIAgentTypeEntity,
-        systemPrompt: any,
-        childPrompt: any,
+        systemPrompt: AIPromptEntity,
+        childPrompt: AIPromptEntity,
         params: ExecuteAgentParams
     ): Promise<AIPromptParams> {
         // Gather context data
@@ -433,6 +433,20 @@ export class BaseAgent {
             )
         ];
 
+        // Handle model selection mode
+        if (params.agent.ModelSelectionMode === 'Agent') {
+            // Use the child prompt (agent's specific prompt) for model selection
+            promptParams.modelSelectionPrompt = childPrompt;
+            LogStatus(`🎯 Agent '${params.agent.Name}' configured to use its own prompt for model selection`);
+        }
+        // Default behavior is 'Agent Type', which uses the parent system prompt
+
+        // Handle runtime override if provided
+        if (params.override) {
+            promptParams.override = params.override;
+            LogStatus(`🎯 Using runtime override: ${params.override.modelId || 'model'} ${params.override.vendorId ? `from vendor ${params.override.vendorId}` : ''}`);
+        }
+
         return promptParams;
     }
 
@@ -443,7 +457,7 @@ export class BaseAgent {
      * @returns {Promise<AIPromptRunResult>} The prompt execution result
      * @protected
      */
-    protected async executePrompt(promptParams: AIPromptParams): Promise<any> {
+    protected async executePrompt(promptParams: AIPromptParams): Promise<AIPromptRunResult> {
         return await this._promptRunner.ExecutePrompt(promptParams);
     }
 
@@ -459,7 +473,7 @@ export class BaseAgent {
     protected async processNextStep<R>(
         params: ExecuteAgentParams,
         agentType: AIAgentTypeEntity,
-        promptResult: any
+        promptResult: AIPromptRunResult
     ): Promise<BaseAgentNextStep<R>> {
         // Get the agent type instance
         let agentTypeInstance: BaseAgentType | null;
@@ -488,7 +502,7 @@ export class BaseAgent {
      * @returns {ChatMessage} A formatted message with action results
      * @protected
      */
-    protected createActionResultMessage(actions: AgentAction[], results: any[]): ChatMessage {
+    protected createActionResultMessage(actions: AgentAction[], results: ActionResult[]): ChatMessage {
         const resultSummary = actions.map((action, index) => {
             const result = results[index];
             const outputParams = result.Params?.filter((p: any) => 
@@ -498,7 +512,7 @@ export class BaseAgent {
             return {
                 actionName: action.name,
                 success: result.Success,
-                resultCode: result.Result?.Code || 'N/A',
+                resultCode: result.Result?.ResultCode || 'N/A',
                 message: result.Message || null,
                 outputs: outputParams.reduce((acc: any, param: any) => {
                     acc[param.Name] = param.Value;
@@ -521,7 +535,7 @@ export class BaseAgent {
      * @returns {ChatMessage} A formatted message with sub-agent results
      * @protected
      */
-    protected createSubAgentResultMessage(subAgent: AgentSubAgentRequest, result: any): ChatMessage {
+    protected createSubAgentResultMessage(subAgent: AgentSubAgentRequest, result: ExecuteAgentResult): ChatMessage {
         return {
             role: 'user',
             content: `Sub-agent '${subAgent.name}' result:\n${typeof result === 'string' ? result : JSON.stringify(result, null, 2)}`
@@ -704,7 +718,7 @@ export class BaseAgent {
      * @param {ChatMessage[]} conversationMessages - Current conversation history
      * @param {UserInfo} [contextUser] - Optional user context
      * 
-     * @returns {Promise<any>} Result from the sub-agent execution
+     * @returns {Promise<ExecuteAgentResult>} Result from the sub-agent execution
      * 
      * @throws {Error} If sub-agent cannot be found or execution fails
      * 
@@ -881,7 +895,7 @@ export class BaseAgent {
      * @returns {object} Formatted parameter object
      * @private
      */
-    private formatActionParameter(param: any): object {
+    private formatActionParameter(param: ActionParamEntity): object {
         return {
             Name: param.Name,
             Type: param.Type,
@@ -1365,10 +1379,10 @@ export class BaseAgent {
             const outputData = {
                 promptResult: {
                     success: promptResult.success,
-                    llmResponse: promptResult.llmResponse,
-                    modelUsed: promptResult.runInfo?.modelName,
-                    tokensUsed: promptResult.runInfo?.promptRun?.TotalTokensUsed,
-                    totalCost: promptResult.runInfo?.promptRun?.TotalCost
+                    llmResponse: promptResult.rawResult,
+                    modelUsed: promptResult.modelInfo?.modelName,
+                    tokensUsed: promptResult?.promptRun?.TokensUsed,
+                    totalCost: promptResult?.promptRun?.TotalCost
                 },
                 nextStep: {
                     decision: nextStep.step,
@@ -1976,7 +1990,7 @@ export class BaseAgent {
                         Status: 'Completed',
                         StartedAt: event.timestamp,
                         CompletedAt: event.timestamp
-                    } as any,
+                    } as AIAgentRunStepEntity,
                     inputData: null,
                     outputData: { 
                         percentage: progressData.percentage,

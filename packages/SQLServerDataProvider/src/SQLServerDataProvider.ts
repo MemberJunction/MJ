@@ -1688,29 +1688,39 @@ export class SQLServerDataProvider
 
       if (!bNewRecord) oldData = entity.GetAll(true); // get all the OLD values, only do for existing records, for new records, not relevant
 
-      sSQL = `
-                    DECLARE @ResultTable TABLE (
-                        ${this.getAllEntityColumnsSQL(entity.EntityInfo)}
-                    );
+      const logRecordChangeSQL = this.GetLogRecordChangeSQL(entity.GetAll(false), oldData, entity.EntityInfo.Name, '@ID', entity.EntityInfo, bNewRecord ? 'Create' : 'Update', user, false);
+      if (logRecordChangeSQL === null) {
+        // if we don't have any record changes to log, just return the simple SQL to run which will do nothing but update __mj_UpdatedAt
+        // this can happen if a subclass overrides the Dirty() flag to make the object dirty due to factors outside of the
+        // array of fields that are directly stored in the DB and we need to respect that but this will blow up if we try
+        // to log record changes when there are none, so we just return the simple SQL to run
+        sSQL = sSimpleSQL; 
+      }
+      else {
+        sSQL = `
+                      DECLARE @ResultTable TABLE (
+                          ${this.getAllEntityColumnsSQL(entity.EntityInfo)}
+                      );
 
-                    INSERT INTO @ResultTable
-                    ${sSimpleSQL};
+                      INSERT INTO @ResultTable
+                      ${sSimpleSQL};
 
-                    DECLARE @ID NVARCHAR(MAX);
-                    
-                    SELECT @ID = ${concatPKIDString} FROM @ResultTable;
-                    
-                    IF @ID IS NOT NULL
-                    BEGIN
-                        DECLARE @ResultChangesTable TABLE (
-                            ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
-                        );
+                      DECLARE @ID NVARCHAR(MAX);
+                      
+                      SELECT @ID = ${concatPKIDString} FROM @ResultTable;
+                      
+                      IF @ID IS NOT NULL
+                      BEGIN
+                          DECLARE @ResultChangesTable TABLE (
+                              ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
+                          );
 
-                        INSERT INTO @ResultChangesTable
-                        ${this.GetLogRecordChangeSQL(entity.GetAll(false), oldData, entity.EntityInfo.Name, '@ID', entity.EntityInfo, bNewRecord ? 'Create' : 'Update', user, false)};
-                    END;
+                          INSERT INTO @ResultChangesTable
+                          ${logRecordChangeSQL};
+                      END;
 
-                    SELECT * FROM @ResultTable;`; // NOTE - in the above, we call the T-SQL variable @ID for simplicity just as a variable name, even though for each entity the pkey could be something else. Entity pkeys are not always a field called ID could be something else including composite keys.
+                      SELECT * FROM @ResultTable;`; // NOTE - in the above, we call the T-SQL variable @ID for simplicity just as a variable name, even though for each entity the pkey could be something else. Entity pkeys are not always a field called ID could be something else including composite keys.
+      }
     } else {
       // not doing track changes for this entity, keep it simple
       sSQL = sSimpleSQL;
@@ -2106,20 +2116,40 @@ export class SQLServerDataProvider
     }
     if (!isFirst) sRet += ',\n                ';
 
-    sRet += `@${f.CodeName}=${this.packageSPParam(val, quotes)}`;
+    sRet += `@${f.CodeName}=${this.packageSPParam(val, quotes, f.UnicodePrefix)}`;
 
     return sRet;
   }
 
-  protected packageSPParam(paramValue: any, quoteString: string) {
+  /**
+   * Returns a string that packages the parameter value for the stored procedure call.
+   * It will handle quoting the value based on the quoteString provided and will also handle null
+   * values by returning 'NULL' as a string. Finally, the prefix is used for unicode fields to add the 'N' prefix if needed.
+   * @param paramValue 
+   * @param quoteString 
+   * @param prefix 
+   * @returns 
+   */
+  protected packageSPParam(paramValue: any, quoteString: string, unicodePrefix: string) {
+    // Handle null/undefined first
+    if (paramValue === null || paramValue === undefined) {
+      return 'NULL';
+    }
+    
     let pVal: any;
     if (typeof paramValue === 'string') {
-      if (quoteString === "'") pVal = paramValue.toString().replace(/'/g, "''");
-      else if (quoteString === '"') pVal = paramValue.toString().replace(/"/g, '""');
-      else pVal = paramValue;
-    } else pVal = paramValue;
+      if (quoteString === "'") 
+        pVal = paramValue.replace(/'/g, "''");
+      else if (quoteString === '"') 
+        pVal = paramValue.replace(/"/g, '""');
+      else 
+        pVal = paramValue;
+    } 
+    else {
+      pVal = paramValue;
+    }
 
-    return paramValue === null || paramValue === undefined ? 'NULL' : quoteString + pVal + quoteString;
+    return unicodePrefix + quoteString + pVal + quoteString;
   }
 
   protected GetLogRecordChangeSQL(

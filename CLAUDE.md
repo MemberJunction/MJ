@@ -1,11 +1,40 @@
 # MemberJunction Development Guide
 
+## 🚨 CRITICAL RULES - VIOLATIONS ARE UNACCEPTABLE 🚨
+
+### 1. NO `any` TYPES - EVER
+- **NEVER use `any` types in TypeScript code**
+- **ALWAYS ask the user** if you think you need to use `any`
+- The user will provide a proper typing solution in most cases
+- This includes:
+  - No `as any` type assertions
+  - No `: any` type annotations
+  - No `<any>` generic type arguments
+  - No `unknown` as a lazy alternative
+- **Why**: MemberJunction has strong typing throughout - there's always a proper type available
+
+### 2. NO COMMITS WITHOUT EXPLICIT APPROVAL
+- **NEVER run `git commit` without the user explicitly asking you to**
+- You may:
+  - Stage changes with `git add`
+  - Show what would be committed with `git status` and `git diff --cached`
+  - Prepare commit messages
+- You may NOT:
+  - Run `git commit` unless the user says "commit" or "create a commit" or similar
+  - Push changes to remote
+  - Create pull requests without approval
+- **Why**: The user needs to review all changes before they become permanent
+
+### 3. NO MODIFICATIONS TO MERGED PRs
+- **NEVER update title/description of merged PRs** without explicit approval each time
+- Always ask before modifying any historical git data
+
+---
+
 **VERY IMPORTANT** We want you to be a high performance agent. Therefore whenever you need to spin up tasks - if they do not require interaction with the user and if they are not interdependent in an way, ALWAYS spin up multiple parallel tasks to work together for faster responses. **NEVER** process tasks sequentially if they are candidates for parallelization
 
 ## IMPORTANT
 - Before starting a new line of work always check the local branch we're on and see if it is (a) separate from the default branch in the remote repo - we always want to work in local feature branches and (b) if we aren't in such a feature branch that is named for the work being requested and empty, cut a new one but ask first and then switch to it
-- **NEVER commit changes without explicit user request** - Always stage changes and show what would be committed, but wait for user approval before running git commit
-- **NEVER update title/description of merged PRs** - Do not modify the title or description of already merged pull requests without getting explicit user approval each time
 
 ## Build Commands
 - Build all packages: `npm run build` - from repo root
@@ -82,9 +111,9 @@ Look for packages that depend on each other:
 
 ## Code Style Guide
 - Use TypeScript strict mode and explicit typing
-- Always use MemberJunction generated `BaseEntity` sub-classes for all data work for strong typing, never use `any`
+- Always use MemberJunction generated `BaseEntity` sub-classes for all data work for strong typing
 - Study the data model in /packages/MJCoreEntities to understand the schema and use properties/fields defined there
-- No explicit `any` types (enforced by ESLint)
+- No explicit `any` types - see CRITICAL RULES section above
 - Prefer object shorthand syntax
 - Follow existing naming conventions:
   - PascalCase for classes and interfaces

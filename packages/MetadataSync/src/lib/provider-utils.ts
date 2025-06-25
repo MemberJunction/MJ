@@ -12,7 +12,7 @@ import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache, setupSQL
 import type { MJConfig } from '../config';
 import * as fs from 'fs';
 import * as path from 'path';
-import { UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, UserInfo } from '@memberjunction/core';
 
 /** Global ConnectionPool instance for connection lifecycle management */
 let globalPool: sql.ConnectionPool | null = null;
@@ -172,7 +172,7 @@ export function getSystemUser(): UserInfo {
  * }
  * ```
  */
-export function getDataProvider(): SQLServerDataProvider | null {
+export function getDataProvider(): DatabaseProviderBase | null {
   return globalProvider;
 }
 

@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/ng-base-forms
 
+## 2.57.0
+
+### Patch Changes
+
+- Updated dependencies [0ba485f]
+  - @memberjunction/core@2.57.0
+  - @memberjunction/global@2.57.0
+  - @memberjunction/ng-link-directives@2.57.0
+  - @memberjunction/ng-record-changes@2.57.0
+  - @memberjunction/ng-shared@2.57.0
+  - @memberjunction/ng-base-types@2.57.0
+  - @memberjunction/ng-code-editor@2.57.0
+  - @memberjunction/ng-container-directives@2.57.0
+  - @memberjunction/ng-tabstrip@2.57.0
+
 ## 2.56.0
 
 ### Patch Changes

@@ -412,6 +412,73 @@ onProgress((status) => {
 });
 ```
 
+### Force Regeneration with Smart Filtering
+
+Need to regenerate specific SQL objects without schema changes? Our force regeneration feature gives you **surgical precision** over what gets regenerated:
+
+```javascript
+// In mj.config.cjs
+forceRegeneration: {
+  enabled: true,
+  // Filter to specific entities using SQL WHERE clause
+  entityWhereClause: "SchemaName = 'CRM' AND __mj_UpdatedAt >= '2025-06-24'",
+  
+  // Granular control over what gets regenerated
+  baseViews: true,      // Regenerate base views
+  spCreate: false,      // Skip create procedures
+  spUpdate: true,       // Regenerate update procedures
+  spDelete: false,      // Skip delete procedures
+  indexes: true,        // Regenerate foreign key indexes
+  fullTextSearch: false // Skip full-text search components
+}
+```
+
+#### Common Scenarios:
+
+**Regenerate views for recently modified entities:**
+```javascript
+forceRegeneration: {
+  enabled: true,
+  entityWhereClause: "__mj_UpdatedAt >= '2025-06-24 22:00:00'",
+  baseViews: true
+}
+```
+
+**Regenerate all stored procedures for a specific schema:**
+```javascript
+forceRegeneration: {
+  enabled: true,
+  entityWhereClause: "SchemaName = 'Sales'",
+  allStoredProcedures: true
+}
+```
+
+**Regenerate specific SQL object for a single entity:**
+```javascript
+forceRegeneration: {
+  enabled: true,
+  entityWhereClause: "Name = 'Customer'",
+  spUpdate: true  // Just regenerate the update procedure
+}
+```
+
+**Regenerate everything (no filtering):**
+```javascript
+forceRegeneration: {
+  enabled: true,
+  // No entityWhereClause = regenerate for ALL entities
+  allStoredProcedures: true,
+  baseViews: true,
+  indexes: true
+}
+```
+
+#### How It Works:
+1. **Entity Filtering**: The `entityWhereClause` runs against the Entity metadata table to select which entities qualify
+2. **Type Filtering**: Individual flags control which SQL object types get regenerated
+3. **Smart Combination**: Only regenerates the intersection (selected entities AND selected types)
+4. **Error Handling**: Invalid WHERE clauses stop execution with clear error messages
+
 ## Error Handling
 
 The library provides comprehensive error handling:

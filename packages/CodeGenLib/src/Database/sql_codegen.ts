@@ -5,7 +5,7 @@ import path from 'path';
 
 import { SQLUtilityBase } from './sql';
 import * as sql from 'mssql';
-import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase, MAX_INDEX_NAME_LENGTH } from '../Config/config';
+import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
 import { ManageMetadataBase } from './manage-metadata';
 
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
@@ -35,8 +35,40 @@ export class SQLCodeGenBase {
         return this._sqlUtilityObject;
     }
 
+    /**
+     * Array of entity names that qualify for forced regeneration based on the whereClause filter
+     */
+    protected entitiesQualifiedForForcedRegeneration: string[] = [];
+
+    /**
+     * Flag indicating whether to filter entities for forced regeneration based on entityWhereClause
+     */
+    protected filterEntitiesQualifiedForRegeneration: boolean = false;
+
     public async manageSQLScriptsAndExecution(pool: sql.ConnectionPool, entities: EntityInfo[], directory: string, currentUser: UserInfo): Promise<boolean> {
         try {
+            // Build list of entities qualified for forced regeneration if entityWhereClause is provided
+            if (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.entityWhereClause) {
+                this.filterEntitiesQualifiedForRegeneration = true; // Enable filtering
+                try {
+                    const whereClause = configInfo.forceRegeneration.entityWhereClause;
+                    const query = `
+                        SELECT Name 
+                        FROM [${mjCoreSchema}].[Entity] 
+                        WHERE ${whereClause}
+                    `;
+                    const result = await pool.request().query(query);
+                    this.entitiesQualifiedForForcedRegeneration = result.recordset.map((r: any) => r.Name);
+                    
+                    logStatus(`Force regeneration filter enabled: ${this.entitiesQualifiedForForcedRegeneration.length} entities qualified based on entityWhereClause: ${whereClause}`);
+                } catch (error) {
+                    logError(`CRITICAL ERROR: Failed to execute forceRegeneration.entityWhereClause query: ${error}`);
+                    logError(`WHERE clause: ${configInfo.forceRegeneration.entityWhereClause}`);
+                    logError(`Stopping execution due to invalid entityWhereClause configuration`);
+                    throw new Error(`Invalid forceRegeneration.entityWhereClause: ${error}`);
+                }
+            }
+
             // STEP 1 - execute any custom SQL scripts for object creation that need to happen first - for example, if
             //          we have custom base views, need to have them defined before we do
             //          the rest as the generated stuff might use custom base views in compiled
@@ -383,7 +415,21 @@ export class SQLCodeGenBase {
                   description.toLowerCase().includes('spdelete')))
             );
             
-            shouldLog = isNewOrModified || isForceRegeneration;
+            // Determine if we should log based on entity state and force regeneration settings
+            if (isNewOrModified) {
+                // Always log new or modified entities
+                shouldLog = true;
+            } else if (isForceRegeneration) {
+                // For force regeneration, the specific type flags (spCreate, baseViews, etc.) 
+                // already filtered this - now we just need to check entity filtering
+                if (this.filterEntitiesQualifiedForRegeneration) {
+                    // Only log if entity is in the qualified list
+                    shouldLog = this.entitiesQualifiedForForcedRegeneration.includes(entity.Name);
+                } else {
+                    // No entity filtering - regenerate this type for all entities
+                    shouldLog = true;
+                }
+            }
         }
         
         if (shouldLog) {

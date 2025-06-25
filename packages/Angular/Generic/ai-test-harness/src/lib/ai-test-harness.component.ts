@@ -1383,8 +1383,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             
             // Execute the prompt using RunAIPrompt
             const query = `
-                mutation RunAIPrompt($promptId: String!, $data: String, $modelId: String, $vendorId: String, $configurationId: String, $skipValidation: Boolean, $templateData: String, $responseFormat: String, $temperature: Float, $topP: Float, $topK: Int, $minP: Float, $frequencyPenalty: Float, $presencePenalty: Float, $seed: Int, $stopSequences: [String!], $includeLogProbs: Boolean, $topLogProbs: Int, $messages: String) {
-                    RunAIPrompt(promptId: $promptId, data: $data, modelId: $modelId, vendorId: $vendorId, configurationId: $configurationId, skipValidation: $skipValidation, templateData: $templateData, responseFormat: $responseFormat, temperature: $temperature, topP: $topP, topK: $topK, minP: $minP, frequencyPenalty: $frequencyPenalty, presencePenalty: $presencePenalty, seed: $seed, stopSequences: $stopSequences, includeLogProbs: $includeLogProbs, topLogProbs: $topLogProbs, messages: $messages) {
+                mutation RunAIPrompt($promptId: String!, $data: String, $overrideModelId: String, $overrideVendorId: String, $configurationId: String, $skipValidation: Boolean, $templateData: String, $responseFormat: String, $temperature: Float, $topP: Float, $topK: Int, $minP: Float, $frequencyPenalty: Float, $presencePenalty: Float, $seed: Int, $stopSequences: [String!], $includeLogProbs: Boolean, $topLogProbs: Int, $messages: String) {
+                    RunAIPrompt(promptId: $promptId, data: $data, overrideModelId: $overrideModelId, overrideVendorId: $overrideVendorId, configurationId: $configurationId, skipValidation: $skipValidation, templateData: $templateData, responseFormat: $responseFormat, temperature: $temperature, topP: $topP, topK: $topK, minP: $minP, frequencyPenalty: $frequencyPenalty, presencePenalty: $presencePenalty, seed: $seed, stopSequences: $stopSequences, includeLogProbs: $includeLogProbs, topLogProbs: $topLogProbs, messages: $messages) {
                         success
                         output
                         parsedResult
@@ -1402,8 +1402,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             const variables = {
                 promptId: (this.entity as AIPromptEntity).ID,
                 data: JSON.stringify(dataContext),
-                modelId: this.selectedModelId || undefined,
-                vendorId: this.selectedVendorId || undefined,
+                overrideModelId: this.selectedModelId || undefined,
+                overrideVendorId: this.selectedVendorId || undefined,
                 configurationId: undefined, // Use default configuration
                 skipValidation: this.skipValidation,
                 templateData: null, // Additional template context if needed
