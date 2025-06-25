@@ -9,7 +9,7 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
     template: `
         <div class="tree-node" 
              [class.expanded]="node.expanded"
-             [style.margin-left.px]="node.depth > 0 ? node.depth * 20 : 0">
+             [class]="'depth-' + depth">
             
             <!-- Node Header -->
             <div class="node-header" (dblclick)="onDoubleClick()">
@@ -147,6 +147,7 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
                 @for (child of node.children; track child.id) {
                     <mj-execution-node 
                         [node]="child"
+                        [depth]="depth + 1"
                         (toggleNode)="toggleNode.emit($event)"
                         (userInteracted)="userInteracted.emit()">
                     </mj-execution-node>
@@ -160,16 +161,86 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
             width: 100%;
         }
         
+        /* Depth-based indentation and background colors */
         .tree-node {
             margin-bottom: 4px;
+            position: relative;
         }
+        
+        /* Base styling for all depth levels */
+        .tree-node[class*="depth-"] {
+            padding-left: 8px;
+        }
+        
+        /* Root level - no lines */
+        .depth-0 .node-header { 
+            background: #f8f9fa; 
+        }
+        
+        /* All child levels get dotted lines */
+        .tree-node[class*="depth-"]:not(.depth-0) {
+            margin-left: calc(var(--depth) * 20px);
+        }
+        
+        .tree-node[class*="depth-"]:not(.depth-0)::before {
+            content: '';
+            position: absolute;
+            left: calc(var(--depth) * -20px - 8px);
+            top: 0;
+            width: 2px;
+            height: 100%;
+            border-left: 2px dotted #e0e7ff;
+        }
+        
+        .tree-node[class*="depth-"]:not(.depth-0)::after {
+            content: '';
+            position: absolute;
+            left: calc(var(--depth) * -20px - 8px);
+            top: 50%;
+            width: calc(var(--depth) * 20px);
+            height: 2px;
+            border-bottom: 2px dotted #e0e7ff;
+        }
+        
+        /* Progressive background lightening */
+        .tree-node[class*="depth-"]:not(.depth-0) .node-header {
+            background: color-mix(in srgb, #f8f9fa 70%, white calc(var(--depth) * 10%));
+        }
+        
+        /* Fallback for browsers that don't support color-mix */
+        .depth-1 { --depth: 1; margin-left: 20px; }
+        .depth-1 .node-header { background: #fafbfc; }
+        
+        .depth-2 { --depth: 2; margin-left: 40px; }
+        .depth-2 .node-header { background: #fcfdfe; }
+        
+        .depth-3 { --depth: 3; margin-left: 60px; }
+        .depth-3 .node-header { background: #feffff; }
+        
+        .depth-4 { --depth: 4; margin-left: 80px; }
+        .depth-4 .node-header { background: #ffffff; }
+        
+        .depth-5 { --depth: 5; margin-left: 100px; }
+        .depth-5 .node-header { background: #ffffff; }
+        
+        .depth-6 { --depth: 6; margin-left: 120px; }
+        .depth-6 .node-header { background: #ffffff; }
+        
+        .depth-7 { --depth: 7; margin-left: 140px; }
+        .depth-7 .node-header { background: #ffffff; }
+        
+        .depth-8 { --depth: 8; margin-left: 160px; }
+        .depth-8 .node-header { background: #ffffff; }
+        
+        .depth-9 { --depth: 9; margin-left: 180px; }
+        .depth-9 .node-header { background: #ffffff; }
+
         
         .node-header {
             display: flex;
             align-items: center;
             gap: 8px;
             padding: 8px 12px;
-            background: #f8f9fa;
             border: 1px solid #e0e0e0;
             border-radius: 6px;
             transition: all 0.2s ease;
@@ -371,6 +442,7 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
 })
 export class ExecutionNodeComponent {
     @Input() node!: ExecutionTreeNode;
+    @Input() depth: number = 0; // Add depth input
     @Output() toggleNode = new EventEmitter<ExecutionTreeNode>();
     @Output() userInteracted = new EventEmitter<void>();
     

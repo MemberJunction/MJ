@@ -302,126 +302,9 @@ export interface ExecutionStats {
             font-size: 14px;
         }
 
-        /* Tree Nodes */
+        /* Tree Nodes - These styles are for reference only, actual rendering is done by ExecutionNodeComponent */
         .tree-node {
             margin-bottom: 4px;
-        }
-
-        .node-header {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
-            background: #f8f9fa;
-            border: 1px solid #e0e0e0;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            user-select: none;
-        }
-
-        .node-header:hover {
-            background: #e8f0fe;
-            border-color: #2196f3;
-        }
-
-        .expand-icon, .expand-spacer {
-            width: 16px;
-            text-align: center;
-            color: #666;
-            font-size: 10px;
-        }
-
-        .status-icon {
-            width: 20px;
-            text-align: center;
-            font-size: 14px;
-        }
-
-        .status-pending { color: #999; }
-        .status-running { color: #2196f3; }
-        .status-completed { color: #4caf50; }
-        .status-failed { color: #f44336; }
-
-        .type-icon {
-            width: 20px;
-            text-align: center;
-            font-size: 14px;
-            color: #666;
-        }
-
-        .node-name {
-            flex: 1;
-            font-size: 13px;
-            font-weight: 500;
-            color: #1a1a1a;
-        }
-
-        .node-duration {
-            font-size: 12px;
-            color: #666;
-            font-weight: 500;
-        }
-
-        .node-metrics {
-            display: flex;
-            gap: 12px;
-            font-size: 12px;
-        }
-
-        .tokens {
-            color: #666;
-        }
-
-        .cost {
-            color: #2196f3;
-            font-weight: 500;
-        }
-
-        /* Node Details */
-        .node-details {
-            margin: 8px 0 8px 44px;
-            padding: 12px;
-            background: #f5f5f5;
-            border-radius: 4px;
-            font-size: 12px;
-        }
-
-        .detail-section {
-            margin-bottom: 8px;
-        }
-
-        .detail-section:last-child {
-            margin-bottom: 0;
-        }
-
-        .detail-section.error {
-            color: #d32f2f;
-        }
-
-        .detail-label {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-weight: 600;
-            margin-bottom: 4px;
-            color: #666;
-        }
-
-        .detail-section.error .detail-label {
-            color: #d32f2f;
-        }
-
-        .detail-label i {
-            font-size: 12px;
-        }
-
-        .detail-content {
-            padding-left: 18px;
-            color: #333;
-            line-height: 1.4;
-            white-space: pre-wrap;
-            word-break: break-word;
         }
 
         /* Footer */
@@ -480,112 +363,6 @@ export interface ExecutionStats {
             font-size: 12px;
             font-weight: 500;
         }
-
-        /* Details Toggle Button */
-        .details-toggle {
-            margin-left: 8px;
-            padding: 2px 6px;
-            background: transparent;
-            border: 1px solid #ddd;
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 10px;
-            color: #666;
-            transition: all 0.2s ease;
-        }
-        
-        .details-toggle:hover {
-            background: #f0f0f0;
-            border-color: #2196f3;
-            color: #2196f3;
-        }
-        
-        /* Markdown Details Section */
-        .markdown-details {
-            margin: 8px 0 8px 44px;
-            padding: 12px;
-            background: #f9fafb;
-            border-left: 3px solid #2196f3;
-            border-radius: 0 4px 4px 0;
-            font-size: 13px;
-            line-height: 1.6;
-        }
-        
-        .markdown-details h2 {
-            font-size: 16px;
-            margin: 0 0 8px 0;
-            color: #1a1a1a;
-        }
-        
-        .markdown-details h3 {
-            font-size: 14px;
-            margin: 8px 0 6px 0;
-            color: #333;
-        }
-        
-        .markdown-details h4 {
-            font-size: 13px;
-            margin: 6px 0 4px 0;
-            color: #555;
-        }
-        
-        .markdown-details ul {
-            margin: 4px 0;
-            padding-left: 20px;
-        }
-        
-        .markdown-details li {
-            margin: 2px 0;
-        }
-        
-        .markdown-details code {
-            background: #e8f0fe;
-            padding: 1px 4px;
-            border-radius: 3px;
-            font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 12px;
-        }
-        
-        .markdown-details pre {
-            background: #f5f5f5;
-            padding: 8px;
-            border-radius: 4px;
-            overflow-x: auto;
-            margin: 8px 0;
-        }
-        
-        .markdown-details pre code {
-            background: none;
-            padding: 0;
-        }
-        
-        .markdown-details strong {
-            font-weight: 600;
-            color: #1a1a1a;
-        }
-        
-        .markdown-details em {
-            font-style: italic;
-            color: #555;
-        }
-
-        /* Button styling for execution history toggle */
-        .execution-history-toggle {
-            background: transparent;
-            border: none;
-            padding: 4px 8px;
-            margin-left: 4px;
-            cursor: pointer;
-            color: #666;
-            font-size: 12px;
-            border-radius: 3px;
-            transition: all 0.2s ease;
-        }
-        
-        .execution-history-toggle:hover {
-            background: #e3f2fd;
-            color: #2196f3;
-        }
         
         /* View Run Button */
         .view-run-btn {
@@ -622,20 +399,6 @@ export interface ExecutionStats {
 
             .execution-tree {
                 padding: 12px;
-            }
-
-            .node-header {
-                padding: 6px 8px;
-                gap: 6px;
-            }
-
-            .node-metrics {
-                display: none;
-            }
-            
-            .markdown-details {
-                margin-left: 20px;
-                font-size: 12px;
             }
         }
     `]
@@ -853,15 +616,21 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     
     /**
      * Create a component for a node and its children
+     * This now ensures proper depth is passed and used for indentation
      */
     private createNodeComponent(node: ExecutionTreeNode, container: ViewContainerRef): ComponentRef<ExecutionNodeComponent> {
         const componentRef = container.createComponent(ExecutionNodeComponent);
         const instance = componentRef.instance;
         
-        // Set inputs
-        instance.node = node;
+        // IMPORTANT: Ensure the node has the correct depth
+        // Create a new node object to ensure Angular detects the change
+        const nodeWithDepth = {
+            ...node,
+            depth: node.depth || 0  // Ensure depth is always defined
+        };
         
-        // No need to apply margin here - it's handled in the component template
+        // Set inputs
+        instance.node = nodeWithDepth;
         
         // Subscribe to outputs
         instance.toggleNode.subscribe((n: ExecutionTreeNode) => this.toggleNode(n));
@@ -879,8 +648,9 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     
     /**
      * Convert new execution tree format to display nodes
+     * FIXED: Ensure depth is properly set and preserved
      */
-    private convertExecutionTree(nodes: any[], depth: number = 0): ExecutionTreeNode[] {
+    private convertExecutionTree(nodes: any[], depth: number = 0, parentDepth: number = -1): ExecutionTreeNode[] {
         // Sort nodes by StepNumber before processing
         const sortedNodes = [...nodes].sort((a, b) => {
             const aStepNum = a.step?.StepNumber || 0;
@@ -889,6 +659,9 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         });
         
         return sortedNodes.map((node, index) => {
+            // Calculate the actual depth for this node
+            const nodeDepth = node.depth !== undefined ? node.depth : parentDepth + 1;
+            
             // Parse the step name for markdown content (same as live steps)
             const stepName = node.step?.StepName || 'Unknown Step';
             let name = stepName;
@@ -938,12 +711,13 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                 outputPreview: outputPreview,
                 error: node.step?.ErrorMessage,
                 expanded: false,
-                depth: node.depth !== undefined ? node.depth : depth,  // Use node.depth if available, fallback to recursion depth
+                depth: nodeDepth,  // Use the calculated depth
                 tokensUsed: this.extractTokens(node.outputData),
                 cost: this.extractCost(node.outputData),
                 detailsMarkdown: detailsMarkdown,
                 detailsExpanded: false,
-                children: node.children ? this.convertExecutionTree(node.children, node.depth !== undefined ? node.depth + 1 : depth + 1) : undefined,
+                // Process children with the correct parent depth
+                children: node.children ? this.convertExecutionTree(node.children, nodeDepth + 1, nodeDepth) : undefined,
                 displayMode: displayMode
             };
             
@@ -1189,6 +963,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     
     /**
      * Convert live steps format to execution tree format
+     * FIXED: Ensure depth is properly preserved
      */
     private convertLiveStepsToTree(liveSteps: any[]): ExecutionTreeNode[] {
         const treeNodes: ExecutionTreeNode[] = [];
@@ -1226,7 +1001,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                 startTime: step.startTime ? new Date(step.startTime) : new Date(),
                 agentPath: step.agentHierarchy || [],
                 expanded: false,
-                depth: step.depth || 0,
+                depth: step.depth !== undefined ? step.depth : 0,  // Ensure depth is always defined
                 detailsMarkdown: detailsMarkdown,
                 detailsExpanded: false
             };
@@ -1294,6 +1069,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                 // Update the component if it exists
                 const componentRef = this.nodeComponentMap.get(nodeId);
                 if (componentRef) {
+                    // Create a new object to ensure change detection
                     componentRef.instance.node = { ...node };
                     componentRef.changeDetectorRef.detectChanges();
                 }
@@ -1554,6 +1330,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     
     /**
      * Append new live steps without re-rendering entire tree
+     * FIXED: Ensure depth is properly preserved when creating nodes
      */
     private appendNewLiveSteps(liveSteps: any[]): void {
         
@@ -1650,15 +1427,15 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                     componentRef.changeDetectorRef.detectChanges();
                 }
             } else {
-                // Create new node
+                // Create new node with proper depth
                 const newNode = this.createNodeFromLiveStep(step);
                 
-                // Debug: Log if depth is missing
-                if (newNode.depth === 0 && step.depth !== 0) {
-                    console.warn('Node depth was reset to 0 for step:', step);
+                // Ensure depth is set from the step data
+                if (step.depth !== undefined) {
+                    newNode.depth = step.depth;
                 }
                 
-                if (step.depth === 0) {
+                if (newNode.depth === 0) {
                     // Add to tree and create component
                     this.executionTree.push(newNode);
                     this.createNodeComponent(newNode, this.executionNodesContainer);
@@ -1681,7 +1458,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                             parentComponentRef.changeDetectorRef.detectChanges();
                         }
                     } else {
-                        // If no parent found, add as root
+                        // If no parent found, add as root but preserve depth
                         this.executionTree.push(newNode);
                         this.createNodeComponent(newNode, this.executionNodesContainer);
                     }
@@ -1805,6 +1582,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     
     /**
      * Create a single node from a live step
+     * FIXED: Ensure depth is properly set from step data
      */
     private createNodeFromLiveStep(step: any): ExecutionTreeNode {
         const stepName = step.step?.StepName || 'Processing...';
@@ -1858,6 +1636,9 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         
         const nodeType = this.mapStepType(step.executionType || step.step?.StepType);
         
+        // IMPORTANT: Use the depth from step data, ensure it's always defined
+        const nodeDepth = step.depth !== undefined ? step.depth : 0;
+        
         const node: ExecutionTreeNode = {
             id: step.step?.ID || this.generateStepId(step),
             name: name,
@@ -1868,7 +1649,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             duration: step.durationMs,
             agentPath: step.agentHierarchy || [],
             expanded: false,
-            depth: step.depth || 0,
+            depth: nodeDepth,  // Use the extracted depth
             detailsMarkdown: detailsMarkdown,
             detailsExpanded: false,
             inputPreview: inputPreview,
