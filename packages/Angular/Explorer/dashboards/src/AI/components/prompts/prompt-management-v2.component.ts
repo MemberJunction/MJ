@@ -125,7 +125,7 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
         },
         {
           EntityName: 'Templates',
-          ExtraFilter: `EntityID IN (SELECT ID FROM AIPrompt)`,
+          ExtraFilter: `ID IN (SELECT TemplateID FROM __mj.AIPrompt)`,
           MaxRows: 1000,
           ResultType: 'entity_object'
         },

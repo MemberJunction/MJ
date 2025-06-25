@@ -460,6 +460,9 @@ export class EntityFieldInfo extends BaseInfo {
         }
     }
 
+    /**
+     * Returns true if the field type is a binary type such as binary, varbinary, or image.
+     */
     get IsBinaryFieldType(): boolean {
         switch (this.Type.trim().toLowerCase()) {
             case 'binary':
@@ -467,6 +470,32 @@ export class EntityFieldInfo extends BaseInfo {
             case 'image':
                 return true;
             default:
+                return false;
+        }
+    }
+
+    /**
+     * Returns the Unicode prefix (N) if the field type requires it, otherwise returns an empty string.
+     */
+    get UnicodePrefix(): string {
+        if (this.RequiredUnicodePrefix) {
+            return 'N';
+        }
+        else {
+            return '';
+        }   
+    }
+
+    /**
+     * Returns true if the field type requires a Unicode prefix (N) when used in a SQL statement.
+     */
+    get RequiredUnicodePrefix(): boolean {
+        switch (this.Type.trim().toLowerCase()) {
+            case 'nchar':
+            case 'nvarchar':
+            case 'ntext':
+                return true;
+            default: 
                 return false;
         }
     }

@@ -173,7 +173,7 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
     const result = await rv.RunView({
       EntityName: 'Entity Actions',
       ExtraFilter: '',
-      OrderBy: 'UpdatedAt DESC',
+      OrderBy: '__mj_UpdatedAt DESC',
       UserSearchString: '',
       IgnoreMaxRows: false,
       MaxRows: 1000
@@ -270,7 +270,7 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
       const result = await rv.RunView({
         EntityName: 'Actions',
         ExtraFilter: extraFilter,
-        OrderBy: 'UpdatedAt DESC',
+        OrderBy: '__mj_UpdatedAt DESC',
         UserSearchString: searchTerm,
         IgnoreMaxRows: false,
         MaxRows: 1000

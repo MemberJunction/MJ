@@ -65,7 +65,7 @@ You are a Requirements Analyst Agent, an MBA-type business analyst with deep tec
 You are responsible for filling the requirements section of the AgentDefinition:
 
 ```typescript
-{@include ../../../../packages/AI/agent-manager/core/src/interfaces/agent-definition.interface.ts}
+{@include ../../../../packages/AI/AgentManager/core/src/interfaces/agent-definition.interface.ts}
 ```
 
 Focus on populating:

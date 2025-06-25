@@ -9,6 +9,7 @@
  * @since 2.50.0
  */
 
+import { AIPromptRunEntity } from '@memberjunction/core-entities';
 import { ChatResult } from './chat.types';
 
 /**
@@ -112,7 +113,7 @@ export interface AIPromptRunResult<T = unknown> {
   /**
    * The AIPromptRun entity that was created for tracking
    */
-  promptRun?: any;
+  promptRun?: AIPromptRunEntity;
 
   /**
    * Total execution time in milliseconds

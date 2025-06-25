@@ -224,6 +224,11 @@ const forceRegenerationConfigSchema = z.object({
    */
   enabled: z.boolean().default(false),
   /**
+   * Optional SQL WHERE clause to filter entities for forced regeneration
+   * Example: "SchemaName = 'dbo' AND Name LIKE 'User%'"
+   */
+  entityWhereClause: z.string().optional(),
+  /**
    * Force regeneration of base views
    */
   baseViews: z.boolean().default(false),

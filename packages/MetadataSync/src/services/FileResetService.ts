@@ -50,6 +50,7 @@ export class FileResetService {
     const files = await fastGlob(pattern, {
       cwd: configManager.getOriginalCwd(),
       absolute: true,
+      dot: true,
       ignore: ['.mj-sync.json', '.mj-folder.json'],
     });
     

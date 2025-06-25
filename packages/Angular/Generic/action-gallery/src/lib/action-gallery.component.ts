@@ -244,6 +244,14 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
     return iconMap[categoryName] || 'fa-folder';
   }
   
+  getCategoryIconClass(category: CategoryNode): string {
+    // Ensure we have a valid icon
+    if (!category.icon) {
+      return 'fa-solid fa-folder category-icon';
+    }
+    return `fa-solid ${category.icon} category-icon`;
+  }
+  
   private filterActions(actions: ActionWithDetails[], searchTerm: string, category: string) {
     let filtered = [...actions];
     

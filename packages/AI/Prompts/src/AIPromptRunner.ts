@@ -197,14 +197,21 @@ export class AIPromptRunner {
         // Hierarchical template composition mode - render child templates first, then compose
         LogStatus(`🌳 Composing prompt with ${params.childPrompts.length} child templates in hierarchical mode`);
         
-        // Select model for parent prompt execution
-        selectedModel = await this.selectModel(prompt, params.modelId, params.contextUser, params.configurationId, params.vendorId);
+        // Determine which prompt to use for model selection
+        let modelSelectionPrompt = prompt;
+        if (params.modelSelectionPrompt) {
+          modelSelectionPrompt = params.modelSelectionPrompt;
+          LogStatus(`🎯 Using prompt "${modelSelectionPrompt.Name}" for model selection instead of parent prompt`);
+        }
+        
+        // Select model using the appropriate prompt
+        selectedModel = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId);
         if (!selectedModel) {
-          throw new Error(`No suitable model found for prompt ${prompt.Name}`);
+          throw new Error(`No suitable model found for prompt ${modelSelectionPrompt.Name}`);
         }
 
         // Create parent prompt run for the final composed prompt execution
-        parentPromptRun = await this.createPromptRun(prompt, selectedModel, params, startTime, params.vendorId);
+        parentPromptRun = await this.createPromptRun(prompt, selectedModel, params, startTime, params.override?.vendorId);
         LogStatus(`📝 Created prompt run ${parentPromptRun.ID} for hierarchical template composition`);
         
         // Render all child prompt templates recursively
@@ -309,9 +316,19 @@ export class AIPromptRunner {
     }
 
     // Use existing model if provided (hierarchical case) or select one
-    const selectedModel = existingModel || await this.selectModel(prompt, params.modelId, params.contextUser, params.configurationId, params.vendorId);
+    let selectedModel = existingModel;
     if (!selectedModel) {
-      throw new Error(`No suitable model found for prompt ${prompt.Name}`);
+      // Determine which prompt to use for model selection
+      let modelSelectionPrompt = prompt;
+      if (params.modelSelectionPrompt) {
+        modelSelectionPrompt = params.modelSelectionPrompt;
+        LogStatus(`🎯 Using prompt "${modelSelectionPrompt.Name}" for model selection instead of main prompt`);
+      }
+      
+      selectedModel = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId);
+      if (!selectedModel) {
+        throw new Error(`No suitable model found for prompt ${modelSelectionPrompt.Name}`);
+      }
     }
 
     // Check for cancellation after model selection
@@ -320,7 +337,7 @@ export class AIPromptRunner {
     }
 
     // Use existing prompt run if provided (hierarchical case) or create new one
-    const promptRun = existingPromptRun || await this.createPromptRun(prompt, selectedModel, params, startTime, params.vendorId);
+    const promptRun = existingPromptRun || await this.createPromptRun(prompt, selectedModel, params, startTime, params.override?.vendorId);
 
     // Check for cancellation before model execution
     if (params.cancellationToken?.aborted) {
@@ -389,17 +406,24 @@ export class AIPromptRunner {
     // Load AI Engine to get models and prompt models
     await AIEngine.Instance.Config(false, params.contextUser);
 
-    // Get prompt-specific model associations
+    // Determine which prompt to use for model selection
+    let modelSelectionPrompt = prompt;
+    if (params.modelSelectionPrompt) {
+      modelSelectionPrompt = params.modelSelectionPrompt;
+      LogStatus(`🎯 Using prompt "${modelSelectionPrompt.Name}" for model selection in parallel execution`);
+    }
+
+    // Get prompt-specific model associations using the model selection prompt
     const promptModels = AIEngine.Instance.PromptModels.filter(
       (pm) =>
-        pm.PromptID === prompt.ID &&
+        pm.PromptID === modelSelectionPrompt.ID &&
         (pm.Status === 'Active' || pm.Status === 'Preview') &&
         (!params.configurationId || !pm.ConfigurationID || pm.ConfigurationID === params.configurationId),
     );
 
-    // Create execution plan
+    // Create execution plan using the modelSelectionPrompt for model configurations
     const executionTasks = this._executionPlanner.createExecutionPlan(
-      prompt,
+      modelSelectionPrompt,
       promptModels,
       AIEngine.Instance.Models,
       renderedPromptText,
@@ -465,7 +489,7 @@ export class AIPromptRunner {
     }
 
     // Use existing prompt run if provided (hierarchical case) or create new one
-    const consolidatedPromptRun = existingPromptRun || await this.createPromptRun(prompt, selectedResult.task.model, params, startTime, params.vendorId);
+    const consolidatedPromptRun = existingPromptRun || await this.createPromptRun(prompt, selectedResult.task.model, params, startTime, params.override?.vendorId);
 
     // Update with parallel execution metadata
     const endTime = new Date();
