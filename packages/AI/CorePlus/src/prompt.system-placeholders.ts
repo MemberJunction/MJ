@@ -10,7 +10,7 @@
  * @since 2.49.0
  */
 
-import { AIPromptParams } from '@memberjunction/ai-core-plus';
+import { AIPromptParams } from './prompt.types';
 import { format } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 

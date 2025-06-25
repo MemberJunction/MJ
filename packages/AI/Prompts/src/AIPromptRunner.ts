@@ -10,7 +10,7 @@ import { ParallelExecutionCoordinator } from './ParallelExecutionCoordinator';
 import { ResultSelectionConfig } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
 import Ajv, { ValidateFunction } from 'ajv';
-import { SystemPlaceholderManager } from './SystemPlaceholders';
+import { SystemPlaceholderManager } from '@memberjunction/ai-core-plus';
 import { 
     TemplateMessageRole,
     ChildPromptParam,
