@@ -239,7 +239,24 @@ export interface IMetadataProvider {
 
     LocalMetadataObsolete(type?: string): boolean
 
-    GetEntityObject<T extends BaseEntity>(entityName: string, contextUser: UserInfo): Promise<T>
+    /**
+     * Creates a new instance of a BaseEntity subclass for the specified entity and calls NewRecord() to initialize it.
+     * The UUID will be automatically generated for non-auto-increment uniqueidentifier primary keys.
+     * @param entityName - The name of the entity to create (e.g., "Users", "Customers")
+     * @param contextUser - Optional context user for permissions (mainly used server-side)
+     * @returns Promise resolving to the newly created entity instance with NewRecord() already called
+     */
+    GetEntityObject<T extends BaseEntity>(entityName: string, contextUser?: UserInfo): Promise<T>
+    
+    /**
+     * Creates a new instance of a BaseEntity subclass and loads an existing record using the provided key.
+     * @param entityName - The name of the entity to create (e.g., "Users", "Customers")
+     * @param loadKey - CompositeKey containing the primary key value(s) to load
+     * @param contextUser - Optional context user for permissions (mainly used server-side)
+     * @returns Promise resolving to the entity instance with the specified record loaded
+     * @throws Error if the record cannot be found or loaded
+     */
+    GetEntityObject<T extends BaseEntity>(entityName: string, loadKey: CompositeKey, contextUser?: UserInfo): Promise<T>
     /**
      * Returns a list of dependencies - records that are linked to the specified Entity/RecordID combination. A dependency is as defined by the relationships in the database. The MemberJunction metadata that is used
      * for this simply reflects the foreign key relationships that exist in the database. The CodeGen tool is what detects all of the relationships and generates the metadata that is used by MemberJunction. The metadata in question
