@@ -167,73 +167,54 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
             position: relative;
         }
         
-        /* Base styling for all depth levels */
-        .tree-node[class*="depth-"] {
-            padding-left: 8px;
+        /* Root level - higher z-index to hide lines behind it */
+        .depth-0 { 
+            position: relative;
+            overflow: hidden;
+            z-index: 2;
         }
-        
-        /* Root level - no lines */
         .depth-0 .node-header { 
-            background: #f8f9fa; 
+            background: #f8f9fa;
+            position: relative;
+            z-index: 2;
         }
         
-        /* All child levels get dotted lines */
-        .tree-node[class*="depth-"]:not(.depth-0) {
-            margin-left: calc(var(--depth) * 20px);
+        /* Child level - single depth with connecting lines */
+        .depth-1 { 
+            margin-left: 30px;
+            padding-left: 12px;
+            position: relative;
+            z-index: 1;
+        }
+        .depth-1 .node-header { 
+            background: #fafbfc;
+            position: relative;
+            z-index: 1;
         }
         
-        .tree-node[class*="depth-"]:not(.depth-0)::before {
+        /* Continuous vertical line that runs through all children */
+        .depth-0::before {
             content: '';
             position: absolute;
-            left: calc(var(--depth) * -20px - 8px);
+            left: 12px;
             top: 0;
             width: 2px;
             height: 100%;
-            border-left: 2px dotted #e0e7ff;
+            border-left: 2px dotted #c0c7d0;
+            z-index: 0; /* Behind everything */
         }
         
-        .tree-node[class*="depth-"]:not(.depth-0)::after {
+        /* Horizontal line connecting to each child node */
+        .depth-1::after {
             content: '';
             position: absolute;
-            left: calc(var(--depth) * -20px - 8px);
-            top: 50%;
-            width: calc(var(--depth) * 20px);
+            left: -15px;
+            top: 12px;
+            width: 25px;
             height: 2px;
-            border-bottom: 2px dotted #e0e7ff;
+            border-bottom: 2px dotted #c0c7d0;
+            z-index: 1;
         }
-        
-        /* Progressive background lightening */
-        .tree-node[class*="depth-"]:not(.depth-0) .node-header {
-            background: color-mix(in srgb, #f8f9fa 70%, white calc(var(--depth) * 10%));
-        }
-        
-        /* Fallback for browsers that don't support color-mix */
-        .depth-1 { --depth: 1; margin-left: 20px; }
-        .depth-1 .node-header { background: #fafbfc; }
-        
-        .depth-2 { --depth: 2; margin-left: 40px; }
-        .depth-2 .node-header { background: #fcfdfe; }
-        
-        .depth-3 { --depth: 3; margin-left: 60px; }
-        .depth-3 .node-header { background: #feffff; }
-        
-        .depth-4 { --depth: 4; margin-left: 80px; }
-        .depth-4 .node-header { background: #ffffff; }
-        
-        .depth-5 { --depth: 5; margin-left: 100px; }
-        .depth-5 .node-header { background: #ffffff; }
-        
-        .depth-6 { --depth: 6; margin-left: 120px; }
-        .depth-6 .node-header { background: #ffffff; }
-        
-        .depth-7 { --depth: 7; margin-left: 140px; }
-        .depth-7 .node-header { background: #ffffff; }
-        
-        .depth-8 { --depth: 8; margin-left: 160px; }
-        .depth-8 .node-header { background: #ffffff; }
-        
-        .depth-9 { --depth: 9; margin-left: 180px; }
-        .depth-9 .node-header { background: #ffffff; }
 
         
         .node-header {
