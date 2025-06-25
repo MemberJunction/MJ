@@ -175,43 +175,21 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
             position: relative;
         }
         
-        /* Visual hierarchy lines */
-        .tree-node::before {
-            content: '';
-            position: absolute;
-            left: -12px;
-            top: 20px;
-            width: 12px;
-            height: 1px;
-            background: #e0e0e0;
-            z-index: 0;
-        }
-        
-        /* Vertical connecting line for nodes with children */
-        .tree-node.has-children::after {
-            content: '';
-            position: absolute;
-            left: -12px;
-            top: 20px;
-            width: 1px;
-            height: calc(100% - 20px);
-            background: #e0e0e0;
-            z-index: 0;
-        }
-        
         /* Root level nodes (depth 0) */
         .depth-0 { 
             margin-left: 0;
             position: relative;
             z-index: 2;
         }
-        .depth-0::before {
+        .depth-0::after {
             display: none;
         }
         .depth-0 .node-header { 
             background: #f8f9fa;
             border: 2px solid #e0e0e0;
             font-weight: 600;
+            position: relative;
+            z-index: 10;
         }
         
         /* Sub-level nodes with increasing indentation */
@@ -263,6 +241,54 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
             border-color: #a0a0a0;
         }
 
+        /* Root level - higher z-index to hide lines behind it */
+        .depth-0 { 
+            position: relative;
+            overflow: hidden;
+            z-index: 2;
+        }
+        .depth-0 .node-header { 
+            background: #f8f9fa;
+            position: relative;
+            z-index: 2;
+        }
+        
+        /* Child level - single depth with connecting lines */
+        .depth-1 { 
+            margin-left: 30px;
+            padding-left: 12px;
+            position: relative;
+            z-index: 1;
+        }
+        .depth-1 .node-header { 
+            background: #fafbfc;
+            position: relative;
+            z-index: 1;
+        }
+        
+        /* Continuous vertical line that runs through all children */
+        .depth-0::before {
+            content: '';
+            position: absolute;
+            left: 12px;
+            top: 0;
+            width: 2px;
+            height: 100%;
+            border-left: 2px dotted #c0c7d0;
+            z-index: 0; /* Behind everything */
+        }
+        
+        /* Horizontal line connecting to each child node */
+        .depth-1::after {
+            content: '';
+            position: absolute;
+            left: -15px;
+            top: 12px;
+            width: 25px;
+            height: 2px;
+            border-bottom: 2px dotted #c0c7d0;
+            z-index: 1;
+        }
         
         .node-header {
             display: flex;
@@ -273,6 +299,9 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
             border-radius: 6px;
             transition: all 0.2s ease;
             user-select: none;
+            position: relative;
+            z-index: 5;
+            background: white;
         }
         
         .node-header:hover {
