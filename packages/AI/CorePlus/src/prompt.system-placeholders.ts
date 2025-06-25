@@ -20,12 +20,28 @@ import { formatInTimeZone } from 'date-fns-tz';
  * @interface SystemPlaceholder
  * @property {string} name - The placeholder name (e.g., '_CURRENT_DATE')
  * @property {string} [description] - Optional description of what this placeholder provides
+ * @property {string} [category] - Optional category for grouping placeholders in UI
  * @property {SystemPlaceholderFunction} getValue - Async function that returns the placeholder value
  */
 export interface SystemPlaceholder {
     name: string;
     description?: string;
+    category?: string;
     getValue: SystemPlaceholderFunction;
+}
+
+/**
+ * Defines a category for organizing system placeholders in UI.
+ * 
+ * @interface SystemPlaceholderCategory
+ * @property {string} name - The category name
+ * @property {string} icon - Font Awesome icon class (without 'fa-' prefix)
+ * @property {string} color - CSS color value for the category
+ */
+export interface SystemPlaceholderCategory {
+    name: string;
+    icon: string;
+    color: string;
 }
 
 /**
@@ -39,6 +55,37 @@ export interface SystemPlaceholder {
 export type SystemPlaceholderFunction = (params: AIPromptParams) => Promise<string>;
 
 /**
+ * System placeholder categories for organizing placeholders in UI.
+ */
+export const SYSTEM_PLACEHOLDER_CATEGORIES: SystemPlaceholderCategory[] = [
+    {
+        name: 'Date & Time',
+        icon: 'fa-calendar-days',
+        color: '#17a2b8'
+    },
+    {
+        name: 'Prompt Metadata',
+        icon: 'fa-file-lines',
+        color: '#6f42c1'
+    },
+    {
+        name: 'User Context',
+        icon: 'fa-user',
+        color: '#28a745'
+    },
+    {
+        name: 'Execution Context',
+        icon: 'fa-microchip',
+        color: '#fd7e14'
+    },
+    {
+        name: 'Environment',
+        icon: 'fa-server',
+        color: '#dc3545'
+    }
+];
+
+/**
  * Default system placeholders available in all prompt templates.
  * These cover common needs like date/time, prompt metadata, and user context.
  */
@@ -47,6 +94,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_CURRENT_DATE',
         description: 'Current date in YYYY-MM-DD format',
+        category: 'Date & Time',
         getValue: async (params: AIPromptParams) => {
             return format(new Date(), 'yyyy-MM-dd');
         }
@@ -54,6 +102,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_CURRENT_TIME',
         description: 'Current time in HH:MM AM/PM format with timezone',
+        category: 'Date & Time',
         getValue: async (params: AIPromptParams) => {
             const now = new Date();
             const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -63,6 +112,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_CURRENT_DATE_AND_TIME',
         description: 'Full timestamp with date and time',
+        category: 'Date & Time',
         getValue: async (params: AIPromptParams) => {
             const now = new Date();
             const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -72,6 +122,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_CURRENT_DAY_OF_WEEK',
         description: 'Current day name (e.g., Monday, Tuesday)',
+        category: 'Date & Time',
         getValue: async (params: AIPromptParams) => {
             return format(new Date(), 'EEEE');
         }
@@ -79,6 +130,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_CURRENT_TIMEZONE',
         description: 'Current timezone identifier',
+        category: 'Date & Time',
         getValue: async (params: AIPromptParams) => {
             return Intl.DateTimeFormat().resolvedOptions().timeZone;
         }
@@ -86,6 +138,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_CURRENT_TIMESTAMP_UTC',
         description: 'Current UTC timestamp in ISO format',
+        category: 'Date & Time',
         getValue: async (params: AIPromptParams) => {
             return new Date().toISOString();
         }
@@ -95,6 +148,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_OUTPUT_EXAMPLE',
         description: 'The expected output example from the prompt configuration',
+        category: 'Prompt Metadata',
         getValue: async (params: AIPromptParams) => {
             return params.prompt.OutputExample || '';
         }
@@ -102,6 +156,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_PROMPT_NAME',
         description: 'The name of the current prompt',
+        category: 'Prompt Metadata',
         getValue: async (params: AIPromptParams) => {
             return params.prompt.Name || '';
         }
@@ -109,6 +164,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_PROMPT_DESCRIPTION',
         description: 'The description of the current prompt',
+        category: 'Prompt Metadata',
         getValue: async (params: AIPromptParams) => {
             return params.prompt.Description || '';
         }
@@ -116,6 +172,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_EXPECTED_OUTPUT_TYPE',
         description: 'The expected output type (string, object, number, etc.)',
+        category: 'Prompt Metadata',
         getValue: async (params: AIPromptParams) => {
             return params.prompt.OutputType || 'string';
         }
@@ -123,6 +180,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_RESPONSE_FORMAT',
         description: 'The expected response format from the prompt',
+        category: 'Prompt Metadata',
         getValue: async (params: AIPromptParams) => {
             return params.prompt.ResponseFormat || 'Any';
         }
@@ -132,6 +190,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_USER_NAME',
         description: 'Current user\'s full name',
+        category: 'User Context',
         getValue: async (params: AIPromptParams) => {
             if (params.contextUser?.Name) {
                 return params.contextUser.Name;
@@ -145,6 +204,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_USER_EMAIL',
         description: 'Current user\'s email address',
+        category: 'User Context',
         getValue: async (params: AIPromptParams) => {
             return params.contextUser?.Email || '';
         }
@@ -152,6 +212,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_USER_ID',
         description: 'Current user\'s unique identifier',
+        category: 'User Context',
         getValue: async (params: AIPromptParams) => {
             return params.contextUser?.ID || '';
         }
@@ -161,6 +222,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_ENVIRONMENT',
         description: 'Current environment (development, staging, production)',
+        category: 'Environment',
         getValue: async (params: AIPromptParams) => {
             // This could be enhanced to read from process.env or configuration
             return process.env.NODE_ENV || 'development';
@@ -169,6 +231,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_API_VERSION',
         description: 'Current API version',
+        category: 'Environment',
         getValue: async (params: AIPromptParams) => {
             // This could be enhanced to read from package.json or configuration
             return process.env.API_VERSION || '2.49.0';
@@ -179,6 +242,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_MODEL_ID',
         description: 'The AI model ID being used for this execution',
+        category: 'Execution Context',
         getValue: async (params: AIPromptParams) => {
             return params.override?.modelId || '';
         }
@@ -186,6 +250,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_VENDOR_ID',
         description: 'The AI vendor ID being used for this execution',
+        category: 'Execution Context',
         getValue: async (params: AIPromptParams) => {
             return params.override?.vendorId || '';
         }
@@ -193,6 +258,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_CONFIGURATION_ID',
         description: 'The configuration ID for environment-specific behavior',
+        category: 'Execution Context',
         getValue: async (params: AIPromptParams) => {
             return params.configurationId || '';
         }
@@ -200,6 +266,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_AGENT_RUN_ID',
         description: 'The parent agent run ID if this prompt is part of an agent execution',
+        category: 'Execution Context',
         getValue: async (params: AIPromptParams) => {
             return params.agentRunId || '';
         }
@@ -207,6 +274,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_HAS_CONVERSATION_CONTEXT',
         description: 'Whether conversation messages are provided',
+        category: 'Execution Context',
         getValue: async (params: AIPromptParams) => {
             return (params.conversationMessages && params.conversationMessages.length > 0) ? 'true' : 'false';
         }
@@ -214,6 +282,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_CONVERSATION_LENGTH',
         description: 'Number of messages in the conversation context',
+        category: 'Execution Context',
         getValue: async (params: AIPromptParams) => {
             return String(params.conversationMessages?.length || 0);
         }
@@ -221,6 +290,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_TEMPLATE_MESSAGE_ROLE',
         description: 'How the template will be added to conversation (system, user, or none)',
+        category: 'Execution Context',
         getValue: async (params: AIPromptParams) => {
             return params.templateMessageRole || 'system';
         }
@@ -228,6 +298,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_IS_CHILD_PROMPT',
         description: 'Whether this prompt is being executed as a child of another prompt',
+        category: 'Execution Context',
         getValue: async (params: AIPromptParams) => {
             // We can infer this from whether childPrompts exist in the params
             return params.childPrompts ? 'false' : 'possibly';
@@ -236,6 +307,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
     {
         name: '_VALIDATION_ENABLED',
         description: 'Whether output validation is enabled',
+        category: 'Execution Context',
         getValue: async (params: AIPromptParams) => {
             return params.skipValidation ? 'false' : 'true';
         }
