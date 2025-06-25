@@ -1104,7 +1104,7 @@ export class AIPromptRunner {
         ...params.templateData     // Template data has highest priority
       };
 
-      LogStatus(`🔧 Rendering template '${template.Name}' with ${Object.keys(systemPlaceholders).length} system placeholders`);
+      //LogStatus(`🔧 Rendering template '${template.Name}' with ${Object.keys(systemPlaceholders).length} system placeholders`);
 
       // Render the template
       return await this._templateEngine.RenderTemplate(template, templateContent, mergedData);
@@ -1339,9 +1339,6 @@ export class AIPromptRunner {
         };
         validationAttempts.push(validationAttempt);
 
-        // Update prompt run with current attempt information
-        await this.updatePromptRunWithValidationAttempt(promptRun, validationAttempt, attempt + 1, maxRetries + 1);
-
         if (validationResult?.Success !== false) {
           // Validation succeeded, return the result
           return {
@@ -1393,9 +1390,6 @@ export class AIPromptRunner {
         };
         validationAttempts.push(validationAttempt);
 
-        // Update prompt run with failed attempt
-        await this.updatePromptRunWithValidationAttempt(promptRun, validationAttempt, attempt + 1, maxRetries + 1);
-
         if (attempt === maxRetries) {
           throw error; // Last attempt, propagate error
         }
@@ -1431,26 +1425,6 @@ export class AIPromptRunner {
     await new Promise(resolve => setTimeout(resolve, delay));
   }
 
-  /**
-   * Updates the prompt run entity with information about a validation attempt
-   */
-  private async updatePromptRunWithValidationAttempt(
-    promptRun: AIPromptRunEntity,
-    attempt: ValidationAttempt,
-    currentAttempt: number,
-    totalAttempts: number,
-  ): Promise<void> {
-    try {
-      // We no longer update the Messages field with validation information
-      // since we have dedicated validation columns now
-      
-      // Just log the attempt for now - the full validation data will be saved
-      // at the end in the dedicated validation columns
-      LogStatus(`Recorded validation attempt ${currentAttempt}/${totalAttempts} for prompt run ${promptRun.ID}`);
-    } catch (error) {
-      LogError(`Error updating prompt run with validation attempt: ${error.message}`);
-    }
-  }
 
   /**
    * Provides a human-readable description of the validation decision
@@ -1839,7 +1813,7 @@ export class AIPromptRunner {
       validationErrors.push(...errors);
 
       if (validationErrors.length === 0) {
-        LogStatus(`✅ Validation passed for prompt ${promptId}`);
+        //LogStatus(`✅ Validation passed for prompt ${promptId}`);
       } else {
         LogStatus(`⚠️ Validation found ${validationErrors.length} issues for prompt ${promptId}:`);
         validationErrors.forEach((error, index) => {
@@ -1894,7 +1868,7 @@ export class AIPromptRunner {
       }
 
       if (validationErrors.length === 0) {
-        LogStatus(`✅ Schema validation passed for prompt ${promptId}`);
+        //LogStatus(`✅ Schema validation passed for prompt ${promptId}`);
       } else {
         LogStatus(`⚠️ Schema validation found ${validationErrors.length} potential issues for prompt ${promptId}:`);
         validationErrors.forEach((error, index) => {
@@ -2041,7 +2015,7 @@ export class AIPromptRunner {
           )
         });
         
-        LogStatus(`Updated prompt run ${promptRun.ID} with ${validationAttempts.length} validation attempts`);
+        //LogStatus(`Updated prompt run ${promptRun.ID} with ${validationAttempts.length} validation attempts`);
       } else {
         // No validation attempts (possibly skipped validation)
         promptRun.ValidationAttemptCount = 1; // At least one attempt was made
