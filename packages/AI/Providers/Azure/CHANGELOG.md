@@ -1,5 +1,13 @@
 # @memberjunction/ai-azure
 
+## 2.57.0
+
+### Patch Changes
+
+- Updated dependencies [0ba485f]
+  - @memberjunction/global@2.57.0
+  - @memberjunction/ai@2.57.0
+
 ## 2.56.0
 
 ### Patch Changes

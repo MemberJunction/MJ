@@ -1,5 +1,31 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.57.0
+
+### Patch Changes
+
+- 67a2bec: feat(ai-agent-form): Add Model Selection Mode control and reorganize panels
+
+  - Added Model Selection Mode dropdown in the Prompts section for better space utilization
+  - Reordered panels to show Actions first, then Sub-Agents, then Prompts for better workflow
+  - Fixed Kendo dropdown to properly bind primitive string values using valuePrimitive="true"
+  - Styled with blue accent to highlight this important configuration option
+  - Control appears in both edit and read-only modes for transparency
+
+- Updated dependencies [0ba485f]
+  - @memberjunction/core@2.57.0
+  - @memberjunction/core-entities@2.57.0
+  - @memberjunction/ai-engine-base@2.57.0
+  - @memberjunction/ng-base-forms@2.57.0
+  - @memberjunction/ng-form-toolbar@2.57.0
+  - @memberjunction/ng-action-gallery@2.57.0
+  - @memberjunction/ng-ai-test-harness@2.57.0
+  - @memberjunction/ng-code-editor@2.57.0
+  - @memberjunction/ng-container-directives@2.57.0
+  - @memberjunction/ng-join-grid@2.57.0
+  - @memberjunction/ng-timeline@2.57.0
+  - @memberjunction/ng-tabstrip@2.57.0
+
 ## 2.56.0
 
 ### Minor Changes

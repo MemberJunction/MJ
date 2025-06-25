@@ -1,5 +1,46 @@
 # Change Log - @memberjunction/server
 
+## 2.57.0
+
+### Minor Changes
+
+- d68d3cf: fix: increase File ContentType column length to 255 characters
+
+  - Updated database migration to increase ContentType column from 50 to 255 characters
+  - Fixed FileResolver to properly handle file creation with updated entity
+  - This allows for longer MIME type strings that were previously truncated
+
+- 0ba485f: various bug fixes
+
+### Patch Changes
+
+- Updated dependencies [0ba485f]
+  - @memberjunction/core@2.57.0
+  - @memberjunction/core-entities@2.57.0
+  - @memberjunction/core-entities-server@2.57.0
+  - @memberjunction/global@2.57.0
+  - @memberjunction/sqlserver-dataprovider@2.57.0
+  - @memberjunction/ai-agent-manager-actions@2.57.0
+  - @memberjunction/ai-agents@2.57.0
+  - @memberjunction/aiengine@2.57.0
+  - @memberjunction/ai-prompts@2.57.0
+  - @memberjunction/ai-vectors-pinecone@2.57.0
+  - @memberjunction/core-actions@2.57.0
+  - @memberjunction/actions@2.57.0
+  - @memberjunction/entity-communications-server@2.57.0
+  - @memberjunction/doc-utils@2.57.0
+  - @memberjunction/external-change-detection@2.57.0
+  - @memberjunction/graphql-dataprovider@2.57.0
+  - @memberjunction/data-context@2.57.0
+  - @memberjunction/queue@2.57.0
+  - @memberjunction/storage@2.57.0
+  - @memberjunction/templates@2.57.0
+  - @memberjunction/ai@2.57.0
+  - @memberjunction/skip-types@2.57.0
+  - @memberjunction/ai-mistral@2.57.0
+  - @memberjunction/ai-openai@2.57.0
+  - @memberjunction/data-context-server@2.57.0
+
 ## 2.56.0
 
 ### Minor Changes

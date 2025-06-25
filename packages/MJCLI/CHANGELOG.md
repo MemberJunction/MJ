@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/cli
 
+## 2.57.0
+
+### Minor Changes
+
+- 0ba485f: various bug fixes
+
+### Patch Changes
+
+- Updated dependencies [0ba485f]
+  - @memberjunction/metadata-sync@2.57.0
+  - @memberjunction/sqlserver-dataprovider@2.57.0
+  - @memberjunction/codegen-lib@2.57.0
+
 ## 2.56.0
 
 ### Patch Changes

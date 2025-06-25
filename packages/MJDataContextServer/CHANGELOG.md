@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/data-context-server
 
+## 2.57.0
+
+### Patch Changes
+
+- Updated dependencies [0ba485f]
+  - @memberjunction/global@2.57.0
+  - @memberjunction/data-context@2.57.0
+
 ## 2.56.0
 
 ### Patch Changes

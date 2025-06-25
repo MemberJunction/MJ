@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/global
 
+## 2.57.0
+
+### Minor Changes
+
+- 0ba485f: various bug fixes
+
 ## 2.56.0
 
 ## 2.55.0

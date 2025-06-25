@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/ng-join-grid
 
+## 2.57.0
+
+### Patch Changes
+
+- Updated dependencies [0ba485f]
+  - @memberjunction/core@2.57.0
+  - @memberjunction/core-entities@2.57.0
+  - @memberjunction/global@2.57.0
+  - @memberjunction/ng-shared@2.57.0
+  - @memberjunction/ng-base-types@2.57.0
+  - @memberjunction/ng-container-directives@2.57.0
+
 ## 2.56.0
 
 ### Patch Changes
