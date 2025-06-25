@@ -9,7 +9,8 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
     template: `
         <div class="tree-node" 
              [class.expanded]="node.expanded"
-             [class]="'depth-' + depth">
+             [class.has-children]="hasChildren()"
+             [class]="'depth-' + node.depth + ' type-' + node.type">
             
             <!-- Node Header -->
             <div class="node-header" (dblclick)="onDoubleClick()">
@@ -75,8 +76,11 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
                     }
                 </span>
                 
-                <!-- Node Name -->
+                <!-- Node Name with depth indicator for sub-agents -->
                 <span class="node-name">
+                    @if (node.type === 'sub-agent' && node.depth > 0) {
+                        <small style="color: #666; margin-right: 8px;">[Level {{ node.depth }}]</small>
+                    }
                     {{ getTruncatedName() }}
                 </span>
                 
@@ -112,7 +116,7 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
                     </div>
                 }
                 
-                @if (node.inputPreview || node.outputPreview || node.error) {
+                <!-- Always show details section if node is expanded, even if some content is empty -->
                 <div class="node-details">
                     @if (node.error) {
                         <div class="detail-section error">
@@ -138,16 +142,20 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
                             <div class="detail-content">{{ node.outputPreview }}</div>
                         </div>
                     }
+                    @if (!node.error && !node.inputPreview && !node.outputPreview && !node.detailsMarkdown && !isNameTruncated()) {
+                        <div class="detail-section">
+                            <div class="detail-content">No additional details available for this step.</div>
+                        </div>
+                    }
                 </div>
-                }
             }
             
-            <!-- Children (when expanded) -->
-            @if (node.expanded && node.children) {
+            <!-- Children (when expanded) - HIERARCHICAL DISPLAY -->
+            @if (node.expanded && node.children && node.children.length > 0) {
                 @for (child of node.children; track child.id) {
                     <mj-execution-node 
                         [node]="child"
-                        [depth]="depth + 1"
+                        [depth]="child.depth"
                         (toggleNode)="toggleNode.emit($event)"
                         (userInteracted)="userInteracted.emit()">
                     </mj-execution-node>
@@ -161,59 +169,98 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
             width: 100%;
         }
         
-        /* Depth-based indentation and background colors */
+        /* Depth-based indentation - each level indents by 24px */
         .tree-node {
             margin-bottom: 4px;
             position: relative;
         }
         
-        /* Root level - higher z-index to hide lines behind it */
+        /* Visual hierarchy lines */
+        .tree-node::before {
+            content: '';
+            position: absolute;
+            left: -12px;
+            top: 20px;
+            width: 12px;
+            height: 1px;
+            background: #e0e0e0;
+            z-index: 0;
+        }
+        
+        /* Vertical connecting line for nodes with children */
+        .tree-node.has-children::after {
+            content: '';
+            position: absolute;
+            left: -12px;
+            top: 20px;
+            width: 1px;
+            height: calc(100% - 20px);
+            background: #e0e0e0;
+            z-index: 0;
+        }
+        
+        /* Root level nodes (depth 0) */
         .depth-0 { 
+            margin-left: 0;
             position: relative;
-            overflow: hidden;
             z-index: 2;
+        }
+        .depth-0::before {
+            display: none;
         }
         .depth-0 .node-header { 
             background: #f8f9fa;
-            position: relative;
-            z-index: 2;
+            border: 2px solid #e0e0e0;
+            font-weight: 600;
         }
         
-        /* Child level - single depth with connecting lines */
-        .depth-1 { 
-            margin-left: 30px;
-            padding-left: 12px;
-            position: relative;
-            z-index: 1;
+        /* Sub-level nodes with increasing indentation */
+        .depth-1 {
+            margin-left: 24px;
         }
-        .depth-1 .node-header { 
-            background: #fafbfc;
-            position: relative;
-            z-index: 1;
+        .depth-1 .node-header {
+            background: #fafafa;
+            border-color: #d0d0d0;
         }
         
-        /* Continuous vertical line that runs through all children */
-        .depth-0::before {
-            content: '';
-            position: absolute;
-            left: 12px;
-            top: 0;
-            width: 2px;
-            height: 100%;
-            border-left: 2px dotted #c0c7d0;
-            z-index: 0; /* Behind everything */
+        .depth-2 {
+            margin-left: 48px;
+        }
+        .depth-2 .node-header {
+            background: #fcfcfc;
+            border-color: #c0c0c0;
         }
         
-        /* Horizontal line connecting to each child node */
-        .depth-1::after {
-            content: '';
-            position: absolute;
-            left: -15px;
-            top: 12px;
-            width: 25px;
-            height: 2px;
-            border-bottom: 2px dotted #c0c7d0;
-            z-index: 1;
+        .depth-3 {
+            margin-left: 72px;
+        }
+        .depth-3 .node-header {
+            background: #fdfdfd;
+            border-color: #b0b0b0;
+        }
+        
+        .depth-4 {
+            margin-left: 96px;
+        }
+        .depth-4 .node-header {
+            background: #fefefe;
+            border-color: #a0a0a0;
+        }
+        
+        .depth-5 {
+            margin-left: 120px;
+        }
+        .depth-5 .node-header {
+            background: #fefefe;
+            border-color: #a0a0a0;
+        }
+        
+        .depth-6 {
+            margin-left: 144px;
+        }
+        .depth-6 .node-header {
+            background: #fefefe;
+            border-color: #a0a0a0;
         }
 
         
@@ -229,8 +276,23 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
         }
         
         .node-header:hover {
-            background: #e8f0fe;
+            background: #e8f0fe !important;
             border-color: #2196f3;
+            transform: translateX(2px);
+        }
+        
+        /* Sub-agent specific styling */
+        .tree-node.type-sub-agent > .node-header {
+            border-left: 4px solid #ff9800;
+        }
+        
+        .tree-node.type-sub-agent.expanded > .node-header {
+            background: #fff3e0 !important;
+        }
+        
+        /* Action specific styling */
+        .tree-node.type-action > .node-header {
+            border-left: 4px solid #4caf50;
         }
         
         .expand-icon {

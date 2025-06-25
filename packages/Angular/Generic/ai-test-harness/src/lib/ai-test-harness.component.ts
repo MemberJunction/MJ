@@ -1227,6 +1227,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 this.currentExecutionData = fullResult;
                 this.executionMonitorMode = 'historical';
                 
+                // Auto-expand all monitoring nodes once execution is complete
+                setTimeout(() => {
+                    this.expandAllMonitoringNodes();
+                }, 100);
+                
                 // Preserve conversation state from the result
                 if (fullResult.returnValue) {
                     this.lastAgentReturnValue = fullResult.returnValue;
@@ -1302,6 +1307,13 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
 
             // Auto-save conversation
             this.autoSaveConversation();
+            
+            // Auto-expand all monitoring nodes once execution is complete (for prompt mode)
+            if (this.mode === 'prompt') {
+                setTimeout(() => {
+                    this.expandAllMonitoringNodes();
+                }, 100);
+            }
 
         } catch (error) {
             console.error('❌ AI Test Harness: Caught error during agent execution', {
@@ -2319,6 +2331,21 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             .filter(m => m.role === 'assistant' && m.agentRunId)
             .pop();
         return lastAssistantMessage?.agentRunId || null;
+    }
+    
+    /**
+     * Expands all nodes in the execution monitor
+     * Called automatically when execution completes
+     */
+    private expandAllMonitoringNodes(): void {
+        if (this.currentExecutionData && this.executionMonitorMode === 'historical') {
+            // Trigger expansion by setting a flag on the execution data
+            this.currentExecutionData = {
+                ...this.currentExecutionData,
+                _autoExpandAll: true,
+                _lastExpandTime: Date.now()
+            };
+        }
     }
     
     /**

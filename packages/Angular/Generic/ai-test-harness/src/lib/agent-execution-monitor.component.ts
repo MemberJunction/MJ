@@ -473,6 +473,14 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                 this.calculateStats();
             }
             
+            // Check for auto-expand flag
+            if (this.executionData && this.executionData._autoExpandAll) {
+                // Auto-expand all nodes after a short delay to ensure rendering is complete
+                setTimeout(() => {
+                    this.expandAllNodes();
+                }, 50);
+            }
+            
             // Process data even if it's empty/null (for initial setup)
             this.processExecutionData();
         }
@@ -648,9 +656,11 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     
     /**
      * Convert new execution tree format to display nodes
-     * FIXED: Ensure depth is properly set and preserved
+     * FIXED: Maintain proper hierarchy for sub-agents instead of flattening
      */
-    private convertExecutionTree(nodes: any[], depth: number = 0, parentDepth: number = -1): ExecutionTreeNode[] {
+    private convertExecutionTree(nodes: any[], depth: number = 0): ExecutionTreeNode[] {
+        const treeNodes: ExecutionTreeNode[] = [];
+        
         // Sort nodes by StepNumber before processing
         const sortedNodes = [...nodes].sort((a, b) => {
             const aStepNum = a.step?.StepNumber || 0;
@@ -658,21 +668,16 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             return aStepNum - bStepNum;
         });
         
-        return sortedNodes.map((node, index) => {
-            // Calculate the actual depth for this node
-            const nodeDepth = node.depth !== undefined ? node.depth : parentDepth + 1;
-            
-            // Parse the step name for markdown content (same as live steps)
+        for (const node of sortedNodes) {
+            // Parse the step name for markdown content
             const stepName = node.step?.StepName || 'Unknown Step';
             let name = stepName;
             let detailsMarkdown: string | undefined;
             
-            // Check if the step name contains markdown (indicated by newlines or markdown syntax)
+            // Check if the step name contains markdown
             if (stepName.includes('\n') || stepName.includes('**') || stepName.includes('##')) {
-                // Split by newline and use first line as name
                 const lines = stepName.split('\n');
                 name = lines[0].trim();
-                // Rest is markdown details
                 if (lines.length > 1) {
                     detailsMarkdown = lines.slice(1).join('\n').trim();
                 }
@@ -699,7 +704,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             const outputPreview = this.createPreview(node.outputData);
             
             const treeNode: ExecutionTreeNode = {
-                id: node.step?.ID || `node-${Date.now()}-${index}`,
+                id: node.step?.ID || `node-${Date.now()}-${Math.random()}`,
                 name: name,
                 type: this.mapStepType(node.executionType || node.step?.StepType),
                 status: this.mapStepStatus(node.step?.Status),
@@ -710,14 +715,13 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                 inputPreview: inputPreview,
                 outputPreview: outputPreview,
                 error: node.step?.ErrorMessage,
-                expanded: false,
-                depth: nodeDepth,  // Use the calculated depth
+                expanded: false, // Start collapsed for sub-agents
+                depth: depth, // Use actual depth for proper indentation
                 tokensUsed: this.extractTokens(node.outputData),
                 cost: this.extractCost(node.outputData),
                 detailsMarkdown: detailsMarkdown,
                 detailsExpanded: false,
-                // Process children with the correct parent depth
-                children: node.children ? this.convertExecutionTree(node.children, nodeDepth + 1, nodeDepth) : undefined,
+                children: undefined, // Will be set below
                 displayMode: displayMode
             };
             
@@ -736,8 +740,15 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                 treeNode.actionIconClass = this.lastParsedActionData.actionIconClass;
             }
             
-            return treeNode;
-        });
+            // IMPORTANT: Process children recursively to maintain hierarchy
+            if (node.children && node.children.length > 0) {
+                treeNode.children = this.convertExecutionTree(node.children, depth + 1);
+            }
+            
+            treeNodes.push(treeNode);
+        }
+        
+        return treeNodes;
     }
     
     /**
@@ -1162,19 +1173,6 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             
             this.cdr.markForCheck();
         }
-    }
-    
-    /**
-     * Check if node has expandable content
-     */
-    private hasExpandableContent(node: ExecutionTreeNode): boolean {
-        return !!(node.children && node.children.length > 0) ||
-               node.type === 'sub-agent' || 
-               node.type === 'action' || 
-               !!node.inputPreview || 
-               !!node.outputPreview || 
-               !!node.error || 
-               !!node.detailsMarkdown;
     }
     
     
@@ -1767,5 +1765,90 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             }
         }
         return false;
+    }
+    
+    /**
+     * Expands all nodes in the execution tree
+     * Called when auto-expand flag is detected or execution completes
+     */
+    private expandAllNodes(): void {
+        if (!this.executionTree || this.executionTree.length === 0) {
+            return;
+        }
+        
+        console.log('🔄 Starting auto-expansion of all nodes', this.executionTree.length);
+        
+        // Recursively expand all nodes
+        const expandNodeRecursively = (nodes: ExecutionTreeNode[]) => {
+            for (const node of nodes) {
+                // Expand ALL nodes regardless of content type
+                node.expanded = true;
+                
+                console.log(`Expanding node: ${node.name}`, {
+                    hasExpandableContent: this.hasExpandableContent(node),
+                    hasInputPreview: !!node.inputPreview,
+                    hasOutputPreview: !!node.outputPreview,
+                    hasError: !!node.error,
+                    hasDetailsMarkdown: !!node.detailsMarkdown
+                });
+                
+                // Update the corresponding component if it exists
+                const componentRef = this.nodeComponentMap.get(node.id);
+                if (componentRef) {
+                    // Create a new object to ensure change detection
+                    const updatedNode = { ...node, expanded: true };
+                    componentRef.instance.node = updatedNode;
+                    componentRef.changeDetectorRef.markForCheck();
+                    componentRef.changeDetectorRef.detectChanges();
+                    console.log(`Updated component for node: ${node.name}`);
+                } else {
+                    console.log(`No component found for node: ${node.name}`);
+                }
+                
+                // Expand children recursively
+                if (node.children) {
+                    expandNodeRecursively(node.children);
+                }
+            }
+        };
+        
+        expandNodeRecursively(this.executionTree);
+        
+        // Trigger change detection for the entire component
+        this.cdr.markForCheck();
+        this.cdr.detectChanges();
+        
+        console.log('✅ Completed auto-expansion of all nodes');
+        
+        // Scroll to top after expansion to show the full tree
+        setTimeout(() => {
+            this.scrollToTop();
+        }, 100);
+    }
+    
+    /**
+     * Scroll the execution tree to the top
+     */
+    private scrollToTop(): void {
+        if (this.executionTreeContainer) {
+            const element = this.executionTreeContainer.nativeElement;
+            element.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        }
+    }
+    
+    /**
+     * Check if node has expandable content
+     */
+    private hasExpandableContent(node: ExecutionTreeNode): boolean {
+        return !!(node.children && node.children.length > 0) ||
+               node.type === 'sub-agent' || 
+               node.type === 'action' || 
+               !!node.inputPreview || 
+               !!node.outputPreview || 
+               !!node.error || 
+               !!node.detailsMarkdown;
     }
 }
