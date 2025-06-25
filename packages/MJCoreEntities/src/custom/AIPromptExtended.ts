@@ -41,7 +41,6 @@ export class AIPromptEntityExtended extends AIPromptEntity {
         }
         else if (this.TemplateTextDirty) {
             // if TemplateText is dirty, we consider the entity dirty
-            compareStringsByLine(this._templateText, this._originalTemplateText);
             return true;
         }   
         return false;
