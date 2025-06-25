@@ -1,4 +1,4 @@
-import { MJEventType, MJGlobal } from '@memberjunction/global';
+import { MJEventType, MJGlobal, uuidv4 } from '@memberjunction/global';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider } from './interfaces';
 import { Metadata } from './metadata';
@@ -872,6 +872,19 @@ export abstract class BaseEntity<T = unknown> {
     public NewRecord(newValues?: FieldValueCollection) : boolean {
         this.init();
         this._everSaved = false; // Reset save state for new record
+        
+        // Generate UUID for non-auto-increment uniqueidentifier primary keys
+        if (this.EntityInfo.PrimaryKeys.length === 1) {
+            const pk = this.EntityInfo.PrimaryKeys[0];
+            if (!pk.AutoIncrement && 
+                pk.Type.toLowerCase().trim() === 'uniqueidentifier' && 
+                !this.Get(pk.Name)) {
+                // Generate and set UUID for this primary key
+                const uuid = uuidv4();
+                this.Set(pk.Name, uuid);
+            }
+        }
+        
         if (newValues) {
             newValues.KeyValuePairs.filter(kv => kv.Value !== null && kv.Value !== undefined).forEach(kv => {
                 this.Set(kv.FieldName, kv.Value);
