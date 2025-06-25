@@ -7,7 +7,12 @@
 -- Entities fixed:
 -- 1. TemplateParam (36 records) - Delete and recreate with hardcoded IDs
 -- 2. AIPromptCategory (2 records) - Update to hardcoded IDs
--- 3. Action (42 records) - Update to match metadata IDs
+-- 3. Action (55 records) - Update to match metadata IDs
+--    - 52 existing actions updated to correct IDs
+--    - 3 new actions added that were missing:
+--      * HubSpot - Get Deals by Company
+--      * HubSpot - Get Upcoming Tasks
+--      * HubSpot - Log Activity
 -- =====================================================
 
 -- Start transaction
@@ -208,51 +213,51 @@ BEGIN TRY
     -- Insert all action updates
     INSERT INTO @ActionUpdates VALUES
     -- HubSpot Actions
-    ('HubSpot - Create Contact', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '6CC7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/hubspot/create-contact.json'),
-    ('HubSpot - Update Contact', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '76C7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/hubspot/update-contact.json'),
-    ('HubSpot - Delete Contact', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '80C7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/hubspot/delete-contact.json'),
-    ('HubSpot - Search Contacts', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '8AC7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/hubspot/search-contacts.json'),
-    ('HubSpot - Get Contact', '3DC7433E-F36B-1410-8DB6-00021F8B792E', 'A5C7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/hubspot/get-contact.json'),
-    ('HubSpot - Create Company', '3DC7433E-F36B-1410-8DB6-00021F8B792E', 'ADC7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/hubspot/create-company.json'),
-    ('HubSpot - Update Company', '3DC7433E-F36B-1410-8DB6-00021F8B792E', 'B5C7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/hubspot/update-company.json'),
-    ('HubSpot - Delete Company', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '80B852CB-4223-493E-A8D6-B909D0CF7F1D', 'Generated UUID'),
-    ('HubSpot - Search Companies', '3DC7433E-F36B-1410-8DB6-00021F8B792E', 'E8C7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/hubspot/search-companies.json'),
-    ('HubSpot - Get Company', '3DC7433E-F36B-1410-8DB6-00021F8B792E', 'D5C7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/hubspot/get-company.json'),
-    ('HubSpot - Create Deal', '3DC7433E-F36B-1410-8DB6-00021F8B792E', 'BDC7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/hubspot/create-deal.json'),
-    ('HubSpot - Update Deal', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '04C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/hubspot/update-deal.json'),
-    ('HubSpot - Delete Deal', '3DC7433E-F36B-1410-8DB6-00021F8B792E', 'A148FF92-24D0-4D24-A038-E7FF43E6F70A', 'Generated UUID'),
-    ('HubSpot - Search Deals', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '20C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/hubspot/search-deals.json'),
-    ('HubSpot - Get Deal', '3DC7433E-F36B-1410-8DB6-00021F8B792E', 'F6C7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/hubspot/get-deal.json'),
-    ('HubSpot - Create Task', '3DC7433E-F36B-1410-8DB6-00021F8B792E', 'C5C7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/hubspot/create-task.json'),
-    ('HubSpot - Update Task', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '58C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/hubspot/update-task.json'),
-    ('HubSpot - Delete Task', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '978FDF5E-47D9-4AEA-9B94-8734A72E05FE', 'Generated UUID'),
-    ('HubSpot - Search Tasks', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '58190BAC-45E4-4197-B905-02567969D67E', 'Generated UUID'),
-    ('HubSpot - Get Task', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '010F8C2B-F925-41FE-86E2-39B88CC5CBCD', 'Generated UUID'),
-    ('HubSpot - Get Recent Engagements', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '5DFDB3F8-9094-4A58-90D5-F12A6CA90580', 'Generated UUID'),
-    ('HubSpot - Get Contact Activities', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '1B360EB6-15B6-49D3-B166-5103D8E52A33', 'Generated UUID'),
-    ('HubSpot - Associate Contact to Company', '3DC7433E-F36B-1410-8DB6-00021F8B792E', 'CDC7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/hubspot/associate-contact-to-company.json'),
-    ('HubSpot - Get Contact Properties', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '58107646-4E79-412C-BE84-A9EF54CA3C08', 'Generated UUID'),
+    ('HubSpot - Create Contact', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '6CC7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('HubSpot - Update Contact', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '76C7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('HubSpot - Delete Contact', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '80C7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('HubSpot - Search Contacts', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '8AC7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('HubSpot - Get Contact', '3DC7433E-F36B-1410-8DB6-00021F8B792E', 'A5C7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('HubSpot - Create Company', '3DC7433E-F36B-1410-8DB6-00021F8B792E', 'ADC7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('HubSpot - Update Company', '3DC7433E-F36B-1410-8DB6-00021F8B792E', 'B5C7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('HubSpot - Search Companies', '3DC7433E-F36B-1410-8DB6-00021F8B792E', 'E8C7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('HubSpot - Get Company', '3DC7433E-F36B-1410-8DB6-00021F8B792E', 'D5C7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('HubSpot - Create Deal', '3DC7433E-F36B-1410-8DB6-00021F8B792E', 'BDC7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('HubSpot - Update Deal', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '04C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('HubSpot - Search Deals', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '20C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('HubSpot - Get Deal', '3DC7433E-F36B-1410-8DB6-00021F8B792E', 'F6C7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('HubSpot - Create Task', '3DC7433E-F36B-1410-8DB6-00021F8B792E', 'C5C7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('HubSpot - Update Task', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '58C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('HubSpot - Associate Contact to Company', '3DC7433E-F36B-1410-8DB6-00021F8B792E', 'CDC7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('HubSpot - Merge Contacts', '3DC7433E-F36B-1410-8DB6-00021F8B792E', 'DDC7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('HubSpot - Get Deals by Contact', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '3CC8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('HubSpot - Get Activities by Contact', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '4AC8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('HubSpot - Get Deals by Company', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '2EC8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('HubSpot - Get Upcoming Tasks', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '60C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('HubSpot - Log Activity', '3DC7433E-F36B-1410-8DB6-00021F8B792E', '12C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
     -- LearnWorlds Actions
-    ('LearnWorlds - Create User', '49C7433E-F36B-1410-8DB6-00021F8B792E', '94C7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/learnworlds/create-user.json'),
-    ('LearnWorlds - Update User', '49C7433E-F36B-1410-8DB6-00021F8B792E', '6169CF14-6A81-4235-BF31-52BDEBDEED4D', 'Generated UUID'),
-    ('LearnWorlds - Get User', '49C7433E-F36B-1410-8DB6-00021F8B792E', '64C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/learnworlds/get-user-details.json'),
-    ('LearnWorlds - Search Users', '49C7433E-F36B-1410-8DB6-00021F8B792E', '75C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/learnworlds/get-users.json'),
-    ('LearnWorlds - Enroll User in Course', '49C7433E-F36B-1410-8DB6-00021F8B792E', '62C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/learnworlds/enroll-user.json'),
-    ('LearnWorlds - Get User Course Progress', '49C7433E-F36B-1410-8DB6-00021F8B792E', '6CC8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/learnworlds/get-user-progress.json'),
-    ('LearnWorlds - Update Course Progress', '49C7433E-F36B-1410-8DB6-00021F8B792E', '6EC8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/learnworlds/update-user-progress.json'),
-    ('LearnWorlds - Get User Certificates', '49C7433E-F36B-1410-8DB6-00021F8B792E', 'E1234567-8901-2345-6789-012345678901', 'Generated UUID'),
-    ('LearnWorlds - Issue Certificate', '49C7433E-F36B-1410-8DB6-00021F8B792E', 'E2234567-8901-2345-6789-012345678902', 'Generated UUID'),
-    ('LearnWorlds - Get Course Analytics', '49C7433E-F36B-1410-8DB6-00021F8B792E', '72C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/learnworlds/get-course-analytics.json'),
+    ('LearnWorlds - Create User', '49C7433E-F36B-1410-8DB6-00021F8B792E', '94C7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('LearnWorlds - Get User Details', '49C7433E-F36B-1410-8DB6-00021F8B792E', '64C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('LearnWorlds - Get Users', '49C7433E-F36B-1410-8DB6-00021F8B792E', '75C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('LearnWorlds - Enroll User', '49C7433E-F36B-1410-8DB6-00021F8B792E', '62C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('LearnWorlds - Get User Progress', '49C7433E-F36B-1410-8DB6-00021F8B792E', '6CC8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('LearnWorlds - Update User Progress', '49C7433E-F36B-1410-8DB6-00021F8B792E', '6EC8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('LearnWorlds - Get Course Analytics', '49C7433E-F36B-1410-8DB6-00021F8B792E', '72C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('LearnWorlds - Get User Enrollments', '49C7433E-F36B-1410-8DB6-00021F8B792E', '66C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('LearnWorlds - Get Courses', '49C7433E-F36B-1410-8DB6-00021F8B792E', '68C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('LearnWorlds - Get Course Details', '49C7433E-F36B-1410-8DB6-00021F8B792E', '6AC8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('LearnWorlds - Get Certificates', '49C7433E-F36B-1410-8DB6-00021F8B792E', '70C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('LearnWorlds - Get Quiz Results', '49C7433E-F36B-1410-8DB6-00021F8B792E', '79C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
     -- QuickBooks Actions
-    ('QuickBooks - Create Journal Entry', '55C7433E-F36B-1410-8DB6-00021F8B792E', '9DC7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/quickbooks/create-journal-entry.json'),
-    ('QuickBooks - Create GL Account', '55C7433E-F36B-1410-8DB6-00021F8B792E', 'E3234567-8901-2345-6789-012345678903', 'Generated UUID'),
-    ('QuickBooks - Get Account Balance', '55C7433E-F36B-1410-8DB6-00021F8B792E', '81C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/quickbooks/get-account-balances.json'),
-    ('QuickBooks - Get GL Transactions', '55C7433E-F36B-1410-8DB6-00021F8B792E', 'E4234567-8901-2345-6789-012345678904', 'Generated UUID'),
+    ('QuickBooks - Create Journal Entry', '55C7433E-F36B-1410-8DB6-00021F8B792E', '9DC7433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('QuickBooks - Get Account Balances', '55C7433E-F36B-1410-8DB6-00021F8B792E', '81C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('QuickBooks - Get GL Codes', '55C7433E-F36B-1410-8DB6-00021F8B792E', '7DC8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('QuickBooks - Get Transactions', '55C7433E-F36B-1410-8DB6-00021F8B792E', '85C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
     -- Business Central Actions
-    ('Business Central - Get Customers', '61C7433E-F36B-1410-8DB6-00021F8B792E', '89C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/business-central/get-customers.json'),
-    ('Business Central - Get GL Entries', '61C7433E-F36B-1410-8DB6-00021F8B792E', '8DC8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/business-central/get-general-ledger-entries.json'),
-    ('Business Central - Get GL Accounts', '61C7433E-F36B-1410-8DB6-00021F8B792E', '91C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/business-central/get-gl-accounts.json'),
-    ('Business Central - Get Sales Invoices', '61C7433E-F36B-1410-8DB6-00021F8B792E', '95C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/business-central/get-sales-invoices.json');
+    ('Business Central - Get Customers', '61C7433E-F36B-1410-8DB6-00021F8B792E', '89C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('Business Central - Get General Ledger Entries', '61C7433E-F36B-1410-8DB6-00021F8B792E', '8DC8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('Business Central - Get GL Accounts', '61C7433E-F36B-1410-8DB6-00021F8B792E', '91C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json'),
+    ('Business Central - Get Sales Invoices', '61C7433E-F36B-1410-8DB6-00021F8B792E', '95C8433E-F36B-1410-8DB6-00021F8B792E', 'Metadata: actions/.bizapps-actions.json');
     
     -- Process each action update
     DECLARE action_cursor CURSOR FOR 
@@ -266,7 +271,7 @@ BEGIN TRY
         SELECT @ActionOldID = ID FROM ${flyway:defaultSchema}.Action 
         WHERE Name = @ActionName AND CategoryID = @CategoryID;
         
-        IF @ActionOldID IS NOT NULL
+        IF @ActionOldID IS NOT NULL AND @ActionOldID <> @NewID
         BEGIN
             -- Update all FK references to temp
             UPDATE ${flyway:defaultSchema}.ActionParam SET ActionID = @TempID WHERE ActionID = @ActionOldID;
@@ -293,7 +298,7 @@ BEGIN TRY
             
             PRINT 'Updated Action "' + @ActionName + '" to ID: ' + CAST(@NewID AS NVARCHAR(36)) + ' -- ' + @Source;
         END
-        ELSE
+        ELSE IF @ActionOldID IS NULL
         BEGIN
             PRINT 'WARNING: Action "' + @ActionName + '" not found. Skipping.';
         END
@@ -317,7 +322,7 @@ BEGIN TRY
     PRINT '';
     PRINT '======================================';
     PRINT 'Metadata ID Fixes Migration completed successfully.';
-    PRINT 'Fixed: 36 TemplateParams, 2 AIPromptCategories, 42 Actions';
+    PRINT 'Fixed: 36 TemplateParams, 2 AIPromptCategories, 55 Actions';
     PRINT '=======================================';
     
     -- Commit transaction if everything succeeded
