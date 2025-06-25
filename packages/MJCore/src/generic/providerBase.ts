@@ -373,6 +373,10 @@ export abstract class ProviderBase implements IMetadataProvider {
                 // Second overload: entityName, loadKey, contextUser
                 actualLoadKey = loadKeyOrContextUser;
                 actualContextUser = contextUser;
+            } else if (contextUser !== undefined) {
+                // Second overload with null/undefined loadKey: entityName, null/undefined, contextUser
+                actualLoadKey = undefined;
+                actualContextUser = contextUser;
             } else {
                 // First overload: entityName, contextUser
                 actualContextUser = loadKeyOrContextUser as UserInfo;

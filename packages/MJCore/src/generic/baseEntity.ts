@@ -107,6 +107,15 @@ export class EntityField {
     }
 
     /**
+     * Resets the NeverSet flag - this is generally an internal method but is available when working with read only fields (mainly primary key fields) to allow them 
+     * to be set/changed once after the object is created. This is useful for scenarios where you want to set a read only field
+     * after the object is created, but only once. This is typically used in the BaseEntity class when loading an entity from an array of values or the DB and reusing an existing object.
+     */
+    public ResetNeverSetFlag() {
+        this._NeverSet = true;
+    }
+
+    /**
      * Returns true if the field is dirty, false otherwise. A field is considered dirty if the value is different from the old value. If the field is read only, it is never dirty.
      */
     get Dirty(): boolean {
@@ -882,6 +891,11 @@ export abstract class BaseEntity<T = unknown> {
                 // Generate and set UUID for this primary key
                 const uuid = uuidv4();
                 this.Set(pk.Name, uuid);
+                const field = this.GetFieldByName(pk.Name);
+                if (field) {
+                    // Reset the never set flag so that we can set this value later if needed, this is so that people who do deferred load after new record are still ok
+                    field.ResetNeverSetFlag(); 
+                }
             }
         }
         
