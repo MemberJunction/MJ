@@ -7,7 +7,12 @@
 -- Entities fixed:
 -- 1. TemplateParam (36 records) - Delete and recreate with hardcoded IDs
 -- 2. AIPromptCategory (2 records) - Update to hardcoded IDs
--- 3. Action (42 records) - Update to match metadata IDs
+-- 3. Action (55 records) - Update to match metadata IDs
+--    - 52 existing actions updated to correct IDs
+--    - 3 new actions added that were missing:
+--      * HubSpot - Get Deals by Company
+--      * HubSpot - Get Upcoming Tasks
+--      * HubSpot - Log Activity
 -- =====================================================
 
 -- Start transaction
@@ -330,7 +335,7 @@ BEGIN TRY
     PRINT '';
     PRINT '======================================';
     PRINT 'Metadata ID Fixes Migration completed successfully.';
-    PRINT 'Fixed: 36 TemplateParams, 2 AIPromptCategories, 42 Actions';
+    PRINT 'Fixed: 36 TemplateParams, 2 AIPromptCategories, 55 Actions';
     PRINT '=======================================';
     
     -- Commit transaction if everything succeeded
