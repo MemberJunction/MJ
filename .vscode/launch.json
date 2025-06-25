@@ -189,8 +189,8 @@
     {
       "id": "metadataSyncDirectory",
       "type": "promptString",
-      "description": "Directory to push (leave empty for default demo)",
-      "default": "packages/MetadataSync/demo/ai-prompts"
+      "description": "Directory to push (e.g., 'metadata' for all, 'metadata/actions' for specific entity)",
+      "default": "metadata"
     },
     {
       "id": "metadataSyncPullDirectory",

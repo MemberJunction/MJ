@@ -1,12 +1,13 @@
-import { BaseEntity, IRunViewProvider, RunView, ValidationErrorInfo, ValidationErrorType, ValidationResult } from "@memberjunction/core";
+import { BaseEntity, CompositeKey, IRunViewProvider, RunView, ValidationErrorInfo, ValidationErrorType, ValidationResult } from "@memberjunction/core";
 import { AIPromptEntity, TemplateContentEntity, TemplateParamEntity } from "../generated/entity_subclasses";
-import { RegisterClass } from "@memberjunction/global";
+import { compareStringsByLine, RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseEntity, "AI Prompts")
 export class AIPromptEntityExtended extends AIPromptEntity {
     /**
      * private property to hold the template text.
      */
+    protected _originalTemplateText: string = "";
     private _templateText: string = "";
     /**
      * Virtual property to hold the template text.
@@ -19,6 +20,36 @@ export class AIPromptEntityExtended extends AIPromptEntity {
     public set TemplateText(value: string) {
         this._templateText = value;
     }
+    public get TemplateTextDirty(): boolean {
+        return this._templateText !== this._originalTemplateText;        
+    }
+
+    override Set(FieldName: string, Value: any): void {
+        if (FieldName?.trim().toLowerCase() === "templatetext") {
+            this.TemplateText = Value;
+        }
+        else {
+            super.Set(FieldName, Value);
+        }
+    }
+
+    override get Dirty(): boolean {
+        const dirty = super.Dirty;
+        if (dirty) {
+            // if the base entity is dirty, we don't need to check TemplateTextDirty
+            return true;
+        }
+        else if (this.TemplateTextDirty) {
+            // if TemplateText is dirty, we consider the entity dirty
+            compareStringsByLine(this._templateText, this._originalTemplateText);
+            return true;
+        }   
+        return false;
+        // otherwise, return false
+//        return super.Dirty || this.TemplateTextDirty;
+    }
+
+
 
     /**
      * private property to cache template parameters.
@@ -70,11 +101,13 @@ export class AIPromptEntityExtended extends AIPromptEntity {
                     // we found the Template Contents, set the TemplateText property
                     this.TemplateText = templateContentResult.Results[0].TemplateText || "";
                 }
+                this._originalTemplateText = this.TemplateText; // store the original text for comparison later
                 return true; // we successfully loaded the Template Contents
             }
             else {
                 // if we did not find any Template Contents, we can set the TemplateText to an empty string
                 this.TemplateText = "";
+                this._originalTemplateText = ""; // reset original text
                 return false; // should be able to load Template Contents even if not found
             }
         }
@@ -117,13 +150,13 @@ export class AIPromptEntityExtended extends AIPromptEntity {
         ]);
     }
 
-    override async Load(ID: string, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
-        const result = await super.Load(ID, EntityRelationshipsToLoad);
+    override async InnerLoad(CompositeKey: CompositeKey, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
+        const result = await super.InnerLoad(CompositeKey, EntityRelationshipsToLoad);        
+
         // Load both template text and params in parallel for better performance
         await this.LoadRelatedEntities();
         return result;
     }
-
 
     /**
      * Fix bug in generated code where new records have a null ID and that matches

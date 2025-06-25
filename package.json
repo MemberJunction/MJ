@@ -10,7 +10,7 @@
     "packages/AI/Providers/*",
     "packages/AI/Recommendations/*",
     "packages/AI/Vectors/*",
-    "packages/AI/agent-manager/*",
+    "packages/AI/AgentManager/*",
     "packages/Communication/*",
     "packages/Communication/providers/*",
     "packages/Templates/*",

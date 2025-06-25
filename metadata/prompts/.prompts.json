@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Loop Agent Type: System Prompt",
-      "Description": "Basic control structure for the Loop Agent Type.",
+      "Description": "Basic control structure for the Loop Agent Type",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",
       "TemplateText": "@file:templates/system/loop-agent-type-system-prompt.template.md",
       "Status": "Active",
@@ -73,8 +73,8 @@
       "ID": "FF7D441F-36E1-458A-B548-0FC2208923BE"
     },
     "sync": {
-      "lastModified": "2025-06-23T21:11:31.133Z",
-      "checksum": "0bf8c3c0cbd8fe8a243ec5f34cdaab56e16871ef1c50c6c132d41ac484214523"
+      "lastModified": "2025-06-24T22:14:28.816Z",
+      "checksum": "50ab20abd8ecd012df189308562817ecf88385c5339ef6ca7e4339f8a927cc29"
     }
   },
   {
@@ -121,8 +121,8 @@
       "ID": "B4053E4F-165C-4AED-8E14-3A0A25A28EFE"
     },
     "sync": {
-      "lastModified": "2025-06-23T21:11:31.150Z",
-      "checksum": "bd2883bddf54ea258a806bb80891726513ba2983634b4f83ba9bc9b65889c5e3"
+      "lastModified": "2025-06-24T18:14:41.215Z",
+      "checksum": "cab30b4b034ad25dc3277a069011d03437bc361fa69af1dff198516b14d800d5"
     }
   },
   {
@@ -169,8 +169,8 @@
       "ID": "26949743-4535-4DA6-86F4-0AD76250E17A"
     },
     "sync": {
-      "lastModified": "2025-06-23T21:11:31.165Z",
-      "checksum": "f55ad56b7cd6d7f58c3b5a33239016d0b7c47b15ea094710d298e787f54c665d"
+      "lastModified": "2025-06-24T18:14:41.226Z",
+      "checksum": "d58051e88e1c05e9f939ac4ec70031d2aa4f74d925a49e0b26e6bdbdc093c74f"
     }
   },
   {
@@ -217,8 +217,8 @@
       "ID": "1B078367-9AE8-4CB8-BC32-CAAD5DE506D5"
     },
     "sync": {
-      "lastModified": "2025-06-23T21:11:31.180Z",
-      "checksum": "1d04241bc97bb8c54d8d4cb42c20ff8f0f6bcddb0a7d24add8501f058b52b4f8"
+      "lastModified": "2025-06-24T18:14:41.236Z",
+      "checksum": "f489bc7f369a4660c9c61562d26c61c284fa59e3aa9f74a49331b70eb84fdfdd"
     }
   },
   {
@@ -265,8 +265,8 @@
       "ID": "D9CF490A-5F1B-4B78-A93C-021707D107A2"
     },
     "sync": {
-      "lastModified": "2025-06-23T21:11:31.194Z",
-      "checksum": "d7ce46b032c3e72de6a352c6ca5cba3d2db13fd4af5e9ef29c4033fc41dc8aac"
+      "lastModified": "2025-06-24T18:14:41.245Z",
+      "checksum": "ee873de946f83a2bead13786b99305328954cfbe2254bed8cae554a51e383dcd"
     }
   },
   {
@@ -313,8 +313,8 @@
       "ID": "DDBD7727-0E89-47D5-AA24-C581648775A0"
     },
     "sync": {
-      "lastModified": "2025-06-23T21:11:31.209Z",
-      "checksum": "b2fd1e4a023ae94139a8c1b691f831f32cb02ce1d4b3e594cb8cdb2e29578d6f"
+      "lastModified": "2025-06-24T18:14:41.255Z",
+      "checksum": "9ed916e06d0fbe0c0cffd8ccb27dc004409b8a74e79a72f3c9c421f30f659786"
     }
   },
   {
@@ -361,8 +361,8 @@
       "ID": "D536DD1C-84C0-46B6-8AC7-7B332E2B0273"
     },
     "sync": {
-      "lastModified": "2025-06-23T21:11:31.222Z",
-      "checksum": "153cd02011ecc5e09637eac6486cbff923564457fbf42a037f3c01305b25c4aa"
+      "lastModified": "2025-06-24T18:14:41.264Z",
+      "checksum": "ce28eb7f57b9051ac3245c24ec71e19a509b4bd67683181ad23c97d0336a006a"
     }
   },
   {
@@ -409,8 +409,8 @@
       "ID": "5182F85B-C86F-4FCB-A38E-90687F8D0CD2"
     },
     "sync": {
-      "lastModified": "2025-06-23T21:11:31.239Z",
-      "checksum": "5d8e87034bc9cd2085deeb50f9119e2c6866c4d69d9b2a5d5612b82b4d23c796"
+      "lastModified": "2025-06-24T18:14:41.273Z",
+      "checksum": "4e3ba44aa5a921bcfc5f28060f952cf472087686cbb622c40485021b3dbb8423"
     }
   },
   {
@@ -457,8 +457,8 @@
       "ID": "2222B834-50D9-49B2-9206-FA714FE9124A"
     },
     "sync": {
-      "lastModified": "2025-06-23T21:11:31.253Z",
-      "checksum": "c2f86da4dee28a6cf43dcdec1e3a9e3ca6c75bdd48de307c4d5a3dff3254a279"
+      "lastModified": "2025-06-24T18:14:41.283Z",
+      "checksum": "7ee0e5f1addbdccc325d2840f405d0fd934b23319a5084fac56f05d62645a6ec"
     }
   },
   {
@@ -505,8 +505,8 @@
       "ID": "C1D7FE6B-287B-4B3F-8618-4CDBCF1394BB"
     },
     "sync": {
-      "lastModified": "2025-06-23T21:11:31.289Z",
-      "checksum": "adfec2e80b43344b688bcae0d384832063199a2d46a1c853e51bacacdfc4fd9a"
+      "lastModified": "2025-06-24T22:14:28.978Z",
+      "checksum": "c3068c1d415b59226dc829368b5d6c2931c46b6d955aeaafff78d3d352bf1e9f"
     }
   },
   {
@@ -568,8 +568,8 @@
       "ID": "96BCAE1C-B1F0-4FC4-9988-54B067BC962A"
     },
     "sync": {
-      "lastModified": "2025-06-23T21:11:31.310Z",
-      "checksum": "5076ee0f6c6a305f6b6beeaf0d51c3d34d4b27666e1350dc7dcea78a045f56de"
+      "lastModified": "2025-06-24T18:14:41.302Z",
+      "checksum": "f3a5222e6cc9716123dd4acfc77d920cb20a11db43bde733ee9860bb5dc667d6"
     }
   },
   {
@@ -631,8 +631,8 @@
       "ID": "B41F7FAD-49F5-4897-92C9-4904C79DD5F5"
     },
     "sync": {
-      "lastModified": "2025-06-23T21:11:31.332Z",
-      "checksum": "20fc26a931a63e1ac3103741941db3dc1d04e224f38e302e1aab8e4cb216ce12"
+      "lastModified": "2025-06-24T18:14:41.315Z",
+      "checksum": "d14eb6bf271f3526facb31f2707125828475273974a9cbc6167e6a14d1e1aa6d"
     }
   },
   {
@@ -694,8 +694,8 @@
       "ID": "2B405BA2-A446-4F1E-9402-D88C51CC8F9F"
     },
     "sync": {
-      "lastModified": "2025-06-23T21:11:31.352Z",
-      "checksum": "083cd8a68207a978d260dc250182842f02c78572e935c6b82ea22a2ec76bb4cd"
+      "lastModified": "2025-06-24T18:14:41.328Z",
+      "checksum": "2bbc0780cb5f5377cb9ada48f3327599226958a3de76cde07b2d8e31349ab676"
     }
   },
   {
@@ -757,8 +757,8 @@
       "ID": "04EB71C7-718A-4B6E-A8BB-35D9AF8AB94D"
     },
     "sync": {
-      "lastModified": "2025-06-23T21:11:31.373Z",
-      "checksum": "3f3820b18ba288dc5451caad39ff9c481b4584b419d1a9d7e7c6119a56f7309e"
+      "lastModified": "2025-06-24T18:14:41.339Z",
+      "checksum": "73850ee7e55be916ac03fa687c0af3faa97d9adbaf4b6d8365616a905532c828"
     }
   }
 ]

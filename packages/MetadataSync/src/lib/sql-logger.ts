@@ -23,9 +23,9 @@ export class SQLLogger {
   
   constructor(syncConfig: SyncConfig | null) {
     this.options = {
-      enabled: syncConfig?.sqlLogging?.enabled || false,
-      outputDirectory: syncConfig?.sqlLogging?.outputDirectory || './sql_logging',
-      formatAsMigration: syncConfig?.sqlLogging?.formatAsMigration || false
+      enabled: syncConfig?.sqlLogging?.enabled ?? false,
+      outputDirectory: syncConfig?.sqlLogging?.outputDirectory ?? './sql_logging',
+      formatAsMigration: syncConfig?.sqlLogging?.formatAsMigration ?? false
     };
   }
   

@@ -97,6 +97,12 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /** Track which execution cards are expanded */
     public expandedExecutions: { [key: string]: boolean } = {};
 
+    /** Available model selection modes */
+    public modelSelectionModes = [
+        { text: 'Agent Type', value: 'Agent Type' },
+        { text: 'Agent', value: 'Agent' }
+    ];
+
     constructor(
         elementRef: ElementRef,
         protected override sharedService: SharedService,

@@ -53,7 +53,7 @@ Your specialized actions include:
 Maintain the AgentManagerContext throughout the process:
 
 ```typescript
-{@include ../../../../packages/AI/agent-manager/core/src/interfaces/agent-definition.interface.ts}
+{@include ../../../../packages/AI/AgentManager/core/src/interfaces/agent-definition.interface.ts}
 ```
 
 ## Guidelines
