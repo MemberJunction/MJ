@@ -10,7 +10,7 @@
  * @since 2.50.0
  */
 
-import { AIPromptRunResult } from '@memberjunction/ai';
+import { AIPromptRunResult } from './prompt.types';
 import { AIAgentRunEntity, AIAgentRunStepEntity, AIAgentTypeEntity, AIPromptEntity } from '@memberjunction/core-entities';
 import { ActionResult, ActionResultSimple } from '@memberjunction/actions-base';
 import { ChatMessage } from '@memberjunction/ai';

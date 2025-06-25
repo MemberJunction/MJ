@@ -3,7 +3,8 @@ import { TemplateContentEntity, TemplateParamEntity, TemplateEntity } from "@mem
 import { RegisterClass } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
-import { AIPromptRunner, AIPromptParams } from "@memberjunction/ai-prompts";
+import { AIPromptRunner } from "@memberjunction/ai-prompts";
+import { AIPromptParams } from "@memberjunction/ai-core-plus";
 
 interface ExtractedParameter {
     name: string;

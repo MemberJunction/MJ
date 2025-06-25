@@ -3,7 +3,7 @@ import { UserPayload } from '../types.js';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { AIAgentEntity } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
-import { ExecuteAgentResult } from '@memberjunction/aiengine';
+import { ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';

@@ -13,13 +13,16 @@
 
 import { AIAgentEntity, AIAgentTypeEntity, AIAgentRunEntity, AIAgentRunStepEntity, TemplateParamEntity, AIPromptEntity, ActionParamEntity } from '@memberjunction/core-entities';
 import { UserInfo, Metadata, RunView, LogStatus } from '@memberjunction/core';
-import { AIPromptRunner, AIPromptParams, ChildPromptParam } from '@memberjunction/ai-prompts';
-import { ChatMessage, AIPromptRunResult } from '@memberjunction/ai';
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
+import { ChatMessage } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { CopyScalarsAndArrays, MJGlobal } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import {
+    AIPromptParams,
+    AIPromptRunResult,
+    ChildPromptParam,
     ExecuteAgentParams, 
     AgentContextData,
     AgentConfiguration,
@@ -38,7 +41,7 @@ import {
     ChatExecutionResult,
     NextStepDetails,
     BaseAgentNextStep
-} from '@memberjunction/aiengine';
+} from '@memberjunction/ai-core-plus';
 import { ActionEntityExtended, ActionResult } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
 

@@ -1,4 +1,5 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ExecutionStatus, CancellationReason, ModelInfo, JudgeMetadata, ValidationAttempt, AIPromptRunResult } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey } from '@memberjunction/ai';
+import { ValidationAttempt, AIPromptRunResult } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatus, Metadata, UserInfo, ValidationResult, ValidationErrorInfo, ValidationErrorType, RunView } from '@memberjunction/core';
 import { CleanJSON, MJGlobal } from '@memberjunction/global';
 import { AIModelEntityExtended, AIPromptEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
@@ -8,24 +9,14 @@ import { ExecutionPlanner } from './ExecutionPlanner';
 import { ParallelExecutionCoordinator } from './ParallelExecutionCoordinator';
 import { ResultSelectionConfig } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
-import Ajv, { JSONSchemaType, ValidateFunction, ErrorObject } from 'ajv';
+import Ajv, { ValidateFunction } from 'ajv';
 import { SystemPlaceholderManager } from './SystemPlaceholders';
 import { 
-    ExecutionProgressCallback, 
-    ExecutionStreamingCallback, 
     TemplateMessageRole,
     ChildPromptParam,
     AIPromptParams
-} from './types';
-
-// Re-export types that other modules need
-export { TemplateMessageRole, AIPromptParams } from './types';
-
-
-
-
-
-
+} from '@memberjunction/ai-core-plus';
+ 
 
 
 
