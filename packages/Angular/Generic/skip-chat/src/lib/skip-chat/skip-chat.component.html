@@ -1,4 +1,4 @@
-<div class="chat-container"  #topLevelDiv>
+<div class="chat-container" kendoDialogContainer #topLevelDiv>
     <div class="layout">
         @if (IsConversationListVisible) {
             <div class="left-panel">
@@ -147,6 +147,11 @@
                                                 (click)="showSharingDialog()"></span>
                                     </button>    
                                 }
+                                <!-- TEMPORARY TEST BUTTON -->
+                                <button kendoButton class="test-button" style="background-color: #ff0000; color: white;">
+                                    <span class="fa-solid fa-flask"
+                                            (click)="testButtonClick()"></span>
+                                </button>
                             </div>
                         </div>
                     }
