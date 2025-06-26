@@ -1815,8 +1815,8 @@ export class AIPromptRunner {
       const cleanKey = key.trim().replace(/[?*]$/, ''); // Remove trailing ? or *
       const fieldPath = path ? `${path}.${cleanKey}` : cleanKey;
 
-      // Check if required field exists
-      if (!isOptional && !(cleanKey in resultObj)) {
+      // Check if required field exists - optional and wildcard items are not required
+      if (!isOptional && !isWildcard && !(cleanKey in resultObj)) {
         errors.push(new ValidationErrorInfo(
           fieldPath,
           `Required field '${cleanKey}' is missing`,
