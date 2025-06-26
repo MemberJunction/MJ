@@ -847,7 +847,7 @@ export class AIPromptRunner {
 
       // If explicit model is specified, validate it from cached models
       if (explicitModelId) {
-        const model = AIEngine.Instance.Models.find((m) => m.ID === explicitModelId && (!vendorName || m.Vendor === vendorName));
+        const model = AIEngine.Instance.Models.find((m) => m.ID === explicitModelId);
         if (!model) {
           throw new Error(`Specified model ${explicitModelId} not found in available models`);
         }
@@ -1113,18 +1113,80 @@ export class AIPromptRunner {
     renderedPrompt: string,
     prompt: AIPromptEntity,
     params: AIPromptParams,
+    vendorId: string | null,
     conversationMessages?: ChatMessage[],
     templateMessageRole: TemplateMessageRole = 'system',
     cancellationToken?: AbortSignal,
   ): Promise<ChatResult> {
     try {
-      // Create LLM instance
-      const apiKey = GetAIAPIKey(model.DriverClass);
-      const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, apiKey);
+      // Get vendor-specific configuration
+      let driverClass = model.DriverClass;
+      let apiName = model.APIName;
+      let maxInputTokens = model.InputTokenLimit;
+      let maxOutputTokens: number | null = null; // AIModel doesn't have this property
+      let supportsEffortLevel = model.SupportsEffortLevel;
+      let actualVendorId = vendorId;
+      
+      if (vendorId) {
+        // Find the AIModelVendor record for this specific vendor
+        const modelVendor = AIEngine.Instance.ModelVendors.find(
+          (mv) => mv.ModelID === model.ID && mv.VendorID === vendorId && mv.Status === 'Active'
+        );
+        
+        if (modelVendor) {
+          // Use vendor-specific values
+          driverClass = modelVendor.DriverClass || driverClass;
+          apiName = modelVendor.APIName || apiName;
+          maxInputTokens = modelVendor.MaxInputTokens || maxInputTokens;
+          maxOutputTokens = modelVendor.MaxOutputTokens || maxOutputTokens;
+          supportsEffortLevel = modelVendor.SupportsEffortLevel ?? supportsEffortLevel;
+        } else {
+          // Warning: specified vendor doesn't provide this model
+          LogStatus(`⚠️ Warning: Vendor ${vendorId} does not provide model ${model.Name}. Falling back to highest priority vendor.`);
+          
+          // Find highest priority vendor for this model
+          const availableVendors = AIEngine.Instance.ModelVendors
+            .filter((mv) => mv.ModelID === model.ID && mv.Status === 'Active')
+            .sort((a, b) => b.Priority - a.Priority);
+          
+          if (availableVendors.length > 0) {
+            const fallbackVendor = availableVendors[0];
+            actualVendorId = fallbackVendor.VendorID;
+            driverClass = fallbackVendor.DriverClass || driverClass;
+            apiName = fallbackVendor.APIName || apiName;
+            maxInputTokens = fallbackVendor.MaxInputTokens || maxInputTokens;
+            maxOutputTokens = fallbackVendor.MaxOutputTokens || maxOutputTokens;
+            supportsEffortLevel = fallbackVendor.SupportsEffortLevel ?? supportsEffortLevel;
+            LogStatus(`✅ Using vendor ${fallbackVendor.Vendor} for model ${model.Name}`);
+          }
+        }
+      } else {
+        // No vendor specified, use highest priority vendor
+        const availableVendors = AIEngine.Instance.ModelVendors
+          .filter((mv) => mv.ModelID === model.ID && mv.Status === 'Active')
+          .sort((a, b) => b.Priority - a.Priority);
+        
+        if (availableVendors.length > 0) {
+          const defaultVendor = availableVendors[0];
+          actualVendorId = defaultVendor.VendorID;
+          driverClass = defaultVendor.DriverClass || driverClass;
+          apiName = defaultVendor.APIName || apiName;
+          maxInputTokens = defaultVendor.MaxInputTokens || maxInputTokens;
+          maxOutputTokens = defaultVendor.MaxOutputTokens || maxOutputTokens;
+          supportsEffortLevel = defaultVendor.SupportsEffortLevel ?? supportsEffortLevel;
+        }
+      }
+
+      // Create LLM instance with vendor-specific driver class
+      const apiKey = GetAIAPIKey(driverClass);
+      const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, driverClass, apiKey);
 
       // Prepare chat parameters
       const chatParams = new ChatParams();
-      chatParams.model = model.APIName;
+      if (!apiName) {
+        throw new Error(`No API name found for model ${model.Name}. Please ensure the model or its vendor configuration includes an APIName.`);
+      }
+      chatParams.model = apiName;
       chatParams.cancellationToken = cancellationToken;
 
       // Apply defaults from prompt entity first (if they exist)
@@ -1299,6 +1361,7 @@ export class AIPromptRunner {
           renderedPromptText,
           prompt,
           params,
+          promptRun.VendorID,
           params.conversationMessages,
           params.templateMessageRole || 'system',
           params.cancellationToken,
