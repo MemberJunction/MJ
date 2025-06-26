@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/ai-groq
 
+## 2.58.0
+
+### Minor Changes
+
+- db88416: migrations
+
+### Patch Changes
+
+- Updated dependencies [db88416]
+  - @memberjunction/ai@2.58.0
+  - @memberjunction/global@2.58.0
+
 ## 2.57.0
 
 ### Patch Changes

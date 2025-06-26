@@ -12,7 +12,8 @@
 
 import { LogError, LogStatus } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
-import { AIEngine, ExecuteAgentResult, ExecuteAgentParams } from '@memberjunction/aiengine';
+import { AIEngine } from '@memberjunction/aiengine';
+import { ExecuteAgentResult, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from './base-agent';
 
 /**

@@ -41,6 +41,14 @@ export class CerebrasLLM extends BaseLLM {
     }
 
     /**
+     * Check if the provider supports thinking models
+     * Cerebras supports thinking models with <think> blocks
+     */
+    protected supportsThinkingModels(): boolean {
+        return true;
+    }
+
+    /**
      * Implementation of non-streaming chat completion for Cerebras
      */
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
@@ -93,10 +101,18 @@ export class CerebrasLLM extends BaseLLM {
 
         // Cast to any to extract the choices
         const choices: ChatResultChoice[] = (chatResponse.choices as Array<ChatCompletion.ChatCompletionResponse.Choice>).map((choice) => {
+            const rawMessage = choice.message.content;
+            // in some cases, Cerebras models do thinking and return that as the first part 
+            // of the message the very first characters will be <think> and it ends with
+            // </think> so we need to remove that and put that into a new thinking response element
+            // Extract thinking content if present using base class helper
+            const extracted = this.extractThinkingFromContent(rawMessage);
+
             const res: ChatResultChoice = {
                 message: {
                     role: ChatMessageRole.assistant,
-                    content: choice.message.content
+                    content: extracted.content,
+                    thinking: extracted.thinking
                 },
                 finish_reason: choice.finish_reason,
                 index: choice.index
@@ -125,6 +141,10 @@ export class CerebrasLLM extends BaseLLM {
      * Create a streaming request for Cerebras
      */
     protected async createStreamingRequest(params: ChatParams): Promise<any> {
+        // Initialize streaming state for thinking extraction if supported
+        if (this.supportsThinkingModels()) {
+            this.initializeThinkingStreamState();
+        }
         // Convert messages to format expected by Cerebras
         const messages = params.messages.map(m => {
             if (typeof m.content === 'string') {
@@ -183,7 +203,12 @@ export class CerebrasLLM extends BaseLLM {
             const choice = chunk.choices[0];
             
             if (choice?.delta?.content) {
-                content = choice.delta.content;
+                const rawContent = choice.delta.content;
+                
+                // Process the content with thinking extraction if supported
+                content = this.supportsThinkingModels() 
+                    ? this.processStreamChunkWithThinking(rawContent)
+                    : rawContent;
             }
             
             if (choice?.finish_reason) {
@@ -220,6 +245,9 @@ export class CerebrasLLM extends BaseLLM {
             finishReason = lastChunk.choices[0].finish_reason;
         }
         
+        // Get thinking content from streaming state if available
+        const thinkingContent = this.thinkingStreamState?.accumulatedThinking.trim();
+        
         // For Cerebras, usage metrics come in the final chunk
         const promptTokens = usage?.promptTokens || 0;
         const completionTokens = usage?.completionTokens || 0;
@@ -233,10 +261,10 @@ export class CerebrasLLM extends BaseLLM {
         // Set all properties
         result.data = {
             choices: [{
-                message: {
+                message: this.addThinkingToMessage({
                     role: ChatMessageRole.assistant,
                     content: accumulatedContent ? accumulatedContent : ''
-                },
+                }, thinkingContent),
                 finish_reason: finishReason,
                 index: 0
             }],

@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/skip-types
 
+## 2.58.0
+
+### Minor Changes
+
+- db88416: migrations
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.58.0
+- @memberjunction/data-context@2.58.0
+
 ## 2.57.0
 
 ### Patch Changes

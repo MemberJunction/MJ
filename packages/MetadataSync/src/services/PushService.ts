@@ -456,6 +456,9 @@ export class PushService {
     if (!exists) {
       entity.NewRecord(); // make sure our record starts out fresh
       isNew = true;
+      
+      // UUID generation now happens automatically in BaseEntity.NewRecord()
+      
       // Set primary key values for new records if provided, this is important for the auto-create logic
       if (primaryKey) {
         for (const [pkField, pkValue] of Object.entries(primaryKey)) {

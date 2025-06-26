@@ -1,5 +1,25 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.58.0
+
+### Patch Changes
+
+- Updated dependencies [def26fe]
+- Updated dependencies [db88416]
+  - @memberjunction/core@2.58.0
+  - @memberjunction/ai-core-plus@2.58.0
+  - @memberjunction/ai-engine-base@2.58.0
+  - @memberjunction/ng-base-forms@2.58.0
+  - @memberjunction/ng-form-toolbar@2.58.0
+  - @memberjunction/ng-action-gallery@2.58.0
+  - @memberjunction/ng-ai-test-harness@2.58.0
+  - @memberjunction/ng-code-editor@2.58.0
+  - @memberjunction/ng-container-directives@2.58.0
+  - @memberjunction/ng-join-grid@2.58.0
+  - @memberjunction/ng-timeline@2.58.0
+  - @memberjunction/core-entities@2.58.0
+  - @memberjunction/ng-tabstrip@2.58.0
+
 ## 2.57.0
 
 ### Patch Changes

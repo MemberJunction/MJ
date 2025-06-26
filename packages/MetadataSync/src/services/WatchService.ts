@@ -204,6 +204,8 @@ export class WatchService {
       entity = await this.syncEngine.createEntityObject(entityConfig.entity);
       entity.NewRecord();
       isNew = true;
+      
+      // UUID generation now happens automatically in BaseEntity.NewRecord()
     }
     
     // Apply defaults first

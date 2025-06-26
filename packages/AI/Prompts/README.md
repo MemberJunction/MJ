@@ -2034,6 +2034,135 @@ This priority system allows you to:
 - Ensure expensive/powerful models are only used when necessary
 - Control the exact execution order for cost optimization
 
+## Multi-Vendor Model Support
+
+MemberJunction supports multiple inference providers (vendors) for the same AI model, enabling flexible deployment scenarios and vendor failover. This is crucial for:
+- Using the same model from different providers (e.g., Claude from Anthropic API vs AWS Bedrock)
+- Vendor-specific configurations (different token limits, API endpoints, pricing)
+- Failover strategies when primary vendors are unavailable
+- Cost optimization by routing to cheaper providers
+
+### Vendor Selection Precedence
+
+The AI Prompt Runner uses a sophisticated vendor selection system with clear precedence rules:
+
+1. **Explicit Runtime Override** (`params.override.vendorId`)
+   - Highest precedence - always used when specified
+   - If the vendor doesn't provide the selected model, a warning is issued and fallback occurs
+
+2. **Prompt-Model Association Vendor** (`AIPromptModel.VendorID`)
+   - When a prompt has specific model associations, the vendor from the highest priority association is used
+   - Configured in the database for prompt-specific vendor preferences
+
+3. **Highest Priority Vendor** (`AIModelVendor.Priority`)
+   - When no explicit vendor is specified, the system uses the vendor with the highest priority
+   - Priority is configured per model-vendor combination in the database
+
+### Vendor-Specific Configuration
+
+Each vendor can have different configurations for the same model:
+
+```typescript
+// AIModelVendor entity fields used during execution:
+{
+    ModelID: 'claude-3-opus-id',
+    VendorID: 'anthropic-id',
+    Priority: 100,                    // Higher = preferred
+    DriverClass: 'AnthropicLLM',      // Vendor-specific implementation
+    APIName: 'claude-3-opus-20240229', // Vendor's API model name
+    MaxInputTokens: 200000,           // Vendor-specific limits
+    MaxOutputTokens: 4096,
+    SupportsStreaming: true,
+    SupportsEffortLevel: false
+}
+```
+
+### Vendor Override Example
+
+```typescript
+// Execute with specific vendor
+const result = await runner.ExecutePrompt({
+    prompt: myPrompt,
+    data: { query: 'Analyze this data' },
+    contextUser: currentUser,
+    override: {
+        modelId: 'claude-3-opus-id',
+        vendorId: 'aws-bedrock-id'  // Use AWS Bedrock instead of default
+    }
+});
+
+// The system will:
+// 1. Validate that AWS Bedrock provides Claude 3 Opus
+// 2. Use AWS Bedrock's driver class and configuration
+// 3. Fall back to highest priority vendor if mismatch occurs
+```
+
+### Model-Vendor Mismatch Handling
+
+When a specified vendor doesn't provide the requested model:
+
+```typescript
+// Scenario: User requests GPT-4 from Anthropic (invalid combination)
+const result = await runner.ExecutePrompt({
+    prompt: myPrompt,
+    override: {
+        modelId: 'gpt-4-id',
+        vendorId: 'anthropic-id'  // Anthropic doesn't provide GPT-4
+    }
+});
+
+// System behavior:
+// 1. Logs warning: "⚠️ Warning: Vendor anthropic does not provide model GPT-4. Falling back to highest priority vendor."
+// 2. Finds highest priority vendor for GPT-4 (e.g., OpenAI)
+// 3. Uses the fallback vendor's configuration
+// 4. Execution continues with valid vendor
+```
+
+### Database Configuration
+
+Configure multi-vendor support through the MemberJunction metadata:
+
+```sql
+-- Example: Claude available from multiple vendors
+INSERT INTO [MJ: AI Model Vendors] (ModelID, VendorID, Priority, DriverClass, APIName, MaxInputTokens)
+VALUES 
+    ('claude-3-id', 'anthropic-id', 100, 'AnthropicLLM', 'claude-3-opus-20240229', 200000),
+    ('claude-3-id', 'aws-bedrock-id', 90, 'BedrockLLM', 'anthropic.claude-3-opus', 180000),
+    ('claude-3-id', 'vertex-ai-id', 80, 'VertexAILLM', 'claude-3-opus@001', 150000);
+
+-- Query vendor options for a model
+SELECT 
+    mv.Priority,
+    v.Name as VendorName,
+    mv.DriverClass,
+    mv.APIName,
+    mv.MaxInputTokens,
+    mv.MaxOutputTokens
+FROM [MJ: AI Model Vendors] mv
+    JOIN [MJ: AI Vendors] v ON mv.VendorID = v.ID
+WHERE mv.ModelID = 'claude-3-id' 
+    AND mv.Status = 'Active'
+ORDER BY mv.Priority DESC;
+```
+
+### Benefits of Multi-Vendor Support
+
+1. **Resilience**: Automatic failover when primary vendor is unavailable
+2. **Cost Optimization**: Route to cheaper vendors for non-critical tasks
+3. **Regional Compliance**: Use region-specific vendors for data residency
+4. **Performance**: Choose vendors with better latency for your location
+5. **Feature Access**: Some vendors may offer unique features (streaming, tools, etc.)
+
+### Implementation Details
+
+The multi-vendor support is implemented in the `executeModel` method:
+
+1. **Vendor Resolution**: Determines which vendor to use based on precedence rules
+2. **Configuration Loading**: Loads vendor-specific settings from AIModelVendor
+3. **Driver Selection**: Uses vendor-specific driver class for API communication
+4. **Fallback Logic**: Handles mismatches gracefully with warnings
+5. **Execution Tracking**: Records the actual vendor used in AIPromptRun
+
 For additional configuration options and advanced use cases, refer to the source code and entity definitions in the MemberJunction core system.
 
 ## System Prompt Embedding

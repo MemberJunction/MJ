@@ -7,6 +7,7 @@ import { LanguageDescription } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
 import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { Subject } from 'rxjs';
+import { DEFAULT_SYSTEM_PLACEHOLDERS, SystemPlaceholder, SYSTEM_PLACEHOLDER_CATEGORIES, SystemPlaceholderCategory } from '@memberjunction/ai-core-plus';
 
 export interface TemplateEditorConfig {
     allowEdit?: boolean;
@@ -38,16 +39,74 @@ export class TemplateEditorComponent implements OnInit, OnDestroy, AfterViewInit
     public contentTypeOptions: Array<{text: string, value: string}> = [];
     public supportedLanguages: LanguageDescription[] = languages;
     public isRunningTemplate = false;
+    public activeHelpTab: 'syntax' | 'placeholders' = 'syntax';
+    public activePlaceholderCategory: string = '';
+    
+    // System placeholders organized by category
+    public placeholderCategories: Array<{
+        category: SystemPlaceholderCategory;
+        placeholders: SystemPlaceholder[];
+    }> = [];
     
     @ViewChild('codeEditor') codeEditor: CodeEditorComponent | null = null;
     private isUpdatingEditorValue = false;
     private destroy$ = new Subject<void>();
     private _metadata = new Metadata();
+    
+    constructor(private notificationService: MJNotificationService) {}
 
     async ngOnInit() {
         this.loadContentTypes();
+        this.organizePlaceholdersByCategory();
         if (this.template) {
             await this.loadTemplateContents();
+        }
+    }
+    
+    private organizePlaceholdersByCategory() {
+        // Group placeholders by their category
+        this.placeholderCategories = SYSTEM_PLACEHOLDER_CATEGORIES.map(category => {
+            const categoryPlaceholders = DEFAULT_SYSTEM_PLACEHOLDERS.filter(
+                placeholder => placeholder.category === category.name
+            );
+            
+            return {
+                category: category,
+                placeholders: categoryPlaceholders
+            };
+        }).filter(cat => cat.placeholders.length > 0); // Only include categories that have placeholders
+        
+        // Add any uncategorized placeholders to a misc category if needed
+        const categorized = DEFAULT_SYSTEM_PLACEHOLDERS.filter(p => p.category);
+        const uncategorized = DEFAULT_SYSTEM_PLACEHOLDERS.filter(p => !p.category);
+        
+        if (uncategorized.length > 0) {
+            this.placeholderCategories.push({
+                category: {
+                    name: 'Other',
+                    icon: 'fa-ellipsis-h',
+                    color: '#6c757d'
+                },
+                placeholders: uncategorized
+            });
+        }
+        
+        // Set the first category as active
+        if (this.placeholderCategories.length > 0) {
+            this.activePlaceholderCategory = this.placeholderCategories[0].category.name;
+        }
+    }
+    
+    /**
+     * Copies a placeholder to the clipboard
+     */
+    public async copyPlaceholder(placeholderName: string): Promise<void> {
+        try {
+            await navigator.clipboard.writeText(`{{ ${placeholderName} }}`);
+            this.notificationService.CreateSimpleNotification('Placeholder copied to clipboard!', 'success', 2000);
+        } catch (error) {
+            console.error('Failed to copy placeholder:', error);
+            this.notificationService.CreateSimpleNotification('Failed to copy placeholder', 'error', 3000);
         }
     }
 

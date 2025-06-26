@@ -11,8 +11,7 @@
  * @since 2.49.0
  */
 
-import { AIPromptRunResult } from '@memberjunction/ai';
-import { BaseAgentNextStep } from '@memberjunction/aiengine';
+import { AIPromptRunResult, BaseAgentNextStep} from '@memberjunction/ai-core-plus';
 
 /**
  * Abstract base class for agent type implementations.

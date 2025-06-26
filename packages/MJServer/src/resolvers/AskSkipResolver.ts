@@ -1318,6 +1318,10 @@ cycle.`);
         vendorDriverName: 'MistralLLM',
         apiKey: GetAIAPIKey('MistralLLM'),
       },
+      {
+        vendorDriverName: 'CerebrasLLM',
+        apiKey: GetAIAPIKey('CerebrasLLM'),
+      },
     ];
   }
 

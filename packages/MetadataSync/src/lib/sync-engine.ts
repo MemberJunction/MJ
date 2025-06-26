@@ -13,7 +13,6 @@ import fs from 'fs-extra';
 import crypto from 'crypto';
 import axios from 'axios';
 import { EntityInfo, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
-import { v4 as uuidv4 } from 'uuid';
 import { EntityConfig, FolderConfig } from '../config';
 
 /**
@@ -293,16 +292,7 @@ export class SyncEngine {
       
       newEntity.NewRecord();
       
-      // Handle explicit ID setting for new records
-      if (entityInfo.PrimaryKeys.length > 0) {
-        for (const pk of entityInfo.PrimaryKeys) {
-          if (!pk.AutoIncrement && pk.Type.toLowerCase() === 'uniqueidentifier') {
-            // Generate UUID for this primary key and set it explicitly
-            const uuid = uuidv4();
-            (newEntity as any)[pk.Name] = uuid;
-          }
-        }
-      }
+      // UUID generation now happens automatically in BaseEntity.NewRecord()
       
       // Set all lookup fields
       for (const {fieldName, fieldValue} of lookupFields) {

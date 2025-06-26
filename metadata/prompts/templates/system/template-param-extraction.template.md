@@ -43,7 +43,7 @@ Return a JSON array of parameter objects with this structure:
    - If used in {% raw %}{% for x in variable %}{% endraw %} → type is "Array"
    - If properties are accessed (variable.property) → type is "Object"
    - Otherwise → type is "Scalar"
-4. A variable is required if it has no default and no conditional protection
+4. Generally speaking consider variables to **NOT** be required unless it is clear the template will be dramatically negatively affected due to the absence of the variable.
 5. Include meaningful descriptions based on usage context
 6. Sort parameters alphabetically by name
 
