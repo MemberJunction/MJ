@@ -1768,7 +1768,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     }
     
     /**
-     * Expands all nodes in the execution tree
+     * Expands nodes in the execution tree that have children
      * Called when auto-expand flag is detected or execution completes
      */
     private expandAllNodes(): void {
@@ -1776,38 +1776,45 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             return;
         }
         
-        console.log('🔄 Starting auto-expansion of all nodes', this.executionTree.length);
+        console.log('🔄 Starting auto-expansion of nodes with children', this.executionTree.length);
         
-        // Recursively expand all nodes
+        // Recursively expand only nodes that have children
         const expandNodeRecursively = (nodes: ExecutionTreeNode[]) => {
             for (const node of nodes) {
-                // Expand ALL nodes regardless of content type
-                node.expanded = true;
+                // Only expand nodes that have children (sub-nodes)
+                const hasChildren = node.children && node.children.length > 0;
                 
-                console.log(`Expanding node: ${node.name}`, {
-                    hasExpandableContent: this.hasExpandableContent(node),
-                    hasInputPreview: !!node.inputPreview,
-                    hasOutputPreview: !!node.outputPreview,
-                    hasError: !!node.error,
-                    hasDetailsMarkdown: !!node.detailsMarkdown
-                });
-                
-                // Update the corresponding component if it exists
-                const componentRef = this.nodeComponentMap.get(node.id);
-                if (componentRef) {
-                    // Create a new object to ensure change detection
-                    const updatedNode = { ...node, expanded: true };
-                    componentRef.instance.node = updatedNode;
-                    componentRef.changeDetectorRef.markForCheck();
-                    componentRef.changeDetectorRef.detectChanges();
-                    console.log(`Updated component for node: ${node.name}`);
+                if (hasChildren) {
+                    node.expanded = true;
+                    
+                    console.log(`Expanding node with children: ${node.name}`, {
+                        childCount: node.children?.length,
+                        nodeType: node.type
+                    });
+                    
+                    // Update the corresponding component if it exists
+                    const componentRef = this.nodeComponentMap.get(node.id);
+                    if (componentRef) {
+                        // Create a new object to ensure change detection
+                        const updatedNode = { ...node, expanded: true };
+                        componentRef.instance.node = updatedNode;
+                        componentRef.changeDetectorRef.markForCheck();
+                        componentRef.changeDetectorRef.detectChanges();
+                        console.log(`Updated component for node: ${node.name}`);
+                    } else {
+                        console.log(`No component found for node: ${node.name}`);
+                    }
+                    
+                    // Expand children recursively
+                    expandNodeRecursively(node.children!);
                 } else {
-                    console.log(`No component found for node: ${node.name}`);
-                }
-                
-                // Expand children recursively
-                if (node.children) {
-                    expandNodeRecursively(node.children);
+                    console.log(`Skipping node without children: ${node.name}`, {
+                        hasExpandableContent: this.hasExpandableContent(node),
+                        hasInputPreview: !!node.inputPreview,
+                        hasOutputPreview: !!node.outputPreview,
+                        hasError: !!node.error,
+                        hasDetailsMarkdown: !!node.detailsMarkdown
+                    });
                 }
             }
         };
@@ -1818,7 +1825,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         this.cdr.markForCheck();
         this.cdr.detectChanges();
         
-        console.log('✅ Completed auto-expansion of all nodes');
+        console.log('✅ Completed auto-expansion of nodes with children');
         
         // Scroll to top after expansion to show the full tree
         setTimeout(() => {

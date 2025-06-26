@@ -13,7 +13,8 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
              [class]="'depth-' + node.depth + ' type-' + node.type">
             
             <!-- Node Header -->
-            <div class="node-header" (dblclick)="onDoubleClick()">
+            <div class="node-header" 
+                 (dblclick)="onDoubleClick()">
                 <!-- Expand/Collapse Icon -->
                 @if (hasExpandableContent()) {
                     <i class="expand-icon fa-solid"
@@ -336,6 +337,8 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
             cursor: pointer;
             border-radius: 3px;
             transition: all 0.2s ease;
+            z-index: 10; /* Ensure expand icon is clickable */
+            position: relative;
         }
         
         .expand-icon:hover {
@@ -517,6 +520,9 @@ export class ExecutionNodeComponent {
     @Input() depth: number = 0; // Add depth input
     @Output() toggleNode = new EventEmitter<ExecutionTreeNode>();
     @Output() userInteracted = new EventEmitter<void>();
+    
+    // NEW: Add events for node navigation
+    // Note: Removed navigateToStep functionality
     
     hasExpandableContent(): boolean {
         return !!(this.node.children && this.node.children.length > 0) ||
