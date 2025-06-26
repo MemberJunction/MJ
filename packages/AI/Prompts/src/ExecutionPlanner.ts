@@ -2,7 +2,7 @@ import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { AIPromptEntity, AIPromptModelEntity, AIModelEntityExtended } from '@memberjunction/core-entities';
 import { ExecutionTask, ParallelizationStrategy } from './ParallelExecution';
 import { ChatMessage } from '@memberjunction/ai';
-import { TemplateMessageRole } from './AIPromptRunner';
+import { TemplateMessageRole } from '@memberjunction/ai-core-plus';
 import { v4 as uuidv4 } from 'uuid';
 
 /**

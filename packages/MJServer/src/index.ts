@@ -40,6 +40,23 @@ LoadCoreEntitiesServerSubClasses(); // prevent tree shaking for this dynamic mod
 import { LoadAgentManagementActions } from '@memberjunction/ai-agent-manager-actions';
 LoadAgentManagementActions();
 
+
+import { resolve } from 'node:path';
+import { DataSourceInfo, raiseEvent } from './types.js';
+import { LoadOpenAILLM } from '@memberjunction/ai-openai';
+import { LoadAnthropicLLM } from '@memberjunction/ai-anthropic';
+import { LoadGroqLLM } from '@memberjunction/ai-groq';
+import { LoadCerebrasLLM } from '@memberjunction/ai-cerebras';
+import { LoadMistralLLM } from '@memberjunction/ai-mistral';
+// Load AI LLMs
+// These imports are necessary to ensure the LLMs are registered in the MemberJunction AI
+// system. They are not tree-shaken because they are dynamically loaded at runtime.
+LoadOpenAILLM();
+LoadAnthropicLLM();
+LoadGroqLLM();
+LoadCerebrasLLM();
+LoadMistralLLM();
+
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
@@ -80,8 +97,6 @@ export { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 
 export * from './generated/generated.js';
 
-import { resolve } from 'node:path';
-import { DataSourceInfo, raiseEvent } from './types.js';
 
 export type MJServerOptions = {
   onBeforeServe?: () => void | Promise<void>;

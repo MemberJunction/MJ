@@ -1,4 +1,5 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ExecutionStatus, CancellationReason, ModelInfo, JudgeMetadata, ValidationAttempt, AIPromptRunResult } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey } from '@memberjunction/ai';
+import { ValidationAttempt, AIPromptRunResult } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatus, Metadata, UserInfo, ValidationResult, ValidationErrorInfo, ValidationErrorType, RunView } from '@memberjunction/core';
 import { CleanJSON, MJGlobal } from '@memberjunction/global';
 import { AIModelEntityExtended, AIPromptEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
@@ -8,24 +9,14 @@ import { ExecutionPlanner } from './ExecutionPlanner';
 import { ParallelExecutionCoordinator } from './ParallelExecutionCoordinator';
 import { ResultSelectionConfig } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
-import Ajv, { JSONSchemaType, ValidateFunction, ErrorObject } from 'ajv';
-import { SystemPlaceholderManager } from './SystemPlaceholders';
+import Ajv, { ValidateFunction } from 'ajv';
+import { SystemPlaceholderManager } from '@memberjunction/ai-core-plus';
 import { 
-    ExecutionProgressCallback, 
-    ExecutionStreamingCallback, 
     TemplateMessageRole,
     ChildPromptParam,
     AIPromptParams
-} from './types';
-
-// Re-export types that other modules need
-export { TemplateMessageRole, AIPromptParams } from './types';
-
-
-
-
-
-
+} from '@memberjunction/ai-core-plus';
+ 
 
 
 
@@ -856,7 +847,7 @@ export class AIPromptRunner {
 
       // If explicit model is specified, validate it from cached models
       if (explicitModelId) {
-        const model = AIEngine.Instance.Models.find((m) => m.ID === explicitModelId && (!vendorName || m.Vendor === vendorName));
+        const model = AIEngine.Instance.Models.find((m) => m.ID === explicitModelId);
         if (!model) {
           throw new Error(`Specified model ${explicitModelId} not found in available models`);
         }
@@ -1104,7 +1095,7 @@ export class AIPromptRunner {
         ...params.templateData     // Template data has highest priority
       };
 
-      LogStatus(`🔧 Rendering template '${template.Name}' with ${Object.keys(systemPlaceholders).length} system placeholders`);
+      //LogStatus(`🔧 Rendering template '${template.Name}' with ${Object.keys(systemPlaceholders).length} system placeholders`);
 
       // Render the template
       return await this._templateEngine.RenderTemplate(template, templateContent, mergedData);
@@ -1122,18 +1113,80 @@ export class AIPromptRunner {
     renderedPrompt: string,
     prompt: AIPromptEntity,
     params: AIPromptParams,
+    vendorId: string | null,
     conversationMessages?: ChatMessage[],
     templateMessageRole: TemplateMessageRole = 'system',
     cancellationToken?: AbortSignal,
   ): Promise<ChatResult> {
     try {
-      // Create LLM instance
-      const apiKey = GetAIAPIKey(model.DriverClass);
-      const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, apiKey);
+      // Get vendor-specific configuration
+      let driverClass = model.DriverClass;
+      let apiName = model.APIName;
+      let maxInputTokens = model.InputTokenLimit;
+      let maxOutputTokens: number | null = null; // AIModel doesn't have this property
+      let supportsEffortLevel = model.SupportsEffortLevel;
+      let actualVendorId = vendorId;
+      
+      if (vendorId) {
+        // Find the AIModelVendor record for this specific vendor
+        const modelVendor = AIEngine.Instance.ModelVendors.find(
+          (mv) => mv.ModelID === model.ID && mv.VendorID === vendorId && mv.Status === 'Active'
+        );
+        
+        if (modelVendor) {
+          // Use vendor-specific values
+          driverClass = modelVendor.DriverClass || driverClass;
+          apiName = modelVendor.APIName || apiName;
+          maxInputTokens = modelVendor.MaxInputTokens || maxInputTokens;
+          maxOutputTokens = modelVendor.MaxOutputTokens || maxOutputTokens;
+          supportsEffortLevel = modelVendor.SupportsEffortLevel ?? supportsEffortLevel;
+        } else {
+          // Warning: specified vendor doesn't provide this model
+          LogStatus(`⚠️ Warning: Vendor ${vendorId} does not provide model ${model.Name}. Falling back to highest priority vendor.`);
+          
+          // Find highest priority vendor for this model
+          const availableVendors = AIEngine.Instance.ModelVendors
+            .filter((mv) => mv.ModelID === model.ID && mv.Status === 'Active')
+            .sort((a, b) => b.Priority - a.Priority);
+          
+          if (availableVendors.length > 0) {
+            const fallbackVendor = availableVendors[0];
+            actualVendorId = fallbackVendor.VendorID;
+            driverClass = fallbackVendor.DriverClass || driverClass;
+            apiName = fallbackVendor.APIName || apiName;
+            maxInputTokens = fallbackVendor.MaxInputTokens || maxInputTokens;
+            maxOutputTokens = fallbackVendor.MaxOutputTokens || maxOutputTokens;
+            supportsEffortLevel = fallbackVendor.SupportsEffortLevel ?? supportsEffortLevel;
+            LogStatus(`✅ Using vendor ${fallbackVendor.Vendor} for model ${model.Name}`);
+          }
+        }
+      } else {
+        // No vendor specified, use highest priority vendor
+        const availableVendors = AIEngine.Instance.ModelVendors
+          .filter((mv) => mv.ModelID === model.ID && mv.Status === 'Active')
+          .sort((a, b) => b.Priority - a.Priority);
+        
+        if (availableVendors.length > 0) {
+          const defaultVendor = availableVendors[0];
+          actualVendorId = defaultVendor.VendorID;
+          driverClass = defaultVendor.DriverClass || driverClass;
+          apiName = defaultVendor.APIName || apiName;
+          maxInputTokens = defaultVendor.MaxInputTokens || maxInputTokens;
+          maxOutputTokens = defaultVendor.MaxOutputTokens || maxOutputTokens;
+          supportsEffortLevel = defaultVendor.SupportsEffortLevel ?? supportsEffortLevel;
+        }
+      }
+
+      // Create LLM instance with vendor-specific driver class
+      const apiKey = GetAIAPIKey(driverClass);
+      const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, driverClass, apiKey);
 
       // Prepare chat parameters
       const chatParams = new ChatParams();
-      chatParams.model = model.APIName;
+      if (!apiName) {
+        throw new Error(`No API name found for model ${model.Name}. Please ensure the model or its vendor configuration includes an APIName.`);
+      }
+      chatParams.model = apiName;
       chatParams.cancellationToken = cancellationToken;
 
       // Apply defaults from prompt entity first (if they exist)
@@ -1308,6 +1361,7 @@ export class AIPromptRunner {
           renderedPromptText,
           prompt,
           params,
+          promptRun.VendorID,
           params.conversationMessages,
           params.templateMessageRole || 'system',
           params.cancellationToken,
@@ -1338,9 +1392,6 @@ export class AIPromptRunner {
           timestamp: new Date(),
         };
         validationAttempts.push(validationAttempt);
-
-        // Update prompt run with current attempt information
-        await this.updatePromptRunWithValidationAttempt(promptRun, validationAttempt, attempt + 1, maxRetries + 1);
 
         if (validationResult?.Success !== false) {
           // Validation succeeded, return the result
@@ -1393,9 +1444,6 @@ export class AIPromptRunner {
         };
         validationAttempts.push(validationAttempt);
 
-        // Update prompt run with failed attempt
-        await this.updatePromptRunWithValidationAttempt(promptRun, validationAttempt, attempt + 1, maxRetries + 1);
-
         if (attempt === maxRetries) {
           throw error; // Last attempt, propagate error
         }
@@ -1431,26 +1479,6 @@ export class AIPromptRunner {
     await new Promise(resolve => setTimeout(resolve, delay));
   }
 
-  /**
-   * Updates the prompt run entity with information about a validation attempt
-   */
-  private async updatePromptRunWithValidationAttempt(
-    promptRun: AIPromptRunEntity,
-    attempt: ValidationAttempt,
-    currentAttempt: number,
-    totalAttempts: number,
-  ): Promise<void> {
-    try {
-      // We no longer update the Messages field with validation information
-      // since we have dedicated validation columns now
-      
-      // Just log the attempt for now - the full validation data will be saved
-      // at the end in the dedicated validation columns
-      LogStatus(`Recorded validation attempt ${currentAttempt}/${totalAttempts} for prompt run ${promptRun.ID}`);
-    } catch (error) {
-      LogError(`Error updating prompt run with validation attempt: ${error.message}`);
-    }
-  }
 
   /**
    * Provides a human-readable description of the validation decision
@@ -1839,7 +1867,7 @@ export class AIPromptRunner {
       validationErrors.push(...errors);
 
       if (validationErrors.length === 0) {
-        LogStatus(`✅ Validation passed for prompt ${promptId}`);
+        //LogStatus(`✅ Validation passed for prompt ${promptId}`);
       } else {
         LogStatus(`⚠️ Validation found ${validationErrors.length} issues for prompt ${promptId}:`);
         validationErrors.forEach((error, index) => {
@@ -1894,7 +1922,7 @@ export class AIPromptRunner {
       }
 
       if (validationErrors.length === 0) {
-        LogStatus(`✅ Schema validation passed for prompt ${promptId}`);
+        //LogStatus(`✅ Schema validation passed for prompt ${promptId}`);
       } else {
         LogStatus(`⚠️ Schema validation found ${validationErrors.length} potential issues for prompt ${promptId}:`);
         validationErrors.forEach((error, index) => {
@@ -2041,7 +2069,7 @@ export class AIPromptRunner {
           )
         });
         
-        LogStatus(`Updated prompt run ${promptRun.ID} with ${validationAttempts.length} validation attempts`);
+        //LogStatus(`Updated prompt run ${promptRun.ID} with ${validationAttempts.length} validation attempts`);
       } else {
         // No validation attempts (possibly skipped validation)
         promptRun.ValidationAttemptCount = 1; // At least one attempt was made

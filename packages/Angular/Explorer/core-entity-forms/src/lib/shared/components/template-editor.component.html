@@ -196,21 +196,150 @@
                     style="flex: 1; height: 350px; border: 1px solid #ced4da; border-radius: 4px;">
                 </mj-code-editor>
                 
-                <!-- Template Syntax Help -->
+                <!-- Template Help Section with Tabs -->
                 @if (!config.compactMode) {
-                    <div class="syntax-help" style="margin-top: 16px; padding: 12px; background: #e8f5e8; border-left: 4px solid #28a745; border-radius: 4px; font-size: 0.85em;">
-                        <div style="font-weight: 600; margin-bottom: 8px; color: #155724;">
-                            <i class="fa-solid fa-lightbulb"></i> Template Syntax Quick Reference:
+                    <div class="template-help-section" style="margin-top: 16px;">
+                        <!-- Tab Navigation -->
+                        <div class="help-tabs" style="display: flex; border-bottom: 2px solid #dee2e6; margin-bottom: 0;">
+                            <button type="button" 
+                                    class="help-tab" 
+                                    [class.active]="activeHelpTab === 'syntax'"
+                                    (click)="activeHelpTab = 'syntax'"
+                                    style="padding: 8px 16px; border: none; background: none; cursor: pointer; font-size: 0.9em; font-weight: 600; color: #6c757d; border-bottom: 3px solid transparent; transition: all 0.2s;"
+                                    [style.color]="activeHelpTab === 'syntax' ? '#28a745' : '#6c757d'"
+                                    [style.border-bottom-color]="activeHelpTab === 'syntax' ? '#28a745' : 'transparent'">
+                                <i class="fa-solid fa-code"></i> Template Syntax
+                            </button>
+                            <button type="button" 
+                                    class="help-tab" 
+                                    [class.active]="activeHelpTab === 'placeholders'"
+                                    (click)="activeHelpTab = 'placeholders'"
+                                    style="padding: 8px 16px; border: none; background: none; cursor: pointer; font-size: 0.9em; font-weight: 600; color: #6c757d; border-bottom: 3px solid transparent; transition: all 0.2s;"
+                                    [style.color]="activeHelpTab === 'placeholders' ? '#28a745' : '#6c757d'"
+                                    [style.border-bottom-color]="activeHelpTab === 'placeholders' ? '#28a745' : 'transparent'">
+                                <i class="fa-solid fa-at"></i> System Placeholders
+                            </button>
                         </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                            <div>
-                                <strong>Parameters:</strong> <code style="background: #fff; padding: 2px 4px; border-radius: 3px;">{{'{{'}} paramName {{'}}'}}</code><br>
-                                <strong>Includes:</strong> <code style="background: #fff; padding: 2px 4px; border-radius: 3px;">{{'{% template "TemplateName" %}'}}</code>
-                            </div>
-                            <div>
-                                <strong>Conditionals:</strong> <code style="background: #fff; padding: 2px 4px; border-radius: 3px;">{{'{% if condition %}'}}</code><br>
-                                <strong>Loops:</strong> <code style="background: #fff; padding: 2px 4px; border-radius: 3px;">{{'{% for item in items %}'}}</code>
-                            </div>
+                        
+                        <!-- Tab Content -->
+                        <div class="help-content" style="padding: 16px; background: #f8f9fa; border: 1px solid #dee2e6; border-top: none; border-radius: 0 0 4px 4px;">
+                            <!-- Template Syntax Tab -->
+                            @if (activeHelpTab === 'syntax') {
+                                <div class="syntax-help" style="font-size: 0.85em;">
+                                    <div style="font-weight: 600; margin-bottom: 12px; color: #155724;">
+                                        <i class="fa-solid fa-lightbulb"></i> Template Syntax Quick Reference
+                                    </div>
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                        <div>
+                                            <div style="margin-bottom: 8px;">
+                                                <strong>Parameters:</strong><br>
+                                                <code style="background: #fff; padding: 4px 6px; border-radius: 3px; display: inline-block; margin-top: 4px;">{{'{{'}} paramName {{'}}'}}</code>
+                                            </div>
+                                            <div>
+                                                <strong>Template Includes:</strong><br>
+                                                <code style="background: #fff; padding: 4px 6px; border-radius: 3px; display: inline-block; margin-top: 4px;">{{'{% template "TemplateName" %}'}}</code>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div style="margin-bottom: 8px;">
+                                                <strong>Conditionals:</strong><br>
+                                                <code style="background: #fff; padding: 4px 6px; border-radius: 3px; display: inline-block; margin-top: 4px;">{{'{% if condition %}'}} ... {{'{% endif %}'}}</code>
+                                            </div>
+                                            <div>
+                                                <strong>Loops:</strong><br>
+                                                <code style="background: #fff; padding: 4px 6px; border-radius: 3px; display: inline-block; margin-top: 4px;">{{'{% for item in items %}'}} ... {{'{% endfor %}'}}</code>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                            
+                            <!-- System Placeholders Tab -->
+                            @if (activeHelpTab === 'placeholders') {
+                                <div class="placeholders-help" style="font-size: 0.85em;">
+                                    <div style="font-weight: 600; margin-bottom: 12px; color: #155724;">
+                                        <i class="fa-solid fa-at"></i> System Placeholders Reference
+                                    </div>
+                                    <p style="margin-bottom: 16px; color: #495057; line-height: 1.5;">
+                                        System placeholders are automatically available in all AI prompt templates. Simply use them in your template text and they will be replaced with their current values at execution time.
+                                    </p>
+                                    
+                                    <!-- Category Sub-tabs -->
+                                    <div class="category-tabs" style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
+                                        @for (categoryGroup of placeholderCategories; track categoryGroup.category.name) {
+                                            <button type="button"
+                                                    class="category-tab"
+                                                    [class.active]="activePlaceholderCategory === categoryGroup.category.name"
+                                                    (click)="activePlaceholderCategory = categoryGroup.category.name"
+                                                    style="padding: 6px 14px; border: 1px solid #dee2e6; background: white; border-radius: 20px; cursor: pointer; font-size: 0.85em; font-weight: 500; display: flex; align-items: center; gap: 6px; transition: all 0.2s; position: relative;"
+                                                    [style.border-color]="activePlaceholderCategory === categoryGroup.category.name ? categoryGroup.category.color : '#dee2e6'"
+                                                    [style.background]="activePlaceholderCategory === categoryGroup.category.name ? categoryGroup.category.color + '10' : 'white'"
+                                                    [style.color]="activePlaceholderCategory === categoryGroup.category.name ? categoryGroup.category.color : '#6c757d'">
+                                                <i [class]="'fa-solid ' + categoryGroup.category.icon" style="font-size: 0.9em;"></i>
+                                                {{ categoryGroup.category.name }}
+                                                <span class="badge" 
+                                                      style="background: rgba(0,0,0,0.1); color: inherit; padding: 2px 6px; border-radius: 10px; font-size: 0.75em; margin-left: 4px;">
+                                                    {{ categoryGroup.placeholders.length }}
+                                                </span>
+                                            </button>
+                                        }
+                                    </div>
+                                    
+                                    <!-- Active Category Content -->
+                                    <div class="placeholder-content" style="background: white; border: 1px solid #dee2e6; border-radius: 8px; padding: 16px;">
+                                        @for (categoryGroup of placeholderCategories; track categoryGroup.category.name) {
+                                            @if (activePlaceholderCategory === categoryGroup.category.name) {
+                                                <div class="category-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                                                    <i [class]="'fa-solid ' + categoryGroup.category.icon" 
+                                                       [style.color]="categoryGroup.category.color" 
+                                                       style="font-size: 1.2em;"></i>
+                                                    <h5 style="margin: 0; color: #343a40; font-weight: 600;">{{ categoryGroup.category.name }}</h5>
+                                                </div>
+                                                
+                                                <div style="display: grid; gap: 10px;">
+                                                    @for (placeholder of categoryGroup.placeholders; track placeholder.name) {
+                                                        <div class="placeholder-item" 
+                                                             style="padding: 12px 16px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; position: relative; transition: all 0.2s; max-width: 800px;"
+                                                             onmouseover="this.style.borderColor='#007bff'; this.style.background='#f0f8ff'; this.querySelector('.copy-btn').style.opacity='1';"
+                                                             onmouseout="this.style.borderColor='#e9ecef'; this.style.background='#f8f9fa'; this.querySelector('.copy-btn').style.opacity='0';">
+                                                            <div style="display: flex; align-items: flex-start; gap: 8px;">
+                                                                <div>
+                                                                    <div style="display: inline-flex; align-items: center; gap: 8px;">
+                                                                        <code style="color: #e83e8c; font-weight: 600; font-size: 0.95em;">{{'{{'}} {{ placeholder.name }} {{'}}'}}</code>
+                                                                        <button type="button"
+                                                                                class="copy-btn"
+                                                                                (click)="copyPlaceholder(placeholder.name)"
+                                                                                style="opacity: 0; transition: opacity 0.2s; background: none; border: none; padding: 4px 8px; cursor: pointer; color: #007bff; border-radius: 4px; display: inline-flex; align-items: center;"
+                                                                                onmouseover="this.style.background='#e7f3ff';"
+                                                                                onmouseout="this.style.background='none';"
+                                                                                title="Copy placeholder to clipboard">
+                                                                            <i class="fa-solid fa-copy" style="font-size: 0.85em;"></i>
+                                                                        </button>
+                                                                    </div>
+                                                                    @if (placeholder.description) {
+                                                                        <div style="color: #6c757d; margin-top: 4px; line-height: 1.4;">{{ placeholder.description }}</div>
+                                                                    }
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+                                    
+                                    <!-- Usage Example -->
+                                    <div style="margin-top: 20px; padding: 12px; background: #e3f2fd; border-radius: 6px; border: 1px solid #bbdefb;">
+                                        <div style="display: flex; align-items: flex-start; gap: 8px;">
+                                            <i class="fa-solid fa-info-circle" style="color: #1976d2; margin-top: 2px;"></i>
+                                            <div style="flex: 1; font-size: 0.85em; color: #1565c0; line-height: 1.5;">
+                                                <strong>Usage Example:</strong> To use a system placeholder in your template, simply include it in double curly braces. 
+                                                For example: <code style="background: white; padding: 2px 4px; border-radius: 3px;">"Today is {{'{{'}} _CURRENT_DATE {{'}}'}} and the current user is {{'{{'}} _USER_NAME {{'}}'}}"</code>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
                         </div>
                     </div>
                 }

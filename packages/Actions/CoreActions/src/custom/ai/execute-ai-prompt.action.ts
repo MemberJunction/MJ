@@ -1,9 +1,10 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import { Metadata, RunView } from "@memberjunction/core";
+import { RunView } from "@memberjunction/core";
 import { AIPromptEntity } from "@memberjunction/core-entities";
-import { AIPromptRunner, AIPromptParams } from "@memberjunction/ai-prompts";
+import { AIPromptRunner } from "@memberjunction/ai-prompts";
+import { AIPromptParams} from "@memberjunction/ai-core-plus";
 
 /**
  * Action that executes MemberJunction AI prompts

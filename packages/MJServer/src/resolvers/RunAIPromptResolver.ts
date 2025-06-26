@@ -2,7 +2,8 @@ import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, Int } from 'type-graph
 import { UserPayload } from '../types.js';
 import { LogError, LogStatus, Metadata } from '@memberjunction/core';
 import { AIPromptEntity } from '@memberjunction/core-entities';
-import { AIPromptRunner, AIPromptParams } from '@memberjunction/ai-prompts';
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
+import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { ResolverBase } from '../generic/ResolverBase.js';
 
 @ObjectType()

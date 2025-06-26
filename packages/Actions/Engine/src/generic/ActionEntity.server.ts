@@ -3,7 +3,8 @@ import { ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity } from "
 import { MJEventType, MJGlobal, RegisterClass } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
 
-import { AIPromptRunner, AIPromptParams } from "@memberjunction/ai-prompts";
+import { AIPromptRunner } from "@memberjunction/ai-prompts";
+import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { DocumentationEngine, LibraryEntityExtended, LibraryItemEntityExtended } from "@memberjunction/doc-utils";
 import { ActionEngineBase, ActionEntityExtended, ActionLibrary, GeneratedCode } from "@memberjunction/actions-base";
 
