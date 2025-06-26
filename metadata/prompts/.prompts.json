@@ -137,14 +137,14 @@
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
       "OutputType": "object",
+      "OutputExample": "@file:output/marketing/marketing-agent-output.example.json",
       "ValidationBehavior": "Strict",
       "MaxRetries": 2,
       "RetryDelayMS": 1000,
       "RetryStrategy": "Fixed",
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=Marketing Agents?create&Description=Prompts for Marketing Agent System",
-      "OutputExample": ""
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Marketing Agents?create&Description=Prompts for Marketing Agent System"
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
@@ -185,14 +185,14 @@
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
       "OutputType": "object",
+      "OutputExample": "@file:output/marketing/marketing-agent-output.example.json",
       "ValidationBehavior": "Strict",
       "MaxRetries": 2,
       "RetryDelayMS": 1000,
       "RetryStrategy": "Fixed",
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=Marketing Agents?create&Description=Prompts for Marketing Agent System",
-      "OutputExample": ""
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Marketing Agents?create&Description=Prompts for Marketing Agent System"
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
@@ -233,14 +233,14 @@
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
       "OutputType": "object",
+      "OutputExample": "@file:output/marketing/marketing-agent-output.example.json",
       "ValidationBehavior": "Strict",
       "MaxRetries": 2,
       "RetryDelayMS": 1000,
       "RetryStrategy": "Fixed",
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=Marketing Agents?create&Description=Prompts for Marketing Agent System",
-      "OutputExample": ""
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Marketing Agents?create&Description=Prompts for Marketing Agent System"
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
@@ -281,14 +281,14 @@
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
       "OutputType": "object",
+      "OutputExample": "@file:output/marketing/marketing-agent-output.example.json",
       "ValidationBehavior": "Strict",
       "MaxRetries": 2,
       "RetryDelayMS": 1000,
       "RetryStrategy": "Fixed",
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=Marketing Agents?create&Description=Prompts for Marketing Agent System",
-      "OutputExample": ""
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Marketing Agents?create&Description=Prompts for Marketing Agent System"
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
@@ -329,14 +329,14 @@
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
       "OutputType": "object",
+      "OutputExample": "@file:output/marketing/marketing-agent-output.example.json",
       "ValidationBehavior": "Strict",
       "MaxRetries": 2,
       "RetryDelayMS": 1000,
       "RetryStrategy": "Fixed",
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=Marketing Agents?create&Description=Prompts for Marketing Agent System",
-      "OutputExample": ""
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Marketing Agents?create&Description=Prompts for Marketing Agent System"
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
@@ -377,14 +377,14 @@
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
       "OutputType": "object",
+      "OutputExample": "@file:output/marketing/marketing-agent-output.example.json",
       "ValidationBehavior": "Strict",
       "MaxRetries": 2,
       "RetryDelayMS": 1000,
       "RetryStrategy": "Fixed",
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=Marketing Agents?create&Description=Prompts for Marketing Agent System",
-      "OutputExample": ""
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Marketing Agents?create&Description=Prompts for Marketing Agent System"
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
