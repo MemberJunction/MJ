@@ -2429,6 +2429,11 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     closeButton.style.height = '32px';
     closeButton.style.lineHeight = '1';
     closeButton.onclick = () => {
+      // Clean up splitter event listeners
+      if (testerContent.refs.splitter && (testerContent.refs.splitter as any).cleanup) {
+        (testerContent.refs.splitter as any).cleanup();
+      }
+      
       document.body.removeChild(dialogContainer);
       document.body.removeChild(backdrop);
       // Clear test components from registry
@@ -2535,13 +2540,19 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     content.style.flex = '1';
     content.style.display = 'flex';
     content.style.overflow = 'hidden';
+    content.style.position = 'relative';
+    
+    // Get saved splitter position from local storage
+    const savedPosition = localStorage.getItem('skipComponentTesterSplitterPosition');
+    const leftWidth = savedPosition ? parseFloat(savedPosition) : 50;
+    const rightWidth = 100 - leftWidth;
     
     // Left panel - Code editor
     const leftPanel = document.createElement('div');
-    leftPanel.style.width = '50%';
+    leftPanel.style.width = `${leftWidth}%`;
     leftPanel.style.display = 'flex';
     leftPanel.style.flexDirection = 'column';
-    leftPanel.style.borderRight = '1px solid #e0e0e0';
+    leftPanel.style.minWidth = '200px';
     
     const editorLabel = document.createElement('div');
     editorLabel.style.padding = '8px 16px';
@@ -2556,11 +2567,30 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     leftPanel.appendChild(editorLabel);
     leftPanel.appendChild(editorContainer);
     
+    // Splitter handle
+    const splitter = document.createElement('div');
+    splitter.style.width = '6px';
+    splitter.style.backgroundColor = '#e0e0e0';
+    splitter.style.cursor = 'col-resize';
+    splitter.style.position = 'relative';
+    splitter.style.userSelect = 'none';
+    
+    // Add hover effect
+    splitter.onmouseenter = () => {
+      splitter.style.backgroundColor = '#c0c0c0';
+    };
+    splitter.onmouseleave = () => {
+      if (!isDragging) {
+        splitter.style.backgroundColor = '#e0e0e0';
+      }
+    };
+    
     // Right panel - Component preview
     const rightPanel = document.createElement('div');
-    rightPanel.style.width = '50%';
+    rightPanel.style.width = `${rightWidth}%`;
     rightPanel.style.display = 'flex';
     rightPanel.style.flexDirection = 'column';
+    rightPanel.style.minWidth = '200px';
     
     const previewLabel = document.createElement('div');
     previewLabel.style.padding = '8px 16px';
@@ -2576,6 +2606,63 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     rightPanel.appendChild(previewLabel);
     rightPanel.appendChild(previewContainer);
     
+    // Add splitter drag functionality
+    let isDragging = false;
+    let startX = 0;
+    let startLeftWidth = 0;
+    
+    const handleMouseDown = (e: MouseEvent) => {
+      isDragging = true;
+      startX = e.pageX;
+      startLeftWidth = leftPanel.offsetWidth;
+      splitter.style.backgroundColor = '#a0a0a0';
+      
+      // Prevent text selection during drag
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'col-resize';
+      
+      e.preventDefault();
+    };
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+      
+      const containerWidth = content.offsetWidth;
+      const deltaX = e.pageX - startX;
+      const newLeftWidth = startLeftWidth + deltaX;
+      const newLeftPercent = (newLeftWidth / containerWidth) * 100;
+      
+      // Limit the splitter position (20% to 80%)
+      if (newLeftPercent >= 20 && newLeftPercent <= 80) {
+        leftPanel.style.width = `${newLeftPercent}%`;
+        rightPanel.style.width = `${100 - newLeftPercent}%`;
+      }
+    };
+    
+    const handleMouseUp = () => {
+      if (!isDragging) return;
+      
+      isDragging = false;
+      splitter.style.backgroundColor = '#e0e0e0';
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      
+      // Save position to local storage
+      const containerWidth = content.offsetWidth;
+      const leftPercent = (leftPanel.offsetWidth / containerWidth) * 100;
+      localStorage.setItem('skipComponentTesterSplitterPosition', leftPercent.toString());
+    };
+    
+    splitter.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    
+    // Clean up event listeners when dialog is closed
+    (splitter as any).cleanup = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
     // Error display area
     const errorContainer = document.createElement('div');
     errorContainer.style.display = 'none';
@@ -2587,6 +2674,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     errorContainer.style.overflow = 'auto';
     
     content.appendChild(leftPanel);
+    content.appendChild(splitter);
     content.appendChild(rightPanel);
     
     container.appendChild(header);
@@ -2602,7 +2690,8 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         clearBtn,
         editorContainer,
         previewContainer,
-        errorContainer
+        errorContainer,
+        splitter
       }
     };
   }
