@@ -14,6 +14,6 @@
   "sqlLogging": {
     "enabled": true,
     "outputDirectory": "./sql_logging",
-    "formatAsMigration": false
+    "formatAsMigration": true
   }
 }

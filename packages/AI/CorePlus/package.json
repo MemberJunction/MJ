@@ -1,7 +1,7 @@
 {
-  "name": "@memberjunction/aiengine",
+  "name": "@memberjunction/ai-core-plus",
   "version": "2.57.0",
-  "description": "MemberJunction: AI Engine Package - handles automatic execution of Entity AI Actions using AI Models",
+  "description": "MemberJunction: AI - Core Components that are usable across server and client but do require the concept of MJ entities, whereas @memberjunction/ai does NOT require anything else from the MemberJunction framework.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -15,13 +15,11 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "2.57.0",
     "@memberjunction/global": "2.57.0",
+    "@memberjunction/core": "2.57.0",
     "@memberjunction/core-entities": "2.57.0",
-    "@memberjunction/actions-base": "2.57.0",
     "@memberjunction/ai": "2.57.0",
-    "@memberjunction/ai-core-plus": "2.57.0",
-    "@memberjunction/ai-engine-base": "2.57.0",
+    "@memberjunction/actions-base": "2.57.0",
     "dotenv": "^16.4.1",
     "rxjs": "^7.8.1"
   },

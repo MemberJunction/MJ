@@ -23,6 +23,8 @@
     "@memberjunction/global": "2.57.0",
     "@memberjunction/core-entities": "2.57.0",
     "@memberjunction/ai-vector-dupe": "2.57.0",
+    "@memberjunction/ai-core-plus": "2.57.0",
+    "@memberjunction/ai-prompts": "2.57.0",
     "@memberjunction/skip-types": "2.57.0",
     "@memberjunction/aiengine": "2.57.0",
     "@memberjunction/sqlserver-dataprovider": "2.57.0",

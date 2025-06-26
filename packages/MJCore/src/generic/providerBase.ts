@@ -336,15 +336,71 @@ export abstract class ProviderBase implements IMetadataProvider {
     }
 
 
-    public async GetEntityObject<T extends BaseEntity>(entityName: string, contextUser: UserInfo = null): Promise<T> {
+    /**
+     * Creates a new instance of a BaseEntity subclass for the specified entity and automatically calls NewRecord() to initialize it.
+     * This method serves as the core implementation for entity instantiation in the MemberJunction framework.
+     * 
+     * @param entityName - The name of the entity to create (must exist in metadata)
+     * @param contextUser - Optional user context for permissions and audit tracking
+     * @returns Promise resolving to the newly created entity instance with NewRecord() called
+     * @throws Error if entity name is not found in metadata or if instantiation fails
+     */
+    public async GetEntityObject<T extends BaseEntity>(entityName: string, contextUser?: UserInfo): Promise<T>;
+    
+    /**
+     * Creates a new instance of a BaseEntity subclass and loads an existing record using the provided key.
+     * This overload provides a convenient way to instantiate and load in a single operation.
+     * 
+     * @param entityName - The name of the entity to create (must exist in metadata)
+     * @param loadKey - CompositeKey containing the primary key value(s) for the record to load
+     * @param contextUser - Optional user context for permissions and audit tracking
+     * @returns Promise resolving to the entity instance with the specified record loaded
+     * @throws Error if entity name is not found, instantiation fails, or record cannot be loaded
+     */
+    public async GetEntityObject<T extends BaseEntity>(entityName: string, loadKey: CompositeKey, contextUser?: UserInfo): Promise<T>;
+    
+    public async GetEntityObject<T extends BaseEntity>(
+        entityName: string, 
+        loadKeyOrContextUser?: CompositeKey | UserInfo,
+        contextUser?: UserInfo
+    ): Promise<T> {
         try {
+            // Determine which overload was called
+            let actualLoadKey: CompositeKey | undefined;
+            let actualContextUser: UserInfo | undefined;
+            
+            if (loadKeyOrContextUser instanceof CompositeKey) {
+                // Second overload: entityName, loadKey, contextUser
+                actualLoadKey = loadKeyOrContextUser;
+                actualContextUser = contextUser;
+            } else if (contextUser !== undefined) {
+                // Second overload with null/undefined loadKey: entityName, null/undefined, contextUser
+                actualLoadKey = undefined;
+                actualContextUser = contextUser;
+            } else {
+                // First overload: entityName, contextUser
+                actualContextUser = loadKeyOrContextUser as UserInfo;
+            }
+
             const entity: EntityInfo = this.Metadata.Entities.find(e => e.Name == entityName);
             if (entity) {
                 // Use the MJGlobal Class Factory to do our object instantiation - we do NOT use metadata for this anymore, doesn't work well to have file paths with node dynamically at runtime
                 // type reference registration by any module via MJ Global is the way to go as it is reliable across all platforms.
                 try {
                     const newObject = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, entityName, entity, this); 
-                    await newObject.Config(contextUser);
+                    await newObject.Config(actualContextUser);
+                    
+                    if (actualLoadKey) {
+                        // Load existing record
+                        const loadResult = await newObject.InnerLoad(actualLoadKey);
+                        if (!loadResult) {
+                            throw new Error(`Failed to load ${entityName} with key: ${actualLoadKey.ToString()}`);
+                        }
+                    } else {
+                        // whenever we create a new object we want it to start
+                        // out as a new record, so we call NewRecord() on it
+                        newObject.NewRecord();
+                    }
 
                     return newObject;
                 }
