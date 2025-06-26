@@ -580,6 +580,7 @@ export class BaseAgent {
             const contextData: AgentContextData = {
                 agentName: agent.Name,
                 agentDescription: agent.Description,
+                parentAgentName: agent.Parent ? agent.Parent.trim() : "",
                 subAgentCount: subAgents.length,
                 subAgentDetails: this.formatSubAgentDetails(subAgents),
                 actionCount: actions.length,
