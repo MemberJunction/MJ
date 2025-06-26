@@ -1258,11 +1258,18 @@ export class BaseAgent {
                     return await this.executePromptStep(params, config, previousDecision);
                 }
             case 'failed':
-                return { 
-                    terminate: true,
-                    step: 'failed', 
-                    returnValue: previousDecision.returnValue 
-                };
+                if (previousDecision.terminate) {
+                    return { 
+                        terminate: true,
+                        step: 'failed', 
+                        returnValue: previousDecision.returnValue 
+                    };
+                }
+                else {
+                    // we had a failure in the past step, but we are not terminating
+                    // so we will retry the prompt step
+                    return await this.executePromptStep(params, config, previousDecision);
+                }
             default:
                 throw new Error(`Unsupported next step: ${previousDecision.step}`);
         }
@@ -1572,7 +1579,15 @@ export class BaseAgent {
             };            
         } catch (error) {
             await this.finalizeStepEntity(stepEntity, false, error.message);
-            throw error;
+
+            // we had an error, don't throw the exception as that will kill our overall execution/run
+            // instead retrun a helpful message in our return value that the parent loop can review and 
+            // adjust
+            return {
+                errorMessage: `Sub-agent execution failed: ${(error as Error).message}`,
+                step: 'failed',
+                terminate: false,
+            };
         }
     }
 
