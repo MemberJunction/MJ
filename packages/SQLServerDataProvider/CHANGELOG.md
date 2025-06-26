@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 2.58.0
+
+### Patch Changes
+
+- def26fe: Added UUID generation to BaseEntity for entities that have single-column pkey that is uniqueidentifier type
+- Updated dependencies [def26fe]
+- Updated dependencies [db88416]
+  - @memberjunction/core@2.58.0
+  - @memberjunction/ai@2.58.0
+  - @memberjunction/aiengine@2.58.0
+  - @memberjunction/ai-vector-dupe@2.58.0
+  - @memberjunction/actions@2.58.0
+  - @memberjunction/core-entities@2.58.0
+  - @memberjunction/queue@2.58.0
+  - @memberjunction/global@2.58.0
+
 ## 2.57.0
 
 ### Minor Changes

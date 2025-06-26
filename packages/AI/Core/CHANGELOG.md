@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/ai
 
+## 2.58.0
+
+### Minor Changes
+
+- db88416: migrations
+
+### Patch Changes
+
+- @memberjunction/global@2.58.0
+
 ## 2.57.0
 
 ### Patch Changes

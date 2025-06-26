@@ -1,5 +1,23 @@
 # @memberjunction/metadata-sync
 
+## 2.58.0
+
+### Minor Changes
+
+- a5f0905: Metadata fixes requires a minor bump
+- 264bdc9: Migration Data Fixes
+
+### Patch Changes
+
+- def26fe: Added UUID generation to BaseEntity for entities that have single-column pkey that is uniqueidentifier type
+- Updated dependencies [def26fe]
+  - @memberjunction/core@2.58.0
+  - @memberjunction/sqlserver-dataprovider@2.58.0
+  - @memberjunction/graphql-dataprovider@2.58.0
+  - @memberjunction/core-entities@2.58.0
+  - @memberjunction/core-entities-server@2.58.0
+  - @memberjunction/global@2.58.0
+
 ## 2.57.0
 
 ### Minor Changes

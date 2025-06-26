@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/core
 
+## 2.58.0
+
+### Patch Changes
+
+- def26fe: Added UUID generation to BaseEntity for entities that have single-column pkey that is uniqueidentifier type
+  - @memberjunction/global@2.58.0
+
 ## 2.57.0
 
 ### Minor Changes
