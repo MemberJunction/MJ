@@ -1,6 +1,7 @@
-import { SimpleChanges, EventEmitter, ElementRef } from '@angular/core';
+import { SimpleChanges, EventEmitter, ElementRef, Injectable } from '@angular/core';
 import { SkipComponentCallbacks, SkipComponentStyles, SkipComponentUtilities } from '@memberjunction/skip-types';
 import { LogError } from '@memberjunction/core';
+import { BaseSingleton } from '@memberjunction/global';
 
 /**
  * CDN URLs for external dependencies
@@ -30,6 +31,153 @@ const CDN_URLS = {
 };
 
 /**
+ * Component metadata for component registry system
+ */
+export interface ComponentMetadata {
+  /** List of child component names required by this component */
+  requiredChildComponents: string[];
+  /** Context for component resolution (e.g., 'CRM', 'Finance', 'Standard') */
+  componentContext: string;
+  /** Version of the component specification */
+  version: string;
+}
+
+/**
+ * Component registration entry with metadata
+ */
+interface ComponentRegistryEntry {
+  component: any;
+  metadata?: {
+    context?: string;
+    version?: string;
+    description?: string;
+  };
+}
+
+/**
+ * Global component registry service for managing reusable React components
+ * Extends BaseSingleton to ensure a truly global singleton instance across
+ * the entire application, even if this code is loaded multiple times.
+ */
+export class GlobalComponentRegistry extends BaseSingleton<GlobalComponentRegistry> {
+  private components = new Map<string, ComponentRegistryEntry>();
+  
+  protected constructor() {
+    super(); // Call parent constructor to register in global store
+  }
+  
+  /**
+   * Get the singleton instance
+   */
+  public static get Instance(): GlobalComponentRegistry {
+    return super.getInstance<GlobalComponentRegistry>();
+  }
+  
+  /**
+   * Register a component with a simple key
+   */
+  public register(key: string, component: any): void {
+    this.components.set(key, { component });
+  }
+  
+  /**
+   * Get a component by key
+   */
+  public get(key: string): any {
+    const entry = this.components.get(key);
+    return entry?.component;
+  }
+  
+  /**
+   * Register a component with metadata for versioning and context
+   */
+  public registerWithMetadata(
+    name: string, 
+    context: string, 
+    version: string, 
+    component: any,
+    description?: string
+  ): void {
+    const key = this.createKey(name, context, version);
+    this.components.set(key, {
+      component,
+      metadata: { context, version, description }
+    });
+    
+    // Also register without version for backwards compatibility
+    const contextKey = `${name}_${context}`;
+    if (!this.components.has(contextKey)) {
+      this.register(contextKey, component);
+    }
+  }
+  
+  /**
+   * Create a standardized key from component metadata
+   */
+  private createKey(name: string, context: string, version: string): string {
+    return `${name}_${context}_${version}`;
+  }
+  
+  /**
+   * Get all registered component keys (useful for debugging)
+   */
+  public getRegisteredKeys(): string[] {
+    return Array.from(this.components.keys());
+  }
+  
+  /**
+   * Clear all registered components
+   */
+  public clear(): void {
+    this.components.clear();
+  }
+  
+  /**
+   * Check if a component is registered
+   */
+  public has(key: string): boolean {
+    return this.components.has(key);
+  }
+  
+  /**
+   * Get component with fallback options
+   */
+  public getWithFallback(name: string, context: string, version: string): any {
+    // Try exact match first
+    let key = this.createKey(name, context, version);
+    if (this.has(key)) {
+      return this.get(key);
+    }
+    
+    // Try without version
+    key = `${name}_${context}`;
+    if (this.has(key)) {
+      return this.get(key);
+    }
+    
+    // Try global version
+    key = `${name}_Global`;
+    if (this.has(key)) {
+      return this.get(key);
+    }
+    
+    // Try just the name
+    if (this.has(name)) {
+      return this.get(name);
+    }
+    
+    return null;
+  }
+  
+  /**
+   * Remove a component from the registry
+   */
+  public remove(key: string): void {
+    this.components.delete(key);
+  }
+}
+
+/**
  * Configuration for a React component to be hosted in Angular
  */
 export interface ReactComponentConfig {
@@ -53,6 +201,9 @@ export interface ReactComponentConfig {
   
   /** Styles to pass to the component */
   styles?: SkipComponentStyles;
+  
+  /** Component metadata for registry integration */
+  metadata?: ComponentMetadata;
 }
 
 /**
@@ -196,6 +347,39 @@ export class SkipReactComponentHost {
 
   constructor(private config: ReactComponentConfig) {
     this.loadReactLibraries();
+  }
+  
+  /**
+   * Create a plain JavaScript object containing only the components needed by the generated component
+   */
+  private createComponentsObject(): any {
+    if (!this.config.metadata?.requiredChildComponents) {
+      return {}; // No child components required
+    }
+    
+    const registry = GlobalComponentRegistry.Instance;
+    const components: any = {};
+    
+    console.log('Creating components object. Required:', this.config.metadata.requiredChildComponents);
+    console.log('Available components in registry:', registry.getRegisteredKeys());
+    
+    for (const componentName of this.config.metadata.requiredChildComponents) {
+      // Try to resolve the component with metadata context
+      const component = registry.getWithFallback(
+        componentName,
+        this.config.metadata.componentContext,
+        this.config.metadata.version
+      );
+      
+      if (component) {
+        components[componentName] = component;
+        console.log(`Found component "${componentName}"`);
+      } else {
+        console.warn(`Component "${componentName}" not found in registry. Tried contexts: ${this.config.metadata.componentContext}, Global`);
+      }
+    }
+    
+    return components;
   }
 
   /**
@@ -383,6 +567,20 @@ export class SkipReactComponentHost {
         this.loadBabel(),
         this.loadCommonLibraries()
       ]);
+      
+      // Register example components if needed (for testing)
+      if (this.config.metadata?.requiredChildComponents?.length) {
+        // Check if we need to register example components
+        const registry = GlobalComponentRegistry.Instance;
+        const hasComponents = this.config.metadata.requiredChildComponents.every(name => 
+          registry.getWithFallback(name, this.config.metadata!.componentContext, this.config.metadata!.version)
+        );
+        
+        if (!hasComponents && typeof (window as any).registerExampleComponents === 'function') {
+          // Try to register example components
+          (window as any).registerExampleComponents(this.React, libraries.Chart);
+        }
+      }
 
       // Create utility functions
       const createStateUpdater = this.createStateUpdaterFunction();
@@ -568,13 +766,15 @@ export class SkipReactComponentHost {
       utilities: utilities,
       userState: this.currentState,
       callbacks: callbacks,
-      styles: styles
+      styles: styles,
+      components: this.createComponentsObject() // Add the filtered components object
     };
     
     // Debug: Log the data being passed to the component
     console.log('=== SkipReactComponentHost: Rendering component ===');
     console.log('Data:', componentProps.data);
     console.log('User state:', componentProps.userState);
+    console.log('Components:', Object.keys(componentProps.components));
     if (componentProps.data?.data_item_0) {
       console.log('First entity:', componentProps.data.data_item_0[0]);
       console.log('Entity count:', componentProps.data.data_item_0.length);
@@ -784,5 +984,1157 @@ export class SkipReactComponentHost {
         }
       };
     };
+  }
+}
+
+/**
+ * Example child components for testing the component registry system
+ * These would normally be defined in separate files and imported
+ */
+
+// Example SearchBox component
+export const createSearchBoxComponent = (React: any) => {
+  return function SearchBox({ data, config, state, onEvent, styles, statePath }: any) {
+    const [searchValue, setSearchValue] = React.useState(state?.searchValue || '');
+    
+    const handleSearch = (value: string) => {
+      setSearchValue(value);
+      if (onEvent) {
+        onEvent({
+          type: 'stateChanged',
+          payload: {
+            statePath: statePath,
+            newState: { searchValue: value }
+          }
+        });
+      }
+    };
+    
+    return React.createElement('div', {
+      style: {
+        padding: styles?.spacing?.md || '16px',
+        backgroundColor: styles?.colors?.surface || '#f8f9fa',
+        borderRadius: styles?.borders?.radius?.md || '8px',
+        marginBottom: styles?.spacing?.md || '16px'
+      }
+    }, [
+      React.createElement('input', {
+        key: 'search-input',
+        type: 'text',
+        value: searchValue,
+        onChange: (e: any) => handleSearch(e.target.value),
+        placeholder: config?.placeholder || 'Search...',
+        style: {
+          width: '100%',
+          padding: styles?.spacing?.sm || '8px',
+          border: `1px solid ${styles?.colors?.border || '#dee2e6'}`,
+          borderRadius: styles?.borders?.radius?.sm || '4px',
+          fontSize: styles?.typography?.fontSize?.md || '14px',
+          fontFamily: styles?.typography?.fontFamily || 'inherit'
+        }
+      })
+    ]);
+  };
+};
+
+// Example OrderList component
+export const createOrderListComponent = (React: any) => {
+  return function OrderList({ data, config, state, onEvent, styles, statePath }: any) {
+    const [sortBy, setSortBy] = React.useState(state?.sortBy || 'date');
+    const [currentPage, setCurrentPage] = React.useState(state?.currentPage || 1);
+    
+    const orders = data || [];
+    const pageSize = config?.pageSize || 10;
+    const totalPages = Math.ceil(orders.length / pageSize);
+    
+    const updateState = (newState: any) => {
+      if (onEvent) {
+        onEvent({
+          type: 'stateChanged',
+          payload: {
+            statePath: statePath,
+            newState: { ...state, ...newState }
+          }
+        });
+      }
+    };
+    
+    const handleSort = (field: string) => {
+      setSortBy(field);
+      updateState({ sortBy: field });
+    };
+    
+    const handlePageChange = (page: number) => {
+      setCurrentPage(page);
+      updateState({ currentPage: page });
+    };
+    
+    // Simple pagination
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const displayedOrders = orders.slice(startIndex, endIndex);
+    
+    return React.createElement('div', {
+      style: {
+        backgroundColor: styles?.colors?.background || '#ffffff',
+        border: `1px solid ${styles?.colors?.border || '#dee2e6'}`,
+        borderRadius: styles?.borders?.radius?.md || '8px',
+        padding: styles?.spacing?.lg || '24px'
+      }
+    }, [
+      // Header
+      React.createElement('div', {
+        key: 'header',
+        style: {
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: styles?.spacing?.md || '16px'
+        }
+      }, [
+        React.createElement('h3', {
+          key: 'title',
+          style: {
+            margin: 0,
+            fontSize: styles?.typography?.fontSize?.lg || '16px',
+            fontWeight: styles?.typography?.fontWeight?.semibold || '600'
+          }
+        }, 'Orders'),
+        config?.sortable && React.createElement('select', {
+          key: 'sort',
+          value: sortBy,
+          onChange: (e: any) => handleSort(e.target.value),
+          style: {
+            padding: styles?.spacing?.sm || '8px',
+            border: `1px solid ${styles?.colors?.border || '#dee2e6'}`,
+            borderRadius: styles?.borders?.radius?.sm || '4px'
+          }
+        }, [
+          React.createElement('option', { key: 'date', value: 'date' }, 'Sort by Date'),
+          React.createElement('option', { key: 'amount', value: 'amount' }, 'Sort by Amount'),
+          React.createElement('option', { key: 'status', value: 'status' }, 'Sort by Status')
+        ])
+      ]),
+      
+      // List
+      React.createElement('div', {
+        key: 'list',
+        style: { marginBottom: styles?.spacing?.md || '16px' }
+      }, displayedOrders.length > 0 ? displayedOrders.map((order: any, index: number) =>
+        React.createElement('div', {
+          key: order.id || index,
+          style: {
+            padding: styles?.spacing?.md || '16px',
+            borderBottom: `1px solid ${styles?.colors?.borderLight || '#f1f5f9'}`,
+            cursor: 'pointer'
+          },
+          onClick: () => onEvent && onEvent({
+            type: 'navigate',
+            payload: { entityName: 'Orders', key: order.id }
+          })
+        }, [
+          React.createElement('div', { 
+            key: 'order-number',
+            style: { fontWeight: styles?.typography?.fontWeight?.medium || '500' }
+          }, `Order #${order.orderNumber || order.id}`),
+          React.createElement('div', {
+            key: 'order-details',
+            style: { 
+              fontSize: styles?.typography?.fontSize?.sm || '12px',
+              color: styles?.colors?.textSecondary || '#6c757d'
+            }
+          }, `$${order.amount || 0} - ${order.status || 'Pending'}`)
+        ])
+      ) : React.createElement('div', {
+        style: {
+          textAlign: 'center',
+          padding: styles?.spacing?.xl || '32px',
+          color: styles?.colors?.textSecondary || '#6c757d'
+        }
+      }, 'No orders found')),
+      
+      // Pagination
+      totalPages > 1 && React.createElement('div', {
+        key: 'pagination',
+        style: {
+          display: 'flex',
+          justifyContent: 'center',
+          gap: styles?.spacing?.sm || '8px'
+        }
+      }, Array.from({ length: totalPages }, (_, i) => i + 1).map(page =>
+        React.createElement('button', {
+          key: page,
+          onClick: () => handlePageChange(page),
+          style: {
+            padding: `${styles?.spacing?.xs || '4px'} ${styles?.spacing?.sm || '8px'}`,
+            border: `1px solid ${styles?.colors?.border || '#dee2e6'}`,
+            borderRadius: styles?.borders?.radius?.sm || '4px',
+            backgroundColor: page === currentPage ? styles?.colors?.primary || '#5B4FE9' : 'transparent',
+            color: page === currentPage ? styles?.colors?.textInverse || '#ffffff' : styles?.colors?.text || '#212529',
+            cursor: 'pointer'
+          }
+        }, page)
+      ))
+    ]);
+  };
+};
+
+// Example CategoryChart component  
+export const createCategoryChartComponent = (React: any, Chart: any) => {
+  return function CategoryChart({ data, config, state, onEvent, styles, statePath }: any) {
+    const chartRef = React.useRef(null);
+    const chartInstanceRef = React.useRef(null);
+    
+    React.useEffect(() => {
+      if (!chartRef.current || !Chart) return;
+      
+      // Destroy existing chart
+      if (chartInstanceRef.current) {
+        chartInstanceRef.current.destroy();
+      }
+      
+      // Create new chart
+      const ctx = chartRef.current.getContext('2d');
+      chartInstanceRef.current = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: data?.map((item: any) => item.category) || [],
+          datasets: [{
+            label: 'Sales by Category',
+            data: data?.map((item: any) => item.value) || [],
+            backgroundColor: styles?.colors?.primary || '#5B4FE9',
+            borderColor: styles?.colors?.primaryHover || '#4940D4',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: config?.showLegend !== false
+            },
+            tooltip: {
+              callbacks: {
+                label: (context: any) => {
+                  return `$${context.parsed.y.toLocaleString()}`;
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: (value: any) => `$${value.toLocaleString()}`
+              }
+            }
+          },
+          onClick: (event: any, elements: any) => {
+            if (elements.length > 0 && onEvent) {
+              const index = elements[0].index;
+              const category = data[index];
+              onEvent({
+                type: 'chartClick',
+                payload: { category: category.category, value: category.value }
+              });
+            }
+          }
+        }
+      });
+      
+      return () => {
+        if (chartInstanceRef.current) {
+          chartInstanceRef.current.destroy();
+        }
+      };
+    }, [data, config, styles]);
+    
+    return React.createElement('div', {
+      style: {
+        backgroundColor: styles?.colors?.background || '#ffffff',
+        border: `1px solid ${styles?.colors?.border || '#dee2e6'}`,
+        borderRadius: styles?.borders?.radius?.md || '8px',
+        padding: styles?.spacing?.lg || '24px',
+        height: '400px'
+      }
+    }, [
+      React.createElement('h3', {
+        key: 'title',
+        style: {
+          margin: `0 0 ${styles?.spacing?.md || '16px'} 0`,
+          fontSize: styles?.typography?.fontSize?.lg || '16px',
+          fontWeight: styles?.typography?.fontWeight?.semibold || '600'
+        }
+      }, 'Sales by Category'),
+      React.createElement('canvas', {
+        key: 'chart',
+        ref: chartRef,
+        style: { maxHeight: '320px' }
+      })
+    ]);
+  };
+};
+
+// Example ActionCategoryList component string - simulates AI-generated code
+export const getActionCategoryListComponentString = () => {
+  return String.raw`
+    function createComponent(React, ReactDOM, useState, useEffect, useCallback, createStateUpdater, createStandardEventHandler) {
+      function ActionCategoryList({ data, config, state, onEvent, styles, statePath, utilities, selectedCategoryID }) {
+        const [categories, setCategories] = useState([]);
+        const [expandedCategories, setExpandedCategories] = useState(new Set());
+        const [loading, setLoading] = useState(true);
+        const [error, setError] = useState(null);
+        
+        useEffect(() => {
+          loadCategories();
+        }, []);
+        
+        const loadCategories = async () => {
+          if (!utilities?.rv) {
+            setError('RunView utility not available');
+            setLoading(false);
+            return;
+          }
+          
+          try {
+            setLoading(true);
+            setError(null);
+            
+            const result = await utilities.rv.RunView({
+              EntityName: 'Action Categories',
+              ExtraFilter: '',
+              OrderBy: 'Name',
+              MaxRows: 1000,
+              ResultType: 'entity_object'
+            });
+            
+            if (result.Success && result.Results) {
+              setCategories(result.Results);
+            } else {
+              setError(result.ErrorMessage || 'Failed to load categories');
+            }
+          } catch (err) {
+            setError('Error loading categories: ' + err);
+          } finally {
+            setLoading(false);
+          }
+        };
+        
+        const handleCategoryClick = (category) => {
+          if (onEvent) {
+            onEvent({
+              type: 'categorySelected',
+              source: 'ActionCategoryList',
+              payload: { 
+                categoryID: category.ID,
+                categoryName: category.Name
+              }
+            });
+          }
+        };
+        
+        if (loading) {
+          return React.createElement('div', {
+            style: {
+              padding: styles?.spacing?.lg || '24px',
+              textAlign: 'center',
+              color: styles?.colors?.textSecondary || '#6c757d'
+            }
+          }, 'Loading categories...');
+        }
+        
+        if (error) {
+          return React.createElement('div', {
+            style: {
+              padding: styles?.spacing?.lg || '24px',
+              color: styles?.colors?.error || '#dc3545'
+            }
+          }, error);
+        }
+        
+        return React.createElement('div', {
+          style: {
+            height: '100%',
+            overflow: 'auto'
+          }
+        }, [
+          React.createElement('h3', {
+            key: 'title',
+            style: {
+              margin: '0 0 ' + (styles?.spacing?.md || '16px') + ' 0',
+              padding: '0 ' + (styles?.spacing?.md || '16px'),
+              fontSize: styles?.typography?.fontSize?.lg || '16px',
+              fontWeight: styles?.typography?.fontWeight?.semibold || '600'
+            }
+          }, 'Action Categories'),
+          
+          React.createElement('div', {
+            key: 'list',
+            style: {
+              display: 'flex',
+              flexDirection: 'column',
+              gap: styles?.spacing?.xs || '4px'
+            }
+          }, categories.map((category) =>
+            React.createElement('div', {
+              key: category.ID,
+              onClick: () => handleCategoryClick(category),
+              style: {
+                padding: styles?.spacing?.md || '16px',
+                cursor: 'pointer',
+                backgroundColor: selectedCategoryID === category.ID 
+                  ? styles?.colors?.primaryLight || '#e8e6ff'
+                  : 'transparent',
+                borderLeft: selectedCategoryID === category.ID
+                  ? '3px solid ' + (styles?.colors?.primary || '#5B4FE9')
+                  : '3px solid transparent',
+                transition: styles?.transitions?.fast || '150ms ease-in-out'
+              },
+              onMouseEnter: (e) => {
+                if (selectedCategoryID !== category.ID) {
+                  e.currentTarget.style.backgroundColor = styles?.colors?.surfaceHover || '#f1f5f9';
+                }
+              },
+              onMouseLeave: (e) => {
+                if (selectedCategoryID !== category.ID) {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }
+              }
+            }, [
+              React.createElement('div', {
+                key: 'name',
+                style: {
+                  fontSize: styles?.typography?.fontSize?.md || '14px',
+                  fontWeight: selectedCategoryID === category.ID 
+                    ? styles?.typography?.fontWeight?.medium || '500'
+                    : styles?.typography?.fontWeight?.regular || '400',
+                  color: styles?.colors?.text || '#212529',
+                  marginBottom: styles?.spacing?.xs || '4px'
+                }
+              }, category.Name),
+              
+              category.Description && React.createElement('div', {
+                key: 'description',
+                style: {
+                  fontSize: styles?.typography?.fontSize?.sm || '12px',
+                  color: styles?.colors?.textSecondary || '#6c757d',
+                  lineHeight: styles?.typography?.lineHeight?.normal || '1.5'
+                }
+              }, category.Description)
+            ])
+          ))
+        ]);
+      }
+      
+      return { component: ActionCategoryList };
+    }
+  `;
+};
+
+// Example ActionList component string - simulates AI-generated code
+export const getActionListComponentString = () => {
+  return String.raw`
+    function createComponent(React, ReactDOM, useState, useEffect, useCallback, createStateUpdater, createStandardEventHandler) {
+      function ActionList({ data, config, state, onEvent, styles, statePath, utilities, selectedCategoryID }) {
+        const [actions, setActions] = useState([]);
+        const [expandedActions, setExpandedActions] = useState(new Set());
+        const [actionDetails, setActionDetails] = useState({});
+        const [loading, setLoading] = useState(false);
+        const [error, setError] = useState(null);
+    
+        useEffect(() => {
+          if (selectedCategoryID) {
+            loadActions(selectedCategoryID);
+          } else {
+            setActions([]);
+          }
+        }, [selectedCategoryID]);
+        
+        const loadActions = async (categoryID) => {
+          if (!utilities?.rv) {
+            setError('RunView utility not available');
+            return;
+          }
+          
+          try {
+            setLoading(true);
+            setError(null);
+            
+            const result = await utilities.rv.RunView({
+              EntityName: 'Actions',
+              ExtraFilter: 'CategoryID = \'' + categoryID + '\'',
+              OrderBy: 'Name',
+              MaxRows: 1000,
+              ResultType: 'entity_object'
+            });
+            
+            if (result.Success && result.Results) {
+              setActions(result.Results);
+            } else {
+              setError(result.ErrorMessage || 'Failed to load actions');
+            }
+          } catch (err) {
+            setError('Error loading actions: ' + err);
+          } finally {
+            setLoading(false);
+          }
+        };
+        
+        const handleActionClick = async (action) => {
+          // Toggle expanded state
+          const newExpanded = new Set(expandedActions);
+          if (newExpanded.has(action.ID)) {
+            newExpanded.delete(action.ID);
+          } else {
+            newExpanded.add(action.ID);
+            // Load details if not already loaded
+            if (!actionDetails[action.ID]) {
+              await loadActionDetails(action.ID);
+            }
+          }
+          setExpandedActions(newExpanded);
+          
+          if (onEvent) {
+            onEvent({
+              type: 'actionSelected',
+              source: 'ActionList',
+              payload: { 
+                actionID: action.ID,
+                actionName: action.Name
+              }
+            });
+          }
+        };
+        
+        const loadActionDetails = async (actionID) => {
+          if (!utilities?.rv) return;
+          
+          try {
+            // Load params and result codes in parallel
+            const [paramsResult, resultCodesResult] = await Promise.all([
+              utilities.rv.RunView({
+                EntityName: 'Action Params',
+                ExtraFilter: 'ActionID = \'' + actionID + '\'',
+                OrderBy: 'Name',
+                ResultType: 'entity_object'
+              }),
+              utilities.rv.RunView({
+                EntityName: 'Action Result Codes',
+                ExtraFilter: 'ActionID = \'' + actionID + '\'',
+                OrderBy: 'ResultCode',
+                ResultType: 'entity_object'
+              })
+            ]);
+            
+            const details = {
+              params: paramsResult.Success ? paramsResult.Results : [],
+              resultCodes: resultCodesResult.Success ? resultCodesResult.Results : []
+            };
+            
+            setActionDetails(prev => ({ ...prev, [actionID]: details }));
+          } catch (err) {
+            console.error('Error loading action details:', err);
+          }
+        };
+        
+        if (!selectedCategoryID) {
+          return React.createElement('div', {
+            style: {
+              padding: styles?.spacing?.xl || '32px',
+              textAlign: 'center',
+              color: styles?.colors?.textSecondary || '#6c757d'
+            }
+          }, 'Select a category to view actions');
+        }
+        
+        if (loading) {
+          return React.createElement('div', {
+            style: {
+              padding: styles?.spacing?.xl || '32px',
+              textAlign: 'center',
+              color: styles?.colors?.textSecondary || '#6c757d'
+            }
+          }, 'Loading actions...');
+        }
+        
+        if (error) {
+          return React.createElement('div', {
+            style: {
+              padding: styles?.spacing?.lg || '24px',
+              color: styles?.colors?.error || '#dc3545'
+            }
+          }, error);
+        }
+        
+        if (actions.length === 0) {
+          return React.createElement('div', {
+            style: {
+              padding: styles?.spacing?.xl || '32px',
+              textAlign: 'center',
+              color: styles?.colors?.textSecondary || '#6c757d'
+            }
+          }, 'No actions found in this category');
+        }
+        
+        return React.createElement('div', {
+          style: {
+            padding: styles?.spacing?.lg || '24px'
+          }
+        }, [
+          React.createElement('h3', {
+            key: 'title',
+            style: {
+              margin: '0 0 ' + (styles?.spacing?.lg || '24px') + ' 0',
+              fontSize: styles?.typography?.fontSize?.lg || '16px',
+              fontWeight: styles?.typography?.fontWeight?.semibold || '600'
+            }
+          }, 'Actions (' + actions.length + ')'),
+          
+          React.createElement('div', {
+            key: 'grid',
+            style: {
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+              gap: styles?.spacing?.md || '16px'
+            }
+          }, actions.map((action) => {
+            const isExpanded = expandedActions.has(action.ID);
+            const details = actionDetails[action.ID] || { params: [], resultCodes: [] };
+            
+            return React.createElement('div', {
+              key: action.ID,
+              style: {
+                backgroundColor: styles?.colors?.surface || '#f8f9fa',
+                border: '1px solid ' + (styles?.colors?.border || '#dee2e6'),
+                borderRadius: styles?.borders?.radius?.md || '8px',
+                overflow: 'hidden',
+                transition: styles?.transitions?.fast || '150ms ease-in-out'
+              }
+            }, [
+              React.createElement('div', {
+                key: 'header',
+                onClick: () => handleActionClick(action),
+                style: {
+                  padding: styles?.spacing?.md || '16px',
+                  cursor: 'pointer'
+                },
+                onMouseEnter: (e) => {
+                  e.currentTarget.style.backgroundColor = styles?.colors?.surfaceHover || '#f1f5f9';
+                },
+                onMouseLeave: (e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }
+              }, [
+                React.createElement('div', {
+                  key: 'header-content',
+                  style: {
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }
+                }, [
+                  React.createElement('div', { key: 'main-content' }, [
+                    React.createElement('div', {
+                      key: 'name',
+                      style: {
+                        fontSize: styles?.typography?.fontSize?.md || '14px',
+                        fontWeight: styles?.typography?.fontWeight?.medium || '500',
+                        color: styles?.colors?.text || '#212529',
+                        marginBottom: styles?.spacing?.xs || '4px'
+                      }
+                    }, action.Name),
+                    
+                    action.Description && React.createElement('div', {
+                      key: 'description',
+                      style: {
+                        fontSize: styles?.typography?.fontSize?.sm || '12px',
+                        color: styles?.colors?.textSecondary || '#6c757d',
+                        lineHeight: styles?.typography?.lineHeight?.normal || '1.5',
+                        marginBottom: styles?.spacing?.xs || '4px'
+                      }
+                    }, action.Description),
+                    
+                    React.createElement('div', {
+                      key: 'metadata',
+                      style: {
+                        display: 'flex',
+                        gap: styles?.spacing?.md || '16px',
+                        fontSize: styles?.typography?.fontSize?.xs || '11px',
+                        color: styles?.colors?.textTertiary || '#94a3b8'
+                      }
+                    }, [
+                      action.Type && React.createElement('span', { key: 'type' }, 'Type: ' + action.Type),
+                      action.Status && React.createElement('span', { key: 'status' }, 'Status: ' + action.Status)
+                    ])
+                  ]),
+                  
+                  React.createElement('span', {
+                    key: 'expand-icon',
+                    style: {
+                      fontSize: '12px',
+                      color: styles?.colors?.textSecondary || '#6c757d',
+                      marginLeft: '8px'
+                    }
+                  }, isExpanded ? '▼' : '▶')
+                ])
+              ]),
+              
+              isExpanded && React.createElement('div', {
+                key: 'details',
+                style: {
+                  borderTop: '1px solid ' + (styles?.colors?.border || '#dee2e6'),
+                  backgroundColor: styles?.colors?.background || '#ffffff'
+                }
+              }, [
+                // Parameters section
+                details.params.length > 0 && React.createElement('div', {
+                  key: 'params',
+                  style: {
+                    padding: styles?.spacing?.md || '16px',
+                    borderBottom: '1px solid ' + (styles?.colors?.borderLight || '#f1f5f9')
+                  }
+                }, [
+                  React.createElement('h4', {
+                    key: 'params-title',
+                    style: {
+                      margin: '0 0 ' + (styles?.spacing?.sm || '8px') + ' 0',
+                      fontSize: styles?.typography?.fontSize?.sm || '13px',
+                      fontWeight: styles?.typography?.fontWeight?.semibold || '600',
+                      color: styles?.colors?.text || '#212529'
+                    }
+                  }, 'Parameters'),
+                  
+                  React.createElement('div', {
+                    key: 'params-list',
+                    style: {
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: styles?.spacing?.xs || '4px'
+                    }
+                  }, details.params.map(param =>
+                    React.createElement('div', {
+                      key: param.ID,
+                      style: {
+                        display: 'flex',
+                        alignItems: 'center',
+                        fontSize: styles?.typography?.fontSize?.xs || '12px',
+                        padding: '4px 0'
+                      }
+                    }, [
+                      React.createElement('span', {
+                        key: 'name',
+                        style: {
+                          fontWeight: styles?.typography?.fontWeight?.medium || '500',
+                          color: styles?.colors?.text || '#212529',
+                          marginRight: '8px'
+                        }
+                      }, param.Name),
+                      
+                      React.createElement('span', {
+                        key: 'type',
+                        style: {
+                          color: styles?.colors?.textSecondary || '#6c757d',
+                          fontSize: '11px',
+                          backgroundColor: styles?.colors?.surfaceHover || '#f1f5f9',
+                          padding: '2px 6px',
+                          borderRadius: '3px',
+                          marginRight: '8px'
+                        }
+                      }, param.Type),
+                      
+                      param.IsRequired && React.createElement('span', {
+                        key: 'required',
+                        style: {
+                          color: styles?.colors?.error || '#dc3545',
+                          fontSize: '10px',
+                          fontWeight: styles?.typography?.fontWeight?.semibold || '600'
+                        }
+                      }, 'REQUIRED'),
+                      
+                      param.Description && React.createElement('span', {
+                        key: 'desc',
+                        style: {
+                          color: styles?.colors?.textTertiary || '#94a3b8',
+                          marginLeft: 'auto',
+                          fontSize: '11px'
+                        }
+                      }, param.Description)
+                    ])
+                  ))
+                ]),
+                
+                // Result codes section
+                details.resultCodes.length > 0 && React.createElement('div', {
+                  key: 'result-codes',
+                  style: {
+                    padding: styles?.spacing?.md || '16px'
+                  }
+                }, [
+                  React.createElement('h4', {
+                    key: 'codes-title',
+                    style: {
+                      margin: '0 0 ' + (styles?.spacing?.sm || '8px') + ' 0',
+                      fontSize: styles?.typography?.fontSize?.sm || '13px',
+                      fontWeight: styles?.typography?.fontWeight?.semibold || '600',
+                      color: styles?.colors?.text || '#212529'
+                    }
+                  }, 'Result Codes'),
+                  
+                  React.createElement('div', {
+                    key: 'codes-list',
+                    style: {
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: styles?.spacing?.xs || '4px'
+                    }
+                  }, details.resultCodes.map(code =>
+                    React.createElement('div', {
+                      key: code.ID,
+                      style: {
+                        display: 'flex',
+                        alignItems: 'center',
+                        fontSize: styles?.typography?.fontSize?.xs || '12px',
+                        padding: '4px 0'
+                      }
+                    }, [
+                      React.createElement('span', {
+                        key: 'code',
+                        style: {
+                          fontFamily: 'monospace',
+                          fontWeight: styles?.typography?.fontWeight?.medium || '500',
+                          color: code.IsSuccess ? styles?.colors?.success || '#10b981' : styles?.colors?.error || '#dc3545',
+                          marginRight: '8px'
+                        }
+                      }, code.ResultCode),
+                      
+                      code.Description && React.createElement('span', {
+                        key: 'desc',
+                        style: {
+                          color: styles?.colors?.textSecondary || '#6c757d'
+                        }
+                      }, code.Description)
+                    ])
+                  ))
+                ])
+              ])
+            ]);
+          }))
+        ]);
+      }
+      
+      return { component: ActionList };
+    }
+  `;
+};
+
+// Example composite ActionBrowser component string - simulates AI-generated code
+export const getActionBrowserComponentString = () => {
+  return String.raw`
+    function createComponent(React, ReactDOM, useState, useEffect, useCallback, createStateUpdater, createStandardEventHandler) {
+      function ActionBrowser({ data, utilities, userState, callbacks, styles, components }) {
+        const [fullUserState, setFullUserState] = useState({
+          selectedCategoryID: null,
+          selectedActionID: null,
+          categoryList: {},
+          actionList: {},
+          ...userState
+        });
+        
+        // Destructure child components from registry
+        const { ActionCategoryList, ActionList } = components;
+        
+        const updateUserState = (stateUpdate) => {
+          const newState = { ...fullUserState, ...stateUpdate };
+          setFullUserState(newState);
+          if (callbacks?.UpdateUserState) {
+            callbacks.UpdateUserState(newState);
+          }
+        };
+        
+        const handleComponentEvent = (event) => {
+          if (event.type === 'categorySelected' && event.source === 'ActionCategoryList') {
+            updateUserState({
+              selectedCategoryID: event.payload.categoryID,
+              selectedActionID: null // Reset action selection
+            });
+            return;
+          }
+          
+          if (event.type === 'actionSelected' && event.source === 'ActionList') {
+            updateUserState({
+              selectedActionID: event.payload.actionID
+            });
+            if (callbacks?.NotifyEvent) {
+              callbacks.NotifyEvent('actionSelected', event.payload);
+            }
+            return;
+          }
+          
+          // Handle standard state changes
+          if (event.type === 'stateChanged') {
+            const update = {};
+            update[event.payload.statePath] = event.payload.newState;
+            updateUserState(update);
+          }
+        };
+        
+        return React.createElement('div', {
+          style: {
+            display: 'flex',
+            height: '100%',
+            minHeight: '600px',
+            backgroundColor: styles.colors.background,
+            fontFamily: styles.typography.fontFamily
+          }
+        }, [
+          // Left sidebar with categories
+          React.createElement('div', {
+            key: 'sidebar',
+            style: {
+              width: '300px',
+              backgroundColor: styles.colors.surface,
+              borderRight: '1px solid ' + styles.colors.border,
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column'
+            }
+          }, [
+            ActionCategoryList && React.createElement(ActionCategoryList, {
+              key: 'categories',
+              data: [],
+              config: {},
+              state: fullUserState.categoryList || {},
+              onEvent: handleComponentEvent,
+              styles: styles,
+              utilities: utilities,
+              statePath: 'categoryList',
+              selectedCategoryID: fullUserState.selectedCategoryID
+            })
+          ]),
+          
+          // Main content area with actions
+          React.createElement('div', {
+            key: 'main',
+            style: {
+              flex: 1,
+              overflow: 'auto'
+            }
+          }, [
+            ActionList && React.createElement(ActionList, {
+              key: 'actions',
+              data: [],
+              config: {},
+              state: fullUserState.actionList || {},
+              onEvent: handleComponentEvent,
+              styles: styles,
+              utilities: utilities,
+              statePath: 'actionList',
+              selectedCategoryID: fullUserState.selectedCategoryID
+            })
+          ])
+        ]);
+      }
+      
+      return { component: ActionBrowser };
+    }
+  `;
+};
+
+/**
+ * Unit tests for GlobalComponentRegistry
+ * These would normally be in a separate .spec.ts file
+ * Run these tests to ensure the registry works correctly
+ */
+export function testGlobalComponentRegistry() {
+  const registry = GlobalComponentRegistry.Instance;
+  const testResults: { test: string; passed: boolean; error?: string }[] = [];
+  
+  const assert = (condition: boolean, testName: string, error?: string) => {
+    testResults.push({ test: testName, passed: condition, error: condition ? undefined : error });
+    if (!condition) {
+      console.error(`Test failed: ${testName}`, error);
+    } else {
+      console.log(`Test passed: ${testName}`);
+    }
+  };
+  
+  // Test 1: Singleton pattern
+  const registry2 = GlobalComponentRegistry.Instance;
+  assert(registry === registry2, 'Singleton pattern', 'Multiple instances created');
+  
+  // Test 2: Basic registration and retrieval
+  registry.clear(); // Start fresh
+  const mockComponent = { name: 'MockComponent' };
+  registry.register('TestComponent', mockComponent);
+  assert(registry.get('TestComponent') === mockComponent, 'Basic register/get', 'Component not retrieved correctly');
+  
+  // Test 3: Has method
+  assert(registry.has('TestComponent') === true, 'Has method - existing', 'Should return true for existing component');
+  assert(registry.has('NonExistent') === false, 'Has method - non-existing', 'Should return false for non-existing component');
+  
+  // Test 4: Register with metadata
+  const mockSearchBox = { name: 'SearchBox' };
+  registry.registerWithMetadata('SearchBox', 'CRM', 'v1', mockSearchBox, 'CRM-specific search');
+  assert(registry.get('SearchBox_CRM_v1') === mockSearchBox, 'Register with metadata', 'Component not found with metadata key');
+  assert(registry.get('SearchBox_CRM') === mockSearchBox, 'Backwards compatibility key', 'Component not found with context-only key');
+  
+  // Test 5: Multiple versions
+  const mockSearchBoxV2 = { name: 'SearchBoxV2' };
+  registry.registerWithMetadata('SearchBox', 'CRM', 'v2', mockSearchBoxV2);
+  assert(registry.get('SearchBox_CRM_v1') === mockSearchBox, 'Version v1 still accessible', 'v1 component overwritten');
+  assert(registry.get('SearchBox_CRM_v2') === mockSearchBoxV2, 'Version v2 accessible', 'v2 component not found');
+  
+  // Test 6: GetWithFallback - exact match
+  const found1 = registry.getWithFallback('SearchBox', 'CRM', 'v2');
+  assert(found1 === mockSearchBoxV2, 'GetWithFallback - exact match', 'Should find exact version match');
+  
+  // Test 7: GetWithFallback - context fallback
+  const found2 = registry.getWithFallback('SearchBox', 'CRM', 'v3'); // v3 doesn't exist
+  assert(found2 === mockSearchBoxV2, 'GetWithFallback - context fallback', 'Should fall back to context match');
+  
+  // Test 8: GetWithFallback - global fallback
+  const globalComponent = { name: 'GlobalSearch' };
+  registry.register('SearchBox_Global', globalComponent);
+  const found3 = registry.getWithFallback('SearchBox', 'Finance', 'v1'); // Finance context doesn't exist
+  assert(found3 === globalComponent, 'GetWithFallback - global fallback', 'Should fall back to global component');
+  
+  // Test 9: GetWithFallback - name only fallback
+  const nameOnlyComponent = { name: 'NameOnly' };
+  registry.register('UniqueComponent', nameOnlyComponent);
+  const found4 = registry.getWithFallback('UniqueComponent', 'Any', 'v1');
+  assert(found4 === nameOnlyComponent, 'GetWithFallback - name only fallback', 'Should fall back to name-only registration');
+  
+  // Test 10: GetWithFallback - not found
+  const found5 = registry.getWithFallback('NotRegistered', 'Any', 'v1');
+  assert(found5 === null, 'GetWithFallback - not found', 'Should return null when component not found');
+  
+  // Test 11: Get registered keys
+  const keys = registry.getRegisteredKeys();
+  assert(keys.includes('SearchBox_CRM_v1'), 'Get registered keys', 'Should include registered components');
+  assert(keys.length > 5, 'Multiple registrations', `Should have multiple keys registered, found ${keys.length}`);
+  
+  // Test 12: Clear registry
+  registry.clear();
+  assert(registry.getRegisteredKeys().length === 0, 'Clear registry', 'Registry should be empty after clear');
+  
+  // Summary
+  const passed = testResults.filter(r => r.passed).length;
+  const failed = testResults.filter(r => !r.passed).length;
+  console.log(`\nTest Summary: ${passed} passed, ${failed} failed out of ${testResults.length} total tests`);
+  
+  // Important: Clear the registry at the end of tests so it's ready for actual use
+  registry.clear();
+  
+  return testResults;
+}
+
+/**
+ * Compile and register a component from string code
+ * This simulates how AI-generated components are processed
+ */
+export async function compileAndRegisterComponent(
+  componentName: string,
+  componentCode: string,
+  context: string = 'Global',
+  version: string = 'v1'
+): Promise<boolean> {
+  const registry = GlobalComponentRegistry.Instance;
+  
+  try {
+    // Get Babel for transpilation
+    const Babel = (window as any).Babel;
+    if (!Babel) {
+      console.error('Babel not loaded - cannot compile component');
+      return false;
+    }
+    
+    // Transpile the code
+    const transpiledCode = Babel.transform(componentCode, {
+      presets: ['react'],
+      filename: `${componentName}.jsx`
+    }).code;
+    
+    // Get React and other dependencies
+    const React = (window as any).React;
+    const ReactDOM = (window as any).ReactDOM;
+    const libraries = {
+      antd: (window as any).antd,
+      ReactBootstrap: (window as any).ReactBootstrap,
+      d3: (window as any).d3,
+      Chart: (window as any).Chart,
+      _: (window as any)._,
+      dayjs: (window as any).dayjs
+    };
+    
+    // Create the component factory
+    const createComponent = new Function(
+      'React', 'ReactDOM', 'useState', 'useEffect', 'useCallback', 'createStateUpdater', 'createStandardEventHandler', 'libraries',
+      `${transpiledCode}; return createComponent;`
+    )(React, ReactDOM, React.useState, React.useEffect, React.useCallback, 
+      () => {}, // createStateUpdater placeholder
+      () => {}, // createStandardEventHandler placeholder
+      libraries
+    );
+    
+    // Get the component from the factory
+    const componentResult = createComponent(
+      React, ReactDOM, React.useState, React.useEffect, React.useCallback,
+      () => {}, // createStateUpdater
+      () => {}  // createStandardEventHandler
+    );
+    
+    // Register the component
+    registry.registerWithMetadata(componentName, context, version, componentResult.component);
+    console.log(`Compiled and registered component: ${componentName}`);
+    
+    return true;
+  } catch (error) {
+    console.error(`Failed to compile component ${componentName}:`, error);
+    return false;
+  }
+}
+
+/**
+ * Helper function to register example components for testing
+ * Call this during application initialization
+ */
+export async function registerExampleComponents(React?: any, Chart?: any) {
+  const registry = GlobalComponentRegistry.Instance;
+  
+  // Get React reference - either passed in or from window
+  React = React || (window as any).React;
+  Chart = Chart || (window as any).Chart;
+  
+  // Also make this function available globally for debugging
+  (window as any).registerExampleComponents = registerExampleComponents;
+  (window as any).compileAndRegisterComponent = compileAndRegisterComponent;
+  
+  if (React) {
+    // Register simple test components (these use the real React components directly)
+    registry.registerWithMetadata('SearchBox', 'CRM', 'v1', createSearchBoxComponent(React));
+    registry.registerWithMetadata('SearchBox', 'Global', 'v1', createSearchBoxComponent(React));
+    
+    // Register OrderList variants  
+    registry.registerWithMetadata('OrderList', 'Standard', 'v1', createOrderListComponent(React));
+    registry.registerWithMetadata('OrderList', 'Advanced', 'v1', createOrderListComponent(React));
+    
+    // Register chart components
+    if (Chart) {
+      registry.registerWithMetadata('CategoryChart', 'Global', 'v1', createCategoryChartComponent(React, Chart));
+    }
+    
+    // Compile and register Action browser components from strings
+    // This simulates how AI-generated components are processed
+    await compileAndRegisterComponent('ActionCategoryList', getActionCategoryListComponentString(), 'Global', 'v1');
+    await compileAndRegisterComponent('ActionList', getActionListComponentString(), 'Global', 'v1');
+    await compileAndRegisterComponent('ActionBrowser', getActionBrowserComponentString(), 'Global', 'v1');
+    
+    console.log('Example components registered successfully');
+    console.log('Registered components:', registry.getRegisteredKeys());
+    return true;
+  } else {
+    console.warn('React not found - cannot register example components');
+    return false;
   }
 }
