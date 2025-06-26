@@ -27,6 +27,14 @@
     {
       "type": "node",
       "request": "launch",
+      "name": "Autotag",
+      "envFile": "${workspaceFolder}/test-vectorization/.env",
+      "program": "${workspaceFolder}/test-vectorization/src/autotag.js",
+      "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
       "name": "MJAPI",
       "envFile": "${workspaceFolder}/packages/MJAPI/.env",
       "cwd": "${workspaceFolder}/packages/MJAPI",

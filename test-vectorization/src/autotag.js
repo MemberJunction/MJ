@@ -3,7 +3,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { Metadata, UserInfo } from '@memberjunction/core';
 import { SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
 import { LoadGeneratedEntities } from 'mj_generatedentities';
-import { AppDataSource } from './db.js';
+import { pool } from './db.js';
 // import { AIModelEntityExtended, EntityBehaviorEntityExtended, EntityBehaviorTypeEntity } from '@memberjunction/core-entities'
 // import { BaseLLM, ChatParams, GetAIAPIKey } from "@memberjunction/ai";
 import { LoadOpenAILLM } from '@memberjunction/ai-openai';
@@ -12,9 +12,8 @@ import { LoadMistralEmbedding } from '@memberjunction/ai-mistral';
 
 const SYSTEM_USER_ID = "EDAFCCEC-6A37-EF11-86D4-000D3A4E707E";
 
-const config = new SQLServerProviderConfigData(AppDataSource, '', '__mj', 5000);
-
-const dataSource = await AppDataSource.initialize();
+await pool.connect();
+const config = new SQLServerProviderConfigData(pool, '', '__mj', 5000);
 const sqlServerDataProvider = await setupSQLServerClient(config);
 
 LoadGeneratedEntities();
