@@ -65,13 +65,13 @@ The user's request and any additional context will be provided below. Your execu
 - If not complete, what is the next most valuable step?
 {% if subAgentCount > 0 %}
 - Which sub-agent to invoke?
-{% end if %}
+{% endif %}
 {% if actionCount > 0 %}
 - Which action(s) to perform?
    {% if subAgentCount > 0 %}
    - Remember you cannot invoke sub-agents and also actions in the same cycle, you must choose **either** a single sub-agent or 1+ actions to run. Use subsequent cycles to do other things.
-   {% end if %}
-{% end if %}
+   {% endif %}
+{% endif %}
 - Your reasoning for the decision
 - Any accumulated results to maintain across iterations
 
