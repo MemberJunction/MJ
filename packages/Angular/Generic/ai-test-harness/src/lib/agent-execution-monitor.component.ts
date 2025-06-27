@@ -195,7 +195,6 @@ export interface ExecutionStats {
             border: 1px solid #e0e0e0;
             border-radius: 8px;
             overflow: hidden;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
 
         /* Header */
@@ -908,6 +907,19 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     }
     
     /**
+     * Helper function to safely convert a value to a preview string
+     */
+    private valueToPreviewString(value: any): string {
+        if (value === null || value === undefined) {
+            return '';
+        }
+        if (typeof value === 'object') {
+            return JSON.stringify(value, null, 2);
+        }
+        return String(value);
+    }
+
+    /**
      * Create a preview string from data
      */
     private createPreview(data: any): string | undefined {
@@ -937,8 +949,8 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                 };
                 return `Sub-agent: ${parsed.subAgentName}`;
             }
-            if (parsed.message) return parsed.message;
-            if (parsed.userMessage) return parsed.userMessage;
+            if (parsed.message) return this.valueToPreviewString(parsed.message);
+            if (parsed.userMessage) return this.valueToPreviewString(parsed.userMessage);
             
             // Show action results clearly
             if (parsed.actionResult) {
@@ -951,7 +963,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                     preview += `Result Code: ${result.resultCode}\n`;
                 }
                 if (result.message) {
-                    preview += `Message: ${result.message}\n`;
+                    preview += `Message: ${this.valueToPreviewString(result.message)}\n`;
                 }
                 if (result.result) {
                     preview += `Result: ${typeof result.result === 'object' ? JSON.stringify(result.result, null, 2) : result.result}`;
@@ -961,10 +973,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             
             // Legacy action result format
             if (parsed.result) {
-                if (typeof parsed.result === 'object') {
-                    return JSON.stringify(parsed.result, null, 2);
-                }
-                return String(parsed.result);
+                return this.valueToPreviewString(parsed.result);
             }
             
             // Show prompt results
@@ -975,7 +984,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                     preview += `Success: ${result.success}\n`;
                 }
                 if (result.content) {
-                    preview += `Content: ${typeof result.content === 'string' ? result.content : JSON.stringify(result.content, null, 2)}`;
+                    preview += `Content: ${this.valueToPreviewString(result.content)}`;
                 }
                 return preview;
             }
