@@ -227,7 +227,7 @@
             <ng-template kendoPanelBarContent>
               <div class="result-viewer">
                 <mj-code-editor
-                  [(ngModel)]="record.Result"
+                  [ngModel]="parsedResult"
                   [language]="'json'"
                   [readonly]="true"
                   style="height: 300px; width: 100%;">
@@ -240,7 +240,7 @@
             <ng-template kendoPanelBarContent>
               <div class="state-viewer">
                 <mj-code-editor
-                  [(ngModel)]="record.AgentState"
+                  [ngModel]="parsedAgentState"
                   [language]="'json'"
                   [readonly]="true"
                   style="height: 400px; width: 100%;">

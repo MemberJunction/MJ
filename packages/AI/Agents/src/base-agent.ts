@@ -766,7 +766,7 @@ export class BaseAgent {
             
             // Prepare messages for sub-agent, adding the context message
             const subAgentMessages: ChatMessage[] = [
-                ...params.conversationMessages,
+                // don't include the full conversation of the parent, just the subAgentRequest - we previously did this: ...params.conversationMessages,
                 {
                     role: 'user',
                     content: subAgentRequest.message

@@ -366,41 +366,134 @@ interface InternalParseJSONOptions {
 
 
 export function ParseJSONRecursive(obj: any, options: ParseJSONOptions = {}): any {
-  const keys = Object.keys(obj);
-  for (const key of keys) {
-    obj[key] = recursiveReplaceKey(obj[key], options);
-  }
-  return obj;
+  // Set default options
+  const opts: Required<ParseJSONOptions> = {
+    maxDepth: options.maxDepth ?? 100,
+    extractInlineJson: options.extractInlineJson ?? false,
+    debug: options.debug ?? false
+  };
+
+  // Start recursive parsing with depth 0
+  return parseJSONRecursiveWithDepth(obj, opts, 0, 'root');
 }
 
-function recursiveReplaceKey(key: any, options: ParseJSONOptions): any {
-  if (typeof key === 'string') {
-    return recursiveReplaceString(key, options);
-  }
-  else if (Array.isArray(key)) {
-    for (let i = 0; i < key.length; i++) {
-      key[i] = recursiveReplaceKey(key[i], options); // recursive call for array elements
+function parseJSONRecursiveWithDepth(obj: any, options: Required<ParseJSONOptions>, depth: number, path: string): any {
+  // Check depth limit
+  if (depth >= options.maxDepth) {
+    if (options.debug) {
+      console.warn(`[ParseJSONRecursive] Maximum depth of ${options.maxDepth} reached at path: ${path}`);
     }
-    return key; // return modified array
+    return obj;
   }
-  else if (typeof key === 'object' && key !== null && key !== undefined) {
-    return ParseJSONRecursive(key, options); // recursive call for nested objects
+
+  // Handle null/undefined
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+
+  // Handle non-objects
+  if (typeof obj !== 'object') {
+    return obj;
+  }
+
+  // Use recursiveReplaceKey which handles all types
+  return recursiveReplaceKey(obj, options, depth, path);
+}
+
+function recursiveReplaceKey(value: any, options: Required<ParseJSONOptions>, depth: number, path: string): any {
+  if (options.debug) {
+    console.log(`[ParseJSONRecursive] Depth: ${depth}, Path: ${path}, Type: ${typeof value}${Array.isArray(value) ? ' (array)' : ''}`);
+  }
+
+  if (typeof value === 'string') {
+    return recursiveReplaceString(value, options, depth, path);
+  }
+  else if (Array.isArray(value)) {
+    // Create a new array instead of modifying the original
+    const newArray = new Array(value.length);
+    for (let i = 0; i < value.length; i++) {
+      newArray[i] = recursiveReplaceKey(value[i], options, depth + 1, `${path}[${i}]`);
+    }
+    return newArray;
+  }
+  else if (typeof value === 'object' && value !== null) {
+    // Create a new object instead of modifying the original
+    const result: any = {};
+    const keys = Object.keys(value);
+    
+    for (const key of keys) {
+      if (options.debug) {
+        console.log(`[ParseJSONRecursive] Processing key: ${key} at path: ${path}.${key}`);
+      }
+      result[key] = recursiveReplaceKey(value[key], options, depth + 1, `${path}.${key}`);
+    }
+    return result;
   }
   else {
-    return key; // return as-is for non-string, non-array, and non-object types
+    return value; // return as-is for non-string, non-array, and non-object types
   }
 }
 
-function recursiveReplaceString(str: string, options: ParseJSONOptions): any {
+function recursiveReplaceString(str: string, options: Required<ParseJSONOptions>, depth: number, path: string): any {
+  if (options.debug) {
+    console.log(`[ParseJSONRecursive] String preview: ${str.substring(0, 100)}${str.length > 100 ? '...' : ''}`);
+  }
+
   try {
     const parsed = JSON.parse(str);
+    
+    // Check if parsing returned the same value (e.g., JSON.parse('"user"') === "user")
+    if (parsed === str) {
+      if (options.debug) {
+        console.log(`[ParseJSONRecursive] JSON.parse returned same value at path: ${path}, stopping`);
+      }
+      return str;
+    }
+
     if (parsed && typeof parsed === 'object') {
-      return ParseJSONRecursive(parsed, options);
+      if (options.debug) {
+        console.log(`[ParseJSONRecursive] Successfully parsed JSON at path: ${path}`);
+      }
+      return parseJSONRecursiveWithDepth(parsed, options, depth + 1, `${path}[parsed-json]`);
     } else {
       return parsed; // Keep simple values as-is
     }
   } catch (e) {
-    // If parsing fails, leave the string as-is
+    // If parsing fails, leave the string as-is, this is not a failure, as we trying to parse any string above
+    // however in this case we need to check for inline JSON extraction
+    if (options?.extractInlineJson) {
+      // Look for JSON patterns within the string
+      // First try ```json blocks
+      const codeBlockMatch = str.match(/```json\s*\n([\s\S]*?)\n```/);
+      if (codeBlockMatch) {
+        try {
+          const parsedJson = JSON.parse(codeBlockMatch[1]);
+          return {
+            text: str.replace(codeBlockMatch[0], '').trim(),
+            json: parseJSONRecursiveWithDepth(parsedJson, options, depth + 1, `${path}[embedded-json]`)
+          };
+        } catch (e) {
+          // If parsing fails, continue
+        }
+      }
+
+      // Simple approach: find first { or [ and try to parse from there
+      const jsonStartIndex = str.search(/[{\[]/);
+      if (jsonStartIndex !== -1) {
+        // Try to parse from the JSON start to the end of string
+        const possibleJson = str.substring(jsonStartIndex);
+        try {
+          const parsedJson = JSON.parse(possibleJson);
+          const textBefore = str.substring(0, jsonStartIndex).trim();
+          return {
+            text: textBefore || undefined,
+            json: parseJSONRecursiveWithDepth(parsedJson, options, depth + 1, `${path}[embedded-json]`)
+          };
+        } catch (e) {
+          // JSON.parse failed, the string doesn't contain valid JSON
+        }
+      }
+    }
     return str;
   }
 }

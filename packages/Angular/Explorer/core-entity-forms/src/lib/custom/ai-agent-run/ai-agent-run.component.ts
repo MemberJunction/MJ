@@ -9,6 +9,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { SharedService } from '@memberjunction/ng-shared';
 import { TimelineItem } from './ai-agent-run-timeline.component';
 import { AIAgentRunFormComponent } from '../../generated/Entities/AIAgentRun/aiagentrun.form.component';
+import { ParseJSONRecursive, ParseJSONOptions } from '../shared-util';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Runs') 
 @Component({
@@ -116,7 +117,21 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   
   getSelectedItemJson(): string {
     if (!this.selectedTimelineItem) return '{}';
-    return JSON.stringify(this.selectedTimelineItem.data.GetAll(), null, 2);
+    
+    // Get all the data from the entity
+    const data = this.selectedTimelineItem.data.GetAll();
+    
+    // Apply recursive JSON parsing to the entire data object with inline extraction
+    // This will handle any JSON strings regardless of property names
+    // and extract embedded JSON from text strings
+    const parseOptions: ParseJSONOptions = {
+      extractInlineJson: true,
+      maxDepth: 100,
+      debug: false // Disable debug logging - regex issue fixed
+    };
+    const parsedData = ParseJSONRecursive(data, parseOptions);
+    
+    return JSON.stringify(parsedData, null, 2);
   }
   
   getStatusIcon(status: string): string {
@@ -136,6 +151,44 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
       // Could show a toast notification here
     } catch (err) {
       console.error('Failed to copy to clipboard:', err);
+    }
+  }
+  
+  /**
+   * Get the Result field with recursive JSON parsing applied
+   */
+  get parsedResult(): string {
+    if (!this.record?.Result) return '';
+    
+    try {
+      const parseOptions: ParseJSONOptions = {
+        extractInlineJson: true,
+        maxDepth: 100,
+        debug: false // Disable debug logging - regex issue fixed
+      };
+      const parsed = ParseJSONRecursive(this.record.Result, parseOptions);
+      return JSON.stringify(parsed, null, 2);
+    } catch (e) {
+      return this.record.Result;
+    }
+  }
+  
+  /**
+   * Get the AgentState field with recursive JSON parsing applied
+   */
+  get parsedAgentState(): string {
+    if (!this.record?.AgentState) return '';
+    
+    try {
+      const parseOptions: ParseJSONOptions = {
+        extractInlineJson: true,
+        maxDepth: 100,
+        debug: false // Disable debug logging - regex issue fixed
+      };
+      const parsed = ParseJSONRecursive(this.record.AgentState, parseOptions);
+      return JSON.stringify(parsed, null, 2);
+    } catch (e) {
+      return this.record.AgentState;
     }
   }
 }
