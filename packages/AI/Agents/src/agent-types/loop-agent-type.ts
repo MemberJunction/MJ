@@ -12,8 +12,8 @@
 
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
-import { AIPromptRunResult, BaseAgentNextStep } from '@memberjunction/ai-core-plus';
-import { LogError, LogStatus } from '@memberjunction/core';
+import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams } from '@memberjunction/ai-core-plus';
+import { LogError, LogStatusEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { LoopAgentResponse } from './loop-agent-response-type';
 
 /**
@@ -39,7 +39,7 @@ import { LoopAgentResponse } from './loop-agent-response-type';
  * 
  * switch (nextStep.step) {
  *   case 'success':
- *     console.log('Task completed:', nextStep.returnValue);
+ *     console.log('Task completed:', nextStep.payload);
  *     break;
  *   case 'sub-agent':
  *     console.log('Delegating to:', nextStep.subAgentName);
@@ -102,11 +102,14 @@ export class LoopAgentType extends BaseAgentType {
 
             // Check if task is complete
             if (response.taskComplete) {
-                LogStatus('✅ Loop Agent: Task completed successfully');
+                LogStatusEx({
+                    message: '✅ Loop Agent: Task completed successfully',
+                    verboseOnly: true
+                });
                 return {
                     terminate: response.taskComplete,
                     step: 'success',
-                    returnValue: response,                    
+                    payload: response,                    
                 };
             }
 
@@ -121,7 +124,7 @@ export class LoopAgentType extends BaseAgentType {
 
             // Determine next step based on type
             const retVal: Partial<BaseAgentNextStep<LoopAgentResponse>> = {
-                returnValue: response, // we always return the full response as the return value
+                payload: response, // we always return the full response as the return value
                 terminate: response.taskComplete
             }
             switch (response.nextStep.type) {
@@ -233,6 +236,38 @@ export class LoopAgentType extends BaseAgentType {
         }
 
         return true;
+    }
+
+    /**
+     * Retrieves the payload from the prompt result.
+     * For LoopAgentType, this returns the parsed LoopAgentResponse.
+     * 
+     * @param {AIPromptRunResult} promptResult - The result from executing the agent's prompt
+     * @returns {Promise<T>} The extracted payload
+     */
+    public async RetrievePayload<T = LoopAgentResponse>(promptResult: AIPromptRunResult): Promise<T> {
+        // Parse the result if it's a string
+        if (typeof promptResult.result === 'string') {
+            return JSON.parse(promptResult.result) as T;
+        }
+        return promptResult.result as T;
+    }
+
+    /**
+     * Injects a payload into the prompt parameters.
+     * For LoopAgentType, this could be used to inject previous loop results or context.
+     * 
+     * @param {T} payload - The payload to inject
+     * @param {AIPromptParams} prompt - The prompt parameters to update
+     */
+    public async InjectPayload<T = any>(payload: T, prompt: AIPromptParams): Promise<void> {
+        // For LoopAgentType, we might inject the payload as additional context
+        // This could be used to pass previous loop iterations or accumulated results
+        if (prompt.data) {
+            prompt.data['previousLoopResult'] = payload;
+        } else {
+            prompt.data = { previousLoopResult: payload };
+        }
     }
 }
 

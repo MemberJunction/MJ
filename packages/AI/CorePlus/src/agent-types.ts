@@ -102,7 +102,7 @@ export type AgentSubAgentRequest<TContext = any> = {
  *   - 'actions': The agent should perform one or more actions using the Actions framework
  *   - 'chat': The agent needs to communicate with the user before proceeding
  * @property {boolean} terminate - Whether to terminate the agent execution after this step
- * @property {any} [returnValue] - Optional value to return with the step determination
+ * @property {P} [payload] - Optional value to return with the step determination
  * @property {string} [errorMessage] - Error message when step is 'failed'
  * @property {string} [retryReason] - Reason for retry when step is 'retry' (e.g., "Processing action results", "Handling error condition")
  * @property {string} [retryInstructions] - Instructions for the retry attempt, including any new context or results
@@ -110,10 +110,10 @@ export type AgentSubAgentRequest<TContext = any> = {
  * @property {AgentAction[]} [actions] - Array of actions to execute when step is 'actions'
  * @property {string} [userMessage] - Message to send to user when step is 'chat'
  */
-export type BaseAgentNextStep<R = any, TContext = any> = {
+export type BaseAgentNextStep<P = any, TContext = any> = {
     terminate: boolean;
     step: 'success' | 'failed' | 'retry' | 'sub-agent' | 'actions' | 'chat';
-    returnValue?: R;
+    payload?: P;
     errorMessage?: string;
     retryReason?: string;
     retryInstructions?: string;
@@ -133,18 +133,18 @@ export type BaseAgentNextStep<R = any, TContext = any> = {
  * @interface ExecuteAgentResult
  * @property {boolean} success - Whether the overall agent execution was successful
  * @property {BaseAgentNextStep['step']} finalStep - The final step type that terminated execution
- * @property {any} [returnValue] - Optional return value from the agent execution, type depends on agent implementation
+ * @property {T} [payload] - Optional payload from the agent execution, type depends on agent implementation
  * @property {string} [errorMessage] - Error message if execution failed
  * @property {boolean} [cancelled] - Whether the execution was cancelled via cancellation token
  * @property {'user_requested' | 'timeout' | 'system'} [cancellationReason] - Reason for cancellation if cancelled
  * @property {AIAgentRunEntity} agentRun - The main database entity tracking this execution
  * @property {ExecutionNode[]} executionTree - Hierarchical tree of execution nodes showing parent-child relationships
- * @template {T} T - Generic type parameter for return value, allowing flexibility in the type of data returned by the agent
+ * @template {T} T - Generic type parameter for payload value, allowing flexibility in the type of data returned by the agent
  */
-export type ExecuteAgentResult<T = any> = {
+export type ExecuteAgentResult<P = any> = {
     success: boolean;
     finalStep: BaseAgentNextStep['step'];
-    returnValue?: T;
+    payload?: P;
     errorMessage?: string;
     cancelled?: boolean;
     cancellationReason?: 'user_requested' | 'timeout' | 'system';
@@ -167,12 +167,12 @@ export type ExecuteAgentResult<T = any> = {
  * @property {Date} startTime - When this step began execution
  * @property {Date} [endTime] - When this step completed (null while running)
  * @property {number} [durationMs] - How long this step took to execute in milliseconds
- * @template {T} [T] - Generic type parameter for the step's execution result, allowing flexibility in the type of data returned
+ * @template {P} [P] - Generic type parameter for the step's payload, allowing flexibility in the type of data returned
  */
-export type ExecutionChainStep<T = any> = {
+export type ExecutionChainStep<P = any> = {
     stepEntity: AIAgentRunStepEntity;
     executionType: 'prompt' | 'action' | 'sub-agent' | 'decision' | 'chat' | 'validation';
-    executionResult: StepExecutionResult<T>;
+    executionResult: StepExecutionResult<P>;
     nextStepDecision: NextStepDecision;
     startTime: Date;
     endTime?: Date;
@@ -184,11 +184,14 @@ export type ExecutionChainStep<T = any> = {
  * 
  * Each execution type has its own result structure containing the native result
  * from the underlying system (prompts, actions, etc.) along with metadata.
+ * 
+ * @type StepExecutionResult
+ * @template P - Generic type parameter for the step's payload, allowing flexibility in the type of data returned
  */
-export type StepExecutionResult<T = any> = 
+export type StepExecutionResult<P = any> = 
     | PromptExecutionResult
     | ActionExecutionResult
-    | SubAgentExecutionResult<T>
+    | SubAgentExecutionResult<P>
     | DecisionExecutionResult
     | ChatExecutionResult
     | ValidationExecutionResult;
@@ -272,13 +275,13 @@ export type ActionExecutionResult = {
  * @property {string} subAgentId - UUID of the sub-agent that was executed
  * @property {string} subAgentName - Human-readable name of the sub-agent
  * @property {ExecuteAgentResult} result - The complete execution result from the sub-agent (recursive)
- * @template T - Generic type parameter for the sub-agent's return value, allowing flexibility in the type of data returned
+ * @template P - Generic type parameter for the sub-agent's payload, allowing flexibility in the type of data returned
  */
-export type SubAgentExecutionResult<T = any> = {
+export type SubAgentExecutionResult<P = any> = {
     type: 'sub-agent';
     subAgentId: string;
     subAgentName: string;
-    result: ExecuteAgentResult<T>;
+    result: ExecuteAgentResult<P>;
 }
 
 /**
@@ -350,13 +353,13 @@ export type NextStepDecision = {
  * Union type that provides specific information based on the type of next step,
  * enabling proper preparation and execution of the subsequent operation.
  */
-export type NextStepDetails = 
+export type NextStepDetails <P = any> = 
     | { type: 'prompt'; promptId: string; promptName: string }
     | { type: 'action'; actions: AgentAction[] }
     | { type: 'sub-agent'; subAgent: AgentSubAgentRequest }
     | { type: 'retry'; retryReason: string; retryInstructions: string }
     | { type: 'chat'; message: string }
-    | { type: 'complete'; returnValue?: any };
+    | { type: 'complete'; payload?: P };
 
 
 /**
@@ -433,6 +436,10 @@ export type AgentExecutionStreamingCallback = (chunk: {
  *                                  
  *                                  This override is passed to all prompt executions within the agent, allowing
  *                                  consistent model usage throughout the agent's execution hierarchy.
+ * @property {boolean} [verbose] - Optional flag to enable verbose logging during agent execution.
+ *                                When true, detailed information about agent decision-making, action selection,
+ *                                sub-agent invocations, and execution flow will be logged.
+ *                                Can also be controlled via MJ_VERBOSE environment variable.
  * 
  * @example
  * // Define a typed context
@@ -469,6 +476,7 @@ export type ExecuteAgentParams<TContext = any> = {
         modelId?: string;
         vendorId?: string;
     }; // Optional runtime override for agent execution
+    verbose?: boolean; // Enable verbose logging during agent execution
 }
 
 /**
