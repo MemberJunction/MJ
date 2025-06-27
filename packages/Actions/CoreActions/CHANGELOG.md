@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/core-actions
 
+## 2.59.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@2.59.0
+- @memberjunction/ai-vector-sync@2.59.0
+- @memberjunction/actions@2.59.0
+- @memberjunction/communication-engine@2.59.0
+- @memberjunction/content-autotagging@2.59.0
+- @memberjunction/external-change-detection@2.59.0
+- @memberjunction/core@2.59.0
+- @memberjunction/core-entities@2.59.0
+- @memberjunction/global@2.59.0
+
 ## 2.58.0
 
 ### Patch Changes
