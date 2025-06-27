@@ -7,7 +7,7 @@ The payload represents the overall state of execution of your work. As you do wo
 for each subsequent iteration we will update the payload here so you've always got the right data. 
 
 **CURRENT PAYLOAD:**
-<< __currentPayload__ >>
+{{ _CURRENT_PAYLOAD }}
 
 {% if parentAgentName == '' and subAgentCount > 0 %}
 ## Important - You're The Boss
