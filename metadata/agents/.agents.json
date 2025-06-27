@@ -136,64 +136,7 @@
           }
         }
       ],
-      "AI Agent Actions": [
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Web Search",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "91CD49A0-7343-467B-8C67-D4204448FF54"
-          },
-          "sync": {
-            "lastModified": "2025-06-23T21:11:31.427Z",
-            "checksum": "4fe81daf59af953a74ce8cb73cd8bd98cb97b2f4156a6e772ecd2badde761c8a"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Web Page Content",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "157C65E2-BF51-4B32-986A-821CC2ADDE2A"
-          },
-          "sync": {
-            "lastModified": "2025-06-23T21:11:31.431Z",
-            "checksum": "23c91211cd6a590c988cc76b6ff2dc47b294058208c85b1a1361e9dcecc91d09"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Text Analyzer",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "10D0DD2C-AA42-4680-8D45-00F2173281EE"
-          },
-          "sync": {
-            "lastModified": "2025-06-23T21:11:31.434Z",
-            "checksum": "886cf8aebf28d972c031e5cd7471325a3e6c0e55e1eae670d630dbd999485067"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Business Days Calculator",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "5C528AB0-4DF8-425A-A50E-14A54DB00F4E"
-          },
-          "sync": {
-            "lastModified": "2025-06-23T21:11:31.438Z",
-            "checksum": "d15aaf405fa87c1ba22c4f1dbc9710a6663f094c9860999fd631cc2eaa4eef15"
-          }
-        }
-      ],
+      "AI Agent Actions": [],
       "AI Agents": [
         {
           "fields": {

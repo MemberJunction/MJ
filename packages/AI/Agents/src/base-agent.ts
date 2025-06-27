@@ -580,6 +580,7 @@ export class BaseAgent {
             const contextData: AgentContextData = {
                 agentName: agent.Name,
                 agentDescription: agent.Description,
+                parentAgentName: agent.Parent ? agent.Parent.trim() : "",
                 subAgentCount: subAgents.length,
                 subAgentDetails: this.formatSubAgentDetails(subAgents),
                 actionCount: actions.length,
@@ -765,7 +766,7 @@ export class BaseAgent {
             
             // Prepare messages for sub-agent, adding the context message
             const subAgentMessages: ChatMessage[] = [
-                ...params.conversationMessages,
+                // don't include the full conversation of the parent, just the subAgentRequest - we previously did this: ...params.conversationMessages,
                 {
                     role: 'user',
                     content: subAgentRequest.message
@@ -1257,11 +1258,18 @@ export class BaseAgent {
                     return await this.executePromptStep(params, config, previousDecision);
                 }
             case 'failed':
-                return { 
-                    terminate: true,
-                    step: 'failed', 
-                    returnValue: previousDecision.returnValue 
-                };
+                if (previousDecision.terminate) {
+                    return { 
+                        terminate: true,
+                        step: 'failed', 
+                        returnValue: previousDecision.returnValue 
+                    };
+                }
+                else {
+                    // we had a failure in the past step, but we are not terminating
+                    // so we will retry the prompt step
+                    return await this.executePromptStep(params, config, previousDecision);
+                }
             default:
                 throw new Error(`Unsupported next step: ${previousDecision.step}`);
         }
@@ -1423,7 +1431,16 @@ export class BaseAgent {
             
         } catch (error) {
             await this.finalizeStepEntity(stepEntity, false, error.message);
-            throw error;
+
+            // we had an error, don't throw the exception as that will kill our overall execution/run
+            // instead retrun a helpful message in our return value that the parent loop can review and 
+            // adjust
+            const errString = error?.message || error || 'Unknown error';
+            return {
+                errorMessage: `Prompt execution failed: ${errString}`,
+                step: 'failed',
+                terminate: false,
+            };
         }
     }
 
@@ -1571,7 +1588,15 @@ export class BaseAgent {
             };            
         } catch (error) {
             await this.finalizeStepEntity(stepEntity, false, error.message);
-            throw error;
+
+            // we had an error, don't throw the exception as that will kill our overall execution/run
+            // instead retrun a helpful message in our return value that the parent loop can review and 
+            // adjust
+            return {
+                errorMessage: `Sub-agent execution failed: ${(error as Error).message}`,
+                step: 'failed',
+                terminate: false,
+            };
         }
     }
 

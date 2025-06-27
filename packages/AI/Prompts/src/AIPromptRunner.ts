@@ -701,7 +701,8 @@ export class AIPromptRunner {
 
           // Render the child template
           const childRenderResult = await this.renderPromptTemplate(template, {
-            ...params,
+            ...params, // spread original params
+            prompt: childPrompt, // THEN, override the prompt for child so we get child related OUTPUT_EXAMPLE and anything else along those lines
             data: mergedChildData,
             templateData: childParam.childPrompt.templateData
           });

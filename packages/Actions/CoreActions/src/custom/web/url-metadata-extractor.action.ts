@@ -1,6 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
+import axios, { AxiosResponse } from 'axios';
 
 /**
  * Action that extracts comprehensive metadata from web pages including OpenGraph, Twitter Cards,
@@ -92,30 +93,24 @@ export class URLMetadataExtractorAction extends BaseAction {
             }
 
             // Fetch the webpage
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), this.TIMEOUT);
-
             try {
-                const response = await fetch(url, {
+                const response = await axios.get(url, {
                     headers: {
-                        'User-Agent': 'Mozilla/5.0 (compatible; MemberJunction Metadata Extractor/1.0; +https://memberjunction.org)',
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                        'Accept-Language': 'en-US,en;q=0.5'
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                        'Accept-Language': 'en-US,en;q=0.9',
+                        'Accept-Encoding': 'gzip, deflate, br',
+                        'Cache-Control': 'max-age=0',
+                        'Upgrade-Insecure-Requests': '1'
                     },
-                    signal: controller.signal
+                    timeout: this.TIMEOUT,
+                    maxContentLength: this.MAX_CONTENT_SIZE,
+                    maxBodyLength: this.MAX_CONTENT_SIZE,
+                    responseType: 'text',
+                    validateStatus: (status) => status >= 200 && status < 400 // Only accept success status codes
                 });
 
-                clearTimeout(timeoutId);
-
-                if (!response.ok) {
-                    return {
-                        Success: false,
-                        Message: `Failed to fetch URL: ${response.status} ${response.statusText}`,
-                        ResultCode: "FETCH_FAILED"
-                    };
-                }
-
-                const contentType = response.headers.get('content-type') || '';
+                const contentType = response.headers['content-type'] || '';
                 if (!contentType.includes('text/html') && !contentType.includes('application/xhtml')) {
                     return {
                         Success: false,
@@ -124,7 +119,7 @@ export class URLMetadataExtractorAction extends BaseAction {
                     };
                 }
 
-                const html = await response.text();
+                const html = response.data;
                 
                 if (html.length > this.MAX_CONTENT_SIZE) {
                     return {
@@ -165,13 +160,37 @@ export class URLMetadataExtractorAction extends BaseAction {
                 };
 
             } catch (fetchError) {
-                clearTimeout(timeoutId);
-                if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-                    return {
-                        Success: false,
-                        Message: `Request timed out after ${this.TIMEOUT}ms`,
-                        ResultCode: "TIMEOUT"
-                    };
+                if (axios.isAxiosError(fetchError)) {
+                    // Check for 404 or other HTTP errors
+                    if (fetchError.response) {
+                        return {
+                            Success: false,
+                            Message: `HTTP Error ${fetchError.response.status}: ${fetchError.response.statusText} for URL: ${url}`,
+                            ResultCode: `HTTP_${fetchError.response.status}`
+                        };
+                    }
+                    
+                    if (fetchError.code === 'ECONNABORTED' || fetchError.code === 'ETIMEDOUT') {
+                        return {
+                            Success: false,
+                            Message: `Request timed out after ${this.TIMEOUT}ms`,
+                            ResultCode: "TIMEOUT"
+                        };
+                    }
+                    if (fetchError.code === 'ENOTFOUND') {
+                        return {
+                            Success: false,
+                            Message: `DNS lookup failed for URL: ${url}`,
+                            ResultCode: "DNS_FAILURE"
+                        };
+                    }
+                    if (fetchError.code === 'ECONNREFUSED') {
+                        return {
+                            Success: false,
+                            Message: `Connection refused for URL: ${url}`,
+                            ResultCode: "CONNECTION_REFUSED"
+                        };
+                    }
                 }
                 throw fetchError;
             }
@@ -295,7 +314,13 @@ export class URLMetadataExtractorAction extends BaseAction {
                 const parts = property.split(':');
                 let current = og;
                 for (let i = 0; i < parts.length - 1; i++) {
-                    if (!current[parts[i]]) current[parts[i]] = {};
+                    // If the current value is a string (from a previous assignment),
+                    // convert it to an object with a 'url' property
+                    if (typeof current[parts[i]] === 'string') {
+                        current[parts[i]] = { url: current[parts[i]] };
+                    } else if (!current[parts[i]]) {
+                        current[parts[i]] = {};
+                    }
                     current = current[parts[i]];
                 }
                 current[parts[parts.length - 1]] = content;

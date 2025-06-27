@@ -24,6 +24,7 @@
     "@angular/forms": "18.0.2"
   },
   "dependencies": {
+    "@memberjunction/global": "2.58.0",
     "@memberjunction/core": "2.58.0",
     "@memberjunction/core-entities": "2.58.0",
     "@memberjunction/ai-core-plus": "2.58.0",

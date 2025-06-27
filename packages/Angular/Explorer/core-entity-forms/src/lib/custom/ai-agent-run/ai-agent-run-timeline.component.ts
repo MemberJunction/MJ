@@ -356,42 +356,45 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   }
   
   private async loadSubAgentChildren(item: TimelineItem) {
-    console.log('🔄 Timeline: Loading children for sub-agent step:', item.id);
+    console.log('🔄 Timeline: Loading children for sub-agent step:', {
+      id: item.id,
+      targetId: item.data?.TargetID,
+      targetLogId: item.data?.TargetLogID,
+      stepType: item.data?.StepType
+    });
     
     try {
       const rv = new RunView();
       
-      // For a sub-agent step, we need to find the steps from sub-runs
-      // that have the current agent run as their parent
+      // For a sub-agent step, the TargetLogID contains the ID of the sub-agent run
+      // TargetID is the agent itself, TargetLogID is the actual run instance
+      const subAgentRunId = item.data?.TargetLogID;
+      
+      if (!subAgentRunId) {
+        console.log('🔄 Timeline: No TargetLogID found for sub-agent step');
+        item.hasNoChildren = true;
+        item.children = [];
+        item.childrenLoaded = true;
+        return;
+      }
+      
+      // Load steps only from the specific sub-agent run
       const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
         EntityName: 'MJ: AI Agent Run Steps',
-        ExtraFilter: `AgentRunID IN (SELECT ID FROM __mj.vwAIAgentRuns WHERE ParentRunID = '${this.aiAgentRunId}')`,
+        ExtraFilter: `AgentRunID = '${subAgentRunId}'`,
         OrderBy: 'StepNumber',
         ResultType: 'entity_object'
       });
       
       if (stepsResult.Success && stepsResult.Results && stepsResult.Results.length > 0) {
-        console.log(`🔄 Timeline: Found ${stepsResult.Results.length} sub-agent steps`);
+        console.log(`🔄 Timeline: Found ${stepsResult.Results.length} steps for sub-agent run ${subAgentRunId}`);
         
-        // Group steps by their AgentRunID to create a hierarchy
-        const stepsByRun = new Map<string, AIAgentRunStepEntity[]>();
-        stepsResult.Results.forEach(step => {
-          const runId = step.AgentRunID;
-          if (!stepsByRun.has(runId)) {
-            stepsByRun.set(runId, []);
-          }
-          stepsByRun.get(runId)!.push(step);
-        });
-        
-        // Create timeline items directly from steps (no intermediate node)
-        item.children = [];
-        for (const [runId, steps] of stepsByRun) {
-          // Add steps directly as children, no intermediate container
-          const childSteps = steps.map(step => this.createTimelineItemFromStep(step, item.level + 1));
-          item.children.push(...childSteps);
-        }
+        // Create timeline items directly from steps
+        item.children = stepsResult.Results.map(step => 
+          this.createTimelineItemFromStep(step, item.level + 1)
+        );
       } else {
-        console.log('🔄 Timeline: No sub-agent steps found');
+        console.log('🔄 Timeline: No steps found for sub-agent run');
         item.hasNoChildren = true;
         item.children = [];
       }
