@@ -495,12 +495,12 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
         }
         
         .markdown-details {
-            margin: 8px 0 8px 44px;
-            padding: 12px;
-            background: #f9f9f9;
-            border-left: 3px solid #2196f3;
-            border-radius: 0 4px 4px 0;
-            font-size: 13px;
+            padding: 16px 16px 0 16px;
+            background: var(--gray-600);
+            border: 1px solid var(--gray-700);
+            border-bottom: none;
+            border-top: none;
+            margin: 0 5px;
         }
         
         .markdown h3, .markdown h4 {
@@ -558,7 +558,6 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
         .full-name {
             font-weight: 600;
             color: #1a1a1a;
-            margin-bottom: 8px;
             padding-bottom: 8px;
             border-bottom: 1px solid #e0e0e0;
             word-wrap: break-word;
