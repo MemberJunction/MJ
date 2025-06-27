@@ -12,6 +12,7 @@ import { ChatMessage } from '@memberjunction/ai';
 import { Subject, Subscription } from 'rxjs';
 import { AgentExecutionMonitorComponent } from './agent-execution-monitor.component';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 
 /**
  * Supported modes for the test harness
@@ -318,6 +319,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     
     /** Current execution data for the monitor */
     public currentExecutionData: any = null;
+    
+    /** Track the last processed run ID to avoid reprocessing same data */
+    private lastProcessedRunId: string | null = null;
     
     /** Agent conversation state tracking */
     private agentConversationState: any = null;
@@ -928,7 +932,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         this.templateVariables = [];
         this.currentConversationId = null;
         this.showSidebar = true;
+        // Clear execution data and tracking when explicitly resetting
         this.currentExecutionData = null;
+        this.lastProcessedRunId = null;
         this.executionMonitorMode = 'historical';
         // Reset conversation state
         this.agentConversationState = null;
@@ -966,6 +972,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             }
         }
         
+        // Clear execution data when explicitly starting a new conversation
+        this.currentExecutionData = null;
+        this.lastProcessedRunId = null;
+        
         this.resetHarness();
         MJNotificationService.Instance.CreateSimpleNotification(
             'Started new conversation',
@@ -996,19 +1006,67 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      * @param tab - The tab to activate
      */
     public selectTab(tab: 'agentVariables' | 'executionMonitor' | 'templateVariables' | 'modelSettings' | 'savedConversations') {
+        console.log('🔄 Switching to tab:', tab, {
+            currentExecutionData: !!this.currentExecutionData,
+            executionDataKeys: this.currentExecutionData ? Object.keys(this.currentExecutionData) : [],
+            conversationMessages: this.conversationMessages.length,
+            executionMonitorMode: this.executionMonitorMode
+        });
         
         this.activeTab = tab;
         
         // If switching to execution monitor tab, ensure it has the latest data
-        if (tab === 'executionMonitor' && this.conversationMessages.length > 0) {
-            const lastAssistantMessage = this.conversationMessages
-                .filter(m => m.role === 'assistant' && m.executionData)
-                .pop();
+        if (tab === 'executionMonitor') {
+            console.log('📊 Switching to execution monitor tab');
+            
+            // Always ensure we have the latest execution data when switching to monitor
+            if (this.conversationMessages.length > 0) {
+                const lastAssistantMessage = this.conversationMessages
+                    .filter(m => m.role === 'assistant' && m.executionData)
+                    .pop();
+                    
+                console.log('🔍 Last assistant message with execution data:', {
+                    found: !!lastAssistantMessage,
+                    hasExecutionData: !!lastAssistantMessage?.executionData,
+                    agentRunId: lastAssistantMessage?.agentRunId,
+                    executionDataKeys: lastAssistantMessage?.executionData ? Object.keys(lastAssistantMessage.executionData) : []
+                });
                 
-            if (lastAssistantMessage && lastAssistantMessage.executionData) {
-                this.currentExecutionData = lastAssistantMessage.executionData;
-                this.executionMonitorMode = 'historical';
+                if (lastAssistantMessage && lastAssistantMessage.executionData) {
+                    // Always update execution data to ensure it's fresh
+                    const messageRunId = lastAssistantMessage.agentRunId;
+                    
+                    // Force update the execution data
+                    this.currentExecutionData = { 
+                        ...lastAssistantMessage.executionData,
+                        _forceRefresh: Date.now() // Add timestamp to force refresh
+                    };
+                    this.executionMonitorMode = 'historical';
+                    this.lastProcessedRunId = messageRunId || null;
+                    
+                    console.log('✅ Force updated execution data:', {
+                        executionTreeLength: this.currentExecutionData.executionTree?.length,
+                        mode: this.executionMonitorMode,
+                        runId: this.lastProcessedRunId,
+                        forceRefresh: this.currentExecutionData._forceRefresh
+                    });
+                    
+                    // Trigger change detection to ensure the execution monitor updates
+                    setTimeout(() => {
+                        this.cdr.detectChanges();
+                    }, 50);
+                } else {
+                    console.log('❌ No execution data found in messages');
+                }
+            } else {
+                console.log('❌ No conversation messages found');
             }
+        } else {
+            console.log('📄 Switching away from execution monitor, preserving data:', {
+                currentExecutionDataExists: !!this.currentExecutionData
+            });
+            // Don't clear currentExecutionData when switching away from execution monitor
+            // This preserves the state for when the user switches back
         }
     }
 
@@ -1089,6 +1147,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         if (this.mode === 'agent' && this.activeTab !== 'executionMonitor') {
             this.selectTab('executionMonitor');
         }
+        
+        // Clear previous execution data when starting a new execution
+        this.currentExecutionData = null;
+        this.lastProcessedRunId = null;
         
         // Execute based on mode
         if (this.mode === 'agent') {
@@ -1212,7 +1274,15 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             
             if (executionResult?.success) {
                 // Parse the payload to get the full execution result
-                const fullResult = JSON.parse(executionResult.payload);
+                const parseOptions: ParseJSONOptions = {
+                    extractInlineJson: true,
+                    maxDepth: 100,
+                    debug: false
+                };
+                
+                let fullResult = JSON.parse(executionResult.payload);
+                // Apply recursive JSON parsing to extract any nested JSON strings
+                fullResult = ParseJSONRecursive(fullResult, parseOptions);
                 
                 // Store execution data with the message
                 assistantMessage.executionData = fullResult;
@@ -1226,6 +1296,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 // Update execution monitor with the new data
                 this.currentExecutionData = fullResult;
                 this.executionMonitorMode = 'historical';
+                
+                // Auto-expand all monitoring nodes once execution is complete
+                setTimeout(() => {
+                    this.expandAllMonitoringNodes();
+                }, 100);
                 
                 // Preserve conversation state from the result
                 if (fullResult.returnValue) {
@@ -1255,7 +1330,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                         displayContent = fullResult.returnValue.message;
                         // If there's also a payload, store it separately
                         if (fullResult.returnValue.payload) {
-                            payloadData = fullResult.returnValue.payload;
+                            // Apply recursive JSON parsing to the payload if it's an object
+                            payloadData = ParseJSONRecursive(fullResult.returnValue.payload, parseOptions);
                         }
                     } else if (typeof fullResult.returnValue === 'object' && 
                         fullResult.returnValue.nextStep?.userMessage) {
@@ -1274,6 +1350,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 assistantMessage.payload = payloadData; // Store the payload if present
                 assistantMessage.executionTime = executionResult.executionTimeMs;
                 assistantMessage.agentRunId = fullResult.agentRun?.ID || assistantMessage.agentRunId;
+                
+                // Update the tracking ID when we set new execution data
+                this.lastProcessedRunId = assistantMessage.agentRunId || null;
                 
                 // Store the full result as raw content for debugging/inspection
                 assistantMessage.rawContent = executionResult.payload;
@@ -1302,6 +1381,13 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
 
             // Auto-save conversation
             this.autoSaveConversation();
+            
+            // Auto-expand all monitoring nodes once execution is complete (for prompt mode)
+            if (this.mode === 'prompt') {
+                setTimeout(() => {
+                    this.expandAllMonitoringNodes();
+                }, 100);
+            }
 
         } catch (error) {
             console.error('❌ AI Test Harness: Caught error during agent execution', {
@@ -1433,6 +1519,13 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             // Update assistant message with result
             assistantMessage.isStreaming = false;
             
+            // Define parse options for both success and error cases
+            const parseOptions: ParseJSONOptions = {
+                extractInlineJson: true,
+                maxDepth: 100,
+                debug: false
+            };
+
             if (executionResult?.success) {
                 // Use parsedResult if available, otherwise fall back to output
                 assistantMessage.content = executionResult.parsedResult || executionResult.output || 'No response generated';
@@ -1448,11 +1541,16 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                         // If parsing fails, keep it as a string
                     }
                 }
-                assistantMessage.rawContent = JSON.stringify(resultForDisplay, null, 2);
+                
+                // Apply recursive JSON parsing to the entire result
+                const recursivelyParsed = ParseJSONRecursive(resultForDisplay, parseOptions);
+                assistantMessage.rawContent = JSON.stringify(recursivelyParsed, null, 2);
                 
                 // Store execution metadata
                 if (executionResult.promptRunId) {
                     assistantMessage.agentRunId = executionResult.promptRunId;
+                    // Update the tracking ID when we set new execution data
+                    this.lastProcessedRunId = assistantMessage.agentRunId || null;
                 }
             } else {
                 assistantMessage.content = 'I encountered an error processing your request.';
@@ -1468,7 +1566,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                             // If parsing fails, keep it as a string
                         }
                     }
-                    assistantMessage.rawContent = JSON.stringify(errorResult, null, 2);
+                    
+                    // Apply recursive JSON parsing to the error result
+                    const recursivelyParsed = ParseJSONRecursive(errorResult, parseOptions);
+                    assistantMessage.rawContent = JSON.stringify(recursivelyParsed, null, 2);
                 }
             }
             
@@ -1958,18 +2059,18 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             
             this.currentExecutionData = lastAssistantMessage.executionData;
             this.executionMonitorMode = 'historical';
+            this.lastProcessedRunId = lastAssistantMessage.agentRunId || null;
             
-            // If execution monitor tab is active, ensure it updates
-            if (this.activeTab === 'executionMonitor') {
-                // Force change detection
-                setTimeout(() => {
-                    this.currentExecutionData = { ...lastAssistantMessage.executionData };
-                }, 0);
-            }
+            // Force change detection to ensure execution monitor updates properly
+            setTimeout(() => {
+                this.currentExecutionData = { ...lastAssistantMessage.executionData };
+                this.cdr.detectChanges();
+            }, 0);
         } else {
             // Clear execution data if no execution found
             this.currentExecutionData = null;
             this.executionMonitorMode = 'historical';
+            this.lastProcessedRunId = null;
         }
 
         this.scrollNeeded = true;
@@ -2218,12 +2319,15 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 
                 // If this is an agent result with execution tree, enhance the display
                 if (parsed.executionTree) {
-                    this.currentJsonContent = JSON.stringify({
+                    // Apply recursive JSON parsing before adding summary
+                    const enhancedParsed = {
                         ...parsed,
                         _executionTreeSummary: this.summarizeExecutionTree(parsed.executionTree)
-                    }, null, 2);
+                    };
+                    this.currentJsonContent = this.formatJson(enhancedParsed);
                 } else {
-                    this.currentJsonContent = JSON.stringify(parsed, null, 2);
+                    // Apply recursive JSON parsing
+                    this.currentJsonContent = this.formatJson(parsed);
                 }
             } catch {
                 // If not valid JSON, show as-is
@@ -2322,6 +2426,21 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     }
     
     /**
+     * Expands all nodes in the execution monitor
+     * Called automatically when execution completes
+     */
+    private expandAllMonitoringNodes(): void {
+        if (this.currentExecutionData && this.executionMonitorMode === 'historical') {
+            // Trigger expansion by setting a flag on the execution data
+            this.currentExecutionData = {
+                ...this.currentExecutionData,
+                _autoExpandAll: true,
+                _lastExpandTime: Date.now()
+            };
+        }
+    }
+    
+    /**
      * Navigate to the run details form
      */
     navigateToRun(event: { runId: string; runType: 'agent' | 'prompt' }) {
@@ -2391,16 +2510,28 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
 
     /**
      * Formats JSON content with proper indentation for display.
+     * Also recursively parses any nested JSON strings.
      * @param content - JSON string to format
      * @returns Formatted JSON string or original content if parsing fails
      */
     public formatJson(content: any): string {
+        const parseOptions: ParseJSONOptions = {
+            extractInlineJson: true,
+            maxDepth: 100,
+            debug: false
+        };
+
         try {
+            let parsed: any;
             if (typeof content === 'string') {
-                return JSON.stringify(JSON.parse(content), null, 2);
+                parsed = JSON.parse(content);
             } else {
-                return JSON.stringify(content, null, 2);
+                parsed = content;
             }
+            
+            // Apply recursive JSON parsing
+            const recursivelyParsed = ParseJSONRecursive(parsed, parseOptions);
+            return JSON.stringify(recursivelyParsed, null, 2);
         } catch {
             return typeof content === 'string' ? content : JSON.stringify(content);
         }

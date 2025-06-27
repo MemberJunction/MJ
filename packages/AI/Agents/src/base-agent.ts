@@ -580,6 +580,7 @@ export class BaseAgent {
             const contextData: AgentContextData = {
                 agentName: agent.Name,
                 agentDescription: agent.Description,
+                parentAgentName: agent.Parent ? agent.Parent.trim() : "",
                 subAgentCount: subAgents.length,
                 subAgentDetails: this.formatSubAgentDetails(subAgents),
                 actionCount: actions.length,
@@ -765,7 +766,7 @@ export class BaseAgent {
             
             // Prepare messages for sub-agent, adding the context message
             const subAgentMessages: ChatMessage[] = [
-                ...params.conversationMessages,
+                // don't include the full conversation of the parent, just the subAgentRequest - we previously did this: ...params.conversationMessages,
                 {
                     role: 'user',
                     content: subAgentRequest.message
@@ -1122,7 +1123,14 @@ export class BaseAgent {
         stepEntity.StepType = stepType;
         // Include hierarchy breadcrumb in StepName for better logging
         stepEntity.StepName = this.formatHierarchicalMessage(stepName);
-        stepEntity.TargetID = targetId || null;
+        // check to see if targetId is a valid UUID
+        if (targetId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId)) {
+            // If not valid, we can just ignore it, but console.warn
+            console.warn(`Invalid target ID format: ${targetId}`);
+        }
+        else {
+            stepEntity.TargetID = targetId || null;
+        }
         stepEntity.TargetLogID = targetLogId || null;
         stepEntity.Status = 'Running';
         stepEntity.StartedAt = new Date();
@@ -1227,27 +1235,41 @@ export class BaseAgent {
         switch (previousDecision.step) {
             case 'retry':
                 return await this.executePromptStep(params, config, previousDecision);
-                
             case 'sub-agent':
                 return await this.executeSubAgentStep(params, previousDecision.subAgent!);
-                
             case 'actions':
                 return await this.executeActionsStep(params, previousDecision.actions!);
-                
             case 'chat':
                 return await this.executeChatStep(params, previousDecision.userMessage!);
             case 'success':
-                return { 
-                    terminate: true,
-                    step: 'success', 
-                    returnValue: previousDecision.returnValue 
-                };
+                const pd = previousDecision as any;
+                if (pd.returnValue?.taskComplete === true && previousDecision.terminate) {
+                    // If task is complete and the parent agent previously requested to auto-terminate, after a successful
+                    // sub-agent run, we can finalize the agent run                    
+                    return { 
+                        terminate: true,
+                        step: 'success', 
+                        returnValue: previousDecision.returnValue 
+                    };
+                }
+                else {
+                    // either task wasn't complete or was a sub-agent run in which case we ALWAYS process one more time
+                    // with the parent prompt
+                    return await this.executePromptStep(params, config, previousDecision);
+                }
             case 'failed':
-                return { 
-                    terminate: true,
-                    step: 'failed', 
-                    returnValue: previousDecision.returnValue 
-                };
+                if (previousDecision.terminate) {
+                    return { 
+                        terminate: true,
+                        step: 'failed', 
+                        returnValue: previousDecision.returnValue 
+                    };
+                }
+                else {
+                    // we had a failure in the past step, but we are not terminating
+                    // so we will retry the prompt step
+                    return await this.executePromptStep(params, config, previousDecision);
+                }
             default:
                 throw new Error(`Unsupported next step: ${previousDecision.step}`);
         }
@@ -1409,7 +1431,16 @@ export class BaseAgent {
             
         } catch (error) {
             await this.finalizeStepEntity(stepEntity, false, error.message);
-            throw error;
+
+            // we had an error, don't throw the exception as that will kill our overall execution/run
+            // instead retrun a helpful message in our return value that the parent loop can review and 
+            // adjust
+            const errString = error?.message || error || 'Unknown error';
+            return {
+                errorMessage: `Prompt execution failed: ${errString}`,
+                step: 'failed',
+                terminate: false,
+            };
         }
     }
 
@@ -1557,7 +1588,15 @@ export class BaseAgent {
             };            
         } catch (error) {
             await this.finalizeStepEntity(stepEntity, false, error.message);
-            throw error;
+
+            // we had an error, don't throw the exception as that will kill our overall execution/run
+            // instead retrun a helpful message in our return value that the parent loop can review and 
+            // adjust
+            return {
+                errorMessage: `Sub-agent execution failed: ${(error as Error).message}`,
+                step: 'failed',
+                terminate: false,
+            };
         }
     }
 
@@ -1570,34 +1609,32 @@ export class BaseAgent {
         params: ExecuteAgentParams,
         actions: AgentAction[]
     ): Promise<BaseAgentNextStep> {
-        
-        // Check for cancellation before starting
-        if (params.cancellationToken?.aborted) {
-            throw new Error('Cancelled before action execution');
-        }
-
-        // Report action execution progress with markdown formatting for parameters
-        let progressMessage: string;
-        if (actions.length === 1) {
-            const action = actions[0];
-            progressMessage = `Executing action: **${action.name}**`;
-            
-            // Add parameters if they exist
-            if (action.params && Object.keys(action.params).length > 0) {
-                const paramsList = Object.entries(action.params)
-                    .map(([key, value]) => {
-                        const displayValue = typeof value === 'object' 
-                            ? JSON.stringify(value, null, 2) 
-                            : String(value);
-                        return `  - \`${key}\`: ${displayValue}`;
-                    })
-                    .join('\n');
-                progressMessage += `\n${paramsList}`;
+        try {
+            // Check for cancellation before starting
+            if (params.cancellationToken?.aborted) {
+                throw new Error('Cancelled before action execution');
             }
-        } else {
-            progressMessage = `Executing ${actions.length} actions:`;
-            actions.forEach(action => {
-                progressMessage += `\n\n• **${action.name}**`;
+
+            // Validate all actions to ensure that the ID and Name provided are both present AND
+            // that they match the information in our database.
+            const actionEntities = actions.map(action => {
+                const actionEntity = ActionEngineServer.Instance.Actions.find(a => a.ID.trim().toLowerCase() === action.id.trim().toLowerCase());
+                if (!actionEntity) {
+                    throw new Error(`Action with ID ${action.id} and Name "${action.name}" not found`);
+                }
+                if (actionEntity.Name.trim().toLowerCase() !== action.name.trim().toLowerCase()) {
+                    throw new Error(`Action with ID ${action.id} has a different name "${actionEntity.Name}" than provided "${action.name}"`);
+                }
+                return actionEntity;
+            });
+
+            // Report action execution progress with markdown formatting for parameters
+            let progressMessage: string;
+            if (actions.length === 1) {
+                const action = actions[0];
+                progressMessage = `Executing action: **${action.name}**`;
+                
+                // Add parameters if they exist
                 if (action.params && Object.keys(action.params).length > 0) {
                     const paramsList = Object.entries(action.params)
                         .map(([key, value]) => {
@@ -1609,140 +1646,164 @@ export class BaseAgent {
                         .join('\n');
                     progressMessage += `\n${paramsList}`;
                 }
-            });
-        }
-            
-        params.onProgress?.({
-            step: 'action_execution',
-            percentage: 50,
-            message: this.formatHierarchicalMessage(progressMessage),
-            metadata: { 
-                actionCount: actions.length,
-                actionNames: actions.map(a => a.name)
-            },
-            displayMode: 'live' // Only show in live mode
-        });
-        
-        // Add assistant message indicating we're executing actions with more detail
-        const actionMessage = actions.length === 1 
-            ? `I'm executing the "${actions[0].name}" action...`
-            : `I'm executing ${actions.length} actions to gather the information needed:\n${actions.map(a => `• ${a.name}`).join('\n')}`;
-        
-        params.conversationMessages.push({
-            role: 'assistant',
-            content: actionMessage
-        });
-        
-        // Execute all actions in parallel
-        const actionPromises = actions.map(async (action) => {
-            const startTime = new Date();
-            const stepEntity = await this.createStepEntity('action', `Execute Action: ${action.name}`, params.contextUser, action.id);
-            let actionResult;
-            try {
-                // Execute the action
-                actionResult = await this.ExecuteSingleAction(params, action, params.contextUser);
-                
-                // Update step entity with ActionExecutionLog ID if available
-                if (actionResult.LogEntry?.ID) {
-                    stepEntity.TargetLogID = actionResult.LogEntry.ID;
-                    await stepEntity.Save();
-                }
-                
-                // Create action execution result
-                const executionResult: ActionExecutionResult = {
-                    type: 'action',
-                    actionId: action.id,
-                    actionName: action.name,
-                    result: actionResult
-                };
-                
-                // Create next step decision
-                const nextStepDecision: NextStepDecision = {
-                    decision: 'retry',
-                    reasoning: 'Action completed successfully',
-                    nextStepDetails: undefined
-                };
-                
-                // Add to execution chain
-                this._executionChain.push({
-                    stepEntity,
-                    executionType: 'action',
-                    executionResult,
-                    nextStepDecision,
-                    startTime,
-                    endTime: new Date(),
-                    durationMs: new Date().getTime() - startTime.getTime()
-                });
-                
-                // Prepare output data with action result
-                const outputData = {
-                    actionResult: {
-                        success: actionResult.Success,
-                        resultCode: actionResult.Result?.ResultCode,
-                        message: actionResult.Message,
-                        parameters: actionResult.Params
+            } else {
+                progressMessage = `Executing ${actions.length} actions:`;
+                actions.forEach(action => {
+                    progressMessage += `\n\n• **${action.name}**`;
+                    if (action.params && Object.keys(action.params).length > 0) {
+                        const paramsList = Object.entries(action.params)
+                            .map(([key, value]) => {
+                                const displayValue = typeof value === 'object' 
+                                    ? JSON.stringify(value, null, 2) 
+                                    : String(value);
+                                return `  - \`${key}\`: ${displayValue}`;
+                            })
+                            .join('\n');
+                        progressMessage += `\n${paramsList}`;
                     }
-                };
-                
-                // Finalize step entity with output data
-                await this.finalizeStepEntity(stepEntity, actionResult.Success, 
-                    actionResult.Success ? undefined : actionResult.Message, outputData);
-                
-                return { success: true, result: actionResult, action, stepEntity };
-                
-            } catch (error) {
-                await this.finalizeStepEntity(stepEntity, false, error.message);
-
-                return { success: false, result: actionResult, error: error.message, action, stepEntity };
+                });
             }
-        });
-        
-        // Wait for all actions to complete
-        const actionResults = await Promise.all(actionPromises);
-        
-        // Check for cancellation after actions complete
-        if (params.cancellationToken?.aborted) {
-            throw new Error('Cancelled after action execution');
-        }
-        
-        // Build a clean summary of action results
-        const actionSummaries = actionResults.map(result => {
-            const actionResult = result.success ? result.result : null;
+                
+            params.onProgress?.({
+                step: 'action_execution',
+                percentage: 50,
+                message: this.formatHierarchicalMessage(progressMessage),
+                metadata: { 
+                    actionCount: actions.length,
+                    actionNames: actions.map(a => a.name)
+                },
+                displayMode: 'live' // Only show in live mode
+            });
             
+            // Add assistant message indicating we're executing actions with more detail
+            const actionMessage = actions.length === 1 
+                ? `I'm executing the "${actions[0].name}" action...`
+                : `I'm executing ${actions.length} actions to gather the information needed:\n${actions.map(a => `• ${a.name}`).join('\n')}`;
+            
+            params.conversationMessages.push({
+                role: 'assistant',
+                content: actionMessage
+            });
+            
+            // Execute all actions in parallel
+            const actionPromises = actions.map(async (action) => {
+                const startTime = new Date();
+                const stepEntity = await this.createStepEntity('action', `Execute Action: ${action.name}`, params.contextUser, action.id);
+                let actionResult;
+                try {
+                    // Execute the action
+                    actionResult = await this.ExecuteSingleAction(params, action, params.contextUser);
+                    
+                    // Update step entity with ActionExecutionLog ID if available
+                    if (actionResult.LogEntry?.ID) {
+                        stepEntity.TargetLogID = actionResult.LogEntry.ID;
+                        await stepEntity.Save();
+                    }
+                    
+                    // Create action execution result
+                    const executionResult: ActionExecutionResult = {
+                        type: 'action',
+                        actionId: action.id,
+                        actionName: action.name,
+                        result: actionResult
+                    };
+                    
+                    // Create next step decision
+                    const nextStepDecision: NextStepDecision = {
+                        decision: 'retry',
+                        reasoning: 'Action completed successfully',
+                        nextStepDetails: undefined
+                    };
+                    
+                    // Add to execution chain
+                    this._executionChain.push({
+                        stepEntity,
+                        executionType: 'action',
+                        executionResult,
+                        nextStepDecision,
+                        startTime,
+                        endTime: new Date(),
+                        durationMs: new Date().getTime() - startTime.getTime()
+                    });
+                    
+                    // Prepare output data with action result
+                    const outputData = {
+                        actionResult: {
+                            success: actionResult.Success,
+                            resultCode: actionResult.Result?.ResultCode,
+                            message: actionResult.Message,
+                            parameters: actionResult.Params
+                        }
+                    };
+                    
+                    // Finalize step entity with output data
+                    await this.finalizeStepEntity(stepEntity, actionResult.Success, 
+                        actionResult.Success ? undefined : actionResult.Message, outputData);
+                    
+                    return { success: true, result: actionResult, action, stepEntity };
+                    
+                } catch (error) {
+                    await this.finalizeStepEntity(stepEntity, false, error.message);
+
+                    return { success: false, result: actionResult, error: error.message, action, stepEntity };
+                }
+            });
+            
+            // Wait for all actions to complete
+            const actionResults = await Promise.all(actionPromises);
+            
+            // Check for cancellation after actions complete
+            if (params.cancellationToken?.aborted) {
+                throw new Error('Cancelled after action execution');
+            }
+            
+            // Build a clean summary of action results
+            const actionSummaries = actionResults.map(result => {
+                const actionResult = result.success ? result.result : null;
+                
+                return {
+                    actionName: result.action.name,
+                    actionId: result.action.id,
+                    params: result.result?.Params || {},
+                    success: result.success,
+                    resultCode: actionResult?.Result?.ResultCode || (result.success ? 'SUCCESS' : 'ERROR'),
+                    message: result.success ? actionResult?.Message || 'Action completed' : result.error
+                };
+            });
+            
+            // Check if any actions failed
+            const failedActions = actionSummaries.filter(a => !a.success);
+            
+            // Add user message with the results
+            const resultsMessage = failedActions.length > 0
+                ? `Action results (${failedActions.length} failed):\n${JSON.stringify(actionSummaries, null, 2)}`
+                : `Action results (all succeeded):\n${JSON.stringify(actionSummaries, null, 2)}`;
+                
+            params.conversationMessages.push({
+                role: 'user',
+                content: resultsMessage
+            });
+            
+            // After actions complete, we need to process the results
+            // The retry step is used to re-execute the prompt with the action results
+            // This allows the agent to analyze the results and determine what to do next
             return {
-                actionName: result.action.name,
-                actionId: result.action.id,
-                params: result.result?.Params || {},
-                success: result.success,
-                resultCode: actionResult?.Result?.ResultCode || (result.success ? 'SUCCESS' : 'ERROR'),
-                message: result.success ? actionResult?.Message || 'Action completed' : result.error
+                terminate: false,
+                step: 'retry',
+                returnValue: actionSummaries,
+                retryReason: failedActions.length > 0 
+                    ? `Processing results with ${failedActions.length} failed action(s): ${failedActions.map(a => a.actionName).join(', ')}`
+                    : `Analyzing results from ${actionSummaries.length} completed action(s) to formulate response`
             };
-        });
-        
-        // Check if any actions failed
-        const failedActions = actionSummaries.filter(a => !a.success);
-        
-        // Add user message with the results
-        const resultsMessage = failedActions.length > 0
-            ? `Action results (${failedActions.length} failed):\n${JSON.stringify(actionSummaries, null, 2)}`
-            : `Action results (all succeeded):\n${JSON.stringify(actionSummaries, null, 2)}`;
-            
-        params.conversationMessages.push({
-            role: 'user',
-            content: resultsMessage
-        });
-        
-        // After actions complete, we need to process the results
-        // The retry step is used to re-execute the prompt with the action results
-        // This allows the agent to analyze the results and determine what to do next
-        return {
-            terminate: false,
-            step: 'retry',
-            returnValue: actionSummaries,
-            retryReason: failedActions.length > 0 
-                ? `Processing results with ${failedActions.length} failed action(s): ${failedActions.map(a => a.actionName).join(', ')}`
-                : `Analyzing results from ${actionSummaries.length} completed action(s) to formulate response`
-        };
+        }
+        catch (e) {
+            return {
+                terminate: false,
+                step: 'retry',
+                returnValue: e && e.message ? e.message : e ? e : 'Unknown error execution actions',
+                retryReason: 'Error while processing actions, retry'
+            };
+        }
     }
 
     /**

@@ -489,6 +489,7 @@ export type ExecuteAgentParams<TContext = any> = {
 export type AgentContextData = {
     agentName: string | null;
     agentDescription: string | null;
+    parentAgentName?: string | null; // Optional parent agent name for sub-agent context
     subAgentCount: number;
     subAgentDetails: string;  // JSON stringified AIAgentEntity[]
     actionCount: number;

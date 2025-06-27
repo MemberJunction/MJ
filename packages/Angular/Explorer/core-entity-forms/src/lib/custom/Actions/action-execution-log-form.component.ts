@@ -1,7 +1,7 @@
 import { Component, OnInit, ChangeDetectorRef, ElementRef } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
 import { ActionExecutionLogEntity, ActionEntity, UserEntity } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Metadata, CompositeKey } from '@memberjunction/core';
@@ -96,21 +96,29 @@ export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogF
     }
 
     private formatJSONFields() {
-        // Format Params
+        const parseOptions: ParseJSONOptions = {
+            extractInlineJson: true,
+            maxDepth: 100,
+            debug: false
+        };
+
+        // Format Params with recursive JSON parsing
         if (this.record.Params) {
             try {
                 const parsed = JSON.parse(this.record.Params);
-                this.formattedParams = JSON.stringify(parsed, null, 2);
+                const recursivelyParsed = ParseJSONRecursive(parsed, parseOptions);
+                this.formattedParams = JSON.stringify(recursivelyParsed, null, 2);
             } catch (e) {
                 this.formattedParams = this.record.Params;
             }
         }
         
-        // Format Message field
+        // Format Message field with recursive JSON parsing
         if (this.record.Message) {
             try {
                 const parsed = JSON.parse(this.record.Message);
-                this.formattedMessage = JSON.stringify(parsed, null, 2);
+                const recursivelyParsed = ParseJSONRecursive(parsed, parseOptions);
+                this.formattedMessage = JSON.stringify(recursivelyParsed, null, 2);
             } catch (e) {
                 this.formattedMessage = this.record.Message;
             }
