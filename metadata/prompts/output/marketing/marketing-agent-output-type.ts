@@ -1,5 +1,5 @@
 /**
- * Marketing Agent Output Type Definition
+ * Marketing Agent Payload Definition
  * This type defines the structure for data passed between marketing sub-agents
  */
 
