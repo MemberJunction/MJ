@@ -1441,8 +1441,6 @@ export class BaseAgent {
                 step: 'failed',
                 terminate: false,
             };
-
-
         }
     }
 

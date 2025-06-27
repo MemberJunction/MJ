@@ -178,6 +178,81 @@ interface TemplateRenderResult {
 }
 ```
 
+### Built-in Filters
+
+The template engine provides several filters for handling complex objects and JSON data:
+
+#### `dump` (Nunjucks built-in)
+Converts any JavaScript object to a formatted JSON string.
+
+```nunjucks
+{{ myObject | dump }}      <!-- Pretty-printed with 2 spaces -->
+{{ myObject | dump(4) }}   <!-- Pretty-printed with 4 spaces -->
+{{ myObject | dump(0) }}   <!-- Compact single-line format -->
+```
+
+#### `json` (Custom filter)
+Similar to `dump` but with better error handling. Converts objects to JSON strings.
+
+```nunjucks
+{{ userData | json }}      <!-- Pretty-printed with 2 spaces (default) -->
+{{ userData | json(4) }}   <!-- Pretty-printed with 4 spaces -->
+{{ userData | json(0) }}   <!-- Compact format -->
+```
+
+If serialization fails, displays: `[Error serializing to JSON: <error message>]`
+
+#### `jsoninline` (Custom filter)
+Converts objects to compact JSON strings (no formatting).
+
+```nunjucks
+{{ userData | jsoninline }}  <!-- Output: {"name":"John","age":30} -->
+```
+
+#### `jsonparse` (Custom filter)
+Parses JSON strings into JavaScript objects. Useful for processing JSON data stored as strings.
+
+```nunjucks
+{{ '{"name":"John","age":30}' | jsonparse | json }}
+<!-- First parses the string to object, then formats it -->
+
+<!-- Access parsed object properties -->
+{{ '{"name":"John","age":30}' | jsonparse | attr("name") }}
+<!-- Output: John -->
+```
+
+#### Example: Handling Complex Objects
+
+Instead of getting `[object Object]` in your templates:
+
+```nunjucks
+<!-- Problem: Shows [object Object] -->
+<div>User Data: {{ userData }}</div>
+
+<!-- Solutions: Use filters to display JSON -->
+<div>User Data: {{ userData | dump }}</div>
+<div>User Data: {{ userData | json }}</div>
+<pre>{{ userData | json(2) }}</pre>
+
+<!-- For debugging: Compact format -->
+<script>
+  const data = {{ userData | jsoninline | safe }};
+</script>
+```
+
+#### Combining Filters
+
+```nunjucks
+<!-- Parse a JSON string, then format it nicely -->
+{{ jsonString | jsonparse | json(4) }}
+
+<!-- Access nested properties after parsing -->
+{{ responseData | jsonparse | attr("results") | json }}
+
+<!-- Safe output without HTML escaping -->
+{{ myData | json | safe }}
+```
+
 ### Extension Configuration
 
 #### AIPrompt Extension Parameters

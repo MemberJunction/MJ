@@ -2241,12 +2241,15 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 
                 // If this is an agent result with execution tree, enhance the display
                 if (parsed.executionTree) {
-                    this.currentJsonContent = JSON.stringify({
+                    // Apply recursive JSON parsing before adding summary
+                    const enhancedParsed = {
                         ...parsed,
                         _executionTreeSummary: this.summarizeExecutionTree(parsed.executionTree)
-                    }, null, 2);
+                    };
+                    this.currentJsonContent = this.formatJson(enhancedParsed);
                 } else {
-                    this.currentJsonContent = JSON.stringify(parsed, null, 2);
+                    // Apply recursive JSON parsing
+                    this.currentJsonContent = this.formatJson(parsed);
                 }
             } catch {
                 // If not valid JSON, show as-is
