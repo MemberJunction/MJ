@@ -68,6 +68,9 @@ export class TemplateEngineServer extends TemplateEngineBase {
             this._templateLoader = new TemplateEntityLoader();
             this._nunjucksEnv = new nunjucks.Environment(this._templateLoader, { autoescape: true, dev: true });
 
+            // Add custom filters
+            this.addCustomFilters();
+
             // get all of the extensions that are registered and register them with nunjucks
             const extensions = MJGlobal.Instance.ClassFactory.GetAllRegistrations(TemplateExtensionBase);
             if (extensions && extensions.length > 0) {
@@ -82,10 +85,46 @@ export class TemplateEngineServer extends TemplateEngineBase {
     public SetupNunjucks(): void {
         this._templateLoader = new TemplateEntityLoader();
         this._nunjucksEnv = new nunjucks.Environment(this._templateLoader, { autoescape: true, dev: true });
+        
+        // Add custom filters
+        this.addCustomFilters();
     }
 
     private _nunjucksEnv: nunjucks.Environment;
     private _templateLoader: TemplateEntityLoader;
+
+    /**
+     * Adds custom filters to the Nunjucks environment
+     */
+    private addCustomFilters(): void {
+        // Add a json filter for converting objects to JSON strings
+        // This is similar to the built-in 'dump' filter but with more control
+        this._nunjucksEnv.addFilter('json', (obj: any, indent: number = 2) => {
+            try {
+                return JSON.stringify(obj, null, indent);
+            } catch (error) {
+                return '[Error serializing to JSON: ' + error.message + ']';
+            }
+        });
+
+        // Add a jsoninline filter for compact JSON output
+        this._nunjucksEnv.addFilter('jsoninline', (obj: any) => {
+            try {
+                return JSON.stringify(obj);
+            } catch (error) {
+                return '[Error serializing to JSON: ' + error.message + ']';
+            }
+        });
+
+        // Add a jsonparse filter for parsing JSON strings
+        this._nunjucksEnv.addFilter('jsonparse', (str: string) => {
+            try {
+                return JSON.parse(str);
+            } catch (error) {
+                return str; // Return original string if parsing fails
+            }
+        });
+    }
 
     /**
      * Cache for templates that have been created by nunjucks so we don't have to create them over and over

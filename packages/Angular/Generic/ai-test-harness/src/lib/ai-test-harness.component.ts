@@ -12,6 +12,7 @@ import { ChatMessage } from '@memberjunction/ai';
 import { Subject, Subscription } from 'rxjs';
 import { AgentExecutionMonitorComponent } from './agent-execution-monitor.component';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 
 /**
  * Supported modes for the test harness
@@ -1273,7 +1274,15 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             
             if (executionResult?.success) {
                 // Parse the payload to get the full execution result
-                const fullResult = JSON.parse(executionResult.payload);
+                const parseOptions: ParseJSONOptions = {
+                    extractInlineJson: true,
+                    maxDepth: 100,
+                    debug: false
+                };
+                
+                let fullResult = JSON.parse(executionResult.payload);
+                // Apply recursive JSON parsing to extract any nested JSON strings
+                fullResult = ParseJSONRecursive(fullResult, parseOptions);
                 
                 // Store execution data with the message
                 assistantMessage.executionData = fullResult;
@@ -1321,7 +1330,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                         displayContent = fullResult.returnValue.message;
                         // If there's also a payload, store it separately
                         if (fullResult.returnValue.payload) {
-                            payloadData = fullResult.returnValue.payload;
+                            // Apply recursive JSON parsing to the payload if it's an object
+                            payloadData = ParseJSONRecursive(fullResult.returnValue.payload, parseOptions);
                         }
                     } else if (typeof fullResult.returnValue === 'object' && 
                         fullResult.returnValue.nextStep?.userMessage) {
@@ -1509,6 +1519,13 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             // Update assistant message with result
             assistantMessage.isStreaming = false;
             
+            // Define parse options for both success and error cases
+            const parseOptions: ParseJSONOptions = {
+                extractInlineJson: true,
+                maxDepth: 100,
+                debug: false
+            };
+
             if (executionResult?.success) {
                 // Use parsedResult if available, otherwise fall back to output
                 assistantMessage.content = executionResult.parsedResult || executionResult.output || 'No response generated';
@@ -1524,7 +1541,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                         // If parsing fails, keep it as a string
                     }
                 }
-                assistantMessage.rawContent = JSON.stringify(resultForDisplay, null, 2);
+                
+                // Apply recursive JSON parsing to the entire result
+                const recursivelyParsed = ParseJSONRecursive(resultForDisplay, parseOptions);
+                assistantMessage.rawContent = JSON.stringify(recursivelyParsed, null, 2);
                 
                 // Store execution metadata
                 if (executionResult.promptRunId) {
@@ -1546,7 +1566,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                             // If parsing fails, keep it as a string
                         }
                     }
-                    assistantMessage.rawContent = JSON.stringify(errorResult, null, 2);
+                    
+                    // Apply recursive JSON parsing to the error result
+                    const recursivelyParsed = ParseJSONRecursive(errorResult, parseOptions);
+                    assistantMessage.rawContent = JSON.stringify(recursivelyParsed, null, 2);
                 }
             }
             
@@ -2296,12 +2319,15 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 
                 // If this is an agent result with execution tree, enhance the display
                 if (parsed.executionTree) {
-                    this.currentJsonContent = JSON.stringify({
+                    // Apply recursive JSON parsing before adding summary
+                    const enhancedParsed = {
                         ...parsed,
                         _executionTreeSummary: this.summarizeExecutionTree(parsed.executionTree)
-                    }, null, 2);
+                    };
+                    this.currentJsonContent = this.formatJson(enhancedParsed);
                 } else {
-                    this.currentJsonContent = JSON.stringify(parsed, null, 2);
+                    // Apply recursive JSON parsing
+                    this.currentJsonContent = this.formatJson(parsed);
                 }
             } catch {
                 // If not valid JSON, show as-is
@@ -2484,16 +2510,28 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
 
     /**
      * Formats JSON content with proper indentation for display.
+     * Also recursively parses any nested JSON strings.
      * @param content - JSON string to format
      * @returns Formatted JSON string or original content if parsing fails
      */
     public formatJson(content: any): string {
+        const parseOptions: ParseJSONOptions = {
+            extractInlineJson: true,
+            maxDepth: 100,
+            debug: false
+        };
+
         try {
+            let parsed: any;
             if (typeof content === 'string') {
-                return JSON.stringify(JSON.parse(content), null, 2);
+                parsed = JSON.parse(content);
             } else {
-                return JSON.stringify(content, null, 2);
+                parsed = content;
             }
+            
+            // Apply recursive JSON parsing
+            const recursivelyParsed = ParseJSONRecursive(parsed, parseOptions);
+            return JSON.stringify(recursivelyParsed, null, 2);
         } catch {
             return typeof content === 'string' ? content : JSON.stringify(content);
         }

@@ -884,6 +884,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             'validation': 'validation',
             'prompt': 'prompt',
             'action': 'action',
+            'action_execution': 'action',
             'subagent': 'sub-agent',
             'sub-agent': 'sub-agent',
             'decision': 'decision',

@@ -590,3 +590,209 @@ export function compareStringsByLine(str1: string, str2: string, logToConsole: b
     }
     return returnArray;
 }
+
+
+
+
+
+
+
+ 
+/**
+ * Options for the ParseJSONRecursive function
+ */
+export interface ParseJSONOptions {
+  /** Maximum recursion depth to prevent infinite loops (default: 100) */
+  maxDepth?: number;
+  /** If true, extracts embedded JSON from strings and places it in a separate key with '_' suffix (default: false) */
+  extractInlineJson?: boolean;
+  /** If true, enables debug logging to console (default: false) */
+  debug?: boolean;
+}
+
+/**
+ * Internal options for the ParseJSONRecursive function
+ * This interface extends the public options with internal tracking fields
+ */
+interface InternalParseJSONOptions {
+  /** Public options */
+  options: ParseJSONOptions;
+  /** Current depth level (used for recursion tracking) */
+  currentDepth: number;
+  /** Set to track objects we've already processed to prevent circular references */
+  processedObjects: WeakSet<object>;
+  /** Set to track JSON strings we've already parsed to prevent infinite loops */
+  processedStrings: Set<string>;
+  /** Current path for debugging */
+  currentPath: string;
+}
+
+/**
+ * Recursively parse JSON strings within an object/array structure.
+ * This function will traverse through objects and arrays, attempting to parse
+ * any string values as JSON. If parsing succeeds, it continues recursively.
+ * This is particularly useful for handling deeply nested JSON structures
+ * where JSON is stored as strings within other JSON objects.
+ * 
+ * The function makes no assumptions about property names - it will attempt
+ * to parse any string value it encounters, regardless of the key name.
+ * 
+ * @param obj The object to process
+ * @param options Configuration options for parsing
+ * @returns The object with all JSON strings parsed
+ * 
+ * @example
+ * const input = {
+ *   data: '{"nested": "{\\"deeply\\": \\"nested\\"}"}',
+ *   payload: '{"foo": "bar"}',
+ *   someOtherProp: '["a", "b", "c"]'
+ * };
+ * const output = ParseJSONRecursive(input);
+ * // Returns: { 
+ * //   data: { nested: { deeply: "nested" } },
+ * //   payload: { foo: "bar" },
+ * //   someOtherProp: ["a", "b", "c"]
+ * // }
+ * 
+ * @example with options
+ * const input = {
+ *   content: 'Action results:\n[{"action": "test"}]'
+ * };
+ * const output = ParseJSONRecursive(input, { extractInlineJson: true, maxDepth: 50 });
+ * // Returns: {
+ * //   content: "Action results:",
+ * //   content_: [{ action: "test" }]
+ * // }
+ */ 
+export function ParseJSONRecursive(obj: any, options: ParseJSONOptions = {}): any {
+  // Set default options
+  const opts: Required<ParseJSONOptions> = {
+    maxDepth: options.maxDepth ?? 100,
+    extractInlineJson: options.extractInlineJson ?? false,
+    debug: options.debug ?? false
+  };
+
+  // Start recursive parsing with depth 0
+  return parseJSONRecursiveWithDepth(obj, opts, 0, 'root');
+}
+
+function parseJSONRecursiveWithDepth(obj: any, options: Required<ParseJSONOptions>, depth: number, path: string): any {
+  // Check depth limit
+  if (depth >= options.maxDepth) {
+    if (options.debug) {
+      console.warn(`[ParseJSONRecursive] Maximum depth of ${options.maxDepth} reached at path: ${path}`);
+    }
+    return obj;
+  }
+
+  // Handle null/undefined
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+
+  // Handle non-objects
+  if (typeof obj !== 'object') {
+    return obj;
+  }
+
+  // Use recursiveReplaceKey which handles all types
+  return recursiveReplaceKey(obj, options, depth, path);
+}
+
+function recursiveReplaceKey(value: any, options: Required<ParseJSONOptions>, depth: number, path: string): any {
+  if (options.debug) {
+    console.log(`[ParseJSONRecursive] Depth: ${depth}, Path: ${path}, Type: ${typeof value}${Array.isArray(value) ? ' (array)' : ''}`);
+  }
+
+  if (typeof value === 'string') {
+    return recursiveReplaceString(value, options, depth, path);
+  }
+  else if (Array.isArray(value)) {
+    // Create a new array instead of modifying the original
+    const newArray = new Array(value.length);
+    for (let i = 0; i < value.length; i++) {
+      newArray[i] = recursiveReplaceKey(value[i], options, depth + 1, `${path}[${i}]`);
+    }
+    return newArray;
+  }
+  else if (typeof value === 'object' && value !== null) {
+    // Create a new object instead of modifying the original
+    const result: any = {};
+    const keys = Object.keys(value);
+    
+    for (const key of keys) {
+      if (options.debug) {
+        console.log(`[ParseJSONRecursive] Processing key: ${key} at path: ${path}.${key}`);
+      }
+      result[key] = recursiveReplaceKey(value[key], options, depth + 1, `${path}.${key}`);
+    }
+    return result;
+  }
+  else {
+    return value; // return as-is for non-string, non-array, and non-object types
+  }
+}
+
+function recursiveReplaceString(str: string, options: Required<ParseJSONOptions>, depth: number, path: string): any {
+  if (options.debug) {
+    console.log(`[ParseJSONRecursive] String preview: ${str.substring(0, 100)}${str.length > 100 ? '...' : ''}`);
+  }
+
+  try {
+    const parsed = JSON.parse(str);
+    
+    // Check if parsing returned the same value (e.g., JSON.parse('"user"') === "user")
+    if (parsed === str) {
+      if (options.debug) {
+        console.log(`[ParseJSONRecursive] JSON.parse returned same value at path: ${path}, stopping`);
+      }
+      return str;
+    }
+
+    if (parsed && typeof parsed === 'object') {
+      if (options.debug) {
+        console.log(`[ParseJSONRecursive] Successfully parsed JSON at path: ${path}`);
+      }
+      return parseJSONRecursiveWithDepth(parsed, options, depth + 1, `${path}[parsed-json]`);
+    } else {
+      return parsed; // Keep simple values as-is
+    }
+  } catch (e) {
+    // If parsing fails, leave the string as-is, this is not a failure, as we trying to parse any string above
+    // however in this case we need to check for inline JSON extraction
+    if (options?.extractInlineJson) {
+      // Look for JSON patterns within the string
+      // First try ```json blocks
+      const codeBlockMatch = str.match(/```json\s*\n([\s\S]*?)\n```/);
+      if (codeBlockMatch) {
+        try {
+          const parsedJson = JSON.parse(codeBlockMatch[1]);
+          return {
+            text: str.replace(codeBlockMatch[0], '').trim(),
+            json: parseJSONRecursiveWithDepth(parsedJson, options, depth + 1, `${path}[embedded-json]`)
+          };
+        } catch (e) {
+          // If parsing fails, continue
+        }
+      }
+
+      // Simple approach: find first { or [ and try to parse from there
+      const jsonStartIndex = str.search(/[{\[]/);
+      if (jsonStartIndex !== -1) {
+        // Try to parse from the JSON start to the end of string
+        const possibleJson = str.substring(jsonStartIndex);
+        try {
+          const parsedJson = JSON.parse(possibleJson);
+          const textBefore = str.substring(0, jsonStartIndex).trim();
+          return {
+            text: textBefore || undefined,
+            json: parseJSONRecursiveWithDepth(parsedJson, options, depth + 1, `${path}[embedded-json]`)
+          };
+        } catch (e) {
+          // JSON.parse failed, the string doesn't contain valid JSON
+        }
+      }
+    }
+    return str;
+  }
+}
