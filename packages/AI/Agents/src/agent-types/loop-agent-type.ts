@@ -261,7 +261,7 @@ export class LoopAgentType extends BaseAgentType {
     }
 
 
-    public static CURRENT_PAYLOAD_PLACHOLDER = '<< __currentPayload__ >>';
+    public static CURRENT_PAYLOAD_PLACHOLDER = '_CURRENT_PAYLOAD';
     /**
      * Injects a payload into the prompt parameters.
      * For LoopAgentType, this could be used to inject previous loop results or context.
@@ -270,38 +270,12 @@ export class LoopAgentType extends BaseAgentType {
      * @param {AIPromptParams} prompt - The prompt parameters to update
      */
     public async InjectPayload<T = any>(payload: T, prompt: AIPromptParams): Promise<void> {
-        // for Loop Agent Type we are using a special placeholder in all of the system prompts
-        // of << __currentPayload__ >> which will be replaced with the payload
-        if (!prompt || !prompt.conversationMessages || prompt.conversationMessages.length === 0) {
-            throw new Error('Prompt does not contain conversation messages to inject payload into');
-        }
-        const sysPrompt = prompt.conversationMessages[0];
-        if (!sysPrompt || sysPrompt.role !== 'system' || !sysPrompt.content) {
-            throw new Error('Invalid system prompt structure');
-        }
+        if (!prompt)
+            throw new Error('Prompt parameters are required for payload injection');
+        if (!prompt.data )
+            prompt.data = {};
 
-        // if we get here we now have the SYSTEM prompt in our hands and we an do what we need
-        // Replace the placeholder with the actual payload
-        // check to see if sysPrompt.content is of type ChatMessageContentBlock or string
-        // if string we just do a simple replace, otherwise we need to cast to ChatMessageContentBlock[]
-        // and replace the placeholder in its .content property
-
-        // first create a regex to match the placeholder
-        const placeholderRegex = new RegExp(LoopAgentType.CURRENT_PAYLOAD_PLACHOLDER, 'g');
-
-        if (typeof sysPrompt.content === 'string') {
-            // replace all instances of the placeholder in the string
-            sysPrompt.content = sysPrompt.content.replace(placeholderRegex, JSON.stringify(payload));
-        } else if (Array.isArray(sysPrompt.content)) {
-            // assuming sysPrompt.content is a ChatMessageContentBlock[]
-            sysPrompt.content.forEach(block => {
-                if (typeof block.content === 'string') {
-                    block.content = block.content.replace(placeholderRegex, JSON.stringify(payload));
-                }
-            });
-        } else {
-            throw new Error('System prompt content is not a string or ChatMessageContentBlock');
-        }
+        prompt.data[LoopAgentType.CURRENT_PAYLOAD_PLACHOLDER] = payload;
     }
 }
 

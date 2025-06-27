@@ -103,6 +103,7 @@ export type AgentSubAgentRequest<TContext = any> = {
  *   - 'chat': The agent needs to communicate with the user before proceeding
  * @property {boolean} terminate - Whether to terminate the agent execution after this step
  * @property {P} [payload] - Optional value to return with the step determination
+ * @property {any} [priorStepResult] - Result from the prior step, useful for retry or sub-agent context
  * @property {string} [errorMessage] - Error message when step is 'failed'
  * @property {string} [retryReason] - Reason for retry when step is 'retry' (e.g., "Processing action results", "Handling error condition")
  * @property {string} [retryInstructions] - Instructions for the retry attempt, including any new context or results
@@ -113,6 +114,7 @@ export type AgentSubAgentRequest<TContext = any> = {
 export type BaseAgentNextStep<P = any, TContext = any> = {
     terminate: boolean;
     step: 'success' | 'failed' | 'retry' | 'sub-agent' | 'actions' | 'chat';
+    priorStepResult?: any;  
     payload?: P;
     errorMessage?: string;
     retryReason?: string;
@@ -207,6 +209,7 @@ export type StepExecutionResult<P = any> =
  * @property {AIAgentRunStepEntity} step - The database entity for this execution step
  * @property {any} inputData - Full input data passed to this step (varies by step type)
  * @property {any} outputData - Full output data from this step (varies by step type)
+ * @property {P} [payload] - Optional payload from the step execution, type depends on agent implementation, payload at the time of this step.
  * @property {'prompt' | 'action' | 'sub-agent' | 'decision' | 'chat' | 'validation'} executionType - Type of execution performed
  * @property {Date} startTime - When this step began execution
  * @property {Date} [endTime] - When this step completed (null while running)
@@ -217,10 +220,11 @@ export type StepExecutionResult<P = any> =
  * @property {string} [parentStepId] - ID of the parent step (null for root steps)
  * @property {string[]} agentHierarchy - Full agent name hierarchy for breadcrumb display
  */
-export type ExecutionNode = {
+export type ExecutionNode<P = any> = {
     step: AIAgentRunStepEntity;
     inputData: any;
     outputData: any;
+    payload: P; // Optional payload from the step execution, type depends on agent implementation
     executionType: 'prompt' | 'action' | 'sub-agent' | 'decision' | 'chat' | 'validation';
     startTime: Date;
     endTime?: Date;
@@ -355,11 +359,11 @@ export type NextStepDecision = {
  * enabling proper preparation and execution of the subsequent operation.
  */
 export type NextStepDetails <P = any> = 
-    | { type: 'prompt'; promptId: string; promptName: string }
-    | { type: 'action'; actions: AgentAction[] }
-    | { type: 'sub-agent'; subAgent: AgentSubAgentRequest }
-    | { type: 'retry'; retryReason: string; retryInstructions: string }
-    | { type: 'chat'; message: string }
+    | { type: 'prompt'; promptId: string; promptName: string; payload?: P }
+    | { type: 'action'; actions: AgentAction[]; payload?: P }
+    | { type: 'sub-agent'; subAgent: AgentSubAgentRequest; payload?: P }
+    | { type: 'retry'; retryReason: string; retryInstructions: string; payload?: P }
+    | { type: 'chat'; message: string; payload?: P }
     | { type: 'complete'; payload?: P };
 
 
@@ -413,6 +417,7 @@ export type AgentExecutionStreamingCallback = (chunk: {
  * @property {number} [parentDepth] - Optional parent depth for sub-agent execution
  * @property {AIAgentRunEntity} [parentRun] - Optional parent agent run entity for nested sub-agent execution
  * @property {Record<string, any>} [data] - Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents
+ * @property {P} [payload] - Optional payload to pass to the agent execution, type depends on agent implementation. Payload is the ongoing dynamic state of the agent run.
  * @property {TContext} [context] - Optional additional context data to pass to the agent execution.
  *                                  This context is propagated to all sub-agents and actions throughout 
  *                                  the execution hierarchy. Use this for runtime-specific data such as:
@@ -461,7 +466,7 @@ export type AgentExecutionStreamingCallback = (chunk: {
  *   }
  * };
  */
-export type ExecuteAgentParams<TContext = any> = {
+export type ExecuteAgentParams<TContext = any, P = any> = {
     agent: AIAgentEntity;
     conversationMessages: ChatMessage[];
     contextUser?: UserInfo;
@@ -472,6 +477,7 @@ export type ExecuteAgentParams<TContext = any> = {
     parentDepth?: number;
     parentRun?: AIAgentRunEntity;
     data?: Record<string, any>; // Additional data to pass through execution
+    payload?: P; // Optional payload to pass to the agent execution, type depends on agent implementation
     context?: TContext;
     override?: {
         modelId?: string;
