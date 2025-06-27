@@ -44,6 +44,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { ActionEntityExtended, ActionResult } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
+import { PayloadManager } from './PayloadManager';
 
 /**
  * Base implementation for AI Agents in the MemberJunction framework.
@@ -130,6 +131,12 @@ export class BaseAgent {
      * @private
      */
     private _subAgentRuns: ExecuteAgentResult[] = [];
+    
+    /**
+     * Payload manager for handling payload access control.
+     * @private
+     */
+    private _payloadManager: PayloadManager = new PayloadManager();
 
     /**
      * Helper method for status logging with verbose control
@@ -1514,30 +1521,6 @@ export class BaseAgent {
     }
 
 
-    /**
-     * This method will do a depth first traversal of the two payload objects and for each node of the tree
-     * the following rules will apply:
-     *  * Scalars
-     *    * If the subAgentPayload has a value for a scalar, it will override the parentPayload value for that same path in the tree and that scalar property
-     *    * If the subAgentPayload does not have a value for a scalar, the parentPayload value will be used
-     *  * Objects
-     *    * If the subAgent has a value for an object and the parent does not, we will simply use the subAgent value
-     *    * If the parentPayload has a value for an object and the subAgent does not, we will simply use the parent value
-     *    * If both have values for an object, we will recursively combine the two objects using the same rules as above
-     *  * Arrays
-     *    * If the subAgentPayload has an array, and the parentPayload does not, the subAgent array will be used
-     *    * If the parentPayload has an array, and the subAgentPayload does not, the parentPayload array will be used
-     *    * If both have arrays, we will do a deep comparison of the arrays and merge them attempting to eliminate duplicates without removing any items.
-     * 
-     * 
-     * This allows us to combine payloads from sub-agents while preserving the parent agent's context and data.
-     *   
-     * @param parentPayload 
-     * @param subAgentPayload 
-     */
-    protected combinePayloads(parentPayload: any, subAgentPayload: any): any {
-        
-    }
 
     /**
      * Executes a sub-agent step and tracks it.
@@ -1587,14 +1570,57 @@ export class BaseAgent {
         const stepEntity = await this.createStepEntity('subagent', `Execute Sub-Agent: ${subAgentRequest.name}`, params.contextUser, subAgentRequest.id, inputData);
         
         try {
-            // Execute sub-agent with cancellation and streaming support
+            // Get sub-agent entity to access payload paths
+            const engine = AIEngine.Instance;
+            const subAgentEntity = engine.Agents.find(a => a.ID === subAgentRequest.id);
+            
+            if (!subAgentEntity) {
+                throw new Error(`Sub-agent entity not found for ID: ${subAgentRequest.id}`);
+            }
+            
+            // Parse payload access paths
+            let downstreamPaths: string[] = ['*'];
+            let upstreamPaths: string[] = ['*'];
+            
+            try {
+                // Note: TypeScript errors on PayloadDownstreamPaths/PayloadUpstreamPaths are expected
+                // until CodeGen runs after the migration to add these fields to AIAgentEntity
+                if ((subAgentEntity as any).PayloadDownstreamPaths) {
+                    downstreamPaths = JSON.parse((subAgentEntity as any).PayloadDownstreamPaths);
+                }
+                if ((subAgentEntity as any).PayloadUpstreamPaths) {
+                    upstreamPaths = JSON.parse((subAgentEntity as any).PayloadUpstreamPaths);
+                }
+            } catch (parseError) {
+                this.logError(`Failed to parse payload paths for sub-agent ${subAgentRequest.name}: ${parseError.message}`, {
+                    category: 'SubAgentExecution',
+                    metadata: {
+                        subAgentId: subAgentRequest.id,
+                        downstreamPaths: (subAgentEntity as any).PayloadDownstreamPaths,
+                        upstreamPaths: (subAgentEntity as any).PayloadUpstreamPaths
+                    }
+                });
+            }
+            
+            // Extract only allowed downstream payload
+            const downstreamPayload = this._payloadManager.extractDownstreamPayload(
+                previousDecision.payload,
+                downstreamPaths
+            );
+            
+            // Execute sub-agent with filtered payload
             const subAgentResult = await this.ExecuteSubAgent(
                 params,
                 subAgentRequest,
-                previousDecision.payload
+                downstreamPayload
             );
             
-            const newPayload = this.combinePayloads(previousDecision.payload, subAgentResult.payload);
+            // Merge upstream changes back into parent payload
+            const mergedPayload = this._payloadManager.mergeUpstreamPayload(
+                previousDecision.payload,
+                subAgentResult.payload,
+                upstreamPaths
+            );
 
             // Update step entity with AIAgentRun ID if available
             if (subAgentResult.agentRun?.ID) {
@@ -1627,7 +1653,7 @@ export class BaseAgent {
             const nextStepDecision: NextStepDecision = {
                 decision: shouldTerminate ? 'success' : 'retry',
                 reasoning: shouldTerminate ? 'Sub-agent execution completed, terminating as requested' : 'Sub-agent completed, continuing execution',
-                nextStepDetails: { type: nextStepType, payload: subAgentResult.payload, retryInstructions: undefined, retryReason: undefined }
+                nextStepDetails: { type: nextStepType, payload: mergedPayload, retryInstructions: undefined, retryReason: undefined }
             };
             
             // Add to execution chain
@@ -1682,7 +1708,8 @@ export class BaseAgent {
             return { 
                 ...subAgentResult, 
                 step: subAgentResult.success ? 'success' : 'failed', 
-                terminate: shouldTerminate 
+                terminate: shouldTerminate,
+                payload: mergedPayload 
             };            
         } catch (error) {
             await this.finalizeStepEntity(stepEntity, false, error.message);
