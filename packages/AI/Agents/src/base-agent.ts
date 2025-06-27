@@ -1431,7 +1431,18 @@ export class BaseAgent {
             
         } catch (error) {
             await this.finalizeStepEntity(stepEntity, false, error.message);
-            throw error;
+
+            // we had an error, don't throw the exception as that will kill our overall execution/run
+            // instead retrun a helpful message in our return value that the parent loop can review and 
+            // adjust
+            const errString = error?.message || error || 'Unknown error';
+            return {
+                errorMessage: `Prompt execution failed: ${errString}`,
+                step: 'failed',
+                terminate: false,
+            };
+
+
         }
     }
 
