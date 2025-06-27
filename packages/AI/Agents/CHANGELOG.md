@@ -1,5 +1,24 @@
 # @memberjunction/ai-agents
 
+## 2.59.0
+
+### Minor Changes
+
+- 008fb65: various
+- 2d8913a: migrations
+
+### Patch Changes
+
+- @memberjunction/ai@2.59.0
+- @memberjunction/ai-core-plus@2.59.0
+- @memberjunction/aiengine@2.59.0
+- @memberjunction/ai-prompts@2.59.0
+- @memberjunction/actions-base@2.59.0
+- @memberjunction/actions@2.59.0
+- @memberjunction/core@2.59.0
+- @memberjunction/core-entities@2.59.0
+- @memberjunction/global@2.59.0
+
 ## 2.58.0
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/ng-link-directives
 
+## 2.59.0
+
+### Patch Changes
+
+- @memberjunction/core@2.59.0
+
 ## 2.58.0
 
 ### Patch Changes

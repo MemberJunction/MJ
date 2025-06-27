@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.59.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.59.0
+- @memberjunction/aiengine@2.59.0
+- @memberjunction/ai-anthropic@2.59.0
+- @memberjunction/ai-groq@2.59.0
+- @memberjunction/ai-mistral@2.59.0
+- @memberjunction/ai-openai@2.59.0
+- @memberjunction/actions@2.59.0
+- @memberjunction/core@2.59.0
+- @memberjunction/core-entities@2.59.0
+- @memberjunction/global@2.59.0
+- @memberjunction/sqlserver-dataprovider@2.59.0
+
 ## 2.58.0
 
 ### Patch Changes
