@@ -9,7 +9,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { SharedService } from '@memberjunction/ng-shared';
 import { TimelineItem } from './ai-agent-run-timeline.component';
 import { AIAgentRunFormComponent } from '../../generated/Entities/AIAgentRun/aiagentrun.form.component';
-import { ParseJSONRecursive, ParseJSONOptions } from '../shared-util';
+import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Runs') 
 @Component({
