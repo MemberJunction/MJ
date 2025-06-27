@@ -370,19 +370,24 @@ export function ParseJSONRecursive(obj: any, options: ParseJSONOptions = {}): an
   for (const key of keys) {
     obj[key] = recursiveReplaceKey(obj[key], options);
   }
+  return obj;
 }
 
 function recursiveReplaceKey(key: any, options: ParseJSONOptions): any {
   if (typeof key === 'string') {
     return recursiveReplaceString(key, options);
   }
-  else if (typeof key === 'object' && key !== null && key !== undefined) {
-    return ParseJSONRecursive(key, options); // recursive call for nested objects
-  }
   else if (Array.isArray(key)) {
     for (let i = 0; i < key.length; i++) {
       key[i] = recursiveReplaceKey(key[i], options); // recursive call for array elements
     }
+    return key; // return modified array
+  }
+  else if (typeof key === 'object' && key !== null && key !== undefined) {
+    return ParseJSONRecursive(key, options); // recursive call for nested objects
+  }
+  else {
+    return key; // return as-is for non-string, non-array, and non-object types
   }
 }
 
