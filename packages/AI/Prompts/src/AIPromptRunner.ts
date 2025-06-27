@@ -77,6 +77,20 @@ import {
  * // Final composed prompt is executed once
  * ```
  */
+/**
+ * Represents a model-vendor pair candidate for execution
+ */
+interface ModelVendorCandidate {
+  model: AIModelEntityExtended;
+  vendorId?: string;
+  vendorName?: string;
+  driverClass: string;
+  apiName?: string;
+  isPreferredVendor: boolean;
+  priority: number; // Higher is better
+  source: 'explicit' | 'prompt-model' | 'model-type' | 'power-rank';
+}
+
 export class AIPromptRunner {
   private _metadata: Metadata;
   private _templateEngine: TemplateEngineServer;
@@ -99,6 +113,34 @@ export class AIPromptRunner {
       AIPromptRunner._ajvInstance = new Ajv({ allErrors: true, verbose: true });
     }
     this._ajv = AIPromptRunner._ajvInstance;
+  }
+
+  /**
+   * Determines if verbose logging is enabled based on params or environment variable
+   */
+  private isVerboseEnabled(params?: AIPromptParams): boolean {
+    // Check explicit verbose flag first
+    if (params?.verbose !== undefined) {
+      return params.verbose;
+    }
+    
+    // Check environment variable as fallback
+    const envVerbose = process.env.MJ_AI_VERBOSE || process.env.AI_PROMPT_VERBOSE;
+    return envVerbose === 'true' || envVerbose === '1' || envVerbose === 'yes';
+  }
+
+  /**
+   * Performs robust validation of an API key
+   * @returns true if the API key is valid (not null, undefined, or empty/whitespace)
+   */
+  private isValidAPIKey(apiKey: string | undefined | null): boolean {
+    if (apiKey === undefined || apiKey === null) {
+      return false;
+    }
+    
+    // Check if it's just whitespace
+    const trimmed = apiKey.trim();
+    return trimmed.length > 0;
   }
 
   /**
@@ -186,24 +228,30 @@ export class AIPromptRunner {
       // Handle different prompt execution modes
       if (params.childPrompts && params.childPrompts.length > 0) {
         // Hierarchical template composition mode - render child templates first, then compose
-        LogStatus(`🌳 Composing prompt with ${params.childPrompts.length} child templates in hierarchical mode`);
+        if (this.isVerboseEnabled(params)) {
+          LogStatus(`🌳 Composing prompt with ${params.childPrompts.length} child templates in hierarchical mode`);
+        }
         
         // Determine which prompt to use for model selection
         let modelSelectionPrompt = prompt;
         if (params.modelSelectionPrompt) {
           modelSelectionPrompt = params.modelSelectionPrompt;
-          LogStatus(`🎯 Using prompt "${modelSelectionPrompt.Name}" for model selection instead of parent prompt`);
+          if (this.isVerboseEnabled(params)) {
+            LogStatus(`🎯 Using prompt "${modelSelectionPrompt.Name}" for model selection instead of parent prompt`);
+          }
         }
         
         // Select model using the appropriate prompt
-        selectedModel = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId);
+        selectedModel = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
         if (!selectedModel) {
           throw new Error(`No suitable model found for prompt ${modelSelectionPrompt.Name}`);
         }
 
         // Create parent prompt run for the final composed prompt execution
         parentPromptRun = await this.createPromptRun(prompt, selectedModel, params, startTime, params.override?.vendorId);
-        LogStatus(`📝 Created prompt run ${parentPromptRun.ID} for hierarchical template composition`);
+        if (this.isVerboseEnabled(params)) {
+          LogStatus(`📝 Created prompt run ${parentPromptRun.ID} for hierarchical template composition`);
+        }
         
         // Render all child prompt templates recursively
         childTemplateRenderingResult = await this.renderChildPromptTemplates(params.childPrompts, params, params.cancellationToken);
@@ -211,7 +259,9 @@ export class AIPromptRunner {
         // Render the parent prompt with child templates embedded
         renderedPromptText = await this.renderPromptWithChildTemplates(prompt, params, childTemplateRenderingResult.renderedTemplates);
         
-        LogStatus(`✅ Hierarchical template composition completed with ${Object.keys(childTemplateRenderingResult.renderedTemplates).length} child templates embedded`);
+        if (this.isVerboseEnabled(params)) {
+          LogStatus(`✅ Hierarchical template composition completed with ${Object.keys(childTemplateRenderingResult.renderedTemplates).length} child templates embedded`);
+        }
         
       } else if (prompt.TemplateID && (!params.conversationMessages || params.templateMessageRole !== 'none')) {
         // Regular template rendering mode
@@ -313,10 +363,12 @@ export class AIPromptRunner {
       let modelSelectionPrompt = prompt;
       if (params.modelSelectionPrompt) {
         modelSelectionPrompt = params.modelSelectionPrompt;
-        LogStatus(`🎯 Using prompt "${modelSelectionPrompt.Name}" for model selection instead of main prompt`);
+        if (this.isVerboseEnabled(params)) {
+          LogStatus(`🎯 Using prompt "${modelSelectionPrompt.Name}" for model selection instead of main prompt`);
+        }
       }
       
-      selectedModel = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId);
+      selectedModel = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
       if (!selectedModel) {
         throw new Error(`No suitable model found for prompt ${modelSelectionPrompt.Name}`);
       }
@@ -401,7 +453,9 @@ export class AIPromptRunner {
     let modelSelectionPrompt = prompt;
     if (params.modelSelectionPrompt) {
       modelSelectionPrompt = params.modelSelectionPrompt;
-      LogStatus(`🎯 Using prompt "${modelSelectionPrompt.Name}" for model selection in parallel execution`);
+      if (this.isVerboseEnabled(params)) {
+        LogStatus(`🎯 Using prompt "${modelSelectionPrompt.Name}" for model selection in parallel execution`);
+      }
     }
 
     // Get prompt-specific model associations using the model selection prompt
@@ -653,7 +707,9 @@ export class AIPromptRunner {
       throw new Error('Child prompt execution was cancelled');
     }
 
-    LogStatus(`🔄 Rendering ${childPrompts.length} child prompt templates in parallel`);
+    if (this.isVerboseEnabled(params)) {
+      LogStatus(`🔄 Rendering ${childPrompts.length} child prompt templates in parallel`);
+    }
 
     // Render all child prompt templates in parallel at this level
     const childRenderingPromises = childPrompts.map(async (childParam) => {
@@ -677,7 +733,9 @@ export class AIPromptRunner {
         }
 
         // Render the child prompt template with merged data
-        LogStatus(`  🔹 Rendering child prompt template: ${childParam.childPrompt.prompt.Name} -> ${childParam.parentPlaceholder}`);
+        if (this.isVerboseEnabled(params)) {
+          LogStatus(`  🔹 Rendering child prompt template: ${childParam.childPrompt.prompt.Name} -> ${childParam.parentPlaceholder}`);
+        }
         
         const childPrompt = childParam.childPrompt.prompt;
         let renderedChildTemplate = '';
@@ -753,7 +811,9 @@ export class AIPromptRunner {
       renderedTemplatesMap[childResult.placeholder] = childResult.renderedTemplate;
     }
 
-    LogStatus(`✅ Completed rendering of ${childResults.length} child prompt templates`);
+    if (this.isVerboseEnabled(params)) {
+      LogStatus(`✅ Completed rendering of ${childResults.length} child prompt templates`);
+    }
     
     return {
       renderedTemplates: renderedTemplatesMap
@@ -799,12 +859,14 @@ export class AIPromptRunner {
         ...params.templateData    // Additional template data (highest priority)
       };
 
-      LogStatus(`🔧 Rendering prompt template with ${Object.keys(childTemplates).length} child templates and ${Object.keys(systemPlaceholders).length} system placeholders`);
-      
-      // Log placeholder replacement for debugging
-      for (const [placeholder, template] of Object.entries(childTemplates)) {
-        const truncatedTemplate = template.length > 100 ? template.substring(0, 100) + '...' : template;
-        LogStatus(`  📝 ${placeholder} -> ${truncatedTemplate}`);
+      if (this.isVerboseEnabled(params)) {
+        LogStatus(`🔧 Rendering prompt template with ${Object.keys(childTemplates).length} child templates and ${Object.keys(systemPlaceholders).length} system placeholders`);
+        
+        // Log placeholder replacement for debugging
+        for (const [placeholder, template] of Object.entries(childTemplates)) {
+          const truncatedTemplate = template.length > 100 ? template.substring(0, 100) + '...' : template;
+          LogStatus(`  📝 ${placeholder} -> ${truncatedTemplate}`);
+        }
       }
 
       // Render the template with the full params context
@@ -829,7 +891,8 @@ export class AIPromptRunner {
 
   /**
    * Selects the appropriate AI model based on prompt configuration and parameters.
-   * Uses AIPromptModels entity for prompt-specific model associations and fallback logic.
+   * Uses the unified buildModelVendorCandidates method to create an ordered list of candidates,
+   * then selects the first one with an available API key.
    */
   private async selectModel(
     prompt: AIPromptEntity,
@@ -837,116 +900,326 @@ export class AIPromptRunner {
     contextUser?: UserInfo,
     configurationId?: string,
     vendorId?: string,
+    params?: AIPromptParams
   ): Promise<AIModelEntityExtended | null> {
     try {
       // Load AI Engine to access cached models and prompt models
       await AIEngine.Instance.Config(false, contextUser);
 
-      // Resolve vendor ID to vendor name if provided
-      // use metadata cache
-      const vendorName: string | undefined = AIEngine.Instance.Vendors.find((v) => v.ID === vendorId)?.Name;      
-
-      // If explicit model is specified, validate it from cached models
-      if (explicitModelId) {
-        const model = AIEngine.Instance.Models.find((m) => m.ID === explicitModelId);
-        if (!model) {
-          throw new Error(`Specified model ${explicitModelId} not found in available models`);
-        }
-        if (!model.IsActive) {
-          throw new Error(`Specified model ${model.Name} (${explicitModelId}) is not active`);
-        }
-        
-        // Check if model type is compatible with prompt's model type requirement
-        if (prompt.AIModelTypeID && model.AIModelTypeID !== prompt.AIModelTypeID) {
-          const modelType = AIEngine.Instance.ModelTypes.find(mt => mt.ID === model.AIModelTypeID);
-          const promptModelType = AIEngine.Instance.ModelTypes.find(mt => mt.ID === prompt.AIModelTypeID);
-          throw new Error(`Specified model ${model.Name} is of type ${modelType?.Name || 'unknown'} but prompt ${prompt.Name} requires model type ${promptModelType?.Name || 'unknown'}`);
-        }
-        
-        return model;
-      }
-
-      // Get prompt-specific model associations from AIPromptModels
-      const promptModels = AIEngine.Instance.PromptModels.filter(
-        (pm) =>
-          pm.PromptID === prompt.ID &&
-          (pm.Status === 'Active' || pm.Status === 'Preview') &&
-          (!configurationId || !pm.ConfigurationID || pm.ConfigurationID === configurationId),
+      // Build unified list of model-vendor candidates
+      const candidates = this.buildModelVendorCandidates(
+        prompt,
+        explicitModelId,
+        configurationId,
+        vendorId
       );
 
-      let candidateModels: AIModelEntityExtended[] = [];
-
-      if (promptModels.length > 0) {
-        // Use prompt-specific models if defined
-        candidateModels = promptModels
-          .map((pm) => AIEngine.Instance.Models.find((m) => m.ID === pm.ModelID))
-          .filter((m) => m && m.IsActive && (!vendorName || m.Vendor === vendorName)) as AIModelEntityExtended[];
-
-        // Sort by priority from AIPromptModels (higher priority first)
-        candidateModels.sort((a, b) => {
-          const aPriority = promptModels.find((pm) => pm.ModelID === a.ID)?.Priority || 0;
-          const bPriority = promptModels.find((pm) => pm.ModelID === b.ID)?.Priority || 0;
-          return bPriority - aPriority;
-        });
-      } 
-      else {
-        // If no prompt-specific models, use all active models that match AIModelTypeID and vendor
-        candidateModels = AIEngine.Instance.Models.filter(
-          (m) =>
-            m.IsActive &&
-            (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID) &&
-            (!vendorName || m.Vendor === vendorName),
-        );
-      }
-      // Sort by power rank based on preference
-      if (prompt.SelectionStrategy === 'ByPower') {
-        switch (prompt.PowerPreference) {
-          case 'Highest':
-            candidateModels.sort((a, b) => b.PowerRank - a.PowerRank);
-            break;
-          case 'Lowest':
-            candidateModels.sort((a, b) => a.PowerRank - b.PowerRank);
-            break;
-          case 'Balanced':
-          default:
-            // For balanced, we could implement more sophisticated logic
-            // For now, just use highest power
-            candidateModels.sort((a, b) => b.PowerRank - a.PowerRank);
-            break;
-        }
-      }
-      else if (prompt.SelectionStrategy === 'Specific') {
-        // rank based on the priority in the AIPromptModels
-        candidateModels.sort((a, b) => {
-          // get the row from promptModels that match the model ID
-          const aPriority = promptModels.find((pm) => pm.ModelID === a.ID)?.Priority || 0;
-          const bPriority = promptModels.find((pm) => pm.ModelID === b.ID)?.Priority || 0;
-          return bPriority - aPriority; // Use the highest priority first
-        });
-      }
-      else {
-        // default ranking order
-        const minPowerRank = prompt.MinPowerRank || 0;
-        candidateModels = AIEngine.Instance.Models.filter(
-          (m) =>
-            m.IsActive &&
-            m.PowerRank >= minPowerRank &&
-            (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID) &&
-            (!vendorName || m.Vendor === vendorName),
-        );
-      }      
-
-      if (candidateModels.length === 0) {
-        LogError(`No suitable models found for prompt ${prompt.Name}`);
+      if (candidates.length === 0) {
+        LogError(`No suitable model candidates found for prompt ${prompt.Name}`);
         return null;
       }
 
-      // Return the top candidate model
-      return candidateModels[0];
+      if (this.isVerboseEnabled(params)) {
+        LogStatus(`🔍 Found ${candidates.length} model-vendor candidates for prompt ${prompt.Name}`);
+        if (candidates.length <= 5) {
+          candidates.forEach((c, i) => {
+            LogStatus(`   ${i + 1}. ${c.model.Name} via ${c.vendorName || 'default'} (${c.driverClass}) - Priority: ${c.priority}${c.isPreferredVendor ? ' [PREFERRED]' : ''}`);
+          });
+        }
+      }
+
+      // Select the first candidate with an available API key
+      const selected = await this.selectModelWithAPIKey(candidates, params);
+      
+      if (!selected) {
+        // No models with API keys found
+        return null;
+      }
+
+      // Store the selected vendor info on the model for later use by executeModel
+      const modelWithVendor = selected.model as AIModelEntityExtended & { 
+        _selectedVendorId?: string;
+        _selectedDriverClass?: string;
+        _selectedApiName?: string;
+      };
+      
+      modelWithVendor._selectedVendorId = selected.vendorId;
+      modelWithVendor._selectedDriverClass = selected.driverClass;
+      modelWithVendor._selectedApiName = selected.apiName;
+
+      return modelWithVendor;
     } catch (error) {
       LogError(`Error selecting model for prompt ${prompt.Name}: ${error.message}`);
       return null;
     }
+  }
+
+  /**
+   * Builds a unified, ordered list of model-vendor candidates based on all selection criteria.
+   * This method consolidates all the various selection strategies into a single ordered list.
+   * 
+   * @param prompt - The AI prompt with selection criteria
+   * @param explicitModelId - Explicitly specified model ID (highest priority)
+   * @param configurationId - Configuration ID for filtering
+   * @param preferredVendorId - Preferred vendor ID
+   * @returns Ordered array of model-vendor candidates (highest priority first)
+   */
+  private buildModelVendorCandidates(
+    prompt: AIPromptEntity,
+    explicitModelId?: string,
+    configurationId?: string,
+    preferredVendorId?: string
+  ): ModelVendorCandidate[] {
+    const candidates: ModelVendorCandidate[] = [];
+    const preferredVendorName = preferredVendorId ? 
+      AIEngine.Instance.Vendors.find(v => v.ID === preferredVendorId)?.Name : undefined;
+
+    // Helper function to create candidates for a model
+    const createCandidatesForModel = (
+      model: AIModelEntityExtended, 
+      basePriority: number,
+      source: ModelVendorCandidate['source'],
+      promptModelPriority?: number
+    ): ModelVendorCandidate[] => {
+      const modelCandidates: ModelVendorCandidate[] = [];
+      
+      // Get all vendors for this model
+      const modelVendors = AIEngine.Instance.ModelVendors
+        .filter(mv => mv.ModelID === model.ID && mv.Status === 'Active')
+        .sort((a, b) => b.Priority - a.Priority);
+
+      // First, add preferred vendor if it exists
+      if (preferredVendorId) {
+        const preferredVendor = modelVendors.find(mv => mv.VendorID === preferredVendorId);
+        if (preferredVendor) {
+          modelCandidates.push({
+            model,
+            vendorId: preferredVendor.VendorID,
+            vendorName: preferredVendor.Vendor,
+            driverClass: preferredVendor.DriverClass || model.DriverClass,
+            apiName: preferredVendor.APIName || model.APIName,
+            isPreferredVendor: true,
+            priority: basePriority + 1000, // Boost priority for preferred vendor
+            source
+          });
+        }
+      }
+
+      // Then add other vendors in priority order
+      for (const vendor of modelVendors) {
+        if (vendor.VendorID !== preferredVendorId) {
+          modelCandidates.push({
+            model,
+            vendorId: vendor.VendorID,
+            vendorName: vendor.Vendor,
+            driverClass: vendor.DriverClass || model.DriverClass,
+            apiName: vendor.APIName || model.APIName,
+            isPreferredVendor: false,
+            priority: basePriority + (vendor.Priority || 0),
+            source
+          });
+        }
+      }
+
+      // If no vendors found, add model with its default driver
+      if (modelCandidates.length === 0 && model.DriverClass) {
+        modelCandidates.push({
+          model,
+          driverClass: model.DriverClass,
+          apiName: model.APIName,
+          isPreferredVendor: false,
+          priority: basePriority,
+          source
+        });
+      }
+
+      // Apply prompt model priority if provided
+      if (promptModelPriority !== undefined) {
+        modelCandidates.forEach(c => c.priority += promptModelPriority * 10);
+      }
+
+      return modelCandidates;
+    };
+
+    // 1. Handle explicit model ID (highest priority)
+    if (explicitModelId) {
+      const model = AIEngine.Instance.Models.find(m => m.ID === explicitModelId);
+      if (model && model.IsActive) {
+        // Check model type compatibility
+        if (!prompt.AIModelTypeID || model.AIModelTypeID === prompt.AIModelTypeID) {
+          candidates.push(...createCandidatesForModel(model, 10000, 'explicit'));
+        }
+      }
+      // If explicit model specified, only use that model
+      return candidates;
+    }
+
+    // 2. Get prompt-specific models from AIPromptModels
+    const promptModels = AIEngine.Instance.PromptModels.filter(
+      pm => pm.PromptID === prompt.ID &&
+            (pm.Status === 'Active' || pm.Status === 'Preview') &&
+            (!configurationId || !pm.ConfigurationID || pm.ConfigurationID === configurationId)
+    );
+
+    if (promptModels.length > 0) {
+      // Use prompt-specific models with their configured priorities
+      for (const pm of promptModels) {
+        const model = AIEngine.Instance.Models.find(m => m.ID === pm.ModelID);
+        if (model && model.IsActive) {
+          // Respect vendor preference from AIPromptModels
+          const pmPreferredVendorId = pm.VendorID || preferredVendorId;
+          if (pmPreferredVendorId && pmPreferredVendorId !== preferredVendorId) {
+            // AIPromptModel has a specific vendor preference
+            const vendor = AIEngine.Instance.ModelVendors.find(
+              mv => mv.ModelID === model.ID && mv.VendorID === pmPreferredVendorId && mv.Status === 'Active'
+            );
+            if (vendor) {
+              candidates.push({
+                model,
+                vendorId: vendor.VendorID,
+                vendorName: vendor.Vendor,
+                driverClass: vendor.DriverClass || model.DriverClass,
+                apiName: vendor.APIName || model.APIName,
+                isPreferredVendor: true,
+                priority: 5000 + (pm.Priority || 0) * 100 + 1000, // Boost for AIPromptModel vendor preference
+                source: 'prompt-model'
+              });
+            }
+          }
+          
+          // Add all other vendor options for this model
+          const otherCandidates = createCandidatesForModel(model, 5000, 'prompt-model', pm.Priority)
+            .filter(c => c.vendorId !== pmPreferredVendorId);
+          candidates.push(...otherCandidates);
+        }
+      }
+    } else {
+      // 3. No prompt-specific models, use selection strategy
+      let modelPool: AIModelEntityExtended[] = AIEngine.Instance.Models.filter(
+        m => m.IsActive &&
+             (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID) &&
+             (!preferredVendorName || 
+              // Include models that have the preferred vendor OR no vendor filter
+              AIEngine.Instance.ModelVendors.some(mv => 
+                mv.ModelID === m.ID && 
+                mv.Status === 'Active' && 
+                mv.Vendor === preferredVendorName
+              ))
+      );
+
+      // Apply selection strategy
+      switch (prompt.SelectionStrategy) {
+        case 'ByPower':
+          // Sort by power rank based on preference
+          switch (prompt.PowerPreference) {
+            case 'Highest':
+              modelPool.sort((a, b) => b.PowerRank - a.PowerRank);
+              break;
+            case 'Lowest':
+              modelPool.sort((a, b) => a.PowerRank - b.PowerRank);
+              break;
+            case 'Balanced':
+              // For balanced, use middle-ranked models first
+              const avgPower = modelPool.reduce((sum, m) => sum + m.PowerRank, 0) / modelPool.length;
+              modelPool.sort((a, b) => 
+                Math.abs(a.PowerRank - avgPower) - Math.abs(b.PowerRank - avgPower)
+              );
+              break;
+          }
+          break;
+          
+        case 'Default':
+        default:
+          // Filter by minimum power rank
+          const minPowerRank = prompt.MinPowerRank || 0;
+          modelPool = modelPool.filter(m => m.PowerRank >= minPowerRank);
+          // Sort by power rank (highest first)
+          modelPool.sort((a, b) => b.PowerRank - a.PowerRank);
+          break;
+      }
+
+      // Create candidates for each model in the pool
+      modelPool.forEach((model, index) => {
+        const basePriority = 1000 - index * 10; // Decrease priority by position
+        candidates.push(...createCandidatesForModel(
+          model, 
+          basePriority, 
+          prompt.SelectionStrategy === 'ByPower' ? 'power-rank' : 'model-type'
+        ));
+      });
+    }
+
+    // Sort all candidates by priority (highest first)
+    candidates.sort((a, b) => b.priority - a.priority);
+
+    return candidates;
+  }
+
+  /**
+   * Finds the first model-vendor candidate that has an available API key
+   * 
+   * @param candidates - Ordered list of model-vendor candidates
+   * @param params - Optional prompt parameters for verbose flag
+   * @returns The first candidate with an available API key, or null if none found
+   */
+  private async selectModelWithAPIKey(
+    candidates: ModelVendorCandidate[],
+    params?: AIPromptParams
+  ): Promise<ModelVendorCandidate | null> {
+    const checkedDrivers = new Map<string, boolean>(); // Cache to avoid repeated lookups
+    let attemptCount = 0;
+    const verbose = this.isVerboseEnabled(params);
+    
+    if (verbose) {
+      LogStatus(`🔑 Checking API keys for ${candidates.length} model-vendor candidates...`);
+    }
+    
+    for (const candidate of candidates) {
+      attemptCount++;
+      
+      // Check cache first
+      if (checkedDrivers.has(candidate.driverClass)) {
+        const hasKey = checkedDrivers.get(candidate.driverClass)!;
+        if (hasKey) {
+          if (verbose) {
+            LogStatus(`✅ Selected model ${candidate.model.Name} with ${candidate.vendorName || 'default'} vendor (cached API key exists)`);
+          }
+          return candidate;
+        }
+        // Skip logging for cached negative results to reduce noise
+        continue;
+      }
+
+      // Check for API key with robust validation
+      const apiKey = GetAIAPIKey(candidate.driverClass);
+      const hasKey = this.isValidAPIKey(apiKey);
+      checkedDrivers.set(candidate.driverClass, hasKey);
+      
+      if (hasKey) {
+        LogStatus(`✅ Selected model ${candidate.model.Name} with ${candidate.vendorName || 'default'} vendor (driver: ${candidate.driverClass})`);
+        if (verbose) {
+          if (candidate.isPreferredVendor) {
+            LogStatus(`   Using preferred vendor${candidate.vendorId ? ` (${candidate.vendorName})` : ''}`);
+          }
+          LogStatus(`   Checked ${attemptCount} candidate(s) before finding valid API key`);
+        }
+        return candidate;
+      } else {
+        // Log first few failed attempts for debugging
+        if (verbose && attemptCount <= 3) {
+          LogStatus(`   ❌ No API key for ${candidate.model.Name}/${candidate.vendorName || 'default'} (${candidate.driverClass})`);
+        }
+      }
+    }
+
+    // Log what we tried
+    const triedSummary = candidates.slice(0, 5).map(c => 
+      `${c.model.Name}/${c.vendorName || 'default'}(${c.driverClass})`
+    ).join(', ');
+    
+    LogError(`No API keys found for any model-vendor combination. Tried: ${triedSummary}${candidates.length > 5 ? `... (${candidates.length} total)` : ''}`);
+    
+    return null;
   }
 
   /**
@@ -965,15 +1238,26 @@ export class AIPromptRunner {
 
       promptRun.PromptID = prompt.ID;
       promptRun.ModelID = model.ID;
+      
+      // Check if model has pre-selected vendor info from selectModel
+      const modelWithVendor = model as AIModelEntityExtended & { 
+        _selectedVendorId?: string;
+      };
+      
       if (vendorId) {
+        // Explicit vendor ID provided
         promptRun.VendorID = vendorId;
+      } else if (modelWithVendor._selectedVendorId) {
+        // Use vendor selected during model selection (with API key verification)
+        promptRun.VendorID = modelWithVendor._selectedVendorId;
       } else {
-        // need to grab the highest priority
-        // AI Model Vendor record for this model
-        const promptModels = AIEngine.Instance.PromptModels.filter((pm) => pm.ModelID === model.ID).sort((a, b) => b.Priority - a.Priority);
-        if (promptModels.length > 0) {
-          const highestPriorityModel = promptModels[0];
-          promptRun.VendorID = highestPriorityModel.VendorID;
+        // Fallback: grab the highest priority AI Model Vendor record for this model
+        const modelVendors = AIEngine.Instance.ModelVendors
+          .filter((mv) => mv.ModelID === model.ID && mv.Status === 'Active')
+          .sort((a, b) => b.Priority - a.Priority);
+        
+        if (modelVendors.length > 0) {
+          promptRun.VendorID = modelVendors[0].VendorID;
         }
       }
       promptRun.ConfigurationID = params.configurationId;
@@ -1120,61 +1404,41 @@ export class AIPromptRunner {
     cancellationToken?: AbortSignal,
   ): Promise<ChatResult> {
     try {
+      // Check if model has pre-selected vendor info from selectModel
+      const modelWithVendor = model as AIModelEntityExtended & { 
+        _selectedVendorId?: string;
+        _selectedDriverClass?: string;
+        _selectedApiName?: string;
+      };
+
       // Get vendor-specific configuration
-      let driverClass = model.DriverClass;
-      let apiName = model.APIName;
-      let maxInputTokens = model.InputTokenLimit;
-      let maxOutputTokens: number | null = null; // AIModel doesn't have this property
-      let supportsEffortLevel = model.SupportsEffortLevel;
-      let actualVendorId = vendorId;
-      
-      if (vendorId) {
-        // Find the AIModelVendor record for this specific vendor
-        const modelVendor = AIEngine.Instance.ModelVendors.find(
-          (mv) => mv.ModelID === model.ID && mv.VendorID === vendorId && mv.Status === 'Active'
-        );
+      let driverClass: string;
+      let apiName: string | undefined;
+
+      // If vendor info was pre-selected by selectModel, use it
+      if (modelWithVendor._selectedDriverClass) {
+        driverClass = modelWithVendor._selectedDriverClass;
+        apiName = modelWithVendor._selectedApiName;
         
-        if (modelVendor) {
-          // Use vendor-specific values
-          driverClass = modelVendor.DriverClass || driverClass;
-          apiName = modelVendor.APIName || apiName;
-          maxInputTokens = modelVendor.MaxInputTokens || maxInputTokens;
-          maxOutputTokens = modelVendor.MaxOutputTokens || maxOutputTokens;
-          supportsEffortLevel = modelVendor.SupportsEffortLevel ?? supportsEffortLevel;
-        } else {
-          // Warning: specified vendor doesn't provide this model
-          LogStatus(`⚠️ Warning: Vendor ${vendorId} does not provide model ${model.Name}. Falling back to highest priority vendor.`);
-          
-          // Find highest priority vendor for this model
-          const availableVendors = AIEngine.Instance.ModelVendors
-            .filter((mv) => mv.ModelID === model.ID && mv.Status === 'Active')
-            .sort((a, b) => b.Priority - a.Priority);
-          
-          if (availableVendors.length > 0) {
-            const fallbackVendor = availableVendors[0];
-            actualVendorId = fallbackVendor.VendorID;
-            driverClass = fallbackVendor.DriverClass || driverClass;
-            apiName = fallbackVendor.APIName || apiName;
-            maxInputTokens = fallbackVendor.MaxInputTokens || maxInputTokens;
-            maxOutputTokens = fallbackVendor.MaxOutputTokens || maxOutputTokens;
-            supportsEffortLevel = fallbackVendor.SupportsEffortLevel ?? supportsEffortLevel;
-            LogStatus(`✅ Using vendor ${fallbackVendor.Vendor} for model ${model.Name}`);
-          }
-        }
+        // Clean up temporary properties
+        delete modelWithVendor._selectedVendorId;
+        delete modelWithVendor._selectedDriverClass;
+        delete modelWithVendor._selectedApiName;
       } else {
-        // No vendor specified, use highest priority vendor
-        const availableVendors = AIEngine.Instance.ModelVendors
-          .filter((mv) => mv.ModelID === model.ID && mv.Status === 'Active')
-          .sort((a, b) => b.Priority - a.Priority);
+        // Fallback to existing logic if not pre-selected (shouldn't happen with new flow)
+        driverClass = model.DriverClass;
+        apiName = model.APIName;
         
-        if (availableVendors.length > 0) {
-          const defaultVendor = availableVendors[0];
-          actualVendorId = defaultVendor.VendorID;
-          driverClass = defaultVendor.DriverClass || driverClass;
-          apiName = defaultVendor.APIName || apiName;
-          maxInputTokens = defaultVendor.MaxInputTokens || maxInputTokens;
-          maxOutputTokens = defaultVendor.MaxOutputTokens || maxOutputTokens;
-          supportsEffortLevel = defaultVendor.SupportsEffortLevel ?? supportsEffortLevel;
+        if (vendorId) {
+          // Find the AIModelVendor record for this specific vendor
+          const modelVendor = AIEngine.Instance.ModelVendors.find(
+            (mv) => mv.ModelID === model.ID && mv.VendorID === vendorId && mv.Status === 'Active'
+          );
+          
+          if (modelVendor) {
+            driverClass = modelVendor.DriverClass || driverClass;
+            apiName = modelVendor.APIName || apiName;
+          }
         }
       }
 
