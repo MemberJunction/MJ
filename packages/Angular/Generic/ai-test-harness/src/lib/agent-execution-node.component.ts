@@ -15,14 +15,13 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
             <!-- Node Header -->
             <div class="node-header" 
                  (dblclick)="onDoubleClick()">
-                <!-- Expand/Collapse Icon -->
-                @if (hasExpandableContent()) {
+                <!-- Expand/Collapse Icon - Only show if node has children -->
+                @if (hasChildren()) {
                     <i class="expand-icon fa-solid"
                        [class.fa-chevron-down]="node.expanded"
                        [class.fa-chevron-right]="!node.expanded"
-                       (click)="onToggleNode($event)"></i>
-                } @else {
-                    <span class="expand-spacer"></span>
+                       (click)="onToggleChildren($event)"
+                       title="Toggle children"></i>
                 }
                 
                 <!-- Status Icon -->
@@ -101,10 +100,21 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
                         }
                     </span>
                 }
+                
+                <!-- Details Toggle Button - Only show if node has details -->
+                @if (hasNodeDetails()) {
+                    <button class="details-toggle-btn"
+                            (click)="onToggleDetails($event)"
+                            [title]="node.detailsExpanded ? 'Hide details' : 'Show details'">
+                        <i class="fa-solid"
+                           [class.fa-info]="!node.detailsExpanded"
+                           [class.fa-times]="node.detailsExpanded"></i>
+                    </button>
+                }
             </div>
             
-            <!-- All Details (when expanded) -->
-            @if (node.expanded) {
+            <!-- Node Details (when details are expanded) -->
+            @if (node.detailsExpanded) {
                 <!-- Show markdown details first if available -->
                 @if (node.detailsMarkdown || isNameTruncated()) {
                     <div class="markdown-details">
@@ -151,7 +161,7 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
                 </div>
             }
             
-            <!-- Children (when expanded) - HIERARCHICAL DISPLAY -->
+            <!-- Children (when children are expanded) - HIERARCHICAL DISPLAY -->
             @if (node.expanded && node.children && node.children.length > 0) {
                 @for (child of node.children; track child.id) {
                     <mj-execution-node 
@@ -172,7 +182,7 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
         
         /* Depth-based indentation - each level indents by 24px */
         .tree-node {
-            margin-bottom: 4px;
+            margin: 4px 0;
             position: relative;
         }
         
@@ -254,7 +264,19 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
             z-index: 2;
         }
         
-        /* Child level - single depth with connecting lines */
+        /* Only add left padding for nodes with children (that show chevrons) */
+        .depth-0.has-children::before {
+            content: '';
+            position: absolute;
+            left: 12px;
+            top: 0;
+            width: 2px;
+            height: 100%;
+            border-left: 2px dotted #c0c7d0;
+            z-index: 0; /* Behind everything */
+        }
+        
+        /* Child level - only for nodes that actually have parent chevrons */
         .depth-1 { 
             margin-left: 30px;
             padding-left: 12px;
@@ -267,19 +289,7 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
             z-index: 1;
         }
         
-        /* Continuous vertical line that runs through all children */
-        .depth-0::before {
-            content: '';
-            position: absolute;
-            left: 12px;
-            top: 0;
-            width: 2px;
-            height: 100%;
-            border-left: 2px dotted #c0c7d0;
-            z-index: 0; /* Behind everything */
-        }
-        
-        /* Horizontal line connecting to each child node */
+        /* Horizontal line connecting to each child node - only when parent has children */
         .depth-1::after {
             content: '';
             position: absolute;
@@ -289,6 +299,13 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
             height: 2px;
             border-bottom: 2px dotted #c0c7d0;
             z-index: 1;
+        }
+        
+        /* Visual indicator when details are expanded */
+        .tree-node.details-expanded > .node-header {
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
+            border-bottom: 1px solid #2196f3;
         }
         
         .node-header {
@@ -306,18 +323,13 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
         }
         
         .node-header:hover {
-            background: #e8f0fe !important;
-            border-color: #2196f3;
-            transform: translateX(2px);
+            background: var(--gray-700);
+            border-color: var(--mj-blue) !important;
         }
         
         /* Sub-agent specific styling */
         .tree-node.type-sub-agent > .node-header {
-            border-left: 4px solid #ff9800;
-        }
-        
-        .tree-node.type-sub-agent.expanded > .node-header {
-            background: #fff3e0 !important;
+            border-left: 4px solid var(--mj-blue);
         }
         
         /* Action specific styling */
@@ -344,11 +356,6 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
         .expand-icon:hover {
             background: #e0e0e0;
             color: #333;
-        }
-        
-        .expand-spacer {
-            width: 20px;
-            text-align: center;
         }
         
         .status-icon {
@@ -408,12 +415,55 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
             font-weight: 500;
         }
         
-        .node-details {
-            margin: 8px 0 8px 44px;
-            padding: 12px;
-            background: #f5f5f5;
+        /* Details Toggle Button */
+        .details-toggle-btn {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            border: 1px solid #e0e0e0;
             border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
             font-size: 12px;
+            color: #666;
+            margin-left: 4px;
+        }
+        
+        .details-toggle-btn:hover {
+            background: #f0f0f0;
+            border-color: #2196f3;
+            color: #2196f3;
+        }
+        
+        .details-toggle-btn:active {
+            background: #e3f2fd;
+        }
+        
+        /* When details are expanded, style the button differently */
+        .tree-node.details-expanded .details-toggle-btn {
+            background: #2196f3;
+            border-color: #2196f3;
+            color: white;
+        }
+        
+        .tree-node.details-expanded .details-toggle-btn:hover {
+            background: #1976d2;
+            border-color: #1976d2;
+        }
+        
+        .node-details {
+            margin: 0 5px;
+            padding: 16px;
+            background: var(--gray-600);
+            border: 1px solid var(--gray-700);
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            font-size: 12px;
+            position: relative;
+            z-index: 4;
         }
         
         .detail-section {
@@ -538,22 +588,40 @@ export class ExecutionNodeComponent {
         return !!(this.node.children && this.node.children.length > 0);
     }
     
-    onToggleNode(event?: Event): void {
+    onToggleChildren(event?: Event): void {
         if (event) {
             event.stopPropagation();
         }
-        if (this.hasExpandableContent()) {
+        if (this.hasChildren()) {
             this.toggleNode.emit(this.node);
+            this.userInteracted.emit();
+        }
+    }
+    
+    onToggleDetails(event?: Event): void {
+        if (event) {
+            event.stopPropagation();
+        }
+        if (this.hasNodeDetails()) {
+            this.node.detailsExpanded = !this.node.detailsExpanded;
             this.userInteracted.emit();
         }
     }
     
     
     onDoubleClick(): void {
-        if (this.hasExpandableContent()) {
+        if (this.hasChildren()) {
             this.toggleNode.emit(this.node);
             this.userInteracted.emit();
         }
+    }
+    
+    hasNodeDetails(): boolean {
+        return !!this.node.inputPreview || 
+               !!this.node.outputPreview || 
+               !!this.node.error || 
+               !!this.node.detailsMarkdown ||
+               this.isNameTruncated();
     }
     
     getTruncatedName(): string {
