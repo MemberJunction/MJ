@@ -69,7 +69,7 @@ export abstract class BaseAgentType {
      *   const response = JSON.parse(this.lastExecutionResult);
      *   
      *   if (response.taskComplete) {
-     *     return { step: 'success', payload: response.result };
+     *     return { step: 'success', payload: response.payload };
      *   } else if (response.needsSubAgent) {
      *     return { step: 'subagent', payload: response.subAgentConfig };
      *   } else {
@@ -78,13 +78,13 @@ export abstract class BaseAgentType {
      * }
      * ```
      */
-    public abstract DetermineNextStep(promptResult: AIPromptRunResult): Promise<BaseAgentNextStep>  
+    public abstract DetermineNextStep<P = any>(promptResult: AIPromptRunResult): Promise<BaseAgentNextStep<P>>;
 
     /**
      * The agent type is responsible for knowing what to retreive a payload from the prompt results for its
      * agent-type specific logic.
      */
-    public abstract RetrievePayload<T = any>(promptResult: AIPromptRunResult): Promise<T>;
+    public abstract RetrievePayload<P = any>(promptResult: AIPromptRunResult): Promise<P>;
 
     /**
      * The agent type is responsible for injecting a payload into the prompt. This can be done by updating the
@@ -92,7 +92,7 @@ export abstract class BaseAgentType {
      * @param payload 
      * @param prompt 
      */
-    public abstract InjectPayload<T = any>(payload: T, prompt: AIPromptParams): Promise<void>;
+    public abstract InjectPayload<P = any>(payload: P, prompt: AIPromptParams): Promise<void>;
 
     /**
      * Helper method that retrieves an instance of the agent type based on the provided agent type entity.

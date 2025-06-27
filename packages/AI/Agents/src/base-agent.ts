@@ -550,18 +550,18 @@ export class BaseAgent {
      * @returns {Promise<ExecuteAgentResult>} The execution result
      * @protected
      */
-    protected async processNextStep<R>(
+    protected async processNextStep<P>(
         params: ExecuteAgentParams,
         agentType: AIAgentTypeEntity,
         promptResult: AIPromptRunResult
-    ): Promise<BaseAgentNextStep<R>> {
+    ): Promise<BaseAgentNextStep<P>> {
         this.logStatus(`🤔 Processing next step for agent '${params.agent.Name}' with agent type '${agentType.Name}'`, true, params);
 
         const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(agentType);
 
         // Let the agent type determine the next step
         this.logStatus(`🎯 Agent type '${agentType.Name}' determining next step`, true, params);
-        const nextStep = await agentTypeInstance.DetermineNextStep(promptResult);
+        const nextStep = await agentTypeInstance.DetermineNextStep<P>(promptResult);
         
         this.logStatus(`📌 Next step determined: ${nextStep.step}${nextStep.terminate ? ' (terminating)' : ''}`, true, params);
 
@@ -1405,11 +1405,11 @@ export class BaseAgent {
             
             // TODO: Implement payload injection via agent type when needed
             const atInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
-            await atInstance.InjectPayload(retryContext?.payload, promptParams);
+            await atInstance.InjectPayload<P>(retryContext?.payload, promptParams);
 
             // Execute the prompt
             const promptResult = await this.executePrompt(promptParams);
-            
+
             // Update step entity with AIPromptRun ID if available
             if (promptResult.promptRun?.ID) {
                 stepEntity.TargetLogID = promptResult.promptRun.ID;
@@ -1427,14 +1427,7 @@ export class BaseAgent {
                     payload: cancelledResult.payload,   
                 }
             }
-            // Create prompt execution result
-            const executionResult: PromptExecutionResult = {
-                type: 'prompt',
-                promptId: config.childPrompt!.ID,
-                promptName: config.childPrompt!.Name,
-                result: promptResult
-            };
-            
+
             // Report decision processing progress
             params.onProgress?.({
                 step: 'decision_processing',
@@ -1446,6 +1439,15 @@ export class BaseAgent {
             // Determine next step using agent type
             const nextStep = await this.processNextStep<P>(params, config.agentType!, promptResult);
             
+            // Create prompt execution result
+            const executionResult: PromptExecutionResult<P> = {
+                type: 'prompt',
+                promptId: config.childPrompt!.ID,
+                promptName: config.childPrompt!.Name,
+                result: promptResult,
+                payload: nextStep.payload
+            };
+
             // Create next step decision
             const nextStepDecision: NextStepDecision = {
                 decision: nextStep.step,
@@ -1475,7 +1477,8 @@ export class BaseAgent {
                 },
                 nextStep: {
                     decision: nextStep.step,
-                    reasoning: nextStepDecision.reasoning
+                    reasoning: nextStepDecision.reasoning,
+                    payload: nextStep.payload
                 }
             };
             

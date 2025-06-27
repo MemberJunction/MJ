@@ -241,11 +241,12 @@ export type ExecutionNode = {
  * @property {string} promptName - Human-readable name of the prompt
  * @property {AIPromptRunResult} result - The native result from the prompt execution system
  */
-export type PromptExecutionResult = {
+export type PromptExecutionResult<P = any> = {
     type: 'prompt';
     promptId: string;
     promptName: string;
     result: AIPromptRunResult;
+    payload?: P; // Optional payload from the prompt execution, type depends on agent implementation
 }
 
 /**

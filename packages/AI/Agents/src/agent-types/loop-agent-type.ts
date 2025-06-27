@@ -64,7 +64,7 @@ export class LoopAgentType extends BaseAgentType {
      * 
      * @throws {Error} Implicitly through failed parsing, but returns failed step instead
      */
-    public async DetermineNextStep(promptResult: AIPromptRunResult): Promise<BaseAgentNextStep<LoopAgentResponse>> {
+    public async DetermineNextStep<P>(promptResult: AIPromptRunResult): Promise<BaseAgentNextStep<P>> {
         try {
             // Ensure we have a successful result
             if (!promptResult.success || !promptResult.result) {
@@ -109,7 +109,7 @@ export class LoopAgentType extends BaseAgentType {
                 return {
                     terminate: response.taskComplete,
                     step: 'success',
-                    payload: response,                    
+                    payload: response.payload,                    
                 };
             }
 
@@ -123,8 +123,8 @@ export class LoopAgentType extends BaseAgentType {
             }
 
             // Determine next step based on type
-            const retVal: Partial<BaseAgentNextStep<LoopAgentResponse>> = {
-                payload: response, // we always return the full response as the return value
+            const retVal: Partial<BaseAgentNextStep<LoopAgentResponse<P>>> = {
+                payload: response.payload,
                 terminate: response.taskComplete
             }
             switch (response.nextStep.type) {
@@ -174,7 +174,7 @@ export class LoopAgentType extends BaseAgentType {
                     retVal.errorMessage = `Unknown next step type: ${response.nextStep.type}`;
                     break;
             }
-            return retVal as BaseAgentNextStep<LoopAgentResponse>;
+            return retVal as BaseAgentNextStep<P>;
         } catch (error) {
             LogError(`Error in LoopAgentType.DetermineNextStep: ${error.message}`);
             return {
@@ -246,13 +246,22 @@ export class LoopAgentType extends BaseAgentType {
      * @returns {Promise<T>} The extracted payload
      */
     public async RetrievePayload<T = LoopAgentResponse>(promptResult: AIPromptRunResult): Promise<T> {
-        // Parse the result if it's a string
-        if (typeof promptResult.result === 'string') {
-            return JSON.parse(promptResult.result) as T;
+        // the promptResult.result should be the LoopAgentResponse
+        if (!promptResult.success || !promptResult.result) {
+            throw new Error('Prompt execution failed or returned no result');
         }
-        return promptResult.result as T;
+
+        const loopAgentResponse = promptResult.result as LoopAgentResponse;
+        if (!this.isValidLoopResponse(loopAgentResponse)) {
+            throw new Error('Invalid LoopAgentResponse structure');
+        }
+
+        // Return the response as the payload
+        return loopAgentResponse.payload as T;
     }
 
+
+    public static CURRENT_PAYLOAD_PLACHOLDER = '<< __currentPayload__ >>';
     /**
      * Injects a payload into the prompt parameters.
      * For LoopAgentType, this could be used to inject previous loop results or context.
@@ -261,12 +270,37 @@ export class LoopAgentType extends BaseAgentType {
      * @param {AIPromptParams} prompt - The prompt parameters to update
      */
     public async InjectPayload<T = any>(payload: T, prompt: AIPromptParams): Promise<void> {
-        // For LoopAgentType, we might inject the payload as additional context
-        // This could be used to pass previous loop iterations or accumulated results
-        if (prompt.data) {
-            prompt.data['previousLoopResult'] = payload;
+        // for Loop Agent Type we are using a special placeholder in all of the system prompts
+        // of << __currentPayload__ >> which will be replaced with the payload
+        if (!prompt || !prompt.conversationMessages || prompt.conversationMessages.length === 0) {
+            throw new Error('Prompt does not contain conversation messages to inject payload into');
+        }
+        const sysPrompt = prompt.conversationMessages[0];
+        if (!sysPrompt || sysPrompt.role !== 'system' || !sysPrompt.content) {
+            throw new Error('Invalid system prompt structure');
+        }
+
+        // if we get here we now have the SYSTEM prompt in our hands and we an do what we need
+        // Replace the placeholder with the actual payload
+        // check to see if sysPrompt.content is of type ChatMessageContentBlock or string
+        // if string we just do a simple replace, otherwise we need to cast to ChatMessageContentBlock[]
+        // and replace the placeholder in its .content property
+
+        // first create a regex to match the placeholder
+        const placeholderRegex = new RegExp(LoopAgentType.CURRENT_PAYLOAD_PLACHOLDER, 'g');
+
+        if (typeof sysPrompt.content === 'string') {
+            // replace all instances of the placeholder in the string
+            sysPrompt.content = sysPrompt.content.replace(placeholderRegex, JSON.stringify(payload));
+        } else if (Array.isArray(sysPrompt.content)) {
+            // assuming sysPrompt.content is a ChatMessageContentBlock[]
+            sysPrompt.content.forEach(block => {
+                if (typeof block.content === 'string') {
+                    block.content = block.content.replace(placeholderRegex, JSON.stringify(payload));
+                }
+            });
         } else {
-            prompt.data = { previousLoopResult: payload };
+            throw new Error('System prompt content is not a string or ChatMessageContentBlock');
         }
     }
 }
