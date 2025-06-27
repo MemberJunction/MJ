@@ -302,126 +302,9 @@ export interface ExecutionStats {
             font-size: 14px;
         }
 
-        /* Tree Nodes */
+        /* Tree Nodes - These styles are for reference only, actual rendering is done by ExecutionNodeComponent */
         .tree-node {
             margin-bottom: 4px;
-        }
-
-        .node-header {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
-            background: #f8f9fa;
-            border: 1px solid #e0e0e0;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            user-select: none;
-        }
-
-        .node-header:hover {
-            background: #e8f0fe;
-            border-color: #2196f3;
-        }
-
-        .expand-icon, .expand-spacer {
-            width: 16px;
-            text-align: center;
-            color: #666;
-            font-size: 10px;
-        }
-
-        .status-icon {
-            width: 20px;
-            text-align: center;
-            font-size: 14px;
-        }
-
-        .status-pending { color: #999; }
-        .status-running { color: #2196f3; }
-        .status-completed { color: #4caf50; }
-        .status-failed { color: #f44336; }
-
-        .type-icon {
-            width: 20px;
-            text-align: center;
-            font-size: 14px;
-            color: #666;
-        }
-
-        .node-name {
-            flex: 1;
-            font-size: 13px;
-            font-weight: 500;
-            color: #1a1a1a;
-        }
-
-        .node-duration {
-            font-size: 12px;
-            color: #666;
-            font-weight: 500;
-        }
-
-        .node-metrics {
-            display: flex;
-            gap: 12px;
-            font-size: 12px;
-        }
-
-        .tokens {
-            color: #666;
-        }
-
-        .cost {
-            color: #2196f3;
-            font-weight: 500;
-        }
-
-        /* Node Details */
-        .node-details {
-            margin: 8px 0 8px 44px;
-            padding: 12px;
-            background: #f5f5f5;
-            border-radius: 4px;
-            font-size: 12px;
-        }
-
-        .detail-section {
-            margin-bottom: 8px;
-        }
-
-        .detail-section:last-child {
-            margin-bottom: 0;
-        }
-
-        .detail-section.error {
-            color: #d32f2f;
-        }
-
-        .detail-label {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-weight: 600;
-            margin-bottom: 4px;
-            color: #666;
-        }
-
-        .detail-section.error .detail-label {
-            color: #d32f2f;
-        }
-
-        .detail-label i {
-            font-size: 12px;
-        }
-
-        .detail-content {
-            padding-left: 18px;
-            color: #333;
-            line-height: 1.4;
-            white-space: pre-wrap;
-            word-break: break-word;
         }
 
         /* Footer */
@@ -480,112 +363,6 @@ export interface ExecutionStats {
             font-size: 12px;
             font-weight: 500;
         }
-
-        /* Details Toggle Button */
-        .details-toggle {
-            margin-left: 8px;
-            padding: 2px 6px;
-            background: transparent;
-            border: 1px solid #ddd;
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 10px;
-            color: #666;
-            transition: all 0.2s ease;
-        }
-        
-        .details-toggle:hover {
-            background: #f0f0f0;
-            border-color: #2196f3;
-            color: #2196f3;
-        }
-        
-        /* Markdown Details Section */
-        .markdown-details {
-            margin: 8px 0 8px 44px;
-            padding: 12px;
-            background: #f9fafb;
-            border-left: 3px solid #2196f3;
-            border-radius: 0 4px 4px 0;
-            font-size: 13px;
-            line-height: 1.6;
-        }
-        
-        .markdown-details h2 {
-            font-size: 16px;
-            margin: 0 0 8px 0;
-            color: #1a1a1a;
-        }
-        
-        .markdown-details h3 {
-            font-size: 14px;
-            margin: 8px 0 6px 0;
-            color: #333;
-        }
-        
-        .markdown-details h4 {
-            font-size: 13px;
-            margin: 6px 0 4px 0;
-            color: #555;
-        }
-        
-        .markdown-details ul {
-            margin: 4px 0;
-            padding-left: 20px;
-        }
-        
-        .markdown-details li {
-            margin: 2px 0;
-        }
-        
-        .markdown-details code {
-            background: #e8f0fe;
-            padding: 1px 4px;
-            border-radius: 3px;
-            font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 12px;
-        }
-        
-        .markdown-details pre {
-            background: #f5f5f5;
-            padding: 8px;
-            border-radius: 4px;
-            overflow-x: auto;
-            margin: 8px 0;
-        }
-        
-        .markdown-details pre code {
-            background: none;
-            padding: 0;
-        }
-        
-        .markdown-details strong {
-            font-weight: 600;
-            color: #1a1a1a;
-        }
-        
-        .markdown-details em {
-            font-style: italic;
-            color: #555;
-        }
-
-        /* Button styling for execution history toggle */
-        .execution-history-toggle {
-            background: transparent;
-            border: none;
-            padding: 4px 8px;
-            margin-left: 4px;
-            cursor: pointer;
-            color: #666;
-            font-size: 12px;
-            border-radius: 3px;
-            transition: all 0.2s ease;
-        }
-        
-        .execution-history-toggle:hover {
-            background: #e3f2fd;
-            color: #2196f3;
-        }
         
         /* View Run Button */
         .view-run-btn {
@@ -622,20 +399,6 @@ export interface ExecutionStats {
 
             .execution-tree {
                 padding: 12px;
-            }
-
-            .node-header {
-                padding: 6px 8px;
-                gap: 6px;
-            }
-
-            .node-metrics {
-                display: none;
-            }
-            
-            .markdown-details {
-                margin-left: 20px;
-                font-size: 12px;
             }
         }
     `]
@@ -693,15 +456,45 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     constructor(private cdr: ChangeDetectorRef) {}
     
     ngOnChanges(changes: SimpleChanges): void {
+        console.log('🔄 Execution Monitor ngOnChanges:', {
+            executionDataChanged: !!changes['executionData'],
+            modeChanged: !!changes['mode'],
+            hasExecutionData: !!this.executionData,
+            currentTreeLength: this.executionTree.length
+        });
         
         if (changes['executionData']) {
-            // Check if we're starting a new live execution (empty liveSteps array)
-            if (this.mode === 'live' && 
-                this.executionData && 
-                this.executionData.liveSteps && 
-                this.executionData.liveSteps.length === 0 &&
-                this.executionTree.length > 0) {
-                // Clear everything for new run
+            // Log the change details
+            const oldData = changes['executionData'].previousValue;
+            const newData = changes['executionData'].currentValue;
+            
+            console.log('📊 Execution data changed:', {
+                oldDataExists: !!oldData,
+                newDataExists: !!newData,
+                newDataKeys: newData ? Object.keys(newData) : [],
+                executionTreeLength: newData?.executionTree?.length,
+                forceRefresh: newData?._forceRefresh
+            });
+            
+            // Check if this is a different execution by comparing run IDs
+            const oldRunId = oldData?.agentRun?.ID || oldData?.promptRun?.ID;
+            const newRunId = newData?.agentRun?.ID || newData?.promptRun?.ID;
+            
+            const isDifferentExecution = oldRunId && newRunId && oldRunId !== newRunId;
+            const isStartingNewLiveExecution = this.mode === 'live' && 
+                newData && 
+                newData.liveSteps && 
+                newData.liveSteps.length === 0 &&
+                this.executionTree.length > 0;
+            const isForceRefresh = newData && newData._forceRefresh;
+            
+            // Clear if it's a genuinely different execution, starting fresh live execution, or force refresh
+            if (isDifferentExecution || isStartingNewLiveExecution || isForceRefresh) {
+                console.log('🗑️ Clearing execution tree due to:', {
+                    isDifferentExecution,
+                    isStartingNewLiveExecution,
+                    isForceRefresh
+                });
                 this.processedStepIds.clear();
                 this.newlyAddedNodeIds.clear();
                 this.clearNodeComponents();
@@ -710,24 +503,40 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                 this.calculateStats();
             }
             
-            // Process data even if it's empty/null (for initial setup)
+            // Check for auto-expand flag
+            if (this.executionData && this.executionData._autoExpandAll) {
+                // Auto-expand all nodes after a short delay to ensure rendering is complete
+                setTimeout(() => {
+                    this.expandAllNodes();
+                }, 50);
+            }
+            
+            // Process data (this will preserve existing nodes if it's the same execution)
             this.processExecutionData();
         }
         
-        // Handle mode changes
+        // Handle mode changes - be more selective about when to clear
         if (changes['mode'] && !changes['mode'].firstChange) {
-            // Clear live nodes when switching from live to historical
-            if (changes['mode'].previousValue === 'live' && changes['mode'].currentValue === 'historical') {
+            const previousMode = changes['mode'].previousValue;
+            const currentMode = changes['mode'].currentValue;
+            
+            console.log('🔄 Mode changed:', { previousMode, currentMode });
+            
+            // Only clear when switching from live to historical AND we don't have historical data
+            if (previousMode === 'live' && currentMode === 'historical') {
                 // Stop live updates
                 if (this.updateSubscription) {
                     this.updateSubscription.unsubscribe();
                     this.updateSubscription = undefined;
                 }
-                // Clear all tracking data from live mode
-                this.processedStepIds.clear();
-                this.newlyAddedNodeIds.clear();
-                this.clearNodeComponents();
-                this.executionTree = [];
+                
+                // Only clear if we don't have valid historical data to show
+                if (!this.executionData || (!this.executionData.executionTree && !this.executionData.steps)) {
+                    this.processedStepIds.clear();
+                    this.newlyAddedNodeIds.clear();
+                    this.clearNodeComponents();
+                    this.executionTree = [];
+                }
             }
             this.processExecutionData();
         }
@@ -736,6 +545,11 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     ngAfterViewInit(): void {
         this.viewInitialized = true;
         
+        console.log('🎯 View initialized, checking for pending data:', {
+            hasExecutionData: !!this.executionData,
+            treeLength: this.executionTree.length,
+            hasContainer: !!this.executionNodesContainer
+        });
         
         // Initial setup for scroll behavior
         if (this.mode === 'live') {
@@ -744,7 +558,11 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         
         // If we have data waiting to be rendered, render it now
         if (this.executionData && this.executionTree.length === 0) {
+            console.log('⚡ Processing pending execution data after view init');
             this.processExecutionData();
+        } else if (this.executionTree.length > 0 && this.nodeComponentMap.size === 0) {
+            console.log('⚡ Re-rendering existing tree after view init');
+            this.renderTree();
         }
     }
     
@@ -773,15 +591,23 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      * Process execution data based on mode
      */
     private processExecutionData(): void {
+        console.log('⚙️ Processing execution data:', {
+            mode: this.mode,
+            hasExecutionData: !!this.executionData,
+            currentTreeLength: this.executionTree.length,
+            viewInitialized: this.viewInitialized,
+            hasContainer: !!this.executionNodesContainer
+        });
         
         if (this.mode === 'historical') {
-            // Clear processed step IDs when processing historical data
-            this.processedStepIds.clear();
+            // Only clear processed step IDs if we don't have existing data or it's different data
+            if (this.executionTree.length === 0) {
+                this.processedStepIds.clear();
+            }
             // Process historical data
             this.buildTreeFromHistoricalData();
         } else {
-            // For live mode, only clear if we don't have existing data
-            // This prevents losing state when switching tabs
+            // For live mode, preserve existing data when possible
             if (this.executionTree.length === 0) {
                 this.processedStepIds.clear();
                 this.newlyAddedNodeIds.clear();
@@ -790,9 +616,13 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             this.setupLiveUpdates();
         }
         
-        // Only calculate stats if we have data
-        if (this.executionTree.length > 0) {
-            this.calculateStats();
+        // Always calculate stats when we have data or when processing new data
+        this.calculateStats();
+        
+        // Force change detection after processing
+        if (this.viewInitialized) {
+            this.cdr.markForCheck();
+            this.cdr.detectChanges();
         }
     }
     
@@ -800,8 +630,15 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      * Build tree from historical execution data
      */
     private buildTreeFromHistoricalData(): void {
+        console.log('🏗️ Building tree from historical data:', {
+            hasExecutionData: !!this.executionData,
+            executionTreeLength: this.executionData?.executionTree?.length,
+            stepsLength: this.executionData?.steps?.length,
+            currentTreeLength: this.executionTree.length
+        });
         
         if (!this.executionData) {
+            console.log('⚠️ No execution data available');
             this.clearNodeComponents();
             this.executionTree = [];
             return;
@@ -812,21 +649,29 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         
         // Handle executionTree format - historical mode should only use saved database data
         if (this.executionData.executionTree) {
+            console.log('📊 Converting execution tree with', this.executionData.executionTree.length, 'nodes');
             const allNodes = this.convertExecutionTree(this.executionData.executionTree);
+            console.log('🔄 Converted to', allNodes.length, 'tree nodes');
             // Filter out live-only nodes in historical mode
             this.executionTree = this.filterNodesForMode(allNodes, 'historical');
+            console.log('✅ After filtering for historical mode:', this.executionTree.length, 'nodes');
         } else if (this.executionData.steps) {
+            console.log('📊 Converting legacy steps with', this.executionData.steps.length, 'steps');
             // Handle legacy steps format
             const allNodes = this.convertLegacySteps(this.executionData.steps);
             this.executionTree = this.filterNodesForMode(allNodes, 'historical');
+            console.log('✅ After converting legacy steps:', this.executionTree.length, 'nodes');
         } else {
+            console.log('⚠️ No executionTree or steps found in data');
             this.executionTree = [];
         }
         
-        
-        // Render the tree using dynamic components
+        // Always render the tree if we have a container
         if (this.executionNodesContainer) {
+            console.log('🎨 Rendering tree with', this.executionTree.length, 'nodes');
             this.renderTree();
+        } else {
+            console.log('⚠️ No execution nodes container available for rendering');
         }
     }
     
@@ -834,6 +679,11 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      * Render the execution tree using dynamic components
      */
     private renderTree(): void {
+        console.log('🎨 Rendering execution tree:', {
+            hasContainer: !!this.executionNodesContainer,
+            treeLength: this.executionTree.length,
+            viewInitialized: this.viewInitialized
+        });
         
         if (!this.executionNodesContainer) {
             console.warn('📊 Execution Monitor: No container available for rendering');
@@ -843,25 +693,38 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         // Clear and recreate all components for historical view
         this.clearNodeComponents();
         
+        console.log('🔄 Creating components for', this.executionTree.length, 'nodes');
         
         // Create components for each root node
         for (const node of this.executionTree) {
-            this.createNodeComponent(node, this.executionNodesContainer);
+            const componentRef = this.createNodeComponent(node, this.executionNodesContainer);
+            console.log('✅ Created component for node:', node.name, 'depth:', node.depth);
         }
         
+        // Force change detection after rendering
+        this.cdr.markForCheck();
+        this.cdr.detectChanges();
+        
+        console.log('🎯 Tree rendering complete. Components created:', this.nodeComponentMap.size);
     }
     
     /**
      * Create a component for a node and its children
+     * This now ensures proper depth is passed and used for indentation
      */
     private createNodeComponent(node: ExecutionTreeNode, container: ViewContainerRef): ComponentRef<ExecutionNodeComponent> {
         const componentRef = container.createComponent(ExecutionNodeComponent);
         const instance = componentRef.instance;
         
-        // Set inputs
-        instance.node = node;
+        // IMPORTANT: Ensure the node has the correct depth
+        // Create a new node object to ensure Angular detects the change
+        const nodeWithDepth = {
+            ...node,
+            depth: node.depth || 0  // Ensure depth is always defined
+        };
         
-        // No need to apply margin here - it's handled in the component template
+        // Set inputs
+        instance.node = nodeWithDepth;
         
         // Subscribe to outputs
         instance.toggleNode.subscribe((n: ExecutionTreeNode) => this.toggleNode(n));
@@ -879,8 +742,11 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     
     /**
      * Convert new execution tree format to display nodes
+     * FIXED: Maintain proper hierarchy for sub-agents instead of flattening
      */
     private convertExecutionTree(nodes: any[], depth: number = 0): ExecutionTreeNode[] {
+        const treeNodes: ExecutionTreeNode[] = [];
+        
         // Sort nodes by StepNumber before processing
         const sortedNodes = [...nodes].sort((a, b) => {
             const aStepNum = a.step?.StepNumber || 0;
@@ -888,18 +754,16 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             return aStepNum - bStepNum;
         });
         
-        return sortedNodes.map((node, index) => {
-            // Parse the step name for markdown content (same as live steps)
+        for (const node of sortedNodes) {
+            // Parse the step name for markdown content
             const stepName = node.step?.StepName || 'Unknown Step';
             let name = stepName;
             let detailsMarkdown: string | undefined;
             
-            // Check if the step name contains markdown (indicated by newlines or markdown syntax)
+            // Check if the step name contains markdown
             if (stepName.includes('\n') || stepName.includes('**') || stepName.includes('##')) {
-                // Split by newline and use first line as name
                 const lines = stepName.split('\n');
                 name = lines[0].trim();
-                // Rest is markdown details
                 if (lines.length > 1) {
                     detailsMarkdown = lines.slice(1).join('\n').trim();
                 }
@@ -926,7 +790,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             const outputPreview = this.createPreview(node.outputData);
             
             const treeNode: ExecutionTreeNode = {
-                id: node.step?.ID || `node-${Date.now()}-${index}`,
+                id: node.step?.ID || `node-${Date.now()}-${Math.random()}`,
                 name: name,
                 type: this.mapStepType(node.executionType || node.step?.StepType),
                 status: this.mapStepStatus(node.step?.Status),
@@ -937,13 +801,13 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                 inputPreview: inputPreview,
                 outputPreview: outputPreview,
                 error: node.step?.ErrorMessage,
-                expanded: false,
-                depth: node.depth !== undefined ? node.depth : depth,  // Use node.depth if available, fallback to recursion depth
+                expanded: false, // Start collapsed for sub-agents
+                depth: depth, // Use actual depth for proper indentation
                 tokensUsed: this.extractTokens(node.outputData),
                 cost: this.extractCost(node.outputData),
                 detailsMarkdown: detailsMarkdown,
                 detailsExpanded: false,
-                children: node.children ? this.convertExecutionTree(node.children, node.depth !== undefined ? node.depth + 1 : depth + 1) : undefined,
+                children: undefined, // Will be set below
                 displayMode: displayMode
             };
             
@@ -962,8 +826,15 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                 treeNode.actionIconClass = this.lastParsedActionData.actionIconClass;
             }
             
-            return treeNode;
-        });
+            // IMPORTANT: Process children recursively to maintain hierarchy
+            if (node.children && node.children.length > 0) {
+                treeNode.children = this.convertExecutionTree(node.children, depth + 1);
+            }
+            
+            treeNodes.push(treeNode);
+        }
+        
+        return treeNodes;
     }
     
     /**
@@ -1190,6 +1061,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     
     /**
      * Convert live steps format to execution tree format
+     * FIXED: Ensure depth is properly preserved
      */
     private convertLiveStepsToTree(liveSteps: any[]): ExecutionTreeNode[] {
         const treeNodes: ExecutionTreeNode[] = [];
@@ -1227,7 +1099,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                 startTime: step.startTime ? new Date(step.startTime) : new Date(),
                 agentPath: step.agentHierarchy || [],
                 expanded: false,
-                depth: step.depth || 0,
+                depth: step.depth !== undefined ? step.depth : 0,  // Ensure depth is always defined
                 detailsMarkdown: detailsMarkdown,
                 detailsExpanded: false
             };
@@ -1295,6 +1167,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                 // Update the component if it exists
                 const componentRef = this.nodeComponentMap.get(nodeId);
                 if (componentRef) {
+                    // Create a new object to ensure change detection
                     componentRef.instance.node = { ...node };
                     componentRef.changeDetectorRef.detectChanges();
                 }
@@ -1340,33 +1213,68 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             this.stats.totalCost = this.executionData.agentRun.TotalCost || 0;
         }
         
-        const processNode = (node: ExecutionTreeNode) => {
-            this.stats.totalSteps++;
+        // Calculate stats from execution tree nodes if we have them
+        if (this.executionTree.length > 0) {
+            const processNode = (node: ExecutionTreeNode) => {
+                this.stats.totalSteps++;
+                
+                if (node.status === 'completed') this.stats.completedSteps++;
+                if (node.status === 'failed') this.stats.failedSteps++;
+                
+                // Only accumulate tokens if we don't have agent run data
+                if (!this.executionData?.agentRun) {
+                    if (node.tokensUsed) this.stats.totalTokens += node.tokensUsed;
+                    if (node.cost) this.stats.totalCost += node.cost;
+                }
+                
+                if (node.duration) this.stats.totalDuration! += node.duration;
+                
+                this.stats.stepsByType[node.type] = (this.stats.stepsByType[node.type] || 0) + 1;
+                
+                // Count prompts
+                if (node.type === 'prompt' || node.promptCount) {
+                    this.stats.totalPrompts += node.promptCount || 1;
+                }
+                
+                if (node.children) {
+                    node.children.forEach(child => processNode(child));
+                }
+            };
             
-            if (node.status === 'completed') this.stats.completedSteps++;
-            if (node.status === 'failed') this.stats.failedSteps++;
+            this.executionTree.forEach(node => processNode(node));
+        } else if (this.executionData?.executionTree) {
+            // If we don't have processed tree nodes but have raw execution data, calculate from raw data
+            console.log('📈 Calculating stats from raw execution data since tree is empty');
+            const processRawNode = (node: any) => {
+                this.stats.totalSteps++;
+                
+                const status = this.mapStepStatus(node.step?.Status);
+                if (status === 'completed') this.stats.completedSteps++;
+                if (status === 'failed') this.stats.failedSteps++;
+                
+                if (node.durationMs) this.stats.totalDuration! += node.durationMs;
+                
+                const nodeType = this.mapStepType(node.executionType || node.step?.StepType);
+                this.stats.stepsByType[nodeType] = (this.stats.stepsByType[nodeType] || 0) + 1;
+                
+                if (nodeType === 'prompt') {
+                    this.stats.totalPrompts += 1;
+                }
+                
+                if (node.children) {
+                    node.children.forEach((child: any) => processRawNode(child));
+                }
+            };
             
-            // Only accumulate tokens if we don't have agent run data
-            if (!this.executionData?.agentRun) {
-                if (node.tokensUsed) this.stats.totalTokens += node.tokensUsed;
-                if (node.cost) this.stats.totalCost += node.cost;
-            }
-            
-            if (node.duration) this.stats.totalDuration! += node.duration;
-            
-            this.stats.stepsByType[node.type] = (this.stats.stepsByType[node.type] || 0) + 1;
-            
-            // Count prompts
-            if (node.type === 'prompt' || node.promptCount) {
-                this.stats.totalPrompts += node.promptCount || 1;
-            }
-            
-            if (node.children) {
-                node.children.forEach(child => processNode(child));
-            }
-        };
+            this.executionData.executionTree.forEach((node: any) => processRawNode(node));
+        }
         
-        this.executionTree.forEach(node => processNode(node));
+        console.log('📈 Stats calculated:', {
+            totalSteps: this.stats.totalSteps,
+            treeLength: this.executionTree.length,
+            executionDataExists: !!this.executionData,
+            hasRawExecutionTree: !!this.executionData?.executionTree
+        });
     }
     
     /**
@@ -1387,19 +1295,6 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             
             this.cdr.markForCheck();
         }
-    }
-    
-    /**
-     * Check if node has expandable content
-     */
-    private hasExpandableContent(node: ExecutionTreeNode): boolean {
-        return !!(node.children && node.children.length > 0) ||
-               node.type === 'sub-agent' || 
-               node.type === 'action' || 
-               !!node.inputPreview || 
-               !!node.outputPreview || 
-               !!node.error || 
-               !!node.detailsMarkdown;
     }
     
     
@@ -1555,6 +1450,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     
     /**
      * Append new live steps without re-rendering entire tree
+     * FIXED: Ensure depth is properly preserved when creating nodes
      */
     private appendNewLiveSteps(liveSteps: any[]): void {
         
@@ -1651,15 +1547,15 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                     componentRef.changeDetectorRef.detectChanges();
                 }
             } else {
-                // Create new node
+                // Create new node with proper depth
                 const newNode = this.createNodeFromLiveStep(step);
                 
-                // Debug: Log if depth is missing
-                if (newNode.depth === 0 && step.depth !== 0) {
-                    console.warn('Node depth was reset to 0 for step:', step);
+                // Ensure depth is set from the step data
+                if (step.depth !== undefined) {
+                    newNode.depth = step.depth;
                 }
                 
-                if (step.depth === 0) {
+                if (newNode.depth === 0) {
                     // Add to tree and create component
                     this.executionTree.push(newNode);
                     this.createNodeComponent(newNode, this.executionNodesContainer);
@@ -1682,7 +1578,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                             parentComponentRef.changeDetectorRef.detectChanges();
                         }
                     } else {
-                        // If no parent found, add as root
+                        // If no parent found, add as root but preserve depth
                         this.executionTree.push(newNode);
                         this.createNodeComponent(newNode, this.executionNodesContainer);
                     }
@@ -1773,7 +1669,9 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      * Filter nodes based on display mode
      */
     private filterNodesForMode(nodes: ExecutionTreeNode[], mode: ExecutionMonitorMode): ExecutionTreeNode[] {
-        return nodes.filter(node => {
+        console.log('🔍 Filtering nodes for mode:', mode, 'from', nodes.length, 'nodes');
+        
+        const filteredNodes = nodes.filter(node => {
             // If no displayMode is set, default to showing in both modes
             if (!node.displayMode) {
                 return true;
@@ -1788,8 +1686,12 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                 return true;
             }
             
+            console.log('📄 Filtering out node in', mode, 'mode:', node.name, 'displayMode:', node.displayMode);
             return false;
         });
+        
+        console.log('✅ Filtered to', filteredNodes.length, 'nodes for mode:', mode);
+        return filteredNodes;
     }
     
     /**
@@ -1806,6 +1708,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     
     /**
      * Create a single node from a live step
+     * FIXED: Ensure depth is properly set from step data
      */
     private createNodeFromLiveStep(step: any): ExecutionTreeNode {
         const stepName = step.step?.StepName || 'Processing...';
@@ -1859,6 +1762,9 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         
         const nodeType = this.mapStepType(step.executionType || step.step?.StepType);
         
+        // IMPORTANT: Use the depth from step data, ensure it's always defined
+        const nodeDepth = step.depth !== undefined ? step.depth : 0;
+        
         const node: ExecutionTreeNode = {
             id: step.step?.ID || this.generateStepId(step),
             name: name,
@@ -1869,7 +1775,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             duration: step.durationMs,
             agentPath: step.agentHierarchy || [],
             expanded: false,
-            depth: step.depth || 0,
+            depth: nodeDepth,  // Use the extracted depth
             detailsMarkdown: detailsMarkdown,
             detailsExpanded: false,
             inputPreview: inputPreview,
@@ -1987,5 +1893,97 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             }
         }
         return false;
+    }
+    
+    /**
+     * Expands nodes in the execution tree that have children
+     * Called when auto-expand flag is detected or execution completes
+     */
+    private expandAllNodes(): void {
+        if (!this.executionTree || this.executionTree.length === 0) {
+            return;
+        }
+        
+        console.log('🔄 Starting auto-expansion of nodes with children', this.executionTree.length);
+        
+        // Recursively expand only nodes that have children
+        const expandNodeRecursively = (nodes: ExecutionTreeNode[]) => {
+            for (const node of nodes) {
+                // Only expand nodes that have children (sub-nodes)
+                const hasChildren = node.children && node.children.length > 0;
+                
+                if (hasChildren) {
+                    node.expanded = true;
+                    
+                    console.log(`Expanding node with children: ${node.name}`, {
+                        childCount: node.children?.length,
+                        nodeType: node.type
+                    });
+                    
+                    // Update the corresponding component if it exists
+                    const componentRef = this.nodeComponentMap.get(node.id);
+                    if (componentRef) {
+                        // Create a new object to ensure change detection
+                        const updatedNode = { ...node, expanded: true };
+                        componentRef.instance.node = updatedNode;
+                        componentRef.changeDetectorRef.markForCheck();
+                        componentRef.changeDetectorRef.detectChanges();
+                        console.log(`Updated component for node: ${node.name}`);
+                    } else {
+                        console.log(`No component found for node: ${node.name}`);
+                    }
+                    
+                    // Expand children recursively
+                    expandNodeRecursively(node.children!);
+                } else {
+                    console.log(`Skipping node without children: ${node.name}`, {
+                        hasExpandableContent: this.hasExpandableContent(node),
+                        hasInputPreview: !!node.inputPreview,
+                        hasOutputPreview: !!node.outputPreview,
+                        hasError: !!node.error,
+                        hasDetailsMarkdown: !!node.detailsMarkdown
+                    });
+                }
+            }
+        };
+        
+        expandNodeRecursively(this.executionTree);
+        
+        // Trigger change detection for the entire component
+        this.cdr.markForCheck();
+        this.cdr.detectChanges();
+        
+        console.log('✅ Completed auto-expansion of nodes with children');
+        
+        // Scroll to top after expansion to show the full tree
+        setTimeout(() => {
+            this.scrollToTop();
+        }, 100);
+    }
+    
+    /**
+     * Scroll the execution tree to the top
+     */
+    private scrollToTop(): void {
+        if (this.executionTreeContainer) {
+            const element = this.executionTreeContainer.nativeElement;
+            element.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        }
+    }
+    
+    /**
+     * Check if node has expandable content
+     */
+    private hasExpandableContent(node: ExecutionTreeNode): boolean {
+        return !!(node.children && node.children.length > 0) ||
+               node.type === 'sub-agent' || 
+               node.type === 'action' || 
+               !!node.inputPreview || 
+               !!node.outputPreview || 
+               !!node.error || 
+               !!node.detailsMarkdown;
     }
 }

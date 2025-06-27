@@ -320,6 +320,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /** Current execution data for the monitor */
     public currentExecutionData: any = null;
     
+    /** Track the last processed run ID to avoid reprocessing same data */
+    private lastProcessedRunId: string | null = null;
+    
     /** Agent conversation state tracking */
     private agentConversationState: any = null;
     private lastAgentReturnValue: any = null;
@@ -929,7 +932,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         this.templateVariables = [];
         this.currentConversationId = null;
         this.showSidebar = true;
+        // Clear execution data and tracking when explicitly resetting
         this.currentExecutionData = null;
+        this.lastProcessedRunId = null;
         this.executionMonitorMode = 'historical';
         // Reset conversation state
         this.agentConversationState = null;
@@ -967,6 +972,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             }
         }
         
+        // Clear execution data when explicitly starting a new conversation
+        this.currentExecutionData = null;
+        this.lastProcessedRunId = null;
+        
         this.resetHarness();
         MJNotificationService.Instance.CreateSimpleNotification(
             'Started new conversation',
@@ -997,19 +1006,67 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      * @param tab - The tab to activate
      */
     public selectTab(tab: 'agentVariables' | 'executionMonitor' | 'templateVariables' | 'modelSettings' | 'savedConversations') {
+        console.log('🔄 Switching to tab:', tab, {
+            currentExecutionData: !!this.currentExecutionData,
+            executionDataKeys: this.currentExecutionData ? Object.keys(this.currentExecutionData) : [],
+            conversationMessages: this.conversationMessages.length,
+            executionMonitorMode: this.executionMonitorMode
+        });
         
         this.activeTab = tab;
         
         // If switching to execution monitor tab, ensure it has the latest data
-        if (tab === 'executionMonitor' && this.conversationMessages.length > 0) {
-            const lastAssistantMessage = this.conversationMessages
-                .filter(m => m.role === 'assistant' && m.executionData)
-                .pop();
+        if (tab === 'executionMonitor') {
+            console.log('📊 Switching to execution monitor tab');
+            
+            // Always ensure we have the latest execution data when switching to monitor
+            if (this.conversationMessages.length > 0) {
+                const lastAssistantMessage = this.conversationMessages
+                    .filter(m => m.role === 'assistant' && m.executionData)
+                    .pop();
+                    
+                console.log('🔍 Last assistant message with execution data:', {
+                    found: !!lastAssistantMessage,
+                    hasExecutionData: !!lastAssistantMessage?.executionData,
+                    agentRunId: lastAssistantMessage?.agentRunId,
+                    executionDataKeys: lastAssistantMessage?.executionData ? Object.keys(lastAssistantMessage.executionData) : []
+                });
                 
-            if (lastAssistantMessage && lastAssistantMessage.executionData) {
-                this.currentExecutionData = lastAssistantMessage.executionData;
-                this.executionMonitorMode = 'historical';
+                if (lastAssistantMessage && lastAssistantMessage.executionData) {
+                    // Always update execution data to ensure it's fresh
+                    const messageRunId = lastAssistantMessage.agentRunId;
+                    
+                    // Force update the execution data
+                    this.currentExecutionData = { 
+                        ...lastAssistantMessage.executionData,
+                        _forceRefresh: Date.now() // Add timestamp to force refresh
+                    };
+                    this.executionMonitorMode = 'historical';
+                    this.lastProcessedRunId = messageRunId || null;
+                    
+                    console.log('✅ Force updated execution data:', {
+                        executionTreeLength: this.currentExecutionData.executionTree?.length,
+                        mode: this.executionMonitorMode,
+                        runId: this.lastProcessedRunId,
+                        forceRefresh: this.currentExecutionData._forceRefresh
+                    });
+                    
+                    // Trigger change detection to ensure the execution monitor updates
+                    setTimeout(() => {
+                        this.cdr.detectChanges();
+                    }, 50);
+                } else {
+                    console.log('❌ No execution data found in messages');
+                }
+            } else {
+                console.log('❌ No conversation messages found');
             }
+        } else {
+            console.log('📄 Switching away from execution monitor, preserving data:', {
+                currentExecutionDataExists: !!this.currentExecutionData
+            });
+            // Don't clear currentExecutionData when switching away from execution monitor
+            // This preserves the state for when the user switches back
         }
     }
 
@@ -1090,6 +1147,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         if (this.mode === 'agent' && this.activeTab !== 'executionMonitor') {
             this.selectTab('executionMonitor');
         }
+        
+        // Clear previous execution data when starting a new execution
+        this.currentExecutionData = null;
+        this.lastProcessedRunId = null;
         
         // Execute based on mode
         if (this.mode === 'agent') {
@@ -1236,6 +1297,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 this.currentExecutionData = fullResult;
                 this.executionMonitorMode = 'historical';
                 
+                // Auto-expand all monitoring nodes once execution is complete
+                setTimeout(() => {
+                    this.expandAllMonitoringNodes();
+                }, 100);
+                
                 // Preserve conversation state from the result
                 if (fullResult.returnValue) {
                     this.lastAgentReturnValue = fullResult.returnValue;
@@ -1285,6 +1351,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 assistantMessage.executionTime = executionResult.executionTimeMs;
                 assistantMessage.agentRunId = fullResult.agentRun?.ID || assistantMessage.agentRunId;
                 
+                // Update the tracking ID when we set new execution data
+                this.lastProcessedRunId = assistantMessage.agentRunId || null;
+                
                 // Store the full result as raw content for debugging/inspection
                 assistantMessage.rawContent = executionResult.payload;
             } else {
@@ -1312,6 +1381,13 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
 
             // Auto-save conversation
             this.autoSaveConversation();
+            
+            // Auto-expand all monitoring nodes once execution is complete (for prompt mode)
+            if (this.mode === 'prompt') {
+                setTimeout(() => {
+                    this.expandAllMonitoringNodes();
+                }, 100);
+            }
 
         } catch (error) {
             console.error('❌ AI Test Harness: Caught error during agent execution', {
@@ -1473,6 +1549,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 // Store execution metadata
                 if (executionResult.promptRunId) {
                     assistantMessage.agentRunId = executionResult.promptRunId;
+                    // Update the tracking ID when we set new execution data
+                    this.lastProcessedRunId = assistantMessage.agentRunId || null;
                 }
             } else {
                 assistantMessage.content = 'I encountered an error processing your request.';
@@ -1981,18 +2059,18 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             
             this.currentExecutionData = lastAssistantMessage.executionData;
             this.executionMonitorMode = 'historical';
+            this.lastProcessedRunId = lastAssistantMessage.agentRunId || null;
             
-            // If execution monitor tab is active, ensure it updates
-            if (this.activeTab === 'executionMonitor') {
-                // Force change detection
-                setTimeout(() => {
-                    this.currentExecutionData = { ...lastAssistantMessage.executionData };
-                }, 0);
-            }
+            // Force change detection to ensure execution monitor updates properly
+            setTimeout(() => {
+                this.currentExecutionData = { ...lastAssistantMessage.executionData };
+                this.cdr.detectChanges();
+            }, 0);
         } else {
             // Clear execution data if no execution found
             this.currentExecutionData = null;
             this.executionMonitorMode = 'historical';
+            this.lastProcessedRunId = null;
         }
 
         this.scrollNeeded = true;
@@ -2345,6 +2423,21 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             .filter(m => m.role === 'assistant' && m.agentRunId)
             .pop();
         return lastAssistantMessage?.agentRunId || null;
+    }
+    
+    /**
+     * Expands all nodes in the execution monitor
+     * Called automatically when execution completes
+     */
+    private expandAllMonitoringNodes(): void {
+        if (this.currentExecutionData && this.executionMonitorMode === 'historical') {
+            // Trigger expansion by setting a flag on the execution data
+            this.currentExecutionData = {
+                ...this.currentExecutionData,
+                _autoExpandAll: true,
+                _lastExpandTime: Date.now()
+            };
+        }
     }
     
     /**
