@@ -279,6 +279,13 @@ export class PayloadManager {
         // Get all paths from sub-agent payload
         const subAgentPaths = this.getAllPaths(subAgentPayload);
         
+        // Track unauthorized changes for consolidated warning
+        const unauthorizedChanges: Array<{
+            path: string;
+            from: any;
+            to: any;
+        }> = [];
+        
         // Check each path against allowed patterns
         for (const actualPath of subAgentPaths) {
             const isAllowed = this.isPathAllowed(actualPath, upstreamPaths);
@@ -288,12 +295,77 @@ export class PayloadManager {
             if (isAllowed) {
                 _.set(result, actualPath, _.cloneDeep(subAgentValue));
             } else {
-                // Only warn if the sub-agent is trying to change the value
+                // Only track if the sub-agent is trying to change the value
                 if (!_.isEqual(subAgentValue, originalValue)) {
-                    LogStatus(`Warning: Sub-agent ${subAgentName} attempted to change unauthorized path: ${actualPath} from ${JSON.stringify(originalValue)} to ${JSON.stringify(subAgentValue)}`);
+                    unauthorizedChanges.push({
+                        path: actualPath,
+                        from: originalValue,
+                        to: subAgentValue
+                    });
                 }
             }
         }
+        
+        // Output consolidated warning if there were unauthorized changes
+        if (unauthorizedChanges.length > 0) {
+            const groupedChanges = this.groupUnauthorizedChanges(unauthorizedChanges);
+            let warningMessage = `\n⚠️  Sub-agent "${subAgentName}" attempted ${unauthorizedChanges.length} unauthorized write${unauthorizedChanges.length > 1 ? 's' : ''}:\n`;
+            
+            for (const [category, changes] of Object.entries(groupedChanges)) {
+                warningMessage += `\n  📁 ${category}:\n`;
+                for (const change of changes) {
+                    const fromStr = this.formatValue(change.from);
+                    const toStr = this.formatValue(change.to);
+                    warningMessage += `     • ${change.path}: ${fromStr} → ${toStr}\n`;
+                }
+            }
+            
+            warningMessage += `\n  ℹ️  Authorized paths: ${upstreamPaths.join(', ')}\n`;
+            LogStatus(warningMessage);
+        }
+    }
+    
+    /**
+     * Groups unauthorized changes by their root path for cleaner display.
+     * 
+     * @private
+     */
+    private groupUnauthorizedChanges(changes: Array<{path: string; from: any; to: any}>): Record<string, Array<{path: string; from: any; to: any}>> {
+        const grouped: Record<string, Array<{path: string; from: any; to: any}>> = {};
+        
+        for (const change of changes) {
+            // Extract the root category (first part of the path)
+            const rootCategory = change.path.split('.')[0] || 'root';
+            
+            if (!grouped[rootCategory]) {
+                grouped[rootCategory] = [];
+            }
+            
+            grouped[rootCategory].push(change);
+        }
+        
+        return grouped;
+    }
+    
+    /**
+     * Formats a value for display in warning messages.
+     * 
+     * @private
+     */
+    private formatValue(value: any): string {
+        if (value === undefined) return 'undefined';
+        if (value === null) return 'null';
+        if (typeof value === 'string') {
+            // Clip long strings to 50 characters
+            const trimmed = value.length > 50 ? value.substring(0, 50) + '...' : value;
+            return `"${trimmed}"`;
+        }
+        if (typeof value === 'object') {
+            const str = JSON.stringify(value);
+            // Clip long JSON to 50 characters
+            return str.length > 50 ? str.substring(0, 50) + '...' : str;
+        }
+        return String(value);
     }
 
     /**
@@ -348,12 +420,24 @@ export class PayloadManager {
                 }
             } else {
                 // Handle regular patterns
-                const regex = pattern
-                    .replace(/\./g, '\\.')
-                    .replace(/\*/g, '[^.]+')
-                    .replace(/\[(\*|\d+)\]/g, '\\[(\\*|\\d+)\\]');
-                if (new RegExp(`^${regex}$`).test(normalizedPath)) {
-                    return true;
+                // Check if pattern ends with .* which means "everything under this path"
+                if (pattern.endsWith('.*')) {
+                    const basePath = pattern.slice(0, -2); // Remove the .*
+                    const escapedBase = basePath.replace(/\./g, '\\.');
+                    // Match the base path followed by a dot and anything after
+                    const regex = `^${escapedBase}(\\..*)?$`;
+                    if (new RegExp(regex).test(normalizedPath)) {
+                        return true;
+                    }
+                } else {
+                    // Handle other wildcard patterns
+                    const regex = pattern
+                        .replace(/\./g, '\\.')
+                        .replace(/\*/g, '[^.]+')
+                        .replace(/\[(\*|\d+)\]/g, '\\[(\\*|\\d+)\\]');
+                    if (new RegExp(`^${regex}$`).test(normalizedPath)) {
+                        return true;
+                    }
                 }
             }
         }
