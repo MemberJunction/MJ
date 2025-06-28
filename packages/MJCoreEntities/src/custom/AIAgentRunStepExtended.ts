@@ -3,7 +3,7 @@ import { ActionExecutionLogEntity, AIAgentRunStepEntity, AIPromptRunEntity } fro
 import { RegisterClass } from "@memberjunction/global";
 import { AIAgentRunEntityExtended } from "./AIAgentRunExtended";
 
-@RegisterClass(BaseEntity, "AI Agent Run Steps")
+@RegisterClass(BaseEntity, "MJ: AI Agent Run Steps")
 export class AIAgentRunStepEntityExtended extends AIAgentRunStepEntity {
     private _actionExecutionLog?: ActionExecutionLogEntity;
     /**
@@ -149,5 +149,4 @@ export class AIAgentRunStepEntityExtended extends AIAgentRunStepEntity {
             return false;
         }
     }
-}
-
+} 

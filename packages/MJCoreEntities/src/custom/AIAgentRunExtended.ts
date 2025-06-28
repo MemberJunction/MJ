@@ -3,7 +3,7 @@ import { AIAgentRunEntity } from "../generated/entity_subclasses";
 import { RegisterClass, SafeJSONParse } from "@memberjunction/global";
 import { AIAgentRunStepEntityExtended } from "./AIAgentRunStepExtended";
 
-@RegisterClass(BaseEntity, "AI Agent Runs")
+@RegisterClass(BaseEntity, "MJ: AI Agent Runs")
 export class AIAgentRunEntityExtended extends AIAgentRunEntity {
     private _runSteps: AIAgentRunStepEntityExtended[] = [];
     public get Steps(): AIAgentRunStepEntityExtended[] {
@@ -128,4 +128,4 @@ export class AIAgentRunEntityExtended extends AIAgentRunEntity {
         }
     }    
 }
-
+ 
