@@ -130,10 +130,10 @@ export class RunAIAgentResolver extends ResolverBase {
         const sanitized: any = {
             success: result.success,
             returnValue: result.payload,
-            errorMessage: result.errorMessage,
-            finalStep: result.finalStep,
-            cancelled: result.cancelled,
-            cancellationReason: result.cancellationReason
+            errorMessage: result.agentRun?.ErrorMessage,
+            finalStep: result.agentRun?.FinalStep,
+            cancelled: result.agentRun?.Status === 'Cancelled',
+            cancellationReason: result.agentRun?.CancellationReason
         };
 
         // Safely extract agent run data
@@ -152,10 +152,8 @@ export class RunAIAgentResolver extends ResolverBase {
             };
         }
 
-        // Safely extract execution tree (hierarchical structure with all step data)
-        if (result.executionTree && Array.isArray(result.executionTree)) {
-            sanitized.executionTree = this.sanitizeExecutionTree(result.executionTree);
-        }
+        // Note: executionTree is no longer part of ExecuteAgentResult
+        // Step information is available through agentRun.Steps
 
         return sanitized;
     }
@@ -393,12 +391,12 @@ export class RunAIAgentResolver extends ResolverBase {
             if (result.success) {
                 LogStatus(`=== AI AGENT RUN COMPLETED FOR: ${agentEntity.Name} (${executionTime}ms) ===`);
             } else {
-                LogError(`AI Agent run failed for ${agentEntity.Name}: ${result.errorMessage}`);
+                LogError(`AI Agent run failed for ${agentEntity.Name}: ${result.agentRun?.ErrorMessage}`);
             }
 
             return {
                 success: result.success,
-                errorMessage: result.errorMessage || undefined,
+                errorMessage: result.agentRun?.ErrorMessage || undefined,
                 executionTimeMs: executionTime,
                 payload
             };
@@ -428,19 +426,12 @@ export class RunAIAgentResolver extends ResolverBase {
      */
     private publishFinalEvents(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, result: ExecuteAgentResult) {
         if (result.agentRun) {
-            // Get the last step from execution tree
+            // Get the last step from agent run
             let lastStep = 'Completed';
-            if (result.executionTree && result.executionTree.length > 0) {
-                // Find the last step by traversing the tree
-                const findLastStep = (nodes: any[]): any => {
-                    let last = nodes[nodes.length - 1];
-                    if (last.children && last.children.length > 0) {
-                        return findLastStep(last.children);
-                    }
-                    return last;
-                };
-                const lastNode = findLastStep(result.executionTree);
-                lastStep = lastNode.step?.StepName || 'Completed';
+            if (result.agentRun?.Steps && result.agentRun.Steps.length > 0) {
+                // Get the last step from the Steps array
+                const lastStepEntity = result.agentRun.Steps[result.agentRun.Steps.length - 1];
+                lastStep = lastStepEntity?.StepName || 'Completed';
             }
 
             // Publish partial result
