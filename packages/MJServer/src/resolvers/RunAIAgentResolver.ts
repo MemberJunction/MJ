@@ -114,6 +114,9 @@ export class AgentExecutionStreamMessage {
 
     @Field()
     timestamp: Date;
+    
+    // Not a GraphQL field - used internally for streaming
+    agentRun?: any;
 }
 
 
@@ -187,7 +190,7 @@ export class RunAIAgentResolver extends ResolverBase {
     /**
      * Create streaming progress callback
      */
-    private createProgressCallback(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, agentRunIdRef: { id: string }) {
+    private createProgressCallback(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, agentRunRef: { current: any }) {
         return (progress: any) => {
             // Only publish progress for significant steps (not initialization noise)
             const significantSteps = ['prompt_execution', 'action_execution', 'subagent_execution', 'decision_processing'];
@@ -196,19 +199,27 @@ export class RunAIAgentResolver extends ResolverBase {
                 return;
             }
             
+            // Get the agent run from the progress metadata or use the ref
+            const agentRun = progress.metadata?.agentRun || agentRunRef.current;
+            if (!agentRun) {
+                console.error('❌ No agent run available for progress callback');
+                return;
+            }
+            
             console.log('📡 Publishing progress update:', {
                 step: progress.step,
                 percentage: progress.percentage,
                 message: progress.message,
                 sessionId,
-                agentRunId: agentRunIdRef.id
+                agentRunId: agentRun.ID
             });
             
-            // Publish progress updates
+            // Publish progress updates with the full serialized agent run
             const progressMsg: AgentExecutionStreamMessage = {
                 sessionId,
-                agentRunId: agentRunIdRef.id,
+                agentRunId: agentRun.ID,
                 type: 'progress',
+                agentRun: agentRun.GetAll(), // Serialize the full agent run
                 progress: {
                     currentStep: progress.step,
                     percentage: progress.percentage,
@@ -250,21 +261,29 @@ export class RunAIAgentResolver extends ResolverBase {
     /**
      * Create streaming content callback
      */
-    private createStreamingCallback(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, agentRunIdRef: { id: string }) {
+    private createStreamingCallback(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, agentRunRef: { current: any }) {
         return (chunk: any) => {
+            // Use the agent run from the ref
+            const agentRun = agentRunRef.current;
+            if (!agentRun) {
+                console.error('❌ No agent run available for streaming callback');
+                return;
+            }
+            
             console.log('💬 Publishing streaming content:', {
                 content: chunk.content.substring(0, 50) + '...',
                 isComplete: chunk.isComplete,
                 stepType: chunk.stepType,
                 sessionId,
-                agentRunId: agentRunIdRef.id
+                agentRunId: agentRun.ID
             });
             
-            // Publish streaming content
+            // Publish streaming content with the full serialized agent run
             const streamMsg: AgentExecutionStreamMessage = {
                 sessionId,
-                agentRunId: agentRunIdRef.id,
+                agentRunId: agentRun.ID,
                 type: 'streaming',
+                agentRun: agentRun.GetAll(), // Include the full serialized agent run
                 streaming: {
                     content: chunk.content,
                     isPartial: !chunk.isComplete,
@@ -314,8 +333,8 @@ export class RunAIAgentResolver extends ResolverBase {
             // Create AI agent runner
             const agentRunner = new AgentRunner();
             
-            // Track agent run ID for streaming (use ref to update later)
-            const agentRunIdRef = { id: 'pending' };
+            // Track agent run for streaming (use ref to update later)
+            const agentRunRef = { current: null as any };
 
             console.log(`🚀 Starting agent execution with sessionId: ${sessionId}`);
 
@@ -324,13 +343,13 @@ export class RunAIAgentResolver extends ResolverBase {
                 agent: agentEntity,
                 conversationMessages: parsedMessages,
                 contextUser: currentUser,
-                onProgress: this.createProgressCallback(pubSub, sessionId, userPayload, agentRunIdRef),
-                onStreaming: this.createStreamingCallback(pubSub, sessionId, userPayload, agentRunIdRef)
+                onProgress: this.createProgressCallback(pubSub, sessionId, userPayload, agentRunRef),
+                onStreaming: this.createStreamingCallback(pubSub, sessionId, userPayload, agentRunRef)
             });
 
-            // Update agent run ID once available
+            // Update agent run ref once available
             if (result.agentRun) {
-                agentRunIdRef.id = result.agentRun.ID;
+                agentRunRef.current = result.agentRun;
             }
 
             const executionTime = Date.now() - startTime;

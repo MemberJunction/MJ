@@ -203,8 +203,17 @@ export class BaseAgent {
                 depth: this._depth || 0
             });
             
-            // Call original callback
-            originalCallback(progress);
+            // Include agent run in metadata if available
+            const enhancedProgress = {
+                ...progress,
+                metadata: {
+                    ...progress.metadata,
+                    agentRun: this._agentRun // Include the agent run entity
+                }
+            };
+            
+            // Call original callback with enhanced progress
+            originalCallback(enhancedProgress);
         };
     }
 
@@ -1445,6 +1454,8 @@ export class BaseAgent {
             // Pass cancellation token and streaming callbacks to prompt execution
             promptParams.cancellationToken = params.cancellationToken;
             promptParams.onStreaming = params.onStreaming ? (chunk) => {
+                // For streaming, we need to wrap it differently since chunk doesn't have metadata
+                // The server resolver should get the agent run from the closure
                 params.onStreaming!({
                     ...chunk,
                     stepType: 'prompt',
@@ -1678,6 +1689,8 @@ export class BaseAgent {
                 shouldTerminate: shouldTerminate,
                 nextStep: shouldTerminate ? 'success' : 'retry'
             };
+
+            
             
             // Finalize step entity
             await this.finalizeStepEntity(stepEntity, subAgentResult.success, 

@@ -94,10 +94,7 @@ export class AIAgentRunStepEntityExtended extends AIAgentRunStepEntity {
         } else if (this.StepType === 'Sub-Agent' && __subAgentRun) {
             this._subAgentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', this.ContextCurrentUser);
             await this._subAgentRun.LoadFromData(__subAgentRun);
-        }
-        
-        // If no extended data provided but we have IDs, try to load from database
-        if (!__promptRun && !__actionExecutionLog && !__subAgentRun && this.ID?.length > 0) {
+        } else if (this.ID?.length > 0) {
             await this.LoadRelatedData();
         }
         

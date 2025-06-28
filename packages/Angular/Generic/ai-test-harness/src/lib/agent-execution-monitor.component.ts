@@ -1,4 +1,4 @@
-import { Component, Input, OnChanges, SimpleChanges, ChangeDetectionStrategy } from '@angular/core';
+import { Component, Input, OnChanges, SimpleChanges, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AIAgentRunEntityExtended, AIAgentRunStepEntityExtended } from '@memberjunction/core-entities';
 
@@ -152,6 +152,8 @@ export class AgentExecutionMonitorComponent implements OnChanges {
     @Input() runId: string | null = null;
     @Input() runType: 'agent' | 'prompt' = 'agent';
     
+    constructor(private cdr: ChangeDetectorRef) {}
+    
     ngOnChanges(changes: SimpleChanges): void {
         if (changes['agentRun']) {
             console.log('Agent run updated:', {
@@ -159,13 +161,19 @@ export class AgentExecutionMonitorComponent implements OnChanges {
                 stepCount: this.agentRun?.Steps?.length || 0
             });
         }
+        
+        if (changes['liveSteps']) {
+            console.log('Live steps updated:', {
+                count: this.liveSteps?.length || 0,
+                mode: this.mode
+            });
+            // Force change detection when live steps update
+            this.cdr.detectChanges();
+        }
     }
     
     getSteps(): AIAgentRunStepEntityExtended[] {
-        // In live mode, use the liveSteps array, otherwise use the agentRun's Steps
-        if (this.mode === 'live' && this.liveSteps.length > 0) {
-            return this.liveSteps;
-        }
+        // Always use the agent run's Steps - they're updated during streaming
         return this.agentRun?.Steps || [];
     }
     

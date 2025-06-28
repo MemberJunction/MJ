@@ -321,7 +321,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     public currentAgentRun: AIAgentRunEntityExtended | null = null;
     
     /**
-     * Tracks agent steps during live execution when we can't modify the entity's Steps property
+     * Tracks agent steps during live execution (deprecated - now using agent run's Steps directly)
      */
     public liveAgentSteps: AIAgentRunStepEntityExtended[] = [];
     
@@ -469,70 +469,59 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             const message = JSON.parse(status.message || '{}');
             if (message?.resolver === 'RunAIAgentResolver') {
                 // Handle different types of streaming messages
-                if (message?.type === 'ExecutionProgress' && message.data?.progress) {
-                    const userMsg = message.data.progress.message;
+                if (message?.type === 'ExecutionProgress' && message.data?.agentRun) {
+                    // The server should be sending the full serialized agent run
+                    const serializedAgentRun = message.data.agentRun;
                     
-                    // Update streaming message content
-                    const streamingMessage = this.conversationMessages.find(m => m.isStreaming);
-                    if (streamingMessage) {
-                        // Clear any typing animation interval
-                        const typingInterval = (streamingMessage as any)._typingInterval;
-                        if (typingInterval) {
-                            clearInterval(typingInterval);
-                            delete (streamingMessage as any)._typingInterval;
+                    // Update streaming message content if available
+                    if (message.data.progress?.message) {
+                        const streamingMessage = this.conversationMessages.find(m => m.isStreaming);
+                        if (streamingMessage) {
+                            // Clear any typing animation interval
+                            const typingInterval = (streamingMessage as any)._typingInterval;
+                            if (typingInterval) {
+                                clearInterval(typingInterval);
+                                delete (streamingMessage as any)._typingInterval;
+                            }
+                            
+                            // Update the streaming content with the status message
+                            streamingMessage.streamingContent = message.data.progress.message;
+                            this.scrollNeeded = true;
                         }
-                        
-                        // Update the streaming content with the status message
-                        streamingMessage.streamingContent = userMsg;
-                        this.scrollNeeded = true;
                     }
                     
-                    // Update execution monitor with live progress
+                    // Update or create the agent run entity from the serialized data
                     if (!this.currentAgentRun) {
-                        // Create a proper agent run entity for live tracking
+                        // First time - create the entity
                         const md = new Metadata();
                         this.currentAgentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs');
-                        // Set minimal properties for display
-                        this.currentAgentRun.ID = `temp-${Date.now()}`;
-                        this.currentAgentRun.Status = 'Running';
-                        this.currentAgentRun.StartedAt = new Date();
                     }
+                    
+                    // Load the serialized data into our entity
+                    await this.currentAgentRun.LoadFromData(serializedAgentRun);
+                    
+                    // Update assistant message with agent run ID if available
+                    const streamingMessage = this.conversationMessages.find(m => m.isStreaming);
+                    if (streamingMessage && this.currentAgentRun.ID) {
+                        streamingMessage.agentRunId = this.currentAgentRun.ID;
+                    }
+                    
+                    // We're in live mode during streaming
                     this.executionMonitorMode = 'live';
                     
-                    // For live mode, we need to track steps separately since we can't modify the entity's Steps property directly
-                    if (!this.liveAgentSteps) {
-                        this.liveAgentSteps = [];
-                    }
+                    // The Steps are now directly available on the agent run entity
+                    // No need for separate liveAgentSteps tracking
+                    this.liveAgentSteps = [];
                     
-                    // Add or update the current step in the execution tree
-                    const stepInfo = {
-                        step: {
-                            ID: `temp-${Date.now()}`,
-                            StepName: userMsg,
-                            StepType: message.data.progress.step || 'unknown',
-                            Status: 'Running',
-                            StartedAt: new Date()
-                        },
-                        executionType: message.data.progress.step || 'unknown',
-                        agentHierarchy: message.data.progress.agentHierarchy || [],
-                        depth: message.data.progress.depth || 0,
-                        startTime: new Date()
-                    };
+                    console.log('📊 Agent run update:', {
+                        id: this.currentAgentRun.ID,
+                        status: this.currentAgentRun.Status,
+                        stepCount: this.currentAgentRun.Steps?.length || 0,
+                        executionMonitorMode: this.executionMonitorMode
+                    });
                     
-                    // Create a step entity for tracking
-                    const md = new Metadata();
-                    const agentStep = await md.GetEntityObject<AIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps');
-                    agentStep.ID = stepInfo.step.ID;
-                    agentStep.StepName = stepInfo.step.StepName;
-                    agentStep.StepType = stepInfo.step.StepType;
-                    agentStep.Status = stepInfo.step.Status as 'Running' | 'Completed' | 'Failed' | 'Cancelled';
-                    agentStep.StartedAt = stepInfo.step.StartedAt;
-                    agentStep.AgentRunID = this.currentAgentRun.ID;
-                    
-                    this.liveAgentSteps.push(agentStep);
-                    
-                    // Update the current agent run to trigger change detection
-                    this.currentAgentRun = this.currentAgentRun;
+                    // Force change detection
+                    this.cdr.detectChanges();
                 }
                 else if (message?.type === 'StreamingContent' && message.data?.streaming) {
                     
@@ -1122,6 +1111,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 id: runId,
                 stepCount: this.currentAgentRun.Steps?.length || 0
             });
+            
+            // Force change detection to update the execution monitor
+            this.cdr.detectChanges();
         } catch (error) {
             console.error('❌ Failed to load agent run:', error);
             this.currentAgentRun = null;
@@ -1314,9 +1306,15 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 
                 // Load the agent run for display
                 if (fullResult && fullResult.agentRunID) {
-                    this.loadAgentRun(fullResult.agentRunID);
+                    await this.loadAgentRun(fullResult.agentRunID);
+                    // Only switch to historical mode after successfully loading
+                    this.executionMonitorMode = 'historical';
+                    // Clear live steps only after we have the historical data
+                    this.liveAgentSteps = [];
+                } else {
+                    // If no agent run ID, keep showing live steps
+                    console.log('⚠️ No agent run ID in result, keeping live mode');
                 }
-                this.executionMonitorMode = 'historical';
                 
                 // Auto-expand all monitoring nodes once execution is complete
                 setTimeout(() => {
@@ -1378,6 +1376,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 
                 // Store the full result as raw content for debugging/inspection
                 assistantMessage.rawContent = executionResult.payload;
+                
+                // Force change detection to update the execution monitor
+                this.cdr.detectChanges();
             } else {
                 console.error('❌ AI Test Harness: Execution failed', {
                     success: executionResult?.success,
