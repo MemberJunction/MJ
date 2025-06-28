@@ -70,7 +70,7 @@ export class LoopAgentType extends BaseAgentType {
             if (!promptResult.success || !promptResult.result) {
                 return {
                     terminate: false,
-                    step: 'failed',
+                    step: 'Failed',
                     errorMessage: promptResult.errorMessage || 'Prompt execution failed'
                 };
             }
@@ -86,7 +86,7 @@ export class LoopAgentType extends BaseAgentType {
             } catch (parseError) {
                 return {
                     terminate: false,
-                    step: 'failed',
+                    step: 'Failed',
                     errorMessage: `Failed to parse JSON response: ${parseError.message}`
                 };
             }
@@ -95,7 +95,7 @@ export class LoopAgentType extends BaseAgentType {
             if (!this.isValidLoopResponse(response)) {
                 return {
                     terminate: false,
-                    step: 'failed',
+                    step: 'Failed',
                     errorMessage: 'Invalid response structure from loop agent prompt'
                 };
             }
@@ -103,12 +103,15 @@ export class LoopAgentType extends BaseAgentType {
             // Check if task is complete
             if (response.taskComplete) {
                 LogStatusEx({
-                    message: '✅ Loop Agent: Task completed successfully',
+                    message: '✅ Loop Agent: Task completed successfully. Message: ' + response.message,
                     verboseOnly: true
                 });
                 return {
                     terminate: response.taskComplete,
-                    step: 'success',
+                    message: response.message,
+                    reasoning: response.reasoning,
+                    confidence: response.confidence,
+                    step: 'Success',
                     payload: response.payload,                    
                 };
             }
@@ -117,7 +120,7 @@ export class LoopAgentType extends BaseAgentType {
             if (!response.nextStep) {
                 return {
                     terminate: false,
-                    step: 'failed',
+                    step: 'Failed',
                     errorMessage: 'Task not complete but no next step provided'
                 };
             }
@@ -128,15 +131,14 @@ export class LoopAgentType extends BaseAgentType {
                 terminate: response.taskComplete
             }
             switch (response.nextStep.type) {
-                case 'sub-agent':
+                case 'Sub-Agent':
                     if (!response.nextStep.subAgent) {
-                        retVal.step = 'failed';
+                        retVal.step = 'Failed';
                         retVal.errorMessage = 'Sub-agent details not specified';
                     }
                     else {
-                        retVal.step = 'sub-agent';
+                        retVal.step = 'Sub-Agent';
                         retVal.subAgent = {
-                            id: response.nextStep.subAgent.id,
                             name: response.nextStep.subAgent.name,
                             message: response.nextStep.subAgent.message,
                             terminateAfter: response.nextStep.subAgent.terminateAfter,
@@ -144,13 +146,13 @@ export class LoopAgentType extends BaseAgentType {
                         }
                     }
                     break;
-                case 'action':
+                case 'Actions':
                     if (!response.nextStep.actions || response.nextStep.actions.length === 0) {
-                        retVal.step = 'failed';
+                        retVal.step = 'Failed';
                         retVal.errorMessage = 'Actions not specified for action type';
                     }
                     else {
-                        retVal.step = 'actions',
+                        retVal.step = 'Actions',
                         retVal.actions = response.nextStep.actions.map(action => ({
                             id: action.id,
                             name: action.name,
@@ -158,19 +160,19 @@ export class LoopAgentType extends BaseAgentType {
                         }))
                     }
                     break;
-                case 'chat':
+                case 'Chat':
                     if (!response.message) {
-                        retVal.step = 'failed';
+                        retVal.step = 'Failed';
                         retVal.errorMessage = 'Chat type specified but no user message provided';
                     }
                     else {
-                        retVal.step = 'chat';
-                        retVal.userMessage = response.message;
+                        retVal.step = 'Chat';
+                        retVal.message = response.message;
                         retVal.terminate = true; // when chat request, this agent needs to return back to the caller/user
                     }
                     break;
                 default:
-                    retVal.step = 'failed';
+                    retVal.step = 'Failed';
                     retVal.errorMessage = `Unknown next step type: ${response.nextStep.type}`;
                     break;
             }
@@ -179,7 +181,7 @@ export class LoopAgentType extends BaseAgentType {
             LogError(`Error in LoopAgentType.DetermineNextStep: ${error.message}`);
             return {
                 terminate: false,
-                step: 'failed',
+                step: 'Failed',
                 errorMessage: `Failed to parse loop agent response: ${error.message}`
             };
         }
@@ -193,8 +195,11 @@ export class LoopAgentType extends BaseAgentType {
      * 
      * @private
      */
-    private isValidLoopResponse(response: any): response is LoopAgentResponse {
-        // Check required fields
+    private isValidLoopResponse(simpleResponse: any): boolean {
+        // Check required fields, first cast the simpleResponse to LoopAgentResponse
+        // so we get the benefit of TypeScript's type checking below in this method
+        const response = simpleResponse as LoopAgentResponse;
+
         if (typeof response !== 'object' || response === null) {
             return false;
         }
@@ -217,19 +222,21 @@ export class LoopAgentType extends BaseAgentType {
 
         // Validate nextStep structure if present
         if (response.nextStep) {
-            const validStepTypes = ['action', 'sub-agent', 'chat'];
-            if (!validStepTypes.includes(response.nextStep.type)) {
+            const validStepTypes = ['actions', 'sub-agent', 'chat'];
+            const lcaseType = response.nextStep.type?.toLowerCase().trim();
+            // allow the AI to mess up the case, but we need to validate it
+            if (!validStepTypes.includes(lcaseType)) {
                 LogError(`LoopAgentResponse has invalid nextStep.type: ${response.nextStep.type}`);
                 return false;
             }
 
             // Validate specific fields based on type
-            if (response.nextStep.type === 'action' && !response.nextStep.actions) {
+            if (lcaseType === 'actions' && !response.nextStep.actions) {
                 LogError('LoopAgentResponse requires actions array for action type');
                 return false;
             }
 
-            if (response.nextStep.type === 'sub-agent' && !response.nextStep.subAgent) {
+            if (lcaseType === 'sub-agent' && !response.nextStep.subAgent) {
                 LogError('LoopAgentResponse requires subAgent object for sub-agent type');
                 return false;
             }
@@ -248,7 +255,7 @@ export class LoopAgentType extends BaseAgentType {
     public async RetrievePayload<T = LoopAgentResponse>(promptResult: AIPromptRunResult): Promise<T> {
         // the promptResult.result should be the LoopAgentResponse
         if (!promptResult.success || !promptResult.result) {
-            throw new Error('Prompt execution failed or returned no result');
+            throw new Error('Prompt execution Failed or returned no result');
         }
 
         const loopAgentResponse = promptResult.result as LoopAgentResponse;

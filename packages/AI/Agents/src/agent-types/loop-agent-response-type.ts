@@ -71,7 +71,7 @@ export interface LoopAgentResponse<T = any> {
          * - 'sub-agent': Delegate to a single sub-agent
          * - 'chat': Send a message back to the user
          */
-        type: 'action' | 'sub-agent' | 'chat';
+        type: 'Actions' | 'Sub-Agent' | 'Chat';
         
         /**
          * Array of actions to execute. Required when type is 'action'.

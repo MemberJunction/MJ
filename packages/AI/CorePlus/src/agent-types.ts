@@ -20,8 +20,6 @@ import { UserInfo } from '@memberjunction/core';
  * Represents a single action to be executed.
  */
 export type AgentAction = {
-    /** UUID of the action */
-    id: string;
     /** Name of the action */
     name: string;
     /** Parameters to pass to the action */
@@ -57,8 +55,6 @@ export type AgentAction = {
  * ```
  */
 export type AgentSubAgentRequest<TContext = any> = {
-    /** UUID of the sub-agent */
-    id: string;
     /** Name of the sub-agent */
     name: string;
     /** Context and instructions for the sub-agent */
@@ -104,7 +100,7 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * - 'actions': The agent should perform one or more actions using the Actions framework
      * - 'chat': The agent needs to communicate with the user before proceeding
      */
-    step: 'success' | 'failed' | 'retry' | 'sub-agent' | 'actions' | 'chat';
+    step: AIAgentRunEntityExtended['FinalStep']
     /** Result from the prior step, useful for retry or sub-agent context */
     priorStepResult?: any;
     /** Optional value to return with the step determination */
@@ -120,7 +116,11 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
     /** Array of actions to execute when step is 'actions' */
     actions?: AgentAction[];
     /** Message to send to user when step is 'chat' */
-    userMessage?: string;
+    message?: string;
+    /** Optional, reasoning information from the agent */
+    reasoning?: string;
+    /** Optional confidence level in the decision (0.0 to 1.0) */
+    confidence?: number;    
 }
 
 /**
@@ -169,12 +169,12 @@ export type NextStepDecision = {
  * enabling proper preparation and execution of the subsequent operation.
  */
 export type NextStepDetails <P = any> = 
-    | { type: 'prompt'; promptId: string; promptName: string; payload?: P }
-    | { type: 'action'; actions: AgentAction[]; payload?: P }
-    | { type: 'sub-agent'; subAgent: AgentSubAgentRequest; payload?: P }
-    | { type: 'retry'; retryReason: string; retryInstructions: string; payload?: P }
-    | { type: 'chat'; message: string; payload?: P }
-    | { type: 'complete'; payload?: P };
+    | { type: 'Prompt'; promptId: string; promptName: string; payload?: P }
+    | { type: 'Actions'; actions: AgentAction[]; payload?: P }
+    | { type: 'Sub-Agent'; subAgent: AgentSubAgentRequest; payload?: P }
+    | { type: 'Retry'; retryReason: string; retryInstructions: string; payload?: P }
+    | { type: 'Chat'; message: string; payload?: P }
+    | { type: 'Complete'; payload?: P };
 
 
 /**

@@ -330,7 +330,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     
     /** Agent conversation state tracking */
     private agentConversationState: any = null;
-    private lastAgentReturnValue: any = null;
+    private lastAgentPayload: any = null;
     private subAgentHistory: any[] = [];
     
     /** Whether to show the save conversation dialog */
@@ -949,7 +949,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         this.executionMonitorMode = 'historical';
         // Reset conversation state
         this.agentConversationState = null;
-        this.lastAgentReturnValue = null;
+        this.lastAgentPayload = null;
         this.subAgentHistory = [];
         // Set default tab based on mode
         this.activeTab = this.mode === 'agent' ? 'agentVariables' : 'templateVariables';
@@ -1096,11 +1096,22 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      * @param runId - The ID of the agent run to load
      */
     private async loadAgentRun(runId: string): Promise<void> {
+        const md = new Metadata();
+        const agentRunEntity = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs');
+        await agentRunEntity.Load(runId);
+        await this.internalLoadAgenRun(agentRunEntity);
+    }
+
+    private async loadAgentRunFromData(agentRunData: any): Promise<void> {
+        const md = new Metadata();
+        const agentRunEntity = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs');
+        await agentRunEntity.LoadFromData(agentRunData);
+        await this.internalLoadAgenRun(agentRunEntity);
+    }
+
+    private async internalLoadAgenRun(agentRunEntity: AIAgentRunEntityExtended): Promise<void> {
         try {
-            const md = new Metadata();
-            this.currentAgentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs');
-            await this.currentAgentRun.Load(runId);
-            
+            this.currentAgentRun = agentRunEntity;
             // The Load method automatically loads related steps through InnerLoad override
             // No need to call LoadRelatedData explicitly as it's protected
             
@@ -1108,7 +1119,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             this.executionMonitorMode = 'historical';
             
             console.log('✅ Loaded agent run:', {
-                id: runId,
+                id: agentRunEntity.ID,
                 stepCount: this.currentAgentRun.Steps?.length || 0
             });
             
@@ -1227,8 +1238,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             if (this.agentConversationState) {
                 dataContext._conversationState = this.agentConversationState;
             }
-            if (this.lastAgentReturnValue) {
-                dataContext._lastReturnValue = this.lastAgentReturnValue;
+            if (this.lastAgentPayload) {
+                dataContext._lastPayload = this.lastAgentPayload;
             }
             if (this.subAgentHistory.length > 0) {
                 dataContext._subAgentHistory = this.subAgentHistory;
@@ -1300,13 +1311,13 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 fullResult = ParseJSONRecursive(fullResult, parseOptions);
                 
                 // Store agent run ID with the message
-                if (fullResult && fullResult.agentRunID) {
+                if (fullResult && fullResult.agentRun?.ID) {
                     assistantMessage.agentRunId = fullResult.agentRunID;
                 }
                 
                 // Load the agent run for display
-                if (fullResult && fullResult.agentRunID) {
-                    await this.loadAgentRun(fullResult.agentRunID);
+                if (fullResult && fullResult.agentRun) {
+                    await this.loadAgentRunFromData(fullResult.agentRun);
                     // Only switch to historical mode after successfully loading
                     this.executionMonitorMode = 'historical';
                     // Clear live steps only after we have the historical data
@@ -1322,48 +1333,21 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 }, 100);
                 
                 // Preserve conversation state from the result
-                if (fullResult.returnValue) {
-                    this.lastAgentReturnValue = fullResult.returnValue;
+                if (fullResult.payload) {
+                    this.lastAgentPayload = fullResult.payload;
                     
                     // Extract conversation state if present
-                    if (fullResult.returnValue.conversationState) {
-                        this.agentConversationState = fullResult.returnValue.conversationState;
-                    }
-                    
-                    // Track sub-agent executions - no longer using execution tree
-                    // Sub-agent information will be available through the agent run steps
-                    if (false) { // Disabled - no longer using execution tree
-                        const subAgentNodes = [];
-                        if (subAgentNodes.length > 0) {
-                            this.subAgentHistory.push(...subAgentNodes);
-                        }
-                    }
+                    if (fullResult.payload.conversationState) {
+                        this.agentConversationState = fullResult.payload.conversationState;
+                    } 
                 }
                 
-                // Extract the user message from the nested returnValue structure
+                // Extract the user message from the nested payload structure
                 let displayContent = 'No response generated';
-                let payloadData = null;
+                let payloadData = fullResult.payload;
                 
-                if (fullResult.returnValue) {
-                    // Check for message field (as shown in user's example)
-                    if (typeof fullResult.returnValue === 'object' && fullResult.returnValue.message) {
-                        displayContent = fullResult.returnValue.message;
-                        // If there's also a payload, store it separately
-                        if (fullResult.returnValue.payload) {
-                            // Apply recursive JSON parsing to the payload if it's an object
-                            payloadData = ParseJSONRecursive(fullResult.returnValue.payload, parseOptions);
-                        }
-                    } else if (typeof fullResult.returnValue === 'object' && 
-                        fullResult.returnValue.nextStep?.userMessage) {
-                        // This is the expected structure for chat responses
-                        displayContent = fullResult.returnValue.nextStep.userMessage;
-                    } else if (typeof fullResult.returnValue === 'string') {
-                        // Simple string response
-                        displayContent = fullResult.returnValue;
-                    } else {
-                        // Other structured response - show as JSON
-                        displayContent = JSON.stringify(fullResult.returnValue, null, 2);
-                    }
+                if (fullResult.agentRun?.Message?.length > 0) {
+                    displayContent = fullResult.agentRun.Message;
                 }
                 
                 assistantMessage.content = displayContent;
