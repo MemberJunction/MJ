@@ -147,7 +147,25 @@
             "Status": "Active",
             "ExecutionOrder": 1,
             "ExposeAsAction": false,
-            "IconClass": "fa-solid fa-feather"
+            "IconClass": "fa-solid fa-feather",
+            "PayloadDownstreamPaths": [
+              "metadata.*",
+              "content.*",
+              "copywriter.*",
+              "seo.primaryKeyword",
+              "seo.secondaryKeywords",
+              "editor.feedback",
+              "editor.suggestions",
+              "brand.voiceConsistency",
+              "brand.messagingPillars",
+              "iterations.*"
+            ],
+            "PayloadUpstreamPaths": [
+              "content.*",
+              "copywriter.*",
+              "metadata.lastModifiedBy",
+              "metadata.updatedAt"
+            ]
           },
           "relatedEntities": {
             "MJ: AI Agent Prompts": [
@@ -271,7 +289,24 @@
             "Status": "Active",
             "ExecutionOrder": 1,
             "ExposeAsAction": false,
-            "IconClass": "fa-solid fa-chart-line"
+            "IconClass": "fa-solid fa-chart-line",
+            "PayloadDownstreamPaths": [
+              "metadata.*",
+              "content.*",
+              "copywriter.*",
+              "seo.*",
+              "editor.feedback",
+              "brand.messagingPillars",
+              "iterations.*"
+            ],
+            "PayloadUpstreamPaths": [
+              "content.headline",
+              "content.alternativeHeadlines",
+              "content.keyPoints",
+              "seo.*",
+              "metadata.lastModifiedBy",
+              "metadata.updatedAt"
+            ]
           },
           "relatedEntities": {
             "MJ: AI Agent Prompts": [
@@ -353,7 +388,24 @@
             "Status": "Active",
             "ExecutionOrder": 1,
             "ExposeAsAction": false,
-            "IconClass": "fa-solid fa-edit"
+            "IconClass": "fa-solid fa-edit",
+            "PayloadDownstreamPaths": [
+              "metadata.*",
+              "content.*",
+              "copywriter.*",
+              "seo.*",
+              "editor.*",
+              "brand.*",
+              "iterations.*"
+            ],
+            "PayloadUpstreamPaths": [
+              "content.*",
+              "editor.*",
+              "copywriter.researchInsights",
+              "seo.metaDescription",
+              "metadata.lastModifiedBy",
+              "metadata.updatedAt"
+            ]
           },
           "relatedEntities": {
             "MJ: AI Agent Prompts": [
@@ -449,7 +501,24 @@
             "Status": "Active",
             "ExecutionOrder": 1,
             "ExposeAsAction": false,
-            "IconClass": "fa-solid fa-shield-alt"
+            "IconClass": "fa-solid fa-shield-alt",
+            "PayloadDownstreamPaths": [
+              "metadata.*",
+              "content.*",
+              "copywriter.*",
+              "seo.*",
+              "editor.*",
+              "brand.*",
+              "iterations.*"
+            ],
+            "PayloadUpstreamPaths": [
+              "content.headline",
+              "content.callToAction",
+              "brand.*",
+              "metadata.status",
+              "metadata.lastModifiedBy",
+              "metadata.updatedAt"
+            ]
           },
           "relatedEntities": {
             "MJ: AI Agent Prompts": [
@@ -517,7 +586,18 @@
             "Status": "Active",
             "ExecutionOrder": 1,
             "ExposeAsAction": false,
-            "IconClass": "fa-solid fa-paper-plane"
+            "IconClass": "fa-solid fa-paper-plane",
+            "PayloadDownstreamPaths": [
+              "metadata.*",
+              "content.*",
+              "brand.approvalStatus",
+              "iterations.*"
+            ],
+            "PayloadUpstreamPaths": [
+              "publisher.*",
+              "metadata.lastModifiedBy",
+              "metadata.updatedAt"
+            ]
           },
           "relatedEntities": {
             "MJ: AI Agent Prompts": [

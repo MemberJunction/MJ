@@ -59,75 +59,296 @@ Matches properties at any depth in the object tree.
 
 ## Examples
 
-### Marketing Campaign Agent Hierarchy
-
-Consider a marketing agent with specialized sub-agents:
-
+### Basic Access Control
 ```json
-// Full Payload Structure
+// Agent configuration
 {
-  "campaign": {
-    "id": "camp-123",
-    "budget": 50000,
-    "status": "active",
-    "target_audience": {
-      "age_range": "25-45",
-      "interests": ["technology", "fitness"]
-    }
-  },
-  "customer": {
-    "id": "cust-456",
-    "name": "Acme Corp",
-    "industry": "Tech",
-    "preferences": {
-      "communication": "email",
-      "frequency": "weekly"
-    }
-  },
-  "analysis": {
-    "sentiment": null,
-    "recommendations": null,
-    "copy": null
-  }
+  "PayloadDownstreamPaths": ["customer.id", "order.*"],
+  "PayloadUpstreamPaths": ["analysis.results", "recommendations"]
 }
 ```
 
-#### Parent Agent: Marketing Strategist
+### Using Wildcards
 ```json
 {
-  "PayloadDownstreamPaths": ["*"],      // Sends everything to sub-agents
-  "PayloadUpstreamPaths": ["*"]         // Accepts all updates
+  "PayloadDownstreamPaths": ["config.*", "data.customers[*].id"],
+  "PayloadUpstreamPaths": ["results.**"]
 }
 ```
 
-#### Sub-Agent: Copywriter
+## Real-World Example: Marketing Agent System
+
+The Marketing Agent system demonstrates sophisticated payload management in a collaborative multi-agent workflow. This example shows how agents work together iteratively, like a human marketing team.
+
+### System Overview
+
+The Marketing Agent orchestrates content creation through five specialized sub-agents:
+- **Copywriter Specialist**: Creates initial content and refines based on feedback
+- **SEO/AIEO Specialist**: Optimizes for search engines and AI discovery
+- **Editor**: Ensures quality, clarity, and consistency
+- **Brand Guardian**: Enforces brand guidelines and compliance
+- **Publisher**: Handles distribution (future implementation)
+
+### Key Design Principles
+
+1. **Root Agent Omniscience**: The Marketing Agent (root) doesn't need path restrictions - it has full access to all payload data by default
+2. **Generous Downstream Sharing**: Sub-agents see each other's work to enable collaboration
+3. **Controlled Upstream Writing**: Sub-agents can only modify specific sections while preserving others' work
+4. **Iterative Workflow**: Supports back-and-forth refinement between specialists
+
+### Payload Structure
+
+```typescript
+interface MarketingAgentOutput {
+  metadata: {
+    sessionId: string;
+    status: 'draft' | 'in_review' | 'approved' | 'published';
+    lastModifiedBy?: string;
+    originalBrief: string;
+    contentType?: 'email' | 'blog_post' | 'social_media' | etc;
+  };
+  
+  content: {
+    headline?: string;
+    alternativeHeadlines?: string[];
+    body?: string;
+    callToAction?: string;
+    keyPoints?: string[];
+  };
+  
+  copywriter?: {
+    initialDraft?: string;
+    creativeApproach?: string;
+    toneOfVoice?: string;
+    // ... other copywriter-specific fields
+  };
+  
+  seo?: {
+    primaryKeyword?: string;
+    metaTitle?: string;
+    metaDescription?: string;
+    // ... other SEO fields
+  };
+  
+  editor?: {
+    corrections?: Array<{type: string; original: string; corrected: string}>;
+    feedback?: string[];
+    suggestions?: string[];
+    // ... other editor fields
+  };
+  
+  brand?: {
+    alignmentScore?: number;
+    approvalStatus?: 'approved' | 'conditional' | 'rejected';
+    // ... other brand fields
+  };
+  
+  iterations?: Array<{iteration: number; agent: string; changes: string}>;
+}
+```
+
+### Sub-Agent Configurations
+
+#### Copywriter Specialist
 ```json
 {
   "PayloadDownstreamPaths": [
-    "campaign.target_audience",         // Needs audience info
-    "customer.preferences",             // Needs customer preferences
-    "analysis.sentiment"                // Needs sentiment if available
+    "metadata.*",              // Full task context
+    "content.*",               // All content to work with
+    "copywriter.*",            // Own previous work
+    "seo.primaryKeyword",      // SEO targets to write for
+    "seo.secondaryKeywords",
+    "editor.feedback",         // Editor's revision requests
+    "editor.suggestions",
+    "brand.voiceConsistency",  // Brand guidelines
+    "brand.messagingPillars",
+    "iterations.*"             // Full history for context
   ],
   "PayloadUpstreamPaths": [
-    "analysis.copy",                    // Can only write copy
-    "analysis.recommendations.tone"     // Can suggest tone
+    "content.*",               // Can create/modify all content
+    "copywriter.*",            // Own section
+    "metadata.lastModifiedBy",
+    "metadata.updatedAt"
   ]
 }
 ```
 
-#### Sub-Agent: Budget Analyzer
+**Workflow Example**: The copywriter receives the original brief, sees SEO keywords to target, and creates initial content. Later, when the editor provides feedback, the copywriter can see it and revise the content accordingly.
+
+#### SEO/AIEO Specialist
 ```json
 {
   "PayloadDownstreamPaths": [
-    "campaign.budget",                  // Needs budget info
-    "campaign.status"                   // Needs campaign status
+    "metadata.*",
+    "content.*",               // Content to optimize
+    "copywriter.*",            // Understanding creative intent
+    "seo.*",                   // Own previous work
+    "editor.feedback",         // May affect SEO approach
+    "brand.messagingPillars",  // Brand keywords to incorporate
+    "iterations.*"
   ],
   "PayloadUpstreamPaths": [
-    "analysis.recommendations.budget",  // Can only write budget recommendations
-    "analysis.recommendations.allocation"
+    "content.headline",        // Can suggest better headlines
+    "content.alternativeHeadlines",
+    "content.keyPoints",       // Can restructure for SEO
+    "seo.*",                   // Own section
+    "metadata.lastModifiedBy",
+    "metadata.updatedAt"
   ]
 }
 ```
+
+**Workflow Example**: The SEO specialist sees the copywriter's creative approach and can suggest headline variations that maintain the creative intent while improving search visibility.
+
+#### Editor
+```json
+{
+  "PayloadDownstreamPaths": [
+    "metadata.*",
+    "content.*",               // All content to edit
+    "copywriter.*",            // Creative intent understanding
+    "seo.*",                   // SEO requirements to maintain
+    "editor.*",                // Own previous work
+    "brand.*",                 // Brand guidelines to enforce
+    "iterations.*"
+  ],
+  "PayloadUpstreamPaths": [
+    "content.*",               // Full editing capabilities
+    "editor.*",                // Own section
+    "copywriter.researchInsights",  // Can add fact-checking notes
+    "seo.metaDescription",     // Can refine meta content
+    "metadata.lastModifiedBy",
+    "metadata.updatedAt"
+  ]
+}
+```
+
+**Workflow Example**: The editor can see both the creative approach and SEO requirements, ensuring edits maintain both creative quality and search optimization.
+
+#### Brand Guardian
+```json
+{
+  "PayloadDownstreamPaths": [
+    "metadata.*",
+    "content.*",               // Final content review
+    "copywriter.*",            // Assess creative alignment
+    "seo.*",                   // Check SEO compliance
+    "editor.*",                // Review all changes
+    "brand.*",                 // Own assessments
+    "iterations.*"
+  ],
+  "PayloadUpstreamPaths": [
+    "content.headline",        // Can mandate brand-compliant headlines
+    "content.callToAction",    // Ensure CTAs align with brand
+    "brand.*",                 // Own section
+    "metadata.status",         // Can approve/reject
+    "metadata.lastModifiedBy",
+    "metadata.updatedAt"
+  ]
+}
+```
+
+**Workflow Example**: The brand guardian reviews all specialists' work and can make final adjustments to ensure brand compliance, potentially sending work back for revision.
+
+### Iteration Flow Example
+
+```mermaid
+flowchart TD
+    Start([User Request:<br/>Create blog post about new product]) --> MA[Marketing Agent<br/>Orchestrates workflow]
+    
+    MA --> CW[Copywriter Agent<br/>Creates initial draft]
+    CW --> |Payload includes:<br/>content.*, copywriter.*| MA
+    
+    MA --> SEO[SEO Specialist<br/>Optimizes for search]
+    SEO --> |Updates:<br/>headlines, keywords, meta| MA
+    
+    MA --> ED[Editor Agent<br/>Refines content]
+    ED --> |Updates:<br/>content.*, adds feedback| MA
+    
+    MA --> BG[Brand Guardian<br/>Reviews compliance]
+    BG --> |Sets status:<br/>conditional| MA
+    
+    MA --> |Brand requests<br/>tone adjustment| CW2[Copywriter Agent<br/>Revises tone]
+    CW2 --> MA
+    
+    MA --> ED2[Editor Agent<br/>Final polish]
+    ED2 --> MA
+    
+    MA --> BG2[Brand Guardian<br/>Final review]
+    BG2 --> |Sets status:<br/>approved| MA
+    
+    MA --> End([Approved Content<br/>Ready for publication])
+    
+    style MA fill:#f9f,stroke:#333,stroke-width:4px
+    style Start fill:#9f9,stroke:#333,stroke-width:2px
+    style End fill:#9f9,stroke:#333,stroke-width:2px
+    style BG fill:#faa,stroke:#333,stroke-width:2px
+    style BG2 fill:#afa,stroke:#333,stroke-width:2px
+```
+
+1. **Initial Brief**: Marketing Agent receives request for blog post about new product
+2. **First Pass**: Copywriter creates initial draft focusing on benefits
+3. **SEO Review**: SEO specialist suggests headline changes and adds keywords
+4. **Editorial Pass**: Editor improves clarity, fixes grammar, suggests restructuring
+5. **Brand Check**: Brand guardian notes tone is too casual, requests revision
+6. **Copywriter Revision**: Copywriter adjusts tone while maintaining SEO keywords
+7. **Final Editorial**: Editor does final polish
+8. **Brand Approval**: Brand guardian approves for publication
+
+Throughout this process:
+- Each agent can see relevant work from others
+- The payload accumulates improvements without losing context
+- The Marketing Agent orchestrates the flow based on task needs
+- Iterations are tracked for full transparency
+
+### Payload Flow Visualization
+
+```mermaid
+graph LR
+    subgraph "Marketing Agent Payload"
+        MP[Full Payload<br/>metadata.*, content.*,<br/>copywriter.*, seo.*,<br/>editor.*, brand.*]
+    end
+    
+    subgraph "Copywriter Access"
+        CWD[Downstream:<br/>metadata.*, content.*,<br/>seo keywords, editor feedback,<br/>brand guidelines]
+        CWU[Upstream:<br/>content.*, copywriter.*]
+    end
+    
+    subgraph "SEO Access"
+        SEOD[Downstream:<br/>metadata.*, content.*,<br/>copywriter.*, editor feedback]
+        SEOU[Upstream:<br/>headlines, keywords,<br/>seo.*]
+    end
+    
+    subgraph "Editor Access"
+        EDD[Downstream:<br/>See everything]
+        EDU[Upstream:<br/>content.*, editor.*,<br/>research insights]
+    end
+    
+    subgraph "Brand Access"
+        BGD[Downstream:<br/>See everything]
+        BGU[Upstream:<br/>headlines, CTAs,<br/>brand.*, status]
+    end
+    
+    MP -->|Filter| CWD
+    MP -->|Filter| SEOD
+    MP -->|Filter| EDD
+    MP -->|Filter| BGD
+    
+    CWU -->|Merge| MP
+    SEOU -->|Merge| MP
+    EDU -->|Merge| MP
+    BGU -->|Merge| MP
+    
+    style MP fill:#f9f,stroke:#333,stroke-width:2px
+```
+
+### Benefits of This Approach
+
+1. **Collaborative Efficiency**: Agents see each other's work, reducing miscommunication
+2. **Iterative Refinement**: Supports non-linear workflows and back-and-forth collaboration
+3. **Preserved Context**: Important information isn't lost between handoffs
+4. **Flexible Orchestration**: The Loop Agent Type can adapt flow based on content needs
+5. **Quality Control**: Multiple specialists can catch and fix different types of issues
 
 ## How It Works
 
