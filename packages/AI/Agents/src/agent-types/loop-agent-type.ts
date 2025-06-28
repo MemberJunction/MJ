@@ -12,8 +12,8 @@
 
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
-import { AIPromptRunResult, BaseAgentNextStep } from '@memberjunction/ai-core-plus';
-import { LogError, LogStatus } from '@memberjunction/core';
+import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams } from '@memberjunction/ai-core-plus';
+import { LogError, LogStatusEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { LoopAgentResponse } from './loop-agent-response-type';
 
 /**
@@ -39,7 +39,7 @@ import { LoopAgentResponse } from './loop-agent-response-type';
  * 
  * switch (nextStep.step) {
  *   case 'success':
- *     console.log('Task completed:', nextStep.returnValue);
+ *     console.log('Task completed:', nextStep.payload);
  *     break;
  *   case 'sub-agent':
  *     console.log('Delegating to:', nextStep.subAgentName);
@@ -64,7 +64,7 @@ export class LoopAgentType extends BaseAgentType {
      * 
      * @throws {Error} Implicitly through failed parsing, but returns failed step instead
      */
-    public async DetermineNextStep(promptResult: AIPromptRunResult): Promise<BaseAgentNextStep<LoopAgentResponse>> {
+    public async DetermineNextStep<P>(promptResult: AIPromptRunResult): Promise<BaseAgentNextStep<P>> {
         try {
             // Ensure we have a successful result
             if (!promptResult.success || !promptResult.result) {
@@ -102,11 +102,14 @@ export class LoopAgentType extends BaseAgentType {
 
             // Check if task is complete
             if (response.taskComplete) {
-                LogStatus('✅ Loop Agent: Task completed successfully');
+                LogStatusEx({
+                    message: '✅ Loop Agent: Task completed successfully',
+                    verboseOnly: true
+                });
                 return {
                     terminate: response.taskComplete,
                     step: 'success',
-                    returnValue: response,                    
+                    payload: response.payload,                    
                 };
             }
 
@@ -120,8 +123,8 @@ export class LoopAgentType extends BaseAgentType {
             }
 
             // Determine next step based on type
-            const retVal: Partial<BaseAgentNextStep<LoopAgentResponse>> = {
-                returnValue: response, // we always return the full response as the return value
+            const retVal: Partial<BaseAgentNextStep<LoopAgentResponse<P>>> = {
+                payload: response.payload,
                 terminate: response.taskComplete
             }
             switch (response.nextStep.type) {
@@ -171,7 +174,7 @@ export class LoopAgentType extends BaseAgentType {
                     retVal.errorMessage = `Unknown next step type: ${response.nextStep.type}`;
                     break;
             }
-            return retVal as BaseAgentNextStep<LoopAgentResponse>;
+            return retVal as BaseAgentNextStep<P>;
         } catch (error) {
             LogError(`Error in LoopAgentType.DetermineNextStep: ${error.message}`);
             return {
@@ -233,6 +236,46 @@ export class LoopAgentType extends BaseAgentType {
         }
 
         return true;
+    }
+
+    /**
+     * Retrieves the payload from the prompt result.
+     * For LoopAgentType, this returns the parsed LoopAgentResponse.
+     * 
+     * @param {AIPromptRunResult} promptResult - The result from executing the agent's prompt
+     * @returns {Promise<T>} The extracted payload
+     */
+    public async RetrievePayload<T = LoopAgentResponse>(promptResult: AIPromptRunResult): Promise<T> {
+        // the promptResult.result should be the LoopAgentResponse
+        if (!promptResult.success || !promptResult.result) {
+            throw new Error('Prompt execution failed or returned no result');
+        }
+
+        const loopAgentResponse = promptResult.result as LoopAgentResponse;
+        if (!this.isValidLoopResponse(loopAgentResponse)) {
+            throw new Error('Invalid LoopAgentResponse structure');
+        }
+
+        // Return the response as the payload
+        return loopAgentResponse.payload as T;
+    }
+
+
+    public static CURRENT_PAYLOAD_PLACHOLDER = '_CURRENT_PAYLOAD';
+    /**
+     * Injects a payload into the prompt parameters.
+     * For LoopAgentType, this could be used to inject previous loop results or context.
+     * 
+     * @param {T} payload - The payload to inject
+     * @param {AIPromptParams} prompt - The prompt parameters to update
+     */
+    public async InjectPayload<T = any>(payload: T, prompt: AIPromptParams): Promise<void> {
+        if (!prompt)
+            throw new Error('Prompt parameters are required for payload injection');
+        if (!prompt.data )
+            prompt.data = {};
+
+        prompt.data[LoopAgentType.CURRENT_PAYLOAD_PLACHOLDER] = payload;
     }
 }
 

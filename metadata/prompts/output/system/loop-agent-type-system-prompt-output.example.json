@@ -31,7 +31,7 @@
       "templateParameters*": {
         "[TEMPLATE_PARAM_NAME]": "[VALUE: If sub-agent has template parameters, provide values here]"
       },
-      "terminateAfter": "[BOOLEAN: true to end parent agent after sub-agent completes, false to continue]"
+      "terminateAfter?": "[BOOLEAN: true to end parent agent after sub-agent completes, false to continue]"
     }
   }
 }

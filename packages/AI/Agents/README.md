@@ -252,6 +252,10 @@ export class DecisionTreeAgent extends BaseAgentType {
 
 For detailed architecture information, see [agent-architecture.md](./agent-architecture.md).
 
+## Payload and State Management
+
+For comprehensive information about managing payload flow between agents and sub-agents, including access control and best practices, see [PAYLOAD_STATE_MANAGEMENT.md](./PAYLOAD_STATE_MANAGEMENT.md).
+
 ## Contributing
 
 Contributions are welcome! Please see the main MemberJunction [contributing guide](../../../CONTRIBUTING.md).

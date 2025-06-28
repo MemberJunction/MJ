@@ -1278,12 +1278,13 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             this.executionData.executionTree.forEach((node: any) => processRawNode(node));
         }
         
-        console.log('📈 Stats calculated:', {
-            totalSteps: this.stats.totalSteps,
-            treeLength: this.executionTree.length,
-            executionDataExists: !!this.executionData,
-            hasRawExecutionTree: !!this.executionData?.executionTree
-        });
+        // Debug logging commented out to reduce console noise
+        // console.log('📈 Stats calculated:', {
+        //     totalSteps: this.stats.totalSteps,
+        //     treeLength: this.executionTree.length,
+        //     executionDataExists: !!this.executionData,
+        //     hasRawExecutionTree: !!this.executionData?.executionTree
+        // });
     }
     
     /**
