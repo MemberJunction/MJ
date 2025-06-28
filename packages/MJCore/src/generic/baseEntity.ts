@@ -276,7 +276,7 @@ export class EntityField {
      * This method will set the internal Old Value which is used to track dirty state, to the current value of the field. This effectively resets the dirty state of the field to false. Use this method sparingly.
      */
     public ResetOldValue() {
-        this._OldValue = this.Value;
+        this._OldValue = this._Value;
     }
 
     /**
