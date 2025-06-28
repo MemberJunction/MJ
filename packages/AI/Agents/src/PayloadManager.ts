@@ -44,7 +44,7 @@ export class PayloadManager {
      * // Returns: { customer: { id: 1, name: 'John' }, order: { id: 2 } }
      * ```
      */
-    public extractDownstreamPayload(fullPayload: any, downstreamPaths: string[]): any {
+    public extractDownstreamPayload(subAgentName: string, fullPayload: any, downstreamPaths: string[]): any {
         if (!fullPayload) return null;
         if (!downstreamPaths || downstreamPaths.length === 0) return {};
         
@@ -84,6 +84,7 @@ export class PayloadManager {
      * ```
      */
     public mergeUpstreamPayload(
+        subAgentName: string,
         parentPayload: any, 
         subAgentPayload: any, 
         upstreamPaths: string[]
@@ -104,7 +105,7 @@ export class PayloadManager {
         }
         
         // Check each path in the sub-agent payload
-        this.mergeAllowedPaths(result, subAgentPayload, upstreamPaths);
+        this.mergeAllowedPaths(result, subAgentPayload, upstreamPaths, subAgentName);
         
         return result;
     }
@@ -272,7 +273,8 @@ export class PayloadManager {
     private mergeAllowedPaths(
         result: any,
         subAgentPayload: any,
-        upstreamPaths: string[]
+        upstreamPaths: string[],
+        subAgentName: string
     ): void {
         // Get all paths from sub-agent payload
         const subAgentPaths = this.getAllPaths(subAgentPayload);
@@ -280,12 +282,16 @@ export class PayloadManager {
         // Check each path against allowed patterns
         for (const actualPath of subAgentPaths) {
             const isAllowed = this.isPathAllowed(actualPath, upstreamPaths);
+            const subAgentValue = _.get(subAgentPayload, actualPath);
+            const originalValue = _.get(result, actualPath);
             
             if (isAllowed) {
-                const value = _.get(subAgentPayload, actualPath);
-                _.set(result, actualPath, _.cloneDeep(value));
+                _.set(result, actualPath, _.cloneDeep(subAgentValue));
             } else {
-                LogStatus(`Warning: Sub-agent attempted to write to unauthorized path: ${actualPath}`);
+                // Only warn if the sub-agent is trying to change the value
+                if (!_.isEqual(subAgentValue, originalValue)) {
+                    LogStatus(`Warning: Sub-agent ${subAgentName} attempted to change unauthorized path: ${actualPath} from ${JSON.stringify(originalValue)} to ${JSON.stringify(subAgentValue)}`);
+                }
             }
         }
     }

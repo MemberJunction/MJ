@@ -1604,6 +1604,7 @@ export class BaseAgent {
             
             // Extract only allowed downstream payload
             const downstreamPayload = this._payloadManager.extractDownstreamPayload(
+                subAgentRequest.name,
                 previousDecision.payload,
                 downstreamPaths
             );
@@ -1617,6 +1618,7 @@ export class BaseAgent {
             
             // Merge upstream changes back into parent payload
             const mergedPayload = this._payloadManager.mergeUpstreamPayload(
+                subAgentRequest.name,
                 previousDecision.payload,
                 subAgentResult.payload,
                 upstreamPaths
