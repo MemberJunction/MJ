@@ -24,7 +24,6 @@ import { AITestHarnessDialogComponent } from './lib/ai-test-harness-dialog.compo
 import { AITestHarnessWindowComponent } from './lib/ai-test-harness-window.component';
 import { TestHarnessCustomWindowComponent } from './lib/test-harness-custom-window.component';
 import { AgentExecutionMonitorComponent } from './lib/agent-execution-monitor.component';
-import { ExecutionNodeComponent } from './lib/agent-execution-node.component';
 import { JsonViewerWindowComponent } from './lib/json-viewer-window.component';
 import { WindowDockService } from './lib/window-dock.service';
 
@@ -60,8 +59,7 @@ import { TestHarnessWindowManagerService } from './lib/test-harness-window-manag
     ContainerDirectivesModule,
     CodeEditorModule,
     // Standalone components
-    AgentExecutionMonitorComponent,
-    ExecutionNodeComponent
+    AgentExecutionMonitorComponent
   ],
   exports: [
     AITestHarnessComponent,
@@ -69,7 +67,6 @@ import { TestHarnessWindowManagerService } from './lib/test-harness-window-manag
     AITestHarnessWindowComponent,
     TestHarnessCustomWindowComponent,
     AgentExecutionMonitorComponent,
-    ExecutionNodeComponent,
     JsonViewerWindowComponent
   ],
   providers: [

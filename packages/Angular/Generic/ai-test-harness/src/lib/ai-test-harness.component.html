@@ -317,11 +317,11 @@
                             <div class="tab-content" style="padding: 0; height: 100%;">
                                 <mj-agent-execution-monitor
                                     [mode]="executionMonitorMode"
-                                    [executionData]="currentExecutionData"
+                                    [agentRun]="currentAgentRun"
+                                    [liveSteps]="liveAgentSteps"
                                     [autoExpand]="true"
                                     [runId]="getLastRunId()"
-                                    [runType]="mode"
-                                    (viewRunClick)="navigateToRun($event)">
+                                    [runType]="mode">
                                 </mj-agent-execution-monitor>
                             </div>
                         }
