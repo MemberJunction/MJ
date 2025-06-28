@@ -6,6 +6,10 @@ import { AIAgentRunStepEntityExtended } from "./AIAgentRunStepExtended";
 @RegisterClass(BaseEntity, "MJ: AI Agent Runs")
 export class AIAgentRunEntityExtended extends AIAgentRunEntity {
     private _runSteps: AIAgentRunStepEntityExtended[] = [];
+
+    /**
+     * Steps is the array of steps that are excuted within this run.
+     */
     public get Steps(): AIAgentRunStepEntityExtended[] {
         return this._runSteps;
     }

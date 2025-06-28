@@ -55,7 +55,7 @@ export class AIAgentRunStepEntityExtended extends AIAgentRunStepEntity {
      * Override GetAll to include extended properties for serialization.
      * This enables streaming of the full object structure including related entities.
      */
-    public GetAll(): any {
+    public override GetAll(): any {
         const baseData = super.GetAll();
         
         // Add related entities based on StepType with __ prefix
@@ -72,7 +72,7 @@ export class AIAgentRunStepEntityExtended extends AIAgentRunStepEntity {
         return extended;
     }
     
-    override async LoadFromData(data: any, _replaceOldValues?: boolean): Promise<boolean> {
+    public override async LoadFromData(data: any, _replaceOldValues?: boolean): Promise<boolean> {
         // Extract our special properties before passing to super
         const { __promptRun, __actionExecutionLog, __subAgentRun, ...baseData } = data;
         
@@ -101,7 +101,7 @@ export class AIAgentRunStepEntityExtended extends AIAgentRunStepEntity {
         return true;
     }
 
-    override async InnerLoad(CompositeKey: CompositeKey, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
+    public override async InnerLoad(CompositeKey: CompositeKey, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
         if (await super.InnerLoad(CompositeKey, EntityRelationshipsToLoad)) {
             return await this.LoadRelatedData();
         }

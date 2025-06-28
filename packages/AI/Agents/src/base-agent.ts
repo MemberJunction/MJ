@@ -30,7 +30,6 @@ import {
     ExecuteAgentResult,
     AgentAction,
     AgentSubAgentRequest,
-    NextStepDetails,
     BaseAgentNextStep
 } from '@memberjunction/ai-core-plus';
 import { ActionEntityExtended, ActionResult } from '@memberjunction/actions-base';

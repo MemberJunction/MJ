@@ -174,10 +174,10 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   }
   
   /**
-   * Get the AgentState field with recursive JSON parsing applied
+   * Get the Final Payload (state) field with recursive JSON parsing applied
    */
-  get parsedAgentState(): string {
-    if (!this.record?.AgentState) return '';
+  get parsedFinalPayload(): string {
+    if (!this.record?.FinalPayload) return '';
     
     try {
       const parseOptions: ParseJSONOptions = {
@@ -185,10 +185,10 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
         maxDepth: 100,
         debug: false // Disable debug logging - regex issue fixed
       };
-      const parsed = ParseJSONRecursive(this.record.AgentState, parseOptions);
+      const parsed = ParseJSONRecursive(this.record.FinalPayload, parseOptions);
       return JSON.stringify(parsed, null, 2);
     } catch (e) {
-      return this.record.AgentState;
+      return this.record.FinalPayload;
     }
   }
 }
