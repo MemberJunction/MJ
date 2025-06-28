@@ -7498,6 +7498,11 @@ export const AIAgentRunSchema = z.object({
         * * Display Name: Final Payload
         * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON serialization of the final Payload state at the end of the agent run`),
+    Message: z.string().nullable().describe(`
+        * * Field Name: Message
+        * * Display Name: Message
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Final message from the agent to the end user at the end of a run`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -31676,7 +31681,8 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     /**
     * * Field Name: AgentState
     * * Display Name: Agent State
-    * * SQL Data Type: nvarchar(MAX)
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(MAX)
     * * Description: JSON serialization of the complete agent state, including conversation context, variables, and execution state. Enables pause/resume functionality.
     */
     get AgentState(): string | null {
@@ -31889,6 +31895,19 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     }
     set FinalPayload(value: string | null) {
         this.Set('FinalPayload', value);
+    }
+
+    /**
+    * * Field Name: Message
+    * * Display Name: Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Final message from the agent to the end user at the end of a run
+    */
+    get Message(): string | null {
+        return this.Get('Message');
+    }
+    set Message(value: string | null) {
+        this.Set('Message', value);
     }
 
     /**

@@ -1308,6 +1308,9 @@ export class AIAgentRun_ {
     @Field({nullable: true, description: `JSON serialization of the final Payload state at the end of the agent run`}) 
     FinalPayload?: string;
         
+    @Field({nullable: true, description: `Final message from the agent to the end user at the end of a run`}) 
+    Message?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -1410,6 +1413,9 @@ export class CreateAIAgentRunInput {
 
     @Field({ nullable: true })
     FinalPayload: string | null;
+
+    @Field({ nullable: true })
+    Message: string | null;
 }
     
 
@@ -1492,6 +1498,9 @@ export class UpdateAIAgentRunInput {
 
     @Field({ nullable: true })
     FinalPayload?: string | null;
+
+    @Field({ nullable: true })
+    Message?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

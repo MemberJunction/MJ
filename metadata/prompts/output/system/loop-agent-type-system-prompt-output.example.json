@@ -2,18 +2,12 @@
   "taskComplete": "[BOOLEAN: true if task is fully complete, false if more steps needed]",
   "message": "[STRING: Human-readable message about current status or final result - this is what the user/caller sees - they do NOT see what is in the payload, so include EVERYTHING here that is important for the user even if it overlaps with the payload]",
   "payload*": {
-    "[KEY]": "[VALUE: Your agent-specific data structure goes here]",
-    "[EXAMPLE_STRUCTURE]": {
-      "resultsFound": "[NUMBER or other data]",
-      "processedItems": "[Array of processed data]",
-      "customField": "[Any structure your agent needs to return]"
-    },
-    "[NOTE]": "This payload structure is completely flexible based on your agent's purpose"
+    "[NOTE]": "Any valid JavaScript object. Payload is completely flexible based on your agent's purpose."
   },
   "reasoning": "[STRING: Your internal explanation of why you made this decision - helps with debugging]",
   "confidence?": "[OPTIONAL NUMBER: 0.0 to 1.0 indicating confidence in this decision]",
   "nextStep?": {
-    "type": "[REQUIRED if taskComplete=false: Must be exactly one of: 'action' | 'sub-agent' | 'chat']",
+    "type": "[REQUIRED if taskComplete=false: Must be exactly one of the options specified in the type definition]",
     "actions?": [
       {
         "id": "[UUID: The exact ID from available actions list]",
