@@ -95,7 +95,10 @@ export class EntityField {
      * Sets the value of the field. If the field is read only, nothing happens. If the field is not read only, the value is set and the internal representation of the dirty flag is flipped if the value is different from the old value.
      */
     set Value(value: any) {
-        if (this._assertActiveStatusRequired) {
+        if (this._assertActiveStatusRequired && value !== this._Value) {
+            // asserting status here becuase the flag is on AND the values
+            // are different - this avoid assertions during sysops like SetMany that often aren't changing
+            // the value of the field
             EntityFieldInfo.AssertEntityFieldActiveStatus(this._entityFieldInfo, 'EntityField.Value setter'); 
         }
         if (
