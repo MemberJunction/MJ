@@ -29,7 +29,7 @@ import { AIAgentRunStepEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="StepType"
-            Type="textbox"
+            Type="dropdownlist"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
@@ -114,6 +114,20 @@ import { AIAgentRunStepEntity } from '@memberjunction/core-entities';
             [ShowLabel]="true"
             FieldName="TargetLogID"
             Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="PayloadAtStart"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="PayloadAtEnd"
+            Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
 
