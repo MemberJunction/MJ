@@ -125,7 +125,7 @@ export class AgentOperations {
                     endTime: result.agentRun?.CompletedAt,
                     errorMessage: result.errorMessage,
                     finalStep: result.finalStep,
-                    result: result.returnValue
+                    result: result.payload
                 }
             };
         } catch (error) {

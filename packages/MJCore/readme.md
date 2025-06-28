@@ -407,6 +407,135 @@ if (!result) {
 }
 ```
 
+## Logging
+
+MemberJunction provides enhanced logging capabilities with both simple and advanced APIs:
+
+### Basic Logging
+
+```typescript
+import { LogStatus, LogError } from '@memberjunction/core';
+
+// Simple status logging
+LogStatus('Operation completed successfully');
+
+// Error logging
+LogError('Operation failed', null, additionalData1, additionalData2);
+
+// Logging to file
+LogStatus('Writing to file', '/logs/output.log');
+```
+
+### Enhanced Logging (v2.59.0+)
+
+The enhanced logging functions provide structured logging with metadata, categories, and conditional verbose output:
+
+#### LogStatusEx - Enhanced Status Logging
+
+```typescript
+import { LogStatusEx, IsVerboseLoggingEnabled, SetVerboseLogging } from '@memberjunction/core';
+
+// Simple usage - same as LogStatus
+LogStatusEx('Process started');
+
+// Verbose-only logging (respects MJ_VERBOSE environment variable)
+LogStatusEx({
+    message: 'Detailed trace information',
+    verboseOnly: true
+});
+
+// With custom verbose check
+LogStatusEx({
+    message: 'Processing items:',
+    verboseOnly: true,
+    isVerboseEnabled: () => myConfig.debugMode === true,
+    additionalArgs: [item1, item2, item3]
+});
+
+// With category and file output
+LogStatusEx({
+    message: 'Batch job completed',
+    category: 'BatchProcessor',
+    logToFileName: '/logs/batch.log',
+    additionalArgs: [processedCount, errorCount]
+});
+```
+
+#### LogErrorEx - Enhanced Error Logging
+
+```typescript
+import { LogErrorEx } from '@memberjunction/core';
+
+// Simple usage - same as LogError
+LogErrorEx('Something went wrong');
+
+// With error object and severity
+try {
+    await riskyOperation();
+} catch (error) {
+    LogErrorEx({
+        message: 'Failed to complete operation',
+        error: error as Error,
+        severity: 'critical',
+        category: 'DataProcessing'
+    });
+}
+
+// With metadata and additional arguments
+LogErrorEx({
+    message: 'Validation failed',
+    severity: 'warning',
+    category: 'Validation',
+    metadata: {
+        userId: user.ID,
+        attemptCount: 3,
+        validationRules: ['email', 'uniqueness']
+    },
+    additionalArgs: [validationResult, user]
+});
+
+// Control stack trace inclusion
+LogErrorEx({
+    message: 'Network timeout',
+    error: timeoutError,
+    includeStack: false, // Omit stack trace
+    metadata: { url: apiUrl, timeout: 5000 }
+});
+```
+
+### Verbose Logging Control
+
+Control verbose logging globally across your application:
+
+```typescript
+// Check if verbose logging is enabled
+if (IsVerboseLoggingEnabled()) {
+    // Perform expensive logging operations
+    const debugInfo = gatherDetailedDebugInfo();
+    LogStatus('Debug info:', debugInfo);
+}
+
+// Enable verbose logging in browser environments
+SetVerboseLogging(true);
+
+// Verbose logging is controlled by:
+// 1. MJ_VERBOSE environment variable (Node.js)
+// 2. MJ_VERBOSE global variable (Browser)
+// 3. MJ_VERBOSE localStorage item (Browser)
+// 4. MJ_VERBOSE URL parameter (Browser)
+```
+
+### Logging Features
+
+- **Severity Levels**: `warning`, `error`, `critical` for LogErrorEx
+- **Categories**: Organize logs by functional area
+- **Metadata**: Attach structured data to logs
+- **Varargs Support**: Pass additional arguments that get forwarded to console.log/error
+- **File Logging**: Direct logs to files (Node.js environments)
+- **Conditional Logging**: Skip verbose logs based on environment settings
+- **Error Objects**: Automatic error message and stack trace extraction
+- **Cross-Platform**: Works in both Node.js and browser environments
+
 ## Provider Architecture
 
 MemberJunction uses a provider model to support different execution environments:
@@ -420,6 +549,10 @@ SetProvider(myProvider);
 ```
 
 ## Breaking Changes
+
+### v2.59.0
+- **Enhanced Logging Functions**: New `LogStatusEx` and `LogErrorEx` functions provide structured logging with metadata, categories, and severity levels. The existing `LogStatus` and `LogError` functions now internally use the enhanced versions, maintaining full backward compatibility.
+- **Verbose Logging Control**: New global functions `IsVerboseLoggingEnabled()` and `SetVerboseLogging()` provide centralized verbose logging control across environments.
 
 ### v2.58.0
 - **GetEntityObject() now calls NewRecord() automatically**: When creating new entities, `NewRecord()` is now called automatically. While calling it again is harmless, it's no longer necessary.

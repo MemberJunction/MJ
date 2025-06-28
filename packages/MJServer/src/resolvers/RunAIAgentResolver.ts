@@ -129,7 +129,7 @@ export class RunAIAgentResolver extends ResolverBase {
     private sanitizeAgentResult(result: ExecuteAgentResult): any {
         const sanitized: any = {
             success: result.success,
-            returnValue: result.returnValue,
+            returnValue: result.payload,
             errorMessage: result.errorMessage,
             finalStep: result.finalStep,
             cancelled: result.cancelled,
@@ -446,7 +446,7 @@ export class RunAIAgentResolver extends ResolverBase {
             // Publish partial result
             const partialResult: AgentPartialResult = {
                 currentStep: lastStep,
-                partialOutput: result.returnValue || undefined
+                partialOutput: result.payload || undefined
             };
 
             const partialMsg: AgentExecutionStreamMessage = {

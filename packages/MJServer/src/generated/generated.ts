@@ -2122,6 +2122,12 @@ export class AIAgent_ {
     @MaxLength(100)
     ModelSelectionMode: string;
         
+    @Field({description: `JSON array of paths that define which parts of the payload should be sent downstream to sub-agents. Use ["*"] to send entire payload, or specify paths like ["customer.id", "campaign.*", "analysis.sentiment"]`}) 
+    PayloadDownstreamPaths: string;
+        
+    @Field({description: `JSON array of paths that define which parts of the payload sub-agents are allowed to write back upstream. Use ["*"] to allow all writes, or specify paths like ["analysis.results", "recommendations.*"]`}) 
+    PayloadUpstreamPaths: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -2221,6 +2227,12 @@ export class CreateAIAgentInput {
 
     @Field({ nullable: true })
     ModelSelectionMode?: string;
+
+    @Field({ nullable: true })
+    PayloadDownstreamPaths?: string;
+
+    @Field({ nullable: true })
+    PayloadUpstreamPaths?: string;
 }
     
 
@@ -2279,6 +2291,12 @@ export class UpdateAIAgentInput {
 
     @Field({ nullable: true })
     ModelSelectionMode?: string;
+
+    @Field({ nullable: true })
+    PayloadDownstreamPaths?: string;
+
+    @Field({ nullable: true })
+    PayloadUpstreamPaths?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

@@ -330,11 +330,19 @@ export class PushService {
               isArray ? i : undefined
             );
             
-            if (result === 'created') created++;
-            else if (result === 'updated') updated++;
-            else if (result === 'unchanged') unchanged++;
+            // Don't count duplicates in stats
+            if (!result.isDuplicate) {
+              if (result.status === 'created') created++;
+              else if (result.status === 'updated') updated++;
+              else if (result.status === 'unchanged') unchanged++;
+            }
             
-            // For arrays, update the original record's primaryKey and sync only
+            // Add related entity stats
+            created += result.relatedStats.created;
+            updated += result.relatedStats.updated;
+            unchanged += result.relatedStats.unchanged;
+            
+            // For arrays, update the original record's primaryKey, sync, and relatedEntities
             if (isArray) {
               // Update primaryKey if it exists (for new records)
               if (recordToProcess.primaryKey) {
@@ -344,15 +352,13 @@ export class PushService {
               if (recordToProcess.sync) {
                 records[i].sync = recordToProcess.sync;
               }
+              // Update relatedEntities to capture primaryKey/sync changes in nested entities
+              if (recordToProcess.relatedEntities) {
+                records[i].relatedEntities = recordToProcess.relatedEntities;
+              }
             }
             
-            // Track processed record
-            const recordKey = this.getRecordKey(recordData, entityConfig.entity);
-            this.processedRecords.set(recordKey, {
-              filePath,
-              arrayIndex: isArray ? i : undefined,
-              lineNumber: i + 1 // Simple line number approximation
-            });
+            // Record tracking is now handled inside processRecord
             
           } catch (recordError) {
             const errorMsg = `Error processing record in ${filePath}${isArray ? ` at index ${i}` : ''}: ${recordError}`;
@@ -383,7 +389,7 @@ export class PushService {
     callbacks?: PushCallbacks,
     filePath?: string,
     arrayIndex?: number
-  ): Promise<'created' | 'updated' | 'unchanged' | 'error'> {
+  ): Promise<{ status: 'created' | 'updated' | 'unchanged' | 'error'; relatedStats: { created: number; updated: number; unchanged: number }; isDuplicate?: boolean }> {
     const metadata = new Metadata();
     
     // Get or create entity instance
@@ -436,7 +442,7 @@ export class PushService {
           const warning = `Record not found: ${entityConfig.entity} with primaryKey {${pkDisplay}}. To auto-create missing records, set push.autoCreateMissingRecords=true in .mj-sync.json`;
           this.warnings.push(warning);
           callbacks?.onWarn?.(warning);
-          return 'error';
+          return { status: 'error', relatedStats: { created: 0, updated: 0, unchanged: 0 } };
         } else if (options.verbose) {
           callbacks?.onLog?.(`Auto-creating missing ${entityConfig.entity} record with primaryKey {${pkDisplay}}`);
         }
@@ -446,10 +452,10 @@ export class PushService {
     if (options.dryRun) {
       if (exists) {
         callbacks?.onLog?.(`[DRY RUN] Would update ${entityConfig.entity} record`);
-        return 'updated';
+        return { status: 'updated', relatedStats: { created: 0, updated: 0, unchanged: 0 } };
       } else {
         callbacks?.onLog?.(`[DRY RUN] Would create ${entityConfig.entity} record`);
-        return 'created';
+        return { status: 'created', relatedStats: { created: 0, updated: 0, unchanged: 0 } };
       }
     }
     
@@ -520,6 +526,12 @@ export class PushService {
       }
     }
     
+    // Check for duplicate processing (but only for existing records that were loaded)
+    let isDuplicate = false;
+    if (!isNew && entity) {
+      isDuplicate = this.checkAndTrackRecord(entityConfig.entity, entity, filePath, arrayIndex);
+    }
+    
     // Save the record (always call Save, but track if it was actually dirty)
     const saveResult = await entity.Save();
     
@@ -537,6 +549,9 @@ export class PushService {
         }
         recordData.primaryKey = newPrimaryKey;
       }
+      
+      // Track the new record now that we have its primary key
+      this.checkAndTrackRecord(entityConfig.entity, entity, filePath, arrayIndex);
     }
     
     // Only update sync metadata if the record was actually dirty (changed)
@@ -556,62 +571,264 @@ export class PushService {
     }
     
     // Process related entities after parent save
-    if (recordData.relatedEntities) {
-      await this.processRelatedEntities(
-        entity,
+    let relatedStats = { created: 0, updated: 0, unchanged: 0 };
+    if (recordData.relatedEntities && !options.dryRun) {
+      relatedStats = await this.processRelatedEntities(
         recordData.relatedEntities,
+        entity,
+        entity, // root is same as parent for top level
         entityDir,
         options,
-        callbacks
+        callbacks,
+        undefined, // fileBackupManager
+        1, // indentLevel
+        filePath,
+        arrayIndex
       );
     }
     
-    // Return the actual status based on whether the record was dirty
-    if (isNew) {
-      return 'created';
-    } else if (isDirty) {
-      return 'updated';
-    } else {
-      return 'unchanged';
-    }
+    // Store related stats on the result for propagation
+    // Don't count duplicates in stats
+    const status: 'created' | 'updated' | 'unchanged' = isDuplicate ? 'unchanged' : (isNew ? 'created' : (isDirty ? 'updated' : 'unchanged'));
+    const result = {
+      status,
+      relatedStats,
+      isDuplicate
+    };
+    
+    // Return enhanced result with related stats
+    return result;
   }
   
   private async processRelatedEntities(
-    parentEntity: BaseEntity,
     relatedEntities: Record<string, RecordData[]>,
-    entityDir: string,
+    parentEntity: BaseEntity,
+    rootEntity: BaseEntity,
+    baseDir: string,
     options: PushOptions,
-    callbacks?: PushCallbacks
-  ): Promise<void> {
-    // TODO: Complete implementation for processing related entities
-    // This is a simplified version - full implementation would:
-    // 1. Create entity objects for each related entity type
-    // 2. Apply field values with proper parent/root references
-    // 3. Save related entities with proper error handling
-    // 4. Support nested related entities recursively
-    for (const [key, records] of Object.entries(relatedEntities)) {
+    callbacks?: PushCallbacks,
+    fileBackupManager?: FileBackupManager,
+    indentLevel: number = 1,
+    parentFilePath?: string,
+    parentArrayIndex?: number
+  ): Promise<{ created: number; updated: number; unchanged: number }> {
+    const indent = '  '.repeat(indentLevel);
+    const stats = { created: 0, updated: 0, unchanged: 0 };
+    
+    for (const [entityName, records] of Object.entries(relatedEntities)) {
+      if (options.verbose) {
+        callbacks?.onLog?.(`${indent}↳ Processing ${records.length} related ${entityName} records`);
+      }
+      
       for (const relatedRecord of records) {
-        // Process @parent references but DON'T modify the original fields
-        const processedFields: Record<string, any> = {};
-        for (const [fieldName, fieldValue] of Object.entries(relatedRecord.fields)) {
-          if (typeof fieldValue === 'string' && fieldValue.startsWith('@parent:')) {
-            const parentField = fieldValue.substring(8);
-            processedFields[fieldName] = parentEntity.Get(parentField);
-          } else {
-            processedFields[fieldName] = await this.syncEngine.processFieldValue(
-              fieldValue,
-              entityDir,
-              parentEntity,
-              null
-            );
+        try {
+          // Load or create entity
+          let entity = null;
+          let isNew = false;
+          
+          if (relatedRecord.primaryKey) {
+            entity = await this.syncEngine.loadEntity(entityName, relatedRecord.primaryKey);
+            
+            // Warn if record has primaryKey but wasn't found
+            if (!entity) {
+              const pkDisplay = Object.entries(relatedRecord.primaryKey)
+                .map(([key, value]) => `${key}=${value}`)
+                .join(', ');
+              
+              // Load sync config to check autoCreateMissingRecords setting
+              const autoCreate = this.syncConfig?.push?.autoCreateMissingRecords ?? false;
+              
+              if (!autoCreate) {
+                const fileRef = parentFilePath ? path.relative(configManager.getOriginalCwd(), parentFilePath) : 'unknown';
+                const warning = `${indent}⚠️  Related record not found: ${entityName} with primaryKey {${pkDisplay}} at ${fileRef}`;
+                this.warnings.push(warning);
+                callbacks?.onWarn?.(warning);
+                const warning2 = `${indent}   To auto-create missing records, set push.autoCreateMissingRecords=true in .mj-sync.json`;
+                this.warnings.push(warning2);
+                callbacks?.onWarn?.(warning2);
+                
+                // Skip this record
+                continue;
+              } else {
+                if (options.verbose) {
+                  callbacks?.onLog?.(`${indent}   Auto-creating missing related ${entityName} record with primaryKey {${pkDisplay}}`);
+                }
+              }
+            }
           }
+          
+          if (!entity) {
+            entity = await this.syncEngine.createEntityObject(entityName);
+            entity.NewRecord();
+            isNew = true;
+            
+            // Handle primary keys for new related entity records
+            const entityInfo = this.syncEngine.getEntityInfo(entityName);
+            if (entityInfo) {
+              for (const pk of entityInfo.PrimaryKeys) {
+                if (!pk.AutoIncrement) {
+                  // Check if we have a value in primaryKey object
+                  if (relatedRecord.primaryKey?.[pk.Name]) {
+                    // User specified a primary key for new record, set it on entity directly
+                    // Don't add to fields as it will be in primaryKey section
+                    (entity as any)[pk.Name] = relatedRecord.primaryKey[pk.Name];
+                    if (options.verbose) {
+                      callbacks?.onLog?.(`${indent}  Using specified primary key ${pk.Name}: ${relatedRecord.primaryKey[pk.Name]}`);
+                    }
+                  }
+                  // Note: BaseEntity.NewRecord() automatically generates UUIDs for uniqueidentifier primary keys
+                }
+              }
+            }
+          }
+          
+          // Apply fields with parent/root context
+          for (const [field, value] of Object.entries(relatedRecord.fields)) {
+            if (field in entity) {
+              try {
+                const processedValue = await this.syncEngine.processFieldValue(
+                  value, 
+                  baseDir, 
+                  parentEntity, 
+                  rootEntity
+                );
+                if (options.verbose) {
+                  callbacks?.onLog?.(`${indent}  Setting ${field}: ${this.formatFieldValue(value)} -> ${this.formatFieldValue(processedValue)}`);
+                }
+                (entity as any)[field] = processedValue;
+              } catch (error) {
+                throw new Error(`Failed to process field '${field}' in ${entityName}: ${error}`);
+              }
+            } else {
+              const warning = `${indent}  Field '${field}' does not exist on entity '${entityName}'`;
+              this.warnings.push(warning);
+              callbacks?.onWarn?.(warning);
+            }
+          }
+          
+          // Check for duplicate processing (but only for existing records that were loaded)
+          let isDuplicate = false;
+          if (!isNew && entity) {
+            // Use parent file path for related entities since they're defined in the parent's file
+            const relatedFilePath = parentFilePath || path.join(baseDir, 'unknown');
+            isDuplicate = this.checkAndTrackRecord(entityName, entity, relatedFilePath, parentArrayIndex);
+          }
+          
+          // Check if the record is dirty before saving
+          let wasActuallyUpdated = false;
+          if (!isNew && entity.Dirty) {
+            // Record is dirty, get the changes
+            const changes = entity.GetChangesSinceLastSave();
+            const changeKeys = Object.keys(changes);
+            if (changeKeys.length > 0) {
+              wasActuallyUpdated = true;
+              
+              // Get primary key info for display
+              const entityInfo = this.syncEngine.getEntityInfo(entityName);
+              const primaryKeyDisplay: string[] = [];
+              if (entityInfo) {
+                for (const pk of entityInfo.PrimaryKeys) {
+                  primaryKeyDisplay.push(`${pk.Name}: ${entity.Get(pk.Name)}`);
+                }
+              }
+              
+              callbacks?.onLog?.(''); // Add newline before update output
+              callbacks?.onLog?.(`${indent}📝 Updating related ${entityName} record:`);
+              if (primaryKeyDisplay.length > 0) {
+                callbacks?.onLog?.(`${indent}   Primary Key: ${primaryKeyDisplay.join(', ')}`);
+              }
+              callbacks?.onLog?.(`${indent}   Changes:`);
+              for (const fieldName of changeKeys) {
+                const field = entity.GetFieldByName(fieldName);
+                const oldValue = field ? field.OldValue : undefined;
+                const newValue = (changes as any)[fieldName];
+                callbacks?.onLog?.(`${indent}     ${fieldName}: ${this.formatFieldValue(oldValue)} → ${this.formatFieldValue(newValue)}`);
+              }
+            }
+          } else if (isNew) {
+            wasActuallyUpdated = true;
+          }
+          
+          // Save the related entity
+          const saved = await entity.Save();
+          if (!saved) {
+            const message = entity.LatestResult?.Message;
+            if (message) {
+              throw new Error(`Failed to save related ${entityName}: ${message}`);
+            }
+            
+            const errors = entity.LatestResult?.Errors?.map(err => 
+              typeof err === 'string' ? err : (err?.message || JSON.stringify(err))
+            )?.join(', ') || 'Unknown error';
+            throw new Error(`Failed to save related ${entityName}: ${errors}`);
+          }
+          
+          // Update stats - don't count duplicates
+          if (!isDuplicate) {
+            if (isNew) {
+              stats.created++;
+            } else if (wasActuallyUpdated) {
+              stats.updated++;
+            } else {
+              stats.unchanged++;
+            }
+          }
+          
+          if (options.verbose && wasActuallyUpdated) {
+            callbacks?.onLog?.(`${indent}  ✓ ${isNew ? 'Created' : 'Updated'} ${entityName} record`);
+          } else if (options.verbose && !wasActuallyUpdated) {
+            callbacks?.onLog?.(`${indent}  - No changes to ${entityName} record`);
+          }
+          
+          // Update the related record with primary key and sync metadata
+          const entityInfo = this.syncEngine.getEntityInfo(entityName);
+          if (entityInfo) {
+            // Update primary key if new
+            if (isNew) {
+              relatedRecord.primaryKey = {};
+              for (const pk of entityInfo.PrimaryKeys) {
+                relatedRecord.primaryKey[pk.Name] = entity.Get(pk.Name);
+              }
+              
+              // Track the new related entity now that we have its primary key
+              const relatedFilePath = parentFilePath || path.join(baseDir, 'unknown');
+              this.checkAndTrackRecord(entityName, entity, relatedFilePath, parentArrayIndex);
+            }
+            
+            // Always update sync metadata
+            relatedRecord.sync = {
+              lastModified: new Date().toISOString(),
+              checksum: this.syncEngine.calculateChecksum(relatedRecord.fields)
+            };
+          }
+          
+          // Process nested related entities if any
+          if (relatedRecord.relatedEntities) {
+            const nestedStats = await this.processRelatedEntities(
+              relatedRecord.relatedEntities,
+              entity,
+              rootEntity,
+              baseDir,
+              options,
+              callbacks,
+              fileBackupManager,
+              indentLevel + 1,
+              parentFilePath,
+              parentArrayIndex
+            );
+            
+            // Accumulate nested stats
+            stats.created += nestedStats.created;
+            stats.updated += nestedStats.updated;
+            stats.unchanged += nestedStats.unchanged;
+          }
+        } catch (error) {
+          throw new Error(`Failed to process related ${entityName}: ${error}`);
         }
-        
-        // TODO: Actually save the related entity with processedFields
-        // For now, we're just processing the values but not saving
-        // This needs to be implemented to actually create/update the related entities
       }
     }
+    
+    return stats;
   }
   
   private isValidRecordData(data: any): data is RecordData {
@@ -644,6 +861,87 @@ export class PushService {
     }
 
     return strValue;
+  }
+  
+  /**
+   * Generate a unique tracking key for a record based on entity name and primary key values
+   */
+  private generateRecordKey(entityName: string, entity: BaseEntity): string {
+    // Use the built-in CompositeKey ToURLSegment method
+    const keySegment = entity.PrimaryKey.ToURLSegment();
+    return `${entityName}|${keySegment}`;
+  }
+  
+  /**
+   * Check if a record has already been processed and warn if duplicate
+   */
+  private checkAndTrackRecord(
+    entityName: string, 
+    entity: BaseEntity, 
+    filePath?: string,
+    arrayIndex?: number,
+    lineNumber?: number
+  ): boolean {
+    const recordKey = this.generateRecordKey(entityName, entity);
+    
+    const existing = this.processedRecords.get(recordKey);
+    if (existing) {
+      const primaryKeyDisplay = entity.EntityInfo?.PrimaryKeys
+        .map(pk => `${pk.Name}: ${entity.Get(pk.Name)}`)
+        .join(', ') || 'unknown';
+      
+      // Format file location with clickable link for VSCode
+      // Create maps with just the line numbers we have
+      const currentLineMap = lineNumber ? new Map([[arrayIndex || 0, lineNumber]]) : undefined;
+      const originalLineMap = existing.lineNumber ? new Map([[existing.arrayIndex || 0, existing.lineNumber]]) : undefined;
+      
+      const currentLocation = this.formatFileLocation(filePath, arrayIndex, currentLineMap);
+      const originalLocation = this.formatFileLocation(existing.filePath, existing.arrayIndex, originalLineMap);
+      
+      const warning = `⚠️  Duplicate record detected for ${entityName} (${primaryKeyDisplay})`;
+      this.warnings.push(warning);
+      const warning2 = `   Current location:  ${currentLocation}`;
+      this.warnings.push(warning2);
+      const warning3 = `   Original location: ${originalLocation}`;
+      this.warnings.push(warning3);
+      const warning4 = `   The duplicate update will proceed, but you should review your data for unintended duplicates.`;
+      this.warnings.push(warning4);
+      
+      return true; // is duplicate
+    }
+    
+    // Track the record with its source location
+    this.processedRecords.set(recordKey, {
+      filePath: filePath || 'unknown',
+      arrayIndex,
+      lineNumber
+    });
+    return false; // not duplicate
+  }
+  
+  /**
+   * Format file location with clickable link for VSCode
+   */
+  private formatFileLocation(filePath?: string, arrayIndex?: number, lineNumbers?: Map<number, number>): string {
+    if (!filePath || filePath === 'unknown') {
+      return 'unknown';
+    }
+    
+    // Get absolute path for better VSCode integration
+    const absolutePath = path.resolve(filePath);
+    
+    // Try to get actual line number from our tracking
+    let lineNumber = 1;
+    if (arrayIndex !== undefined && lineNumbers && lineNumbers.has(arrayIndex)) {
+      lineNumber = lineNumbers.get(arrayIndex)!;
+    } else if (arrayIndex !== undefined) {
+      // Fallback estimation if we don't have actual line numbers
+      lineNumber = 2 + (arrayIndex * 15);
+    }
+    
+    // Create clickable file path for VSCode - format: file:line
+    // VSCode will make this clickable in the terminal
+    return `${absolutePath}:${lineNumber}`;
   }
   
   private findEntityDirectories(baseDir: string, specificDir?: string): string[] {
