@@ -13,3 +13,5 @@ export * from './custom/ResourcePermissions/ResourcePermissionSubclass';
 export * from './custom/ResourcePermissions/ResourceData';
 export * from './custom/EntityEntityExtended';
 export * from './custom/EntityFieldEntityExtended';
+export * from './custom/AIAgentRunExtended';
+export * from './custom/AIAgentRunStepExtended';
