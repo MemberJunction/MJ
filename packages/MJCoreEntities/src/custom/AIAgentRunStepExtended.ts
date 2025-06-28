@@ -1,5 +1,5 @@
 import { BaseEntity, CompositeKey, LogErrorEx, Metadata } from "@memberjunction/core";
-import { ActionExecutionLogEntity, AIAgentActionEntity, AIAgentEntity, AIAgentModelEntity, AIAgentNoteEntity, AIAgentRunEntity, AIAgentRunStepEntity, AIPromptRunEntity } from "../generated/entity_subclasses";
+import { ActionExecutionLogEntity, AIAgentRunStepEntity, AIPromptRunEntity } from "../generated/entity_subclasses";
 import { RegisterClass } from "@memberjunction/global";
 import { AIAgentRunEntityExtended } from "./AIAgentRunExtended";
 
@@ -51,13 +51,57 @@ export class AIAgentRunStepEntityExtended extends AIAgentRunStepEntity {
         this._promptRun = value;
     }
 
-    override async LoadFromData(data: any, _replaceOldValues?: boolean): Promise<boolean> {
-        if (await super.LoadFromData(data, _replaceOldValues)) {
-            return await this.LoadRelatedData();
+    /**
+     * Override GetAll to include extended properties for serialization.
+     * This enables streaming of the full object structure including related entities.
+     */
+    public GetAll(): any {
+        const baseData = super.GetAll();
+        
+        // Add related entities based on StepType with __ prefix
+        const extended: any = { ...baseData };
+        
+        if (this.StepType === 'Prompt' && this._promptRun) {
+            extended.__promptRun = this._promptRun.GetAll();
+        } else if (this.StepType === 'Actions' && this._actionExecutionLog) {
+            extended.__actionExecutionLog = this._actionExecutionLog.GetAll();
+        } else if (this.StepType === 'Sub-Agent' && this._subAgentRun) {
+            extended.__subAgentRun = this._subAgentRun.GetAll(); // Recursive!
         }
-        else {
+        
+        return extended;
+    }
+    
+    override async LoadFromData(data: any, _replaceOldValues?: boolean): Promise<boolean> {
+        // Extract our special properties before passing to super
+        const { __promptRun, __actionExecutionLog, __subAgentRun, ...baseData } = data;
+        
+        // Load base properties
+        const baseResult = await super.LoadFromData(baseData, _replaceOldValues);
+        if (!baseResult) {
             return false;
         }
+        
+        // Handle extended properties based on StepType
+        const md = new Metadata();
+        
+        if (this.StepType === 'Prompt' && __promptRun) {
+            this._promptRun = await md.GetEntityObject<AIPromptRunEntity>('MJ: AI Prompt Runs', this.ContextCurrentUser);
+            await this._promptRun.LoadFromData(__promptRun);
+        } else if (this.StepType === 'Actions' && __actionExecutionLog) {
+            this._actionExecutionLog = await md.GetEntityObject<ActionExecutionLogEntity>('Action Execution Logs', this.ContextCurrentUser);
+            await this._actionExecutionLog.LoadFromData(__actionExecutionLog);
+        } else if (this.StepType === 'Sub-Agent' && __subAgentRun) {
+            this._subAgentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', this.ContextCurrentUser);
+            await this._subAgentRun.LoadFromData(__subAgentRun);
+        }
+        
+        // If no extended data provided but we have IDs, try to load from database
+        if (!__promptRun && !__actionExecutionLog && !__subAgentRun && this.ID?.length > 0) {
+            await this.LoadRelatedData();
+        }
+        
+        return true;
     }
 
     override async InnerLoad(CompositeKey: CompositeKey, EntityRelationshipsToLoad?: string[]): Promise<boolean> {

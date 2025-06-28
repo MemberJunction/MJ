@@ -1,5 +1,5 @@
 import { BaseEntity, CompositeKey, LogErrorEx, Metadata, RunView } from "@memberjunction/core";
-import { AIAgentRunEntity, AIAgentRunStepEntity } from "../generated/entity_subclasses";
+import { AIAgentRunEntity } from "../generated/entity_subclasses";
 import { RegisterClass, SafeJSONParse } from "@memberjunction/global";
 import { AIAgentRunStepEntityExtended } from "./AIAgentRunStepExtended";
 
@@ -42,13 +42,52 @@ export class AIAgentRunEntityExtended extends AIAgentRunEntity {
         return this._finalPayloadObject;
     }
     
+    /**
+     * Override GetAll to include extended properties for serialization.
+     * This enables streaming of the full object structure including related entities.
+     */
+    public GetAll(): any {
+        const baseData = super.GetAll();
+        
+        // Add extended properties with __ prefix to avoid conflicts
+        return {
+            ...baseData,
+            __finalPayloadObject: this._finalPayloadObject,
+            __runSteps: this._runSteps.map(step => step.GetAll())
+        };
+    }
+    
     override async LoadFromData(data: any, _replaceOldValues?: boolean): Promise<boolean> {
-        if (await super.LoadFromData(data, _replaceOldValues)) {
-            return await this.LoadRelatedData();
-        }
-        else {
+        // Extract our special properties before passing to super
+        const { __runSteps, __finalPayloadObject, ...baseData } = data;
+        
+        // Load base properties
+        const baseResult = await super.LoadFromData(baseData, _replaceOldValues);
+        if (!baseResult) {
             return false;
         }
+        
+        // Handle extended properties
+        if (__finalPayloadObject !== undefined) {
+            this._finalPayloadObject = __finalPayloadObject;
+        }
+        
+        // Handle steps array if provided
+        if (__runSteps && Array.isArray(__runSteps)) {
+            this._runSteps = [];
+            const md = new Metadata();
+            for (const stepData of __runSteps) {
+                const step = await md.GetEntityObject<AIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', this.ContextCurrentUser);
+                await step.LoadFromData(stepData);
+                this._runSteps.push(step);
+            }
+        }
+        // If no steps provided in data, try to load from database
+        else if (this.ID?.length > 0) {
+            await this.LoadRelatedData();
+        }
+        
+        return true;
     }
 
     override async InnerLoad(CompositeKey: CompositeKey, EntityRelationshipsToLoad?: string[]): Promise<boolean> {

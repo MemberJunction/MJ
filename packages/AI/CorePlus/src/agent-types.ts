@@ -343,29 +343,6 @@ export type AgentConfiguration = {
     childPrompt?: AIPromptEntity;
 }
 
-/**
- * Context maintained throughout an agent run.
- * 
- * This context tracks the current execution state, parent relationships for
- * nested sub-agent calls, agent hierarchy for streaming messages, and any 
- * persistent state needed across steps.
- */
-export type AgentRunContext = {
-    /** Current position in the execution chain (0-based) */
-    currentStepIndex: number;
-    /** Stack of parent run IDs for nested sub-agent calls */
-    parentRunStack: string[];
-    /** Stack of agent names for hierarchical message display (e.g., ["Marketing Agent", "Copywriter Agent"]) */
-    agentHierarchy: string[];
-    /** Current nesting depth (0 = root agent, 1 = first sub-agent, etc.) */
-    depth: number;
-    /** Optional conversation ID linking multiple agent runs */
-    conversationId?: string;
-    /** Optional user ID for context and permissions */
-    userId?: string;
-    /** Any persistent state maintained across steps */
-    agentState: Record<string, any>;
-}
 
 
     

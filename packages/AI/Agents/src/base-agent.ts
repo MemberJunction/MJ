@@ -26,7 +26,6 @@ import {
     ExecuteAgentParams, 
     AgentContextData,
     AgentConfiguration,
-    AgentRunContext,
     AgentExecutionProgressCallback,
     ExecuteAgentResult,
     AgentAction,
@@ -95,16 +94,23 @@ export class BaseAgent {
     private _metadata: Metadata = new Metadata();
 
     /**
-     * Current agent run context.
-     * @private
-     */
-    private _runContext: AgentRunContext | null = null;
-
-    /**
      * Current agent run entity.
      * @private
      */
     private _agentRun: AIAgentRunEntityExtended | null = null;
+
+    /**
+     * Agent hierarchy for display purposes (e.g., ["Marketing Agent", "Copywriter Agent"]).
+     * Tracked separately as it's display-only and doesn't need persistence.
+     * @private
+     */
+    private _agentHierarchy: string[] = [];
+
+    /**
+     * Current depth in the agent hierarchy (0 = root agent, 1 = first sub-agent, etc.).
+     * @private
+     */
+    private _depth: number = 0;
 
     
     /**
@@ -193,8 +199,8 @@ export class BaseAgent {
             this._allProgressSteps.push({
                 ...progress,
                 timestamp: new Date(),
-                agentHierarchy: this._runContext?.agentHierarchy || [],
-                depth: this._runContext?.depth || 0
+                agentHierarchy: this._agentHierarchy || [],
+                depth: this._depth || 0
             });
             
             // Call original callback
@@ -855,8 +861,8 @@ export class BaseAgent {
                 cancellationToken: params.cancellationToken,
                 onProgress: params.onProgress,
                 onStreaming: params.onStreaming,
-                parentAgentHierarchy: this._runContext?.agentHierarchy,
-                parentDepth: this._runContext?.depth,
+                parentAgentHierarchy: this._agentHierarchy,
+                parentDepth: this._depth,
                 parentRun: this._agentRun,
                 payload: payload, // pass the payload if provided
                 data: subAgentRequest.templateParameters,
@@ -1085,18 +1091,16 @@ export class BaseAgent {
             throw new Error(`Failed to create agent run record: Details: ${errorMessage}`);
         }
 
-        // Initialize run context
-        this._runContext = {
-            currentStepIndex: 0,
-            parentRunStack: [],
-            agentHierarchy: params.parentAgentHierarchy 
-                ? [...params.parentAgentHierarchy, params.agent.Name || 'Unknown Agent']
-                : [params.agent.Name || 'Unknown Agent'],
-            depth: params.parentDepth !== undefined ? params.parentDepth + 1 : 0,
-            conversationId: undefined, // TODO: Get from conversation context
-            userId: params.contextUser?.ID,
-            agentState: {}
-        };
+        // Initialize hierarchy tracking
+        this._agentHierarchy = params.parentAgentHierarchy 
+            ? [...params.parentAgentHierarchy, params.agent.Name || 'Unknown Agent']
+            : [params.agent.Name || 'Unknown Agent'];
+        this._depth = params.parentDepth !== undefined ? params.parentDepth + 1 : 0;
+
+        // Initialize AgentState if not already set
+        if (!this._agentRun.AgentState) {
+            this._agentRun.AgentState = JSON.stringify({});
+        }
 
         // Reset execution chain and progress tracking
         this._allProgressSteps = [];
@@ -1153,7 +1157,8 @@ export class BaseAgent {
         const stepEntity = await this._metadata.GetEntityObject<AIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', contextUser);
         
         stepEntity.AgentRunID = this._agentRun!.ID;
-        stepEntity.StepNumber = this._runContext!.currentStepIndex + 1;
+        // Step number is based on current count of steps + 1
+        stepEntity.StepNumber = (this._agentRun!.Steps?.length || 0) + 1;
         stepEntity.StepType = stepType;
         // Include hierarchy breadcrumb in StepName for better logging
         stepEntity.StepName = this.formatHierarchicalMessage(stepName);
@@ -1174,8 +1179,8 @@ export class BaseAgent {
             stepEntity.InputData = JSON.stringify({
                 ...inputData,
                 context: {
-                    agentHierarchy: this._runContext!.agentHierarchy,
-                    depth: this._runContext!.depth,
+                    agentHierarchy: this._agentHierarchy,
+                    depth: this._depth,
                     stepNumber: stepEntity.StepNumber
                 }
             });
@@ -1184,8 +1189,6 @@ export class BaseAgent {
         if (!await stepEntity.Save()) {
             throw new Error(`Failed to create agent run step record: ${JSON.stringify(stepEntity.LatestResult)}`);
         }
-        
-        this._runContext!.currentStepIndex++;
         
         // Add the step to the agent run's Steps array
         if (this._agentRun) {
@@ -1235,9 +1238,9 @@ export class BaseAgent {
      * @returns {string} - The formatted message with hierarchy breadcrumb
      */
     private formatHierarchicalMessage(baseMessage: string): string {
-        if (this._runContext && this._runContext.depth > 0) {
+        if (this._depth > 0) {
             // Build breadcrumb from agent hierarchy (skip root agent)
-            const breadcrumb = this._runContext.agentHierarchy
+            const breadcrumb = this._agentHierarchy
                 .slice(1)
                 .join(' → ');
             return breadcrumb ? `${breadcrumb}: ${baseMessage}` : baseMessage;
@@ -1405,7 +1408,7 @@ export class BaseAgent {
                 instructions: previousDecision.retryInstructions
             } : undefined,
             conversationMessages: params.conversationMessages,
-            agentState: this._runContext?.agentState
+            agentState: this._agentRun?.AgentState ? JSON.parse(this._agentRun.AgentState) : {}
         };
         
         const stepEntity = await this.createStepEntity('Prompt', 'Execute Agent Prompt', params.contextUser, config.childPrompt?.ID, inputData);
@@ -1580,7 +1583,7 @@ export class BaseAgent {
             message: subAgentRequest.message,
             terminateAfter: subAgentRequest.terminateAfter,
             conversationMessages: params.conversationMessages,
-            parentAgentHierarchy: this._runContext?.agentHierarchy
+            parentAgentHierarchy: this._agentHierarchy
         };
         
         const stepEntity = await this.createStepEntity('Sub-Agent', `Execute Sub-Agent: ${subAgentRequest.name}`, params.contextUser, subAgentRequest.id, inputData);
