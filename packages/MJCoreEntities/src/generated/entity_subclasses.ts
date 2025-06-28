@@ -1128,6 +1128,18 @@ export const AIAgentSchema = z.object({
     *   * Agent Type
     *   * Agent
     * * Description: Controls whether model selection is driven by the Agent Type's system prompt or the Agent's specific prompt. Default is Agent Type for backward compatibility.`),
+    PayloadDownstreamPaths: z.string().describe(`
+        * * Field Name: PayloadDownstreamPaths
+        * * Display Name: Payload Downstream Paths
+        * * SQL Data Type: nvarchar(MAX)
+        * * Default Value: ["*"]
+    * * Description: JSON array of paths that define which parts of the payload should be sent downstream to sub-agents. Use ["*"] to send entire payload, or specify paths like ["customer.id", "campaign.*", "analysis.sentiment"]`),
+    PayloadUpstreamPaths: z.string().describe(`
+        * * Field Name: PayloadUpstreamPaths
+        * * Display Name: Payload Upstream Paths
+        * * SQL Data Type: nvarchar(MAX)
+        * * Default Value: ["*"]
+    * * Description: JSON array of paths that define which parts of the payload sub-agents are allowed to write back upstream. Use ["*"] to allow all writes, or specify paths like ["analysis.results", "recommendations.*"]`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -15211,6 +15223,34 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     }
     set ModelSelectionMode(value: 'Agent Type' | 'Agent') {
         this.Set('ModelSelectionMode', value);
+    }
+
+    /**
+    * * Field Name: PayloadDownstreamPaths
+    * * Display Name: Payload Downstream Paths
+    * * SQL Data Type: nvarchar(MAX)
+    * * Default Value: ["*"]
+    * * Description: JSON array of paths that define which parts of the payload should be sent downstream to sub-agents. Use ["*"] to send entire payload, or specify paths like ["customer.id", "campaign.*", "analysis.sentiment"]
+    */
+    get PayloadDownstreamPaths(): string {
+        return this.Get('PayloadDownstreamPaths');
+    }
+    set PayloadDownstreamPaths(value: string) {
+        this.Set('PayloadDownstreamPaths', value);
+    }
+
+    /**
+    * * Field Name: PayloadUpstreamPaths
+    * * Display Name: Payload Upstream Paths
+    * * SQL Data Type: nvarchar(MAX)
+    * * Default Value: ["*"]
+    * * Description: JSON array of paths that define which parts of the payload sub-agents are allowed to write back upstream. Use ["*"] to allow all writes, or specify paths like ["analysis.results", "recommendations.*"]
+    */
+    get PayloadUpstreamPaths(): string {
+        return this.Get('PayloadUpstreamPaths');
+    }
+    set PayloadUpstreamPaths(value: string) {
+        this.Set('PayloadUpstreamPaths', value);
     }
 
     /**

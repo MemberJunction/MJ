@@ -10,7 +10,7 @@
  * @since 2.49.0
  */
 
-import { LogError, LogStatus } from '@memberjunction/core';
+import { LogError, LogStatusEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ExecuteAgentResult, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
@@ -53,7 +53,11 @@ export class AgentRunner {
      */
     public async RunAgent<C = any, R = any>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
         try {
-            LogStatus(`AgentRunner: Starting execution for agent: ${params.agent.Name} (ID: ${params.agent.ID})`);
+            LogStatusEx({
+                message: `AgentRunner: Starting execution for agent: ${params.agent.Name} (ID: ${params.agent.ID})`,
+                verboseOnly: true,
+                isVerboseEnabled: () => params.verbose === true || IsVerboseLoggingEnabled()
+            });
             
             // Ensure AIEngine is configured
             await AIEngine.Instance.Config(false, params.contextUser);
@@ -66,7 +70,11 @@ export class AgentRunner {
             
             // Get the correct agent class using ClassFactory, prefer the agent's DriverClass if specified, otherwise fallback to Agent Type, otherwise we get BaseAgent from ClassFactory
             const driverClass = params.agent.DriverClass || agentType.DriverClass;
-            LogStatus(`AgentRunner: Using driver class: ${driverClass}`);
+            LogStatusEx({
+                message: `AgentRunner: Using driver class: ${driverClass}`,
+                verboseOnly: true,
+                isVerboseEnabled: () => params.verbose === true || IsVerboseLoggingEnabled()
+            });
             
             const agentInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAgent>(
                 BaseAgent,
