@@ -1308,17 +1308,27 @@ ${updatedAtTrigger}
                     sOutput += `NULL`; // we don't set the deleted at field on an insert, only on a delete
             }
             else if ((prefix && prefix !== '') && !ef.IsPrimaryKey && ef.IsUniqueIdentifier && ef.HasDefaultValue) {
-                    // this is the VALUE side (prefix not null/blank), is NOT a primary key, and is a uniqueidentifier column, and has a default value specified
-                    // in this situation we need to check if the value being passed in is the special value '00000000-0000-0000-0000-000000000000' (which is in __specialUUIDValue) if it is, we substitute it with the actual default value
-                    // otherwise we use the value passed in
-                    // next check to make sure ef.DefaultValue does not contain quotes around the value if it is a string type, if it does, we need to remove them
-                    let defValue = ef.DefaultValue;
-                    if (ef.TSType === EntityFieldTSType.String) {
-                        if (defValue.startsWith("'") && defValue.endsWith("'")) {
-                            defValue = defValue.substring(1, defValue.length - 1).trim(); // remove the quotes
-                        }
+                // this is the VALUE side (prefix not null/blank), is NOT a primary key, and is a uniqueidentifier column, and has a default value specified
+                // in this situation we need to check if the value being passed in is the special value '00000000-0000-0000-0000-000000000000' (which is in __specialUUIDValue) if it is, we substitute it with the actual default value
+                // When the uniqueidentifier default value is set to NEWID() or NEWSEQUENTIALID(), we need to ensure that the value is not wrapped in quotes, so we check for that
+                // otherwise we use the value passed in
+                // next check to make sure ef.DefaultValue does not contain quotes around the value if it is a string type, if it does, we need to remove them
+                let defValue = ef.DefaultValue;
+                if (ef.TSType === EntityFieldTSType.String) {
+                    if (defValue.startsWith("'") && defValue.endsWith("'")) {
+                        defValue = defValue.substring(1, defValue.length - 1).trim(); // remove the quotes
                     }
-                sOutput += `CASE @${ef.CodeName} WHEN '${this.__specialUUIDValue}' THEN ${quotes}${defValue}${quotes} ELSE @${ef.CodeName} END`;
+                }
+
+                const defValueLowered = defValue.toLowerCase().trim();
+
+                //If the default value is NEWID or NEWSEQUENTIALID, we will use the default value as is, without quotes.
+                //Otherwise, wrap the default value with the quotes variable value.
+                if (!defValueLowered.includes('newid()') && !defValueLowered.includes('newsequentialid()')) {
+                    defValue = `${quotes}${defValue}${quotes}`;
+                }
+
+                sOutput += `CASE @${ef.CodeName} WHEN '${this.__specialUUIDValue}' THEN ${defValue} ELSE @${ef.CodeName} END`;
             }
             else {
                 let sVal: string = '';
