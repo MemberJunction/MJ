@@ -320,6 +320,7 @@
                                     [agentRun]="currentAgentRun"
                                     [liveSteps]="liveAgentSteps"
                                     [autoExpand]="true"
+                                    (viewRunClick)="navigateToAgentRun($event)"
                                     [runId]="getLastRunId()"
                                     [runType]="mode">
                                 </mj-agent-execution-monitor>
@@ -721,7 +722,7 @@
                                         </button>
                                     }
                                     @if (message.agentRunId && mode === 'agent' && message.role === 'assistant') {
-                                        <button class="execution-history-toggle" (click)="navigateToAgentRun(message.agentRunId)" title="View full run details">
+                                        <button class="execution-history-toggle" (click)="navigateToAgentRun({runId: message.agentRunId, runType: 'agent'})" title="View full run details">
                                             <i class="fa-solid fa-external-link-alt"></i>
                                         </button>
                                     }

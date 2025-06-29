@@ -208,6 +208,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     @Output() runOpened = new EventEmitter<{ runId: string; runType: 'agent' | 'prompt' }>();
     
+    /**
+     * Event emitted when the component requests to be minimized (e.g., when navigating to a run)
+     */
+    @Output() minimizeRequested = new EventEmitter<void>();
+    
     /** Reference to the scrollable messages container for auto-scrolling functionality */
     @ViewChild('messagesContainer') private messagesContainer!: ElementRef;
     
@@ -1160,7 +1165,12 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         // Clear input and update change detection
         const messageToSend = this.currentUserMessage;
         this.currentUserMessage = '';
-        this.cdr.detectChanges();
+        
+        // Use Promise.resolve to defer the change detection to the next microtask
+        // This prevents ExpressionChangedAfterItHasBeenCheckedError
+        Promise.resolve().then(() => {
+            this.cdr.detectChanges();
+        });
         
         // Scroll to bottom
         this.scrollNeeded = true;
@@ -2982,9 +2992,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      * Navigates to the AI Agent Run form to view detailed execution information
      * @param agentRunId - The ID of the agent run to view
      */
-    public navigateToAgentRun(agentRunId: string) {
-        if (agentRunId) {
-            this.router.navigate(['/entities', 'MJ: AI Agent Runs', agentRunId]);
+    public navigateToAgentRun({runId, runType}: {runId: string, runType: 'agent' | 'prompt'}) {
+        if (runId && runType==='agent') {
+            SharedService.Instance.OpenEntityRecord('MJ: AI Agent Runs', CompositeKey.FromID(runId));
+            // Request minimization from our container
+            this.minimizeRequested.emit();
         }
     }
 }

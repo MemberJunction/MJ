@@ -238,12 +238,12 @@
           
           <kendo-panelbar-item title="Final Payload" *ngIf="record.FinalPayload">
             <ng-template kendoPanelBarContent>
-              <div class="state-viewer">
+              <div class="result-viewer">
                 <mj-code-editor
                   [ngModel]="parsedFinalPayload"
                   [language]="'json'"
                   [readonly]="true"
-                  style="height: 400px; width: 100%;">
+                  style="height: 300px; width: 100%;">
                 </mj-code-editor>
               </div>
             </ng-template>

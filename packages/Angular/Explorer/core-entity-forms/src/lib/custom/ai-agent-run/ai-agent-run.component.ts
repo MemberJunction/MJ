@@ -161,12 +161,22 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     if (!this.record?.Result) return '';
     
     try {
+      // First, check if Result is a JSON string that needs to be parsed
+      let resultData = this.record.Result;
+      try {
+        // If Result is a JSON string, parse it first
+        resultData = JSON.parse(this.record.Result);
+      } catch {
+        // If it's not valid JSON, use it as-is
+        resultData = this.record.Result;
+      }
+      
       const parseOptions: ParseJSONOptions = {
         extractInlineJson: true,
         maxDepth: 100,
         debug: false // Disable debug logging - regex issue fixed
       };
-      const parsed = ParseJSONRecursive(this.record.Result, parseOptions);
+      const parsed = ParseJSONRecursive(resultData, parseOptions);
       return JSON.stringify(parsed, null, 2);
     } catch (e) {
       return this.record.Result;
@@ -180,12 +190,22 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     if (!this.record?.FinalPayload) return '';
     
     try {
+      // First, check if FinalPayload is a JSON string that needs to be parsed
+      let payloadData = this.record.FinalPayload;
+      try {
+        // If FinalPayload is a JSON string, parse it first
+        payloadData = JSON.parse(this.record.FinalPayload);
+      } catch {
+        // If it's not valid JSON, use it as-is
+        payloadData = this.record.FinalPayload;
+      }
+      
       const parseOptions: ParseJSONOptions = {
         extractInlineJson: true,
         maxDepth: 100,
         debug: false // Disable debug logging - regex issue fixed
       };
-      const parsed = ParseJSONRecursive(this.record.FinalPayload, parseOptions);
+      const parsed = ParseJSONRecursive(payloadData, parseOptions);
       return JSON.stringify(parsed, null, 2);
     } catch (e) {
       return this.record.FinalPayload;
