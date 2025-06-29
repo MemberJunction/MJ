@@ -117,14 +117,12 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
       {
         EntityName: 'MJ: AI Agent Run Steps',
         ExtraFilter: `AgentRunID='${this.aiAgentRunId}'`,
-        OrderBy: 'StepNumber',
-        ResultType: 'entity_object'
+        OrderBy: 'StepNumber' 
       },
       {
         EntityName: 'MJ: AI Agent Runs',
         ExtraFilter: `ParentRunID='${this.aiAgentRunId}'`,
-        OrderBy: 'StartedAt',
-        ResultType: 'entity_object'
+        OrderBy: 'StartedAt' 
       }
     ]);
     
@@ -165,8 +163,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
     const result = await rv.RunView<ActionExecutionLogEntity>({
       EntityName: 'Action Execution Logs',
       ExtraFilter: `ActionID IN ('${actionIds.join("','")}')`,
-      OrderBy: 'StartedAt',
-      ResultType: 'entity_object'
+      OrderBy: 'StartedAt' 
     });
     
     if (result.Success) {
@@ -185,8 +182,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
     const result = await rv.RunView<AIPromptRunEntity>({
       EntityName: 'MJ: AI Prompt Runs',
       ExtraFilter: `ID IN ('${promptIds.join("','")}')`,
-      OrderBy: '__mj_CreatedAt',
-      ResultType: 'entity_object'
+      OrderBy: '__mj_CreatedAt' 
     });
     
     if (result.Success) {
@@ -382,8 +378,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
       const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
         EntityName: 'MJ: AI Agent Run Steps',
         ExtraFilter: `AgentRunID = '${subAgentRunId}'`,
-        OrderBy: 'StepNumber',
-        ResultType: 'entity_object'
+        OrderBy: 'StepNumber' 
       });
       
       if (stepsResult.Success && stepsResult.Results && stepsResult.Results.length > 0) {

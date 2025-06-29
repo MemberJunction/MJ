@@ -120,10 +120,7 @@ export class TestHarnessWindowService {
             // Handle window close
             componentRef.instance.closeWindow.subscribe(() => {
                 this.closeWindow(windowId);
-                resultSubject.next({
-                    success: true
-                });
-                resultSubject.complete();
+                // Don't complete the observable here, as the window.result will handle it
             });
         }
         
@@ -156,8 +153,14 @@ export class TestHarnessWindowService {
     private closeWindow(windowId: string) {
         const windowRef = this.openWindows.get(windowId);
         if (windowRef) {
-            windowRef.close();
-            this.openWindows.delete(windowId);
+            try {
+                windowRef.close();
+                this.openWindows.delete(windowId);
+            } catch (error) {
+                console.error('Error closing window:', error);
+                // Force delete from map even if close fails
+                this.openWindows.delete(windowId);
+            }
         }
     }
     

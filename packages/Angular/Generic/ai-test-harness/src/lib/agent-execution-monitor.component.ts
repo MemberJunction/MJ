@@ -939,19 +939,49 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      * Mark previously new nodes as completed
      */
     private markPreviouslyNewNodesAsComplete(): void {
-        // Mark previously added steps as completed if they were running
-        for (const stepId of this.newlyAddedNodeIds) {
-            const componentRef = this.nodeComponentMap.get(stepId);
-            if (componentRef) {
-                const step = componentRef.instance.step;
-                if (step.Status === 'Running') {
-                    // Create a copy with updated status
-                    const updatedStep = Object.assign({}, step, { Status: 'Completed' });
-                    componentRef.instance.step = updatedStep;
-                    componentRef.changeDetectorRef.detectChanges();
+        // Mark ALL running steps as completed (not just previously new ones)
+        // This ensures only the latest step shows as running
+        this.nodeComponentMap.forEach((componentRef, stepId) => {
+            const step = componentRef.instance.step;
+            if (step.Status === 'Running') {
+                // Create a copy with updated status
+                const updatedStep = Object.assign({}, step, { Status: 'Completed' });
+                componentRef.instance.step = updatedStep;
+                componentRef.changeDetectorRef.detectChanges();
+            }
+        });
+    }
+    
+    /**
+     * Ensure only the last step in the execution order shows as running
+     */
+    private ensureOnlyLastStepIsRunning(): void {
+        // Find the last step by step number
+        let lastRunningStep: { stepId: string; stepNumber: number; componentRef: ComponentRef<ExecutionNodeComponent> } | null = null;
+        
+        this.nodeComponentMap.forEach((componentRef, stepId) => {
+            const step = componentRef.instance.step;
+            if (step.Status === 'Running') {
+                const stepNumber = step.StepNumber || 0;
+                if (!lastRunningStep || stepNumber > lastRunningStep.stepNumber) {
+                    lastRunningStep = { stepId, stepNumber, componentRef };
                 }
             }
-        }
+        });
+        
+        // Set override display status for all running steps
+        this.nodeComponentMap.forEach((componentRef, stepId) => {
+            const step = componentRef.instance.step;
+            if (step.Status === 'Running') {
+                // Override display to show as completed, except for the last one
+                if (lastRunningStep && stepId === lastRunningStep.stepId) {
+                    componentRef.instance.overrideDisplayStatus = 'Running';
+                } else {
+                    componentRef.instance.overrideDisplayStatus = 'Completed';
+                }
+                componentRef.changeDetectorRef.detectChanges();
+            }
+        });
     }
     
     
@@ -1244,6 +1274,9 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         }
         
         if (hasNewSteps) {
+            // After processing all new steps, ensure only the last one shows as running
+            this.ensureOnlyLastStepIsRunning();
+            
             this.updateCurrentStep();
             this.calculateStats();
             

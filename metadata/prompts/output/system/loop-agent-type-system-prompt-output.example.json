@@ -10,7 +10,6 @@
     "type": "[REQUIRED if taskComplete=false: Must be exactly one of the options specified in the type definition]",
     "actions?": [
       {
-        "id": "[UUID: The exact ID from available actions list]",
         "name": "[STRING: The exact name from available actions list]",
         "params*": {
           "[PARAM_NAME]": "[PARAM_VALUE: Must match action's expected parameters]",
@@ -19,7 +18,6 @@
       }
     ],
     "subAgent?": {
-      "id": "[UUID: The exact ID from available sub-agents list]",
       "name": "[STRING: The exact name from available sub-agents list]",
       "message": "[STRING: Complete context and instructions for the sub-agent - they don't see conversation history]",
       "templateParameters*": {

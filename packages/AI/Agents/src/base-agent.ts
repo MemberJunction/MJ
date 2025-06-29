@@ -203,16 +203,30 @@ export class BaseAgent {
             });
             
             // Include agent run in metadata if available
-            const enhancedProgress = {
-                ...progress,
-                metadata: {
-                    ...progress.metadata,
-                    agentRun: this._agentRun // Include the agent run entity
-                }
-            };
+            try {
+                const enhancedProgress = {
+                    ...progress,
+                    metadata: {
+                        ...progress.metadata,
+                        agentRun: this._agentRun 
+                    }
+                };
             
-            // Call original callback with enhanced progress
-            originalCallback(enhancedProgress);
+                // Call original callback with enhanced progress
+                originalCallback(enhancedProgress);
+            }
+            catch (e) {
+                this.logError(`Failed to enhance progress with agent run: ${e instanceof Error ? e.message : e}`, {
+                    category: 'ProgressEnhancement',
+                    metadata: {
+                        progress: progress,
+                        agentRunId: this._agentRun?.ID || 'N/A'
+                    }
+                });     
+
+                // Call original callback without enhancement
+                originalCallback(progress);
+            }
         };
     }
 
@@ -789,6 +803,7 @@ export class BaseAgent {
         params: ExecuteAgentParams<SC>,
         subAgentRequest: AgentSubAgentRequest<SC>, 
         subAgent: AIAgentEntityExtended,
+        stepEntity: AIAgentRunStepEntityExtended,
         payload?: SR
     ): Promise<ExecuteAgentResult<SR>> {
         try {
@@ -821,7 +836,7 @@ export class BaseAgent {
                 conversationMessages: subAgentMessages,
                 contextUser: params.contextUser,
                 cancellationToken: params.cancellationToken,
-                onProgress: params.onProgress,
+                onProgress:  params.onProgress,
                 onStreaming: params.onStreaming,
                 parentAgentHierarchy: this._agentHierarchy,
                 parentDepth: this._depth,
@@ -1510,11 +1525,14 @@ export class BaseAgent {
                 downstreamPaths
             );
             
+            stepEntity.PayloadAtStart = JSON.stringify(previousDecision.payload);
+
             // Execute sub-agent with filtered payload
             const subAgentResult = await this.ExecuteSubAgent(
                 params,
                 subAgentRequest,
                 subAgentEntity,
+                stepEntity,
                 downstreamPayload
             );
             
@@ -1531,7 +1549,6 @@ export class BaseAgent {
                 stepEntity.TargetLogID = subAgentResult.agentRun.ID;
                 // Set the SubAgentRun property for hierarchical tracking
                 stepEntity.SubAgentRun = subAgentResult.agentRun;
-                stepEntity.PayloadAtStart = JSON.stringify(previousDecision.payload);
                 stepEntity.PayloadAtEnd = JSON.stringify(mergedPayload);
                 // saving happens later by calling finalizeStepEntity()
             }

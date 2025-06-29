@@ -140,9 +140,13 @@ export class RunAIAgentResolver extends ResolverBase {
         };
 
         // Safely extract agent run data using GetAll() for proper serialization
-        if (result.agentRun) {
+        if (result.agentRun && typeof result.agentRun.GetAll === 'function') {
             // Use GetAll() to get the full serialized object including extended properties
             sanitized.agentRun = result.agentRun.GetAll();
+        }
+        else {
+            // shouldn't ever get here
+            console.error('❌ Unexpected agent run structure:', result.agentRun);
         }
 
         // Note: executionTree is no longer part of ExecuteAgentResult

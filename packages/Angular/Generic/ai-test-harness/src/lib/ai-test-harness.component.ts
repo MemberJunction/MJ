@@ -521,7 +521,14 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                         id: this.currentAgentRun.ID,
                         status: this.currentAgentRun.Status,
                         stepCount: this.currentAgentRun.Steps?.length || 0,
-                        executionMonitorMode: this.executionMonitorMode
+                        executionMonitorMode: this.executionMonitorMode,
+                        steps: this.currentAgentRun.Steps?.map(s => ({
+                            id: s.ID,
+                            type: s.StepType,
+                            status: s.Status,
+                            hasSubAgentRun: !!s.SubAgentRun,
+                            subStepCount: s.SubAgentRun?.Steps?.length || 0
+                        }))
                     });
                     
                     // Force change detection
@@ -1382,6 +1389,12 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 assistantMessage.content = 'I encountered an error processing your request.';
                 assistantMessage.error = executionResult?.errorMessage || 'Unknown error occurred';
                 
+                // On failure, clear live steps and switch to historical mode
+                if (this.currentAgentRun) {
+                    this.executionMonitorMode = 'historical';
+                    this.liveAgentSteps = [];
+                }
+                
                 // Try to parse error payload if available
                 if (executionResult?.payload) {
                     try {
@@ -1421,6 +1434,12 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 lastMessage.content = 'I encountered an error processing your request.';
                 lastMessage.error = (error as Error).message;
                 delete lastMessage.streamingContent;
+            }
+            
+            // On error, clear live steps and switch to historical mode
+            if (this.currentAgentRun) {
+                this.executionMonitorMode = 'historical';
+                this.liveAgentSteps = [];
             }
             
             MJNotificationService.Instance.CreateSimpleNotification(
@@ -2402,6 +2421,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             // Note: The execution monitor component should handle auto-expansion internally
         }
     }
+    
     
     /**
      * Navigate to the run details form

@@ -119,7 +119,15 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     if (!this.selectedTimelineItem) return '{}';
     
     // Get all the data from the entity
-    const data = this.selectedTimelineItem.data.GetAll();
+    // first check to see if the item is an AIAgentRunStepEntity
+    let data;
+    if (this.selectedTimelineItem.data instanceof AIAgentRunStepEntity) {
+      // If it's a step entity, we need to get the full run data
+      data = this.selectedTimelineItem.data.GetAll();
+    }
+    else {
+      data = this.selectedTimelineItem.data;
+    }
     
     // Apply recursive JSON parsing to the entire data object with inline extraction
     // This will handle any JSON strings regardless of property names

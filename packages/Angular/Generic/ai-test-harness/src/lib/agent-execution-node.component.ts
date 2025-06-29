@@ -559,6 +559,7 @@ export class ExecutionNodeComponent {
     @Input() agentPath: string[] = [];
     @Input() expanded: boolean = false;
     @Input() detailsExpanded: boolean = false;
+    @Input() overrideDisplayStatus?: string; // Allow parent to override the displayed status
     
     @Output() toggleNode = new EventEmitter<void>();
     @Output() toggleDetails = new EventEmitter<void>();
@@ -664,7 +665,9 @@ export class ExecutionNodeComponent {
             'Cancelled': 'failed',
             'Paused': 'pending'
         };
-        return statusMap[this.step.Status] || 'pending';
+        // Use override if provided, otherwise use actual status
+        const status = this.overrideDisplayStatus || this.step.Status;
+        return statusMap[status] || 'pending';
     }
     
     getDuration(): number {
