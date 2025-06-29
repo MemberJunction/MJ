@@ -514,9 +514,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                     // We're in live mode during streaming
                     this.executionMonitorMode = 'live';
                     
-                    // The Steps are now directly available on the agent run entity
-                    // No need for separate liveAgentSteps tracking
-                    this.liveAgentSteps = [];
+                    // Pass the steps from the agent run to the execution monitor for live display
+                    this.liveAgentSteps = this.currentAgentRun.Steps || [];
                     
                     console.log('📊 Agent run update:', {
                         id: this.currentAgentRun.ID,
@@ -1204,6 +1203,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         this.currentAgentRun.ID = `temp-${Date.now()}`;
         this.currentAgentRun.Status = 'Running';
         this.currentAgentRun.StartedAt = new Date();
+        // Steps will be populated by the agent updates
         this.liveAgentSteps = [];
         this.executionMonitorMode = 'live';
 

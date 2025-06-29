@@ -133,7 +133,7 @@ export interface ExecutionStats {
                     <div class="step-types">
                         @for (type of getStepTypes(); track type) {
                             <span class="type-badge">
-                                {{ stats.stepsByType[type] }} {{ type }}
+                                {{ stats.stepsByType[type] }} {{ pluralizeStepType(type, stats.stepsByType[type]) }}
                             </span>
                         }
                     </div>
@@ -422,88 +422,90 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     constructor(private cdr: ChangeDetectorRef) {}
     
     ngOnChanges(changes: SimpleChanges): void {
-        // return;  // temporary for debugging
-
-        // console.log('🔄 Execution Monitor ngOnChanges:', {
-        //     agentRunChanged: !!changes['agentRun'],
-        //     liveStepsChanged: !!changes['liveSteps'],
-        //     modeChanged: !!changes['mode'],
-        //     hasAgentRun: !!this.agentRun,
-        //     liveStepsCount: this.liveSteps?.length || 0
-        // });
+        console.log('🔄 Execution Monitor ngOnChanges:', {
+            agentRunChanged: !!changes['agentRun'],
+            liveStepsChanged: !!changes['liveSteps'],
+            modeChanged: !!changes['mode'],
+            hasAgentRun: !!this.agentRun,
+            liveStepsCount: this.liveSteps?.length || 0
+        });
         
-        // // Handle agent run changes (historical mode)
-        // if (changes['agentRun'] && this.mode === 'historical') {
-        //     const oldRun = changes['agentRun'].previousValue;
-        //     const newRun = changes['agentRun'].currentValue;
+        // Handle agent run changes (historical mode)
+        if (changes['agentRun'] && this.mode === 'historical') {
+            const oldRun = changes['agentRun'].previousValue;
+            const newRun = changes['agentRun'].currentValue;
             
-        //     console.log('📊 Agent run changed:', {
-        //         oldRunExists: !!oldRun,
-        //         newRunExists: !!newRun,
-        //         oldRunId: oldRun?.ID,
-        //         newRunId: newRun?.ID,
-        //         stepsCount: newRun?.Steps?.length
-        //     });
+            console.log('📊 Agent run changed:', {
+                oldRunExists: !!oldRun,
+                newRunExists: !!newRun,
+                oldRunId: oldRun?.ID,
+                newRunId: newRun?.ID,
+                stepsCount: newRun?.Steps?.length
+            });
             
-        //     // Check if this is a different execution
-        //     const isDifferentExecution = oldRun && newRun && oldRun.ID !== newRun.ID;
+            // Only clear if it's actually a different execution (different ID)
+            const isDifferentExecution = (!oldRun && newRun) || 
+                                       (oldRun && newRun && oldRun.ID !== newRun.ID) ||
+                                       (oldRun && !newRun);
             
-        //     // Clear if it's a different execution
-        //     if (isDifferentExecution || !oldRun) {
-        //         console.log('🗑️ Clearing for new agent run');
-        //         this.processedStepIds.clear();
-        //         this.newlyAddedNodeIds.clear();
-        //         this.expandedStates.clear();
-        //         this.detailsExpandedStates.clear();
-        //         this.clearNodeComponents();
-        //         this.currentStep = null;
-        //     }
+            if (isDifferentExecution) {
+                console.log('🗑️ Clearing for different agent run');
+                this.processedStepIds.clear();
+                this.newlyAddedNodeIds.clear();
+                this.expandedStates.clear();
+                this.detailsExpandedStates.clear();
+                this.clearNodeComponents();
+                this.currentStep = null;
+            }
             
-        //     // Process the agent run data
-        //     this.processAgentRun();
-        // }
+            // Always process the agent run data (will handle updates to existing run)
+            if (newRun) {
+                this.processAgentRun();
+            }
+        }
         
-        // // Handle live steps changes (live mode)
-        // if (changes['liveSteps'] && this.mode === 'live') {
-        //     const oldSteps = changes['liveSteps'].previousValue;
-        //     const newSteps = changes['liveSteps'].currentValue;
+        // Handle live steps changes (live mode)
+        if (changes['liveSteps'] && this.mode === 'live') {
+            const oldSteps = changes['liveSteps'].previousValue;
+            const newSteps = changes['liveSteps'].currentValue;
             
-        //     console.log('📊 Live steps changed:', {
-        //         oldCount: oldSteps?.length || 0,
-        //         newCount: newSteps?.length || 0
-        //     });
+            console.log('📊 Live steps changed:', {
+                oldCount: oldSteps?.length || 0,
+                newCount: newSteps?.length || 0
+            });
             
-        //     // Process live steps
-        //     this.processLiveSteps();
-        // }
+            // Process live steps
+            this.processLiveSteps();
+        }
         
-        // // Handle mode changes
-        // if (changes['mode'] && !changes['mode'].firstChange) {
-        //     const previousMode = changes['mode'].previousValue;
-        //     const currentMode = changes['mode'].currentValue;
+        // Handle mode changes
+        if (changes['mode'] && !changes['mode'].firstChange) {
+            const previousMode = changes['mode'].previousValue;
+            const currentMode = changes['mode'].currentValue;
             
-        //     console.log('🔄 Mode changed:', { previousMode, currentMode });
+            console.log('🔄 Mode changed:', { previousMode, currentMode });
             
-        //     // Stop live updates when switching away from live mode
-        //     if (previousMode === 'live' && this.updateSubscription) {
-        //         this.updateSubscription.unsubscribe();
-        //         this.updateSubscription = undefined;
-        //     }
+            // Clear everything when switching modes
+            this.processedStepIds.clear();
+            this.newlyAddedNodeIds.clear();
+            this.expandedStates.clear();
+            this.detailsExpandedStates.clear();
+            this.clearNodeComponents();
+            this.currentStep = null;
             
-        //     // Process data for the new mode
-        //     if (currentMode === 'historical' && this.agentRun) {
-        //         this.processAgentRun();
-        //     } else if (currentMode === 'live') {
-        //         this.setupLiveUpdates();
-        //     }
-        // }
-        
-        // // Check for auto-expand flag
-        // if (this.autoExpand && (this.agentRun?.Steps?.length || this.liveSteps?.length)) {
-        //     setTimeout(() => {
-        //         this.expandAllNodes();
-        //     }, 50);
-        // }
+            // Stop live updates when switching away from live mode
+            if (previousMode === 'live' && this.updateSubscription) {
+                this.updateSubscription.unsubscribe();
+                this.updateSubscription = undefined;
+            }
+            
+            // Process data for the new mode
+            if (currentMode === 'historical' && this.agentRun) {
+                this.processAgentRun();
+            } else if (currentMode === 'live') {
+                this.setupLiveUpdates();
+            }
+        }
     }
     
     ngAfterViewInit(): void {
@@ -586,8 +588,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         // Calculate statistics
         this.calculateStats();
         
-        // Force change detection
-        this.cdr.markForCheck();
+        // Trigger change detection after rendering all components
         this.cdr.detectChanges();
     }
     
@@ -607,6 +608,9 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         
         // Append new steps without clearing existing ones
         this.appendNewLiveSteps(this.liveSteps);
+        
+        // Trigger change detection after appending live steps
+        this.cdr.detectChanges();
         
         // Set up live update monitoring if not already set up
         if (!this.updateSubscription) {
@@ -1121,6 +1125,25 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         return Object.keys(this.stats.stepsByType).sort();
     }
     
+    /**
+     * Pluralize step type based on count
+     */
+    pluralizeStepType(type: string, count: number): string {
+        if (count === 1) {
+            return type;
+        }
+        
+        // Handle special cases
+        switch (type.toLowerCase()) {
+            case 'analysis':
+                return 'Analyses';
+            case 'summary':
+                return 'Summaries';
+            default:
+                // Default pluralization - just add 's'
+                return type + 's';
+        }
+    }
     
     /**
      * Format markdown content for display
@@ -1223,7 +1246,9 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         if (hasNewSteps) {
             this.updateCurrentStep();
             this.calculateStats();
-            this.cdr.markForCheck();
+            
+            // Force change detection to ensure new components are rendered
+            this.cdr.detectChanges();
             
             // Auto-scroll if user hasn't interacted
             setTimeout(() => {
