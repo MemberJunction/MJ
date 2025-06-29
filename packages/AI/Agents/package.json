@@ -25,9 +25,11 @@
     "@memberjunction/actions": "2.59.0",
     "@memberjunction/actions-base": "2.59.0",
     "dotenv": "^16.4.1",
+    "lodash": "^4.17.21",
     "rxjs": "^7.8.1"
   },
   "devDependencies": {
+    "@types/lodash": "^4.14.202",
     "@types/node": "20.14.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.4.5"

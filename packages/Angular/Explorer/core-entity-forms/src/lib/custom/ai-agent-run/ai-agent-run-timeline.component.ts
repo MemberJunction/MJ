@@ -117,14 +117,12 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
       {
         EntityName: 'MJ: AI Agent Run Steps',
         ExtraFilter: `AgentRunID='${this.aiAgentRunId}'`,
-        OrderBy: 'StepNumber',
-        ResultType: 'entity_object'
+        OrderBy: 'StepNumber' 
       },
       {
         EntityName: 'MJ: AI Agent Runs',
         ExtraFilter: `ParentRunID='${this.aiAgentRunId}'`,
-        OrderBy: 'StartedAt',
-        ResultType: 'entity_object'
+        OrderBy: 'StartedAt' 
       }
     ]);
     
@@ -133,13 +131,13 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
       this.stepsSubject$.next(steps);
       
       // Load action logs for action steps
-      const actionSteps = steps.filter(s => s.StepType === 'action' || s.StepType === 'tool');
+      const actionSteps = steps.filter(s => s.StepType === 'Actions');
       if (actionSteps.length > 0) {
         await this.loadActionLogs(actionSteps);
       }
       
       // Load prompt runs for prompt steps
-      const promptSteps = steps.filter(s => s.StepType === 'prompt');
+      const promptSteps = steps.filter(s => s.StepType === 'Prompt');
       if (promptSteps.length > 0) {
         await this.loadPromptRuns(promptSteps);
       }
@@ -165,8 +163,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
     const result = await rv.RunView<ActionExecutionLogEntity>({
       EntityName: 'Action Execution Logs',
       ExtraFilter: `ActionID IN ('${actionIds.join("','")}')`,
-      OrderBy: 'StartedAt',
-      ResultType: 'entity_object'
+      OrderBy: 'StartedAt' 
     });
     
     if (result.Success) {
@@ -185,8 +182,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
     const result = await rv.RunView<AIPromptRunEntity>({
       EntityName: 'MJ: AI Prompt Runs',
       ExtraFilter: `ID IN ('${promptIds.join("','")}')`,
-      OrderBy: '__mj_CreatedAt',
-      ResultType: 'entity_object'
+      OrderBy: '__mj_CreatedAt' 
     });
     
     if (result.Success) {
@@ -295,11 +291,11 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   
   private getStepIcon(stepType: string): string {
     const iconMap: Record<string, string> = {
-      'prompt': 'fa-microchip',
-      'tool': 'fa-tools',
-      'subagent': 'fa-robot',
-      'decision': 'fa-code-branch',
-      'action': 'fa-cog'
+      'Prompt': 'fa-microchip',
+      'Tool': 'fa-tools',
+      'Sub-Agent': 'fa-robot',
+      'Decision': 'fa-code-branch',
+      'Actions': 'fa-cog'
     };
     return iconMap[stepType] || 'fa-circle';
   }
@@ -350,7 +346,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
     item.isExpanded = !item.isExpanded;
     
     // If expanding and children not loaded yet, load them
-    if (item.isExpanded && !item.childrenLoaded && item.type === 'step' && item.data?.StepType === 'subagent') {
+    if (item.isExpanded && !item.childrenLoaded && item.type === 'step' && item.data?.StepType === 'Sub-Agent') {
       await this.loadSubAgentChildren(item);
     }
   }
@@ -382,8 +378,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
       const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
         EntityName: 'MJ: AI Agent Run Steps',
         ExtraFilter: `AgentRunID = '${subAgentRunId}'`,
-        OrderBy: 'StepNumber',
-        ResultType: 'entity_object'
+        OrderBy: 'StepNumber' 
       });
       
       if (stepsResult.Success && stepsResult.Results && stepsResult.Results.length > 0) {

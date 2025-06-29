@@ -32,18 +32,270 @@ export function LogDebug(...args: any[]): void {
   __defaultLogger.apply(undefined, args);
 }
 
+/**
+ * Options for the enhanced LogErrorEx function
+ */
+export interface LogErrorOptions {
+    /** The error message */
+    message: string;
+    
+    /** Optional file name to log to */
+    logToFileName?: string;
+    
+    /** Additional arguments to pass to console.error (varargs) */
+    additionalArgs?: any[];
+    
+    /** Error severity level */
+    severity?: 'warning' | 'error' | 'critical';
+    
+    /** Category for filtering logs */
+    category?: string;
+    
+    /** The actual error object */
+    error?: Error;
+    
+    /** Additional metadata about the error */
+    metadata?: Record<string, any>;
+    
+    /** Whether to include stack trace */
+    includeStack?: boolean;
+}
+
+/**
+ * Enhanced error logging function with structured error information.
+ * 
+ * Provides rich error logging capabilities including severity levels, categories,
+ * error objects with stack traces, metadata, and varargs support.
+ * 
+ * @param options - Error logging options or a simple string message for backward compatibility
+ * 
+ * @example
+ * // Simple string message
+ * LogErrorEx('Something went wrong');
+ * 
+ * @example
+ * // With error object and metadata
+ * LogErrorEx({
+ *   message: 'Failed to process request',
+ *   error: new Error('Network timeout'),
+ *   severity: 'critical',
+ *   category: 'NetworkError',
+ *   metadata: { 
+ *     url: 'https://api.example.com',
+ *     timeout: 5000 
+ *   }
+ * });
+ * 
+ * @example
+ * // With additional arguments (varargs)
+ * LogErrorEx({
+ *   message: 'Multiple values failed',
+ *   additionalArgs: [value1, value2, value3]
+ * });
+ */
+export function LogErrorEx(options: LogErrorOptions | string): void {
+    // Handle simple string message for backward compatibility
+    if (typeof options === 'string') {
+        logToConsole(options, true);
+        return;
+    }
+    
+    // Build the error message with optional metadata
+    let fullMessage = options.message;
+    
+    // Add category if provided
+    if (options.category) {
+        fullMessage = `[${options.category}] ${fullMessage}`;
+    }
+    
+    // Add severity if not default
+    if (options.severity && options.severity !== 'error') {
+        fullMessage = `[${options.severity.toUpperCase()}] ${fullMessage}`;
+    }
+    
+    // Add error details if provided
+    if (options.error) {
+        fullMessage += `\n  Error: ${options.error.message}`;
+        if (options.includeStack !== false && options.error.stack) {
+            fullMessage += `\n  Stack: ${options.error.stack}`;
+        }
+    }
+    
+    // Add metadata if provided
+    if (options.metadata && Object.keys(options.metadata).length > 0) {
+        fullMessage += '\n  Metadata: ' + JSON.stringify(options.metadata, null, 2);
+    }
+    
+    // Log the error using the internal logging mechanism
+    if (options.logToFileName !== null && options.logToFileName !== undefined && options.logToFileName.length >= 0) {
+        logToFile(fullMessage, true, options.logToFileName, ...(options.additionalArgs || []));
+    } else {
+        logToConsole(fullMessage, true, ...(options.additionalArgs || []));
+    }
+}
+
 export function LogError(message: any, logToFileName: string | null = null, ...args: any[]) {
-    if (logToFileName !== null && logToFileName !== undefined && logToFileName.length >= 0)
-        logToFile(message, true, logToFileName, ...args)
-    else
-        logToConsole(message, true, ...args)
+    // Use LogErrorEx internally
+    LogErrorEx({
+        message: String(message),
+        logToFileName,
+        additionalArgs: args
+    });
+}
+
+/**
+ * Options for the enhanced LogStatusEx function
+ */
+export interface LogStatusOptions {
+    /** The message to log */
+    message: string;
+    
+    /** Optional file name to log to */
+    logToFileName?: string;
+    
+    /** Additional arguments to pass to console.log (varargs) */
+    additionalArgs?: any[];
+    
+    /** If true, only logs when verbose mode is enabled */
+    verboseOnly?: boolean;
+    
+    /** Optional custom function to check if verbose logging is enabled */
+    isVerboseEnabled?: () => boolean;
+    
+    /** Severity level for future extensibility */
+    severity?: SeverityType;
+    
+    /** Category for filtering logs */
+    category?: string;
+}
+
+/**
+ * Enhanced status logging function with verbose control and extensibility.
+ * 
+ * Provides flexible logging with verbose mode support, custom verbose checks,
+ * categories, severity levels, and varargs support. Messages can be conditionally
+ * logged based on global or custom verbose settings.
+ * 
+ * @param options - Logging options or a simple string message for backward compatibility
+ * 
+ * @example
+ * // Simple string message
+ * LogStatusEx('Operation completed');
+ * 
+ * @example
+ * // Verbose-only message with global check
+ * LogStatusEx({
+ *   message: 'Detailed trace information',
+ *   verboseOnly: true
+ * });
+ * 
+ * @example
+ * // With custom verbose check and additional args
+ * LogStatusEx({
+ *   message: 'Processing items:',
+ *   verboseOnly: true,
+ *   isVerboseEnabled: () => params.verbose === true,
+ *   additionalArgs: [item1, item2, item3]
+ * });
+ * 
+ * @example
+ * // With category and file logging
+ * LogStatusEx({
+ *   message: 'Batch processing complete',
+ *   category: 'BatchJob',
+ *   logToFileName: '/logs/batch.log'
+ * });
+ */
+export function LogStatusEx(options: LogStatusOptions | string): void {
+    // Handle simple string message for backward compatibility
+    if (typeof options === 'string') {
+        logToConsole(options, false);
+        return;
+    }
+    
+    // Check if this is a verbose-only message
+    if (options.verboseOnly) {
+        const checkVerbose = options.isVerboseEnabled || IsVerboseLoggingEnabled;
+        if (!checkVerbose()) {
+            return; // Skip verbose messages when verbose mode is off
+        }
+    }
+    
+    // Log the message using the internal logging mechanism
+    if (options.logToFileName !== null && options.logToFileName !== undefined && options.logToFileName.length >= 0) {
+        logToFile(options.message, false, options.logToFileName, ...(options.additionalArgs || []));
+    } else {
+        logToConsole(options.message, false, ...(options.additionalArgs || []));
+    }
+}
+
+/**
+ * Checks if verbose logging is enabled globally
+ * Works in both Node.js and Browser environments
+ * @returns true if verbose logging is enabled
+ */
+export function IsVerboseLoggingEnabled(): boolean {
+    // Node.js environment
+    if (runningOnNode()) {
+        const verbose = process.env.MJ_VERBOSE;
+        if (verbose !== undefined) {
+            return ['true', '1', 'yes'].includes(verbose.toLowerCase());
+        }
+    }
+    
+    // Browser environment
+    if (runningInBrowser()) {
+        // Check global variable
+        if ((window as any).MJ_VERBOSE !== undefined) {
+            return (window as any).MJ_VERBOSE === true;
+        }
+        
+        // Check localStorage
+        try {
+            const stored = localStorage.getItem('MJ_VERBOSE');
+            if (stored !== null) {
+                return ['true', '1', 'yes'].includes(stored.toLowerCase());
+            }
+        } catch {
+            // localStorage might be blocked
+        }
+        
+        // Check URL parameter
+        if (typeof URLSearchParams !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const verbose = params.get('MJ_VERBOSE');
+            if (verbose) {
+                return ['true', '1', 'yes'].includes(verbose.toLowerCase());
+            }
+        }
+    }
+    
+    return false; // Default to non-verbose
+}
+
+/**
+ * Sets verbose logging mode in browser environments
+ * @param enabled Whether to enable verbose logging
+ */
+export function SetVerboseLogging(enabled: boolean): void {
+    if (runningInBrowser()) {
+        (window as any).MJ_VERBOSE = enabled;
+        try {
+            localStorage.setItem('MJ_VERBOSE', enabled ? 'true' : 'false');
+        } catch {
+            // localStorage might be blocked
+        }
+    }
 }
 
 export function LogStatus(message: any, logToFileName: string = null, ...args: any[]) {
-    if (logToFileName !== null && logToFileName !== undefined && logToFileName.length >= 0)
-        logToFile(message, false, logToFileName, ...args)
-    else
-        logToConsole(message, false, ...args)
+    // Use LogStatusEx internally
+    LogStatusEx({
+        message: String(message),
+        logToFileName,
+        additionalArgs: args,
+        verboseOnly: false
+    });
 }
 
 function logToConsole(message: any, isError: boolean, ...args: any[]) {

@@ -82,8 +82,7 @@ export class AgentConfigurationComponent implements OnInit, OnDestroy {
         EntityName: 'AI Agents',
         ExtraFilter: '',
         OrderBy: 'Name',
-        MaxRows: 1000,
-        ResultType: 'entity_object'
+        MaxRows: 1000 
       });
       
       this.agents = result.Results || [];

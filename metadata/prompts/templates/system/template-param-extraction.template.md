@@ -39,13 +39,15 @@ Return a JSON array of parameter objects with this structure:
 ## Rules:
 1. Only include each variable ONCE (deduplicate)
 2. Ignore Nunjucks built-in variables (loop, super, etc.)
-3. For type detection:
+3. Ignore System Placholders. These are populated by the system, and are not considered template parameters. These 
+system placholders start with a single _ character, for example in the below, you would ignore _OUTPUT_EXAMPLE
+  {% raw %}My Template: {{ _OUTPUT_EXAMPLE }}{% endraw %}
+4. For type detection:
    - If used in {% raw %}{% for x in variable %}{% endraw %} → type is "Array"
    - If properties are accessed (variable.property) → type is "Object"
    - Otherwise → type is "Scalar"
-4. Generally speaking consider variables to **NOT** be required unless it is clear the template will be dramatically negatively affected due to the absence of the variable.
-5. Include meaningful descriptions based on usage context
-6. Sort parameters alphabetically by name
+5. Generally speaking consider variables to **NOT** be required unless it is clear the template will be dramatically negatively affected due to the absence of the variable.
+6. Include meaningful descriptions based on usage context
 
 ## Example:
 Template:

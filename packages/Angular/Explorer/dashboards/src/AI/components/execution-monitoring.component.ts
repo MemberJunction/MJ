@@ -2341,14 +2341,12 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
         new RunView().RunView<AIPromptRunEntity>({
           EntityName: 'MJ: AI Prompt Runs',
           ExtraFilter: `RunAt >= '${startTime.toISOString()}' AND RunAt <= '${endTime.toISOString()}'`,
-          OrderBy: 'RunAt DESC',
-          ResultType: 'entity_object'
+          OrderBy: 'RunAt DESC' 
         }),
         new RunView().RunView<AIAgentRunEntity>({
           EntityName: 'MJ: AI Agent Runs',
           ExtraFilter: `StartedAt >= '${startTime.toISOString()}' AND StartedAt <= '${endTime.toISOString()}'`,
-          OrderBy: 'StartedAt DESC',
-          ResultType: 'entity_object'
+          OrderBy: 'StartedAt DESC' 
         })
       ]);
       
@@ -2421,8 +2419,7 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
       const rv = new RunView();
       const result = await rv.RunView<AIModelEntity>({
         EntityName: 'AI Models',
-        ExtraFilter: `Name = '${modelName.replace(/'/g, "''")}'`,
-        ResultType: 'entity_object'
+        ExtraFilter: `Name = '${modelName.replace(/'/g, "''")}'` 
       });
       
       const model = result.Results[0];

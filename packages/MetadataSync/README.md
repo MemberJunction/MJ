@@ -769,6 +769,35 @@ Support environment-specific values:
 - `@env:VARIABLE_NAME`
 - Useful for different environments (dev/staging/prod)
 
+### Automatic JSON Stringification
+When a field value is an array or object, the tool automatically converts it to a JSON string for database storage:
+- Arrays and objects are detected and stringified with pretty formatting (2-space indentation)
+- Maintains clean, readable JSON in source files while storing as strings in database
+- Works seamlessly with all field types that accept text content
+
+Examples:
+```json
+{
+  "fields": {
+    "Name": "My Entity",
+    "Configuration": {
+      "setting1": "value1",
+      "setting2": {
+        "nested": true,
+        "items": [1, 2, 3]
+      }
+    },
+    "Tags": ["tag1", "tag2", "tag3"],
+    "Metadata": {
+      "created": "2024-01-15",
+      "author": "John Doe"
+    }
+  }
+}
+```
+
+The `Configuration`, `Tags`, and `Metadata` fields will automatically be converted to JSON strings when pushed to the database, while maintaining their structured format in your source files.
+
 ### {@include} References in Files (NEW)
 Enable content composition within non-JSON files (like .md, .html, .txt) using JSDoc-style include syntax:
 - Pattern: `{@include path/to/file.ext}`

@@ -125,8 +125,7 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
       const modelResults = await rv.RunView<AIModelEntity>({
         EntityName: 'AI Models',
         OrderBy: 'Name',
-        MaxRows: 1000,
-        ResultType: 'entity_object'
+        MaxRows: 1000 
       });
 
       // Load vendors and types in parallel
@@ -134,14 +133,12 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
         rv.RunView<AIVendorEntity>({
           EntityName: 'MJ: AI Vendors',
           OrderBy: 'Name',
-          MaxRows: 1000,
-          ResultType: 'entity_object'
+          MaxRows: 1000 
         }),
         rv.RunView<AIModelTypeEntity>({
           EntityName: 'AI Model Types',
           OrderBy: 'Name',
-          MaxRows: 1000,
-          ResultType: 'entity_object'
+          MaxRows: 1000 
         })
       ]);
 

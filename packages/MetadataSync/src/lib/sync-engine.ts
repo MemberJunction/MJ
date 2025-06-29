@@ -71,9 +71,13 @@ export class SyncEngine {
   }
   
   /**
-   * Process special references in field values
+   * Process special references in field values and handle complex objects
    * 
-   * Handles the following reference types:
+   * Automatically handles:
+   * - Arrays and objects are converted to JSON strings
+   * - Scalars (strings, numbers, booleans, null) pass through unchanged
+   * 
+   * Handles the following reference types for string values:
    * - `@parent:fieldName` - References a field from the parent record
    * - `@root:fieldName` - References a field from the root record
    * - `@file:path` - Reads content from an external file
@@ -95,9 +99,23 @@ export class SyncEngine {
    * 
    * // Lookup with auto-create
    * const userId = await processFieldValue('@lookup:Users.Email=john@example.com?create', '/path');
+   * 
+   * // Complex object - automatically stringified
+   * const jsonStr = await processFieldValue({items: [{id: 1}, {id: 2}]}, '/path');
+   * // Returns: '{\n  "items": [\n    {\n      "id": 1\n    },\n    {\n      "id": 2\n    }\n  ]\n}'
    * ```
    */
   async processFieldValue(value: any, baseDir: string, parentRecord?: BaseEntity | null, rootRecord?: BaseEntity | null): Promise<any> {
+    // Handle arrays and objects by converting them to JSON strings
+    if (value !== null && typeof value === 'object') {
+      // Check if it's an array or a plain object (not a Date, etc.)
+      if (Array.isArray(value) || value.constructor === Object) {
+        // Convert to pretty-printed JSON string
+        return JSON.stringify(value, null, 2);
+      }
+    }
+    
+    // If not a string, return as-is (numbers, booleans, null, etc.)
     if (typeof value !== 'string') {
       return value;
     }

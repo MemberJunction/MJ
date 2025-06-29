@@ -398,6 +398,14 @@ export class AIPromptParams {
     modelId?: string;
     vendorId?: string;
   };
+
+  /**
+   * Whether to enable verbose logging during prompt execution.
+   * When true, detailed information about model selection, API key checking,
+   * and execution steps will be logged.
+   * Can also be controlled via MJ_AI_VERBOSE environment variable.
+   */
+  verbose?: boolean;
 }
 
 

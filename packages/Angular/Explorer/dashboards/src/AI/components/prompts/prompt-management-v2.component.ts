@@ -107,32 +107,22 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
       const [promptResults, categoryResults, typeResults, templateResults, templateContentResults] = await rv.RunViews([
         {
           EntityName: 'AI Prompts',
-          OrderBy: 'Name',
-          MaxRows: 1000,
-          ResultType: 'entity_object'
+          OrderBy: 'Name' 
         },
         {
           EntityName: 'AI Prompt Categories',
-          OrderBy: 'Name',
-          MaxRows: 1000,
-          ResultType: 'entity_object'
+          OrderBy: 'Name', 
         },
         {
           EntityName: 'AI Prompt Types',
-          OrderBy: 'Name',
-          MaxRows: 1000,
-          ResultType: 'entity_object'
+          OrderBy: 'Name' 
         },
         {
           EntityName: 'Templates',
-          ExtraFilter: `ID IN (SELECT TemplateID FROM __mj.AIPrompt)`,
-          MaxRows: 1000,
-          ResultType: 'entity_object'
+          ExtraFilter: `ID IN (SELECT TemplateID FROM __mj.AIPrompt)` 
         },
         {
-          EntityName: 'Template Contents',
-          MaxRows: 5000,
-          ResultType: 'entity_object'
+          EntityName: 'Template Contents' 
         }
       ]);
 

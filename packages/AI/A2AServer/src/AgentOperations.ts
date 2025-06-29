@@ -123,9 +123,9 @@ export class AgentOperations {
                     status: result.agentRun?.Status || (result.success ? 'Completed' : 'Failed'),
                     startTime: result.agentRun?.StartedAt,
                     endTime: result.agentRun?.CompletedAt,
-                    errorMessage: result.errorMessage,
-                    finalStep: result.finalStep,
-                    result: result.returnValue
+                    errorMessage: result.agentRun?.ErrorMessage,
+                    finalStep: result.agentRun?.FinalStep,
+                    result: result.payload
                 }
             };
         } catch (error) {

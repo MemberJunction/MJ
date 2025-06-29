@@ -1,4 +1,4 @@
-import { Component, AfterViewInit, OnDestroy, ViewChild, ChangeDetectorRef } from '@angular/core';
+import { Component, AfterViewInit, OnDestroy, ViewChild, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { BaseDashboard } from '../generic/base-dashboard';
 import { RegisterClass } from '@memberjunction/global';
 import { CompositeKey } from '@memberjunction/core';
@@ -18,7 +18,8 @@ interface AIDashboardState {
 @Component({
   selector: 'mj-ai-dashboard',
   templateUrl: './ai-dashboard.component.html',
-  styleUrls: ['./ai-dashboard.component.scss']
+  styleUrls: ['./ai-dashboard.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 @RegisterClass(BaseDashboard, 'AIDashboard')
 export class AIDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
@@ -40,15 +41,14 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
   // Navigation items for bottom navigation - reordered with monitoring first
   public navigationItems: string[] = ['monitoring', 'prompts', 'agents', 'models', 'config'];
   
-  public get navigationConfig() {
-    return [
-      { text: 'Monitor', icon: 'fa-solid fa-chart-line', selected: this.activeTab === 'monitoring' },
-      { text: 'Prompts', icon: 'fa-solid fa-comment-dots', selected: this.activeTab === 'prompts' },
-      { text: 'Agents', icon: 'fa-solid fa-robot', selected: this.activeTab === 'agents' },
-      { text: 'Models', icon: 'fa-solid fa-microchip', selected: this.activeTab === 'models' },
-      { text: 'Config', icon: 'fa-solid fa-cogs', selected: this.activeTab === 'config' }
-    ];
-  }
+  // Navigation configuration as a property to avoid change detection issues
+  public navigationConfig = [
+    { text: 'Monitor', icon: 'fa-solid fa-chart-line', selected: false },
+    { text: 'Prompts', icon: 'fa-solid fa-comment-dots', selected: false },
+    { text: 'Agents', icon: 'fa-solid fa-robot', selected: false },
+    { text: 'Models', icon: 'fa-solid fa-microchip', selected: false },
+    { text: 'Config', icon: 'fa-solid fa-cogs', selected: false }
+  ];
 
   public get navigationConfigForKendo() {
     return [
@@ -62,16 +62,21 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
 
   private stateChangeSubject = new Subject<AIDashboardState>();
 
-  constructor() {
+  constructor(private cdr: ChangeDetectorRef) {
     super();
     this.setupStateManagement();
+    this.updateNavigationSelection();
   }
 
   ngAfterViewInit(): void {
     // Initialize the dashboard after view init
     // Mark the initial tab as visited
     this.visitedTabs.add(this.activeTab);
+    this.updateNavigationSelection();
     this.emitStateChange();
+    
+    // Force change detection to ensure view is stable
+    this.cdr.detectChanges();
   }
 
   ngOnDestroy(): void {
@@ -85,6 +90,9 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
     // Update selectedIndex immediately
     this.selectedIndex = index >= 0 ? index : 0;
     
+    // Update navigation selection
+    this.updateNavigationSelection();
+    
     // Defer only the resize operation
     setTimeout(() => {
       // Invoke manual resize after tab change to fix rendering issues
@@ -94,6 +102,9 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
     
     this.visitedTabs.add(tabId); // Mark tab as visited
     this.emitStateChange();
+    
+    // Trigger change detection
+    this.cdr.markForCheck();
   }
   
   public hasVisited(tabId: string): boolean {
@@ -106,6 +117,7 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
     if (index >= 0 && index < this.navigationItems.length) {
       this.selectedIndex = index;
       this.activeTab = this.navigationItems[index];
+      this.updateNavigationSelection();
       this.emitStateChange();
       
       // Invoke manual resize after navigation change
@@ -113,6 +125,9 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
       setTimeout(() => {
         SharedService.Instance.InvokeManualResize();
       }, 100);
+      
+      // Trigger change detection
+      this.cdr.markForCheck();
     }
   }
 
@@ -173,6 +188,9 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
       
       // Mark the tab as visited
       this.visitedTabs.add(state.activeTab);
+      
+      // Update navigation selection
+      this.updateNavigationSelection();
     }
     
     // Store component states for when they're rendered
@@ -192,7 +210,8 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
       this.systemConfigurationState = state.systemConfigurationState;
     }
     
-    // No need for manual change detection with default strategy
+    // Trigger change detection for OnPush strategy
+    this.cdr.markForCheck();
   }
 
   // Handle entity record opening from sub-components
@@ -241,6 +260,13 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
     const tabIndex = this.navigationItems.indexOf(this.activeTab);
     const labels = ['Monitor', 'Prompts', 'Agents', 'Models', 'Config'];
     return tabIndex >= 0 ? labels[tabIndex] : 'AI Administration';
+  }
+  
+  private updateNavigationSelection(): void {
+    // Update the selected state for navigation items
+    this.navigationConfig.forEach((item, index) => {
+      item.selected = this.navigationItems[index] === this.activeTab;
+    });
   }
 }
 
