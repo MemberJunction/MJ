@@ -37,7 +37,8 @@ export interface AITestHarnessWindowData {
                 <mj-ai-test-harness
                     [entity]="(agent || prompt) || null"
                     [mode]="mode"
-                    [isVisible]="true">
+                    [isVisible]="true"
+                    (minimizeRequested)="onMinimizeRequested()">
                 </mj-ai-test-harness>
             }
         </div>
@@ -150,6 +151,12 @@ export class AITestHarnessWindowComponent implements OnInit {
     }
     
     onClose() {
+        this.closeWindow.emit();
+    }
+    
+    onMinimizeRequested() {
+        // Since Kendo Window doesn't support minimize functionality,
+        // we'll close the window when navigating to view the agent run
         this.closeWindow.emit();
     }
     

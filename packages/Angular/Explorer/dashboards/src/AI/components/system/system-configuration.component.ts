@@ -42,11 +42,7 @@ export class SystemConfigurationComponent implements OnInit {
       const rv = new RunView();
       const result = await rv.RunView({
         EntityName: 'MJ: AI Configurations',
-        ExtraFilter: '',
-        OrderBy: 'Name',
-        UserSearchString: '',
-        IgnoreMaxRows: false,
-        MaxRows: 1000
+        OrderBy: 'Name' 
       });
 
       if (result && result.Success && result.Results) {

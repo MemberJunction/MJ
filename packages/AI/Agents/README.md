@@ -53,7 +53,7 @@ npm install @memberjunction/ai-agents
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { UserInfo } from '@memberjunction/core';
 
-// Using AgentRunner (recommended)
+// Using AgentRunner (recommended) which uses `ClassFactory` to pick the highest priority sub-class of BaseAgent that matches your Agent (and falls back to just using `BaseAgent` if there's no custom sub-class)
 const runner = new AgentRunner();
 const result = await runner.RunAgent({
     agent: agentEntity, // AIAgentEntity from database
@@ -61,8 +61,8 @@ const result = await runner.RunAgent({
     contextUser: user
 });
 
-// Direct instantiation (for custom agents)
-const agent = new BaseAgent();
+// Direct instantiation when you want to pick the exact class that gets run
+const agent = new YourAgentClass();
 const result = await agent.Execute({
     agent: agentEntity,
     conversationMessages: messages,

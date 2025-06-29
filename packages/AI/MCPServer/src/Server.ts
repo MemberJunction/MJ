@@ -201,8 +201,8 @@ async function loadAgentTools(contextUser: UserInfo) {
                             return JSON.stringify({
                                 success: result.success,
                                 runId: result.agentRun?.ID,
-                                errorMessage: result.errorMessage,
-                                finalStep: result.finalStep,
+                                errorMessage: result.agentRun?.ErrorMessage,
+                                finalStep: result.agentRun?.FinalStep,
                                 result: result.payload
                             });
                         } else {
@@ -359,8 +359,8 @@ function addAgentExecuteTool(agent: AIAgentEntity, contextUser: UserInfo) {
                     return JSON.stringify({
                         success: result.success,
                         runId: result.agentRun?.ID,
-                        errorMessage: result.errorMessage,
-                        finalStep: result.finalStep,
+                        errorMessage: result.agentRun?.ErrorMessage,
+                        finalStep: result.agentRun?.FinalStep,
                         result: result.payload
                     });
                 } else {

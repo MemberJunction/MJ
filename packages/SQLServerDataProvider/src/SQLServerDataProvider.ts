@@ -2259,6 +2259,10 @@ export class SQLServerDataProvider
       const changes: any = {};
       for (const key in newData) {
         const f = entityInfo.Fields.find((f) => f.Name.toLowerCase() === key.toLowerCase());
+        if (!f) {
+          continue; // skip if field not found in entity info, sometimes objects have extra properties that are not part of the entity
+        }
+        
         let bDiff: boolean = false;
         if (f.ReadOnly)
           bDiff = false; // read only fields are never different, they can change in the database, but we don't consider them to be a change for record changes purposes.
