@@ -10994,21 +10994,21 @@ export const TemplateContentTypeSchema = z.object({
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Description of the template content type`),
-    CodeType: z.union([z.literal('Nunjucks'), z.literal('JSON'), z.literal('Python'), z.literal('TypeScript'), z.literal('HTML'), z.literal('CSS'), z.literal('JavaScript'), z.literal('Other')]).describe(`
+    CodeType: z.union([z.literal('TypeScript'), z.literal('HTML'), z.literal('CSS'), z.literal('JavaScript'), z.literal('Other'), z.literal('Nunjucks'), z.literal('JSON'), z.literal('Python')]).describe(`
         * * Field Name: CodeType
         * * Display Name: Code Type
         * * SQL Data Type: nvarchar(25)
         * * Default Value: Other
     * * Value List Type: List
     * * Possible Values 
-    *   * Nunjucks
-    *   * JSON
-    *   * Python
     *   * TypeScript
     *   * HTML
     *   * CSS
     *   * JavaScript
     *   * Other
+    *   * Nunjucks
+    *   * JSON
+    *   * Python
     * * Description: Refers to the primary language or codetype of the templates of this type, HTML, JSON, JavaScript, etc`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -33362,9 +33362,9 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
 
     /**
     * Validate() method override for MJ: AI Prompt Models entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * ParallelCount: This rule ensures that the number of parallel tasks (ParallelCount) must be at least 1. It cannot be zero or negative.
     * * Priority: This rule ensures that the Priority value must be greater than or equal to zero. Negative priorities are not allowed.
     * * ExecutionGroup: This rule ensures that the ExecutionGroup value must be zero or a positive number. Negative numbers are not allowed.
-    * * ParallelCount: This rule ensures that the number of parallel tasks (ParallelCount) must be at least 1. It cannot be zero or negative.
     * * Table-Level: This rule ensures that if the parallelization mode is 'None' or 'StaticCount', then the parallel config parameter must be empty. If the parallelization mode is 'ConfigParam', then the parallel config parameter must be provided.  
     * @public
     * @method
@@ -33372,12 +33372,24 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
+        this.ValidateParallelCountAtLeastOne(result);
         this.ValidatePriorityIsNonNegative(result);
         this.ValidateExecutionGroupIsNonNegative(result);
-        this.ValidateParallelCountAtLeastOne(result);
         this.ValidateParallelConfigParamBasedOnParallelizationMode(result);
 
         return result;
+    }
+
+    /**
+    * This rule ensures that the number of parallel tasks (ParallelCount) must be at least 1. It cannot be zero or negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParallelCountAtLeastOne(result: ValidationResult) {
+    	if (this.ParallelCount < 1) {
+    		result.Errors.push(new ValidationErrorInfo("ParallelCount", "ParallelCount must be at least 1.", this.ParallelCount, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -33401,18 +33413,6 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     public ValidateExecutionGroupIsNonNegative(result: ValidationResult) {
     	if (this.ExecutionGroup < 0) {
     		result.Errors.push(new ValidationErrorInfo("ExecutionGroup", "ExecutionGroup must be zero or a positive number.", this.ExecutionGroup, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the number of parallel tasks (ParallelCount) must be at least 1. It cannot be zero or negative.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateParallelCountAtLeastOne(result: ValidationResult) {
-    	if (this.ParallelCount < 1) {
-    		result.Errors.push(new ValidationErrorInfo("ParallelCount", "ParallelCount must be at least 1.", this.ParallelCount, ValidationErrorType.Failure));
     	}
     }
 
@@ -41461,20 +41461,20 @@ export class TemplateContentTypeEntity extends BaseEntity<TemplateContentTypeEnt
     * * Default Value: Other
     * * Value List Type: List
     * * Possible Values 
-    *   * Nunjucks
-    *   * JSON
-    *   * Python
     *   * TypeScript
     *   * HTML
     *   * CSS
     *   * JavaScript
     *   * Other
+    *   * Nunjucks
+    *   * JSON
+    *   * Python
     * * Description: Refers to the primary language or codetype of the templates of this type, HTML, JSON, JavaScript, etc
     */
-    get CodeType(): 'Nunjucks' | 'JSON' | 'Python' | 'TypeScript' | 'HTML' | 'CSS' | 'JavaScript' | 'Other' {
+    get CodeType(): 'TypeScript' | 'HTML' | 'CSS' | 'JavaScript' | 'Other' | 'Nunjucks' | 'JSON' | 'Python' {
         return this.Get('CodeType');
     }
-    set CodeType(value: 'Nunjucks' | 'JSON' | 'Python' | 'TypeScript' | 'HTML' | 'CSS' | 'JavaScript' | 'Other') {
+    set CodeType(value: 'TypeScript' | 'HTML' | 'CSS' | 'JavaScript' | 'Other' | 'Nunjucks' | 'JSON' | 'Python') {
         this.Set('CodeType', value);
     }
 
