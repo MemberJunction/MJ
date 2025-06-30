@@ -1,5 +1,22 @@
 # Change Log - @memberjunction/core
 
+## 2.60.0
+
+### Minor Changes
+
+- e512e4e: metadata + core + ai changes
+
+### Patch Changes
+
+- b5fa80a: Improvements to boolean and numeric handling in EntityField Dirty and Set methods
+  - @memberjunction/global@2.60.0
+
+## 2.59.0
+
+### Patch Changes
+
+- @memberjunction/global@2.59.0
+
 ## 2.58.0
 
 ### Patch Changes

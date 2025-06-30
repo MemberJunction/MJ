@@ -1,5 +1,33 @@
 # Change Log - @memberjunction/aiengine
 
+## 2.60.0
+
+### Patch Changes
+
+- Updated dependencies [bb46c63]
+- Updated dependencies [b5fa80a]
+- Updated dependencies [e30ee12]
+- Updated dependencies [e512e4e]
+  - @memberjunction/ai-core-plus@2.60.0
+  - @memberjunction/core@2.60.0
+  - @memberjunction/core-entities@2.60.0
+  - @memberjunction/ai-engine-base@2.60.0
+  - @memberjunction/actions-base@2.60.0
+  - @memberjunction/ai@2.60.0
+  - @memberjunction/global@2.60.0
+
+## 2.59.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@2.59.0
+- @memberjunction/ai@2.59.0
+- @memberjunction/ai-core-plus@2.59.0
+- @memberjunction/actions-base@2.59.0
+- @memberjunction/core@2.59.0
+- @memberjunction/core-entities@2.59.0
+- @memberjunction/global@2.59.0
+
 ## 2.58.0
 
 ### Patch Changes

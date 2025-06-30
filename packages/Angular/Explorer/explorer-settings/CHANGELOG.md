@@ -1,5 +1,42 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
+## 2.60.0
+
+### Patch Changes
+
+- Updated dependencies [b5fa80a]
+- Updated dependencies [e30ee12]
+- Updated dependencies [e512e4e]
+  - @memberjunction/core@2.60.0
+  - @memberjunction/core-entities@2.60.0
+  - @memberjunction/ng-base-forms@2.60.0
+  - @memberjunction/ng-entity-form-dialog@2.60.0
+  - @memberjunction/ng-entity-permissions@2.60.0
+  - @memberjunction/ng-shared@2.60.0
+  - @memberjunction/ng-simple-record-list@2.60.0
+  - @memberjunction/ng-user-view-grid@2.60.0
+  - @memberjunction/ng-container-directives@2.60.0
+  - @memberjunction/ng-notifications@2.60.0
+  - @memberjunction/ng-tabstrip@2.60.0
+  - @memberjunction/global@2.60.0
+
+## 2.59.0
+
+### Patch Changes
+
+- @memberjunction/ng-base-forms@2.59.0
+- @memberjunction/ng-entity-form-dialog@2.59.0
+- @memberjunction/ng-entity-permissions@2.59.0
+- @memberjunction/ng-shared@2.59.0
+- @memberjunction/ng-simple-record-list@2.59.0
+- @memberjunction/ng-user-view-grid@2.59.0
+- @memberjunction/ng-container-directives@2.59.0
+- @memberjunction/ng-notifications@2.59.0
+- @memberjunction/ng-tabstrip@2.59.0
+- @memberjunction/core@2.59.0
+- @memberjunction/core-entities@2.59.0
+- @memberjunction/global@2.59.0
+
 ## 2.58.0
 
 ### Patch Changes

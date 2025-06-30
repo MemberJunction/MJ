@@ -114,6 +114,9 @@ export class AgentExecutionStreamMessage {
 
     @Field()
     timestamp: Date;
+    
+    // Not a GraphQL field - used internally for streaming
+    agentRun?: any;
 }
 
 
@@ -129,72 +132,29 @@ export class RunAIAgentResolver extends ResolverBase {
     private sanitizeAgentResult(result: ExecuteAgentResult): any {
         const sanitized: any = {
             success: result.success,
-            returnValue: result.returnValue,
-            errorMessage: result.errorMessage,
-            finalStep: result.finalStep,
-            cancelled: result.cancelled,
-            cancellationReason: result.cancellationReason
+            payload: result.payload,
+            errorMessage: result.agentRun?.ErrorMessage,
+            finalStep: result.agentRun?.FinalStep,
+            cancelled: result.agentRun?.Status === 'Cancelled',
+            cancellationReason: result.agentRun?.CancellationReason
         };
 
-        // Safely extract agent run data
-        if (result.agentRun) {
-            sanitized.agentRun = {
-                ID: result.agentRun.ID,
-                Status: result.agentRun.Status,
-                StartedAt: result.agentRun.StartedAt,
-                CompletedAt: result.agentRun.CompletedAt,
-                Success: result.agentRun.Success,
-                ErrorMessage: result.agentRun.ErrorMessage,
-                AgentID: result.agentRun.AgentID,
-                Result: result.agentRun.Result,
-                TotalTokensUsed: result.agentRun.TotalTokensUsed,
-                TotalCost: result.agentRun.TotalCost
-            };
+        // Safely extract agent run data using GetAll() for proper serialization
+        if (result.agentRun && typeof result.agentRun.GetAll === 'function') {
+            // Use GetAll() to get the full serialized object including extended properties
+            sanitized.agentRun = result.agentRun.GetAll();
+        }
+        else {
+            // shouldn't ever get here
+            console.error('❌ Unexpected agent run structure:', result.agentRun);
         }
 
-        // Safely extract execution tree (hierarchical structure with all step data)
-        if (result.executionTree && Array.isArray(result.executionTree)) {
-            sanitized.executionTree = this.sanitizeExecutionTree(result.executionTree);
-        }
+        // Note: executionTree is no longer part of ExecuteAgentResult
+        // Step information is available through agentRun.Steps
 
         return sanitized;
     }
 
-    /**
-     * Sanitize execution tree for JSON serialization
-     */
-    private sanitizeExecutionTree(nodes: any[]): any[] {
-        return nodes.map(node => ({
-            step: node.step ? {
-                ID: node.step.ID,
-                AgentRunID: node.step.AgentRunID,
-                StepNumber: node.step.StepNumber,
-                StepType: node.step.StepType,
-                StepName: node.step.StepName,
-                TargetID: node.step.TargetID,
-                Status: node.step.Status,
-                StartedAt: node.step.StartedAt,
-                CompletedAt: node.step.CompletedAt,
-                Success: node.step.Success,
-                ErrorMessage: node.step.ErrorMessage,
-                InputData: node.step.InputData,
-                OutputData: node.step.OutputData
-            } : null,
-            inputData: node.inputData,
-            outputData: node.outputData,
-            executionType: node.executionType,
-            startTime: node.startTime,
-            endTime: node.endTime,
-            durationMs: node.durationMs,
-            nextStepDecision: node.nextStepDecision,
-            children: node.children && node.children.length > 0 
-                ? this.sanitizeExecutionTree(node.children) 
-                : [],
-            depth: node.depth,
-            parentStepId: node.parentStepId,
-            agentHierarchy: node.agentHierarchy
-        }));
-    }
 
     /**
      * Parse and validate JSON input
@@ -234,7 +194,7 @@ export class RunAIAgentResolver extends ResolverBase {
     /**
      * Create streaming progress callback
      */
-    private createProgressCallback(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, agentRunIdRef: { id: string }) {
+    private createProgressCallback(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, agentRunRef: { current: any }) {
         return (progress: any) => {
             // Only publish progress for significant steps (not initialization noise)
             const significantSteps = ['prompt_execution', 'action_execution', 'subagent_execution', 'decision_processing'];
@@ -243,19 +203,27 @@ export class RunAIAgentResolver extends ResolverBase {
                 return;
             }
             
+            // Get the agent run from the progress metadata or use the ref
+            const agentRun = progress.metadata?.agentRun || agentRunRef.current;
+            if (!agentRun) {
+                console.error('❌ No agent run available for progress callback');
+                return;
+            }
+            
             console.log('📡 Publishing progress update:', {
                 step: progress.step,
                 percentage: progress.percentage,
                 message: progress.message,
                 sessionId,
-                agentRunId: agentRunIdRef.id
+                agentRunId: agentRun.ID
             });
             
-            // Publish progress updates
+            // Publish progress updates with the full serialized agent run
             const progressMsg: AgentExecutionStreamMessage = {
                 sessionId,
-                agentRunId: agentRunIdRef.id,
+                agentRunId: agentRun.ID,
                 type: 'progress',
+                agentRun: agentRun.GetAll(), // Serialize the full agent run
                 progress: {
                     currentStep: progress.step,
                     percentage: progress.percentage,
@@ -297,21 +265,29 @@ export class RunAIAgentResolver extends ResolverBase {
     /**
      * Create streaming content callback
      */
-    private createStreamingCallback(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, agentRunIdRef: { id: string }) {
+    private createStreamingCallback(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, agentRunRef: { current: any }) {
         return (chunk: any) => {
+            // Use the agent run from the ref
+            const agentRun = agentRunRef.current;
+            if (!agentRun) {
+                console.error('❌ No agent run available for streaming callback');
+                return;
+            }
+            
             console.log('💬 Publishing streaming content:', {
                 content: chunk.content.substring(0, 50) + '...',
                 isComplete: chunk.isComplete,
                 stepType: chunk.stepType,
                 sessionId,
-                agentRunId: agentRunIdRef.id
+                agentRunId: agentRun.ID
             });
             
-            // Publish streaming content
+            // Publish streaming content with the full serialized agent run
             const streamMsg: AgentExecutionStreamMessage = {
                 sessionId,
-                agentRunId: agentRunIdRef.id,
+                agentRunId: agentRun.ID,
                 type: 'streaming',
+                agentRun: agentRun.GetAll(), // Include the full serialized agent run
                 streaming: {
                     content: chunk.content,
                     isPartial: !chunk.isComplete,
@@ -361,8 +337,8 @@ export class RunAIAgentResolver extends ResolverBase {
             // Create AI agent runner
             const agentRunner = new AgentRunner();
             
-            // Track agent run ID for streaming (use ref to update later)
-            const agentRunIdRef = { id: 'pending' };
+            // Track agent run for streaming (use ref to update later)
+            const agentRunRef = { current: null as any };
 
             console.log(`🚀 Starting agent execution with sessionId: ${sessionId}`);
 
@@ -371,13 +347,13 @@ export class RunAIAgentResolver extends ResolverBase {
                 agent: agentEntity,
                 conversationMessages: parsedMessages,
                 contextUser: currentUser,
-                onProgress: this.createProgressCallback(pubSub, sessionId, userPayload, agentRunIdRef),
-                onStreaming: this.createStreamingCallback(pubSub, sessionId, userPayload, agentRunIdRef)
+                onProgress: this.createProgressCallback(pubSub, sessionId, userPayload, agentRunRef),
+                onStreaming: this.createStreamingCallback(pubSub, sessionId, userPayload, agentRunRef)
             });
 
-            // Update agent run ID once available
+            // Update agent run ref once available
             if (result.agentRun) {
-                agentRunIdRef.id = result.agentRun.ID;
+                agentRunRef.current = result.agentRun;
             }
 
             const executionTime = Date.now() - startTime;
@@ -393,12 +369,12 @@ export class RunAIAgentResolver extends ResolverBase {
             if (result.success) {
                 LogStatus(`=== AI AGENT RUN COMPLETED FOR: ${agentEntity.Name} (${executionTime}ms) ===`);
             } else {
-                LogError(`AI Agent run failed for ${agentEntity.Name}: ${result.errorMessage}`);
+                LogError(`AI Agent run failed for ${agentEntity.Name}: ${result.agentRun?.ErrorMessage}`);
             }
 
             return {
                 success: result.success,
-                errorMessage: result.errorMessage || undefined,
+                errorMessage: result.agentRun?.ErrorMessage || undefined,
                 executionTimeMs: executionTime,
                 payload
             };
@@ -428,25 +404,18 @@ export class RunAIAgentResolver extends ResolverBase {
      */
     private publishFinalEvents(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, result: ExecuteAgentResult) {
         if (result.agentRun) {
-            // Get the last step from execution tree
+            // Get the last step from agent run
             let lastStep = 'Completed';
-            if (result.executionTree && result.executionTree.length > 0) {
-                // Find the last step by traversing the tree
-                const findLastStep = (nodes: any[]): any => {
-                    let last = nodes[nodes.length - 1];
-                    if (last.children && last.children.length > 0) {
-                        return findLastStep(last.children);
-                    }
-                    return last;
-                };
-                const lastNode = findLastStep(result.executionTree);
-                lastStep = lastNode.step?.StepName || 'Completed';
+            if (result.agentRun?.Steps && result.agentRun.Steps.length > 0) {
+                // Get the last step from the Steps array
+                const lastStepEntity = result.agentRun.Steps[result.agentRun.Steps.length - 1];
+                lastStep = lastStepEntity?.StepName || 'Completed';
             }
 
             // Publish partial result
             const partialResult: AgentPartialResult = {
                 currentStep: lastStep,
-                partialOutput: result.returnValue || undefined
+                partialOutput: result.payload || undefined
             };
 
             const partialMsg: AgentExecutionStreamMessage = {

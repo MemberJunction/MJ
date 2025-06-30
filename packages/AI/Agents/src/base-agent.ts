@@ -11,8 +11,8 @@
  * @since 2.49.0
  */
 
-import { AIAgentEntity, AIAgentTypeEntity, AIAgentRunEntity, AIAgentRunStepEntity, TemplateParamEntity, AIPromptEntity, ActionParamEntity } from '@memberjunction/core-entities';
-import { UserInfo, Metadata, RunView, LogStatus } from '@memberjunction/core';
+import { AIAgentEntity, AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntity, ActionParamEntity, AIAgentEntityExtended } from '@memberjunction/core-entities';
+import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
@@ -26,24 +26,15 @@ import {
     ExecuteAgentParams, 
     AgentContextData,
     AgentConfiguration,
-    AgentRunContext,
     AgentExecutionProgressCallback,
     ExecuteAgentResult,
     AgentAction,
     AgentSubAgentRequest,
-    ExecutionChainStep,
-    ExecutionNode,
-    NextStepDecision,
-    PromptExecutionResult,
-    ActionExecutionResult,
-    SubAgentExecutionResult,
-    ValidationExecutionResult,
-    ChatExecutionResult,
-    NextStepDetails,
     BaseAgentNextStep
 } from '@memberjunction/ai-core-plus';
 import { ActionEntityExtended, ActionResult } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
+import { PayloadManager } from './PayloadManager';
 
 /**
  * Base implementation for AI Agents in the MemberJunction framework.
@@ -102,22 +93,24 @@ export class BaseAgent {
     private _metadata: Metadata = new Metadata();
 
     /**
-     * Current agent run context.
-     * @private
-     */
-    private _runContext: AgentRunContext | null = null;
-
-    /**
      * Current agent run entity.
      * @private
      */
-    private _agentRun: AIAgentRunEntity | null = null;
+    private _agentRun: AIAgentRunEntityExtended | null = null;
 
     /**
-     * Execution chain tracking all steps.
+     * Agent hierarchy for display purposes (e.g., ["Marketing Agent", "Copywriter Agent"]).
+     * Tracked separately as it's display-only and doesn't need persistence.
      * @private
      */
-    private _executionChain: ExecutionChainStep[] = [];
+    private _agentHierarchy: string[] = [];
+
+    /**
+     * Current depth in the agent hierarchy (0 = root agent, 1 = first sub-agent, etc.).
+     * @private
+     */
+    private _depth: number = 0;
+
     
     /**
      * All progress steps including intermediate ones for complete execution tracking.
@@ -130,6 +123,68 @@ export class BaseAgent {
      * @private
      */
     private _subAgentRuns: ExecuteAgentResult[] = [];
+    
+    /**
+     * Payload manager for handling payload access control.
+     * @private
+     */
+    private _payloadManager: PayloadManager = new PayloadManager();
+
+    /**
+     * Helper method for status logging with verbose control
+     * @param message The message to log
+     * @param verboseOnly Whether this is a verbose-only message
+     * @param params Optional agent execution parameters for custom verbose check
+     */
+    protected logStatus(message: string, verboseOnly: boolean = false, params?: ExecuteAgentParams): void {
+        if (verboseOnly) {
+            LogStatusEx({
+                message,
+                verboseOnly: true,
+                isVerboseEnabled: () => params?.verbose === true || IsVerboseLoggingEnabled()
+            });
+        } else {
+            LogStatus(message);
+        }
+    }
+
+    /**
+     * Helper method for enhanced error logging with metadata
+     */
+    protected logError(error: Error | string, options?: {
+        category?: string;
+        metadata?: Record<string, any>;
+        agent?: AIAgentEntity;
+        agentType?: AIAgentTypeEntity;
+        severity?: 'warning' | 'error' | 'critical';
+    }): void {
+        const errorMessage = error instanceof Error ? error.message : error;
+        const errorObj = error instanceof Error ? error : undefined;
+        
+        const metadata: Record<string, any> = {
+            ...options?.metadata
+        };
+        
+        // Add agent information if available
+        if (options?.agent) {
+            metadata.agentId = options.agent.ID;
+            metadata.agentName = options.agent.Name;
+        }
+        
+        // Add agent type information if available
+        if (options?.agentType) {
+            metadata.agentTypeId = options.agentType.ID;
+            metadata.agentTypeName = options.agentType.Name;
+        }
+        
+        LogErrorEx({
+            message: errorMessage,
+            error: errorObj,
+            category: options?.category || 'BaseAgent',
+            severity: options?.severity || 'error',
+            metadata: Object.keys(metadata).length > 0 ? metadata : undefined
+        });
+    }
 
     /**
      * Wrapper for progress callbacks that captures all progress events.
@@ -143,12 +198,35 @@ export class BaseAgent {
             this._allProgressSteps.push({
                 ...progress,
                 timestamp: new Date(),
-                agentHierarchy: this._runContext?.agentHierarchy || [],
-                depth: this._runContext?.depth || 0
+                agentHierarchy: this._agentHierarchy || [],
+                depth: this._depth || 0
             });
             
-            // Call original callback
-            originalCallback(progress);
+            // Include agent run in metadata if available
+            try {
+                const enhancedProgress = {
+                    ...progress,
+                    metadata: {
+                        ...progress.metadata,
+                        agentRun: this._agentRun 
+                    }
+                };
+            
+                // Call original callback with enhanced progress
+                originalCallback(enhancedProgress);
+            }
+            catch (e) {
+                this.logError(`Failed to enhance progress with agent run: ${e instanceof Error ? e.message : e}`, {
+                    category: 'ProgressEnhancement',
+                    metadata: {
+                        progress: progress,
+                        agentRunId: this._agentRun?.ID || 'N/A'
+                    }
+                });     
+
+                // Call original callback without enhancement
+                originalCallback(progress);
+            }
         };
     }
 
@@ -182,6 +260,8 @@ export class BaseAgent {
      */
     public async Execute<C = any, R = any>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
         try {
+            this.logStatus(`🤖 Starting execution of agent '${params.agent.Name}'`, true, params);
+            
             // Wrap the progress callback to capture all events
             const wrappedParams = {
                 ...params,
@@ -190,6 +270,7 @@ export class BaseAgent {
             
             // Check for cancellation at start
             if (params.cancellationToken?.aborted) {
+                this.logStatus(`⚠️ Agent '${params.agent.Name}' execution cancelled before start`, true, params);
                 return await this.createCancelledResult('Cancelled before execution started', params.contextUser);
             }
 
@@ -223,28 +304,43 @@ export class BaseAgent {
             if (validationResult) return validationResult;
 
             // Load agent configuration
+            this.logStatus(`📋 Loading configuration for agent '${params.agent.Name}'`, true, params);
             const config = await this.loadAgentConfiguration(params.agent);
             if (!config.success) {
+                this.logError(`Failed to load agent configuration: ${config.errorMessage}`, {
+                    agent: params.agent,
+                    category: 'AgentConfiguration'
+                });
                 return await this.createFailureResult(config.errorMessage || 'Failed to load agent configuration', params.contextUser);
             }
 
             // Execute the agent's internal logic with wrapped parameters
+            this.logStatus(`🚀 Executing agent '${params.agent.Name}' internal logic`, true, params);
             const executionResult = await this.executeAgentInternal<R>(wrappedParams, config);
             
             // Report finalization progress
             wrappedParams.onProgress?.({
                 step: 'finalization',
                 percentage: 95,
+                metadata: { result: executionResult },
                 message: this.formatHierarchicalMessage('Finalizing agent execution')
             });
 
             // Finalize the agent run
-            return await this.finalizeAgentRun<R>(executionResult.finalStep.step, executionResult.finalStep.returnValue, params.contextUser);
+            this.logStatus(`✅ Finalizing execution for agent '${params.agent.Name}'`, true, params);
+           
+            return await this.finalizeAgentRun<R>(executionResult.finalStep, executionResult.finalStep.payload, params.contextUser);
         } catch (error) {
             // Check if error is due to cancellation
             if (params.cancellationToken?.aborted || error.message === 'Cancelled during execution') {
+                this.logStatus(`⚠️ Agent '${params.agent.Name}' execution cancelled: ${error.message}`, true, params);
                 return await this.createCancelledResult(error.message || 'Cancelled due to error during execution', params.contextUser);
             }
+            this.logError(error, {
+                agent: params.agent,
+                category: 'AgentExecution',
+                severity: 'critical'
+            });
             return await this.createFailureResult(error.message, params.contextUser);
         }
     }
@@ -264,15 +360,15 @@ export class BaseAgent {
      * @template R - The type of the return value from agent execution
      * @param {ExecuteAgentParams} params - The execution parameters with wrapped callbacks (includes wrapped onProgress and onStreaming)
      * @param {AgentConfiguration} config - The loaded agent configuration
-     * @returns {Promise<{finalReturnValue: R, stepCount: number}>} The execution result with typed final return value and step count
+     * @returns {Promise<{finalPayload: P, stepCount: number}>} The execution result with typed final payload and step count
      * @protected
      */
-    protected async executeAgentInternal<R = any>(
+    protected async executeAgentInternal<P = any>(
         params: ExecuteAgentParams, 
         config: AgentConfiguration
-    ): Promise<{finalStep: BaseAgentNextStep<R>, stepCount: number}> {
+    ): Promise<{finalStep: BaseAgentNextStep<P>, stepCount: number}> {
         let continueExecution = true;
-        let currentNextStep: BaseAgentNextStep<R> | null = null;        
+        let currentNextStep: BaseAgentNextStep<P> | null = null;        
         let stepCount = 0;
 
         while (continueExecution) {
@@ -282,15 +378,18 @@ export class BaseAgent {
             }
 
             // Execute the current step based on previous decision or initial prompt
-            const nextStep = await this.executeNextStep<R>(params, config, currentNextStep);
+            this.logStatus(`🔄 Executing step ${stepCount + 1} for agent '${params.agent.Name}'`, true, params);
+            const nextStep = await this.executeNextStep<P>(params, config, currentNextStep);
             stepCount++;
             
             // Check if we should continue or terminate
             if (nextStep.terminate) {
                 continueExecution = false;
                 currentNextStep = nextStep;
+                this.logStatus(`🏁 Agent '${params.agent.Name}' terminating after ${stepCount} steps with result: ${nextStep.step}`, true, params);
             } else {
                 currentNextStep = nextStep;
+                this.logStatus(`➡️ Agent '${params.agent.Name}' continuing to next step: ${nextStep.step}`, true, params);
             }
         }
 
@@ -319,12 +418,16 @@ export class BaseAgent {
      */
     protected async validateAgent(agent: AIAgentEntity): Promise<ExecuteAgentResult | null> {
         if (agent.Status !== 'Active') {
+            // Set error on the agent run
+            if (this._agentRun) {
+                this._agentRun.ErrorMessage = `Agent '${agent.Name}' is not active. Current status: ${agent.Status}`;
+                this._agentRun.Status = 'Failed';
+                this._agentRun.Success = false;
+                this._agentRun.FinalStep = 'Failed';
+            }
             return {
                 success: false,
-                finalStep: 'failed',
-                errorMessage: `Agent '${agent.Name}' is not active. Current status: ${agent.Status}`,
-                agentRun: this._agentRun!,
-                executionTree: []
+                agentRun: this._agentRun!
             };
         }
         return null;
@@ -405,13 +508,17 @@ export class BaseAgent {
      * @returns {Promise<AIPromptParams>} Configured prompt parameters
      * @protected
      */
-    protected async preparePromptParams(
-        agentType: AIAgentTypeEntity,
-        systemPrompt: AIPromptEntity,
-        childPrompt: AIPromptEntity,
+    protected async preparePromptParams<P>(
+        config: AgentConfiguration,
+        payload: P,
         params: ExecuteAgentParams
     ): Promise<AIPromptParams> {
+        const agentType: AIAgentTypeEntity = config.agentType;
+        const systemPrompt: AIPromptEntity = config.systemPrompt;
+        const childPrompt: AIPromptEntity = config.childPrompt;
+
         // Gather context data
+
         const promptTemplateData = await this.gatherPromptTemplateData(params.agent, params.contextUser, params.data);
 
         // Set up the hierarchical prompt execution
@@ -421,6 +528,15 @@ export class BaseAgent {
         promptParams.contextUser = params.contextUser;
         promptParams.conversationMessages = params.conversationMessages;
         promptParams.templateMessageRole = 'system';
+        promptParams.verbose = params.verbose; // Pass through verbose flag
+
+        if (payload) {
+            // before we execute the prompt, we ask our Agent Type to inject the
+            // payload - as the way a payload is injected is dependent on the agent type and its
+            // prompting strategy. At this level in BaseAgent we don't know the format, location etc
+            const atInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
+            await atInstance.InjectPayload<P>(payload, promptParams);
+        }
 
         // Setup child prompt parameters
         promptParams.childPrompts = [
@@ -430,7 +546,8 @@ export class BaseAgent {
                     data: promptTemplateData,
                     contextUser: params.contextUser,
                     conversationMessages: params.conversationMessages,
-                    templateMessageRole: 'user'
+                    templateMessageRole: 'user',
+                    verbose: params.verbose
                 } as AIPromptParams,
                 agentType.AgentPromptPlaceholder
             )
@@ -440,14 +557,14 @@ export class BaseAgent {
         if (params.agent.ModelSelectionMode === 'Agent') {
             // Use the child prompt (agent's specific prompt) for model selection
             promptParams.modelSelectionPrompt = childPrompt;
-            LogStatus(`🎯 Agent '${params.agent.Name}' configured to use its own prompt for model selection`);
+            this.logStatus(`🎯 Agent '${params.agent.Name}' configured to use its own prompt for model selection`, true, params);
         }
         // Default behavior is 'Agent Type', which uses the parent system prompt
 
         // Handle runtime override if provided
         if (params.override) {
             promptParams.override = params.override;
-            LogStatus(`🎯 Using runtime override: ${params.override.modelId || 'model'} ${params.override.vendorId ? `from vendor ${params.override.vendorId}` : ''}`);
+            this.logStatus(`🎯 Using runtime override: ${params.override.modelId || 'model'} ${params.override.vendorId ? `from vendor ${params.override.vendorId}` : ''}`, true, params);
         }
 
         return promptParams;
@@ -473,30 +590,25 @@ export class BaseAgent {
      * @returns {Promise<ExecuteAgentResult>} The execution result
      * @protected
      */
-    protected async processNextStep<R>(
+    protected async processNextStep<P>(
         params: ExecuteAgentParams,
         agentType: AIAgentTypeEntity,
         promptResult: AIPromptRunResult
-    ): Promise<BaseAgentNextStep<R>> {
-        // Get the agent type instance
-        let agentTypeInstance: BaseAgentType | null;
-        try {
-            agentTypeInstance = await this.getAgentTypeInstance(agentType);
-        } catch (error) {
-            return {
-                terminate: false, // agent decides to terminate or not based on failure
-                step: 'failed',
-                errorMessage: error.message
-            };
-        }
+    ): Promise<BaseAgentNextStep<P>> {
+        this.logStatus(`🤔 Processing next step for agent '${params.agent.Name}' with agent type '${agentType.Name}'`, true, params);
+
+        const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(agentType);
 
         // Let the agent type determine the next step
-        const nextStep = await agentTypeInstance.DetermineNextStep(promptResult);
+        this.logStatus(`🎯 Agent type '${agentType.Name}' determining next step`, true, params);
+        const nextStep = await agentTypeInstance.DetermineNextStep<P>(promptResult);
+        
+        this.logStatus(`📌 Next step determined: ${nextStep.step}${nextStep.terminate ? ' (terminating)' : ''}`, true, params);
 
-        // Return the next step directly - execution handling is done in executeNextStep
+        // Return the next step directly - execution handling is done in execute NextStep
         return nextStep;
     }
-
+ 
     /**
      * Creates a chat message containing action execution results.
      * 
@@ -580,6 +692,7 @@ export class BaseAgent {
             const contextData: AgentContextData = {
                 agentName: agent.Name,
                 agentDescription: agent.Description,
+                parentAgentName: agent.Parent ? agent.Parent.trim() : "",
                 subAgentCount: subAgents.length,
                 subAgentDetails: this.formatSubAgentDetails(subAgents),
                 actionCount: actions.length,
@@ -602,51 +715,6 @@ export class BaseAgent {
 
 
     /**
-     * Instantiates the appropriate agent type class based on the agent type entity.
-     * 
-     * This method uses the MemberJunction class factory to dynamically instantiate
-     * agent type classes. It uses the DriverClass field if specified, otherwise falls
-     * back to using the agent type's Name. If a specific class doesn't exist, it 
-     * returns a default implementation.
-     * 
-     * @param {AIAgentTypeEntity} agentType - The agent type entity to instantiate
-     * 
-     * @returns {Promise<BaseAgentType | null>} Instance of the agent type class
-     * 
-     * @example
-     * // For an agent type with DriverClass "LoopAgentType"
-     * const agentTypeInstance = await this.getAgentTypeInstance(loopAgentType);
-     * 
-     * @private
-     */
-    private async getAgentTypeInstance(agentType: AIAgentTypeEntity): Promise<BaseAgentType | null> {
-        // Use DriverClass if specified, otherwise use the Name as the lookup key
-        return this.getAgentInstanceWithDriverClass(agentType.DriverClass || agentType.Name);
-    }
-
-    /**
-     * Instantiates an agent type class using a specific driver class name.
-     * 
-     * This method is used when an individual agent has its own DriverClass override,
-     * allowing for specialized implementations per agent instance.
-     * 
-     * @param {string} driverClass - The driver class name to instantiate
-     * 
-     * @returns {Promise<BaseAgentType | null>} Instance of the agent type class
-     * 
-     * @private
-     */
-    private async getAgentInstanceWithDriverClass(driverClass: string): Promise<BaseAgentType | null> {
-        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAgentType>(BaseAgentType, driverClass);
-        
-        if (!instance) {
-            throw new Error(`No implementation found for agent with DriverClass '${driverClass}'. Please ensure the class is registered with the ClassFactory.`);
-        }
-        
-        return instance;
-    }
-
-    /**
      * This method executes one action using the MemberJunction Actions framework.
      * The full ActionResult objects are returned, allowing the caller to access result codes, output parameters,
      * and other execution details.
@@ -659,34 +727,21 @@ export class BaseAgent {
      * 
      * @throws {Error} If the action fails to execute
      */
-    public async ExecuteSingleAction(params: ExecuteAgentParams, action: AgentAction, contextUser?: UserInfo): Promise<ActionResult> {
+    public async ExecuteSingleAction(params: ExecuteAgentParams, action: AgentAction, actionEntity: ActionEntityExtended, 
+        contextUser?: UserInfo): Promise<ActionResult> {
         try {
+            this.logStatus(`⚡ Executing action '${action.name}'`, true, params);
+            
             const actionEngine = ActionEngineServer.Instance;
-        
-            // Validate action ID
-            if (!action.id) {
-                throw new Error(`Action ID is required for action: ${action.name || 'unknown'}`);
-            }
-            
-            // Find the action entity by ID
-            const actionEntity = actionEngine.Actions.find(a => a.ID === action.id);
-            
-            if (!actionEntity) {
-                // Check if the provided ID is a valid UUID
-                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-                if (!uuidRegex.test(action.id)) {
-                    throw new Error(`${action.id} is not a valid UUID and must be a UUID representing the Action ID`);
-                } else {
-                    throw new Error(`Action with ID ${action.id} not found in the action table`);
-                }
-            }
-            
+
             // Convert params object to ActionParam array
             const actionParams = Object.entries(action.params || {}).map(([key, value]) => ({
                 Name: key,
                 Value: value,
                 Type: 'Input' as const
             }));
+            
+            this.logStatus(`📥 Action parameters: ${JSON.stringify(action.params)}`, true, params);
             
             // Execute the action and return the full ActionResult
             const result = await actionEngine.RunAction({
@@ -702,9 +757,18 @@ export class BaseAgent {
                 throw new Error(`Action '${action.name}' failed: ${result.Message || 'Unknown error'}`);
             }
             
+            this.logStatus(`✅ Action '${action.name}' completed successfully`, true, params);
+            
             return result;
             
         } catch (error) {
+            this.logError(error, {
+                category: 'ActionExecution',
+                metadata: {
+                    actionName: action.name,
+                    actionParams: action.params
+                }
+            });
             throw new Error(`Error executing actions: ${error.message}`);
         }
     }
@@ -738,34 +802,19 @@ export class BaseAgent {
     protected async ExecuteSubAgent<SC = any, SR = any>(
         params: ExecuteAgentParams<SC>,
         subAgentRequest: AgentSubAgentRequest<SC>, 
+        subAgent: AIAgentEntityExtended,
+        stepEntity: AIAgentRunStepEntityExtended,
+        payload?: SR
     ): Promise<ExecuteAgentResult<SR>> {
         try {
-            const engine = AIEngine.Instance;
-            
-            // Validate subAgentID
-            if (!subAgentRequest.id) {
-                throw new Error('Sub-agent ID is required');
-            }
-            
-            // Find the sub-agent by ID
-            const subAgent = engine.Agents.find(a => a.ID === subAgentRequest.id);
-            
-            if (!subAgent) {
-                // Check if the provided ID is a valid UUID
-                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-                if (!uuidRegex.test(subAgentRequest.id)) {
-                    throw new Error(`${subAgentRequest.id} is not a valid UUID and must be a UUID representing the Agent ID`);
-                } else {
-                    throw new Error(`Sub-agent with ID ${subAgentRequest.id} not found in the agent table`);
-                }
-            }
+            this.logStatus(`🤖 Executing sub-agent '${subAgentRequest.name}'`, true, params);
             
             // Create a new AgentRunner instance
             const runner = new AgentRunner();
             
             // Prepare messages for sub-agent, adding the context message
             const subAgentMessages: ChatMessage[] = [
-                ...params.conversationMessages,
+                // don't include the full conversation of the parent, just the subAgentRequest - we previously did this: ...params.conversationMessages,
                 {
                     role: 'user',
                     content: subAgentRequest.message
@@ -776,30 +825,47 @@ export class BaseAgent {
             // This would need to be passed through the AgentRunner in a real implementation
             // For now, we execute normally and the sub-agent will track its parent relationship
             
+            this.logStatus(`📨 Sub-agent message: "${subAgentRequest.message}"`, true, params);
+            if (subAgentRequest.templateParameters) {
+                this.logStatus(`📎 Template parameters: ${JSON.stringify(subAgentRequest.templateParameters)}`, true, params);
+            }
+            
             // Execute the sub-agent with cancellation and streaming support
             const result = await runner.RunAgent({
                 agent: subAgent,
                 conversationMessages: subAgentMessages,
                 contextUser: params.contextUser,
                 cancellationToken: params.cancellationToken,
-                onProgress: params.onProgress,
+                onProgress:  params.onProgress,
                 onStreaming: params.onStreaming,
-                parentAgentHierarchy: this._runContext?.agentHierarchy,
-                parentDepth: this._runContext?.depth,
+                parentAgentHierarchy: this._agentHierarchy,
+                parentDepth: this._depth,
                 parentRun: this._agentRun,
+                payload: payload, // pass the payload if provided
                 data: subAgentRequest.templateParameters,
-                context: params.context // pass along our context to sub-agents so they can keep passing it down and pass to actions as well
+                context: params.context, // pass along our context to sub-agents so they can keep passing it down and pass to actions as well
+                verbose: params.verbose // pass verbose flag to sub-agent
             });
             
             // Check if execution was successful
             if (!result.success) {
-                throw new Error(`Sub-agent '${subAgentRequest.name}' failed: ${result.errorMessage || 'Unknown error'}`);
+                throw new Error(`Sub-agent '${subAgentRequest.name}' failed: ${result.agentRun?.ErrorMessage || 'Unknown error'}`);
             }
+            
+            this.logStatus(`✅ Sub-agent '${subAgentRequest.name}' completed successfully`, true, params);
             
             // Return the full result for tracking
             return result;
             
         } catch (error) {
+            this.logError(error, {
+                category: 'SubAgentExecution',
+                metadata: {
+                    agentName: params.agent.Name,
+                    subAgentName: subAgentRequest.name,
+                    message: subAgentRequest.message
+                }
+            });
             throw new Error(`Error executing sub-agent: ${error.message}`);
         }
     }
@@ -813,7 +879,6 @@ export class BaseAgent {
      */
     private formatSubAgentDetails(subAgents: AIAgentEntity[]): string {
         return JSON.stringify(subAgents.map(sa => ({
-            ID: sa.ID,
             Name: sa.Name,
             Description: sa.Description,
             Type: sa.TypeID ? this.getAgentTypeName(sa.TypeID) : 'Unknown',
@@ -865,7 +930,6 @@ export class BaseAgent {
      */
     private formatActionDetails(actions: ActionEntityExtended[]): string {
         return JSON.stringify(actions.map(action => ({
-            ID: action.ID,
             Name: action.Name,
             Description: action.Description,
             // Parameters with detailed information
@@ -882,8 +946,6 @@ export class BaseAgent {
                 Code: rc.ResultCode,
                 IsSuccess: rc.IsSuccess,
                 Description: rc.Description || 'No description provided',
-                // Help LLM understand when to expect each result
-                Usage: this.inferResultCodeUsage(rc.ResultCode, rc.IsSuccess)
             })),
             // Additional metadata
             Category: action.CategoryID ? this.getActionCategoryName(action.CategoryID) : null,
@@ -947,38 +1009,7 @@ export class BaseAgent {
         // For now, returning a placeholder
         return 'General';
     }
-
-    /**
-     * Infers when a result code might be returned based on its name and success status.
-     * 
-     * @param {string} resultCode - The result code
-     * @param {boolean} isSuccess - Whether this is a success code
-     * @returns {string} Description of when this result might occur
-     * @private
-     */
-    private inferResultCodeUsage(resultCode: string, isSuccess: boolean): string {
-        // Common patterns for result codes
-        if (resultCode === 'SUCCESS') {
-            return 'Returned when the action completes successfully';
-        } else if (resultCode === 'FAILED') {
-            return 'Generic failure - check error message for details';
-        } else if (resultCode.includes('MISSING_PARAMETERS')) {
-            return 'Returned when required parameters are not provided';
-        } else if (resultCode.includes('INVALID')) {
-            return 'Returned when input validation fails';
-        } else if (resultCode.includes('NOT_FOUND')) {
-            return 'Returned when the requested resource cannot be found';
-        } else if (resultCode.includes('TIMEOUT')) {
-            return 'Returned when the operation times out';
-        } else if (resultCode.includes('PERMISSION') || resultCode.includes('UNAUTHORIZED')) {
-            return 'Returned when permission is denied';
-        } else {
-            return isSuccess 
-                ? 'Specific success condition - see description' 
-                : 'Specific error condition - see description';
-        }
-    }
-
+ 
     /**
      * Initializes the agent run tracking by creating AIAgentRunEntity and setting up context.
      * 
@@ -987,7 +1018,7 @@ export class BaseAgent {
      */
     private async initializeAgentRun(params: ExecuteAgentParams): Promise<void> {
         // Create AIAgentRunEntity
-        this._agentRun = await this._metadata.GetEntityObject<AIAgentRunEntity>('MJ: AI Agent Runs', params.contextUser);
+        this._agentRun = await this._metadata.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', params.contextUser);
         this._agentRun.AgentID = params.agent.ID;
         this._agentRun.Status = 'Running';
         this._agentRun.StartedAt = new Date();
@@ -1002,21 +1033,13 @@ export class BaseAgent {
             throw new Error(`Failed to create agent run record: Details: ${errorMessage}`);
         }
 
-        // Initialize run context
-        this._runContext = {
-            currentStepIndex: 0,
-            parentRunStack: [],
-            agentHierarchy: params.parentAgentHierarchy 
-                ? [...params.parentAgentHierarchy, params.agent.Name || 'Unknown Agent']
-                : [params.agent.Name || 'Unknown Agent'],
-            depth: params.parentDepth !== undefined ? params.parentDepth + 1 : 0,
-            conversationId: undefined, // TODO: Get from conversation context
-            userId: params.contextUser?.ID,
-            agentState: {}
-        };
+        // Initialize hierarchy tracking
+        this._agentHierarchy = params.parentAgentHierarchy 
+            ? [...params.parentAgentHierarchy, params.agent.Name || 'Unknown Agent']
+            : [params.agent.Name || 'Unknown Agent'];
+        this._depth = params.parentDepth !== undefined ? params.parentDepth + 1 : 0;
 
         // Reset execution chain and progress tracking
-        this._executionChain = [];
         this._allProgressSteps = [];
     }
 
@@ -1028,71 +1051,24 @@ export class BaseAgent {
      * @returns {Promise<ExecuteAgentResult | null>} - Failure result if validation fails, null if successful
      */
     private async validateAgentWithTracking(agent: AIAgentEntity, contextUser: UserInfo): Promise<ExecuteAgentResult | null> {
-        const startTime = new Date();
-        
         try {
             // Original validation logic
             const validationResult = await this.validateAgent(agent);
             
             if (validationResult) {
                 // Create validation step
-                const stepEntity = await this.createStepEntity('validation', 'Agent Validation', contextUser);
+                const stepEntity = await this.createStepEntity('Validation', 'Agent Validation', contextUser);
                 
-                // Create validation execution result
-                const executionResult: ValidationExecutionResult = {
-                    type: 'validation',
-                    validationTarget: 'agent configuration',
-                    result: { valid: false, errors: [validationResult.errorMessage || 'Validation failed'] }
-                };
-                
-                // Create next step decision
-                const nextStepDecision: NextStepDecision = {
-                    decision: 'failed',
-                    reasoning: 'Agent validation failed',
-                    nextStepDetails: { type: 'complete' }
-                };
-                
-                // Add to execution chain
-                this._executionChain.push({
-                    stepEntity,
-                    executionType: 'validation',
-                    executionResult,
-                    nextStepDecision,
-                    startTime,
-                    endTime: new Date(),
-                    durationMs: new Date().getTime() - startTime.getTime()
-                });
                 
                 // Update step entity
-                await this.finalizeStepEntity(stepEntity, false, validationResult.errorMessage);
+                await this.finalizeStepEntity(stepEntity, false, validationResult.agentRun?.ErrorMessage);
                 
-                return await this.createFailureResult(validationResult.errorMessage || 'Validation failed', contextUser);
+                return await this.createFailureResult(validationResult.agentRun?.ErrorMessage || 'Validation failed', contextUser);
             }
             
             // Validation successful - create success step
-            const stepEntity = await this.createStepEntity('validation', 'Agent Validation', contextUser);
+            const stepEntity = await this.createStepEntity('Validation', 'Agent Validation', contextUser);
             
-            const executionResult: ValidationExecutionResult = {
-                type: 'validation',
-                validationTarget: 'agent configuration',
-                result: { valid: true }
-            };
-            
-            const nextStepDecision: NextStepDecision = {
-                decision: 'success',
-                reasoning: 'Agent validation passed',
-                nextStepDetails: { type: 'prompt', promptId: agent.ID, promptName: 'Initial Prompt' }
-            };
-            
-            this._executionChain.push({
-                stepEntity,
-                executionType: 'validation',
-                executionResult,
-                nextStepDecision,
-                startTime,
-                endTime: new Date(),
-                durationMs: new Date().getTime() - startTime.getTime()
-            });
             
             await this.finalizeStepEntity(stepEntity, true);
             
@@ -1114,15 +1090,23 @@ export class BaseAgent {
      * @param {string} [targetLogId] - Optional ID of the execution log (ActionExecutionLog, AIPromptRun, or AIAgentRun)
      * @returns {Promise<AIAgentRunStepEntity>} - The created step entity
      */
-    private async createStepEntity(stepType: string, stepName: string, contextUser: UserInfo, targetId?: string, inputData?: any, targetLogId?: string): Promise<AIAgentRunStepEntity> {
-        const stepEntity = await this._metadata.GetEntityObject<AIAgentRunStepEntity>('MJ: AI Agent Run Steps', contextUser);
+    private async createStepEntity(stepType: AIAgentRunStepEntityExtended["StepType"], stepName: string, contextUser: UserInfo, targetId?: string, inputData?: any, targetLogId?: string): Promise<AIAgentRunStepEntityExtended> {
+        const stepEntity = await this._metadata.GetEntityObject<AIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', contextUser);
         
         stepEntity.AgentRunID = this._agentRun!.ID;
-        stepEntity.StepNumber = this._runContext!.currentStepIndex + 1;
+        // Step number is based on current count of steps + 1
+        stepEntity.StepNumber = (this._agentRun!.Steps?.length || 0) + 1;
         stepEntity.StepType = stepType;
         // Include hierarchy breadcrumb in StepName for better logging
         stepEntity.StepName = this.formatHierarchicalMessage(stepName);
-        stepEntity.TargetID = targetId || null;
+        // check to see if targetId is a valid UUID
+        if (targetId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId)) {
+            // If not valid, we can just ignore it, but console.warn
+            console.warn(`Invalid target ID format: ${targetId}`);
+        }
+        else {
+            stepEntity.TargetID = targetId || null;
+        }
         stepEntity.TargetLogID = targetLogId || null;
         stepEntity.Status = 'Running';
         stepEntity.StartedAt = new Date();
@@ -1132,8 +1116,8 @@ export class BaseAgent {
             stepEntity.InputData = JSON.stringify({
                 ...inputData,
                 context: {
-                    agentHierarchy: this._runContext!.agentHierarchy,
-                    depth: this._runContext!.depth,
+                    agentHierarchy: this._agentHierarchy,
+                    depth: this._depth,
                     stepNumber: stepEntity.StepNumber
                 }
             });
@@ -1143,7 +1127,10 @@ export class BaseAgent {
             throw new Error(`Failed to create agent run step record: ${JSON.stringify(stepEntity.LatestResult)}`);
         }
         
-        this._runContext!.currentStepIndex++;
+        // Add the step to the agent run's Steps array
+        if (this._agentRun) {
+            this._agentRun.Steps.push(stepEntity);
+        }
         
         return stepEntity;
     }
@@ -1157,7 +1144,7 @@ export class BaseAgent {
      * @param {string} [errorMessage] - Optional error message
      * @param {any} [outputData] - Optional output data to capture for this step
      */
-    private async finalizeStepEntity(stepEntity: AIAgentRunStepEntity, success: boolean, errorMessage?: string, outputData?: any): Promise<void> {
+    private async finalizeStepEntity(stepEntity: AIAgentRunStepEntityExtended, success: boolean, errorMessage?: string, outputData?: any): Promise<void> {
         stepEntity.Status = success ? 'Completed' : 'Failed';
         stepEntity.CompletedAt = new Date();
         stepEntity.Success = success;
@@ -1188,14 +1175,41 @@ export class BaseAgent {
      * @returns {string} - The formatted message with hierarchy breadcrumb
      */
     private formatHierarchicalMessage(baseMessage: string): string {
-        if (this._runContext && this._runContext.depth > 0) {
+        if (this._depth > 0) {
             // Build breadcrumb from agent hierarchy (skip root agent)
-            const breadcrumb = this._runContext.agentHierarchy
+            const breadcrumb = this._agentHierarchy
                 .slice(1)
                 .join(' → ');
             return breadcrumb ? `${breadcrumb}: ${baseMessage}` : baseMessage;
         }
         return baseMessage;
+    }
+
+    /**
+     * Gets human-readable reasoning for the next step decision.
+     * 
+     * @private
+     * @param {BaseAgentNextStep} nextStep - The next step decision
+     * @returns {string} Human-readable reasoning
+     */
+    private getNextStepReasoning(nextStep: BaseAgentNextStep): string {
+        switch (nextStep.step) {
+            case 'Success':
+                return 'Agent completed task successfully';
+            case 'Failed':
+                return nextStep.errorMessage || 'Agent execution failed';
+            case 'Retry':
+                return nextStep.retryReason || 'Retrying with updated context';
+            case 'Sub-Agent':
+                return `Delegating to sub-agent: ${nextStep.subAgent?.name || 'Unknown'}`;
+            case 'Actions':
+                const actionCount = nextStep.actions?.length || 0;
+                return `Executing ${actionCount} action${actionCount !== 1 ? 's' : ''}`;
+            case 'Chat':
+                return 'Requesting user input';
+            default:
+                return 'Unknown decision';
+        }
     }
 
     /**
@@ -1209,13 +1223,13 @@ export class BaseAgent {
      * @param {ExecuteAgentParams} params - Original execution parameters
      * @param {AgentConfiguration} config - Agent configuration
      * @param {BaseAgentNextStep | null} previousDecision - Previous step decision
-     * @returns {Promise<{terminate: boolean, returnValue?: any, nextStep?: BaseAgentNextStep}>}
+     * @returns {Promise<BaseAgentNextStep<P>>}
      */
-    protected async executeNextStep<R = any>(
+    protected async executeNextStep<P = any>(
         params: ExecuteAgentParams, 
         config: AgentConfiguration, 
-        previousDecision: BaseAgentNextStep<R> | null
-    ): Promise<BaseAgentNextStep<R>> {
+        previousDecision: BaseAgentNextStep<P> | null
+    ): Promise<BaseAgentNextStep<P>> {
         
         // Determine what to execute
         if (!previousDecision) {
@@ -1225,29 +1239,43 @@ export class BaseAgent {
         
         // Execute based on the previous decision
         switch (previousDecision.step) {
-            case 'retry':
+            case 'Retry':
                 return await this.executePromptStep(params, config, previousDecision);
-                
-            case 'sub-agent':
-                return await this.executeSubAgentStep(params, previousDecision.subAgent!);
-                
-            case 'actions':
-                return await this.executeActionsStep(params, previousDecision.actions!);
-                
-            case 'chat':
-                return await this.executeChatStep(params, previousDecision.userMessage!);
-            case 'success':
-                return { 
-                    terminate: true,
-                    step: 'success', 
-                    returnValue: previousDecision.returnValue 
-                };
-            case 'failed':
-                return { 
-                    terminate: true,
-                    step: 'failed', 
-                    returnValue: previousDecision.returnValue 
-                };
+            case 'Sub-Agent':
+                return await this.executeSubAgentStep(params, previousDecision!);
+            case 'Actions':
+                return await this.executeActionsStep(params, previousDecision);
+            case 'Chat':
+                return await this.executeChatStep(params, previousDecision);
+            case 'Success':
+                const pd = previousDecision as any;
+                if (pd.payload?.taskComplete === true && previousDecision.terminate) {
+                    // If task is complete and the parent agent previously requested to auto-terminate, after a successful
+                    // sub-agent run, we can finalize the agent run                    
+                    return { 
+                        terminate: true,
+                        step: 'Success', 
+                        payload: previousDecision.payload 
+                    };
+                }
+                else {
+                    // either task wasn't complete or was a sub-agent run in which case we ALWAYS process one more time
+                    // with the parent prompt
+                    return await this.executePromptStep(params, config, previousDecision);
+                }
+            case 'Failed':
+                if (previousDecision.terminate) {
+                    return { 
+                        terminate: true,
+                        step: 'Failed', 
+                        payload: previousDecision.payload 
+                    };
+                }
+                else {
+                    // we had a failure in the past step, but we are not terminating
+                    // so we will retry the prompt step
+                    return await this.executePromptStep(params, config, previousDecision);
+                }
             default:
                 throw new Error(`Unsupported next step: ${previousDecision.step}`);
         }
@@ -1258,34 +1286,32 @@ export class BaseAgent {
      * 
      * @private
      */
-    private async executePromptStep<R>(
+    private async executePromptStep<P>(
         params: ExecuteAgentParams, 
         config: AgentConfiguration,
-        retryContext?: BaseAgentNextStep
-    ): Promise<BaseAgentNextStep<R>> {
+        previousDecision?: BaseAgentNextStep
+    ): Promise<BaseAgentNextStep<P>> {
         
-        const startTime = new Date();
         
         // Prepare input data for the step
         const inputData = {
             promptId: config.childPrompt?.ID,
             promptName: config.childPrompt?.Name,
-            isRetry: !!retryContext,
-            retryContext: retryContext ? {
-                reason: retryContext.retryReason,
-                instructions: retryContext.retryInstructions
+            isRetry: !!previousDecision,
+            retryContext: previousDecision ? {
+                reason: previousDecision.retryReason,
+                instructions: previousDecision.retryInstructions
             } : undefined,
             conversationMessages: params.conversationMessages,
-            agentState: this._runContext?.agentState
         };
         
-        const stepEntity = await this.createStepEntity('prompt', 'Execute Agent Prompt', params.contextUser, config.childPrompt?.ID, inputData);
+        const stepEntity = await this.createStepEntity('Prompt', 'Execute Agent Prompt', params.contextUser, config.childPrompt?.ID, inputData);
         
         try {
             // Report prompt execution progress with context
-            const isRetry = !!retryContext;
+            const isRetry = !!previousDecision;
             const promptMessage = isRetry 
-                ? `Running ${params.agent.Name} with context from ${retryContext.retryReason || 'previous actions'}`
+                ? `Running ${params.agent.Name} with context from ${previousDecision.retryReason || 'previous actions'}`
                 : `Running ${params.agent.Name}'s initial prompt...`;
                 
             params.onProgress?.({
@@ -1301,16 +1327,20 @@ export class BaseAgent {
             });
 
             // Prepare prompt parameters
-            const promptParams = await this.preparePromptParams(
-                config.agentType!, 
-                config.systemPrompt!, 
-                config.childPrompt!,
-                params
-            );
+            const payload = previousDecision?.payload || params.payload;
+            
+            // Set PayloadAtStart
+            if (stepEntity && payload) {
+                stepEntity.PayloadAtStart = JSON.stringify(payload);
+            }
+            
+            const promptParams = await this.preparePromptParams(config, payload, params);
             
             // Pass cancellation token and streaming callbacks to prompt execution
             promptParams.cancellationToken = params.cancellationToken;
             promptParams.onStreaming = params.onStreaming ? (chunk) => {
+                // For streaming, we need to wrap it differently since chunk doesn't have metadata
+                // The server resolver should get the agent run from the closure
                 params.onStreaming!({
                     ...chunk,
                     stepType: 'prompt',
@@ -1318,16 +1348,14 @@ export class BaseAgent {
                 });
             } : undefined;
             
-            // Note: retry context is now handled through conversation messages
-            // The retryContext parameter is kept for backward compatibility but not used
-            
             // Execute the prompt
             const promptResult = await this.executePrompt(promptParams);
-            
+
             // Update step entity with AIPromptRun ID if available
             if (promptResult.promptRun?.ID) {
                 stepEntity.TargetLogID = promptResult.promptRun.ID;
-                await stepEntity.Save();
+                stepEntity.PromptRun = promptResult.promptRun; // Store the prompt run object
+                // don't save here, we save when we call finalizeStepEntity()
             }
             
             // Check for cancellation after prompt execution
@@ -1337,18 +1365,11 @@ export class BaseAgent {
                 return { 
                     ...cancelledResult,
                     terminate: true, 
-                    step: cancelledResult.finalStep,
-                    returnValue: cancelledResult.returnValue,   
+                    step: 'Failed', // Cancelled is treated as failed
+                    payload: cancelledResult.payload,   
                 }
             }
-            // Create prompt execution result
-            const executionResult: PromptExecutionResult = {
-                type: 'prompt',
-                promptId: config.childPrompt!.ID,
-                promptName: config.childPrompt!.Name,
-                result: promptResult
-            };
-            
+
             // Report decision processing progress
             params.onProgress?.({
                 step: 'decision_processing',
@@ -1358,25 +1379,8 @@ export class BaseAgent {
             });
             
             // Determine next step using agent type
-            const nextStep = await this.processNextStep<R>(params, config.agentType!, promptResult);
+            const nextStep = await this.processNextStep<P>(params, config.agentType!, promptResult);
             
-            // Create next step decision
-            const nextStepDecision: NextStepDecision = {
-                decision: nextStep.step,
-                reasoning: this.getNextStepReasoning(nextStep),
-                nextStepDetails: this.getNextStepDetails(nextStep)
-            };
-            
-            // Add to execution chain
-            this._executionChain.push({
-                stepEntity,
-                executionType: 'prompt',
-                executionResult,
-                nextStepDecision,
-                startTime,
-                endTime: new Date(),
-                durationMs: new Date().getTime() - startTime.getTime()
-            });
             
             // Prepare output data
             const outputData = {
@@ -1389,19 +1393,30 @@ export class BaseAgent {
                 },
                 nextStep: {
                     decision: nextStep.step,
-                    reasoning: nextStepDecision.reasoning
+                    reasoning: this.getNextStepReasoning(nextStep),
+                    payload: nextStep.payload
                 }
             };
+            
+            // Set PayloadAtEnd
+            if (stepEntity && nextStep.payload) {
+                stepEntity.PayloadAtEnd = JSON.stringify(nextStep.payload);
+            }
+            
+            // Update the agent run's current payload
+            if (this._agentRun && nextStep.payload) {
+                this._agentRun.FinalPayloadObject = nextStep.payload;
+            }
             
             // Finalize step entity
             await this.finalizeStepEntity(stepEntity, promptResult.success, 
                 promptResult.success ? undefined : promptResult.errorMessage, outputData);
             
             // Return based on next step
-            if (nextStep.step === 'chat') {
+            if (nextStep.step === 'Chat') {
                 return { ...nextStep, terminate: true };
             }
-            else if (nextStep.step === 'success' || nextStep.step === 'failed') {
+            else if (nextStep.step === 'Success' || nextStep.step === 'Failed') {
                 return { ...nextStep, terminate: true };
             } else {
                 return { ...nextStep, terminate: false };
@@ -1409,9 +1424,20 @@ export class BaseAgent {
             
         } catch (error) {
             await this.finalizeStepEntity(stepEntity, false, error.message);
-            throw error;
+
+            // we had an error, don't throw the exception as that will kill our overall execution/run
+            // instead retrun a helpful message in our return value that the parent loop can review and 
+            // adjust
+            const errString = error?.message || error || 'Unknown error';
+            return {
+                errorMessage: `Prompt execution failed: ${errString}`,
+                step: 'Failed',
+                terminate: false,
+            };
         }
     }
+
+
 
     /**
      * Executes a sub-agent step and tracks it.
@@ -1420,9 +1446,9 @@ export class BaseAgent {
      */
     private async executeSubAgentStep<SC = any, SR = any>(
         params: ExecuteAgentParams<SC>,
-        subAgentRequest: AgentSubAgentRequest<SC>
+        previousDecision?: BaseAgentNextStep<SR, SC>,
     ): Promise<BaseAgentNextStep<SR, SC>> {
-        
+        const subAgentRequest = previousDecision.subAgent as AgentSubAgentRequest<SC>;
         // Check for cancellation before starting
         if (params.cancellationToken?.aborted) {
             throw new Error('Cancelled before sub-agent execution');
@@ -1434,7 +1460,7 @@ export class BaseAgent {
             percentage: 60,
             message: this.formatHierarchicalMessage(`Delegating to ${subAgentRequest.name} agent`),
             metadata: { 
-                subAgentId: subAgentRequest.id,
+                agentName: params.agent.Name,
                 subAgentName: subAgentRequest.name,
                 reason: subAgentRequest.message
             }
@@ -1446,31 +1472,85 @@ export class BaseAgent {
             content: `I'm delegating this task to the "${subAgentRequest.name}" agent.\n\nReason: ${subAgentRequest.message}`
         });
         
-        const startTime = new Date();
         
         // Prepare input data for the step
         const inputData = {
-            subAgentId: subAgentRequest.id,
+            agentName: params.agent.Name,
             subAgentName: subAgentRequest.name,
             message: subAgentRequest.message,
             terminateAfter: subAgentRequest.terminateAfter,
             conversationMessages: params.conversationMessages,
-            parentAgentHierarchy: this._runContext?.agentHierarchy
+            parentAgentHierarchy: this._agentHierarchy
         };
         
-        const stepEntity = await this.createStepEntity('subagent', `Execute Sub-Agent: ${subAgentRequest.name}`, params.contextUser, subAgentRequest.id, inputData);
+        // Get sub-agent entity to access payload paths
+        const subAgentEntity = AIEngine.Instance.Agents.find(a => a.Name === subAgentRequest.name &&
+                                                            a.ParentID === params.agent.ID);
+        if (!subAgentEntity) {
+            throw new Error(`Sub-agent '${subAgentRequest.name}' not found`);
+        }
+        const stepEntity = await this.createStepEntity('Sub-Agent', `Execute Sub-Agent: ${subAgentRequest.name}`, params.contextUser, subAgentEntity.ID, inputData);
         
         try {
-            // Execute sub-agent with cancellation and streaming support
-            const subAgentResult = await this.ExecuteSubAgent(
-                params,
-                subAgentRequest
+            // Parse payload access paths
+            let downstreamPaths: string[] = ['*'];
+            let upstreamPaths: string[] = ['*'];
+            
+            try {
+                // Note: TypeScript errors on PayloadDownstreamPaths/PayloadUpstreamPaths are expected
+                // until CodeGen runs after the migration to add these fields to AIAgentEntity
+                if ((subAgentEntity as any).PayloadDownstreamPaths) {
+                    downstreamPaths = JSON.parse((subAgentEntity as any).PayloadDownstreamPaths);
+                }
+                if ((subAgentEntity as any).PayloadUpstreamPaths) {
+                    upstreamPaths = JSON.parse((subAgentEntity as any).PayloadUpstreamPaths);
+                }
+            } catch (parseError) {
+                this.logError(`Failed to parse payload paths for sub-agent ${subAgentRequest.name}: ${parseError.message}`, {
+                    category: 'SubAgentExecution',
+                    metadata: {
+                        agentName: params.agent.Name,
+                        subAgentName: subAgentRequest.name,
+                        subAgentId: subAgentEntity.ID,
+                        downstreamPaths: (subAgentEntity as any).PayloadDownstreamPaths,
+                        upstreamPaths: (subAgentEntity as any).PayloadUpstreamPaths
+                    }
+                });
+            }
+            
+            // Extract only allowed downstream payload
+            const downstreamPayload = this._payloadManager.extractDownstreamPayload(
+                subAgentRequest.name,
+                previousDecision.payload,
+                downstreamPaths
             );
             
+            stepEntity.PayloadAtStart = JSON.stringify(previousDecision.payload);
+
+            // Execute sub-agent with filtered payload
+            const subAgentResult = await this.ExecuteSubAgent(
+                params,
+                subAgentRequest,
+                subAgentEntity,
+                stepEntity,
+                downstreamPayload
+            );
+            
+            // Merge upstream changes back into parent payload
+            const mergedPayload = this._payloadManager.mergeUpstreamPayload(
+                subAgentRequest.name,
+                previousDecision.payload,
+                subAgentResult.payload,
+                upstreamPaths
+            );
+
             // Update step entity with AIAgentRun ID if available
             if (subAgentResult.agentRun?.ID) {
                 stepEntity.TargetLogID = subAgentResult.agentRun.ID;
-                await stepEntity.Save();
+                // Set the SubAgentRun property for hierarchical tracking
+                stepEntity.SubAgentRun = subAgentResult.agentRun;
+                stepEntity.PayloadAtEnd = JSON.stringify(mergedPayload);
+                // saving happens later by calling finalizeStepEntity()
             }
             
             // Check for cancellation after sub-agent execution
@@ -1479,65 +1559,39 @@ export class BaseAgent {
                 throw new Error('Cancelled during sub-agent execution');
             }
             
-            // Create sub-agent execution result
-            const executionResult: SubAgentExecutionResult = {
-                type: 'sub-agent',
-                subAgentId: subAgentRequest.id,
-                subAgentName: subAgentRequest.name,
-                result: subAgentResult
-            };
-            
             // Store sub-agent run for complete tracking
             this._subAgentRuns.push(subAgentResult);
             
             // Determine if we should terminate after sub-agent
             const shouldTerminate = subAgentRequest.terminateAfter;
             
-            // Create next step decision
-            const nextStepType = subAgentResult.returnValue?.step || 'retry'; 
-            const nextStepDecision: NextStepDecision = {
-                decision: shouldTerminate ? 'success' : 'retry',
-                reasoning: shouldTerminate ? 'Sub-agent execution completed, terminating as requested' : 'Sub-agent completed, continuing execution',
-                nextStepDetails: { type: nextStepType, returnValue: subAgentResult.returnValue }
-            };
-            
-            // Add to execution chain
-            this._executionChain.push({
-                stepEntity,
-                executionType: 'sub-agent',
-                executionResult,
-                nextStepDecision,
-                startTime,
-                endTime: new Date(),
-                durationMs: new Date().getTime() - startTime.getTime()
-            });
-            
             // Prepare output data
             const outputData = {
                 subAgentResult: {
                     success: subAgentResult.success,
-                    finalStep: subAgentResult.finalStep,
-                    returnValue: subAgentResult.returnValue,
-                    errorMessage: subAgentResult.errorMessage,
+                    finalStep: subAgentResult.agentRun?.FinalStep,
+                    payload: subAgentResult.payload,
+                    errorMessage: subAgentResult.agentRun?.ErrorMessage,
                     agentRunId: subAgentResult.agentRun?.ID,
-                    stepCount: this.countStepsInTree(subAgentResult.executionTree)
+                    stepCount: subAgentResult.agentRun?.Steps?.length || 0
                 },
                 shouldTerminate: shouldTerminate,
-                nextStep: nextStepDecision.decision
+                nextStep: shouldTerminate ? 'success' : 'retry'
             };
-            
+
             // Finalize step entity
             await this.finalizeStepEntity(stepEntity, subAgentResult.success, 
-                subAgentResult.errorMessage, outputData);
+                subAgentResult.agentRun?.ErrorMessage, outputData);
             
             // Build a clean summary of sub-agent result
             const subAgentSummary = {
+                agentName: params.agent.Name,
                 subAgentName: subAgentRequest.name,
-                subAgentId: subAgentRequest.id,
+                subAgentId: subAgentEntity.ID,
                 success: subAgentResult.success,
-                finalStep: subAgentResult.finalStep,
-                returnValue: subAgentResult.returnValue,
-                errorMessage: subAgentResult.errorMessage || null
+                finalStep: subAgentResult.agentRun?.FinalStep,
+                payload: subAgentResult.payload,
+                errorMessage: subAgentResult.agentRun?.ErrorMessage || null
             };
             
             // Add user message with the sub-agent results
@@ -1550,14 +1604,28 @@ export class BaseAgent {
                 content: resultMessage
             });
             
+            // Update the agent run's current payload with the merged result
+            if (this._agentRun) {
+                this._agentRun.FinalPayloadObject = mergedPayload;
+            }
+            
             return { 
                 ...subAgentResult, 
-                step: subAgentResult.success ? 'success' : 'failed', 
-                terminate: shouldTerminate 
+                step: subAgentResult.success ? 'Success' : 'Failed', 
+                terminate: shouldTerminate,
+                payload: mergedPayload 
             };            
         } catch (error) {
             await this.finalizeStepEntity(stepEntity, false, error.message);
-            throw error;
+
+            // we had an error, don't throw the exception as that will kill our overall execution/run
+            // instead retrun a helpful message in our return value that the parent loop can review and 
+            // adjust
+            return {
+                errorMessage: `Sub-agent execution failed: ${(error as Error).message}`,
+                step: 'Failed',
+                terminate: false,
+            };
         }
     }
 
@@ -1568,38 +1636,24 @@ export class BaseAgent {
      */
     private async executeActionsStep(
         params: ExecuteAgentParams,
-        actions: AgentAction[]
+        previousDecision: BaseAgentNextStep
     ): Promise<BaseAgentNextStep> {
-        
-        // Check for cancellation before starting
-        if (params.cancellationToken?.aborted) {
-            throw new Error('Cancelled before action execution');
-        }
-
-        // Report action execution progress with markdown formatting for parameters
-        let progressMessage: string;
-        if (actions.length === 1) {
-            const action = actions[0];
-            progressMessage = `Executing action: **${action.name}**`;
-            
-            // Add parameters if they exist
-            if (action.params && Object.keys(action.params).length > 0) {
-                const paramsList = Object.entries(action.params)
-                    .map(([key, value]) => {
-                        const displayValue = typeof value === 'object' 
-                            ? JSON.stringify(value, null, 2) 
-                            : String(value);
-                        return `  - \`${key}\`: ${displayValue}`;
-                    })
-                    .join('\n');
-                progressMessage += `\n${paramsList}`;
+        try {
+            const actions: AgentAction[] = previousDecision.actions || [];
+            // Check for cancellation before starting
+            if (params.cancellationToken?.aborted) {
+                throw new Error('Cancelled before action execution');
             }
-        } else {
-            progressMessage = `Executing ${actions.length} actions:`;
-            actions.forEach(action => {
-                progressMessage += `\n\n• **${action.name}**`;
-                if (action.params && Object.keys(action.params).length > 0) {
-                    const paramsList = Object.entries(action.params)
+
+            // Report action execution progress with markdown formatting for parameters
+            let progressMessage: string;
+            if (actions.length === 1) {
+                const aa = actions[0];
+                progressMessage = `Executing action: **${aa.name}**`;
+                
+                // Add parameters if they exist
+                if (aa.params && Object.keys(aa.params).length > 0) {
+                    const paramsList = Object.entries(aa.params)
                         .map(([key, value]) => {
                             const displayValue = typeof value === 'object' 
                                 ? JSON.stringify(value, null, 2) 
@@ -1609,140 +1663,147 @@ export class BaseAgent {
                         .join('\n');
                     progressMessage += `\n${paramsList}`;
                 }
-            });
-        }
-            
-        params.onProgress?.({
-            step: 'action_execution',
-            percentage: 50,
-            message: this.formatHierarchicalMessage(progressMessage),
-            metadata: { 
-                actionCount: actions.length,
-                actionNames: actions.map(a => a.name)
-            },
-            displayMode: 'live' // Only show in live mode
-        });
-        
-        // Add assistant message indicating we're executing actions with more detail
-        const actionMessage = actions.length === 1 
-            ? `I'm executing the "${actions[0].name}" action...`
-            : `I'm executing ${actions.length} actions to gather the information needed:\n${actions.map(a => `• ${a.name}`).join('\n')}`;
-        
-        params.conversationMessages.push({
-            role: 'assistant',
-            content: actionMessage
-        });
-        
-        // Execute all actions in parallel
-        const actionPromises = actions.map(async (action) => {
-            const startTime = new Date();
-            const stepEntity = await this.createStepEntity('action', `Execute Action: ${action.name}`, params.contextUser, action.id);
-            let actionResult;
-            try {
-                // Execute the action
-                actionResult = await this.ExecuteSingleAction(params, action, params.contextUser);
-                
-                // Update step entity with ActionExecutionLog ID if available
-                if (actionResult.LogEntry?.ID) {
-                    stepEntity.TargetLogID = actionResult.LogEntry.ID;
-                    await stepEntity.Save();
-                }
-                
-                // Create action execution result
-                const executionResult: ActionExecutionResult = {
-                    type: 'action',
-                    actionId: action.id,
-                    actionName: action.name,
-                    result: actionResult
-                };
-                
-                // Create next step decision
-                const nextStepDecision: NextStepDecision = {
-                    decision: 'retry',
-                    reasoning: 'Action completed successfully',
-                    nextStepDetails: undefined
-                };
-                
-                // Add to execution chain
-                this._executionChain.push({
-                    stepEntity,
-                    executionType: 'action',
-                    executionResult,
-                    nextStepDecision,
-                    startTime,
-                    endTime: new Date(),
-                    durationMs: new Date().getTime() - startTime.getTime()
-                });
-                
-                // Prepare output data with action result
-                const outputData = {
-                    actionResult: {
-                        success: actionResult.Success,
-                        resultCode: actionResult.Result?.ResultCode,
-                        message: actionResult.Message,
-                        parameters: actionResult.Params
+            } else {
+                progressMessage = `Executing ${actions.length} actions:`;
+                actions.forEach(aa => {
+                    progressMessage += `\n\n• **${aa.name}**`;
+                    if (aa.params && Object.keys(aa.params).length > 0) {
+                        const paramsList = Object.entries(aa.params)
+                            .map(([key, value]) => {
+                                const displayValue = typeof value === 'object' 
+                                    ? JSON.stringify(value, null, 2) 
+                                    : String(value);
+                                return `  - \`${key}\`: ${displayValue}`;
+                            })
+                            .join('\n');
+                        progressMessage += `\n${paramsList}`;
                     }
-                };
-                
-                // Finalize step entity with output data
-                await this.finalizeStepEntity(stepEntity, actionResult.Success, 
-                    actionResult.Success ? undefined : actionResult.Message, outputData);
-                
-                return { success: true, result: actionResult, action, stepEntity };
-                
-            } catch (error) {
-                await this.finalizeStepEntity(stepEntity, false, error.message);
-
-                return { success: false, result: actionResult, error: error.message, action, stepEntity };
+                });
             }
-        });
-        
-        // Wait for all actions to complete
-        const actionResults = await Promise.all(actionPromises);
-        
-        // Check for cancellation after actions complete
-        if (params.cancellationToken?.aborted) {
-            throw new Error('Cancelled after action execution');
-        }
-        
-        // Build a clean summary of action results
-        const actionSummaries = actionResults.map(result => {
-            const actionResult = result.success ? result.result : null;
+                
+            params.onProgress?.({
+                step: 'action_execution',
+                percentage: 50,
+                message: this.formatHierarchicalMessage(progressMessage),
+                metadata: { 
+                    actionCount: actions.length,
+                    actionNames: actions.map(a => a.name)
+                },
+                displayMode: 'live' // Only show in live mode
+            });
             
+            // Add assistant message indicating we're executing actions with more detail
+            const actionMessage = actions.length === 1 
+                ? `I'm executing the "${actions[0].name}" action...`
+                : `I'm executing ${actions.length} actions to gather the information needed:\n${actions.map(a => `• ${a.name}`).join('\n')}`;
+            
+            params.conversationMessages.push({
+                role: 'assistant',
+                content: actionMessage
+            });
+            
+            const actionEngine = ActionEngineServer.Instance;
+            const agentActions = AIEngine.Instance.AgentActions.filter(aa => aa.AgentID === params.agent.ID);
+
+            // Execute all actions in parallel
+            const actionPromises = actions.map(async (aa) => {
+                // get all agent actions first for this agent
+                const actionEntity = actionEngine.Actions.find(a => a.Name === aa.name && agentActions.some(aa => aa.ActionID === a.ID));
+                if (!actionEntity) {
+                    throw new Error(`Action "${aa.name}" Not Found for Agent "${params.agent.Name}"`);
+                }
+
+                const stepEntity = await this.createStepEntity('Actions', `Execute Action: ${aa.name}`, params.contextUser, actionEntity.ID);
+                let actionResult;
+                try {
+                    // Execute the action
+                    actionResult = await this.ExecuteSingleAction(params, aa, actionEntity, params.contextUser);
+                    
+                    // Update step entity with ActionExecutionLog ID if available
+                    if (actionResult.LogEntry?.ID) {
+                        stepEntity.TargetLogID = actionResult.LogEntry.ID;
+                        await stepEntity.Save();
+                    }
+                    
+                    // Prepare output data with action result
+                    const outputData = {
+                        actionResult: {
+                            success: actionResult.Success,
+                            resultCode: actionResult.Result?.ResultCode,
+                            message: actionResult.Message,
+                            parameters: actionResult.Params
+                        }
+                    };
+                    
+                    // Finalize step entity with output data
+                    await this.finalizeStepEntity(stepEntity, actionResult.Success, 
+                        actionResult.Success ? undefined : actionResult.Message, outputData);
+                    
+                    return { success: true, result: actionResult, action: aa, actionEntity, stepEntity };
+                    
+                } catch (error) {
+                    await this.finalizeStepEntity(stepEntity, false, error.message);
+
+                    return { success: false, result: actionResult, error: error.message, action: aa, actionEntity, stepEntity };
+                }
+            });
+            
+            // Wait for all actions to complete
+            const actionResults = await Promise.all(actionPromises);
+            
+            // Check for cancellation after actions complete
+            if (params.cancellationToken?.aborted) {
+                throw new Error('Cancelled after action execution');
+            }
+            
+            // Build a clean summary of action results
+            const actionSummaries = actionResults.map(result => {
+                const actionResult = result.success ? result.result : null;
+                
+                return {
+                    actionName: result.action.name,
+                    actionId: result.actionEntity?.ID,
+                    params: result.result?.Params || {},
+                    success: result.success,
+                    resultCode: actionResult?.Result?.ResultCode || (result.success ? 'SUCCESS' : 'ERROR'),
+                    message: result.success ? actionResult?.Message || 'Action completed' : result.error
+                };
+            });
+            
+            // Check if any actions failed
+            const failedActions = actionSummaries.filter(a => !a.success);
+            
+            // Add user message with the results
+            const resultsMessage = failedActions.length > 0
+                ? `Action results (${failedActions.length} failed):\n${JSON.stringify(actionSummaries, null, 2)}`
+                : `Action results (all succeeded):\n${JSON.stringify(actionSummaries, null, 2)}`;
+                
+            params.conversationMessages.push({
+                role: 'user',
+                content: resultsMessage
+            });
+            
+            // After actions complete, we need to process the results
+            // The retry step is used to re-execute the prompt with the action results
+            // This allows the agent to analyze the results and determine what to do next
             return {
-                actionName: result.action.name,
-                actionId: result.action.id,
-                params: result.result?.Params || {},
-                success: result.success,
-                resultCode: actionResult?.Result?.ResultCode || (result.success ? 'SUCCESS' : 'ERROR'),
-                message: result.success ? actionResult?.Message || 'Action completed' : result.error
+                terminate: false,
+                step: 'Retry',
+                payload: previousDecision?.payload || null,
+                priorStepResult: actionSummaries,
+                retryReason: failedActions.length > 0 
+                    ? `Processing results with ${failedActions.length} failed action(s): ${failedActions.map(a => a.actionName).join(', ')}`
+                    : `Analyzing results from ${actionSummaries.length} completed action(s) to formulate response`
             };
-        });
-        
-        // Check if any actions failed
-        const failedActions = actionSummaries.filter(a => !a.success);
-        
-        // Add user message with the results
-        const resultsMessage = failedActions.length > 0
-            ? `Action results (${failedActions.length} failed):\n${JSON.stringify(actionSummaries, null, 2)}`
-            : `Action results (all succeeded):\n${JSON.stringify(actionSummaries, null, 2)}`;
-            
-        params.conversationMessages.push({
-            role: 'user',
-            content: resultsMessage
-        });
-        
-        // After actions complete, we need to process the results
-        // The retry step is used to re-execute the prompt with the action results
-        // This allows the agent to analyze the results and determine what to do next
-        return {
-            terminate: false,
-            step: 'retry',
-            returnValue: actionSummaries,
-            retryReason: failedActions.length > 0 
-                ? `Processing results with ${failedActions.length} failed action(s): ${failedActions.map(a => a.actionName).join(', ')}`
-                : `Analyzing results from ${actionSummaries.length} completed action(s) to formulate response`
-        };
+        }
+        catch (e) {
+            return {
+                terminate: false,
+                step: 'Retry',
+                payload: e && e.message ? e.message : e ? e : 'Unknown error execution actions',
+                retryReason: 'Error while processing actions, retry'
+            };
+        }
     }
 
     /**
@@ -1752,40 +1813,19 @@ export class BaseAgent {
      */
     private async executeChatStep(
         params: ExecuteAgentParams,
-        userMessage: string
+        previousDecision: BaseAgentNextStep
     ): Promise<BaseAgentNextStep> {
-        // Chat functionality would need to be implemented based on the specific chat system
-        // For now, we'll just create a failed step
-        const startTime = new Date();
-        const stepEntity = await this.createStepEntity('chat', 'User Interaction', params.contextUser);
-        
-        const executionResult: ChatExecutionResult = {
-            type: 'chat',
-            userMessage,
-            result: { success: false, continueExecution: false }
-        };
-        
-        const nextStepDecision: NextStepDecision = {
-            decision: 'failed',
-            reasoning: 'Chat functionality not implemented in base agent'
-        };
-        
-        this._executionChain.push({
-            stepEntity,
-            executionType: 'chat',
-            executionResult,
-            nextStepDecision,
-            startTime,
-            endTime: new Date(),
-            durationMs: new Date().getTime() - startTime.getTime()
-        });
+        const stepEntity = await this.createStepEntity('Chat', 'User Interaction', params.contextUser);
         
         await this.finalizeStepEntity(stepEntity, false, 'Chat not implemented');
         
         return { 
-            step: 'chat',
+            step: 'Chat',
             terminate: true,
-            returnValue: userMessage,
+            priorStepResult: previousDecision.message,
+            reasoning: previousDecision.reasoning,
+            confidence: previousDecision.confidence,
+            payload: previousDecision.payload,
         };
     }
 
@@ -1813,10 +1853,7 @@ export class BaseAgent {
         
         return {
             success: false,
-            finalStep: 'failed',
-            errorMessage,
-            agentRun: this._agentRun!,
-            executionTree: this.buildExecutionTree()
+            agentRun: this._agentRun!
         };
     }
 
@@ -1846,12 +1883,7 @@ export class BaseAgent {
         
         return {
             success: false,
-            finalStep: 'failed',
-            errorMessage: message,
-            cancelled: true,
-            cancellationReason: 'user_requested',
-            agentRun: this._agentRun!,
-            executionTree: this.buildExecutionTree()
+            agentRun: this._agentRun!
         };
     }
 
@@ -1860,12 +1892,17 @@ export class BaseAgent {
      * 
      * @private
      */
-    private async finalizeAgentRun<R>(finalStep: BaseAgentNextStep['step'], returnValue?: R, contextUser?: UserInfo): Promise<ExecuteAgentResult<R>> {
+    private async finalizeAgentRun<P>(finalStep: BaseAgentNextStep, payload?: P, contextUser?: UserInfo): Promise<ExecuteAgentResult<P>> {
         if (this._agentRun) {
             this._agentRun.Status = 'Completed';
             this._agentRun.CompletedAt = new Date();
-            this._agentRun.Success = finalStep === 'success';
-            this._agentRun.Result = returnValue ? JSON.stringify(returnValue) : null;
+            this._agentRun.Success = finalStep.step === 'Success' || finalStep.step === 'Chat';
+            this._agentRun.Result = payload ? JSON.stringify(payload) : null;
+            this._agentRun.FinalStep = finalStep.step;
+            this._agentRun.Message = finalStep.message;
+
+            // Set the FinalPayloadObject - this will automatically stringify for the DB
+            this._agentRun.FinalPayloadObject = payload;
             
             // Calculate total tokens from all prompts and sub-agents
             const tokenStats = this.calculateTokenStats();
@@ -1874,38 +1911,22 @@ export class BaseAgent {
             this._agentRun.TotalCompletionTokensUsed = tokenStats.completionTokens;
             this._agentRun.TotalCost = tokenStats.totalCost;
             
-            await this._agentRun.Save();
+            const ok = await this._agentRun.Save();
+            if (!ok) {
+                LogError(`Failed to finalize agent run ${this._agentRun.ID}`);
+            }
         }
         
         return {
-            success: finalStep === 'success' || finalStep === 'chat',
-            finalStep,
-            returnValue,
-            agentRun: this._agentRun!,
-            executionTree: this.buildExecutionTree()
+            success: finalStep.step === 'Success' || finalStep.step === 'Chat',
+            payload,
+            agentRun: this._agentRun!
         };
     }
 
-    /**
-     * Counts the total number of steps in an execution tree.
-     * 
-     * @private
-     * @param {ExecutionNode[]} nodes - The execution tree nodes
-     * @returns {number} The total count of steps
-     */
-    private countStepsInTree(nodes: ExecutionNode[]): number {
-        let count = 0;
-        for (const node of nodes) {
-            count++;
-            if (node.children && node.children.length > 0) {
-                count += this.countStepsInTree(node.children);
-            }
-        }
-        return count;
-    }
 
     /**
-     * Calculate total token statistics from execution chain.
+     * Calculate total token statistics from the agent run's persisted steps.
      * 
      * @returns Token statistics including totals and costs
      * @private
@@ -1916,232 +1937,26 @@ export class BaseAgent {
         let completionTokens = 0;
         let totalCost = 0;
 
-        // Iterate through execution chain to sum up tokens
-        for (const step of this._executionChain) {
-            if (step.executionType === 'prompt' && step.executionResult.type === 'prompt') {
-                const promptResult = step.executionResult as PromptExecutionResult;
-                if (promptResult.result) {
-                    totalTokens += promptResult.result.tokensUsed || 0;
-                    promptTokens += promptResult.result.promptTokens || 0;
-                    completionTokens += promptResult.result.completionTokens || 0;
-                    // Use the TotalCost from the promptRun entity which includes proper cost calculation
-                    totalCost += promptResult.result.promptRun?.TotalCost || 0;
-                }
-            } else if (step.executionType === 'sub-agent' && step.executionResult.type === 'sub-agent') {
-                const subAgentResult = step.executionResult as SubAgentExecutionResult;
-                if (subAgentResult.result?.agentRun) {
+        // Iterate through the agent run's steps to sum up tokens
+        if (this._agentRun?.Steps) {
+            for (const step of this._agentRun.Steps) {
+                if (step.StepType === 'Prompt' && step.PromptRun) {
+                    // Add tokens from prompt runs
+                    totalTokens += step.PromptRun.TokensUsedRollup || 0;
+                    promptTokens += step.PromptRun.TokensPromptRollup || 0;  
+                    completionTokens += step.PromptRun.TokensCompletionRollup || 0;
+                    totalCost += step.PromptRun.TotalCost || 0;
+                } else if (step.StepType === 'Sub-Agent' && step.SubAgentRun) {
                     // Add tokens from sub-agent runs (these should already be calculated recursively)
-                    totalTokens += subAgentResult.result.agentRun.TotalTokensUsed || 0;
-                    promptTokens += subAgentResult.result.agentRun.TotalPromptTokensUsed || 0;
-                    completionTokens += subAgentResult.result.agentRun.TotalCompletionTokensUsed || 0;
-                    totalCost += subAgentResult.result.agentRun.TotalCost || 0;
+                    totalTokens += step.SubAgentRun.TotalTokensUsed || 0;
+                    promptTokens += step.SubAgentRun.TotalPromptTokensUsed || 0;
+                    completionTokens += step.SubAgentRun.TotalCompletionTokensUsed || 0;
+                    totalCost += step.SubAgentRun.TotalCost || 0;
                 }
             }
         }
 
         return { totalTokens, promptTokens, completionTokens, totalCost };
-    }
-
-    /**
-     * Builds the hierarchical execution tree from flat steps and sub-agent runs.
-     * 
-     * @private
-     * @returns {ExecutionNode[]} The hierarchical execution tree
-     */
-    private buildExecutionTree(): ExecutionNode[] {
-        const executionTree: ExecutionNode[] = [];
-        
-        // Create a combined list of all events (progress and execution) sorted by time
-        const allEvents: any[] = [];
-        
-        // Track the highest step number used for progress events
-        let maxProgressStepNumber = 0;
-        
-        // Add progress events
-        for (const progressStep of this._allProgressSteps) {
-            allEvents.push({
-                type: 'progress',
-                timestamp: progressStep.timestamp,
-                data: progressStep
-            });
-        }
-        
-        // Add execution chain events
-        for (const chainStep of this._executionChain) {
-            allEvents.push({
-                type: 'execution',
-                timestamp: chainStep.startTime,
-                data: chainStep
-            });
-        }
-        
-        // Sort by timestamp
-        allEvents.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-        
-        // Build the tree
-        for (const event of allEvents) {
-            if (event.type === 'progress') {
-                // Create a lightweight node for progress events
-                const progressData = event.data;
-                maxProgressStepNumber++;
-                const progressNode: ExecutionNode = {
-                    step: {
-                        ID: `progress-${event.timestamp.getTime()}`,
-                        StepNumber: maxProgressStepNumber,
-                        StepName: progressData.message,
-                        StepType: progressData.step || 'progress',
-                        Status: 'Completed',
-                        StartedAt: event.timestamp,
-                        CompletedAt: event.timestamp
-                    } as AIAgentRunStepEntity,
-                    inputData: null,
-                    outputData: { 
-                        percentage: progressData.percentage,
-                        metadata: progressData.metadata 
-                    },
-                    executionType: progressData.step || 'progress',
-                    startTime: event.timestamp,
-                    endTime: event.timestamp,
-                    durationMs: 0,
-                    children: [],
-                    depth: progressData.depth || this._runContext?.depth || 0,
-                    parentStepId: null,
-                    agentHierarchy: progressData.agentHierarchy || this._runContext?.agentHierarchy || []
-                };
-                executionTree.push(progressNode);
-            } else {
-                // Process execution chain step
-                const chainStep = event.data;
-                const stepEntity = chainStep.stepEntity;
-                
-                // Parse input/output data if available
-                let inputData = null;
-                let outputData = null;
-                try {
-                    if (stepEntity.InputData) {
-                        inputData = JSON.parse(stepEntity.InputData);
-                    }
-                    if (stepEntity.OutputData) {
-                        outputData = JSON.parse(stepEntity.OutputData);
-                    }
-                } catch (e) {
-                    // If parsing fails, use raw data
-                    inputData = stepEntity.InputData;
-                    outputData = stepEntity.OutputData;
-                }
-                
-                const node: ExecutionNode = {
-                    step: stepEntity,
-                    inputData,
-                    outputData,
-                    executionType: chainStep.executionType,
-                    startTime: chainStep.startTime,
-                    endTime: chainStep.endTime,
-                    durationMs: chainStep.durationMs,
-                    nextStepDecision: chainStep.nextStepDecision,
-                    children: [],
-                    depth: this._runContext?.depth || 0,
-                    parentStepId: null,
-                    agentHierarchy: this._runContext?.agentHierarchy || []
-                };
-                
-                // If this is a sub-agent step, add its execution tree as children
-                if (chainStep.executionType === 'sub-agent' && chainStep.executionResult?.type === 'sub-agent') {
-                    const subAgentResult = (chainStep.executionResult as SubAgentExecutionResult).result;
-                    if (subAgentResult.executionTree) {
-                        // Update depth and parent info for all sub-agent nodes
-                        node.children = subAgentResult.executionTree.map(childNode => ({
-                            ...childNode,
-                            parentStepId: stepEntity.ID,
-                            depth: (this._runContext?.depth || 0) + 1
-                        }));
-                        
-                        // Sort children by StepNumber recursively
-                        this.sortExecutionTreeByStepNumber(node.children);
-                    }
-                }
-                
-                executionTree.push(node);
-            }
-        }
-        
-        // Sort the top-level tree by StepNumber
-        this.sortExecutionTreeByStepNumber(executionTree);
-        
-        return executionTree;
-    }
-    
-    /**
-     * Sorts an execution tree by StepNumber at each level recursively.
-     * 
-     * @private
-     * @param {ExecutionNode[]} nodes - The nodes to sort
-     */
-    private sortExecutionTreeByStepNumber(nodes: ExecutionNode[]): void {
-        // Sort by StepNumber
-        nodes.sort((a, b) => {
-            const aStepNumber = a.step?.StepNumber || 0;
-            const bStepNumber = b.step?.StepNumber || 0;
-            return aStepNumber - bStepNumber;
-        });
-        
-        // Recursively sort children
-        for (const node of nodes) {
-            if (node.children && node.children.length > 0) {
-                this.sortExecutionTreeByStepNumber(node.children);
-            }
-        }
-    }
-
-    /**
-     * Gets human-readable reasoning for a next step decision.
-     * 
-     * @private
-     */
-    private getNextStepReasoning(nextStep: BaseAgentNextStep): string {
-        switch (nextStep.step) {
-            case 'success':
-                return 'Agent completed successfully';
-            case 'failed':
-                return `Agent failed: ${nextStep.errorMessage || 'Unknown error'}`;
-            case 'retry':
-                return nextStep.retryReason || 'Retrying with additional context';
-            case 'sub-agent':
-                return `Invoking sub-agent: ${nextStep.subAgent?.name}`;
-            case 'actions':
-                return `Executing ${nextStep.actions?.length || 0} action(s)`;
-            case 'chat':
-                return 'User interaction required';
-            default:
-                return 'Unknown next step';
-        }
-    }
-
-    /**
-     * Gets next step details for a decision.
-     * 
-     * @private
-     */
-    private getNextStepDetails(nextStep: BaseAgentNextStep): NextStepDetails | undefined {
-        switch (nextStep.step) {
-            case 'success':
-            case 'failed':
-                return { type: 'complete', returnValue: nextStep.returnValue };
-            case 'retry':
-                return { 
-                    type: 'retry', 
-                    retryReason: nextStep.retryReason || '', 
-                    retryInstructions: nextStep.retryInstructions || '' 
-                };
-            case 'sub-agent':
-                return nextStep.subAgent ? { type: 'sub-agent', subAgent: nextStep.subAgent } : undefined;
-            case 'actions':
-                return nextStep.actions ? { type: 'action', actions: nextStep.actions } : undefined;
-            case 'chat':
-                return { type: 'chat', message: nextStep.userMessage || '' };
-            default:
-                return undefined;
-        }
     }
 }
 

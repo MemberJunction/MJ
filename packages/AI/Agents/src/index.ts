@@ -14,3 +14,4 @@ export * from './agent-types/loop-agent-response-type';
 export * from './base-agent';
 export * from './agent-types';
 export * from './AgentRunner';
+export * from './PayloadManager';

@@ -1,5 +1,66 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 2.60.0
+
+### Patch Changes
+
+- Updated dependencies [b5fa80a]
+- Updated dependencies [e30ee12]
+- Updated dependencies [e512e4e]
+  - @memberjunction/core@2.60.0
+  - @memberjunction/core-entities@2.60.0
+  - @memberjunction/ng-ask-skip@2.60.0
+  - @memberjunction/ng-auth-services@2.60.0
+  - @memberjunction/ng-base-forms@2.60.0
+  - @memberjunction/ng-compare-records@2.60.0
+  - @memberjunction/ng-dashboards@2.60.0
+  - @memberjunction/ng-entity-form-dialog@2.60.0
+  - @memberjunction/ng-explorer-settings@2.60.0
+  - @memberjunction/ng-record-changes@2.60.0
+  - @memberjunction/ng-shared@2.60.0
+  - @memberjunction/ng-user-view-grid@2.60.0
+  - @memberjunction/ng-user-view-properties@2.60.0
+  - @memberjunction/ng-container-directives@2.60.0
+  - @memberjunction/ng-file-storage@2.60.0
+  - @memberjunction/ng-query-grid@2.60.0
+  - @memberjunction/ng-record-selector@2.60.0
+  - @memberjunction/ng-resource-permissions@2.60.0
+  - @memberjunction/ng-skip-chat@2.60.0
+  - @memberjunction/communication-types@2.60.0
+  - @memberjunction/entity-communications-client@2.60.0
+  - @memberjunction/templates-base-types@2.60.0
+  - @memberjunction/ng-tabstrip@2.60.0
+  - @memberjunction/global@2.60.0
+
+## 2.59.0
+
+### Patch Changes
+
+- @memberjunction/ng-dashboards@2.59.0
+- @memberjunction/ng-ask-skip@2.59.0
+- @memberjunction/ng-auth-services@2.59.0
+- @memberjunction/ng-base-forms@2.59.0
+- @memberjunction/ng-compare-records@2.59.0
+- @memberjunction/ng-entity-form-dialog@2.59.0
+- @memberjunction/ng-explorer-settings@2.59.0
+- @memberjunction/ng-record-changes@2.59.0
+- @memberjunction/ng-shared@2.59.0
+- @memberjunction/ng-user-view-grid@2.59.0
+- @memberjunction/ng-user-view-properties@2.59.0
+- @memberjunction/ng-container-directives@2.59.0
+- @memberjunction/ng-file-storage@2.59.0
+- @memberjunction/ng-query-grid@2.59.0
+- @memberjunction/ng-record-selector@2.59.0
+- @memberjunction/ng-resource-permissions@2.59.0
+- @memberjunction/ng-skip-chat@2.59.0
+- @memberjunction/ng-tabstrip@2.59.0
+- @memberjunction/communication-types@2.59.0
+- @memberjunction/entity-communications-client@2.59.0
+- @memberjunction/core@2.59.0
+- @memberjunction/core-entities@2.59.0
+- @memberjunction/global@2.59.0
+- @memberjunction/templates-base-types@2.59.0
+
 ## 2.58.0
 
 ### Patch Changes

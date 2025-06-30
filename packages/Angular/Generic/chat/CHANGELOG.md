@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/ng-chat
 
+## 2.60.0
+
+### Patch Changes
+
+- Updated dependencies [b5fa80a]
+- Updated dependencies [e512e4e]
+  - @memberjunction/core@2.60.0
+  - @memberjunction/ng-container-directives@2.60.0
+
+## 2.59.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.59.0
+- @memberjunction/core@2.59.0
+
 ## 2.58.0
 
 ### Patch Changes

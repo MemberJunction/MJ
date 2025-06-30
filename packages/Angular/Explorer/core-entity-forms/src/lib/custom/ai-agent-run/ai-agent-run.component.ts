@@ -9,6 +9,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { SharedService } from '@memberjunction/ng-shared';
 import { TimelineItem } from './ai-agent-run-timeline.component';
 import { AIAgentRunFormComponent } from '../../generated/Entities/AIAgentRun/aiagentrun.form.component';
+import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Runs') 
 @Component({
@@ -116,7 +117,29 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   
   getSelectedItemJson(): string {
     if (!this.selectedTimelineItem) return '{}';
-    return JSON.stringify(this.selectedTimelineItem.data.GetAll(), null, 2);
+    
+    // Get all the data from the entity
+    // first check to see if the item is an AIAgentRunStepEntity
+    let data;
+    if (this.selectedTimelineItem.data instanceof AIAgentRunStepEntity) {
+      // If it's a step entity, we need to get the full run data
+      data = this.selectedTimelineItem.data.GetAll();
+    }
+    else {
+      data = this.selectedTimelineItem.data;
+    }
+    
+    // Apply recursive JSON parsing to the entire data object with inline extraction
+    // This will handle any JSON strings regardless of property names
+    // and extract embedded JSON from text strings
+    const parseOptions: ParseJSONOptions = {
+      extractInlineJson: true,
+      maxDepth: 100,
+      debug: false // Disable debug logging - regex issue fixed
+    };
+    const parsedData = ParseJSONRecursive(data, parseOptions);
+    
+    return JSON.stringify(parsedData, null, 2);
   }
   
   getStatusIcon(status: string): string {
@@ -136,6 +159,64 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
       // Could show a toast notification here
     } catch (err) {
       console.error('Failed to copy to clipboard:', err);
+    }
+  }
+  
+  /**
+   * Get the Result field with recursive JSON parsing applied
+   */
+  get parsedResult(): string {
+    if (!this.record?.Result) return '';
+    
+    try {
+      // First, check if Result is a JSON string that needs to be parsed
+      let resultData = this.record.Result;
+      try {
+        // If Result is a JSON string, parse it first
+        resultData = JSON.parse(this.record.Result);
+      } catch {
+        // If it's not valid JSON, use it as-is
+        resultData = this.record.Result;
+      }
+      
+      const parseOptions: ParseJSONOptions = {
+        extractInlineJson: true,
+        maxDepth: 100,
+        debug: false // Disable debug logging - regex issue fixed
+      };
+      const parsed = ParseJSONRecursive(resultData, parseOptions);
+      return JSON.stringify(parsed, null, 2);
+    } catch (e) {
+      return this.record.Result;
+    }
+  }
+  
+  /**
+   * Get the Final Payload (state) field with recursive JSON parsing applied
+   */
+  get parsedFinalPayload(): string {
+    if (!this.record?.FinalPayload) return '';
+    
+    try {
+      // First, check if FinalPayload is a JSON string that needs to be parsed
+      let payloadData = this.record.FinalPayload;
+      try {
+        // If FinalPayload is a JSON string, parse it first
+        payloadData = JSON.parse(this.record.FinalPayload);
+      } catch {
+        // If it's not valid JSON, use it as-is
+        payloadData = this.record.FinalPayload;
+      }
+      
+      const parseOptions: ParseJSONOptions = {
+        extractInlineJson: true,
+        maxDepth: 100,
+        debug: false // Disable debug logging - regex issue fixed
+      };
+      const parsed = ParseJSONRecursive(payloadData, parseOptions);
+      return JSON.stringify(parsed, null, 2);
+    } catch (e) {
+      return this.record.FinalPayload;
     }
   }
 }

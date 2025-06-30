@@ -16,7 +16,7 @@ The `@memberjunction/global` library serves as the foundation for cross-componen
 - **Class Factory System** - Dynamic class registration and instantiation with inheritance support
 - **Event System** - RxJS-based event bus for component communication
 - **Object Caching** - In-memory object cache for application lifetime
-- **Utility Functions** - Common string manipulation, JSON parsing, and formatting utilities
+- **Utility Functions** - Common string manipulation, JSON parsing (including recursive nested JSON parsing), and formatting utilities
 
 ## Core Components
 
@@ -184,13 +184,41 @@ replaceAllSpaces('Hello World'); // "HelloWorld"
 ### JSON Utilities
 
 ```typescript
-import { CleanJSON, SafeJSONParse } from '@memberjunction/global';
+import { CleanJSON, SafeJSONParse, ParseJSONRecursive } from '@memberjunction/global';
 
 // Clean and extract JSON from markdown or mixed content
 const cleaned = CleanJSON('```json\n{"key": "value"}\n```');
 
 // Safe JSON parsing with error handling
 const parsed = SafeJSONParse<MyType>('{"key": "value"}', true);
+
+// Recursively parse JSON strings within objects
+const input = {
+  data: '{"nested": "{\\"deeply\\": \\"nested\\"}"}',
+  messages: '[{"content": "{\\"type\\": \\"greeting\\", \\"text\\": \\"Hello\\"}"}]'
+};
+const output = ParseJSONRecursive(input);
+// Returns: {
+//   data: { nested: { deeply: "nested" } },
+//   messages: [{ content: { type: "greeting", text: "Hello" } }]
+// }
+
+// Extract inline JSON from text strings
+const textWithJson = {
+  result: 'Action completed: {"status": "success", "count": 42}'
+};
+const extracted = ParseJSONRecursive(textWithJson, { extractInlineJson: true });
+// Returns: {
+//   result: "Action completed:",
+//   result_: { status: "success", count: 42 }
+// }
+
+// Control recursion depth and enable debugging
+const deeplyNested = ParseJSONRecursive(complexData, {
+  maxDepth: 50,        // Default: 100
+  extractInlineJson: true,  // Default: false
+  debug: true          // Default: false, logs parsing steps
+});
 ```
 
 ### HTML Conversion

@@ -1290,6 +1290,27 @@ export class AIAgentRun_ {
     @Field(() => Float, {nullable: true, description: `Total cost including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCost. For parent agents, this includes the sum of all descendant agent costs. Note: This assumes all costs are in the same currency for accurate rollup.`}) 
     TotalCostRollup?: number;
         
+    @Field({nullable: true, description: `Optional tracking of a specific conversation detail (e.g. a specific message) that spawned this agent run`}) 
+    @MaxLength(16)
+    ConversationDetailID?: string;
+        
+    @Field(() => Int, {nullable: true, description: `If a conversation detail spawned multiple agent runs, tracks the order of their spawn/execution`}) 
+    ConversationDetailSequence?: number;
+        
+    @Field({nullable: true, description: `Reason for cancellation if the agent run was cancelled`}) 
+    @MaxLength(60)
+    CancellationReason?: string;
+        
+    @Field({nullable: true, description: `The final step type that concluded the agent run`}) 
+    @MaxLength(60)
+    FinalStep?: string;
+        
+    @Field({nullable: true, description: `JSON serialization of the final Payload state at the end of the agent run`}) 
+    FinalPayload?: string;
+        
+    @Field({nullable: true, description: `Final message from the agent to the end user at the end of a run`}) 
+    Message?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -1377,6 +1398,24 @@ export class CreateAIAgentRunInput {
 
     @Field(() => Float, { nullable: true })
     TotalCostRollup: number | null;
+
+    @Field({ nullable: true })
+    ConversationDetailID: string | null;
+
+    @Field(() => Int, { nullable: true })
+    ConversationDetailSequence: number | null;
+
+    @Field({ nullable: true })
+    CancellationReason: string | null;
+
+    @Field({ nullable: true })
+    FinalStep: string | null;
+
+    @Field({ nullable: true })
+    FinalPayload: string | null;
+
+    @Field({ nullable: true })
+    Message: string | null;
 }
     
 
@@ -1444,6 +1483,24 @@ export class UpdateAIAgentRunInput {
 
     @Field(() => Float, { nullable: true })
     TotalCostRollup?: number | null;
+
+    @Field({ nullable: true })
+    ConversationDetailID?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    ConversationDetailSequence?: number | null;
+
+    @Field({ nullable: true })
+    CancellationReason?: string | null;
+
+    @Field({ nullable: true })
+    FinalStep?: string | null;
+
+    @Field({ nullable: true })
+    FinalPayload?: string | null;
+
+    @Field({ nullable: true })
+    Message?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -2122,6 +2179,12 @@ export class AIAgent_ {
     @MaxLength(100)
     ModelSelectionMode: string;
         
+    @Field({description: `JSON array of paths that define which parts of the payload should be sent downstream to sub-agents. Use ["*"] to send entire payload, or specify paths like ["customer.id", "campaign.*", "analysis.sentiment"]`}) 
+    PayloadDownstreamPaths: string;
+        
+    @Field({description: `JSON array of paths that define which parts of the payload sub-agents are allowed to write back upstream. Use ["*"] to allow all writes, or specify paths like ["analysis.results", "recommendations.*"]`}) 
+    PayloadUpstreamPaths: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -2221,6 +2284,12 @@ export class CreateAIAgentInput {
 
     @Field({ nullable: true })
     ModelSelectionMode?: string;
+
+    @Field({ nullable: true })
+    PayloadDownstreamPaths?: string;
+
+    @Field({ nullable: true })
+    PayloadUpstreamPaths?: string;
 }
     
 
@@ -2279,6 +2348,12 @@ export class UpdateAIAgentInput {
 
     @Field({ nullable: true })
     ModelSelectionMode?: string;
+
+    @Field({ nullable: true })
+    PayloadDownstreamPaths?: string;
+
+    @Field({ nullable: true })
+    PayloadUpstreamPaths?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -20332,6 +20407,9 @@ export class ConversationDetail_ {
     @Field(() => [Report_])
     Reports_ConversationDetailIDArray: Report_[]; // Link to Reports
     
+    @Field(() => [AIAgentRun_])
+    MJ_AIAgentRuns_ConversationDetailIDArray: AIAgentRun_[]; // Link to MJ_AIAgentRuns
+    
 }
 
 //****************************************************************************
@@ -20504,6 +20582,16 @@ export class ConversationDetailResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [ConversationDetailID]='${conversationdetail_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [AIAgentRun_])
+    async MJ_AIAgentRuns_ConversationDetailIDArray(@Root() conversationdetail_: ConversationDetail_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [ConversationDetailID]='${conversationdetail_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows);
         return result;
     }
         
@@ -39849,7 +39937,7 @@ export class AIAgentRunStep_ {
     @Field(() => Int, {description: `Sequential number of this step within the agent run, starting from 1`}) 
     StepNumber: number;
         
-    @Field({description: `Type of execution step: prompt, tool, subagent, decision`}) 
+    @Field({description: `Type of execution step: Prompt, Actions, Sub-Agent, Decision, Chat, Validation`}) 
     @MaxLength(100)
     StepType: string;
         
@@ -39896,6 +39984,12 @@ export class AIAgentRunStep_ {
     @Field({nullable: true, description: `ID of the execution log/run record created for this step (ActionExecutionLog.ID for action steps, AIAgentRun.ID for subagent steps, AIPromptRun.ID for prompt steps)`}) 
     @MaxLength(16)
     TargetLogID?: string;
+        
+    @Field({nullable: true, description: `JSON serialization of the Payload state at the start of this step`}) 
+    PayloadAtStart?: string;
+        
+    @Field({nullable: true, description: `JSON serialization of the Payload state at the end of this step`}) 
+    PayloadAtEnd?: string;
         
 }
 
@@ -39945,6 +40039,12 @@ export class CreateAIAgentRunStepInput {
 
     @Field({ nullable: true })
     TargetLogID: string | null;
+
+    @Field({ nullable: true })
+    PayloadAtStart: string | null;
+
+    @Field({ nullable: true })
+    PayloadAtEnd: string | null;
 }
     
 
@@ -39994,6 +40094,12 @@ export class UpdateAIAgentRunStepInput {
 
     @Field({ nullable: true })
     TargetLogID?: string | null;
+
+    @Field({ nullable: true })
+    PayloadAtStart?: string | null;
+
+    @Field({ nullable: true })
+    PayloadAtEnd?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

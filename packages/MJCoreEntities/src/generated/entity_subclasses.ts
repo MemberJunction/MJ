@@ -1128,6 +1128,18 @@ export const AIAgentSchema = z.object({
     *   * Agent Type
     *   * Agent
     * * Description: Controls whether model selection is driven by the Agent Type's system prompt or the Agent's specific prompt. Default is Agent Type for backward compatibility.`),
+    PayloadDownstreamPaths: z.string().describe(`
+        * * Field Name: PayloadDownstreamPaths
+        * * Display Name: Payload Downstream Paths
+        * * SQL Data Type: nvarchar(MAX)
+        * * Default Value: ["*"]
+    * * Description: JSON array of paths that define which parts of the payload should be sent downstream to sub-agents. Use ["*"] to send entire payload, or specify paths like ["customer.id", "campaign.*", "analysis.sentiment"]`),
+    PayloadUpstreamPaths: z.string().describe(`
+        * * Field Name: PayloadUpstreamPaths
+        * * Display Name: Payload Upstream Paths
+        * * SQL Data Type: nvarchar(MAX)
+        * * Default Value: ["*"]
+    * * Description: JSON array of paths that define which parts of the payload sub-agents are allowed to write back upstream. Use ["*"] to allow all writes, or specify paths like ["analysis.results", "recommendations.*"]`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -7221,11 +7233,20 @@ export const AIAgentRunStepSchema = z.object({
         * * Display Name: Step Number
         * * SQL Data Type: int
     * * Description: Sequential number of this step within the agent run, starting from 1`),
-    StepType: z.string().describe(`
+    StepType: z.union([z.literal('Prompt'), z.literal('Actions'), z.literal('Sub-Agent'), z.literal('Decision'), z.literal('Chat'), z.literal('Validation')]).describe(`
         * * Field Name: StepType
         * * Display Name: Step Type
         * * SQL Data Type: nvarchar(50)
-    * * Description: Type of execution step: prompt, tool, subagent, decision`),
+        * * Default Value: Prompt
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Prompt
+    *   * Actions
+    *   * Sub-Agent
+    *   * Decision
+    *   * Chat
+    *   * Validation
+    * * Description: Type of execution step: Prompt, Actions, Sub-Agent, Decision, Chat, Validation`),
     StepName: z.string().describe(`
         * * Field Name: StepName
         * * Display Name: Step Name
@@ -7294,6 +7315,16 @@ export const AIAgentRunStepSchema = z.object({
         * * Display Name: Target Log ID
         * * SQL Data Type: uniqueidentifier
     * * Description: ID of the execution log/run record created for this step (ActionExecutionLog.ID for action steps, AIAgentRun.ID for subagent steps, AIPromptRun.ID for prompt steps)`),
+    PayloadAtStart: z.string().nullable().describe(`
+        * * Field Name: PayloadAtStart
+        * * Display Name: Payload At Start
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON serialization of the Payload state at the start of this step`),
+    PayloadAtEnd: z.string().nullable().describe(`
+        * * Field Name: PayloadAtEnd
+        * * Display Name: Payload At End
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON serialization of the Payload state at the end of this step`),
 });
 
 export type AIAgentRunStepEntityType = z.infer<typeof AIAgentRunStepSchema>;
@@ -7428,6 +7459,50 @@ export const AIAgentRunSchema = z.object({
         * * Display Name: Total Cost Rollup
         * * SQL Data Type: decimal(19, 8)
     * * Description: Total cost including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCost. For parent agents, this includes the sum of all descendant agent costs. Note: This assumes all costs are in the same currency for accurate rollup.`),
+    ConversationDetailID: z.string().nullable().describe(`
+        * * Field Name: ConversationDetailID
+        * * Display Name: Conversation Detail ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
+    * * Description: Optional tracking of a specific conversation detail (e.g. a specific message) that spawned this agent run`),
+    ConversationDetailSequence: z.number().nullable().describe(`
+        * * Field Name: ConversationDetailSequence
+        * * Display Name: Conversation Detail Sequence
+        * * SQL Data Type: int
+    * * Description: If a conversation detail spawned multiple agent runs, tracks the order of their spawn/execution`),
+    CancellationReason: z.union([z.literal('User Request'), z.literal('Timeout'), z.literal('System')]).nullable().describe(`
+        * * Field Name: CancellationReason
+        * * Display Name: Cancellation Reason
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * User Request
+    *   * Timeout
+    *   * System
+    * * Description: Reason for cancellation if the agent run was cancelled`),
+    FinalStep: z.union([z.literal('Success'), z.literal('Failed'), z.literal('Retry'), z.literal('Sub-Agent'), z.literal('Actions'), z.literal('Chat')]).nullable().describe(`
+        * * Field Name: FinalStep
+        * * Display Name: Final Step
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Success
+    *   * Failed
+    *   * Retry
+    *   * Sub-Agent
+    *   * Actions
+    *   * Chat
+    * * Description: The final step type that concluded the agent run`),
+    FinalPayload: z.string().nullable().describe(`
+        * * Field Name: FinalPayload
+        * * Display Name: Final Payload
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON serialization of the final Payload state at the end of the agent run`),
+    Message: z.string().nullable().describe(`
+        * * Field Name: Message
+        * * Display Name: Message
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Final message from the agent to the end user at the end of a run`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -15211,6 +15286,34 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     }
     set ModelSelectionMode(value: 'Agent Type' | 'Agent') {
         this.Set('ModelSelectionMode', value);
+    }
+
+    /**
+    * * Field Name: PayloadDownstreamPaths
+    * * Display Name: Payload Downstream Paths
+    * * SQL Data Type: nvarchar(MAX)
+    * * Default Value: ["*"]
+    * * Description: JSON array of paths that define which parts of the payload should be sent downstream to sub-agents. Use ["*"] to send entire payload, or specify paths like ["customer.id", "campaign.*", "analysis.sentiment"]
+    */
+    get PayloadDownstreamPaths(): string {
+        return this.Get('PayloadDownstreamPaths');
+    }
+    set PayloadDownstreamPaths(value: string) {
+        this.Set('PayloadDownstreamPaths', value);
+    }
+
+    /**
+    * * Field Name: PayloadUpstreamPaths
+    * * Display Name: Payload Upstream Paths
+    * * SQL Data Type: nvarchar(MAX)
+    * * Default Value: ["*"]
+    * * Description: JSON array of paths that define which parts of the payload sub-agents are allowed to write back upstream. Use ["*"] to allow all writes, or specify paths like ["analysis.results", "recommendations.*"]
+    */
+    get PayloadUpstreamPaths(): string {
+        return this.Get('PayloadUpstreamPaths');
+    }
+    set PayloadUpstreamPaths(value: string) {
+        this.Set('PayloadUpstreamPaths', value);
     }
 
     /**
@@ -31185,12 +31288,21 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
     * * Field Name: StepType
     * * Display Name: Step Type
     * * SQL Data Type: nvarchar(50)
-    * * Description: Type of execution step: prompt, tool, subagent, decision
+    * * Default Value: Prompt
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Prompt
+    *   * Actions
+    *   * Sub-Agent
+    *   * Decision
+    *   * Chat
+    *   * Validation
+    * * Description: Type of execution step: Prompt, Actions, Sub-Agent, Decision, Chat, Validation
     */
-    get StepType(): string {
+    get StepType(): 'Prompt' | 'Actions' | 'Sub-Agent' | 'Decision' | 'Chat' | 'Validation' {
         return this.Get('StepType');
     }
-    set StepType(value: string) {
+    set StepType(value: 'Prompt' | 'Actions' | 'Sub-Agent' | 'Decision' | 'Chat' | 'Validation') {
         this.Set('StepType', value);
     }
 
@@ -31350,6 +31462,32 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
     }
     set TargetLogID(value: string | null) {
         this.Set('TargetLogID', value);
+    }
+
+    /**
+    * * Field Name: PayloadAtStart
+    * * Display Name: Payload At Start
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON serialization of the Payload state at the start of this step
+    */
+    get PayloadAtStart(): string | null {
+        return this.Get('PayloadAtStart');
+    }
+    set PayloadAtStart(value: string | null) {
+        this.Set('PayloadAtStart', value);
+    }
+
+    /**
+    * * Field Name: PayloadAtEnd
+    * * Display Name: Payload At End
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON serialization of the Payload state at the end of this step
+    */
+    get PayloadAtEnd(): string | null {
+        return this.Get('PayloadAtEnd');
+    }
+    set PayloadAtEnd(value: string | null) {
+        this.Set('PayloadAtEnd', value);
     }
 }
 
@@ -31543,7 +31681,8 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     /**
     * * Field Name: AgentState
     * * Display Name: Agent State
-    * * SQL Data Type: nvarchar(MAX)
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(MAX)
     * * Description: JSON serialization of the complete agent state, including conversation context, variables, and execution state. Enables pause/resume functionality.
     */
     get AgentState(): string | null {
@@ -31677,6 +31816,98 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     }
     set TotalCostRollup(value: number | null) {
         this.Set('TotalCostRollup', value);
+    }
+
+    /**
+    * * Field Name: ConversationDetailID
+    * * Display Name: Conversation Detail ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
+    * * Description: Optional tracking of a specific conversation detail (e.g. a specific message) that spawned this agent run
+    */
+    get ConversationDetailID(): string | null {
+        return this.Get('ConversationDetailID');
+    }
+    set ConversationDetailID(value: string | null) {
+        this.Set('ConversationDetailID', value);
+    }
+
+    /**
+    * * Field Name: ConversationDetailSequence
+    * * Display Name: Conversation Detail Sequence
+    * * SQL Data Type: int
+    * * Description: If a conversation detail spawned multiple agent runs, tracks the order of their spawn/execution
+    */
+    get ConversationDetailSequence(): number | null {
+        return this.Get('ConversationDetailSequence');
+    }
+    set ConversationDetailSequence(value: number | null) {
+        this.Set('ConversationDetailSequence', value);
+    }
+
+    /**
+    * * Field Name: CancellationReason
+    * * Display Name: Cancellation Reason
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * User Request
+    *   * Timeout
+    *   * System
+    * * Description: Reason for cancellation if the agent run was cancelled
+    */
+    get CancellationReason(): 'User Request' | 'Timeout' | 'System' | null {
+        return this.Get('CancellationReason');
+    }
+    set CancellationReason(value: 'User Request' | 'Timeout' | 'System' | null) {
+        this.Set('CancellationReason', value);
+    }
+
+    /**
+    * * Field Name: FinalStep
+    * * Display Name: Final Step
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Success
+    *   * Failed
+    *   * Retry
+    *   * Sub-Agent
+    *   * Actions
+    *   * Chat
+    * * Description: The final step type that concluded the agent run
+    */
+    get FinalStep(): 'Success' | 'Failed' | 'Retry' | 'Sub-Agent' | 'Actions' | 'Chat' | null {
+        return this.Get('FinalStep');
+    }
+    set FinalStep(value: 'Success' | 'Failed' | 'Retry' | 'Sub-Agent' | 'Actions' | 'Chat' | null) {
+        this.Set('FinalStep', value);
+    }
+
+    /**
+    * * Field Name: FinalPayload
+    * * Display Name: Final Payload
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON serialization of the final Payload state at the end of the agent run
+    */
+    get FinalPayload(): string | null {
+        return this.Get('FinalPayload');
+    }
+    set FinalPayload(value: string | null) {
+        this.Set('FinalPayload', value);
+    }
+
+    /**
+    * * Field Name: Message
+    * * Display Name: Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Final message from the agent to the end user at the end of a run
+    */
+    get Message(): string | null {
+        return this.Get('Message');
+    }
+    set Message(value: string | null) {
+        this.Set('Message', value);
     }
 
     /**

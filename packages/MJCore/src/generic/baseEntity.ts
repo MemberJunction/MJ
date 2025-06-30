@@ -15,6 +15,12 @@ import { z } from 'zod';
  * used properties from the entity field metadata.
  */
 export class EntityField {
+    /**
+     * Indicates whether the active status of the field should be asserted when accessing or setting the value.
+     * Starts off as false and turns to true after contructor is done doing all its setup work. Internally, this can be
+     * temporarily turned off to allow for legacy fields to be created without asserting the active status.
+     */
+    private _assertActiveStatusRequired: boolean = false; 
     private _entityFieldInfo: EntityFieldInfo;
     private _OldValue: any;
     private _Value: any;
@@ -57,7 +63,9 @@ export class EntityField {
     get Value(): any {
         // Asserting status here for deprecated or disabled fields, not in constructor because
         // we legacy fields will exist
-        EntityFieldInfo.AssertEntityFieldActiveStatus(this._entityFieldInfo, 'EntityField.Value setter'); 
+        if (this._assertActiveStatusRequired) {
+            EntityFieldInfo.AssertEntityFieldActiveStatus(this._entityFieldInfo, 'EntityField.Value setter'); 
+        }
         return this._Value;
     }
 
@@ -87,7 +95,12 @@ export class EntityField {
      * Sets the value of the field. If the field is read only, nothing happens. If the field is not read only, the value is set and the internal representation of the dirty flag is flipped if the value is different from the old value.
      */
     set Value(value: any) {
-        EntityFieldInfo.AssertEntityFieldActiveStatus(this._entityFieldInfo, 'EntityField.Value setter'); 
+        if (this._assertActiveStatusRequired && value !== this._Value) {
+            // asserting status here becuase the flag is on AND the values
+            // are different - this avoid assertions during sysops like SetMany that often aren't changing
+            // the value of the field
+            EntityFieldInfo.AssertEntityFieldActiveStatus(this._entityFieldInfo, 'EntityField.Value setter'); 
+        }
         if (
               !this.ReadOnly ||
               this._NeverSet  /* Allow one time set of any field because BaseEntity Object passes in ReadOnly fields when we load,
@@ -139,9 +152,92 @@ export class EntityField {
                     newCompare = this.Value.getTime();
                 }
 
+                // Special handling for bit/Boolean types - treat truthy values as equivalent
+                if (this._entityFieldInfo.TSType === EntityFieldTSType.Boolean || 
+                    this._entityFieldInfo.Type.toLowerCase() === 'bit') {
+                    // Convert both values to boolean for comparison
+                    const oldBool = this.convertToBoolean(oldCompare);
+                    const newBool = this.convertToBoolean(newCompare);
+                    return oldBool !== newBool;
+                }
+
+                // Special handling for numeric types - treat numeric strings that convert to same value as equivalent
+                if (this._entityFieldInfo.TSType === EntityFieldTSType.Number || this.isNumericType(this._entityFieldInfo.Type)) {
+                    const oldNum = this.convertToNumber(oldCompare);
+                    const newNum = this.convertToNumber(newCompare);
+                    
+                    // Handle NaN cases - if both are NaN, they're equivalent
+                    if (isNaN(oldNum) && isNaN(newNum)) {
+                        return false;
+                    }
+                    // If only one is NaN, they're different
+                    if (isNaN(oldNum) || isNaN(newNum)) {
+                        return true;
+                    }
+                    
+                    return oldNum !== newNum;
+                }
+
                 return oldCompare !== newCompare;
             }
         }
+    }
+
+    /**
+     * Helper method to convert a value to boolean for comparison purposes.
+     * Treats truthy values as true regardless of data type.
+     */
+    private convertToBoolean(value: any): boolean {
+        if (value === null || value === undefined) {
+            return false;
+        }
+        if (typeof value === 'boolean') {
+            return value;
+        }
+        if (typeof value === 'number') {
+            return value !== 0;
+        }
+        if (typeof value === 'string') {
+            const normalized = value.trim().toLowerCase();
+            return normalized === 'true' || normalized === '1';
+        }
+        // For any other type, use JavaScript's truthiness
+        return !!value;
+    }
+
+    /**
+     * Helper method to check if a SQL type is numeric.
+     */
+    private isNumericType(sqlType: string): boolean {
+        if (!sqlType) return false;
+        const normalizedType = sqlType.toLowerCase().trim();
+        return ['int', 'smallint', 'bigint', 'tinyint', 'money', 'decimal', 'numeric', 'float', 'real'].includes(normalizedType) ||
+               normalizedType.startsWith('decimal(') || 
+               normalizedType.startsWith('numeric(');
+    }
+
+    /**
+     * Helper method to convert a value to number for comparison purposes.
+     */
+    private convertToNumber(value: any): number {
+        if (value === null || value === undefined) {
+            return NaN;
+        }
+        if (typeof value === 'number') {
+            return value;
+        }
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (trimmed === '') {
+                return NaN;
+            }
+            return Number(trimmed);
+        }
+        if (typeof value === 'boolean') {
+            return value ? 1 : 0;
+        }
+        // For any other type, attempt conversion
+        return Number(value);
     }
 
     /**
@@ -270,13 +366,17 @@ export class EntityField {
             this.Value = null; // we need to set the value to null instead of being undefined as the value is defined, it is NULL
             this._NeverSet = true; // set this back to true because we are setting the value to null;
         }
+
+        this._assertActiveStatusRequired = true; // turn on assertion for active status now that we're done with constructor.
     }
 
     /**
      * This method will set the internal Old Value which is used to track dirty state, to the current value of the field. This effectively resets the dirty state of the field to false. Use this method sparingly.
      */
     public ResetOldValue() {
+        this._assertActiveStatusRequired = false; // temporarily turn off assertion for active status so we can set the old value without asserting
         this._OldValue = this.Value;
+        this._assertActiveStatusRequired = true; // turn it back on after we're done
     }
 
     /**
@@ -619,6 +719,7 @@ export abstract class BaseEntity<T = unknown> {
 
     /**
      * Sets the value of a given field. If the field doesn't exist, nothing happens.
+     * The field's type is used to convert the value to the appropriate type.
      * @param FieldName
      * @param Value
      */
@@ -627,6 +728,29 @@ export abstract class BaseEntity<T = unknown> {
         if (field != null) {
             if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof Value === 'string' || typeof Value === 'number') ) {
                 field.Value = new Date(Value);
+            }
+            else if (field.EntityFieldInfo.TSType === EntityFieldTSType.Number && typeof Value === 'string' && Value !== null && Value !== undefined) {
+                const numericValue = Number(Value);
+                if (!isNaN(numericValue)) {
+                    field.Value = numericValue;
+                } else {
+                    field.Value = Value;
+                }
+            }
+            else if (field.EntityFieldInfo.TSType === EntityFieldTSType.Boolean && Value !== null && Value !== undefined) {
+                if (typeof Value === 'string') {
+                    if (Value.trim() === '1' || Value.trim().toLowerCase() === 'true') {
+                        field.Value = true;
+                    } else if (Value.trim() === '0' || Value.trim().toLowerCase() === 'false') {
+                        field.Value = false;
+                    } else {
+                        field.Value = Value;
+                    }
+                } else if (typeof Value === 'number') {
+                    field.Value = Value !== 0;
+                } else {
+                    field.Value = Value;
+                }
             }
             else {
                 field.Value = Value;

@@ -88,9 +88,9 @@ export const loadModule = () => {
           }
         }
         const fieldDeprecatedFlag: string = e.Status === 'Deprecated' || e.Status === 'Disabled' ? 
-            `\n * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.` : '';
+            `\n    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.` : '';
         const fieldDisabledFlag: string = e.Status === 'Disabled' ? 
-            `\n * @disabled This field is disabled and will not be available in the application. Attempting to use it will result in exceptions being thrown` : '';
+            `\n    * * @disabled This field is disabled and will not be available in the application. Attempting to use it will result in exceptions being thrown` : '';
 
         let sRet: string = `    /**
     * * Field Name: ${e.Name}${e.DisplayName && e.DisplayName.length > 0 ? '\n    * * Display Name: ' + e.DisplayName : ''}

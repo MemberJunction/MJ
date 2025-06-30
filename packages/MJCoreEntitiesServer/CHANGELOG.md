@@ -1,5 +1,41 @@
 # @memberjunction/core-entities-server
 
+## 2.60.0
+
+### Minor Changes
+
+- e30ee12: migrations
+
+### Patch Changes
+
+- Updated dependencies [bb46c63]
+- Updated dependencies [b5fa80a]
+- Updated dependencies [e30ee12]
+- Updated dependencies [e512e4e]
+  - @memberjunction/ai-core-plus@2.60.0
+  - @memberjunction/core@2.60.0
+  - @memberjunction/core-entities@2.60.0
+  - @memberjunction/ai-prompts@2.60.0
+  - @memberjunction/aiengine@2.60.0
+  - @memberjunction/ai-vector-dupe@2.60.0
+  - @memberjunction/sqlserver-dataprovider@2.60.0
+  - @memberjunction/skip-types@2.60.0
+  - @memberjunction/global@2.60.0
+
+## 2.59.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@2.59.0
+- @memberjunction/aiengine@2.59.0
+- @memberjunction/ai-prompts@2.59.0
+- @memberjunction/ai-vector-dupe@2.59.0
+- @memberjunction/core@2.59.0
+- @memberjunction/core-entities@2.59.0
+- @memberjunction/global@2.59.0
+- @memberjunction/sqlserver-dataprovider@2.59.0
+- @memberjunction/skip-types@2.59.0
+
 ## 2.58.0
 
 ### Patch Changes

@@ -10,9 +10,7 @@
  * @since 2.50.0
  */
 
-import { AIPromptRunResult } from './prompt.types';
-import { AIAgentRunEntity, AIAgentRunStepEntity, AIAgentTypeEntity, AIPromptEntity } from '@memberjunction/core-entities';
-import { ActionResult, ActionResultSimple } from '@memberjunction/actions-base';
+import { AIAgentRunEntity, AIAgentRunEntityExtended, AIAgentTypeEntity, AIPromptEntity } from '@memberjunction/core-entities';
 import { ChatMessage } from '@memberjunction/ai';
 import { AIAgentEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
@@ -20,15 +18,11 @@ import { UserInfo } from '@memberjunction/core';
 
 /**
  * Represents a single action to be executed.
- * 
- * @interface AgentAction
- * @property {string} id - UUID of the action
- * @property {string} name - Name of the action
- * @property {Record<string, unknown>} params - Parameters to pass to the action
  */
 export type AgentAction = {
-    id: string;
+    /** Name of the action */
     name: string;
+    /** Parameters to pass to the action */
     params: Record<string, unknown>;
 }
 
@@ -38,16 +32,6 @@ export type AgentAction = {
  * @template TContext - Type of the context object passed to the sub-agent.
  *                      This allows for type-safe context propagation from parent to sub-agent.
  *                      Defaults to any for backward compatibility.
- * 
- * @interface AgentSubAgentRequest
- * @property {string} id - UUID of the sub-agent
- * @property {string} name - Name of the sub-agent
- * @property {string} message - Context and instructions for the sub-agent
- * @property {boolean} terminateAfter - Whether to terminate the parent agent after sub-agent completes
- * @property {TContext} context - Context data passed to the sub-agent by the parent agent.
- *                               This context flows through the entire execution hierarchy,
- *                               allowing sub-agents to access runtime-specific configuration,
- *                               environment settings, and shared state from their parent agents.
  * 
  * @example
  * ```typescript
@@ -71,12 +55,22 @@ export type AgentAction = {
  * ```
  */
 export type AgentSubAgentRequest<TContext = any> = {
-    id: string;
+    /** Name of the sub-agent */
     name: string;
+    /** Context and instructions for the sub-agent */
     message: string;
+    /** Whether to terminate the parent agent after sub-agent completes */
     terminateAfter: boolean;
-    templateParameters?: Record<string, string>; // Optional template parameters for sub-agent invocation
-    context?: TContext; // Optional because AI determines sub-agent invocation, context comes from execution params
+    /** Optional template parameters for sub-agent invocation */
+    templateParameters?: Record<string, string>;
+    /** 
+     * Context data passed to the sub-agent by the parent agent.
+     * This context flows through the entire execution hierarchy,
+     * allowing sub-agents to access runtime-specific configuration,
+     * environment settings, and shared state from their parent agents.
+     * Optional because AI determines sub-agent invocation, context comes from execution params.
+     */
+    context?: TContext;
 }
 
 /**
@@ -86,40 +80,47 @@ export type AgentSubAgentRequest<TContext = any> = {
  * happen next in the agent workflow. This type encapsulates that decision along
  * with any necessary context for the determined action.
  * 
+ * @template P - Type of the payload value, allowing flexibility in the type of data returned
  * @template TContext - Type of the context object used for sub-agent requests.
  *                      This ensures type safety when passing context to sub-agents.
  *                      Defaults to any for backward compatibility.
- * 
- * @interface BaseAgentNextStep
- * @property {'success' | 'failed' | 'retry' | 'sub-agent' | 'actions' | 'chat'} step - The determined next step
- *   - 'success': The agent has completed its task successfully
- *   - 'failed': The agent has failed to complete its task
- *   - 'retry': The agent should re-run to either:
- *     a) Process new results from completed actions or sub-agents
- *     b) Retry after a failure condition
- *     c) Continue processing with updated context
- *   - 'sub-agent': The agent should spawn a sub-agent to handle a specific task
- *   - 'actions': The agent should perform one or more actions using the Actions framework
- *   - 'chat': The agent needs to communicate with the user before proceeding
- * @property {boolean} terminate - Whether to terminate the agent execution after this step
- * @property {any} [returnValue] - Optional value to return with the step determination
- * @property {string} [errorMessage] - Error message when step is 'failed'
- * @property {string} [retryReason] - Reason for retry when step is 'retry' (e.g., "Processing action results", "Handling error condition")
- * @property {string} [retryInstructions] - Instructions for the retry attempt, including any new context or results
- * @property {AgentSubAgentRequest<TContext>} [subAgent] - Sub-agent details when step is 'sub-agent'
- * @property {AgentAction[]} [actions] - Array of actions to execute when step is 'actions'
- * @property {string} [userMessage] - Message to send to user when step is 'chat'
  */
-export type BaseAgentNextStep<R = any, TContext = any> = {
+export type BaseAgentNextStep<P = any, TContext = any> = {
+    /** Whether to terminate the agent execution after this step */
     terminate: boolean;
-    step: 'success' | 'failed' | 'retry' | 'sub-agent' | 'actions' | 'chat';
-    returnValue?: R;
+    /** 
+     * The determined next step:
+     * - 'success': The agent has completed its task successfully
+     * - 'failed': The agent has failed to complete its task
+     * - 'retry': The agent should re-run to either:
+     *   a) Process new results from completed actions or sub-agents
+     *   b) Retry after a failure condition
+     *   c) Continue processing with updated context
+     * - 'sub-agent': The agent should spawn a sub-agent to handle a specific task
+     * - 'actions': The agent should perform one or more actions using the Actions framework
+     * - 'chat': The agent needs to communicate with the user before proceeding
+     */
+    step: AIAgentRunEntityExtended['FinalStep']
+    /** Result from the prior step, useful for retry or sub-agent context */
+    priorStepResult?: any;
+    /** Optional value to return with the step determination */
+    payload?: P;
+    /** Error message when step is 'failed' */
     errorMessage?: string;
+    /** Reason for retry when step is 'retry' (e.g., "Processing action results", "Handling error condition") */
     retryReason?: string;
+    /** Instructions for the retry attempt, including any new context or results */
     retryInstructions?: string;
+    /** Sub-agent details when step is 'sub-agent' */
     subAgent?: AgentSubAgentRequest<TContext>;
+    /** Array of actions to execute when step is 'actions' */
     actions?: AgentAction[];
-    userMessage?: string;
+    /** Message to send to user when step is 'chat' */
+    message?: string;
+    /** Optional, reasoning information from the agent */
+    reasoning?: string;
+    /** Optional confidence level in the decision (0.0 to 1.0) */
+    confidence?: number;    
 }
 
 /**
@@ -127,220 +128,37 @@ export type BaseAgentNextStep<R = any, TContext = any> = {
  * 
  * This result structure provides complete visibility into the agent's execution flow,
  * including all prompts executed, actions taken, sub-agents invoked, and decisions made.
- * The execution tree provides a hierarchical view that mirrors the actual execution flow,
- * with each node containing the AIAgentRunStepEntity via its step property.
+ * The agentRun property contains the full execution history with all steps.
  * 
- * @interface ExecuteAgentResult
- * @property {boolean} success - Whether the overall agent execution was successful
- * @property {BaseAgentNextStep['step']} finalStep - The final step type that terminated execution
- * @property {any} [returnValue] - Optional return value from the agent execution, type depends on agent implementation
- * @property {string} [errorMessage] - Error message if execution failed
- * @property {boolean} [cancelled] - Whether the execution was cancelled via cancellation token
- * @property {'user_requested' | 'timeout' | 'system'} [cancellationReason] - Reason for cancellation if cancelled
- * @property {AIAgentRunEntity} agentRun - The main database entity tracking this execution
- * @property {ExecutionNode[]} executionTree - Hierarchical tree of execution nodes showing parent-child relationships
- * @template {T} T - Generic type parameter for return value, allowing flexibility in the type of data returned by the agent
+ * @template P - Generic type parameter for payload value, allowing flexibility in the type of data returned by the agent
  */
-export type ExecuteAgentResult<T = any> = {
+export type ExecuteAgentResult<P = any> = {
+    /** Whether the agent execution was successful */
     success: boolean;
-    finalStep: BaseAgentNextStep['step'];
-    returnValue?: T;
-    errorMessage?: string;
-    cancelled?: boolean;
-    cancellationReason?: 'user_requested' | 'timeout' | 'system';
-    agentRun: AIAgentRunEntity;
-    executionTree: ExecutionNode[];
+    /** Optional payload returned by the agent */
+    payload?: P;
+    /** 
+     * The agent run entity with full execution history.
+     * - Use agentRun.ErrorMessage for error details
+     * - Use agentRun.Status === 'Cancelled' to check if cancelled
+     * - Use agentRun.CancellationReason for cancellation reason
+     * - Use agentRun.Steps for the execution step history
+     */
+    agentRun: AIAgentRunEntityExtended;
 }
-
-/**
- * Represents a single step in the agent execution chain.
- * 
- * Each step captures what was executed (prompt, action, sub-agent, etc.), the result
- * of that execution, and the decision made about what to do next. This creates a
- * complete audit trail of the agent's decision-making process.
- * 
- * @interface ExecutionChainStep
- * @property {AIAgentRunStepEntity} stepEntity - The database entity tracking this step
- * @property {'prompt' | 'action' | 'sub-agent' | 'decision' | 'chat' | 'validation'} executionType - Type of execution performed in this step
- * @property {StepExecutionResult} executionResult - The result of the execution (type varies based on executionType)
- * @property {NextStepDecision} nextStepDecision - The decision made about what to do next after this step
- * @property {Date} startTime - When this step began execution
- * @property {Date} [endTime] - When this step completed (null while running)
- * @property {number} [durationMs] - How long this step took to execute in milliseconds
- * @template {T} [T] - Generic type parameter for the step's execution result, allowing flexibility in the type of data returned
- */
-export type ExecutionChainStep<T = any> = {
-    stepEntity: AIAgentRunStepEntity;
-    executionType: 'prompt' | 'action' | 'sub-agent' | 'decision' | 'chat' | 'validation';
-    executionResult: StepExecutionResult<T>;
-    nextStepDecision: NextStepDecision;
-    startTime: Date;
-    endTime?: Date;
-    durationMs?: number;
-}
-
-/**
- * Union type for different execution results based on the step type.
- * 
- * Each execution type has its own result structure containing the native result
- * from the underlying system (prompts, actions, etc.) along with metadata.
- */
-export type StepExecutionResult<T = any> = 
-    | PromptExecutionResult
-    | ActionExecutionResult
-    | SubAgentExecutionResult<T>
-    | DecisionExecutionResult
-    | ChatExecutionResult
-    | ValidationExecutionResult;
-
-/**
- * Represents a single node in the hierarchical execution tree.
- * 
- * Each node contains the step entity data, rich input/output information,
- * and can have child nodes representing sub-steps (especially for sub-agents).
- * This structure provides complete traceability of the agent's execution flow.
- * 
- * @interface ExecutionNode
- * @property {AIAgentRunStepEntity} step - The database entity for this execution step
- * @property {any} inputData - Full input data passed to this step (varies by step type)
- * @property {any} outputData - Full output data from this step (varies by step type)
- * @property {'prompt' | 'action' | 'sub-agent' | 'decision' | 'chat' | 'validation'} executionType - Type of execution performed
- * @property {Date} startTime - When this step began execution
- * @property {Date} [endTime] - When this step completed (null while running)
- * @property {number} [durationMs] - How long this step took to execute in milliseconds
- * @property {NextStepDecision} [nextStepDecision] - Decision about what to do next after this step
- * @property {ExecutionNode[]} [children] - Child nodes for sub-steps (primarily for sub-agents)
- * @property {number} depth - Nesting level (0 = root agent, 1 = first sub-agent, etc.)
- * @property {string} [parentStepId] - ID of the parent step (null for root steps)
- * @property {string[]} agentHierarchy - Full agent name hierarchy for breadcrumb display
- */
-export type ExecutionNode = {
-    step: AIAgentRunStepEntity;
-    inputData: any;
-    outputData: any;
-    executionType: 'prompt' | 'action' | 'sub-agent' | 'decision' | 'chat' | 'validation';
-    startTime: Date;
-    endTime?: Date;
-    durationMs?: number;
-    nextStepDecision?: NextStepDecision;
-    children?: ExecutionNode[];
-    depth: number;
-    parentStepId?: string;
-    agentHierarchy: string[];
-}
-
-/**
- * Result from executing a prompt within an agent step.
- * 
- * @interface PromptExecutionResult
- * @property {'prompt'} type - Discriminator for TypeScript union type
- * @property {string} promptId - UUID of the prompt that was executed
- * @property {string} promptName - Human-readable name of the prompt
- * @property {AIPromptRunResult} result - The native result from the prompt execution system
- */
-export type PromptExecutionResult = {
-    type: 'prompt';
-    promptId: string;
-    promptName: string;
-    result: AIPromptRunResult;
-}
-
-/**
- * Result from executing an action within an agent step.
- * 
- * @interface ActionExecutionResult
- * @property {'action'} type - Discriminator for TypeScript union type
- * @property {string} actionId - UUID of the action that was executed
- * @property {string} actionName - Human-readable name of the action
- * @property {ActionResult | ActionResultSimple} result - The native result from the action execution system
- */
-export type ActionExecutionResult = {
-    type: 'action';
-    actionId: string;
-    actionName: string;
-    result: ActionResult | ActionResultSimple;
-}
-
-/**
- * Result from executing a sub-agent within an agent step.
- * 
- * Sub-agent results are recursive, containing the complete execution history
- * of the sub-agent, allowing full drill-down into nested agent calls.
- * 
- * @interface SubAgentExecutionResult
- * @property {'sub-agent'} type - Discriminator for TypeScript union type
- * @property {string} subAgentId - UUID of the sub-agent that was executed
- * @property {string} subAgentName - Human-readable name of the sub-agent
- * @property {ExecuteAgentResult} result - The complete execution result from the sub-agent (recursive)
- * @template T - Generic type parameter for the sub-agent's return value, allowing flexibility in the type of data returned
- */
-export type SubAgentExecutionResult<T = any> = {
-    type: 'sub-agent';
-    subAgentId: string;
-    subAgentName: string;
-    result: ExecuteAgentResult<T>;
-}
-
-/**
- * Result from a decision step where the agent type determines the next action.
- * 
- * @interface DecisionExecutionResult
- * @property {'decision'} type - Discriminator for TypeScript union type
- * @property {string} decisionLogic - Description of what decision logic was applied
- * @property {any} inputContext - The data/context used to make the decision
- * @property {BaseAgentNextStep} result - The next step determination from the agent type
- */
-export type DecisionExecutionResult = {
-    type: 'decision';
-    decisionLogic: string;
-    inputContext: any;
-    result: BaseAgentNextStep;
-}
-
-/**
- * Result from a chat/user interaction step.
- * 
- * @interface ChatExecutionResult
- * @property {'chat'} type - Discriminator for TypeScript union type
- * @property {string} userMessage - The message sent to the user
- * @property {string} [userResponse] - The response received from the user (if any)
- * @property {{ success: boolean; continueExecution: boolean }} result - Whether the interaction was successful and if execution should continue
- */
-export type ChatExecutionResult = {
-    type: 'chat';
-    userMessage: string;
-    userResponse?: string;
-    result: { success: boolean; continueExecution: boolean };
-}
-
-/**
- * Result from a validation step.
- * 
- * @interface ValidationExecutionResult
- * @property {'validation'} type - Discriminator for TypeScript union type
- * @property {string} validationTarget - What was being validated (e.g., "agent configuration", "prompt output")
- * @property {{ valid: boolean; errors?: string[] }} result - Whether validation passed and any error messages
- */
-export type ValidationExecutionResult = {
-    type: 'validation';
-    validationTarget: string;
-    result: { valid: boolean; errors?: string[] };
-}
-
+     
 /**
  * The decision made about what to do next after a step completes.
  * 
  * This captures not just what was decided, but why it was decided and what
  * will happen next, providing transparency into the agent's decision-making.
- * 
- * @interface NextStepDecision
- * @property {BaseAgentNextStep['step']} decision - The next step type that was decided
- * @property {string} [reasoning] - Human-readable explanation of why this decision was made
- * @property {NextStepDetails} [nextStepDetails] - Details about what will be executed next (if not terminating)
  */
 export type NextStepDecision = {
+    /** The next step type that was decided */
     decision: BaseAgentNextStep['step'];
+    /** Human-readable explanation of why this decision was made */
     reasoning?: string;
+    /** Details about what will be executed next (if not terminating) */
     nextStepDetails?: NextStepDetails;
 }
 
@@ -350,13 +168,13 @@ export type NextStepDecision = {
  * Union type that provides specific information based on the type of next step,
  * enabling proper preparation and execution of the subsequent operation.
  */
-export type NextStepDetails = 
-    | { type: 'prompt'; promptId: string; promptName: string }
-    | { type: 'action'; actions: AgentAction[] }
-    | { type: 'sub-agent'; subAgent: AgentSubAgentRequest }
-    | { type: 'retry'; retryReason: string; retryInstructions: string }
-    | { type: 'chat'; message: string }
-    | { type: 'complete'; returnValue?: any };
+export type NextStepDetails <P = any> = 
+    | { type: 'Prompt'; promptId: string; promptName: string; payload?: P }
+    | { type: 'Actions'; actions: AgentAction[]; payload?: P }
+    | { type: 'Sub-Agent'; subAgent: AgentSubAgentRequest; payload?: P }
+    | { type: 'Retry'; retryReason: string; retryInstructions: string; payload?: P }
+    | { type: 'Chat'; message: string; payload?: P }
+    | { type: 'Complete'; payload?: P };
 
 
 /**
@@ -397,44 +215,10 @@ export type AgentExecutionStreamingCallback = (chunk: {
  * @template TContext - Type of the context object passed through agent and action execution.
  *                      This allows for type-safe context propagation throughout the execution hierarchy.
  *                      Defaults to any for backward compatibility.
- * 
- * @interface ExecuteAgentParams
- * @property {AIAgentEntity} agent - The agent entity to execute, containing all metadata and configuration
- * @property {ChatMessage[]} conversationMessages - Array of chat messages representing the conversation history
- * @property {UserInfo} [contextUser] - Optional user context for permission checking and personalization
- * @property {AbortSignal} [cancellationToken] - Optional cancellation token to abort the agent execution
- * @property {AgentExecutionProgressCallback} [onProgress] - Optional callback for receiving execution progress updates
- * @property {AgentExecutionStreamingCallback} [onStreaming] - Optional callback for receiving streaming content updates
- * @property {string[]} [parentAgentHierarchy] - Optional parent agent hierarchy for sub-agent execution
- * @property {number} [parentDepth] - Optional parent depth for sub-agent execution
- * @property {AIAgentRunEntity} [parentRun] - Optional parent agent run entity for nested sub-agent execution
- * @property {Record<string, any>} [data] - Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents
- * @property {TContext} [context] - Optional additional context data to pass to the agent execution.
- *                                  This context is propagated to all sub-agents and actions throughout 
- *                                  the execution hierarchy. Use this for runtime-specific data such as:
- *                                  - Environment-specific configuration (API endpoints, feature flags)
- *                                  - User-specific settings or preferences
- *                                  - Session-specific data (request IDs, correlation IDs)
- *                                  - External service credentials or connection information
- *                                  
- *                                  Note: Avoid including sensitive data like passwords or API keys 
- *                                  unless absolutely necessary, as context may be passed to multiple 
- *                                  agents and actions.
- * @property {{modelId?: string, vendorId?: string}} [override] - Optional runtime override for agent execution.
- *                                  When specified, these values take precedence over all other model selection methods.
- *                                  Currently supports model and vendor overrides, but can be extended in the future.
- *                                  
- *                                  Model selection precedence (highest to lowest):
- *                                  1. Runtime override (this parameter)
- *                                  2. Agent's ModelSelectionMode configuration:
- *                                     - If "Agent": Uses the agent's specific prompt model configuration
- *                                     - If "Agent Type" (default): Uses the agent type's system prompt model configuration
- *                                  3. Default model selection based on prompt configuration
- *                                  
- *                                  This override is passed to all prompt executions within the agent, allowing
- *                                  consistent model usage throughout the agent's execution hierarchy.
+ * @template P - Type of the payload passed to the agent execution
  * 
  * @example
+ * ```typescript
  * // Define a typed context
  * interface MyAgentContext {
  *   apiEndpoint: string;
@@ -452,23 +236,71 @@ export type AgentExecutionStreamingCallback = (chunk: {
  *     sessionId: 'abc123'
  *   }
  * };
+ * ```
  */
-export type ExecuteAgentParams<TContext = any> = {
+export type ExecuteAgentParams<TContext = any, P = any> = {
+    /** The agent entity to execute, containing all metadata and configuration */
     agent: AIAgentEntity;
+    /** Array of chat messages representing the conversation history */
     conversationMessages: ChatMessage[];
+    /** Optional user context for permission checking and personalization */
     contextUser?: UserInfo;
+    /** Optional cancellation token to abort the agent execution */
     cancellationToken?: AbortSignal;
+    /** Optional callback for receiving execution progress updates */
     onProgress?: AgentExecutionProgressCallback;
+    /** Optional callback for receiving streaming content updates */
     onStreaming?: AgentExecutionStreamingCallback;
+    /** Optional parent agent hierarchy for sub-agent execution */
     parentAgentHierarchy?: string[];
+    /** Optional parent depth for sub-agent execution */
     parentDepth?: number;
+    /** Optional parent agent run entity for nested sub-agent execution */
     parentRun?: AIAgentRunEntity;
-    data?: Record<string, any>; // Additional data to pass through execution
+    /** Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents */
+    data?: Record<string, any>;
+    /** Optional payload to pass to the agent execution, type depends on agent implementation. Payload is the ongoing dynamic state of the agent run. */
+    payload?: P;
+    /** 
+     * Optional additional context data to pass to the agent execution.
+     * This context is propagated to all sub-agents and actions throughout 
+     * the execution hierarchy. Use this for runtime-specific data such as:
+     * - Environment-specific configuration (API endpoints, feature flags)
+     * - User-specific settings or preferences
+     * - Session-specific data (request IDs, correlation IDs)
+     * - External service credentials or connection information
+     * 
+     * Note: Avoid including sensitive data like passwords or API keys 
+     * unless absolutely necessary, as context may be passed to multiple 
+     * agents and actions.
+     */
     context?: TContext;
+    /** 
+     * Optional runtime override for agent execution.
+     * When specified, these values take precedence over all other model selection methods.
+     * Currently supports model and vendor overrides, but can be extended in the future.
+     * 
+     * Model selection precedence (highest to lowest):
+     * 1. Runtime override (this parameter)
+     * 2. Agent's ModelSelectionMode configuration:
+     *    - If "Agent": Uses the agent's specific prompt model configuration
+     *    - If "Agent Type" (default): Uses the agent type's system prompt model configuration
+     * 3. Default model selection based on prompt configuration
+     * 
+     * This override is passed to all prompt executions within the agent, allowing
+     * consistent model usage throughout the agent's execution hierarchy.
+     */
     override?: {
         modelId?: string;
         vendorId?: string;
-    }; // Optional runtime override for agent execution
+    };
+    /** 
+     * Optional flag to enable verbose logging during agent execution.
+     * When true, detailed information about agent decision-making, action selection,
+     * sub-agent invocations, and execution flow will be logged.
+     * Can also be controlled via MJ_VERBOSE environment variable.
+     */
+    verbose?: boolean;
 }
 
 /**
@@ -477,64 +309,40 @@ export type ExecuteAgentParams<TContext = any> = {
  * This data structure is passed to the prompt templates and contains information
  * about the agent, its sub-agents, and available actions. The sub-agent and action
  * details are JSON stringified to work with the template engine.
- * 
- * @interface AgentContextData
- * @property {string | null} agentName - The name of the agent being executed
- * @property {string | null} agentDescription - Description of the agent's purpose and capabilities
- * @property {number} subAgentCount - Number of sub-agents available to this agent
- * @property {string} subAgentDetails - JSON stringified array of AIAgentEntity objects representing sub-agents
- * @property {number} actionCount - Number of actions available to this agent
- * @property {string} actionDetails - JSON stringified array of ActionEntity objects representing available actions
  */
 export type AgentContextData = {
+    /** The name of the agent being executed */
     agentName: string | null;
+    /** Description of the agent's purpose and capabilities */
     agentDescription: string | null;
+    /** Optional parent agent name for sub-agent context */
+    parentAgentName?: string | null;
+    /** Number of sub-agents available to this agent */
     subAgentCount: number;
-    subAgentDetails: string;  // JSON stringified AIAgentEntity[]
+    /** JSON stringified array of AIAgentEntity objects representing sub-agents */
+    subAgentDetails: string;
+    /** Number of actions available to this agent */
     actionCount: number;
-    actionDetails: string;     // JSON stringified ActionEntity[]
+    /** JSON stringified array of ActionEntity objects representing available actions */
+    actionDetails: string;
 }
 
 /**
  * Configuration loaded for agent execution.
- * 
- * @interface AgentConfiguration
- * @property {boolean} success - Whether configuration was loaded successfully
- * @property {string} [errorMessage] - Error message if configuration failed
- * @property {any} [agentType] - The loaded agent type entity
- * @property {any} [systemPrompt] - The loaded system prompt entity
- * @property {any} [childPrompt] - The loaded child prompt entity
  */
 export type AgentConfiguration = {
+    /** Whether configuration was loaded successfully */
     success: boolean;
+    /** Error message if configuration failed */
     errorMessage?: string;
+    /** The loaded agent type entity */
     agentType?: AIAgentTypeEntity;
+    /** The loaded system prompt entity */
     systemPrompt?: AIPromptEntity;
+    /** The loaded child prompt entity */
     childPrompt?: AIPromptEntity;
 }
 
-/**
- * Context maintained throughout an agent run.
- * 
- * This context tracks the current execution state, parent relationships for
- * nested sub-agent calls, agent hierarchy for streaming messages, and any 
- * persistent state needed across steps.
- * 
- * @interface AgentRunContext
- * @property {number} currentStepIndex - Current position in the execution chain (0-based)
- * @property {string[]} parentRunStack - Stack of parent run IDs for nested sub-agent calls
- * @property {string[]} agentHierarchy - Stack of agent names for hierarchical message display (e.g., ["Marketing Agent", "Copywriter Agent"])
- * @property {number} depth - Current nesting depth (0 = root agent, 1 = first sub-agent, etc.)
- * @property {string} [conversationId] - Optional conversation ID linking multiple agent runs
- * @property {string} [userId] - Optional user ID for context and permissions
- * @property {Record<string, any>} agentState - Any persistent state maintained across steps
- */
-export type AgentRunContext = {
-    currentStepIndex: number;
-    parentRunStack: string[];
-    agentHierarchy: string[];
-    depth: number;
-    conversationId?: string;
-    userId?: string;
-    agentState: Record<string, any>;
-}    
+
+
+    

@@ -1,5 +1,5 @@
 import { Component, ElementRef, ChangeDetectorRef } from '@angular/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { AIPromptRunEntity, AIPromptEntity, AIModelEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
@@ -112,11 +112,18 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent {
     }
     
     private formatJsonFields() {
-        // Format messages
+        const parseOptions: ParseJSONOptions = {
+            extractInlineJson: true,
+            maxDepth: 100,
+            debug: false
+        };
+
+        // Format messages with recursive JSON parsing
         if (this.record.Messages) {
             try {
                 const parsed = JSON.parse(this.record.Messages);
-                this.formattedMessages = JSON.stringify(parsed, null, 2);
+                const recursivelyParsed = ParseJSONRecursive(parsed, parseOptions);
+                this.formattedMessages = JSON.stringify(recursivelyParsed, null, 2);
             } catch {
                 this.formattedMessages = this.record.Messages;
             }
@@ -124,11 +131,12 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent {
             this.formattedMessages = '';
         }
         
-        // Format result
+        // Format result with recursive JSON parsing
         if (this.record.Result) {
             try {
                 const parsed = JSON.parse(this.record.Result);
-                this.formattedResult = JSON.stringify(parsed, null, 2);
+                const recursivelyParsed = ParseJSONRecursive(parsed, parseOptions);
+                this.formattedResult = JSON.stringify(recursivelyParsed, null, 2);
             } catch {
                 this.formattedResult = this.record.Result;
             }
@@ -258,11 +266,18 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent {
     }
     
     private loadValidationData() {
+        const parseOptions: ParseJSONOptions = {
+            extractInlineJson: true,
+            maxDepth: 100,
+            debug: false
+        };
+
         // Parse validation attempts if available
         if (this.record.ValidationAttempts) {
             try {
                 this.validationAttempts = JSON.parse(this.record.ValidationAttempts);
-                this.formattedValidationAttempts = JSON.stringify(this.validationAttempts, null, 2);
+                const recursivelyParsed = ParseJSONRecursive(this.validationAttempts, parseOptions);
+                this.formattedValidationAttempts = JSON.stringify(recursivelyParsed, null, 2);
             } catch (error) {
                 console.error('Error parsing ValidationAttempts:', error);
                 this.validationAttempts = [];
@@ -277,7 +292,8 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent {
         if (this.record.ValidationSummary) {
             try {
                 this.validationSummary = JSON.parse(this.record.ValidationSummary);
-                this.formattedValidationSummary = JSON.stringify(this.validationSummary, null, 2);
+                const recursivelyParsed = ParseJSONRecursive(this.validationSummary, parseOptions);
+                this.formattedValidationSummary = JSON.stringify(recursivelyParsed, null, 2);
             } catch (error) {
                 console.error('Error parsing ValidationSummary:', error);
                 this.validationSummary = null;

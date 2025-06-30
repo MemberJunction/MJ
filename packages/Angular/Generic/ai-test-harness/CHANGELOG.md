@@ -1,5 +1,34 @@
 # @memberjunction/ng-ai-test-harness
 
+## 2.60.0
+
+### Patch Changes
+
+- dc95bed: Execution monitor details UI fix
+- Updated dependencies [b5fa80a]
+- Updated dependencies [e30ee12]
+- Updated dependencies [e512e4e]
+  - @memberjunction/core@2.60.0
+  - @memberjunction/core-entities@2.60.0
+  - @memberjunction/ng-shared@2.60.0
+  - @memberjunction/ng-code-editor@2.60.0
+  - @memberjunction/ng-container-directives@2.60.0
+  - @memberjunction/ng-notifications@2.60.0
+  - @memberjunction/graphql-dataprovider@2.60.0
+
+## 2.59.0
+
+### Patch Changes
+
+- 4af40cb: Implements full execution monitor functionality with UI, styling, and bug fixes for the AI test harness.
+  - @memberjunction/ng-shared@2.59.0
+  - @memberjunction/ng-code-editor@2.59.0
+  - @memberjunction/ng-container-directives@2.59.0
+  - @memberjunction/ng-notifications@2.59.0
+  - @memberjunction/graphql-dataprovider@2.59.0
+  - @memberjunction/core@2.59.0
+  - @memberjunction/core-entities@2.59.0
+
 ## 2.58.0
 
 ### Patch Changes

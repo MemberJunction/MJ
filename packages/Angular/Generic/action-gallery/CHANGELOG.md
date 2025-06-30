@@ -1,5 +1,28 @@
 # @memberjunction/ng-action-gallery
 
+## 2.60.0
+
+### Patch Changes
+
+- Updated dependencies [b5fa80a]
+- Updated dependencies [e30ee12]
+- Updated dependencies [dc95bed]
+- Updated dependencies [e512e4e]
+  - @memberjunction/core@2.60.0
+  - @memberjunction/core-entities@2.60.0
+  - @memberjunction/ng-ai-test-harness@2.60.0
+  - @memberjunction/ng-container-directives@2.60.0
+
+## 2.59.0
+
+### Patch Changes
+
+- Updated dependencies [4af40cb]
+  - @memberjunction/ng-ai-test-harness@2.59.0
+  - @memberjunction/ng-container-directives@2.59.0
+  - @memberjunction/core@2.59.0
+  - @memberjunction/core-entities@2.59.0
+
 ## 2.58.0
 
 ### Patch Changes
