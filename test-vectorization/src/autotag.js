@@ -13,7 +13,7 @@ import { LoadMistralEmbedding } from '@memberjunction/ai-mistral';
 const SYSTEM_USER_ID = "EDAFCCEC-6A37-EF11-86D4-000D3A4E707E";
 
 await pool.connect();
-const config = new SQLServerProviderConfigData(pool, '', '__mj', 5000);
+const config = new SQLServerProviderConfigData(pool, '__mj', 5000);
 const sqlServerDataProvider = await setupSQLServerClient(config);
 
 LoadGeneratedEntities();
