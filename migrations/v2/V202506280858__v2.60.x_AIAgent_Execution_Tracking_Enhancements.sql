@@ -9,7 +9,7 @@ UPDATE ${flyway:defaultSchema}.AIAgentRunStep
 SET StepType = 'Prompt'
 WHERE StepType IS NULL;
 
--- ALTER TABLE statements for __mj.AIAgentRun
+-- ALTER TABLE statements for AIAgentRun
 ALTER TABLE ${flyway:defaultSchema}.AIAgentRun 
 ADD ConversationDetailID uniqueidentifier NULL,
     ConversationDetailSequence INT NULL,
@@ -31,7 +31,7 @@ ALTER TABLE ${flyway:defaultSchema}.AIAgentRun
 ADD CONSTRAINT CK_AIAgentRun_FinalStep 
 CHECK (FinalStep IN ('Success', 'Failed', 'Retry', 'Sub-Agent', 'Actions', 'Chat'));
 
--- ALTER TABLE statements for __mj.AIAgentRunStep
+-- ALTER TABLE statements for AIAgentRunStep
 ALTER TABLE ${flyway:defaultSchema}.AIAgentRunStep
 ALTER COLUMN StepType nvarchar(50) NOT NULL;
 
@@ -78,66 +78,66 @@ BEGIN
     EXEC sp_dropextendedproperty 
         @name = N'MS_Description',
         @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-        @level1type = N'TABLE', @level1name = '__mj.AIAgentRunStep',
+        @level1type = N'TABLE', @level1name = 'AIAgentRunStep',
         @level2type = N'COLUMN', @level2name = 'StepType';
 END
 
--- Add extended properties for __mj.AIAgentRun
+-- Add extended properties for AIAgentRun
 EXEC sp_addextendedproperty 
     @name = N'MS_Description',
     @value = N'Optional tracking of a specific conversation detail (e.g. a specific message) that spawned this agent run',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = '__mj.AIAgentRun',
+    @level1type = N'TABLE', @level1name = 'AIAgentRun',
     @level2type = N'COLUMN', @level2name = 'ConversationDetailID';
 
 EXEC sp_addextendedproperty 
     @name = N'MS_Description',
     @value = N'If a conversation detail spawned multiple agent runs, tracks the order of their spawn/execution',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = '__mj.AIAgentRun',
+    @level1type = N'TABLE', @level1name = 'AIAgentRun',
     @level2type = N'COLUMN', @level2name = 'ConversationDetailSequence';
 
 EXEC sp_addextendedproperty 
     @name = N'MS_Description',
     @value = N'Reason for cancellation if the agent run was cancelled',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = '__mj.AIAgentRun',
+    @level1type = N'TABLE', @level1name = 'AIAgentRun',
     @level2type = N'COLUMN', @level2name = 'CancellationReason';
 
 EXEC sp_addextendedproperty 
     @name = N'MS_Description',
     @value = N'The final step type that concluded the agent run',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = '__mj.AIAgentRun',
+    @level1type = N'TABLE', @level1name = 'AIAgentRun',
     @level2type = N'COLUMN', @level2name = 'FinalStep';
 
 EXEC sp_addextendedproperty 
     @name = N'MS_Description',
     @value = N'JSON serialization of the final Payload state at the end of the agent run',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = '__mj.AIAgentRun',
+    @level1type = N'TABLE', @level1name = 'AIAgentRun',
     @level2type = N'COLUMN', @level2name = 'FinalPayload';
 
--- Add extended properties for __mj.AIAgentRunStep
+-- Add extended properties for AIAgentRunStep
 EXEC sp_addextendedproperty 
     @name = N'MS_Description',
     @value = N'Type of execution step: Prompt, Actions, Sub-Agent, Decision, Chat, Validation',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = '__mj.AIAgentRunStep',
+    @level1type = N'TABLE', @level1name = 'AIAgentRunStep',
     @level2type = N'COLUMN', @level2name = 'StepType';
 
 EXEC sp_addextendedproperty 
     @name = N'MS_Description',
     @value = N'JSON serialization of the Payload state at the start of this step',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = '__mj.AIAgentRunStep',
+    @level1type = N'TABLE', @level1name = 'AIAgentRunStep',
     @level2type = N'COLUMN', @level2name = 'PayloadAtStart';
 
 EXEC sp_addextendedproperty 
     @name = N'MS_Description',
     @value = N'JSON serialization of the Payload state at the end of this step',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = '__mj.AIAgentRunStep',
+    @level1type = N'TABLE', @level1name = 'AIAgentRunStep',
     @level2type = N'COLUMN', @level2name = 'PayloadAtEnd';
  
 
@@ -2088,7 +2088,7 @@ EXEC sp_addextendedproperty
 
 
 
-update ${flyway:defaultSchema}.EntityField set Status='Deprecated' WHERE ID='6FF56877-27AE-47D9-A6CD-641088C2458E' -- __mj.AIAgentRun.AgentState - field not used, we use Payload fields now      
+update ${flyway:defaultSchema}.EntityField set Status='Deprecated' WHERE ID='6FF56877-27AE-47D9-A6CD-641088C2458E' -- AIAgentRun.AgentState - field not used, we use Payload fields now      
 
 
 
