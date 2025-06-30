@@ -9,6 +9,10 @@ UPDATE ${flyway:defaultSchema}.AIAgentRunStep
 SET StepType = 'Prompt'
 WHERE StepType IS NULL;
 
+-- ALTER TABLE statements for AIAgentRunStep
+ALTER TABLE ${flyway:defaultSchema}.AIAgentRunStep
+ALTER COLUMN StepType nvarchar(50) NOT NULL;
+
 -- ALTER TABLE statements for AIAgentRun
 ALTER TABLE ${flyway:defaultSchema}.AIAgentRun 
 ADD ConversationDetailID uniqueidentifier NULL,
@@ -16,6 +20,7 @@ ADD ConversationDetailID uniqueidentifier NULL,
     CancellationReason nvarchar(30) NULL,
     FinalStep nvarchar(30) NULL,
     FinalPayload nvarchar(MAX) NULL;
+GO
 
 -- Add foreign key constraint
 ALTER TABLE ${flyway:defaultSchema}.AIAgentRun
@@ -31,9 +36,6 @@ ALTER TABLE ${flyway:defaultSchema}.AIAgentRun
 ADD CONSTRAINT CK_AIAgentRun_FinalStep 
 CHECK (FinalStep IN ('Success', 'Failed', 'Retry', 'Sub-Agent', 'Actions', 'Chat'));
 
--- ALTER TABLE statements for AIAgentRunStep
-ALTER TABLE ${flyway:defaultSchema}.AIAgentRunStep
-ALTER COLUMN StepType nvarchar(50) NOT NULL;
 
 -- Drop existing default constraint if it exists
 DECLARE @DefaultConstraintName NVARCHAR(255)
