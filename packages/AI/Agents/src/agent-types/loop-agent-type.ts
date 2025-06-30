@@ -112,7 +112,7 @@ export class LoopAgentType extends BaseAgentType {
                     reasoning: response.reasoning,
                     confidence: response.confidence,
                     step: 'Success',
-                    payload: response.payload,                    
+                    payloadChangeRequest: response.payloadChangeRequest,                    
                 };
             }
 
@@ -126,8 +126,8 @@ export class LoopAgentType extends BaseAgentType {
             }
 
             // Determine next step based on type
-            const retVal: Partial<BaseAgentNextStep<LoopAgentResponse<P>>> = {
-                payload: response.payload,
+            const retVal: Partial<BaseAgentNextStep<P>> = {
+                payloadChangeRequest: response.payloadChangeRequest,
                 terminate: response.taskComplete
             }
             switch (response.nextStep.type) {
@@ -274,8 +274,8 @@ export class LoopAgentType extends BaseAgentType {
             throw new Error('Invalid LoopAgentResponse structure');
         }
 
-        // Return the response as the payload
-        return loopAgentResponse.payload as T;
+        // Return the response (the framework will handle applying payload changes)
+        return loopAgentResponse as T;
     }
 
 

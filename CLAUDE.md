@@ -123,6 +123,10 @@ Look for packages that depend on each other:
 - Error handling: use try/catch blocks and provide meaningful error messages
 - Document public APIs with TSDoc comments
 - Follow single responsibility principle
+- Keep functions focused and concise - avoid overly long functions
+  - Functions should have a clear, single purpose
+  - Break complex operations into smaller, well-named helper functions
+  - Aim for functions that fit on a single screen when possible
 
 ## Object-Oriented Design Principles
 

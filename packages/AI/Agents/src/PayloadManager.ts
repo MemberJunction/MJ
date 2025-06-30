@@ -12,6 +12,7 @@
  */
 
 import { LogError, LogStatus } from '@memberjunction/core';
+import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 import * as _ from 'lodash';
 
 /**
@@ -504,5 +505,330 @@ export class PayloadManager {
         }
         
         return result;
+    }
+
+    /**
+     * Applies an AgentPayloadChangeRequest to a payload
+     * 
+     * @param originalPayload The original payload to apply changes to
+     * @param changeRequest The change request from the AI agent
+     * @param options Configuration options for the operation
+     * @returns Result object with the modified payload, operation counts, and any warnings
+     */
+    public applyAgentChangeRequest<P = any>(
+        originalPayload: P,
+        changeRequest: AgentPayloadChangeRequest<P>,
+        options?: {
+            validateChanges?: boolean;
+            logChanges?: boolean;
+            agentName?: string;
+        }
+    ): { 
+        result: P; 
+        applied: { 
+            additions: number; 
+            updates: number; 
+            deletions: number; 
+        };
+        warnings: string[];
+    } {
+        const warnings: string[] = [];
+        const result = _.cloneDeep(originalPayload) || {} as P;
+        const counts = { additions: 0, updates: 0, deletions: 0 };
+        
+        // Process all changes recursively
+        this.processChangeRequest(
+            result,
+            originalPayload,
+            changeRequest,
+            [],
+            counts,
+            warnings
+        );
+        
+        // Log if requested
+        if (options?.logChanges) {
+            this.logChangesSummary(counts, changeRequest.reasoning, options.agentName);
+        }
+        
+        return {
+            result,
+            applied: counts,
+            warnings
+        };
+    }
+
+    /**
+     * Process a change request recursively through the payload structure
+     */
+    private processChangeRequest(
+        target: any,
+        original: any,
+        changeRequest: AgentPayloadChangeRequest<any>,
+        path: string[],
+        counts: { additions: number; updates: number; deletions: number; },
+        warnings: string[]
+    ): void {
+        if (Array.isArray(target)) {
+            this.processArrayChanges(target, original, changeRequest, path, counts, warnings);
+        } else if (typeof target === 'object' && target !== null) {
+            this.processObjectChanges(target, original, changeRequest, path, counts, warnings);
+        }
+    }
+
+    /**
+     * Process changes for array elements
+     */
+    private processArrayChanges(
+        target: any[],
+        original: any[],
+        changeRequest: AgentPayloadChangeRequest<any>,
+        path: string[],
+        counts: { additions: number; updates: number; deletions: number; },
+        warnings: string[]
+    ): void {
+        const pathStr = path.join('.');
+        
+        // Get change arrays for this path
+        const removeArray = pathStr ? _.get(changeRequest.removeElements, pathStr) : changeRequest.removeElements;
+        const updateArray = pathStr ? _.get(changeRequest.updateElements, pathStr) : changeRequest.updateElements;
+        const newArray = pathStr ? _.get(changeRequest.newElements, pathStr) : changeRequest.newElements;
+        
+        // Build a new array with all changes applied
+        const newTargetArray: any[] = [];
+        
+        // Process existing elements
+        for (let i = 0; i < target.length; i++) {
+            if (removeArray && removeArray[i] === '_DELETE_') {
+                counts.deletions++;
+                continue; // Skip deleted items
+            }
+            
+            // Use updated value if provided, otherwise keep original
+            let elementToAdd = target[i];
+            
+            if (updateArray && this.isSignificantValue(updateArray[i])) {
+                elementToAdd = updateArray[i];
+                counts.updates++;
+            } else if (typeof elementToAdd === 'object' && elementToAdd !== null) {
+                // For objects/arrays that aren't being replaced, process nested changes
+                elementToAdd = _.cloneDeep(elementToAdd);
+                this.processChangeRequest(
+                    elementToAdd,
+                    original ? original[i] : undefined,
+                    changeRequest,
+                    [...path, i.toString()],
+                    counts,
+                    warnings
+                );
+            }
+            
+            newTargetArray.push(elementToAdd);
+        }
+        
+        // Add new elements
+        if (newArray && Array.isArray(newArray)) {
+            for (const item of newArray) {
+                if (this.isSignificantValue(item)) {
+                    newTargetArray.push(item);
+                    counts.additions++;
+                }
+            }
+        }
+        
+        // Replace array contents in-place
+        target.length = 0;
+        target.push(...newTargetArray);
+    }
+
+
+    /**
+     * Process changes for object properties
+     */
+    private processObjectChanges(
+        target: any,
+        original: any,
+        changeRequest: AgentPayloadChangeRequest<any>,
+        path: string[],
+        counts: { additions: number; updates: number; deletions: number; },
+        warnings: string[]
+    ): void {
+        // Get all unique keys from change request
+        const changeKeys = this.getChangeKeys(changeRequest, path);
+        
+        // Process changes for each key
+        for (const key of changeKeys) {
+            this.processKeyChange(
+                target,
+                original,
+                changeRequest,
+                [...path, key],
+                key,
+                counts,
+                warnings
+            );
+        }
+        
+        // Recurse into all existing keys for nested changes
+        for (const key of Object.keys(target)) {
+            if (!changeKeys.has(key) && typeof target[key] === 'object' && target[key] !== null) {
+                this.processChangeRequest(
+                    target[key],
+                    original ? original[key] : undefined,
+                    changeRequest,
+                    [...path, key],
+                    counts,
+                    warnings
+                );
+            }
+        }
+    }
+
+    /**
+     * Process a single key change (add, update, or delete)
+     */
+    private processKeyChange(
+        target: any,
+        original: any,
+        changeRequest: AgentPayloadChangeRequest<any>,
+        keyPath: string[],
+        key: string,
+        counts: { additions: number; updates: number; deletions: number; },
+        warnings: string[]
+    ): void {
+        const pathStr = keyPath.join('.');
+        
+        // Check for deletion
+        const removeValue = _.get(changeRequest.removeElements, pathStr);
+        if (removeValue === '_DELETE_') {
+            delete target[key];
+            counts.deletions++;
+            return;
+        }
+        
+        // Check for addition
+        const newValue = _.get(changeRequest.newElements, pathStr);
+        if (newValue !== undefined && !(key in target)) {
+            target[key] = newValue;
+            counts.additions++;
+            return;
+        }
+        
+        // Check for update
+        const updateValue = _.get(changeRequest.updateElements, pathStr);
+        if (updateValue !== undefined && key in target) {
+            target[key] = updateValue;
+            counts.updates++;
+        } else if (updateValue !== undefined) {
+            warnings.push(`Update attempted on non-existent key: ${pathStr}`);
+        } else if (newValue !== undefined) {
+            warnings.push(`Addition attempted on existing key: ${pathStr}`);
+        }
+    }
+
+    /**
+     * Get all unique keys from change request for a given path
+     */
+    private getChangeKeys(changeRequest: AgentPayloadChangeRequest<any>, path: string[]): Set<string> {
+        const keys = new Set<string>();
+        const pathStr = path.join('.');
+        
+        const addKeysFromObject = (obj: any) => {
+            if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+                Object.keys(obj).forEach(k => keys.add(k));
+            }
+        };
+        
+        const removeObj = pathStr ? _.get(changeRequest.removeElements, pathStr) : changeRequest.removeElements;
+        const updateObj = pathStr ? _.get(changeRequest.updateElements, pathStr) : changeRequest.updateElements;
+        const newObj = pathStr ? _.get(changeRequest.newElements, pathStr) : changeRequest.newElements;
+        
+        addKeysFromObject(removeObj);
+        addKeysFromObject(updateObj);
+        addKeysFromObject(newObj);
+        
+        return keys;
+    }
+
+    /**
+     * Check if a value is significant (not empty object or undefined)
+     */
+    private isSignificantValue(value: any): boolean {
+        if (value === undefined) return false;
+        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+            return Object.keys(value).length > 0;
+        }
+        return true;
+    }
+
+
+    /**
+     * Log a summary of changes applied
+     */
+    private logChangesSummary(
+        counts: { additions: number; updates: number; deletions: number; },
+        reasoning: string | undefined,
+        agentName: string | undefined
+    ): void {
+        const agent = agentName ? ` by ${agentName}` : '';
+        const reason = reasoning ? ` | Reason: ${reasoning}` : '';
+        LogStatus(
+            `Payload changes applied${agent}: ` +
+            `+${counts.additions} additions, ~${counts.updates} updates, -${counts.deletions} deletions${reason}`
+        );
+    }
+
+    /**
+     * Apply a change request to a sub-agent payload with upstream guardrails
+     * 
+     * This method first applies the change request, then enforces upstream path restrictions
+     * to ensure the sub-agent only modifies allowed paths.
+     */
+    public applySubAgentChangeRequest<P = any>(
+        parentPayload: P,
+        changeRequest: AgentPayloadChangeRequest<P>,
+        upstreamPaths: string[],
+        subAgentName: string
+    ): {
+        result: P;
+        applied: { additions: number; updates: number; deletions: number; };
+        warnings: string[];
+        blocked: number;
+    } {
+        // First apply the full change request
+        const changeResult = this.applyAgentChangeRequest(
+            parentPayload,
+            changeRequest,
+            { validateChanges: true }
+        );
+        
+        // Then apply upstream guardrails
+        const guardedPayload = this.mergeUpstreamPayload(
+            subAgentName,
+            parentPayload,
+            changeResult.result,
+            upstreamPaths
+        );
+        
+        // Count blocked changes (this is a simplified count)
+        const blocked = this.countBlockedChanges(parentPayload, changeResult.result, guardedPayload);
+        
+        return {
+            result: guardedPayload,
+            applied: changeResult.applied,
+            warnings: changeResult.warnings,
+            blocked
+        };
+    }
+
+    /**
+     * Count how many changes were blocked by guardrails
+     */
+    private countBlockedChanges(_original: any, intended: any, actual: any): number {
+        // This is a simplified implementation
+        // A full implementation would do deep comparison
+        const intendedStr = JSON.stringify(intended);
+        const actualStr = JSON.stringify(actual);
+        return intendedStr === actualStr ? 0 : 1;
     }
 }

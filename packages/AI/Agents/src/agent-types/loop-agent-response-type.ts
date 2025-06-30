@@ -1,14 +1,16 @@
+import { AgentPayloadChangeRequest } from "@memberjunction/ai-core-plus";
+
 /**
  * Response structure expected from the Loop Agent Type system prompt.
  * This interface matches the JSON schema defined in the loop agent type template.
  * 
- * T is the generic type for the payload, allowing flexibility in the data returned
+ * P is the generic type for the payload, allowing flexibility in the data returned
  * by the agent. This can be any structured data type that the agent needs to return
  * to the user or calling system, defaults to any.
  * 
  * @interface LoopAgentResponse
  */
-export interface LoopAgentResponse<T = any> {
+export interface LoopAgentResponse<P = any> {
     /**
      * Indicates whether the entire task has been completed successfully.
      * When true, the agent loop will terminate and return the final result.
@@ -35,14 +37,11 @@ export interface LoopAgentResponse<T = any> {
     message: string;
 
     /**
-     * Agent specific payload that contains the result of the task.
-     * This can include accumulated results, processed data, or any other
-     * information that the agent has gathered during its execution.
-     * This payload is returned when taskComplete is true, allowing the agent
-     * to return a structured result to the user or calling system.
-     * @type {T}
+     * Agent's payload change requests. Leave this as undefined if no changes are needed.
+     * See @see AgentPayloadChangeRequest for details on how to structure this.
+     * @type {P}
      */
-    payload: T;
+    payloadChangeRequest?: AgentPayloadChangeRequest<P>;
     
     /**
      * The agent's internal reasoning about the current state and decision made.
@@ -151,3 +150,5 @@ export interface LoopAgentResponse<T = any> {
         };
     };
 }
+
+//\n{@include ../../../CorePlus/src/agent-payload-change-request.ts}

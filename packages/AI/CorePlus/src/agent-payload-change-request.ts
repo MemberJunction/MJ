@@ -1,0 +1,94 @@
+/**
+ * The purpose of this type is to give an AI model the ability to request specific changes
+ * to an existing payload. This allows for more fine grained control over state changes
+ * and also is token efficient, as it allows the AI to specify only the changes needed
+ * rather than sending the entire payload again in its completion.
+ */
+export type AgentPayloadChangeRequest<P = any> = {
+    /**
+     * A partial of P that includes all new elements added that were not previously present in
+     * the payload prior to the prompt execution. This allows the AI to specify the new elements
+     * to be added clearly here. The structure is identical to the payload type P with just the
+     * portions filled out that need to be added.
+     */
+    newElements?: Partial<P>;
+
+    /**
+     * A partial of P that includes all elements that should be updated in the payload.
+     * This allows the AI to specify which elements should be updated in the payload.
+     * The structure is identical to the payload type P with just the portions filled out
+     * that need to be updated.
+     */
+    updateElements?: Partial<P>;
+
+    /**
+     * This partial of P includes all elements that should be removed from the payload. When an
+     * item needs to be removed, rather than the normal value, the AI should simply include the
+     * item with a value of "_DELETE_". By doing this, the AI is telling us exactly which elements
+     * to remove. 
+     * 
+     * For nested objects, here is an example:
+     * ```typescript
+     * {
+     *   nestedObject: {
+     *     itemToRemove: '_DELETE_'
+     *   }
+     * }
+     * ```
+     * 
+     * In this case if there was a payload like this:
+     * ```typescript        
+     * {
+     *   nestedObject: {
+     *    itemToRemove: 'value',
+     *    itemToKeep: 'value'
+     *   },
+     *   anotherItemToRemove: '_DELETE_',
+     *   anotherItemToKeep: 12345  
+     * }
+     * ```
+     * The result of the operation would be :
+     * ```typescript
+     * {
+     *   nestedObject: {
+     *     itemToKeep: 'value'
+     *   },
+     *   anotherItemToKeep: 12345
+     * }
+     * 
+     * In the case of arrays, it is important to include ALL array elements so the order is specified properly but the contents of array items being kept does **NOT**
+     * need to be specified. For example, if the payload was:
+     * ```typescript
+     * {
+     *   items: [
+     *     { id: '1', value: 'keep' },
+     *     { id: '2', value: 'this one goes away' }, 
+     *     { id: '3', value: 'keep' }
+     *   ]
+     * }
+     * ```
+     * And the AI wanted to remove the second item, it would specify:
+     * ```typescript
+     * {
+     *  items: [
+     *   {},
+     *   "_DELETE_",
+     *   {}
+     * }
+     * ```
+     * The above return value for the removeElements attribute would result in the following payload after processing
+     * ```typescript
+     * {
+     *  items: [
+     *     { id: '1', value: 'keep' },
+     *     { id: '3', value: 'keep' }
+     *  ]
+     * }
+     * ```
+     * Important note: For token efficiency, the AI model should note emit array elements fully that it wants to **keep** 
+     * but rather emit empty objects `{}` for those items. This indicates that the item should be kept as is since it is NOT
+     * equal to a string literal of "_DELETE_".
+     */
+    removeElements?: Partial<P>;
+    reasoning?: string;
+}

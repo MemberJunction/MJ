@@ -14,6 +14,7 @@ import { AIAgentRunEntity, AIAgentRunEntityExtended, AIAgentTypeEntity, AIPrompt
 import { ChatMessage } from '@memberjunction/ai';
 import { AIAgentEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
+import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 
 
 /**
@@ -103,8 +104,18 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
     step: AIAgentRunEntityExtended['FinalStep']
     /** Result from the prior step, useful for retry or sub-agent context */
     priorStepResult?: any;
-    /** Optional value to return with the step determination */
-    payload?: P;
+    /** 
+     * Payload change request from the agent.
+     * Framework will apply these changes to the previous payload to create the new state.
+     * This approach ensures safe state mutations and prevents data loss from LLM truncation.
+     */
+    payloadChangeRequest?: AgentPayloadChangeRequest<P>;
+    /** 
+     * The payload that was passed into this step execution.
+     * Useful for debugging and understanding what state the agent was working with.
+     * @deprecated Use payloadChangeRequest instead for state mutations
+     */
+    previousPayload?: P;
     /** Error message when step is 'failed' */
     errorMessage?: string;
     /** Reason for retry when step is 'retry' (e.g., "Processing action results", "Handling error condition") */
@@ -146,7 +157,7 @@ export type ExecuteAgentResult<P = any> = {
      */
     agentRun: AIAgentRunEntityExtended;
 }
-     
+
 /**
  * The decision made about what to do next after a step completes.
  * 

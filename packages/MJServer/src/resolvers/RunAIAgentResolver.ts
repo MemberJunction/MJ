@@ -149,9 +149,6 @@ export class RunAIAgentResolver extends ResolverBase {
             console.error('❌ Unexpected agent run structure:', result.agentRun);
         }
 
-        // Note: executionTree is no longer part of ExecuteAgentResult
-        // Step information is available through agentRun.Steps
-
         return sanitized;
     }
 
