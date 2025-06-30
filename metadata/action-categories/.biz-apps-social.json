@@ -1,0 +1,74 @@
+[
+  {
+    "fields": {
+      "Name": "Social Media",
+      "Description": "Social media management integrations for content creation, scheduling, analytics, and engagement across multiple platforms",
+      "ParentID": "@lookup:Action Categories.Name=Business Apps&ParentID=null",
+      "Status": "Active"
+    }
+  }, 
+  {
+    "fields": {
+      "Name": "HootSuite",
+      "Description": "HootSuite social media management platform integration for multi-network posting and analytics",
+      "ParentID": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Buffer",
+      "Description": "Buffer social media scheduling and analytics platform integration",
+      "ParentID": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "LinkedIn",
+      "Description": "LinkedIn professional networking platform integration for posts, connections, and company pages",
+      "ParentID": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Twitter",
+      "Description": "Twitter/X microblogging platform integration for tweets, analytics, and engagement",
+      "ParentID": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Facebook",
+      "Description": "Facebook social network integration for pages, posts, insights, and advertising",
+      "ParentID": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Instagram",
+      "Description": "Instagram visual content platform integration for posts, stories, reels, and insights",
+      "ParentID": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "TikTok",
+      "Description": "TikTok short-form video platform integration for content creation and analytics",
+      "ParentID": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "YouTube",
+      "Description": "YouTube video platform integration for video management, playlists, and channel analytics",
+      "ParentID": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
+      "Status": "Active"
+    }
+  }
+]
