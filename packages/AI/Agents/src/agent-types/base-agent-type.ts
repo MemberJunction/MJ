@@ -11,7 +11,10 @@
  * @since 2.49.0
  */
 
-import { AIPromptRunResult, BaseAgentNextStep} from '@memberjunction/ai-core-plus';
+import { AIPromptParams, AIPromptRunResult, BaseAgentNextStep} from '@memberjunction/ai-core-plus';
+import { AIAgentTypeEntity } from '@memberjunction/core-entities';
+import { MJGlobal } from '@memberjunction/global';
+import { LogError } from '@memberjunction/core';
 
 /**
  * Abstract base class for agent type implementations.
@@ -41,7 +44,7 @@ import { AIPromptRunResult, BaseAgentNextStep} from '@memberjunction/ai-core-plu
  *     
  *     return {
  *       step: goalAchieved ? 'success' : 'action',
- *       returnValue: result
+ *       payload: result
  *     };
  *   }
  * }
@@ -66,14 +69,111 @@ export abstract class BaseAgentType {
      *   const response = JSON.parse(this.lastExecutionResult);
      *   
      *   if (response.taskComplete) {
-     *     return { step: 'success', returnValue: response.result };
+     *     return { step: 'success', payload: response.payload };
      *   } else if (response.needsSubAgent) {
-     *     return { step: 'subagent', returnValue: response.subAgentConfig };
+     *     return { step: 'subagent', payload: response.subAgentConfig };
      *   } else {
-     *     return { step: 'action', returnValue: response.nextAction };
+     *     return { step: 'action', payload: response.nextAction };
      *   }
      * }
      * ```
      */
-    public abstract DetermineNextStep(promptResult: AIPromptRunResult): Promise<BaseAgentNextStep>  
+    public abstract DetermineNextStep<P = any>(promptResult: AIPromptRunResult): Promise<BaseAgentNextStep<P>>;
+
+    /**
+     * The agent type is responsible for knowing what to retreive a payload from the prompt results for its
+     * agent-type specific logic.
+     */
+    public abstract RetrievePayload<P = any>(promptResult: AIPromptRunResult): Promise<P>;
+
+    /**
+     * The agent type is responsible for injecting a payload into the prompt. This can be done by updating the
+     * system prompt by replacing a special non-Nunjucks placeholder, or by adding extra messages to the prompt.
+     * @param payload 
+     * @param prompt 
+     */
+    public abstract InjectPayload<P = any>(payload: P, prompt: AIPromptParams): Promise<void>;
+
+    /**
+     * Helper method that retrieves an instance of the agent type based on the provided agent type entity.
+     * 
+     * This method uses the ClassFactory to create an instance of the agent type class
+     * specified in the DriverClass field of the agent type entity. If the DriverClass is not
+     * specified, it throws an error.
+     * 
+     * @async
+     * @static
+     * @method GetAgentTypeInstance
+     * @param {AIAgentTypeEntity} agentType - The agent type entity to instantiate
+     * 
+     * @returns {Promise<BaseAgentType>} An instance of the agent type class
+     * 
+     * @throws {Error} If the agent type does not have a DriverClass specified or if instantiation fails
+     * @param agentType 
+     * @returns 
+     */
+    public static async GetAgentTypeInstance(agentType: AIAgentTypeEntity): Promise<BaseAgentType> {
+        try {
+            const agentTypeInstance = await this.getAgentTypeInstance(agentType);
+            return agentTypeInstance;
+        } catch (error) {
+            LogError(error);
+            throw new Error(`Failed to get agent type instance for ${agentType.Name}: ${error.message}`);
+        }
+    }
+
+
+    /**
+     * Instantiates the appropriate agent type class based on the agent type entity.
+     * 
+     * This method uses the MemberJunction class factory to dynamically instantiate
+     * agent type classes. It uses the DriverClass field. If DriverClass is not specified
+     * it throws an error.
+     * 
+     * @param {AIAgentTypeEntity} agentType - The agent type entity to instantiate
+     * 
+     * @returns {Promise<BaseAgentType | null>} Instance of the agent type class
+     * 
+     * @example
+     * // For an agent type with DriverClass "LoopAgentType"
+     * const agentTypeInstance = await this.getAgentTypeInstance(loopAgentType);
+     * 
+     * @protected
+     */
+    protected static async getAgentTypeInstance(agentType: AIAgentTypeEntity): Promise<BaseAgentType | null> {
+        // Use DriverClass 
+        if (!agentType.DriverClass) {
+            throw new Error(`Agent type '${agentType.Name}' does not have a DriverClass specified. Please ensure the agent type is properly configured.`);
+        }
+        
+        // Create an instance of the agent type using the DriverClass
+        return this.getAgentInstanceWithDriverClass(agentType.DriverClass);
+    }
+
+    /**
+     * Instantiates an agent type class using a specific driver class name.
+     * 
+     * This method is used when an individual agent has its own DriverClass override,
+     * allowing for specialized implementations per agent instance.
+     * 
+     * @param {string} driverClass - The driver class name to instantiate
+     * 
+     * @returns {Promise<BaseAgentType | null>} Instance of the agent type class
+     * 
+     * @protected
+     */
+    protected static async getAgentInstanceWithDriverClass(driverClass: string): Promise<BaseAgentType | null> {
+        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAgentType>(BaseAgentType, driverClass);
+        
+        if (!instance) {
+            throw new Error(`No implementation found for agent with DriverClass '${driverClass}'. Please ensure the class is registered with the ClassFactory.`);
+        }
+
+        // now check to make sure that the instance is NOT the base class BaseAgentType as that is not valid
+        if (instance.constructor === BaseAgentType) {
+            throw new Error(`The DriverClass '${driverClass}' is not a valid agent type implementation. It must extend BaseAgentType.`);
+        }
+        
+        return instance;
+    }
 }

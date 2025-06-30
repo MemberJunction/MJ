@@ -39,7 +39,9 @@ import { TestHarnessWindowManagerService } from './lib/test-harness-window-manag
     AITestHarnessDialogComponent,
     AITestHarnessWindowComponent,
     TestHarnessCustomWindowComponent,
-    JsonViewerWindowComponent
+    JsonViewerWindowComponent,
+    AgentExecutionMonitorComponent,
+    ExecutionNodeComponent
   ],
   imports: [
     CommonModule,
@@ -58,10 +60,7 @@ import { TestHarnessWindowManagerService } from './lib/test-harness-window-manag
     IconsModule,
     // MemberJunction
     ContainerDirectivesModule,
-    CodeEditorModule,
-    // Standalone components
-    AgentExecutionMonitorComponent,
-    ExecutionNodeComponent
+    CodeEditorModule
   ],
   exports: [
     AITestHarnessComponent,
@@ -69,7 +68,6 @@ import { TestHarnessWindowManagerService } from './lib/test-harness-window-manag
     AITestHarnessWindowComponent,
     TestHarnessCustomWindowComponent,
     AgentExecutionMonitorComponent,
-    ExecutionNodeComponent,
     JsonViewerWindowComponent
   ],
   providers: [

@@ -1,16 +1,15 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { ExecutionTreeNode } from './agent-execution-monitor.component';
+import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from '@angular/core';
+import { AIAgentRunStepEntityExtended } from '@memberjunction/core-entities';
 
 @Component({
     selector: 'mj-execution-node',
-    standalone: true,
-    imports: [CommonModule],
+    changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
         <div class="tree-node" 
-             [class.expanded]="node.expanded"
+             [class.expanded]="expanded"
              [class.has-children]="hasChildren()"
-             [class]="'depth-' + node.depth + ' type-' + node.type">
+             [class.details-expanded]="detailsExpanded"
+             [class]="'depth-' + depth + ' type-' + getStepTypeClass()">
             
             <!-- Node Header -->
             <div class="node-header" 
@@ -18,15 +17,15 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
                 <!-- Expand/Collapse Icon - Only show if node has children -->
                 @if (hasChildren()) {
                     <i class="expand-icon fa-solid"
-                       [class.fa-chevron-down]="node.expanded"
-                       [class.fa-chevron-right]="!node.expanded"
+                       [class.fa-chevron-down]="expanded"
+                       [class.fa-chevron-right]="!expanded"
                        (click)="onToggleChildren($event)"
                        title="Toggle children"></i>
                 }
                 
                 <!-- Status Icon -->
-                <span class="status-icon" [class]="'status-' + node.status">
-                    @switch (node.status) {
+                <span class="status-icon" [class]="'status-' + getStatusClass()">
+                    @switch (getStatusClass()) {
                         @case ('pending') {
                             <i class="fa-regular fa-circle"></i>
                         }
@@ -44,7 +43,7 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
                 
                 <!-- Type Icon -->
                 <span class="type-icon" [title]="getNodeTitle()">
-                    @switch (node.type) {
+                    @switch (getStepTypeClass()) {
                         @case ('validation') {
                             <i class="fa-solid fa-shield-halved"></i>
                         }
@@ -52,17 +51,17 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
                             <i class="fa-solid fa-brain"></i>
                         }
                         @case ('action') {
-                            @if (node.actionIconClass) {
-                                <i [class]="node.actionIconClass"></i>
+                            @if (getActionIconClass()) {
+                                <i [class]="getActionIconClass()"></i>
                             } @else {
                                 <i class="fa-solid fa-bolt"></i>
                             }
                         }
                         @case ('sub-agent') {
-                            @if (node.agentLogoURL) {
-                                <img [src]="node.agentLogoURL" [alt]="node.agentName || 'Agent'" class="agent-logo-icon">
-                            } @else if (node.agentIconClass) {
-                                <i [class]="node.agentIconClass"></i>
+                            @if (getAgentLogoURL()) {
+                                <img [src]="getAgentLogoURL()" [alt]="getAgentName() || 'Agent'" class="agent-logo-icon">
+                            } @else if (getAgentIconClass()) {
+                                <i [class]="getAgentIconClass()"></i>
                             } @else {
                                 <i class="fa-solid fa-sitemap"></i>
                             }
@@ -78,25 +77,25 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
                 
                 <!-- Node Name with depth indicator for sub-agents -->
                 <span class="node-name">
-                    @if (node.type === 'sub-agent' && node.depth > 0) {
-                        <small style="color: #666; margin-right: 8px;">[Level {{ node.depth }}]</small>
+                    @if (step.StepType === 'Sub-Agent' && depth > 0) {
+                        <small style="color: #666; margin-right: 8px;">[Level {{ depth }}]</small>
                     }
                     {{ getTruncatedName() }}
                 </span>
                 
                 <!-- Duration -->
-                @if (node.duration) {
-                    <span class="node-duration">{{ formatDuration(node.duration) }}</span>
+                @if (getDuration()) {
+                    <span class="node-duration">{{ formatDuration(getDuration()) }}</span>
                 }
                 
                 <!-- Tokens/Cost -->
-                @if (node.tokensUsed || node.cost) {
+                @if (getTokensUsed() || getCost()) {
                     <span class="node-metrics">
-                        @if (node.tokensUsed) {
-                            <span class="tokens">{{ node.tokensUsed }} tokens</span>
+                        @if (getTokensUsed()) {
+                            <span class="tokens">{{ getTokensUsed() }} tokens</span>
                         }
-                        @if (node.cost) {
-                            <span class="cost">\${{ node.cost.toFixed(4) }}</span>
+                        @if (getCost()) {
+                            <span class="cost">\${{ getCost()!.toFixed(4) }}</span>
                         }
                     </span>
                 }
@@ -105,55 +104,55 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
                 @if (hasNodeDetails()) {
                     <button class="details-toggle-btn"
                             (click)="onToggleDetails($event)"
-                            [title]="node.detailsExpanded ? 'Hide details' : 'Show details'">
+                            [title]="detailsExpanded ? 'Hide details' : 'Show details'">
                         <i class="fa-solid"
-                           [class.fa-info]="!node.detailsExpanded"
-                           [class.fa-times]="node.detailsExpanded"></i>
+                           [class.fa-info]="!detailsExpanded"
+                           [class.fa-times]="detailsExpanded"></i>
                     </button>
                 }
             </div>
             
             <!-- Node Details (when details are expanded) -->
-            @if (node.detailsExpanded) {
+            @if (detailsExpanded) {
                 <!-- Show markdown details first if available -->
-                @if (node.detailsMarkdown || isNameTruncated()) {
+                @if (getDetailsMarkdown() || isNameTruncated()) {
                     <div class="markdown-details">
                         @if (isNameTruncated()) {
-                            <div class="full-name">{{ node.name }}</div>
+                            <div class="full-name">{{ step.StepName }}</div>
                         }
-                        @if (node.detailsMarkdown) {
-                            <div class="detail-content markdown" [innerHTML]="formatMarkdown(node.detailsMarkdown)"></div>
+                        @if (getDetailsMarkdown()) {
+                            <div class="detail-content markdown" [innerHTML]="formatMarkdown(getDetailsMarkdown()!)"></div>
                         }
                     </div>
                 }
                 
                 <!-- Always show details section if node is expanded, even if some content is empty -->
                 <div class="node-details">
-                    @if (node.error) {
+                    @if (step.ErrorMessage) {
                         <div class="detail-section error">
                             <div class="detail-label">
                                 <i class="fa-solid fa-exclamation-triangle"></i> Error
                             </div>
-                            <div class="detail-content">{{ node.error }}</div>
+                            <div class="detail-content">{{ step.ErrorMessage }}</div>
                         </div>
                     }
-                    @if (node.inputPreview) {
+                    @if (getInputPreview()) {
                         <div class="detail-section">
                             <div class="detail-label">
                                 <i class="fa-solid fa-sign-in-alt"></i> Input
                             </div>
-                            <div class="detail-content">{{ node.inputPreview }}</div>
+                            <div class="detail-content">{{ getInputPreview() }}</div>
                         </div>
                     }
-                    @if (node.outputPreview) {
+                    @if (getOutputPreview()) {
                         <div class="detail-section">
                             <div class="detail-label">
                                 <i class="fa-solid fa-sign-out-alt"></i> Output
                             </div>
-                            <div class="detail-content">{{ node.outputPreview }}</div>
+                            <div class="detail-content">{{ getOutputPreview() }}</div>
                         </div>
                     }
-                    @if (!node.error && !node.inputPreview && !node.outputPreview && !node.detailsMarkdown && !isNameTruncated()) {
+                    @if (!step.ErrorMessage && !getInputPreview() && !getOutputPreview() && !getDetailsMarkdown() && !isNameTruncated()) {
                         <div class="detail-section">
                             <div class="detail-content">No additional details available for this step.</div>
                         </div>
@@ -161,17 +160,7 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
                 </div>
             }
             
-            <!-- Children (when children are expanded) - HIERARCHICAL DISPLAY -->
-            @if (node.expanded && node.children && node.children.length > 0) {
-                @for (child of node.children; track child.id) {
-                    <mj-execution-node 
-                        [node]="child"
-                        [depth]="child.depth"
-                        (toggleNode)="toggleNode.emit($event)"
-                        (userInteracted)="userInteracted.emit()">
-                    </mj-execution-node>
-                }
-            }
+            <!-- Note: Sub-agent children are rendered by the parent component to maintain proper depth tracking -->
         </div>
     `,
     styles: [`
@@ -495,12 +484,12 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
         }
         
         .markdown-details {
-            margin: 8px 0 8px 44px;
-            padding: 12px;
-            background: #f9f9f9;
-            border-left: 3px solid #2196f3;
-            border-radius: 0 4px 4px 0;
-            font-size: 13px;
+            padding: 16px 16px 0 16px;
+            background: var(--gray-600);
+            border: 1px solid var(--gray-700);
+            border-bottom: none;
+            border-top: none;
+            margin: 0 5px;
         }
         
         .markdown h3, .markdown h4 {
@@ -558,7 +547,6 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
         .full-name {
             font-weight: 600;
             color: #1a1a1a;
-            margin-bottom: 8px;
             padding-bottom: 8px;
             border-bottom: 1px solid #e0e0e0;
             word-wrap: break-word;
@@ -566,26 +554,21 @@ import { ExecutionTreeNode } from './agent-execution-monitor.component';
     `]
 })
 export class ExecutionNodeComponent {
-    @Input() node!: ExecutionTreeNode;
-    @Input() depth: number = 0; // Add depth input
-    @Output() toggleNode = new EventEmitter<ExecutionTreeNode>();
+    @Input() step!: AIAgentRunStepEntityExtended;
+    @Input() depth: number = 0;
+    @Input() agentPath: string[] = [];
+    @Input() expanded: boolean = false;
+    @Input() detailsExpanded: boolean = false;
+    @Input() overrideDisplayStatus?: string; // Allow parent to override the displayed status
+    
+    @Output() toggleNode = new EventEmitter<void>();
+    @Output() toggleDetails = new EventEmitter<void>();
     @Output() userInteracted = new EventEmitter<void>();
     
-    // NEW: Add events for node navigation
-    // Note: Removed navigateToStep functionality
-    
-    hasExpandableContent(): boolean {
-        return !!(this.node.children && this.node.children.length > 0) ||
-               this.node.type === 'sub-agent' || 
-               this.node.type === 'action' || 
-               !!this.node.inputPreview || 
-               !!this.node.outputPreview || 
-               !!this.node.error || 
-               !!this.node.detailsMarkdown;
-    }
-    
     hasChildren(): boolean {
-        return !!(this.node.children && this.node.children.length > 0);
+        return this.step.StepType === 'Sub-Agent' && 
+               !!this.step.SubAgentRun?.Steps && 
+               this.step.SubAgentRun.Steps.length > 0;
     }
     
     onToggleChildren(event?: Event): void {
@@ -593,7 +576,7 @@ export class ExecutionNodeComponent {
             event.stopPropagation();
         }
         if (this.hasChildren()) {
-            this.toggleNode.emit(this.node);
+            this.toggleNode.emit();
             this.userInteracted.emit();
         }
     }
@@ -603,37 +586,37 @@ export class ExecutionNodeComponent {
             event.stopPropagation();
         }
         if (this.hasNodeDetails()) {
-            this.node.detailsExpanded = !this.node.detailsExpanded;
+            this.toggleDetails.emit();
             this.userInteracted.emit();
         }
     }
     
-    
     onDoubleClick(): void {
         if (this.hasChildren()) {
-            this.toggleNode.emit(this.node);
+            this.toggleNode.emit();
             this.userInteracted.emit();
         }
     }
     
     hasNodeDetails(): boolean {
-        return !!this.node.inputPreview || 
-               !!this.node.outputPreview || 
-               !!this.node.error || 
-               !!this.node.detailsMarkdown ||
+        return !!this.step.InputData || 
+               !!this.step.OutputData || 
+               !!this.step.ErrorMessage || 
+               !!this.getDetailsMarkdown() ||
                this.isNameTruncated();
     }
     
     getTruncatedName(): string {
         const maxLength = 120;
-        if (this.node.name.length <= maxLength) {
-            return this.node.name;
+        const name = this.getStepName();
+        if (name.length <= maxLength) {
+            return name;
         }
-        return this.node.name.substring(0, maxLength) + '...';
+        return name.substring(0, maxLength) + '...';
     }
     
     isNameTruncated(): boolean {
-        return this.node.name.length > 120;
+        return this.step.StepName.length > 120;
     }
     
     formatDuration(ms: number): string {
@@ -645,13 +628,181 @@ export class ExecutionNodeComponent {
     }
     
     getNodeTitle(): string {
-        if (this.node.type === 'sub-agent' && this.node.agentName) {
-            return `Sub-agent: ${this.node.agentName}`;
+        if (this.step.StepType === 'Sub-Agent' && this.getAgentName()) {
+            return `Sub-agent: ${this.getAgentName()}`;
         }
-        if (this.node.type === 'action' && this.node.actionName) {
-            return `Action: ${this.node.actionName}`;
+        if (this.step.StepType === 'Actions' && this.getActionName()) {
+            return `Action: ${this.getActionName()}`;
         }
-        return this.node.type;
+        return this.step.StepType;
+    }
+    
+    // Getter methods for step data
+    getStepName(): string {
+        // Extract just the first line if the name contains markdown
+        const lines = this.step.StepName.split('\n');
+        return lines[0].trim();
+    }
+    
+    getStepTypeClass(): string {
+        const typeMap: Record<string, string> = {
+            'Validation': 'validation',
+            'Prompt': 'prompt',
+            'Actions': 'action',
+            'Sub-Agent': 'sub-agent',
+            'Decision': 'decision',
+            'Chat': 'chat'
+        };
+        return typeMap[this.step.StepType] || 'prompt';
+    }
+    
+    getStatusClass(): string {
+        const statusMap: Record<string, string> = {
+            'Pending': 'pending',
+            'Running': 'running',
+            'Completed': 'completed',
+            'Failed': 'failed',
+            'Cancelled': 'failed',
+            'Paused': 'pending'
+        };
+        // Use override if provided, otherwise use actual status
+        const status = this.overrideDisplayStatus || this.step.Status;
+        return statusMap[status] || 'pending';
+    }
+    
+    getDuration(): number {
+        if (!this.step.StartedAt || !this.step.CompletedAt) return 0;
+        return new Date(this.step.CompletedAt).getTime() - new Date(this.step.StartedAt).getTime();
+    }
+    
+    getTokensUsed(): number | undefined {
+        // Check if this is a prompt step with token data
+        if (this.step.StepType === 'Prompt' && this.step.PromptRun) {
+            return this.step.PromptRun.TokensUsed || undefined;
+        }
+        return undefined;
+    }
+    
+    getCost(): number | undefined {
+        // Check if this is a prompt step with cost data
+        if (this.step.StepType === 'Prompt' && this.step.PromptRun) {
+            return this.step.PromptRun.TotalCost || undefined;
+        }
+        return undefined;
+    }
+    
+    getDetailsMarkdown(): string | undefined {
+        // Check if the step name contains markdown details after the first line
+        const lines = this.step.StepName.split('\n');
+        if (lines.length > 1) {
+            return lines.slice(1).join('\n').trim();
+        }
+        return undefined;
+    }
+    
+    getInputPreview(): string | undefined {
+        if (!this.step.InputData) return undefined;
+        
+        try {
+            const parsed = JSON.parse(this.step.InputData);
+            
+            // Extract meaningful preview
+            if (parsed.promptName) return `Prompt: ${parsed.promptName}`;
+            if (parsed.actionName) return `Action: ${parsed.actionName}`;
+            if (parsed.subAgentName) return `Sub-agent: ${parsed.subAgentName}`;
+            if (parsed.message) return parsed.message;
+            if (parsed.userMessage) return parsed.userMessage;
+            
+            // Fallback to stringified preview
+            const str = JSON.stringify(parsed, null, 2);
+            return str.length > 500 ? str.substring(0, 500) + '...' : str;
+        } catch {
+            return typeof this.step.InputData === 'string' ? this.step.InputData : JSON.stringify(this.step.InputData);
+        }
+    }
+    
+    getOutputPreview(): string | undefined {
+        if (!this.step.OutputData) return undefined;
+        
+        try {
+            const parsed = JSON.parse(this.step.OutputData);
+            
+            // Show action results clearly
+            if (parsed.actionResult) {
+                const result = parsed.actionResult;
+                let preview = '';
+                if (result.success !== undefined) {
+                    preview += `Success: ${result.success}\n`;
+                }
+                if (result.resultCode) {
+                    preview += `Result Code: ${result.resultCode}\n`;
+                }
+                if (result.message) {
+                    preview += `Message: ${result.message}\n`;
+                }
+                if (result.result) {
+                    preview += `Result: ${typeof result.result === 'object' ? JSON.stringify(result.result, null, 2) : result.result}`;
+                }
+                return preview.trim();
+            }
+            
+            // Show prompt results
+            if (parsed.promptResult) {
+                const result = parsed.promptResult;
+                let preview = '';
+                if (result.success !== undefined) {
+                    preview += `Success: ${result.success}\n`;
+                }
+                if (result.content) {
+                    preview += `Content: ${result.content}`;
+                }
+                return preview;
+            }
+            
+            // Fallback
+            const str = JSON.stringify(parsed, null, 2);
+            return str.length > 500 ? str.substring(0, 500) + '...' : str;
+        } catch {
+            return typeof this.step.OutputData === 'string' ? this.step.OutputData : JSON.stringify(this.step.OutputData);
+        }
+    }
+    
+    // Methods to extract metadata from input/output data
+    getAgentName(): string | undefined {
+        if (this.step.StepType === 'Sub-Agent' && this.step.SubAgentRun) {
+            return this.step.SubAgentRun.Agent || undefined;
+        }
+        return this.parseMetadata('subAgentName');
+    }
+    
+    getAgentIconClass(): string | undefined {
+        return this.parseMetadata('subAgentIconClass') || this.parseMetadata('agentIconClass');
+    }
+    
+    getAgentLogoURL(): string | undefined {
+        return this.parseMetadata('subAgentLogoURL') || this.parseMetadata('agentLogoURL');
+    }
+    
+    getActionName(): string | undefined {
+        if (this.step.StepType === 'Actions' && this.step.ActionExecutionLog) {
+            return this.step.ActionExecutionLog.Action;
+        }
+        return this.parseMetadata('actionName');
+    }
+    
+    getActionIconClass(): string | undefined {
+        return this.parseMetadata('actionIconClass');
+    }
+    
+    private parseMetadata(key: string): string | undefined {
+        if (!this.step.InputData) return undefined;
+        
+        try {
+            const parsed = JSON.parse(this.step.InputData);
+            return parsed[key];
+        } catch {
+            return undefined;
+        }
     }
     
     formatMarkdown(markdown: string): string {

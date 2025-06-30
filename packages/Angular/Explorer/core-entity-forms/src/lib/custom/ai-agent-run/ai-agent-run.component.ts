@@ -119,7 +119,15 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     if (!this.selectedTimelineItem) return '{}';
     
     // Get all the data from the entity
-    const data = this.selectedTimelineItem.data.GetAll();
+    // first check to see if the item is an AIAgentRunStepEntity
+    let data;
+    if (this.selectedTimelineItem.data instanceof AIAgentRunStepEntity) {
+      // If it's a step entity, we need to get the full run data
+      data = this.selectedTimelineItem.data.GetAll();
+    }
+    else {
+      data = this.selectedTimelineItem.data;
+    }
     
     // Apply recursive JSON parsing to the entire data object with inline extraction
     // This will handle any JSON strings regardless of property names
@@ -161,12 +169,22 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     if (!this.record?.Result) return '';
     
     try {
+      // First, check if Result is a JSON string that needs to be parsed
+      let resultData = this.record.Result;
+      try {
+        // If Result is a JSON string, parse it first
+        resultData = JSON.parse(this.record.Result);
+      } catch {
+        // If it's not valid JSON, use it as-is
+        resultData = this.record.Result;
+      }
+      
       const parseOptions: ParseJSONOptions = {
         extractInlineJson: true,
         maxDepth: 100,
         debug: false // Disable debug logging - regex issue fixed
       };
-      const parsed = ParseJSONRecursive(this.record.Result, parseOptions);
+      const parsed = ParseJSONRecursive(resultData, parseOptions);
       return JSON.stringify(parsed, null, 2);
     } catch (e) {
       return this.record.Result;
@@ -174,21 +192,31 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   }
   
   /**
-   * Get the AgentState field with recursive JSON parsing applied
+   * Get the Final Payload (state) field with recursive JSON parsing applied
    */
-  get parsedAgentState(): string {
-    if (!this.record?.AgentState) return '';
+  get parsedFinalPayload(): string {
+    if (!this.record?.FinalPayload) return '';
     
     try {
+      // First, check if FinalPayload is a JSON string that needs to be parsed
+      let payloadData = this.record.FinalPayload;
+      try {
+        // If FinalPayload is a JSON string, parse it first
+        payloadData = JSON.parse(this.record.FinalPayload);
+      } catch {
+        // If it's not valid JSON, use it as-is
+        payloadData = this.record.FinalPayload;
+      }
+      
       const parseOptions: ParseJSONOptions = {
         extractInlineJson: true,
         maxDepth: 100,
         debug: false // Disable debug logging - regex issue fixed
       };
-      const parsed = ParseJSONRecursive(this.record.AgentState, parseOptions);
+      const parsed = ParseJSONRecursive(payloadData, parseOptions);
       return JSON.stringify(parsed, null, 2);
     } catch (e) {
-      return this.record.AgentState;
+      return this.record.FinalPayload;
     }
   }
 }
