@@ -268,8 +268,7 @@ export class EntitySelectorDialogComponent implements OnInit {
             const result = await rv.RunView({
                 EntityName: this.config.entityName,
                 ExtraFilter: this.config.filters,
-                OrderBy: this.config.orderBy,
-                ResultType: 'simple'
+                OrderBy: this.config.orderBy 
             });
 
             this.entities = result.Results;

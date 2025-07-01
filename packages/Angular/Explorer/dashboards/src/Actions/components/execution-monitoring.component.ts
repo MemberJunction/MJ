@@ -105,22 +105,12 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
       const rv = new RunView();
       const [executionsResult, actionsResult] = await rv.RunViews([
         {
-          EntityName: 'Action Execution Logs',
-          ExtraFilter: '',
-          OrderBy: 'StartedAt DESC',
-          UserSearchString: '',
-          IgnoreMaxRows: false,
-          MaxRows: 5000,
-          ResultType: 'entity_object'
+          EntityName: 'Action Execution Logs', 
+          OrderBy: 'StartedAt DESC' 
         },
         {
-          EntityName: 'Actions',
-          ExtraFilter: '',
-          OrderBy: 'Name',
-          UserSearchString: '',
-          IgnoreMaxRows: false,
-          MaxRows: 1000,
-          ResultType: 'entity_object'
+          EntityName: 'Actions', 
+          OrderBy: 'Name' 
         }
       ]);
       

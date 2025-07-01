@@ -72,8 +72,7 @@ export class TemplateParamDialogComponent implements OnInit {
             const results = await rv.RunView<TemplateParamEntity>({
                 EntityName: 'Template Params',
                 ExtraFilter: `TemplateID='${this.template.ID}'`,
-                OrderBy: 'Name ASC',
-                ResultType: 'entity_object'
+                OrderBy: 'Name ASC' 
             });
 
             this.originalTemplateParams = results.Results;

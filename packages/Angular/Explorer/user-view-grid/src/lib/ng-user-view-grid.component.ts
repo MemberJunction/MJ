@@ -1258,8 +1258,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
     const rvResult: RunViewResult = await rv.RunView({
       EntityName: 'Lists',
-      ExtraFilter: `UserID = '${md.CurrentUser.ID}' AND EntityID = '${this._entityInfo.ID}'`,
-      ResultType: 'entity_object'
+      ExtraFilter: `UserID = '${md.CurrentUser.ID}' AND EntityID = '${this._entityInfo.ID}'` 
     });
 
     if(!rvResult.Success){
