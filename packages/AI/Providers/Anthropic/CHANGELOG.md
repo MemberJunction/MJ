@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ai-anthropic
 
+## 2.61.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.61.0
+- @memberjunction/global@2.61.0
+
 ## 2.60.0
 
 ### Patch Changes

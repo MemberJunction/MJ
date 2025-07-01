@@ -1,5 +1,19 @@
 # @memberjunction/ai-core-plus
 
+## 2.61.0
+
+### Minor Changes
+
+- 51b2b47: Improvements to AI Agents and Added Social Actions
+
+### Patch Changes
+
+- @memberjunction/ai@2.61.0
+- @memberjunction/actions-base@2.61.0
+- @memberjunction/core@2.61.0
+- @memberjunction/core-entities@2.61.0
+- @memberjunction/global@2.61.0
+
 ## 2.60.0
 
 ### Minor Changes

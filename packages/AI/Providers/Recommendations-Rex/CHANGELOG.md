@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ai-recommendations-rex
 
+## 2.61.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.61.0
+- @memberjunction/ai-recommendations@2.61.0
+- @memberjunction/global@2.61.0
+
 ## 2.60.0
 
 ### Patch Changes

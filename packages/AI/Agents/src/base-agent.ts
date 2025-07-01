@@ -329,7 +329,7 @@ export class BaseAgent {
             // Finalize the agent run
             this.logStatus(`✅ Finalizing execution for agent '${params.agent.Name}'`, true, params);
            
-            return await this.finalizeAgentRun<R>(executionResult.finalStep, executionResult.finalStep.payload, params.contextUser);
+            return await this.finalizeAgentRun<R>(executionResult.finalStep, executionResult.finalStep.previousPayload, params.contextUser);
         } catch (error) {
             // Check if error is due to cancellation
             if (params.cancellationToken?.aborted || error.message === 'Cancelled during execution') {
@@ -530,13 +530,13 @@ export class BaseAgent {
         promptParams.templateMessageRole = 'system';
         promptParams.verbose = params.verbose; // Pass through verbose flag
 
-        if (payload) {
-            // before we execute the prompt, we ask our Agent Type to inject the
-            // payload - as the way a payload is injected is dependent on the agent type and its
-            // prompting strategy. At this level in BaseAgent we don't know the format, location etc
-            const atInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
-            await atInstance.InjectPayload<P>(payload, promptParams);
-        }
+        // before we execute the prompt, we ask our Agent Type to inject the
+        // payload - as the way a payload is injected is dependent on the agent type and its
+        // prompting strategy. At this level in BaseAgent we don't know the format, location etc
+        // NOTE: We do this even if payload is empty, each agent type can have its own
+        //       logic for handling empty payloads.
+        const atInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
+        await atInstance.InjectPayload<P>(payload, promptParams);
 
         // Setup child prompt parameters
         promptParams.childPrompts = [
@@ -1249,13 +1249,13 @@ export class BaseAgent {
                 return await this.executeChatStep(params, previousDecision);
             case 'Success':
                 const pd = previousDecision as any;
-                if (pd.payload?.taskComplete === true && previousDecision.terminate) {
+                if (pd.previousPayload?.taskComplete === true && previousDecision.terminate) {
                     // If task is complete and the parent agent previously requested to auto-terminate, after a successful
                     // sub-agent run, we can finalize the agent run                    
                     return { 
                         terminate: true,
                         step: 'Success', 
-                        payload: previousDecision.payload 
+                        previousPayload: previousDecision.previousPayload 
                     };
                 }
                 else {
@@ -1268,7 +1268,7 @@ export class BaseAgent {
                     return { 
                         terminate: true,
                         step: 'Failed', 
-                        payload: previousDecision.payload 
+                        previousPayload: previousDecision.previousPayload 
                     };
                 }
                 else {
@@ -1327,7 +1327,7 @@ export class BaseAgent {
             });
 
             // Prepare prompt parameters
-            const payload = previousDecision?.payload || params.payload;
+            const payload = previousDecision?.previousPayload || params.payload;
             
             // Set PayloadAtStart
             if (stepEntity && payload) {
@@ -1366,7 +1366,7 @@ export class BaseAgent {
                     ...cancelledResult,
                     terminate: true, 
                     step: 'Failed', // Cancelled is treated as failed
-                    payload: cancelledResult.payload,   
+                    previousPayload: cancelledResult.payload,   
                 }
             }
 
@@ -1381,6 +1381,25 @@ export class BaseAgent {
             // Determine next step using agent type
             const nextStep = await this.processNextStep<P>(params, config.agentType!, promptResult);
             
+            // Apply payload changes if provided
+            let finalPayload = payload; // Start with current payload
+            if (nextStep.payloadChangeRequest) {
+                const changeResult = this._payloadManager.applyAgentChangeRequest(
+                    payload,
+                    nextStep.payloadChangeRequest,
+                    {
+                        validateChanges: true,
+                        logChanges: true,
+                        agentName: params.agent.Name
+                    }
+                );
+                
+                if (changeResult.warnings.length > 0) {
+                    LogStatus(`Payload warnings: ${changeResult.warnings.join('; ')}`);
+                }
+                
+                finalPayload = changeResult.result;
+            }
             
             // Prepare output data
             const outputData = {
@@ -1394,19 +1413,22 @@ export class BaseAgent {
                 nextStep: {
                     decision: nextStep.step,
                     reasoning: this.getNextStepReasoning(nextStep),
-                    payload: nextStep.payload
+                    payload: finalPayload
                 }
             };
             
-            // Set PayloadAtEnd
-            if (stepEntity && nextStep.payload) {
-                stepEntity.PayloadAtEnd = JSON.stringify(nextStep.payload);
+            // Set PayloadAtEnd with the final payload after changes
+            if (stepEntity && finalPayload) {
+                stepEntity.PayloadAtEnd = JSON.stringify(finalPayload);
             }
             
             // Update the agent run's current payload
-            if (this._agentRun && nextStep.payload) {
-                this._agentRun.FinalPayloadObject = nextStep.payload;
+            if (this._agentRun && finalPayload) {
+                this._agentRun.FinalPayloadObject = finalPayload;
             }
+            
+            // Update nextStep to include the final payload
+            nextStep.previousPayload = finalPayload;
             
             // Finalize step entity
             await this.finalizeStepEntity(stepEntity, promptResult.success, 
@@ -1521,11 +1543,11 @@ export class BaseAgent {
             // Extract only allowed downstream payload
             const downstreamPayload = this._payloadManager.extractDownstreamPayload(
                 subAgentRequest.name,
-                previousDecision.payload,
+                previousDecision.previousPayload,
                 downstreamPaths
             );
             
-            stepEntity.PayloadAtStart = JSON.stringify(previousDecision.payload);
+            stepEntity.PayloadAtStart = JSON.stringify(previousDecision.previousPayload);
 
             // Execute sub-agent with filtered payload
             const subAgentResult = await this.ExecuteSubAgent(
@@ -1539,7 +1561,7 @@ export class BaseAgent {
             // Merge upstream changes back into parent payload
             const mergedPayload = this._payloadManager.mergeUpstreamPayload(
                 subAgentRequest.name,
-                previousDecision.payload,
+                previousDecision.previousPayload,
                 subAgentResult.payload,
                 upstreamPaths
             );
@@ -1604,6 +1626,11 @@ export class BaseAgent {
                 content: resultMessage
             });
             
+            // Set PayloadAtEnd with the merged payload
+            if (stepEntity) {
+                stepEntity.PayloadAtEnd = JSON.stringify(mergedPayload);
+            }
+            
             // Update the agent run's current payload with the merged result
             if (this._agentRun) {
                 this._agentRun.FinalPayloadObject = mergedPayload;
@@ -1613,7 +1640,7 @@ export class BaseAgent {
                 ...subAgentResult, 
                 step: subAgentResult.success ? 'Success' : 'Failed', 
                 terminate: shouldTerminate,
-                payload: mergedPayload 
+                previousPayload: mergedPayload
             };            
         } catch (error) {
             await this.finalizeStepEntity(stepEntity, false, error.message);
@@ -1789,7 +1816,7 @@ export class BaseAgent {
             return {
                 terminate: false,
                 step: 'Retry',
-                payload: previousDecision?.payload || null,
+                previousPayload: previousDecision?.previousPayload || null,
                 priorStepResult: actionSummaries,
                 retryReason: failedActions.length > 0 
                     ? `Processing results with ${failedActions.length} failed action(s): ${failedActions.map(a => a.actionName).join(', ')}`
@@ -1800,7 +1827,7 @@ export class BaseAgent {
             return {
                 terminate: false,
                 step: 'Retry',
-                payload: e && e.message ? e.message : e ? e : 'Unknown error execution actions',
+                errorMessage: e && e.message ? e.message : e ? e : 'Unknown error execution actions',
                 retryReason: 'Error while processing actions, retry'
             };
         }
@@ -1825,7 +1852,7 @@ export class BaseAgent {
             priorStepResult: previousDecision.message,
             reasoning: previousDecision.reasoning,
             confidence: previousDecision.confidence,
-            payload: previousDecision.payload,
+            previousPayload: previousDecision.previousPayload,
         };
     }
 

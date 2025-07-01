@@ -1,8 +1,8 @@
 {
   "taskComplete": "[BOOLEAN: true if task is fully complete, false if more steps needed]",
   "message": "[STRING: Human-readable message about current status or final result - this is what the user/caller sees - they do NOT see what is in the payload, so include EVERYTHING here that is important for the user even if it overlaps with the payload]",
-  "payload*": {
-    "[NOTE]": "Any valid JavaScript object. Payload is completely flexible based on your agent's purpose."
+  "payloadChangeRequest*": {
+    "[NOTE]": "Follow the format of AgentPayloadChangeRequest. Ok to leave undefined if no changes are needed."
   },
   "reasoning": "[STRING: Your internal explanation of why you made this decision - helps with debugging]",
   "confidence?": "[OPTIONAL NUMBER: 0.0 to 1.0 indicating confidence in this decision]",
