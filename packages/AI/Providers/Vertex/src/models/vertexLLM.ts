@@ -9,7 +9,8 @@ import {
   SummarizeParams, 
   SummarizeResult, 
   ModelUsage, 
-  ChatMessage 
+  ChatMessage,
+  ErrorAnalyzer 
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { VertexAI } from '@google-cloud/vertexai';
@@ -143,6 +144,7 @@ export class VertexLLM extends BaseLLM {
         },
         errorMessage: error.message || "Error calling Google Vertex AI",
         exception: error,
+        errorInfo: ErrorAnalyzer.analyzeError(error, 'Vertex')
       };
     }
   }

@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import * as Config from '../config';
@@ -140,6 +140,7 @@ export class BettyBotLLM extends BaseLLM {
                 choices: [],
                 usage: new ModelUsage(0, 0)
             };
+            errorResult.errorInfo = ErrorAnalyzer.analyzeError(ex, 'BettyBot');
             
             return errorResult;
         }

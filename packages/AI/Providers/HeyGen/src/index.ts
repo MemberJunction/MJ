@@ -1,5 +1,5 @@
 import { RegisterClass } from "@memberjunction/global";
-import { AvatarInfo, AvatarVideoParams, BaseVideoGenerator, VideoResult } from "@memberjunction/ai";
+import { AvatarInfo, AvatarVideoParams, BaseVideoGenerator, VideoResult, ErrorAnalyzer } from "@memberjunction/ai";
 import axios from "axios";
 
 @RegisterClass(BaseVideoGenerator, "HeyGenVideoGenerator")
@@ -48,9 +48,10 @@ export class HeyGenVideoGenerator extends BaseVideoGenerator {
             videoResult.videoId = response.data.data.video_id;
             videoResult.success = true;
         } catch (error) {
+            const errorInfo = ErrorAnalyzer.analyzeError(error, 'HeyGen');
             videoResult.success = false;
-            videoResult.errorMessage = error.message;
-            console.error(error);
+            videoResult.errorMessage = error?.message || 'Unknown error occurred';
+            console.error('HeyGen CreateAvatarVideo error:', error, errorInfo);
         }
         return videoResult;
     }
@@ -75,7 +76,8 @@ export class HeyGenVideoGenerator extends BaseVideoGenerator {
                 result.push(avatarInfo);
             }
         } catch (error) {
-            console.error(error);
+            const errorInfo = ErrorAnalyzer.analyzeError(error, 'HeyGen');
+            console.error('HeyGen GetAvatars error:', errorInfo);
         }   
         return result;
     }

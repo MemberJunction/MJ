@@ -1,9 +1,15 @@
+import { AIErrorInfo } from './errorTypes.js';
+
 export class BaseResult {
     success: boolean
     startTime: Date
     endTime: Date
     errorMessage: string
     exception: any
+    /**
+     * Structured error information for better error handling and retry logic
+     */
+    errorInfo?: AIErrorInfo
     get timeElapsed(): number {
         return this.endTime.getTime() - this.startTime.getTime();
     }
