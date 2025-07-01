@@ -52,9 +52,9 @@
                     
                     <!-- Action Buttons -->
                     <div class="run-actions">
-                        <kendo-button fillMode="outline" size="small" (click)="refreshData()" title="Refresh data">
+                        <button kendoButtonfillMode="outline" size="small" (click)="refreshData()" title="Refresh data">
                             <i class="fa-solid fa-refresh"></i>
-                        </kendo-button>
+                        </button>
                     </div>
                 </div>
                 
@@ -113,13 +113,13 @@
                                 @if (record.Messages && record.Messages.trim() !== '') {
                                     <div class="json-editor-container">
                                         <div class="json-toolbar">
-                                            <kendo-button 
+                                            <button kendoButton
                                                 fillMode="flat" 
                                                 size="small"
                                                 (click)="copyToClipboard(formattedMessages, 'Messages')"
                                                 title="Copy JSON">
                                                 <i class="fa-solid fa-copy"></i> Copy
-                                            </kendo-button>
+                                            </button>
                                         </div>
                                         <mj-code-editor 
                                             [(ngModel)]="formattedMessages"
@@ -169,13 +169,13 @@
                                 @if (record.Result && record.Result.trim() !== '') {
                                     <div class="json-editor-container">
                                         <div class="json-toolbar">
-                                            <kendo-button 
+                                            <button kendoButton
                                                 fillMode="flat" 
                                                 size="small"
                                                 (click)="copyToClipboard(formattedResult, 'Result')"
                                                 title="Copy JSON">
                                                 <i class="fa-solid fa-copy"></i> Copy
-                                            </kendo-button>
+                                            </button>
                                         </div>
                                         <mj-code-editor 
                                             [(ngModel)]="formattedResult"

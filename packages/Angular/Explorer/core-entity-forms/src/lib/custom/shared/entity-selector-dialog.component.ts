@@ -81,11 +81,11 @@ export interface EntitySelectorConfig {
                 }
             </div>
             <div class="dialog-actions">
-                <kendo-button themeColor="primary" (click)="createNew()">
+                <button kendoButtonthemeColor="primary" (click)="createNew()">
                     <i class="fa-solid fa-plus"></i> Create New
-                </kendo-button>
-                <kendo-button (click)="onCancel()">Cancel</kendo-button>
-                <kendo-button themeColor="primary" [disabled]="!selectedEntity" (click)="onSelect()">Select</kendo-button>
+                </button>
+                <button kendoButton(click)="onCancel()">Cancel</button>
+                <button kendoButtonthemeColor="primary" [disabled]="!selectedEntity" (click)="onSelect()">Select</button>
             </div>
         </div>
     `,

@@ -12,16 +12,16 @@
           (click)="downloadFile(dataItem)"
         >
           <span class="fa-solid fa-download"></span>
-        </kendo-button>
-        <kendo-button [disabled]="!canBeDeleted(dataItem)" (click)="deleteFile(dataItem)">
+        </button>
+        <button kendoButton[disabled]="!canBeDeleted(dataItem)" (click)="deleteFile(dataItem)">
           <span class="fa-solid fa-trash-can"></span>
-        </kendo-button>
+        </button>
         <kendo-button
           [disabled]="dataItem.Status!=='Uploaded'"
           (click)="editFile = dataItem"
         >
           <span class="fa-solid fa-pen-to-square"></span>
-        </kendo-button>
+        </button>
       </ng-template>
     </kendo-grid-column>
   </kendo-grid>

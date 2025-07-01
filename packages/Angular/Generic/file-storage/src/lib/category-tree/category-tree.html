@@ -1,7 +1,7 @@
 <div class="container">
   <div class="tree-header">
-    <kendo-button (click)="clearSelection()">All Files</kendo-button>
-    <kendo-button (click)="createNewCategory()" size="small">Add category</kendo-button>
+    <button kendoButton(click)="clearSelection()">All Files</button>
+    <button kendoButton(click)="createNewCategory()" size="small">Add category</button>
   </div>
   <kendo-treeview
     [nodes]="categoriesData"
