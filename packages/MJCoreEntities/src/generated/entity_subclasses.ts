@@ -2637,6 +2637,10 @@ export const CompanyIntegrationRecordMapSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    CompanyIntegration: z.string().describe(`
+        * * Field Name: CompanyIntegration
+        * * Display Name: Company Integration
+        * * SQL Data Type: nvarchar(255)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
@@ -2910,6 +2914,11 @@ export const CompanyIntegrationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+    * * Description: User-friendly name for the company integration instance, typically in the format "Company: Integration".`),
     Company: z.string().describe(`
         * * Field Name: Company
         * * SQL Data Type: nvarchar(50)`),
@@ -4309,6 +4318,10 @@ export const EmployeeCompanyIntegrationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    CompanyIntegration: z.string().describe(`
+        * * Field Name: CompanyIntegration
+        * * Display Name: Company Integration
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type EmployeeCompanyIntegrationEntityType = z.infer<typeof EmployeeCompanyIntegrationSchema>;
@@ -7113,6 +7126,10 @@ export const ListSchema = z.object({
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(100)`),
+    CompanyIntegration: z.string().nullable().describe(`
+        * * Field Name: CompanyIntegration
+        * * Display Name: Company Integration
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type ListEntityType = z.infer<typeof ListSchema>;
@@ -19282,6 +19299,15 @@ export class CompanyIntegrationRecordMapEntity extends BaseEntity<CompanyIntegra
     }
 
     /**
+    * * Field Name: CompanyIntegration
+    * * Display Name: Company Integration
+    * * SQL Data Type: nvarchar(255)
+    */
+    get CompanyIntegration(): string {
+        return this.Get('CompanyIntegration');
+    }
+
+    /**
     * * Field Name: Entity
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
@@ -20016,6 +20042,19 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: User-friendly name for the company integration instance, typically in the format "Company: Integration".
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
     }
 
     /**
@@ -23714,6 +23753,15 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CompanyIntegration
+    * * Display Name: Company Integration
+    * * SQL Data Type: nvarchar(255)
+    */
+    get CompanyIntegration(): string {
+        return this.Get('CompanyIntegration');
     }
 }
 
@@ -30943,6 +30991,15 @@ export class ListEntity extends BaseEntity<ListEntityType> {
     */
     get Category(): string | null {
         return this.Get('Category');
+    }
+
+    /**
+    * * Field Name: CompanyIntegration
+    * * Display Name: Company Integration
+    * * SQL Data Type: nvarchar(255)
+    */
+    get CompanyIntegration(): string | null {
+        return this.Get('CompanyIntegration');
     }
 }
 

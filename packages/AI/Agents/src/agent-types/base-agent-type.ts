@@ -80,11 +80,11 @@ export abstract class BaseAgentType {
      */
     public abstract DetermineNextStep<P = any>(promptResult: AIPromptRunResult): Promise<BaseAgentNextStep<P>>;
 
-    /**
-     * The agent type is responsible for knowing what to retreive a payload from the prompt results for its
-     * agent-type specific logic.
-     */
-    public abstract RetrievePayload<P = any>(promptResult: AIPromptRunResult): Promise<P>;
+    // /**
+    //  * The agent type is responsible for knowing what to retreive a payload from the prompt results for its
+    //  * agent-type specific logic.
+    //  */
+    // public abstract RetrievePayload<P = any>(promptResult: AIPromptRunResult): Promise<P>;
 
     /**
      * The agent type is responsible for injecting a payload into the prompt. This can be done by updating the
