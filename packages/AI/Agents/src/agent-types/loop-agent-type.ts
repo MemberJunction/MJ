@@ -112,7 +112,7 @@ export class LoopAgentType extends BaseAgentType {
                     reasoning: response.reasoning,
                     confidence: response.confidence,
                     step: 'Success',
-                    payload: response.payload,                    
+                    payloadChangeRequest: response.payloadChangeRequest,                    
                 };
             }
 
@@ -126,8 +126,8 @@ export class LoopAgentType extends BaseAgentType {
             }
 
             // Determine next step based on type
-            const retVal: Partial<BaseAgentNextStep<LoopAgentResponse<P>>> = {
-                payload: response.payload,
+            const retVal: Partial<BaseAgentNextStep<P>> = {
+                payloadChangeRequest: response.payloadChangeRequest,
                 terminate: response.taskComplete
             }
             switch (response.nextStep.type) {
@@ -256,27 +256,27 @@ export class LoopAgentType extends BaseAgentType {
         return true;
     }
 
-    /**
-     * Retrieves the payload from the prompt result.
-     * For LoopAgentType, this returns the parsed LoopAgentResponse.
-     * 
-     * @param {AIPromptRunResult} promptResult - The result from executing the agent's prompt
-     * @returns {Promise<T>} The extracted payload
-     */
-    public async RetrievePayload<T = LoopAgentResponse>(promptResult: AIPromptRunResult): Promise<T> {
-        // the promptResult.result should be the LoopAgentResponse
-        if (!promptResult.success || !promptResult.result) {
-            throw new Error('Prompt execution Failed or returned no result');
-        }
+    // /**
+    //  * Retrieves the payload from the prompt result.
+    //  * For LoopAgentType, this returns the parsed LoopAgentResponse.
+    //  * 
+    //  * @param {AIPromptRunResult} promptResult - The result from executing the agent's prompt
+    //  * @returns {Promise<T>} The extracted payload
+    //  */
+    // public async RetrievePayload<T = LoopAgentResponse>(promptResult: AIPromptRunResult): Promise<T> {
+    //     // the promptResult.result should be the LoopAgentResponse
+    //     if (!promptResult.success || !promptResult.result) {
+    //         throw new Error('Prompt execution Failed or returned no result');
+    //     }
 
-        const loopAgentResponse = promptResult.result as LoopAgentResponse;
-        if (!this.isValidLoopResponse(loopAgentResponse)) {
-            throw new Error('Invalid LoopAgentResponse structure');
-        }
+    //     const loopAgentResponse = promptResult.result as LoopAgentResponse;
+    //     if (!this.isValidLoopResponse(loopAgentResponse)) {
+    //         throw new Error('Invalid LoopAgentResponse structure');
+    //     }
 
-        // Return the response as the payload
-        return loopAgentResponse.payload as T;
-    }
+    //     // Return the response (the framework will handle applying payload changes)
+    //     return loopAgentResponse.payloadChangeRequest as T;
+    // }
 
 
     public static CURRENT_PAYLOAD_PLACHOLDER = '_CURRENT_PAYLOAD';
@@ -293,7 +293,7 @@ export class LoopAgentType extends BaseAgentType {
         if (!prompt.data )
             prompt.data = {};
 
-        prompt.data[LoopAgentType.CURRENT_PAYLOAD_PLACHOLDER] = payload;
+        prompt.data[LoopAgentType.CURRENT_PAYLOAD_PLACHOLDER] = payload || {};
     }
 }
 
