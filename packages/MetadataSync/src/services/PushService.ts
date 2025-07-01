@@ -166,8 +166,19 @@ export class PushService {
             continue;
           }
           
-          if (options.verbose) {
-            callbacks?.onLog?.(`\nProcessing ${entityConfig.entity} in ${entityDir}`);
+          // Show folder with spinner at start
+          const dirName = path.relative(process.cwd(), entityDir) || '.';
+          callbacks?.onLog?.(`\n📁 ${dirName}:`);
+          
+          // Use onProgress for animated spinner if available
+          if (callbacks?.onProgress) {
+            callbacks.onProgress(`Processing ${dirName}...`);
+          } else {
+            callbacks?.onLog?.(`   ⏳ Processing...`);
+          }
+          
+          if (options.verbose && callbacks?.onLog) {
+            callbacks.onLog(`Processing ${entityConfig.entity} in ${entityDir}`);
           }
           
           const result = await this.processEntityDirectory(
@@ -179,11 +190,14 @@ export class PushService {
             sqlLogger
           );
           
+          // Stop the spinner if we were using onProgress
+          if (callbacks?.onProgress && callbacks?.onSuccess) {
+            callbacks.onSuccess(`Processed ${dirName}`);
+          }
+          
           // Show per-directory summary
-          const dirName = path.relative(process.cwd(), entityDir) || '.';
           const dirTotal = result.created + result.updated + result.unchanged;
           if (dirTotal > 0 || result.errors > 0) {
-            callbacks?.onLog?.(`\n📁 ${dirName}:`);
             callbacks?.onLog?.(`   Total processed: ${dirTotal} unique records`);
             if (result.created > 0) {
               callbacks?.onLog?.(`   ✓ Created: ${result.created}`);
