@@ -1,12 +1,9 @@
 /**
- * The purpose of this type is to give an AI model the ability to request specific changes
- * to an existing payload. This allows for more fine grained control over state changes
- * and also is token efficient, as it allows the AI to specify only the changes needed
- * rather than sending the entire payload again in its completion.
+ * This type is used by AI Models to provide a structured way to request changes to the agent's payload.
  */
 export type AgentPayloadChangeRequest<P = any> = {
     /**
-     * A partial of P that includes all new elements added that were not previously present in
+     * A partial of P that includes all new elements added that were **not** previously present in
      * the payload prior to the prompt execution. This allows the AI to specify the new elements
      * to be added clearly here. The structure is identical to the payload type P with just the
      * portions filled out that need to be added.
@@ -17,7 +14,7 @@ export type AgentPayloadChangeRequest<P = any> = {
      * A partial of P that includes all elements that should be updated in the payload.
      * This allows the AI to specify which elements should be updated in the payload.
      * The structure is identical to the payload type P with just the portions filled out
-     * that need to be updated.
+     * that need to be updated. **DO NOT INCLUDE ELEMENTS THAT ARE NOT CHANGING**.
      */
     updateElements?: Partial<P>;
 
@@ -85,10 +82,16 @@ export type AgentPayloadChangeRequest<P = any> = {
      *  ]
      * }
      * ```
-     * Important note: For token efficiency, the AI model should note emit array elements fully that it wants to **keep** 
+     * Important note: For token efficiency, the AI model should **NOT** emit array elements fully that it wants to **keep** 
      * but rather emit empty objects `{}` for those items. This indicates that the item should be kept as is since it is NOT
      * equal to a string literal of "_DELETE_".
      */
     removeElements?: Partial<P>;
+
+    /**
+     * Brief description of the reasoning behind the changes requested.
+     * This should be a concise explanation of why the changes are necessary, helping with debugging and transparency.
+     * @optional
+     */
     reasoning?: string;
 }

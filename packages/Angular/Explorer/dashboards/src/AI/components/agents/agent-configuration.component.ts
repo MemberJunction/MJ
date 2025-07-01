@@ -1,4 +1,4 @@
-import { Component, Output, EventEmitter, OnInit, OnDestroy, Input, ViewContainerRef } from '@angular/core';
+import { Component, Output, EventEmitter, OnInit, OnDestroy, Input, ViewContainerRef, AfterViewInit, ChangeDetectorRef } from '@angular/core';
 import { RunView } from '@memberjunction/core';
 import { AIAgentEntity } from '@memberjunction/core-entities';
 import { NewAgentDialogService } from '@memberjunction/ng-core-entity-forms';
@@ -18,7 +18,7 @@ interface AgentFilter {
   templateUrl: './agent-configuration.component.html',
   styleUrls: ['./agent-configuration.component.scss']
 })
-export class AgentConfigurationComponent implements OnInit, OnDestroy {
+export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
   @Input() initialState: any = null;
   @Output() openEntityRecord = new EventEmitter<{entityName: string, recordId: string}>();
   @Output() stateChange = new EventEmitter<any>();
@@ -45,14 +45,15 @@ export class AgentConfigurationComponent implements OnInit, OnDestroy {
   constructor(
     private newAgentDialogService: NewAgentDialogService,
     private viewContainerRef: ViewContainerRef,
-    private testHarnessService: AITestHarnessDialogService
+    private testHarnessService: AITestHarnessDialogService,
+    private cdr: ChangeDetectorRef
   ) {}
 
-  ngOnInit(): void {
+  async ngAfterViewInit() {
     if (this.initialState) {
       this.applyInitialState(this.initialState);
     }
-    this.loadAgents();
+    await this.loadAgents();
   }
 
   ngOnDestroy(): void {
@@ -90,7 +91,9 @@ export class AgentConfigurationComponent implements OnInit, OnDestroy {
     } catch (error) {
       console.error('Error loading AI agents:', error);
     } finally {
-      this.isLoading = false;
+      this.isLoading = false;     
+      // force change detection to update the view
+      this.cdr.detectChanges();
     }
   }
 

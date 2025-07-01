@@ -1,5 +1,5 @@
 import { RegisterClass } from "@memberjunction/global";
-import { BaseAudioGenerator, TextToSpeechParams, SpeechResult, SpeechToTextParams, VoiceInfo, AudioModel, PronounciationDictionary } from "@memberjunction/ai";
+import { BaseAudioGenerator, TextToSpeechParams, SpeechResult, SpeechToTextParams, VoiceInfo, AudioModel, PronounciationDictionary, ErrorAnalyzer } from "@memberjunction/ai";
 import { OpenAI } from "openai";
 
 @RegisterClass(BaseAudioGenerator, "OpenAIAudioGenerator")
@@ -13,18 +13,25 @@ export class OpenAIAudioGenerator extends BaseAudioGenerator {
 
     public async CreateSpeech(params: TextToSpeechParams): Promise<SpeechResult> {
         const speechResult = new SpeechResult();
-        const audio = await this._openAI.audio.speech.create({
-            model: params.model_id || (await this.GetModels())[0].id,
-            voice: params.voice || (await this.GetVoices())[0].id,
-            input: params.text,
-            instructions: params.instructions || "Speak in a cheerful and positive tone"
-        });
+        try {
+            const audio = await this._openAI.audio.speech.create({
+                model: params.model_id || (await this.GetModels())[0].id,
+                voice: params.voice || (await this.GetVoices())[0].id,
+                input: params.text,
+                instructions: params.instructions || "Speak in a cheerful and positive tone"
+            });
 
-        const arrayBuffer = await audio.arrayBuffer();
-        const audioBuffer = Buffer.from(arrayBuffer);
-        speechResult.data = audioBuffer;
-        speechResult.success = true;
-        speechResult.content = audioBuffer.toString('base64');
+            const arrayBuffer = await audio.arrayBuffer();
+            const audioBuffer = Buffer.from(arrayBuffer);
+            speechResult.data = audioBuffer;
+            speechResult.success = true;
+            speechResult.content = audioBuffer.toString('base64');
+        } catch (error) {
+            const errorInfo = ErrorAnalyzer.analyzeError(error, 'OpenAI TTS');
+            speechResult.success = false;
+            speechResult.errorMessage = error?.message || 'Unknown error occurred';
+            console.error(`OpenAI TTS error:`, error, errorInfo);
+        }
         return speechResult;
     }
 

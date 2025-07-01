@@ -9,6 +9,28 @@ Advanced AI prompt execution engine with hierarchical template composition, inte
 
 ## Key Features
 
+### 🛡️ Intelligent Failover Support
+Automatic failover when AI providers experience outages, rate limits, or service degradation. The system intelligently switches between models and vendors to ensure reliable prompt execution.
+
+#### Failover Strategies
+- **SameModelDifferentVendor**: Try the same model from different providers
+- **NextBestModel**: Switch to alternative models based on power rankings
+- **PowerRank**: Use the global model power ranking for selection
+
+#### Configuration
+```typescript
+const promptWithFailover = {
+    Name: "Critical Analysis",
+    FailoverStrategy: "SameModelDifferentVendor",
+    FailoverMaxAttempts: 3,
+    FailoverDelaySeconds: 2,
+    FailoverModelStrategy: "PreferSameModel",
+    FailoverErrorScope: "All"  // or "NetworkOnly", "RateLimitOnly", "ServiceErrorOnly"
+};
+```
+
+**Note**: Prompts with `AIModelTypeID = NULL` can use any available model during failover, while prompts with a specific type ID are restricted to models of that type.
+
 ### 🎯 Dynamic Hierarchical Template Composition
 
 #### Why Dynamic Template Composition?
@@ -557,6 +579,171 @@ comprehensivePromptExecution().catch(console.error);
 ```
 
 ## Advanced Features
+
+### Intelligent Failover System
+
+The AI Prompt Runner includes a sophisticated failover system that automatically handles provider outages, rate limits, and service degradation. This ensures your AI-powered applications remain resilient and responsive even when individual providers experience issues.
+
+#### How Failover Works
+
+When a prompt execution fails, the system:
+1. **Analyzes the error** using the ErrorAnalyzer to determine if failover is appropriate
+2. **Selects alternative models/vendors** based on the configured strategy
+3. **Applies intelligent delays** with exponential backoff to prevent overwhelming providers
+4. **Tracks all attempts** for debugging and analysis
+5. **Updates the execution** to use the successful model/vendor combination
+
+#### Failover Configuration
+
+Configure failover behavior at the prompt level:
+
+```typescript
+// Database columns added to AIPrompt entity:
+FailoverStrategy: 'SameModelDifferentVendor' | 'NextBestModel' | 'PowerRank' | 'None'
+FailoverMaxAttempts: number        // Maximum failover attempts (default: 3)
+FailoverDelaySeconds: number       // Initial delay between attempts (default: 1)
+FailoverModelStrategy: 'PreferSameModel' | 'PreferDifferentModel' | 'RequireSameModel'
+FailoverErrorScope: 'All' | 'NetworkOnly' | 'RateLimitOnly' | 'ServiceErrorOnly'
+```
+
+#### Failover Strategies Explained
+
+**SameModelDifferentVendor**: Ideal for multi-cloud deployments
+```typescript
+// Example: Claude from different providers
+// Primary: Anthropic API
+// Failover 1: AWS Bedrock
+// Failover 2: Google Vertex AI
+```
+
+**NextBestModel**: Balances capability and availability
+```typescript
+// Example: Gradual capability reduction
+// Primary: GPT-4-turbo
+// Failover 1: Claude-3-opus
+// Failover 2: GPT-3.5-turbo
+```
+
+**PowerRank**: Uses MemberJunction's model power rankings
+```typescript
+// Automatically selects models based on their PowerRank scores
+// Ensures you always get the best available model
+```
+
+#### Error Scope Configuration
+
+Control which types of errors trigger failover:
+
+- **All**: Any error triggers failover (most resilient)
+- **NetworkOnly**: Only network/connection errors
+- **RateLimitOnly**: Only rate limit errors (429 status)
+- **ServiceErrorOnly**: Only service errors (500, 503 status)
+
+#### Failover Tracking
+
+The system comprehensively tracks failover attempts in the database:
+
+```typescript
+// AIPromptRun entity tracking fields:
+OriginalModelID: string           // The initially selected model
+OriginalRequestStartTime: Date    // When the request started
+FailoverAttempts: number          // Number of failover attempts made
+FailoverErrors: string (JSON)     // Detailed error information for each attempt
+FailoverDurations: string (JSON)  // Duration of each attempt in milliseconds
+TotalFailoverDuration: number     // Total time spent in failover
+```
+
+#### Advanced Failover Customization
+
+The AIPromptRunner exposes protected methods for advanced customization:
+
+```typescript
+class CustomPromptRunner extends AIPromptRunner {
+    // Override to implement custom failover configuration
+    protected getFailoverConfiguration(prompt: AIPromptEntity): FailoverConfiguration {
+        // Add environment-specific logic
+        if (process.env.NODE_ENV === 'production') {
+            return {
+                strategy: 'SameModelDifferentVendor',
+                maxAttempts: 5,
+                delaySeconds: 2,
+                modelStrategy: 'PreferSameModel',
+                errorScope: 'NetworkOnly'
+            };
+        }
+        return super.getFailoverConfiguration(prompt);
+    }
+
+    // Override to implement custom failover decision logic
+    protected shouldAttemptFailover(
+        error: Error,
+        config: FailoverConfiguration,
+        attemptNumber: number
+    ): boolean {
+        // Add custom error analysis
+        if (error.message.includes('quota_exceeded')) {
+            return false; // Don't retry quota errors
+        }
+        return super.shouldAttemptFailover(error, config, attemptNumber);
+    }
+
+    // Override to implement custom delay calculation
+    protected calculateFailoverDelay(
+        attemptNumber: number,
+        baseDelaySeconds: number,
+        previousError?: Error
+    ): number {
+        // Custom backoff strategy
+        if (previousError?.message.includes('rate_limit')) {
+            return 60000; // 1 minute for rate limits
+        }
+        return super.calculateFailoverDelay(attemptNumber, baseDelaySeconds, previousError);
+    }
+}
+```
+
+#### Failover Best Practices
+
+1. **Configure Appropriately**: Use `NetworkOnly` or `RateLimitOnly` for production to avoid retrying invalid requests
+2. **Set Reasonable Attempts**: 3-5 attempts typically sufficient
+3. **Monitor Failover Patterns**: Query the tracking data to identify problematic providers
+4. **Test Failover Scenarios**: Simulate provider outages in development
+5. **Consider Costs**: Failover may route to more expensive providers
+
+#### Example: Production-Ready Configuration
+
+```typescript
+const productionPrompt = {
+    Name: "Customer Service Assistant",
+    FailoverStrategy: "SameModelDifferentVendor",
+    FailoverMaxAttempts: 4,
+    FailoverDelaySeconds: 2,
+    FailoverModelStrategy: "PreferSameModel",
+    FailoverErrorScope: "NetworkOnly",
+    // Ensure failover stays within approved models
+    MinPowerRank: 85
+};
+
+// Query failover performance
+const failoverStats = await runView.RunView({
+    EntityName: 'MJ: AI Prompt Runs',
+    ExtraFilter: `FailoverAttempts > 0 AND RunAt >= '2024-01-01'`,
+    OrderBy: 'RunAt DESC'
+});
+
+// Analyze which vendors are most reliable
+SELECT 
+    OriginalModelID,
+    ModelID as FinalModelID,
+    COUNT(*) as FailoverCount,
+    AVG(TotalFailoverDuration) as AvgFailoverTime
+FROM AIPromptRun
+WHERE FailoverAttempts > 0
+GROUP BY OriginalModelID, ModelID
+ORDER BY FailoverCount DESC;
+```
+
+For more details on the failover implementation, see the [Failover Design Document](./failover-design.md).
 
 ### Intelligent Caching
 

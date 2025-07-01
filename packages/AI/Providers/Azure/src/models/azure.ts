@@ -13,7 +13,8 @@ import {
   SummarizeResult,
   GetUserMessageFromChatParams,
   ModelUsage,
-  BaseResult
+  BaseResult,
+  ErrorAnalyzer
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { AzureChatCompletionChoice, AzureChatCompletionChunk, AzureChatCompletionChunkChoice, AzureChatCompletionResponse } from '../generic/azure.types';
@@ -210,7 +211,7 @@ export class AzureLLM extends BaseLLM {
             };
         } catch (error) {
             const endTime = new Date();
-            return {
+            const result = {
                 success: false,
                 statusText: "Error",
                 startTime: startTime,
@@ -222,7 +223,9 @@ export class AzureLLM extends BaseLLM {
                 },
                 errorMessage: error instanceof Error ? error.message : String(error),
                 exception: error,
+                errorInfo: ErrorAnalyzer.analyzeError(error, 'Azure')
             };
+            return result;
         }
     }
     

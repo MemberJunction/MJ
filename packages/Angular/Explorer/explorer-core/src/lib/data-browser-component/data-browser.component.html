@@ -16,7 +16,7 @@
             <h1>Applications</h1>
         </div>
         <div class="mj-header-actions">
-            <kendo-button 
+            <button kendoButton
                 fillMode="flat"
                 rounded="full"
                 size="large"
@@ -24,7 +24,7 @@
                 [title]="'Configure Applications'"
                 (click)="ShowAppSelectionDialog()">
                 <i class="fas fa-cog"></i>
-            </kendo-button>
+            </button>
         </div>
     </div>
 
@@ -70,7 +70,7 @@
         <i class="fas fa-server mj-empty-icon"></i>
         <h3>No Applications Selected</h3>
         <p>Choose which applications you'd like to access from your dashboard</p>
-        <kendo-button 
+        <button kendoButton
             themeColor="primary"
             rounded="medium"
             size="large"
@@ -79,7 +79,7 @@
                 <i class="fas fa-cog"></i>
                 Configure Applications
             </span>
-        </kendo-button>
+        </button>
     </div>
 
     <!-- Application Selection Dialog -->

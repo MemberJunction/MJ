@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer } from '@memberjunction/ai';
 import { ValidationAttempt, AIPromptRunResult } from '@memberjunction/ai-core-plus';
 import { LogError, LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, ValidationResult, ValidationErrorInfo, ValidationErrorType, RunView } from '@memberjunction/core';
 import { CleanJSON, MJGlobal } from '@memberjunction/global';
@@ -89,6 +89,30 @@ interface ModelVendorCandidate {
   isPreferredVendor: boolean;
   priority: number; // Higher is better
   source: 'explicit' | 'prompt-model' | 'model-type' | 'power-rank';
+}
+
+/**
+ * Configuration for failover behavior when primary model fails
+ */
+interface FailoverConfiguration {
+  strategy: 'SameModelDifferentVendor' | 'NextBestModel' | 'PowerRank' | 'None';
+  maxAttempts: number;
+  delaySeconds: number;
+  modelStrategy?: 'PreferSameModel' | 'PreferDifferentModel' | 'RequireSameModel';
+  errorScope?: 'All' | 'NetworkOnly' | 'RateLimitOnly' | 'ServiceErrorOnly';
+}
+
+/**
+ * Tracks information about a failover attempt
+ */
+interface FailoverAttempt {
+  attemptNumber: number;
+  modelId: string;
+  vendorId?: string;
+  error: Error;
+  errorType: string;
+  duration: number;
+  timestamp: Date;
 }
 
 export class AIPromptRunner {
@@ -1313,6 +1337,26 @@ export class AIPromptRunner {
       promptRun.PromptID = prompt.ID;
       promptRun.ModelID = model.ID;
       
+      // Set original model tracking for failover
+      // TODO: Remove type assertions after CodeGen updates entities with new fields
+      const promptRunWithFailover = promptRun as AIPromptRunEntity & {
+        OriginalModelID?: string;
+        OriginalRequestStartTime?: Date;
+        FailoverAttempts?: number;
+        FailoverErrors?: string;
+        FailoverDurations?: string;
+        TotalFailoverDuration?: number;
+      };
+      
+      promptRunWithFailover.OriginalModelID = model.ID;
+      promptRunWithFailover.OriginalRequestStartTime = startTime;
+      
+      // Initialize failover tracking fields
+      promptRunWithFailover.FailoverAttempts = 0;
+      promptRunWithFailover.FailoverErrors = null;
+      promptRunWithFailover.FailoverDurations = null;
+      promptRunWithFailover.TotalFailoverDuration = 0;
+      
       // Check if model has pre-selected vendor info from selectModel
       const modelWithVendor = model as AIModelEntityExtended & { 
         _selectedVendorId?: string;
@@ -1482,6 +1526,313 @@ export class AIPromptRunner {
       });
       throw error;
     }
+  }
+
+  /**
+   * Executes the AI model with failover support
+   * 
+   * @remarks
+   * This method wraps the core executeModel functionality with intelligent failover
+   * capabilities. It will attempt to execute with different models/vendors according
+   * to the configured failover strategy when errors occur.
+   * 
+   * The method calls several smaller, focused helper methods:
+   * - buildFailoverCandidates: Creates candidate models based on type restrictions
+   * - createCandidatesFromModels: Converts models to vendor-specific candidates
+   * - updatePromptRunWithFailoverSuccess: Records successful failover metadata
+   * - updatePromptRunWithFailoverFailure: Records failed failover metadata
+   * - createFailoverErrorResult: Creates standardized error response
+   */
+  protected async executeModelWithFailover(
+    model: AIModelEntityExtended,
+    renderedPrompt: string,
+    prompt: AIPromptEntity,
+    params: AIPromptParams,
+    vendorId: string | null,
+    conversationMessages?: ChatMessage[],
+    templateMessageRole: TemplateMessageRole = 'system',
+    cancellationToken?: AbortSignal,
+    allCandidates?: ModelVendorCandidate[],
+    promptRun?: AIPromptRunEntity
+  ): Promise<ChatResult> {
+    // Get failover configuration
+    const failoverConfig = this.getFailoverConfiguration(prompt);
+    
+    // If failover is disabled, execute normally
+    if (failoverConfig.strategy === 'None') {
+      return this.executeModel(
+        model, renderedPrompt, prompt, params, vendorId,
+        conversationMessages, templateMessageRole, cancellationToken
+      );
+    }
+
+    // Track failover attempts
+    const failoverAttempts: FailoverAttempt[] = [];
+    let lastError: Error | null = null;
+    let currentModel = model;
+    let currentVendorId = vendorId;
+    let attemptNumber = 0;
+    
+    // Get all model candidates if not provided
+    if (!allCandidates) {
+      allCandidates = await this.buildFailoverCandidates(prompt);
+    }
+
+    // Main failover loop
+    while (attemptNumber <= failoverConfig.maxAttempts) {
+      attemptNumber++;
+      const attemptStartTime = Date.now();
+      
+      try {
+        // Log the attempt if not the first one
+        if (attemptNumber > 1) {
+          LogStatusEx({
+            message: `🔄 Failover attempt ${attemptNumber} with model ${currentModel.Name} (vendor: ${currentVendorId || 'default'})`,
+            category: 'AI',
+            additionalArgs: [{
+              promptId: prompt.ID,
+              modelId: currentModel.ID,
+              vendorId: currentVendorId,
+              attemptNumber
+            }]
+          });
+        }
+        
+        // Execute the model
+        const result = await this.executeModel(
+          currentModel, renderedPrompt, prompt, params, currentVendorId,
+          conversationMessages, templateMessageRole, cancellationToken
+        );
+        
+        // Success! Update promptRun with failover information if we had attempts
+        if (failoverAttempts.length > 0 && promptRun) {
+          this.updatePromptRunWithFailoverSuccess(promptRun, failoverAttempts, currentModel, currentVendorId);
+        }
+        
+        return result;
+        
+      } catch (error) {
+        const attemptDuration = Date.now() - attemptStartTime;
+        lastError = error as Error;
+        
+        // Create failover attempt record
+        const errorAnalysis = ErrorAnalyzer.analyzeError(lastError);
+        const failoverAttempt: FailoverAttempt = {
+          attemptNumber,
+          modelId: currentModel.ID,
+          vendorId: currentVendorId,
+          error: lastError,
+          errorType: errorAnalysis.errorType,
+          duration: attemptDuration,
+          timestamp: new Date()
+        };
+        failoverAttempts.push(failoverAttempt);
+        
+        // Check if we should attempt failover
+        const shouldFailover = this.shouldAttemptFailover(
+          lastError, failoverConfig, attemptNumber
+        );
+        
+        if (!shouldFailover) {
+          // Log the final failure
+          this.logFailoverAttempt(prompt.ID, failoverAttempt, false);
+          break;
+        }
+        
+        // Select next candidate
+        const nextCandidates = this.selectFailoverCandidates(
+          currentModel,
+          currentVendorId,
+          failoverConfig.strategy,
+          failoverConfig.modelStrategy,
+          allCandidates,
+          failoverAttempts
+        );
+        
+        if (nextCandidates.length === 0) {
+          // No more candidates available
+          this.logFailoverAttempt(prompt.ID, failoverAttempt, false);
+          break;
+        }
+        
+        // Get the next candidate
+        const nextCandidate = nextCandidates[0];
+        currentModel = nextCandidate.model;
+        currentVendorId = nextCandidate.vendorId;
+        
+        // Log the attempt
+        this.logFailoverAttempt(prompt.ID, failoverAttempt, true);
+        
+        // Wait before retry (if not the last attempt)
+        if (attemptNumber < failoverConfig.maxAttempts) {
+          const delay = this.calculateFailoverDelay(
+            attemptNumber, 
+            failoverConfig.delaySeconds,
+            lastError
+          );
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+    
+    // All attempts failed
+    if (promptRun && failoverAttempts.length > 0) {
+      this.updatePromptRunWithFailoverFailure(promptRun, failoverAttempts);
+    }
+    
+    return this.createFailoverErrorResult(lastError, failoverAttempts);
+  }
+
+  /**
+   * Builds failover candidates for a prompt based on available models and type restrictions
+   */
+  protected async buildFailoverCandidates(prompt: AIPromptEntity): Promise<ModelVendorCandidate[]> {
+    const aiEngine = AIEngine.Instance;
+    
+    // Get all models, filtered by type if specified
+    let allModels: AIModelEntityExtended[];
+    if (prompt.AIModelTypeID) {
+      // Find the model type from the prompt
+      const modelType = aiEngine.ModelTypes.find(mt => mt.ID === prompt.AIModelTypeID);
+      if (!modelType) {
+        throw new Error(`Model type ${prompt.AIModelTypeID} not found`);
+      }
+      
+      // Get all models of this specific type
+      allModels = aiEngine.Models.filter(m => 
+        m.AIModelType?.trim().toLowerCase() === modelType.Name.trim().toLowerCase()
+      );
+    } else {
+      // No type restriction - get all models
+      allModels = aiEngine.Models;
+    }
+    
+    return this.createCandidatesFromModels(allModels);
+  }
+
+  /**
+   * Creates model-vendor candidates from a list of models
+   */
+  protected createCandidatesFromModels(models: AIModelEntityExtended[]): ModelVendorCandidate[] {
+    const candidates: ModelVendorCandidate[] = [];
+    
+    for (const model of models) {
+      const vendors = model.ModelVendors || [];
+      if (vendors.length === 0) {
+        // Model without specific vendors
+        candidates.push({
+          model: model,
+          vendorId: undefined,
+          vendorName: undefined,
+          driverClass: model.DriverClass,
+          apiName: model.APIName,
+          isPreferredVendor: false,
+          priority: model.PowerRank || 0,
+          source: 'power-rank'
+        });
+      } else {
+        // Add each vendor as a separate candidate
+        for (const vendor of vendors) {
+          candidates.push({
+            model: model,
+            vendorId: vendor.VendorID,
+            vendorName: vendor.Vendor,
+            driverClass: vendor.DriverClass || model.DriverClass,
+            apiName: vendor.APIName || model.APIName,
+            isPreferredVendor: vendor.Priority > 0,
+            priority: (model.PowerRank || 0) + (vendor.Priority || 0),
+            source: 'power-rank'
+          });
+        }
+      }
+    }
+    
+    return candidates;
+  }
+
+  /**
+   * Updates prompt run with successful failover tracking data
+   */
+  protected updatePromptRunWithFailoverSuccess(
+    promptRun: AIPromptRunEntity,
+    failoverAttempts: FailoverAttempt[],
+    currentModel: AIModelEntityExtended,
+    currentVendorId: string | null
+  ): void {
+    // TODO: Remove type assertions after CodeGen updates entities with new fields
+    const promptRunWithFailover = promptRun as AIPromptRunEntity & {
+      OriginalModelID?: string;
+      OriginalRequestStartTime?: Date;
+      FailoverAttempts?: number;
+      FailoverErrors?: string;
+      FailoverDurations?: string;
+      TotalFailoverDuration?: number;
+    };
+    
+    promptRunWithFailover.FailoverAttempts = failoverAttempts.length;
+    promptRunWithFailover.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
+      model: a.modelId,
+      vendor: a.vendorId,
+      error: a.error.message,
+      errorType: a.errorType
+    })));
+    promptRunWithFailover.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
+    promptRunWithFailover.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
+    
+    // Update ModelID if we ended up using a different model
+    if (currentModel.ID !== promptRunWithFailover.OriginalModelID) {
+      promptRun.ModelID = currentModel.ID;
+    }
+    if (currentVendorId && currentVendorId !== promptRun.VendorID) {
+      promptRun.VendorID = currentVendorId;
+    }
+  }
+
+  /**
+   * Updates prompt run with failover failure tracking data
+   */
+  private updatePromptRunWithFailoverFailure(
+    promptRun: AIPromptRunEntity,
+    failoverAttempts: FailoverAttempt[]
+  ): void {
+    // TODO: Remove type assertions after CodeGen updates entities with new fields
+    const promptRunWithFailover = promptRun as AIPromptRunEntity & {
+      OriginalModelID?: string;
+      OriginalRequestStartTime?: Date;
+      FailoverAttempts?: number;
+      FailoverErrors?: string;
+      FailoverDurations?: string;
+      TotalFailoverDuration?: number;
+    };
+    
+    promptRunWithFailover.FailoverAttempts = failoverAttempts.length;
+    promptRunWithFailover.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
+      model: a.modelId,
+      vendor: a.vendorId,
+      error: a.error.message,
+      errorType: a.errorType
+    })));
+    promptRunWithFailover.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
+    promptRunWithFailover.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
+  }
+
+  /**
+   * Creates an error result for failed failover attempts
+   */
+  private createFailoverErrorResult(lastError: Error | null, failoverAttempts: FailoverAttempt[]): ChatResult {
+    const startTime = new Date();
+    const endTime = new Date();
+    
+    return {
+      success: false,
+      startTime: startTime,
+      endTime: endTime,
+      errorMessage: lastError?.message || 'Unknown error',
+      exception: lastError,
+      statusText: `Failover failed after ${failoverAttempts.length} attempts`,
+      timeElapsed: endTime.getTime() - startTime.getTime(),
+      data: null
+    };
   }
 
   /**
@@ -1720,8 +2071,8 @@ export class AIPromptRunner {
           await this.applyRetryDelay(prompt, attempt);
         }
 
-        // Execute the AI model
-        const modelResult = await this.executeModel(
+        // Execute the AI model with failover support
+        const modelResult = await this.executeModelWithFailover(
           selectedModel,
           renderedPromptText,
           prompt,
@@ -1730,6 +2081,8 @@ export class AIPromptRunner {
           params.conversationMessages,
           params.templateMessageRole || 'system',
           params.cancellationToken,
+          undefined, // allCandidates - will be determined in executeModelWithFailover
+          promptRun
         );
 
         // Accumulate token usage from this attempt
@@ -2471,6 +2824,9 @@ export class AIPromptRunner {
       // Set Success flag based on validation result
       promptRun.Success = modelResult.success && (parsedResult.validationResult?.Success !== false);
 
+      // Note: Failover tracking fields are now updated directly in executeModelWithFailover
+      // The promptRun entity already has the failover information set
+
       // With template composition, we only execute once so rollup equals regular fields
       promptRun.TokensPromptRollup = promptRun.TokensPrompt;
       promptRun.TokensCompletionRollup = promptRun.TokensCompletion;
@@ -2495,6 +2851,243 @@ export class AIPromptRunner {
         metadata: {
           promptRunId: promptRun.ID
         }
+      });
+    }
+  }
+
+  // ==================== FAILOVER METHODS ====================
+
+  /**
+   * Retrieves failover configuration from the prompt entity.
+   * 
+   * @param prompt - The AI prompt entity containing failover settings
+   * @returns FailoverConfiguration object with strategy and settings
+   * 
+   * @remarks
+   * This method extracts failover configuration from the prompt entity and provides
+   * default values when configuration is not specified. Override this method to
+   * implement custom failover configuration logic.
+   */
+  protected getFailoverConfiguration(prompt: AIPromptEntity): FailoverConfiguration {
+    // TODO: Remove type assertions after CodeGen updates entities with new fields
+    const promptWithFailover = prompt as AIPromptEntity & {
+      FailoverStrategy?: 'SameModelDifferentVendor' | 'NextBestModel' | 'PowerRank' | 'None';
+      FailoverMaxAttempts?: number;
+      FailoverDelaySeconds?: number;
+      FailoverModelStrategy?: 'PreferSameModel' | 'PreferDifferentModel' | 'RequireSameModel';
+      FailoverErrorScope?: 'All' | 'NetworkOnly' | 'RateLimitOnly' | 'ServiceErrorOnly';
+    };
+    
+    return {
+      strategy: promptWithFailover.FailoverStrategy || 'None',
+      maxAttempts: promptWithFailover.FailoverMaxAttempts || 3,
+      delaySeconds: promptWithFailover.FailoverDelaySeconds || 1,
+      modelStrategy: promptWithFailover.FailoverModelStrategy || 'PreferSameModel',
+      errorScope: promptWithFailover.FailoverErrorScope || 'All'
+    };
+  }
+
+  /**
+   * Determines whether a failover attempt should be made based on the error and configuration.
+   * 
+   * @param error - The error that occurred during execution
+   * @param config - The failover configuration
+   * @param attemptNumber - The current attempt number (1-based)
+   * @returns True if failover should be attempted, false otherwise
+   * 
+   * @remarks
+   * This method uses the ErrorAnalyzer to classify errors and determine if they are
+   * eligible for failover based on the configured error scope. Override this method
+   * to implement custom failover decision logic.
+   */
+  protected shouldAttemptFailover(
+    error: Error,
+    config: FailoverConfiguration,
+    attemptNumber: number
+  ): boolean {
+    // Don't failover if strategy is None or we've exceeded max attempts
+    if (config.strategy === 'None' || attemptNumber > config.maxAttempts) {
+      return false;
+    }
+
+    // Analyze the error to determine if it's eligible for failover
+    const errorAnalysis = ErrorAnalyzer.analyzeError(error);
+    
+    // Check if error analysis allows failover
+    if (!errorAnalysis.canFailover) {
+      return false;
+    }
+
+    // Check error scope configuration
+    switch (config.errorScope) {
+      case 'NetworkOnly':
+        return errorAnalysis.errorType === 'NetworkError';
+      case 'RateLimitOnly':
+        return errorAnalysis.errorType === 'RateLimit';
+      case 'ServiceErrorOnly':
+        return errorAnalysis.errorType === 'ServiceUnavailable' || 
+               errorAnalysis.errorType === 'InternalServerError';
+      case 'All':
+      default:
+        return true;
+    }
+  }
+
+  /**
+   * Calculates the delay before the next failover attempt.
+   * 
+   * @param attemptNumber - The current attempt number (1-based)
+   * @param baseDelaySeconds - The base delay in seconds from configuration
+   * @param previousError - The error from the previous attempt
+   * @returns Delay in milliseconds before the next attempt
+   * 
+   * @remarks
+   * Implements exponential backoff with jitter by default. The delay increases
+   * exponentially with each attempt and includes random jitter to prevent
+   * thundering herd problems. Override this method to implement custom delay logic.
+   */
+  protected calculateFailoverDelay(
+    attemptNumber: number,
+    baseDelaySeconds: number,
+    previousError?: Error
+  ): number {
+    // Exponential backoff: delay = base * 2^(attempt-1)
+    const exponentialDelay = baseDelaySeconds * Math.pow(2, attemptNumber - 1);
+    
+    // Add jitter (0-25% of delay) to prevent thundering herd
+    const jitter = exponentialDelay * 0.25 * Math.random();
+    
+    // Cap at 30 seconds to prevent excessive delays
+    const totalDelay = Math.min(exponentialDelay + jitter, 30);
+    
+    return totalDelay * 1000; // Convert to milliseconds
+  }
+
+  /**
+   * Selects candidate models for failover based on the strategy and current failure.
+   * 
+   * @param currentModel - The model that just failed
+   * @param currentVendorId - The vendor ID that just failed
+   * @param strategy - The failover strategy to use
+   * @param modelStrategy - The model selection preference
+   * @param allCandidates - All available model-vendor candidates
+   * @param attemptHistory - History of previous failover attempts
+   * @returns Array of candidates sorted by priority (highest first)
+   * 
+   * @remarks
+   * This method implements different strategies for selecting failover candidates:
+   * - SameModelDifferentVendor: Try the same model with different vendors
+   * - NextBestModel: Try different models in order of preference
+   * - PowerRank: Use the global power ranking of models
+   * 
+   * Override this method to implement custom candidate selection logic.
+   */
+  protected selectFailoverCandidates(
+    currentModel: AIModelEntityExtended,
+    currentVendorId: string | undefined,
+    strategy: FailoverConfiguration['strategy'],
+    modelStrategy: FailoverConfiguration['modelStrategy'],
+    allCandidates: ModelVendorCandidate[],
+    attemptHistory: FailoverAttempt[]
+  ): ModelVendorCandidate[] {
+    // Filter out candidates that have already failed
+    const failedPairs = new Set(
+      attemptHistory.map(a => `${a.modelId}:${a.vendorId || 'default'}`)
+    );
+    
+    const availableCandidates = allCandidates.filter(c => {
+      const key = `${c.model.ID}:${c.vendorId || 'default'}`;
+      return !failedPairs.has(key);
+    });
+
+    // Apply strategy-specific filtering and sorting
+    let candidates: ModelVendorCandidate[];
+    
+    switch (strategy) {
+      case 'SameModelDifferentVendor':
+        // Only consider same model with different vendors
+        candidates = availableCandidates.filter(c => 
+          c.model.ID === currentModel.ID && c.vendorId !== currentVendorId
+        );
+        break;
+        
+      case 'NextBestModel':
+        // Consider all models, apply model strategy preference
+        candidates = availableCandidates;
+        if (modelStrategy === 'RequireSameModel') {
+          candidates = candidates.filter(c => c.model.ID === currentModel.ID);
+        } else if (modelStrategy === 'PreferSameModel') {
+          // Sort to put same model first
+          candidates.sort((a, b) => {
+            const aSameModel = a.model.ID === currentModel.ID ? 1 : 0;
+            const bSameModel = b.model.ID === currentModel.ID ? 1 : 0;
+            return bSameModel - aSameModel;
+          });
+        } else if (modelStrategy === 'PreferDifferentModel') {
+          // Sort to put different models first
+          candidates.sort((a, b) => {
+            const aDiffModel = a.model.ID !== currentModel.ID ? 1 : 0;
+            const bDiffModel = b.model.ID !== currentModel.ID ? 1 : 0;
+            return bDiffModel - aDiffModel;
+          });
+        }
+        break;
+        
+      case 'PowerRank':
+        // Use all candidates, they're already sorted by power rank
+        candidates = availableCandidates;
+        break;
+        
+      default:
+        candidates = [];
+    }
+
+    // Final sort by priority (higher is better)
+    return candidates.sort((a, b) => b.priority - a.priority);
+  }
+
+  /**
+   * Logs a failover attempt for tracking and debugging.
+   * 
+   * @param promptId - The ID of the prompt being executed
+   * @param attempt - The failover attempt details
+   * @param willRetry - Whether another attempt will be made
+   * 
+   * @remarks
+   * This method logs detailed information about each failover attempt to help with
+   * debugging and monitoring. Override this method to implement custom logging or
+   * integrate with external monitoring systems.
+   */
+  protected logFailoverAttempt(
+    promptId: string,
+    attempt: FailoverAttempt,
+    willRetry: boolean
+  ): void {
+    const message = `Failover attempt ${attempt.attemptNumber} for prompt ${promptId}`;
+    const metadata = {
+      promptId,
+      attemptNumber: attempt.attemptNumber,
+      modelId: attempt.modelId,
+      vendorId: attempt.vendorId,
+      errorType: attempt.errorType,
+      duration: attempt.duration,
+      willRetry,
+      error: attempt.error.message
+    };
+
+    if (willRetry) {
+      LogStatusEx({
+        message: `⚡ ${message}`,
+        category: 'AI',
+        additionalArgs: [metadata]
+      });
+    } else {
+      LogErrorEx({
+        message: message,
+        error: attempt.error,
+        category: 'AI',
+        severity: 'error',
+        metadata: metadata
       });
     }
   }

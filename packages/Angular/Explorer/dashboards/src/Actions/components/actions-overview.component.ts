@@ -101,37 +101,18 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
       
       const [actionsResult, categoriesResult, executionsResult] = await rv.RunViews([
         {
-          EntityName: 'Actions',
-          ExtraFilter: '',
-          OrderBy: '__mj_UpdatedAt DESC',
-          UserSearchString: '',
-          IgnoreMaxRows: false,
-          MaxRows: 1000,
-          ResultType: 'entity_object'
+          EntityName: 'Actions', 
+          OrderBy: '__mj_UpdatedAt DESC' 
         },
         {
-          EntityName: 'Action Categories',
-          ExtraFilter: '',
-          OrderBy: 'Name',
-          UserSearchString: '',
-          IgnoreMaxRows: false,
-          MaxRows: 1000,
-          ResultType: 'entity_object'
+          EntityName: 'Action Categories', 
+          OrderBy: 'Name' 
         },
         {
-          EntityName: 'Action Execution Logs',
-          ExtraFilter: '',
-          OrderBy: 'StartedAt DESC',
-          UserSearchString: '',
-          IgnoreMaxRows: false,
-          MaxRows: 1000,
-          ResultType: 'entity_object'
+          EntityName: 'Action Execution Logs', 
+          OrderBy: 'StartedAt DESC', 
         }
       ]);
-      
-      console.log('Actions result:', actionsResult);
-      console.log('Categories result:', categoriesResult);
-      console.log('Executions result:', executionsResult);
       
       if (!actionsResult.Success || !categoriesResult.Success || !executionsResult.Success) {
         const errors = [];

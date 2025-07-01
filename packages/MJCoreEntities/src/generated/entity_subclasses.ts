@@ -1711,6 +1711,36 @@ export const AIPromptSchema = z.object({
         * * Display Name: Top Log Probs
         * * SQL Data Type: int
     * * Description: Default number of top log probabilities to include when IncludeLogProbs is true. Can be overridden at runtime.`),
+    FailoverMaxAttempts: z.number().nullable().describe(`
+        * * Field Name: FailoverMaxAttempts
+        * * Display Name: Failover Max Attempts
+        * * SQL Data Type: int
+        * * Default Value: 3
+    * * Description: Maximum number of failover attempts before giving up`),
+    FailoverDelaySeconds: z.number().nullable().describe(`
+        * * Field Name: FailoverDelaySeconds
+        * * Display Name: Failover Delay Seconds
+        * * SQL Data Type: int
+        * * Default Value: 5
+    * * Description: Initial delay in seconds between failover attempts`),
+    FailoverStrategy: z.string().describe(`
+        * * Field Name: FailoverStrategy
+        * * Display Name: Failover Strategy
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: SameModelDifferentVendor
+    * * Description: Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None`),
+    FailoverModelStrategy: z.string().describe(`
+        * * Field Name: FailoverModelStrategy
+        * * Display Name: Failover Model Strategy
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: PreferSameModel
+    * * Description: Strategy for selecting failover models. Options: PreferSameModel, PreferDifferentModel, RequireSameModel`),
+    FailoverErrorScope: z.string().describe(`
+        * * Field Name: FailoverErrorScope
+        * * Display Name: Failover Error Scope
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: All
+    * * Description: Types of errors that should trigger failover. Options: All, NetworkOnly, RateLimitOnly, ServiceErrorOnly`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template
@@ -8424,6 +8454,38 @@ export const AIPromptRunSchema = z.object({
         * * Display Name: Validation Summary
         * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON object containing summary information about the validation process`),
+    FailoverAttempts: z.number().nullable().describe(`
+        * * Field Name: FailoverAttempts
+        * * Display Name: Failover Attempts
+        * * SQL Data Type: int
+        * * Default Value: 0
+    * * Description: Number of failover attempts made during this prompt run`),
+    FailoverErrors: z.string().nullable().describe(`
+        * * Field Name: FailoverErrors
+        * * Display Name: Failover Errors
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of error details from each failover attempt`),
+    FailoverDurations: z.string().nullable().describe(`
+        * * Field Name: FailoverDurations
+        * * Display Name: Failover Durations
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of duration in milliseconds for each failover attempt`),
+    OriginalRequestStartTime: z.date().nullable().describe(`
+        * * Field Name: OriginalRequestStartTime
+        * * Display Name: Original Request Start Time
+        * * SQL Data Type: datetime
+    * * Description: Timestamp when the original request started, before any failovers`),
+    TotalFailoverDuration: z.number().nullable().describe(`
+        * * Field Name: TotalFailoverDuration
+        * * Display Name: Total Failover Duration
+        * * SQL Data Type: int
+    * * Description: Total time spent in failover attempts in milliseconds`),
+    OriginalModelID: z.string().nullable().describe(`
+        * * Field Name: OriginalModelID
+        * * Display Name: Original Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    * * Description: The AI Model ID that was originally attempted before any failovers`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -8444,6 +8506,10 @@ export const AIPromptRunSchema = z.object({
         * * Field Name: Configuration
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(100)`),
+    OriginalModel: z.string().nullable().describe(`
+        * * Field Name: OriginalModel
+        * * Display Name: Original Model
+        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type AIPromptRunEntityType = z.infer<typeof AIPromptRunSchema>;
@@ -16109,7 +16175,10 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Table-Level: This rule ensures that if the cache match type is set to 'Vector', the cache similarity threshold must be specified. If the match type is anything other than 'Vector', the similarity threshold can be left empty.
     * * Table-Level: This rule ensures that if the parallelization mode is set to 'StaticCount', then the number of parallel tasks (ParallelCount) must be provided.
     * * Table-Level: This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then the Parallel Config Param field must be filled in. For any other mode, the Parallel Config Param can be left empty.
-    * * Table-Level: This rule ensures that if the OutputType is set to 'object', an OutputExample must be provided. If the OutputType is anything other than 'object', providing an OutputExample is not required.  
+    * * Table-Level: This rule ensures that if the OutputType is set to 'object', an OutputExample must be provided. If the OutputType is anything other than 'object', providing an OutputExample is not required.
+    * * FailoverErrorScope: This rule ensures that the FailoverErrorScope field can only be set to 'ServiceErrorOnly', 'RateLimitOnly', 'NetworkOnly', 'All', or left empty.
+    * * FailoverStrategy: This rule ensures that the FailoverStrategy field, if specified, must be either 'None', 'PowerRank', 'NextBestModel', 'SameModelDifferentVendor', or left blank (unset).
+    * * FailoverModelStrategy: This rule ensures that the value for FailoverModelStrategy is either 'RequireSameModel', 'PreferDifferentModel', 'PreferSameModel', or left blank (not set). Any other value is not allowed.  
     * @public
     * @method
     * @override
@@ -16123,6 +16192,9 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
         this.ValidateParallelCountWhenParallelizationModeIsStaticCount(result);
         this.ValidateParallelConfigParamRequiredForConfigParamMode(result);
         this.ValidateOutputExampleWhenOutputTypeObject(result);
+        this.ValidateFailoverErrorScopeAgainstAllowedValues(result);
+        this.ValidateFailoverStrategyAllowedValues(result);
+        this.ValidateFailoverModelStrategyAgainstAllowedValues(result);
 
         return result;
     }
@@ -16208,6 +16280,63 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     public ValidateOutputExampleWhenOutputTypeObject(result: ValidationResult) {
     	if (this.OutputType === "object" && (this.OutputExample === null || this.OutputExample === undefined)) {
     		result.Errors.push(new ValidationErrorInfo("OutputExample", "When OutputType is 'object', OutputExample must be provided.", this.OutputExample, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the FailoverErrorScope field can only be set to 'ServiceErrorOnly', 'RateLimitOnly', 'NetworkOnly', 'All', or left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateFailoverErrorScopeAgainstAllowedValues(result: ValidationResult) {
+    	const allowedValues = ["ServiceErrorOnly", "RateLimitOnly", "NetworkOnly", "All", null];
+    	if (!allowedValues.includes(this.FailoverErrorScope)) {
+    		result.Errors.push(new ValidationErrorInfo("FailoverErrorScope", "The failover error scope must be one of: 'ServiceErrorOnly', 'RateLimitOnly', 'NetworkOnly', 'All', or left empty.", this.FailoverErrorScope, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the FailoverStrategy field, if specified, must be either 'None', 'PowerRank', 'NextBestModel', 'SameModelDifferentVendor', or left blank (unset).
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateFailoverStrategyAllowedValues(result: ValidationResult) {
+    	const allowed = [
+    		"None",
+    		"PowerRank",
+    		"NextBestModel",
+    		"SameModelDifferentVendor",
+    		null, // Allowing null/undefined as valid per the constraint
+    		undefined
+    	];
+    	if (!allowed.includes(this.FailoverStrategy)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"FailoverStrategy",
+    			"The failover strategy must be 'None', 'PowerRank', 'NextBestModel', 'SameModelDifferentVendor', or left blank.",
+    			this.FailoverStrategy,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * This rule ensures that the value for FailoverModelStrategy is either 'RequireSameModel', 'PreferDifferentModel', 'PreferSameModel', or left blank (not set). Any other value is not allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateFailoverModelStrategyAgainstAllowedValues(result: ValidationResult) {
+    	const allowedValues = ["RequireSameModel", "PreferDifferentModel", "PreferSameModel", null];
+    	if (this.FailoverModelStrategy !== null &&
+    		!allowedValues.includes(this.FailoverModelStrategy)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"FailoverModelStrategy",
+    			"FailoverModelStrategy must be null or one of: 'RequireSameModel', 'PreferDifferentModel', 'PreferSameModel'.",
+    			this.FailoverModelStrategy,
+    			ValidationErrorType.Failure
+    		));
     	}
     }
 
@@ -16869,6 +16998,76 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     }
     set TopLogProbs(value: number | null) {
         this.Set('TopLogProbs', value);
+    }
+
+    /**
+    * * Field Name: FailoverMaxAttempts
+    * * Display Name: Failover Max Attempts
+    * * SQL Data Type: int
+    * * Default Value: 3
+    * * Description: Maximum number of failover attempts before giving up
+    */
+    get FailoverMaxAttempts(): number | null {
+        return this.Get('FailoverMaxAttempts');
+    }
+    set FailoverMaxAttempts(value: number | null) {
+        this.Set('FailoverMaxAttempts', value);
+    }
+
+    /**
+    * * Field Name: FailoverDelaySeconds
+    * * Display Name: Failover Delay Seconds
+    * * SQL Data Type: int
+    * * Default Value: 5
+    * * Description: Initial delay in seconds between failover attempts
+    */
+    get FailoverDelaySeconds(): number | null {
+        return this.Get('FailoverDelaySeconds');
+    }
+    set FailoverDelaySeconds(value: number | null) {
+        this.Set('FailoverDelaySeconds', value);
+    }
+
+    /**
+    * * Field Name: FailoverStrategy
+    * * Display Name: Failover Strategy
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: SameModelDifferentVendor
+    * * Description: Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None
+    */
+    get FailoverStrategy(): string {
+        return this.Get('FailoverStrategy');
+    }
+    set FailoverStrategy(value: string) {
+        this.Set('FailoverStrategy', value);
+    }
+
+    /**
+    * * Field Name: FailoverModelStrategy
+    * * Display Name: Failover Model Strategy
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: PreferSameModel
+    * * Description: Strategy for selecting failover models. Options: PreferSameModel, PreferDifferentModel, RequireSameModel
+    */
+    get FailoverModelStrategy(): string {
+        return this.Get('FailoverModelStrategy');
+    }
+    set FailoverModelStrategy(value: string) {
+        this.Set('FailoverModelStrategy', value);
+    }
+
+    /**
+    * * Field Name: FailoverErrorScope
+    * * Display Name: Failover Error Scope
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: All
+    * * Description: Types of errors that should trigger failover. Options: All, NetworkOnly, RateLimitOnly, ServiceErrorOnly
+    */
+    get FailoverErrorScope(): string {
+        return this.Get('FailoverErrorScope');
+    }
+    set FailoverErrorScope(value: string) {
+        this.Set('FailoverErrorScope', value);
     }
 
     /**
@@ -34524,6 +34723,86 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     }
 
     /**
+    * * Field Name: FailoverAttempts
+    * * Display Name: Failover Attempts
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of failover attempts made during this prompt run
+    */
+    get FailoverAttempts(): number | null {
+        return this.Get('FailoverAttempts');
+    }
+    set FailoverAttempts(value: number | null) {
+        this.Set('FailoverAttempts', value);
+    }
+
+    /**
+    * * Field Name: FailoverErrors
+    * * Display Name: Failover Errors
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of error details from each failover attempt
+    */
+    get FailoverErrors(): string | null {
+        return this.Get('FailoverErrors');
+    }
+    set FailoverErrors(value: string | null) {
+        this.Set('FailoverErrors', value);
+    }
+
+    /**
+    * * Field Name: FailoverDurations
+    * * Display Name: Failover Durations
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of duration in milliseconds for each failover attempt
+    */
+    get FailoverDurations(): string | null {
+        return this.Get('FailoverDurations');
+    }
+    set FailoverDurations(value: string | null) {
+        this.Set('FailoverDurations', value);
+    }
+
+    /**
+    * * Field Name: OriginalRequestStartTime
+    * * Display Name: Original Request Start Time
+    * * SQL Data Type: datetime
+    * * Description: Timestamp when the original request started, before any failovers
+    */
+    get OriginalRequestStartTime(): Date | null {
+        return this.Get('OriginalRequestStartTime');
+    }
+    set OriginalRequestStartTime(value: Date | null) {
+        this.Set('OriginalRequestStartTime', value);
+    }
+
+    /**
+    * * Field Name: TotalFailoverDuration
+    * * Display Name: Total Failover Duration
+    * * SQL Data Type: int
+    * * Description: Total time spent in failover attempts in milliseconds
+    */
+    get TotalFailoverDuration(): number | null {
+        return this.Get('TotalFailoverDuration');
+    }
+    set TotalFailoverDuration(value: number | null) {
+        this.Set('TotalFailoverDuration', value);
+    }
+
+    /**
+    * * Field Name: OriginalModelID
+    * * Display Name: Original Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    * * Description: The AI Model ID that was originally attempted before any failovers
+    */
+    get OriginalModelID(): string | null {
+        return this.Get('OriginalModelID');
+    }
+    set OriginalModelID(value: string | null) {
+        this.Set('OriginalModelID', value);
+    }
+
+    /**
     * * Field Name: Prompt
     * * Display Name: Prompt
     * * SQL Data Type: nvarchar(255)
@@ -34566,6 +34845,15 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     */
     get Configuration(): string | null {
         return this.Get('Configuration');
+    }
+
+    /**
+    * * Field Name: OriginalModel
+    * * Display Name: Original Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get OriginalModel(): string | null {
+        return this.Get('OriginalModel');
     }
 }
 

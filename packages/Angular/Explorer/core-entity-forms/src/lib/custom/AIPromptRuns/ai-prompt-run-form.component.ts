@@ -104,8 +104,7 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent {
         const result = await rv.RunView<AIPromptRunEntity>({
             EntityName: 'MJ: AI Prompt Runs',
             ExtraFilter: `ParentID='${this.record.ID}'`,
-            OrderBy: 'ExecutionOrder ASC, RunAt DESC',
-            ResultType: 'entity_object'
+            OrderBy: 'ExecutionOrder ASC, RunAt DESC' 
         });
         
         this.childRuns = result.Results;

@@ -490,7 +490,11 @@ const customFormatParams: ChatParams = {
 
 ## Error Handling
 
-All operations return a standardized result format with error information:
+### Enhanced Error Information (v2.47.0+)
+
+The MemberJunction AI Core package now provides rich, structured error information to enable intelligent retry logic and provider failover. All operations return results extending `BaseResult` which now includes detailed error information.
+
+#### Basic Error Handling
 
 ```typescript
 const result = await llm.ChatCompletion(params);
@@ -502,6 +506,148 @@ if (!result.success) {
   console.error('Time Elapsed:', result.timeElapsed, 'ms');
 } else {
   console.log('Success! Response time:', result.timeElapsed, 'ms');
+}
+```
+
+#### Advanced Error Handling with Error Info
+
+```typescript
+const result = await llm.ChatCompletion(params);
+
+if (!result.success && result.errorInfo) {
+  const { errorInfo } = result;
+  
+  console.log(`Error Type: ${errorInfo.errorType}`);
+  console.log(`HTTP Status: ${errorInfo.httpStatusCode}`);
+  console.log(`Severity: ${errorInfo.severity}`);
+  console.log(`Can Failover: ${errorInfo.canFailover}`);
+  
+  // Handle based on error type
+  switch (errorInfo.errorType) {
+    case 'RateLimit':
+      // Wait and retry or switch providers
+      const delay = errorInfo.suggestedRetryDelaySeconds || 30;
+      console.log(`Rate limited. Retry after ${delay} seconds`);
+      break;
+      
+    case 'Authentication':
+      // Fatal error - check API keys
+      console.error('Authentication failed. Check API key configuration.');
+      break;
+      
+    case 'ServiceUnavailable':
+      // Try another provider
+      if (errorInfo.canFailover) {
+        console.log('Service unavailable. Switching to backup provider...');
+      }
+      break;
+  }
+}
+```
+
+### Error Types
+
+The package categorizes errors into the following types:
+
+- **`RateLimit`**: Rate limit exceeded (HTTP 429). Suggests switching providers or waiting
+- **`Authentication`**: Auth failure (HTTP 401/403). Usually indicates invalid API key
+- **`ServiceUnavailable`**: Service down (HTTP 503). Provider temporarily unavailable
+- **`InternalServerError`**: Server error (HTTP 500). Problem on provider's side
+- **`NetworkError`**: Connection issues, timeouts, DNS failures
+- **`InvalidRequest`**: Bad request format (HTTP 400). Problem with request parameters
+- **`ModelError`**: Model-specific issues (not found, overloaded)
+- **`Unknown`**: Unclassified errors
+
+### Error Severity Levels
+
+Errors are classified by severity to guide retry strategies:
+
+- **`Transient`**: Temporary error that may resolve with immediate retry
+- **`Retriable`**: Error requiring waiting or provider switching before retry
+- **`Fatal`**: Permanent error that won't be resolved by retrying
+
+### Error Analysis Utility
+
+The package includes an `ErrorAnalyzer` utility for providers to use:
+
+```typescript
+import { ErrorAnalyzer } from '@memberjunction/ai';
+
+try {
+  // Provider API call
+} catch (error) {
+  const errorInfo = ErrorAnalyzer.analyzeError(error, 'OpenAI');
+  // errorInfo now contains structured error details
+}
+```
+
+### Implementing Intelligent Failover
+
+```typescript
+import { BaseLLM, ChatParams, AIErrorInfo } from '@memberjunction/ai';
+
+class ResilientAIClient {
+  private providers: Array<{ name: string; llm: BaseLLM }> = [];
+  
+  async chatWithFailover(params: ChatParams): Promise<ChatResult> {
+    for (const provider of this.providers) {
+      try {
+        const result = await provider.llm.ChatCompletion(params);
+        
+        if (result.success) {
+          return result;
+        }
+        
+        // Check if we should try another provider
+        if (result.errorInfo?.canFailover) {
+          console.log(`Provider ${provider.name} failed. Trying next...`);
+          continue;
+        } else {
+          // Fatal error - don't try other providers
+          return result;
+        }
+        
+      } catch (error) {
+        console.error(`Provider ${provider.name} threw exception:`, error);
+      }
+    }
+    
+    throw new Error('All providers failed');
+  }
+}
+```
+
+### Retry with Backoff
+
+```typescript
+async function retryWithBackoff(
+  operation: () => Promise<ChatResult>,
+  maxRetries: number = 3
+): Promise<ChatResult> {
+  let lastResult: ChatResult;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    lastResult = await operation();
+    
+    if (lastResult.success) {
+      return lastResult;
+    }
+    
+    const errorInfo = lastResult.errorInfo;
+    if (!errorInfo || errorInfo.severity === 'Fatal') {
+      // Don't retry fatal errors
+      return lastResult;
+    }
+    
+    // Calculate delay
+    const delay = errorInfo.suggestedRetryDelaySeconds ||
+                  Math.pow(2, attempt - 1) * 1000; // Exponential backoff
+    
+    console.log(`Retry ${attempt}/${maxRetries} after ${delay}s...`);
+    await new Promise(resolve => setTimeout(resolve, delay * 1000));
+  }
+  
+  return lastResult!;
 }
 ```
 
@@ -610,7 +756,19 @@ class BaseResult {
     endTime: Date;
     errorMessage: string;
     exception: any;
+    errorInfo?: AIErrorInfo; // Enhanced error details (v2.47.0+)
     timeElapsed: number; // Computed getter
+}
+
+// Enhanced error information structure
+interface AIErrorInfo {
+    httpStatusCode?: number;              // HTTP status code (429, 500, etc.)
+    errorType: AIErrorType;               // Categorized error type
+    severity: ErrorSeverity;              // Transient, Retriable, or Fatal
+    suggestedRetryDelaySeconds?: number;  // Provider-suggested retry delay
+    canFailover: boolean;                 // Whether switching providers might help
+    providerErrorCode?: string;           // Original provider error code
+    context?: Record<string, any>;        // Additional error context
 }
 ```
 

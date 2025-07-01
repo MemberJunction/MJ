@@ -293,8 +293,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             const results = await rv.RunView<TemplateParamEntity>({
                 EntityName: 'Template Params',
                 ExtraFilter: `TemplateID = '${this.template.ID}'`,
-                OrderBy: 'Name ASC',
-                ResultType: 'entity_object'
+                OrderBy: 'Name ASC' 
             });
             
             this.templateParams = results.Results || [];
@@ -479,14 +478,11 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
      */
     public async loadAvailableModels() {
         try {
-            const rv = new RunView();
-            const results = await rv.RunView<AIModelEntity>({
-                EntityName: 'AI Models',
-                OrderBy: 'Name ASC',
-                ResultType: 'entity_object'
-            });
-            
-            this.availableModels = results.Results;
+            const engine = AIEngineBase.Instance;
+            await engine.Config(false);
+            const models = engine.Models;
+            models.sort((a, b) => a.Name.localeCompare(b.Name));
+            this.availableModels = models;
         } catch (error) {
             console.error('Error loading available models:', error);
         }
@@ -497,14 +493,11 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
      */
     public async loadAvailableVendors() {
         try {
-            const rv = new RunView();
-            const results = await rv.RunView<AIVendorEntity>({
-                EntityName: 'MJ: AI Vendors',
-                OrderBy: 'Name ASC',
-                ResultType: 'entity_object'
-            });
-            
-            this.availableVendors = results.Results;
+            const engine = AIEngineBase.Instance;
+            await engine.Config(false);
+            const vendors = engine.Vendors;
+            vendors.sort((a, b) => a.Name.localeCompare(b.Name));
+            this.availableVendors = vendors;
         } catch (error) {
             console.error('Error loading available vendors:', error);
         }
@@ -516,14 +509,11 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     public async loadAvailablePromptTypes() {
         this.isLoadingPromptTypes = true;
         try {
-            const rv = new RunView();
-            const results = await rv.RunView<AIPromptTypeEntity>({
-                EntityName: 'AI Prompt Types',
-                OrderBy: '__mj_CreatedAt ASC',
-                ResultType: 'entity_object'
-            });
-            
-            this.availablePromptTypes = results.Results;
+            const engine = AIEngineBase.Instance;
+            await engine.Config(false);
+            const promptTypes = engine.PromptTypes;
+            promptTypes.sort((a, b) => a.Name.localeCompare(b.Name));
+            this.availablePromptTypes = promptTypes;
         } catch (error) {
             console.error('Error loading available prompt types:', error);
         } finally {
@@ -546,31 +536,12 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
 
         try {
             // Load model vendors for this model, filtering by TypeID for inference providers only
-            const rv = new RunView();
-            const modelVendorsResult = await rv.RunView<AIModelVendorEntity>({
-                EntityName: 'MJ: AI Model Vendors',
-                ExtraFilter: `ModelID='${modelId}' AND TypeID='${this.__InferenceProvider_VendorTypeDefinitionID}'`,
-                OrderBy: 'VendorID ASC',
-                ResultType: 'entity_object'
-            });
-
-            const modelVendors = modelVendorsResult.Results || [];
+            const engine = AIEngineBase.Instance;
+            await engine.Config(false);
+            const modelVendors = engine.ModelVendors.filter(mv => mv.ModelID === modelId && mv.TypeID === this.__InferenceProvider_VendorTypeDefinitionID);
             
-            // Get unique vendor IDs
-            const vendorIds = [...new Set(modelVendors.map(mv => mv.VendorID))];
-            
-            // Load vendor details
-            const vendors: AIVendorEntity[] = [];
-            if (vendorIds.length > 0) {
-                const vendorFilter = vendorIds.map(id => `ID='${id}'`).join(' OR ');
-                const vendorsResult = await rv.RunView<AIVendorEntity>({
-                    EntityName: 'MJ: AI Vendors',
-                    ExtraFilter: vendorFilter,
-                    OrderBy: 'Name ASC',
-                    ResultType: 'entity_object'
-                });
-                vendors.push(...(vendorsResult.Results || []));
-            }
+            // filter vendors to just the vendors in the modelVendors array in VendorID
+            const vendors = engine.Vendors.filter(v => modelVendors.some(mv => mv.VendorID === v.ID));
 
             const result = { vendors, modelVendors };
             this.modelVendorsMap.set(modelId, result);
@@ -663,15 +634,13 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
 
         this.isLoadingModels = true;
         try {
-            const rv = new RunView();
-            const results = await rv.RunView<AIPromptModelEntity>({
-                EntityName: 'MJ: AI Prompt Models',
-                ExtraFilter: `PromptID='${this.record.ID}'`,
-                OrderBy: 'Priority DESC, __mj_CreatedAt ASC',
-                ResultType: 'entity_object'
+            const engine = AIEngineBase.Instance;
+            await engine.Config(false);
+            this.promptModels = engine.PromptModels.filter(pm => pm.PromptID === this.record.ID);
+            this.promptModels.sort((a, b) => {
+                // first sort on priority (descending), then by created date (ascending)
+                return b.Priority - a.Priority || new Date(a.__mj_CreatedAt).getTime() - new Date(b.__mj_CreatedAt).getTime();
             });
-            
-            this.promptModels = results.Results;
 
             // Load vendors for existing models
             const modelIds = this.promptModels
@@ -893,23 +862,15 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         this.isLoadingResultSelectorData = true;
         try {
             // Load categories and prompts
-            const [categoriesResult, promptsResult] = await Promise.all([
-                new RunView().RunView<AIPromptCategoryEntity>({
-                    EntityName: 'AI Prompt Categories',
-                    OrderBy: 'Name ASC',
-                    ResultType: 'entity_object'
-                }),
-                new RunView().RunView<AIPromptEntity>({
-                    EntityName: 'AI Prompts',
-                    ExtraFilter: 'Status=\'Active\'',
-                    OrderBy: 'Name ASC',
-                    ResultType: 'entity_object'
-                })
-            ]);
+            const engine = AIEngineBase.Instance;
+            await engine.Config(false);
 
-            const categories = categoriesResult.Results || [];
-            const prompts = promptsResult.Results || [];
+            const categories = engine.PromptCategories;
+            const prompts = engine.Prompts.filter(p => p.Status === 'Active');
 
+            categories.sort((a, b) => a.Name.localeCompare(b.Name));
+            prompts.sort((a, b) => a.Name.localeCompare(b.Name));
+             
             // Build tree structure
             this.resultSelectorTreeData = this.buildResultSelectorTree(categories, prompts);
 
@@ -1178,9 +1139,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             const result = await rv.RunView<AIPromptRunEntity>({
                 EntityName: 'MJ: AI Prompt Runs',
                 ExtraFilter: `PromptID='${this.record.ID}'`,
-                OrderBy: 'RunAt DESC',
-                MaxRows: 100,
-                ResultType: 'entity_object'
+                OrderBy: 'RunAt DESC' 
             });
             
             this.executionHistory = result.Results;

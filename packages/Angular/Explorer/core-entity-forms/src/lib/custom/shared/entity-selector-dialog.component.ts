@@ -81,11 +81,11 @@ export interface EntitySelectorConfig {
                 }
             </div>
             <div class="dialog-actions">
-                <kendo-button themeColor="primary" (click)="createNew()">
+                <button kendoButton themeColor="primary" (click)="createNew()">
                     <i class="fa-solid fa-plus"></i> Create New
-                </kendo-button>
-                <kendo-button (click)="onCancel()">Cancel</kendo-button>
-                <kendo-button themeColor="primary" [disabled]="!selectedEntity" (click)="onSelect()">Select</kendo-button>
+                </button>
+                <button kendoButton (click)="onCancel()">Cancel</button>
+                <button kendoButton themeColor="primary" [disabled]="!selectedEntity" (click)="onSelect()">Select</button>
             </div>
         </div>
     `,
@@ -268,8 +268,7 @@ export class EntitySelectorDialogComponent implements OnInit {
             const result = await rv.RunView({
                 EntityName: this.config.entityName,
                 ExtraFilter: this.config.filters,
-                OrderBy: this.config.orderBy,
-                ResultType: 'simple'
+                OrderBy: this.config.orderBy 
             });
 
             this.entities = result.Results;

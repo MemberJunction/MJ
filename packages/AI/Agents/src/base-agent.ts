@@ -34,7 +34,9 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { ActionEntityExtended, ActionResult } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
-import { PayloadManager } from './PayloadManager';
+import { PayloadManager, PayloadManagerResult } from './PayloadManager';
+import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
+import * as _ from 'lodash';
 
 /**
  * Base implementation for AI Agents in the MemberJunction framework.
@@ -1144,6 +1146,42 @@ export class BaseAgent {
      * @param {string} [errorMessage] - Optional error message
      * @param {any} [outputData] - Optional output data to capture for this step
      */
+    /**
+     * Builds a summary of payload change results for storage
+     * @param changeResult The result from PayloadManager operations
+     * @returns A serializable summary object
+     */
+    private buildPayloadChangeResultSummary(changeResult: PayloadManagerResult<any>): any {
+        return {
+            applied: changeResult.applied,
+            warnings: changeResult.warnings,
+            requiresFeedback: changeResult.requiresFeedback,
+            timestamp: changeResult.timestamp,
+            
+            // Include analysis summary if available
+            analysis: changeResult.analysis ? {
+                totalWarnings: changeResult.analysis.summary.totalWarnings,
+                warningsByType: changeResult.analysis.summary.warningsByType,
+                suspiciousChanges: changeResult.analysis.summary.suspiciousChanges,
+                // Only store critical warnings to save space
+                criticalWarnings: changeResult.analysis.criticalWarnings.map(w => ({
+                    type: w.type,
+                    severity: w.severity,
+                    path: w.path,
+                    message: w.message
+                }))
+            } : undefined,
+            
+            // Store compact diff summary instead of full diff
+            diffSummary: changeResult.diff ? {
+                added: changeResult.diff.summary.added,
+                removed: changeResult.diff.summary.removed,
+                modified: changeResult.diff.summary.modified,
+                totalChanges: changeResult.diff.summary.totalPaths
+            } : undefined
+        };
+    }
+
     private async finalizeStepEntity(stepEntity: AIAgentRunStepEntityExtended, success: boolean, errorMessage?: string, outputData?: any): Promise<void> {
         stepEntity.Status = success ? 'Completed' : 'Failed';
         stepEntity.CompletedAt = new Date();
@@ -1383,6 +1421,7 @@ export class BaseAgent {
             
             // Apply payload changes if provided
             let finalPayload = payload; // Start with current payload
+            let currentStepPayloadChangeResult = undefined;
             if (nextStep.payloadChangeRequest) {
                 const changeResult = this._payloadManager.applyAgentChangeRequest(
                     payload,
@@ -1390,7 +1429,9 @@ export class BaseAgent {
                     {
                         validateChanges: true,
                         logChanges: true,
-                        agentName: params.agent.Name
+                        agentName: params.agent.Name,
+                        analyzeChanges: true,
+                        generateDiff: true
                     }
                 );
                 
@@ -1398,9 +1439,13 @@ export class BaseAgent {
                     LogStatus(`Payload warnings: ${changeResult.warnings.join('; ')}`);
                 }
                 
+                // Store payload change metadata for audit trail
+                // This will be merged into outputData later
+                currentStepPayloadChangeResult = this.buildPayloadChangeResultSummary(changeResult);
+                
                 finalPayload = changeResult.result;
             }
-            
+             
             // Prepare output data
             const outputData = {
                 promptResult: {
@@ -1414,7 +1459,11 @@ export class BaseAgent {
                     decision: nextStep.step,
                     reasoning: this.getNextStepReasoning(nextStep),
                     payload: finalPayload
-                }
+                },
+                // Include payload change metadata if changes were made
+                ...(currentStepPayloadChangeResult && {
+                    payloadChangeResult: currentStepPayloadChangeResult
+                })
             };
             
             // Set PayloadAtEnd with the final payload after changes
@@ -1565,6 +1614,61 @@ export class BaseAgent {
                 subAgentResult.payload,
                 upstreamPaths
             );
+            
+            // Track the merge operation to detect what changed
+            // We create a synthetic change request that represents the merge
+            const mergeChangeRequest: AgentPayloadChangeRequest<any> = {
+                newElements: {},
+                updateElements: {},
+                removeElements: {}
+            };
+            
+            // Identify what changed in the merge by comparing original and merged payloads
+            const originalKeys = Object.keys(previousDecision.previousPayload || {});
+            const mergedKeys = Object.keys(mergedPayload || {});
+            
+            // Find updates and additions
+            for (const key of mergedKeys) {
+                if (!(key in (previousDecision.previousPayload || {}))) {
+                    mergeChangeRequest.newElements![key] = mergedPayload[key];
+                } else if (!_.isEqual(previousDecision.previousPayload[key], mergedPayload[key])) {
+                    mergeChangeRequest.updateElements![key] = mergedPayload[key];
+                }
+            }
+            
+            // Find removals
+            for (const key of originalKeys) {
+                if (!(key in (mergedPayload || {}))) {
+                    mergeChangeRequest.removeElements![key] = '_DELETE_';
+                }
+            }
+            
+            let currentStepPayloadChangeResult: any = undefined;
+
+            // Analyze the merge if there were any changes
+            if (Object.keys(mergeChangeRequest.newElements!).length > 0 || 
+                Object.keys(mergeChangeRequest.updateElements!).length > 0 || 
+                Object.keys(mergeChangeRequest.removeElements!).length > 0) {
+                
+                const mergeAnalysis = this._payloadManager.applyAgentChangeRequest(
+                    previousDecision.previousPayload,
+                    mergeChangeRequest,
+                    {
+                        validateChanges: false,
+                        logChanges: true,
+                        analyzeChanges: true,
+                        generateDiff: true,
+                        agentName: `${subAgentRequest.name} (upstream merge)`
+                    }
+                );
+                
+                // Store merge analysis
+                currentStepPayloadChangeResult = this.buildPayloadChangeResultSummary(mergeAnalysis);
+                
+                if (mergeAnalysis.warnings.length > 0) {
+                    LogStatus(`Sub-agent merge warnings: ${mergeAnalysis.warnings.join('; ')}`);
+                }
+            }
 
             // Update step entity with AIAgentRun ID if available
             if (subAgentResult.agentRun?.ID) {
@@ -1595,11 +1699,17 @@ export class BaseAgent {
                     payload: subAgentResult.payload,
                     errorMessage: subAgentResult.agentRun?.ErrorMessage,
                     agentRunId: subAgentResult.agentRun?.ID,
-                    stepCount: subAgentResult.agentRun?.Steps?.length || 0
+                    stepCount: subAgentResult.agentRun?.Steps?.length || 0,
+                    downstreamPaths,
+                    upstreamPaths
                 },
                 shouldTerminate: shouldTerminate,
-                nextStep: shouldTerminate ? 'success' : 'retry'
-            };
+                nextStep: shouldTerminate ? 'success' : 'retry',
+                // Include payload change metadata if changes were made during merge
+                ...(currentStepPayloadChangeResult && {
+                    payloadChangeResult: currentStepPayloadChangeResult
+                })
+            }; 
 
             // Finalize step entity
             await this.finalizeStepEntity(stepEntity, subAgentResult.success, 
@@ -1732,6 +1842,10 @@ export class BaseAgent {
             const actionEngine = ActionEngineServer.Instance;
             const agentActions = AIEngine.Instance.AgentActions.filter(aa => aa.AgentID === params.agent.ID);
 
+            // Track step numbers for parallel actions
+            let numActionsProcessed = 0;
+            const baseStepNumber = (this._agentRun!.Steps?.length || 0) + 1;
+
             // Execute all actions in parallel
             const actionPromises = actions.map(async (aa) => {
                 // get all agent actions first for this agent
@@ -1741,6 +1855,10 @@ export class BaseAgent {
                 }
 
                 const stepEntity = await this.createStepEntity('Actions', `Execute Action: ${aa.name}`, params.contextUser, actionEntity.ID);
+                
+                // Override step number to ensure unique values for parallel actions
+                stepEntity.StepNumber = baseStepNumber + numActionsProcessed++;
+                
                 let actionResult;
                 try {
                     // Execute the action
