@@ -530,13 +530,13 @@ export class BaseAgent {
         promptParams.templateMessageRole = 'system';
         promptParams.verbose = params.verbose; // Pass through verbose flag
 
-        if (payload) {
-            // before we execute the prompt, we ask our Agent Type to inject the
-            // payload - as the way a payload is injected is dependent on the agent type and its
-            // prompting strategy. At this level in BaseAgent we don't know the format, location etc
-            const atInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
-            await atInstance.InjectPayload<P>(payload, promptParams);
-        }
+        // before we execute the prompt, we ask our Agent Type to inject the
+        // payload - as the way a payload is injected is dependent on the agent type and its
+        // prompting strategy. At this level in BaseAgent we don't know the format, location etc
+        // NOTE: We do this even if payload is empty, each agent type can have its own
+        //       logic for handling empty payloads.
+        const atInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
+        await atInstance.InjectPayload<P>(payload, promptParams);
 
         // Setup child prompt parameters
         promptParams.childPrompts = [
