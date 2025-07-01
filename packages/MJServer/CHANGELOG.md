@@ -1,5 +1,44 @@
 # Change Log - @memberjunction/server
 
+## 2.61.0
+
+### Minor Changes
+
+- 51b2b47: Improvements to AI Agents and Added Social Actions
+
+### Patch Changes
+
+- Updated dependencies [51b2b47]
+  - @memberjunction/ai-agents@2.61.0
+  - @memberjunction/ai-core-plus@2.61.0
+  - @memberjunction/actions@2.61.0
+  - @memberjunction/aiengine@2.61.0
+  - @memberjunction/ai-prompts@2.61.0
+  - @memberjunction/core-actions@2.61.0
+  - @memberjunction/core-entities-server@2.61.0
+  - @memberjunction/ai-agent-manager-actions@2.61.0
+  - @memberjunction/sqlserver-dataprovider@2.61.0
+  - @memberjunction/ai-vectors-pinecone@2.61.0
+  - @memberjunction/queue@2.61.0
+  - @memberjunction/templates@2.61.0
+  - @memberjunction/external-change-detection@2.61.0
+  - @memberjunction/entity-communications-server@2.61.0
+  - @memberjunction/ai@2.61.0
+  - @memberjunction/ai-anthropic@2.61.0
+  - @memberjunction/ai-cerebras@2.61.0
+  - @memberjunction/ai-groq@2.61.0
+  - @memberjunction/ai-mistral@2.61.0
+  - @memberjunction/ai-openai@2.61.0
+  - @memberjunction/doc-utils@2.61.0
+  - @memberjunction/graphql-dataprovider@2.61.0
+  - @memberjunction/core@2.61.0
+  - @memberjunction/core-entities@2.61.0
+  - @memberjunction/data-context@2.61.0
+  - @memberjunction/data-context-server@2.61.0
+  - @memberjunction/global@2.61.0
+  - @memberjunction/storage@2.61.0
+  - @memberjunction/skip-types@2.61.0
+
 ## 2.60.0
 
 ### Minor Changes

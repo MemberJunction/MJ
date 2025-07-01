@@ -1,5 +1,20 @@
 # @memberjunction/core-entities-server
 
+## 2.61.0
+
+### Patch Changes
+
+- Updated dependencies [51b2b47]
+  - @memberjunction/ai-core-plus@2.61.0
+  - @memberjunction/aiengine@2.61.0
+  - @memberjunction/ai-prompts@2.61.0
+  - @memberjunction/sqlserver-dataprovider@2.61.0
+  - @memberjunction/ai-vector-dupe@2.61.0
+  - @memberjunction/core@2.61.0
+  - @memberjunction/core-entities@2.61.0
+  - @memberjunction/global@2.61.0
+  - @memberjunction/skip-types@2.61.0
+
 ## 2.60.0
 
 ### Minor Changes
