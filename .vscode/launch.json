@@ -12,7 +12,7 @@
       "sourceMaps": true,
       "smartStep": true,
       "console": "integratedTerminal",
-      "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**"]
+      "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**", "**/zone/**"] 
     },
     {
       "type": "node",
@@ -22,7 +22,7 @@
       "cwd": "${workspaceFolder}/packages/Actions/ScheduledActionsServer",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["start"],
-      "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**"]
+      "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**", "**/zone/**"]
     },
     {
       "type": "node",
@@ -32,7 +32,7 @@
       "cwd": "${workspaceFolder}/packages/MJAPI",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["start"],
-      "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**"]
+      "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**", "**/zone/**"] 
     },
     {
       "type": "chrome",
@@ -47,7 +47,9 @@
         "webpack:///./src/*": "${workspaceFolder}/packages/MJExplorer/src/*",
         "../src/*": "${workspaceFolder}/packages/GraphQLDataProvider/src/*",
         "*/packages/*": "${workspaceFolder}/*"
-      }
+      },
+      "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**", "**/zone/**"],
+      "justMyCode": true,
     },
     {
       "type": "node",
@@ -55,7 +57,7 @@
       "name": "CodeGen CLI",
       "program": "${workspaceFolder}/packages/MJCLI/bin/dev",
       "args": ["codegen"],
-      "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**"]
+      "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**", "**/zone/**"]
     },
     {
       "type": "chrome",
@@ -117,7 +119,7 @@
         "${workspaceFolder}/packages/**/dist/**/*.js",
         "${workspaceFolder}/packages/**/lib/**/*.js"
       ],
-      "skipFiles": ["<node_internals>/**"],
+      "skipFiles": ["<node_internals>/**", "**/zone/**"],
       "env": {
         "NODE_ENV": "development",
         "METADATA_SYNC_TARGET_DIR": "${input:metadataSyncPullDirectory}"
