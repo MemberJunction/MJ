@@ -15,13 +15,13 @@
       </div>
       <div class="mj-header-actions">
         <!-- Kendo Button with Font Awesome Icon -->
-        <button kendoButtonfillMode="outline" rounded="medium" themeColor="base">
+        <button kendoButton fillMode="outline" rounded="medium" themeColor="base">
           <span class="button-content">
             <i class="fas fa-download"></i>
             Export
           </span>
         </button>
-        <button kendoButtonthemeColor="primary" rounded="medium">
+        <button kendoButton themeColor="primary" rounded="medium">
           <span class="button-content">
             <i class="fas fa-save"></i>
             Save Changes
@@ -51,31 +51,31 @@
     <div class="mb-3">
       <h4>Kendo Buttons with Font Awesome Icons</h4>
       <div class="button-group">
-        <button kendoButtonthemeColor="primary" rounded="medium" size="large">
+        <button kendoButton themeColor="primary" rounded="medium" size="large">
           <span class="button-content">
             <i class="fas fa-check"></i>
             Primary Action
           </span>
         </button>
-        <button kendoButtonthemeColor="info" rounded="medium">
+        <button kendoButton themeColor="info" rounded="medium">
           <span class="button-content">
             <i class="fas fa-info-circle"></i>
             Info Button
           </span>
         </button>
-        <button kendoButtonthemeColor="success" rounded="medium">
+        <button kendoButton themeColor="success" rounded="medium">
           <span class="button-content">
             <i class="fas fa-check-circle"></i>
             Success
           </span>
         </button>
-        <button kendoButtonthemeColor="warning" rounded="medium">
+        <button kendoButton themeColor="warning" rounded="medium">
           <span class="button-content">
             <i class="fas fa-exclamation-triangle"></i>
             Warning
           </span>
         </button>
-        <button kendoButtonthemeColor="error" rounded="medium">
+        <button kendoButton themeColor="error" rounded="medium">
           <span class="button-content">
             <i class="fas fa-times-circle"></i>
             Error
@@ -87,16 +87,16 @@
     <div class="mb-3">
       <h4>Icon-Only Kendo Buttons</h4>
       <div class="button-group">
-        <button kendoButtonfillMode="flat" rounded="full" size="large" title="Edit">
+        <button kendoButton fillMode="flat" rounded="full" size="large" title="Edit">
           <i class="fas fa-edit"></i>
         </button>
-        <button kendoButtonfillMode="flat" rounded="full" size="large" title="Delete">
+        <button kendoButton fillMode="flat" rounded="full" size="large" title="Delete">
           <i class="fas fa-trash"></i>
         </button>
-        <button kendoButtonfillMode="flat" rounded="full" size="large" title="Settings">
+        <button kendoButton fillMode="flat" rounded="full" size="large" title="Settings">
           <i class="fas fa-cog"></i>
         </button>
-        <button kendoButtonfillMode="flat" rounded="full" size="large" title="Search">
+        <button kendoButton fillMode="flat" rounded="full" size="large" title="Search">
           <i class="fas fa-search"></i>
         </button>
       </div>
@@ -184,8 +184,8 @@
             </kendo-chip-list>
           </kendo-card-body>
           <kendo-card-actions orientation="horizontal" layout="end">
-            <button kendoButtonfillMode="flat">Details</button>
-            <button kendoButtonthemeColor="primary">View Dashboard</button>
+            <button kendoButton fillMode="flat">Details</button>
+            <button kendoButton themeColor="primary">View Dashboard</button>
           </kendo-card-actions>
         </kendo-card>
 
@@ -196,7 +196,7 @@
               <h4 class="mt-3">User Profile</h4>
               <p>Manage your account settings and preferences</p>
               <kendo-badge-container>
-                <button kendoButtonthemeColor="primary" rounded="medium">
+                <button kendoButton themeColor="primary" rounded="medium">
                   <span class="button-content">
                     <i class="fas fa-bell"></i>
                     Notifications
@@ -214,7 +214,7 @@
               <i class="fas fa-inbox mj-empty-icon"></i>
               <h3>No Data Available</h3>
               <p>Start by importing your data</p>
-              <button kendoButtonthemeColor="primary" rounded="medium">
+              <button kendoButton themeColor="primary" rounded="medium">
                 <span class="button-content">
                   <i class="fas fa-upload"></i>
                   Import Data
@@ -475,7 +475,7 @@
       <h4>Notification Badges</h4>
       <div class="badge-group">
         <kendo-badge-container>
-          <button kendoButtonthemeColor="primary" rounded="medium">
+          <button kendoButton themeColor="primary" rounded="medium">
             <i class="fas fa-envelope mr-2"></i>
             Messages
           </button>
@@ -483,7 +483,7 @@
         </kendo-badge-container>
 
         <kendo-badge-container>
-          <button kendoButtonfillMode="flat" rounded="full" size="large">
+          <button kendoButton fillMode="flat" rounded="full" size="large">
             <i class="fas fa-bell"></i>
           </button>
           <kendo-badge themeColor="warning" position="edge" [align]="badgeAlignTopEnd" rounded="full">3</kendo-badge>
@@ -521,13 +521,13 @@
               <i class="fas fa-search search-prefix-icon"></i>
             </ng-template>
           </kendo-textbox>
-          <button kendoButtonfillMode="outline" rounded="medium">
+          <button kendoButton fillMode="outline" rounded="medium">
             <span class="button-content">
               <i class="fas fa-filter"></i>
               Filter
             </span>
           </button>
-          <button kendoButtonthemeColor="primary" rounded="medium">
+          <button kendoButton themeColor="primary" rounded="medium">
             <span class="button-content">
               <i class="fas fa-user-plus"></i>
               Add User
@@ -571,7 +571,7 @@
             <div class="tab-content-wrapper">
               <h5>Dashboard Overview</h5>
               <p>View your application's key metrics and performance indicators.</p>
-              <button kendoButtonthemeColor="primary">View Details</button>
+              <button kendoButton themeColor="primary">View Details</button>
             </div>
           </ng-template>
         </kendo-tabstrip-tab>
@@ -635,7 +635,7 @@
         [animation]="true">
       </kendo-progressbar>
       
-      <button kendoButtonthemeColor="primary" (click)="loadData()" class="mt-2">
+      <button kendoButton themeColor="primary" (click)="loadData()" class="mt-2">
         <span class="button-content">
           <i class="fas fa-sync"></i>
           Simulate Loading
@@ -694,7 +694,7 @@
         <i class="fas fa-window-maximize"></i>
         Custom Modal
       </button>
-      <button kendoButtonthemeColor="info" rounded="medium" (click)="openKendoDialog()">
+      <button kendoButton themeColor="info" rounded="medium" (click)="openKendoDialog()">
         <span class="button-content">
           <i class="fas fa-comment"></i>
           Kendo Dialog
@@ -744,8 +744,8 @@
       </div>
     </div>
     <div class="mj-modal-footer">
-      <button kendoButtonfillMode="outline" (click)="closeModal()">Cancel</button>
-      <button kendoButtonthemeColor="primary">
+      <button kendoButton fillMode="outline" (click)="closeModal()">Cancel</button>
+      <button kendoButton themeColor="primary">
         <span class="button-content">
           <i class="fas fa-save"></i>
           Save Changes
@@ -853,8 +853,8 @@
   </form>
   
   <kendo-dialog-actions>
-    <button kendoButtonfillMode="outline" (click)="closeKendoDialog()">Cancel</button>
-    <button kendoButtonthemeColor="primary" (click)="submitForm()" [disabled]="!formGroup.valid">
+    <button kendoButton fillMode="outline" (click)="closeKendoDialog()">Cancel</button>
+    <button kendoButton themeColor="primary" (click)="submitForm()" [disabled]="!formGroup.valid">
       <span class="button-content">
         <i class="fas fa-save"></i>
         Save Changes

@@ -113,7 +113,7 @@
                                     <!-- Actions -->
                                     <div class="param-actions" style="display: flex; align-items: start; justify-content: center; padding-top: 4px;">
                                         @if (!param.isFromTemplate && parameters.length > 1) {
-                                            <button kendoButtonfillMode="flat"
+                                            <button kendoButton fillMode="flat"
                                                         themeColor="error"
                                                         size="small"
                                                         (click)="removeParameter(i)"
@@ -128,7 +128,7 @@
                             
                             <!-- Add Parameter Row -->
                             <div style="padding: 12px 16px; text-align: center; background: white; border-top: 1px solid #dee2e6;">
-                                <button kendoButtonfillMode="outline"
+                                <button kendoButton fillMode="outline"
                                             themeColor="success"
                                             size="small"
                                             (click)="addParameter()"
@@ -141,7 +141,7 @@
                         <div style="text-align: center; padding: 20px; color: #6c757d;">
                             <i class="fa-solid fa-info-circle" style="font-size: 2em; margin-bottom: 12px; opacity: 0.5;"></i>
                             <p style="margin: 0 0 12px 0;">No parameters defined yet</p>
-                            <button kendoButtonthemeColor="primary" size="small"
+                            <button kendoButton themeColor="primary" size="small"
                                         (click)="addParameter()"
                                         [disabled]="isRunning">
                                 <i class="fa-solid fa-plus"></i> Add First Parameter
@@ -212,7 +212,7 @@
                                 }
                                 <div style="text-align: center;">
                                     <div style="font-size: 0.75em; margin-bottom: 2px;" [style.color]="testResult.success ? '#155724' : '#721c24'">ACTIONS</div>
-                                    <button kendoButtonfillMode="flat" size="small"
+                                    <button kendoButton fillMode="flat" size="small"
                                                 (click)="saveResults()"
                                                 title="Save results to file"
                                                 style="min-width: auto; padding: 4px 8px;">
@@ -262,7 +262,7 @@
         <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
             <div>
                 @if (hasUnsavedParameters) {
-                    <button kendoButtonfillMode="outline"
+                    <button kendoButton fillMode="outline"
                                 themeColor="info"
                                 (click)="updateTemplateParams()"
                                 [disabled]="isRunning">
@@ -272,17 +272,17 @@
             </div>
             
             <div style="display: flex; gap: 8px;">
-                <button kendoButtonfillMode="outline" (click)="close()">
+                <button kendoButton fillMode="outline" (click)="close()">
                     Close
                 </button>
                 
                 @if (testResult) {
-                    <button kendoButtonfillMode="outline" themeColor="info" (click)="saveResults()">
+                    <button kendoButton fillMode="outline" themeColor="info" (click)="saveResults()">
                         <i class="fa-solid fa-download"></i> Save Results
                     </button>
                 }
-                
-                <button kendoButtonthemeColor="primary"
+
+                <button kendoButton themeColor="primary"
                              [disabled]="isRunning || isLoading"
                              (click)="runTemplate()">
                     @if (isRunning) {

@@ -13,7 +13,7 @@
         >
           <span class="fa-solid fa-download"></span>
         </button>
-        <button kendoButton[disabled]="!canBeDeleted(dataItem)" (click)="deleteFile(dataItem)">
+        <button kendoButton [disabled]="!canBeDeleted(dataItem)" (click)="deleteFile(dataItem)">
           <span class="fa-solid fa-trash-can"></span>
         </button>
         <button kendoButton

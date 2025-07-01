@@ -146,7 +146,7 @@
               <h3>No {{Title}} Found</h3>
               <p>There are no items to display in this category.</p>
               @if(ItemOptions.length > 0) {
-                <button kendoButtonthemeColor="primary" rounded="medium" (click)="onDropdownItemClick({Text: ItemOptions[0].Text})">
+                <button kendoButton themeColor="primary" rounded="medium" (click)="onDropdownItemClick({Text: ItemOptions[0].Text})">
                   <span class="button-content">
                     <i class="fas fa-plus"></i>
                     Create Your First Item
@@ -233,10 +233,10 @@
     </div>
     
     <kendo-dialog-actions class="mj-dialog-actions">
-      <button kendoButtonfillMode="outline" rounded="medium" (click)="onConfirmDeleteItem(false)">
+      <button kendoButton fillMode="outline" rounded="medium" (click)="onConfirmDeleteItem(false)">
         Cancel
       </button>
-      <button kendoButtonthemeColor="error" rounded="medium" (click)="onConfirmDeleteItem(true)">
+      <button kendoButton themeColor="error" rounded="medium" (click)="onConfirmDeleteItem(true)">
         <span class="button-content">
           <i [ngClass]="(selectedItem?.IsLink && selectedItem?.LinkPermissionLevel === 'Owner') || !selectedItem?.IsLink ? 'fas fa-trash' : 'fas fa-link-slash'"></i>
           {{(selectedItem?.IsLink && selectedItem?.LinkPermissionLevel === 'Owner') || !selectedItem?.IsLink ? 'Delete' : 'Unlink'}}
@@ -284,11 +284,11 @@
     </div>
     
     <kendo-dialog-actions class="mj-dialog-actions">
-      <button kendoButtonfillMode="outline" rounded="medium" (click)="toggleUpsertFolderView(false, false)">
+      <button kendoButton fillMode="outline" rounded="medium" (click)="toggleUpsertFolderView(false, false)">
         Cancel
       </button>
       @if(selectedFolder) {
-        <button kendoButtonthemeColor="primary" rounded="medium" (click)="updateFolder()">
+        <button kendoButton themeColor="primary" rounded="medium" (click)="updateFolder()">
           <span class="button-content">
             <i class="fas fa-save"></i>
             Update Folder
@@ -296,7 +296,7 @@
         </button>
       }
       @else {
-        <button kendoButtonthemeColor="primary" rounded="medium" (click)="createFolder()">
+        <button kendoButton themeColor="primary" rounded="medium" (click)="createFolder()">
           <span class="button-content">
             <i class="fas fa-folder-plus"></i>
             Create Folder

@@ -173,7 +173,7 @@
               </div>
               <h3>No items found</h3>
               <p>This folder is empty or no items match your search criteria.</p>
-              <button kendoButtonthemeColor="primary" rounded="medium" (click)="onDropdownItemClick({text: 'Folder'})">
+              <button kendoButton themeColor="primary" rounded="medium" (click)="onDropdownItemClick({text: 'Folder'})">
                 <span class="button-content">
                   <i class="fas fa-plus"></i>
                   Create Your First Item
@@ -297,10 +297,10 @@
     </div>
     
     <kendo-dialog-actions class="mj-dialog-actions">
-      <button kendoButtonfillMode="outline" rounded="medium" (click)="onConfirmDeleteItem(false)">
+      <button kendoButton fillMode="outline" rounded="medium" (click)="onConfirmDeleteItem(false)">
         Cancel
       </button>
-      <button kendoButtonthemeColor="error" rounded="medium" (click)="onConfirmDeleteItem(true)">
+      <button kendoButton themeColor="error" rounded="medium" (click)="onConfirmDeleteItem(true)">
         <span class="button-content">
           <i [ngClass]="(selectedItem?.IsLink && selectedItem?.LinkPermissionLevel === 'Owner') || !selectedItem?.IsLink ? 'fas fa-trash' : 'fas fa-link-slash'"></i>
           {{(selectedItem?.IsLink && selectedItem?.LinkPermissionLevel === 'Owner') || !selectedItem?.IsLink ? 'Delete' : 'Unlink'}}
@@ -335,10 +335,10 @@
     </div>
     
     <kendo-dialog-actions class="mj-dialog-actions">
-      <button kendoButtonfillMode="outline" rounded="medium" (click)="toggleCreateFolderView()">
+      <button kendoButton fillMode="outline" rounded="medium" (click)="toggleCreateFolderView()">
         Cancel
       </button>
-      <button kendoButtonthemeColor="primary" rounded="medium" (click)="createFolder()">
+      <button kendoButton themeColor="primary" rounded="medium" (click)="createFolder()">
         <span class="button-content">
           <i class="fas fa-folder-plus"></i>
           Create Folder

@@ -51,7 +51,7 @@
                 <!-- Action Buttons -->
                 <div class="agent-actions">
                     @if (record.ID) {
-                        <button kendoButtonthemeColor="primary" size="large"
+                        <button kendoButton themeColor="primary" size="large"
                                     (click)="openTestHarness()"
                                     [disabled]="record.Status !== 'Active'"
                                     title="Run this AI agent">
@@ -59,7 +59,7 @@
                             Run
                         </button>
                     }
-                    <button kendoButtonfillMode="outline" size="small" (click)="refreshRelatedData()" title="Refresh all data">
+                    <button kendoButton fillMode="outline" size="small" (click)="refreshRelatedData()" title="Refresh all data">
                         <i class="fa-solid fa-refresh"></i>
                     </button>
                 </div>
@@ -81,7 +81,7 @@
                                 <div class="section-header">
                                     <div class="header-actions">
                                         @if (EditMode) {
-                                            <button kendoButtonthemeColor="primary" size="small" (click)="configureActions()">
+                                            <button kendoButton themeColor="primary" size="small" (click)="configureActions()">
                                                 <i class="fa-solid fa-plus"></i> Add Action
                                             </button>
                                         }
@@ -94,7 +94,7 @@
                                         <h4>No Actions Configured</h4>
                                         <p>Add actions to enable this agent to perform specific tasks and operations.</p>
                                         @if (EditMode) {
-                                            <button kendoButtonthemeColor="primary" (click)="configureActions()">
+                                            <button kendoButton themeColor="primary" (click)="configureActions()">
                                                 <i class="fa-solid fa-plus"></i> Configure First Action
                                             </button>
                                         }
@@ -162,7 +162,7 @@
                                     </div>
                                     <div class="header-actions">
                                         @if (EditMode) {
-                                            <button kendoButtonthemeColor="primary" size="small" (click)="createSubAgent()">
+                                            <button kendoButton themeColor="primary" size="small" (click)="createSubAgent()">
                                                 <i class="fa-solid fa-plus"></i> Add Sub-Agent
                                             </button>
                                         }
@@ -175,7 +175,7 @@
                                         <h4>No Sub-Agents</h4>
                                         <p>Create sub-agents to build a hierarchical structure for complex workflows.</p>
                                         @if (EditMode) {
-                                            <button kendoButtonthemeColor="primary" (click)="createSubAgent()">
+                                            <button kendoButton themeColor="primary" (click)="createSubAgent()">
                                                 <i class="fa-solid fa-plus"></i> Create First Sub-Agent
                                             </button>
                                         }
@@ -257,7 +257,7 @@
                                     </div>
                                     <div class="header-actions">
                                         @if (EditMode) {
-                                            <button kendoButtonthemeColor="primary" size="small" (click)="addPrompt()">
+                                            <button kendoButton themeColor="primary" size="small" (click)="addPrompt()">
                                                 <i class="fa-solid fa-plus"></i> Add Prompt
                                             </button>
                                         }
@@ -270,7 +270,7 @@
                                         <h4>No Prompts Configured</h4>
                                         <p>Add prompts to define how this agent processes requests and generates responses.</p>
                                         @if (EditMode) {
-                                            <button kendoButtonthemeColor="primary" (click)="addPrompt()">
+                                            <button kendoButton themeColor="primary" (click)="addPrompt()">
                                                 <i class="fa-solid fa-plus"></i> Create First Prompt
                                             </button>
                                         }
@@ -393,7 +393,7 @@
                                     </div>
                                     <div class="header-actions">
                                         @if (EditMode) {
-                                            <button kendoButtonthemeColor="primary" size="small" (click)="addNote()">
+                                            <button kendoButton themeColor="primary" size="small" (click)="addNote()">
                                                 <i class="fa-solid fa-plus"></i> Add Note
                                             </button>
                                         }
@@ -406,7 +406,7 @@
                                         <h4>No Notes</h4>
                                         <p>Add notes to document important information, observations, or instructions for this agent.</p>
                                         @if (EditMode) {
-                                            <button kendoButtonthemeColor="primary" (click)="addNote()">
+                                            <button kendoButton themeColor="primary" (click)="addNote()">
                                                 <i class="fa-solid fa-plus"></i> Create First Note
                                             </button>
                                         }
