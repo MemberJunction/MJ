@@ -768,7 +768,7 @@ export class PayloadManager {
             return;
         }
         
-        // Check for addition
+        // Check for addition first
         const newValue = _.get(changeRequest.newElements, pathStr);
         if (newValue !== undefined && !(key in target)) {
             target[key] = newValue;
@@ -778,13 +778,41 @@ export class PayloadManager {
         
         // Check for update
         const updateValue = _.get(changeRequest.updateElements, pathStr);
-        if (updateValue !== undefined && key in target) {
+        
+        // Be forgiving: if AI put an update in newElements by mistake, treat it as an update
+        const effectiveUpdateValue = (updateValue !== undefined) ? updateValue : 
+                                    (newValue !== undefined && key in target) ? newValue : 
+                                    undefined;
+        
+        if (effectiveUpdateValue !== undefined && key in target) {
+            // If both values are objects, we need to recursively process the update
+            if (typeof effectiveUpdateValue === 'object' && effectiveUpdateValue !== null &&
+                typeof target[key] === 'object' && target[key] !== null &&
+                !Array.isArray(effectiveUpdateValue) && !Array.isArray(target[key])) {
+                // Recursively process nested updates
+                this.processChangeRequest(
+                    target[key],
+                    original ? original[key] : undefined,
+                    changeRequest,
+                    keyPath,
+                    counts,
+                    warnings
+                );
+            } else {
+                // For non-objects or arrays, replace the value
+                target[key] = effectiveUpdateValue;
+                counts.updates++;
+            }
+            
+            // Add a soft warning if we auto-corrected the placement
+            if (updateValue === undefined && newValue !== undefined) {
+                warnings.push(`Auto-corrected: '${key}' was in newElements but already exists (treated as update)`);
+            }
+        } else if (updateValue !== undefined && !(key in target)) {
+            // Be forgiving: if AI put an addition in updateElements by mistake, treat it as an addition
             target[key] = updateValue;
-            counts.updates++;
-        } else if (updateValue !== undefined) {
-            warnings.push(`Update attempted on non-existent key: ${pathStr}`);
-        } else if (newValue !== undefined) {
-            warnings.push(`Addition attempted on existing key: ${pathStr}`);
+            counts.additions++;
+            warnings.push(`Auto-corrected: '${key}' was in updateElements but doesn't exist (treated as addition)`);
         }
     }
 
