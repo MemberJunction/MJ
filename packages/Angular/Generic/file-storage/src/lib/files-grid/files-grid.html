@@ -7,7 +7,7 @@
     <kendo-grid-column field="Status" title="Status"> </kendo-grid-column>
     <kendo-grid-column field="Actions">
       <ng-template kendoGridCellTemplate let-dataItem>
-        <kendo-button
+        <button kendoButton
           [disabled]="dataItem.Status!=='Uploaded'"
           (click)="downloadFile(dataItem)"
         >
@@ -16,7 +16,7 @@
         <button kendoButton[disabled]="!canBeDeleted(dataItem)" (click)="deleteFile(dataItem)">
           <span class="fa-solid fa-trash-can"></span>
         </button>
-        <kendo-button
+        <button kendoButton
           [disabled]="dataItem.Status!=='Uploaded'"
           (click)="editFile = dataItem"
         >
