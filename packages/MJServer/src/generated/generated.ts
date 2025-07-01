@@ -5770,6 +5770,10 @@ export class EmployeeCompanyIntegration_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field() 
+    @MaxLength(510)
+    CompanyIntegration: string;
+        
 }
 
 //****************************************************************************
@@ -7142,6 +7146,10 @@ export class CompanyIntegration_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({description: `User-friendly name for the company integration instance, typically in the format "Company: Integration".`}) 
+    @MaxLength(510)
+    Name: string;
+        
     @Field() 
     @MaxLength(100)
     Company: string;
@@ -7227,6 +7235,9 @@ export class CreateCompanyIntegrationInput {
 
     @Field({ nullable: true })
     CustomAttribute1: string | null;
+
+    @Field({ nullable: true })
+    Name?: string;
 }
     
 
@@ -7273,6 +7284,9 @@ export class UpdateCompanyIntegrationInput {
 
     @Field({ nullable: true })
     CustomAttribute1?: string | null;
+
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -12774,6 +12788,10 @@ export class List_ {
     @Field({nullable: true}) 
     @MaxLength(200)
     Category?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    CompanyIntegration?: string;
         
     @Field(() => [ListDetail_])
     ListDetails_ListIDArray: ListDetail_[]; // Link to ListDetails
@@ -21321,6 +21339,10 @@ export class CompanyIntegrationRecordMap_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    CompanyIntegration: string;
         
     @Field() 
     @MaxLength(510)
