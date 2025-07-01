@@ -10,7 +10,6 @@
  */
 
 import { LogStatus } from '@memberjunction/core';
-import { ChatMessage } from '@memberjunction/ai';
 import { PayloadWarning } from './PayloadChangeAnalyzer';
 
 /**
@@ -48,20 +47,29 @@ export interface PayloadFeedbackResult {
 }
 
 /**
- * Interface for executing prompts - can be implemented by different prompt runners
+ * Configuration for payload feedback collection
  */
-export interface IPromptExecutor {
-    executePrompt(messages: ChatMessage[], options: any): Promise<string>;
+export interface PayloadFeedbackConfig {
+    /** ID of the AI Prompt to use for feedback collection */
+    feedbackPromptId?: string;
+    /** Maximum number of questions to ask in a single batch */
+    maxQuestionsPerBatch?: number;
+    /** Temperature for feedback queries (lower = more deterministic) */
+    temperature?: number;
 }
 
 /**
  * Manages feedback collection for suspicious payload changes
  */
 export class PayloadFeedbackManager {
-    private promptExecutor?: IPromptExecutor;
+    private config: PayloadFeedbackConfig;
     
-    constructor(promptExecutor?: IPromptExecutor) {
-        this.promptExecutor = promptExecutor;
+    constructor(config?: PayloadFeedbackConfig) {
+        this.config = {
+            maxQuestionsPerBatch: 10,
+            temperature: 0.1,
+            ...config
+        };
     }
     
     /**
@@ -121,6 +129,12 @@ export class PayloadFeedbackManager {
     
     /**
      * Query the AI agent about suspicious changes
+     * 
+     * @todo Implement using MemberJunction AI Prompts system with stored prompts
+     * This should:
+     * 1. Load the feedback prompt from database using feedbackPromptId
+     * 2. Use AIPromptRunner to execute with proper template parameters
+     * 3. Parse structured response from the agent
      */
     public async queryAgent(
         questions: PayloadFeedbackQuestion[],
@@ -130,152 +144,34 @@ export class PayloadFeedbackManager {
             return [];
         }
         
-        // Build the feedback prompt
-        const prompt = this.buildFeedbackPrompt(questions);
+        // TODO: Implement using MemberJunction prompt system
+        // For now, return default acceptance
+        LogStatus('PayloadFeedbackManager.queryAgent not yet implemented - accepting all changes by default');
         
-        try {
-            // Query the AI agent using the provided executor or return mock response
-            let response: string;
-            
-            if (this.promptExecutor) {
-                const messages: ChatMessage[] = [
-                    { role: 'system', content: this.getSystemPrompt() },
-                    { role: 'user', content: prompt }
-                ];
-                
-                response = await this.promptExecutor.executePrompt(messages, {
-                    model: conversationContext.model,
-                    temperature: 0.1,
-                    maxTokens: 1000
-                });
-            } else {
-                // If no executor provided, return default acceptance
-                LogStatus('No prompt executor provided, accepting all changes by default');
-                const mockResponses = questions.map((_, i) => ({
-                    questionNumber: i + 1,
-                    intended: true,
-                    explanation: 'Accepted by default (no executor available)'
-                }));
-                response = `\`\`\`json\n${JSON.stringify({ responses: mockResponses }, null, 2)}\n\`\`\``;
-            }
-            
-            // Parse the response
-            const responses = this.parseAgentResponse(response, questions);
-            
-            return responses;
-        } catch (error) {
-            LogStatus(`Error querying agent for feedback: ${error.message}`);
-            // Return default acceptance for all questions on error
-            return questions.map(q => ({
-                questionId: q.id,
-                intended: true,
-                explanation: 'Accepted due to feedback query error'
-            }));
-        }
+        return questions.map(q => ({
+            questionId: q.id,
+            intended: true,
+            explanation: 'Accepted by default (feedback system not yet implemented)'
+        }));
     }
     
     /**
-     * Build the feedback prompt
+     * Build template parameters for the feedback prompt
+     * 
+     * @todo This should prepare the data structure to pass to the stored prompt template
      */
-    private buildFeedbackPrompt(questions: PayloadFeedbackQuestion[]): string {
-        const lines = [
-            'I noticed some potentially significant changes in your response that I want to confirm were intentional:',
-            '',
-            'Please answer each question with YES or NO, followed by a brief explanation if needed.',
-            ''
-        ];
-        
-        for (let i = 0; i < questions.length; i++) {
-            lines.push(`${i + 1}. ${questions[i].question}`);
-            
-            // Add context if available
-            if (questions[i].context?.details) {
-                const details = questions[i].context.details;
-                if (details.contentPreview) {
-                    lines.push(`   Before: "${details.contentPreview.before}"`);
-                    lines.push(`   After: "${details.contentPreview.after}"`);
-                }
-            }
-            lines.push('');
-        }
-        
-        lines.push('Please respond in the following JSON format:');
-        lines.push('```json');
-        lines.push('{');
-        lines.push('  "responses": [');
-        lines.push('    {');
-        lines.push('      "questionNumber": 1,');
-        lines.push('      "intended": true,');
-        lines.push('      "explanation": "Brief explanation (optional)"');
-        lines.push('    }');
-        lines.push('  ]');
-        lines.push('}');
-        lines.push('```');
-        
-        return lines.join('\n');
-    }
-    
-    /**
-     * Get the system prompt for feedback queries
-     */
-    private getSystemPrompt(): string {
-        return `You are reviewing changes you previously made to a data payload. 
-Please confirm whether each change was intentional. 
-Respond with structured JSON containing your yes/no answers. 
-Be concise and direct in your responses.`;
-    }
-    
-    /**
-     * Parse the agent's response
-     */
-    private parseAgentResponse(
-        response: string,
-        questions: PayloadFeedbackQuestion[]
-    ): PayloadFeedbackResponse[] {
-        try {
-            // Extract JSON from the response
-            const jsonMatch = response.match(/```json\s*({[\s\S]*?})\s*```/);
-            if (!jsonMatch) {
-                throw new Error('No JSON found in response');
-            }
-            
-            const parsed = JSON.parse(jsonMatch[1]);
-            const responses: PayloadFeedbackResponse[] = [];
-            
-            if (parsed.responses && Array.isArray(parsed.responses)) {
-                for (const resp of parsed.responses) {
-                    const questionIndex = resp.questionNumber - 1;
-                    if (questionIndex >= 0 && questionIndex < questions.length) {
-                        responses.push({
-                            questionId: questions[questionIndex].id,
-                            intended: Boolean(resp.intended),
-                            explanation: resp.explanation
-                        });
-                    }
-                }
-            }
-            
-            // Fill in any missing responses with defaults
-            for (const question of questions) {
-                if (!responses.find(r => r.questionId === question.id)) {
-                    responses.push({
-                        questionId: question.id,
-                        intended: true,
-                        explanation: 'No explicit response provided'
-                    });
-                }
-            }
-            
-            return responses;
-        } catch (error) {
-            LogStatus(`Error parsing agent feedback response: ${error.message}`);
-            // Return default acceptance for all questions
-            return questions.map(q => ({
-                questionId: q.id,
-                intended: true,
-                explanation: 'Accepted due to parsing error'
-            }));
-        }
+    private buildFeedbackTemplateParams(questions: PayloadFeedbackQuestion[]): Record<string, any> {
+        return {
+            questions: questions.map((q, i) => ({
+                number: i + 1,
+                text: q.question,
+                context: q.context,
+                warningType: q.warning.type,
+                severity: q.warning.severity
+            })),
+            totalQuestions: questions.length,
+            timestamp: new Date().toISOString()
+        };
     }
     
     /**

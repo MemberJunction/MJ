@@ -1535,8 +1535,15 @@ export class AIPromptRunner {
    * This method wraps the core executeModel functionality with intelligent failover
    * capabilities. It will attempt to execute with different models/vendors according
    * to the configured failover strategy when errors occur.
+   * 
+   * The method calls several smaller, focused helper methods:
+   * - buildFailoverCandidates: Creates candidate models based on type restrictions
+   * - createCandidatesFromModels: Converts models to vendor-specific candidates
+   * - updatePromptRunWithFailoverSuccess: Records successful failover metadata
+   * - updatePromptRunWithFailoverFailure: Records failed failover metadata
+   * - createFailoverErrorResult: Creates standardized error response
    */
-  private async executeModelWithFailover(
+  protected async executeModelWithFailover(
     model: AIModelEntityExtended,
     renderedPrompt: string,
     prompt: AIPromptEntity,
@@ -1568,58 +1575,7 @@ export class AIPromptRunner {
     
     // Get all model candidates if not provided
     if (!allCandidates) {
-      // Get candidates based on the model selection strategy
-      const aiEngine = AIEngine.Instance;
-      
-      // Get all models, filtered by type if specified
-      let allModels: AIModelEntityExtended[];
-      if (prompt.AIModelTypeID) {
-        // Find the model type from the prompt
-        const modelType = aiEngine.ModelTypes.find(mt => mt.ID === prompt.AIModelTypeID);
-        if (!modelType) {
-          throw new Error(`Model type ${prompt.AIModelTypeID} not found`);
-        }
-        
-        // Get all models of this specific type
-        allModels = aiEngine.Models.filter(m => 
-          m.AIModelType?.trim().toLowerCase() === modelType.Name.trim().toLowerCase()
-        );
-      } else {
-        // No type restriction - get all models
-        allModels = aiEngine.Models;
-      }
-      
-      allCandidates = [];
-      for (const candidateModel of allModels) {
-        const vendors = candidateModel.ModelVendors || [];
-        if (vendors.length === 0) {
-          // Model without specific vendors
-          allCandidates.push({
-            model: candidateModel,
-            vendorId: undefined,
-            vendorName: undefined,
-            driverClass: candidateModel.DriverClass,
-            apiName: candidateModel.APIName,
-            isPreferredVendor: false,
-            priority: candidateModel.PowerRank || 0,
-            source: 'power-rank'
-          });
-        } else {
-          // Add each vendor as a separate candidate
-          for (const vendor of vendors) {
-            allCandidates.push({
-              model: candidateModel,
-              vendorId: vendor.VendorID,
-              vendorName: vendor.Vendor,
-              driverClass: vendor.DriverClass || candidateModel.DriverClass,
-              apiName: vendor.APIName || candidateModel.APIName,
-              isPreferredVendor: vendor.Priority > 0, // Higher priority vendors are preferred
-              priority: (candidateModel.PowerRank || 0) + (vendor.Priority || 0),
-              source: 'power-rank'
-            });
-          }
-        }
-      }
+      allCandidates = await this.buildFailoverCandidates(prompt);
     }
 
     // Main failover loop
@@ -1650,34 +1606,7 @@ export class AIPromptRunner {
         
         // Success! Update promptRun with failover information if we had attempts
         if (failoverAttempts.length > 0 && promptRun) {
-          // Update the promptRun entity with failover tracking
-          // TODO: Remove type assertions after CodeGen updates entities with new fields
-          const promptRunWithFailover = promptRun as AIPromptRunEntity & {
-            OriginalModelID?: string;
-            OriginalRequestStartTime?: Date;
-            FailoverAttempts?: number;
-            FailoverErrors?: string;
-            FailoverDurations?: string;
-            TotalFailoverDuration?: number;
-          };
-          
-          promptRunWithFailover.FailoverAttempts = failoverAttempts.length;
-          promptRunWithFailover.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
-            model: a.modelId,
-            vendor: a.vendorId,
-            error: a.error.message,
-            errorType: a.errorType
-          })));
-          promptRunWithFailover.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
-          promptRunWithFailover.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
-          
-          // Update ModelID if we ended up using a different model
-          if (currentModel.ID !== promptRunWithFailover.OriginalModelID) {
-            promptRun.ModelID = currentModel.ID;
-          }
-          if (currentVendorId && currentVendorId !== promptRun.VendorID) {
-            promptRun.VendorID = currentVendorId;
-          }
+          this.updatePromptRunWithFailoverSuccess(promptRun, failoverAttempts, currentModel, currentVendorId);
         }
         
         return result;
@@ -1746,33 +1675,155 @@ export class AIPromptRunner {
       }
     }
     
-    // All attempts failed, update promptRun if available
+    // All attempts failed
     if (promptRun && failoverAttempts.length > 0) {
-      // TODO: Remove type assertions after CodeGen updates entities with new fields
-      const promptRunWithFailover = promptRun as AIPromptRunEntity & {
-        OriginalModelID?: string;
-        OriginalRequestStartTime?: Date;
-        FailoverAttempts?: number;
-        FailoverErrors?: string;
-        FailoverDurations?: string;
-        TotalFailoverDuration?: number;
-      };
-      
-      promptRunWithFailover.FailoverAttempts = failoverAttempts.length;
-      promptRunWithFailover.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
-        model: a.modelId,
-        vendor: a.vendorId,
-        error: a.error.message,
-        errorType: a.errorType
-      })));
-      promptRunWithFailover.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
-      promptRunWithFailover.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
+      this.updatePromptRunWithFailoverFailure(promptRun, failoverAttempts);
     }
     
-    // Create error result
+    return this.createFailoverErrorResult(lastError, failoverAttempts);
+  }
+
+  /**
+   * Builds failover candidates for a prompt based on available models and type restrictions
+   */
+  protected async buildFailoverCandidates(prompt: AIPromptEntity): Promise<ModelVendorCandidate[]> {
+    const aiEngine = AIEngine.Instance;
+    
+    // Get all models, filtered by type if specified
+    let allModels: AIModelEntityExtended[];
+    if (prompt.AIModelTypeID) {
+      // Find the model type from the prompt
+      const modelType = aiEngine.ModelTypes.find(mt => mt.ID === prompt.AIModelTypeID);
+      if (!modelType) {
+        throw new Error(`Model type ${prompt.AIModelTypeID} not found`);
+      }
+      
+      // Get all models of this specific type
+      allModels = aiEngine.Models.filter(m => 
+        m.AIModelType?.trim().toLowerCase() === modelType.Name.trim().toLowerCase()
+      );
+    } else {
+      // No type restriction - get all models
+      allModels = aiEngine.Models;
+    }
+    
+    return this.createCandidatesFromModels(allModels);
+  }
+
+  /**
+   * Creates model-vendor candidates from a list of models
+   */
+  protected createCandidatesFromModels(models: AIModelEntityExtended[]): ModelVendorCandidate[] {
+    const candidates: ModelVendorCandidate[] = [];
+    
+    for (const model of models) {
+      const vendors = model.ModelVendors || [];
+      if (vendors.length === 0) {
+        // Model without specific vendors
+        candidates.push({
+          model: model,
+          vendorId: undefined,
+          vendorName: undefined,
+          driverClass: model.DriverClass,
+          apiName: model.APIName,
+          isPreferredVendor: false,
+          priority: model.PowerRank || 0,
+          source: 'power-rank'
+        });
+      } else {
+        // Add each vendor as a separate candidate
+        for (const vendor of vendors) {
+          candidates.push({
+            model: model,
+            vendorId: vendor.VendorID,
+            vendorName: vendor.Vendor,
+            driverClass: vendor.DriverClass || model.DriverClass,
+            apiName: vendor.APIName || model.APIName,
+            isPreferredVendor: vendor.Priority > 0,
+            priority: (model.PowerRank || 0) + (vendor.Priority || 0),
+            source: 'power-rank'
+          });
+        }
+      }
+    }
+    
+    return candidates;
+  }
+
+  /**
+   * Updates prompt run with successful failover tracking data
+   */
+  protected updatePromptRunWithFailoverSuccess(
+    promptRun: AIPromptRunEntity,
+    failoverAttempts: FailoverAttempt[],
+    currentModel: AIModelEntityExtended,
+    currentVendorId: string | null
+  ): void {
+    // TODO: Remove type assertions after CodeGen updates entities with new fields
+    const promptRunWithFailover = promptRun as AIPromptRunEntity & {
+      OriginalModelID?: string;
+      OriginalRequestStartTime?: Date;
+      FailoverAttempts?: number;
+      FailoverErrors?: string;
+      FailoverDurations?: string;
+      TotalFailoverDuration?: number;
+    };
+    
+    promptRunWithFailover.FailoverAttempts = failoverAttempts.length;
+    promptRunWithFailover.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
+      model: a.modelId,
+      vendor: a.vendorId,
+      error: a.error.message,
+      errorType: a.errorType
+    })));
+    promptRunWithFailover.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
+    promptRunWithFailover.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
+    
+    // Update ModelID if we ended up using a different model
+    if (currentModel.ID !== promptRunWithFailover.OriginalModelID) {
+      promptRun.ModelID = currentModel.ID;
+    }
+    if (currentVendorId && currentVendorId !== promptRun.VendorID) {
+      promptRun.VendorID = currentVendorId;
+    }
+  }
+
+  /**
+   * Updates prompt run with failover failure tracking data
+   */
+  private updatePromptRunWithFailoverFailure(
+    promptRun: AIPromptRunEntity,
+    failoverAttempts: FailoverAttempt[]
+  ): void {
+    // TODO: Remove type assertions after CodeGen updates entities with new fields
+    const promptRunWithFailover = promptRun as AIPromptRunEntity & {
+      OriginalModelID?: string;
+      OriginalRequestStartTime?: Date;
+      FailoverAttempts?: number;
+      FailoverErrors?: string;
+      FailoverDurations?: string;
+      TotalFailoverDuration?: number;
+    };
+    
+    promptRunWithFailover.FailoverAttempts = failoverAttempts.length;
+    promptRunWithFailover.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
+      model: a.modelId,
+      vendor: a.vendorId,
+      error: a.error.message,
+      errorType: a.errorType
+    })));
+    promptRunWithFailover.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
+    promptRunWithFailover.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
+  }
+
+  /**
+   * Creates an error result for failed failover attempts
+   */
+  private createFailoverErrorResult(lastError: Error | null, failoverAttempts: FailoverAttempt[]): ChatResult {
     const startTime = new Date();
     const endTime = new Date();
-    const errorResult: ChatResult = {
+    
+    return {
       success: false,
       startTime: startTime,
       endTime: endTime,
@@ -1782,8 +1833,6 @@ export class AIPromptRunner {
       timeElapsed: endTime.getTime() - startTime.getTime(),
       data: null
     };
-    
-    return errorResult;
   }
 
   /**

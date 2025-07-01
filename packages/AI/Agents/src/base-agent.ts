@@ -1842,6 +1842,10 @@ export class BaseAgent {
             const actionEngine = ActionEngineServer.Instance;
             const agentActions = AIEngine.Instance.AgentActions.filter(aa => aa.AgentID === params.agent.ID);
 
+            // Track step numbers for parallel actions
+            let numActionsProcessed = 0;
+            const baseStepNumber = (this._agentRun!.Steps?.length || 0) + 1;
+
             // Execute all actions in parallel
             const actionPromises = actions.map(async (aa) => {
                 // get all agent actions first for this agent
@@ -1851,6 +1855,10 @@ export class BaseAgent {
                 }
 
                 const stepEntity = await this.createStepEntity('Actions', `Execute Action: ${aa.name}`, params.contextUser, actionEntity.ID);
+                
+                // Override step number to ensure unique values for parallel actions
+                stepEntity.StepNumber = baseStepNumber + numActionsProcessed++;
+                
                 let actionResult;
                 try {
                     // Execute the action
