@@ -1571,16 +1571,23 @@ export class AIPromptRunner {
       // Get candidates based on the model selection strategy
       const aiEngine = AIEngine.Instance;
       
-      // Find the model type from the prompt
-      const modelType = aiEngine.ModelTypes.find(mt => mt.ID === prompt.AIModelTypeID);
-      if (!modelType) {
-        throw new Error(`Model type ${prompt.AIModelTypeID} not found`);
+      // Get all models, filtered by type if specified
+      let allModels: AIModelEntityExtended[];
+      if (prompt.AIModelTypeID) {
+        // Find the model type from the prompt
+        const modelType = aiEngine.ModelTypes.find(mt => mt.ID === prompt.AIModelTypeID);
+        if (!modelType) {
+          throw new Error(`Model type ${prompt.AIModelTypeID} not found`);
+        }
+        
+        // Get all models of this specific type
+        allModels = aiEngine.Models.filter(m => 
+          m.AIModelType?.trim().toLowerCase() === modelType.Name.trim().toLowerCase()
+        );
+      } else {
+        // No type restriction - get all models
+        allModels = aiEngine.Models;
       }
-      
-      // Get all models of this type
-      const allModels = aiEngine.Models.filter(m => 
-        m.AIModelType?.trim().toLowerCase() === modelType.Name.trim().toLowerCase()
-      );
       
       allCandidates = [];
       for (const candidateModel of allModels) {

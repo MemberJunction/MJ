@@ -29,6 +29,8 @@ const promptWithFailover = {
 };
 ```
 
+**Note**: Prompts with `AIModelTypeID = NULL` can use any available model during failover, while prompts with a specific type ID are restricted to models of that type.
+
 ### 🎯 Dynamic Hierarchical Template Composition
 
 #### Why Dynamic Template Composition?

@@ -32,7 +32,7 @@
       "cwd": "${workspaceFolder}/packages/MJAPI",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["start"],
-      "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**", "**/zone/**"] 
+      "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**"] 
     },
     {
       "type": "chrome",

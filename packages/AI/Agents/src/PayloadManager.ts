@@ -6,6 +6,25 @@
  * modify (upstream). It supports JSON path-based access control with
  * wildcards and nested path support.
  * 
+ * ## Key Features:
+ * - Path-based access control for sub-agent data isolation
+ * - Automatic detection of suspicious payload changes
+ * - Human-readable diff generation for audit trails
+ * - Configurable warning thresholds for content changes
+ * 
+ * ## Path Syntax:
+ * - Exact paths: "customer.name"
+ * - Wildcards: "customer.*" (all properties under customer)
+ * - Array indices: "items[0].price" or "items[*].price"
+ * - Deep wildcards: "**.id" (all id fields at any depth)
+ * - Root wildcard: "*" (entire payload)
+ * 
+ * ## Change Detection Rules:
+ * - Content truncation: Warns when text reduced by >70%
+ * - Key removal: Flags when non-empty keys are removed
+ * - Type changes: Detects object→primitive conversions
+ * - Pattern anomalies: Identifies placeholder replacements
+ * 
  * @module @memberjunction/ai-agents
  * @author MemberJunction.com
  * @since 3.0.0
@@ -14,6 +33,32 @@
 import { LogError, LogStatus } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 import * as _ from 'lodash';
+import { PayloadChangeAnalyzer, PayloadAnalysisResult, PayloadWarning } from './PayloadChangeAnalyzer';
+import { PayloadDiffer, PayloadDiff } from './PayloadDiff';
+
+/**
+ * Result of applying a payload change request with enhanced tracking
+ */
+export interface PayloadManagerResult<P = any> {
+    /** The resulting payload after changes */
+    result: P;
+    /** Counts of applied operations */
+    applied: {
+        additions: number;
+        updates: number;
+        deletions: number;
+    };
+    /** Basic warnings from the change process */
+    warnings: string[];
+    /** Detailed analysis of suspicious changes */
+    analysis?: PayloadAnalysisResult;
+    /** Diff between original and result payload */
+    diff?: PayloadDiff;
+    /** Whether feedback is required from the agent */
+    requiresFeedback?: boolean;
+    /** Timestamp of the operation */
+    timestamp: Date;
+}
 
 /**
  * Manages payload access control for agent hierarchies.
@@ -522,16 +567,10 @@ export class PayloadManager {
             validateChanges?: boolean;
             logChanges?: boolean;
             agentName?: string;
+            analyzeChanges?: boolean;
+            generateDiff?: boolean;
         }
-    ): { 
-        result: P; 
-        applied: { 
-            additions: number; 
-            updates: number; 
-            deletions: number; 
-        };
-        warnings: string[];
-    } {
+    ): PayloadManagerResult<P> {
         const warnings: string[] = [];
         const result = _.cloneDeep(originalPayload) || {} as P;
         const counts = { additions: 0, updates: 0, deletions: 0 };
@@ -551,10 +590,33 @@ export class PayloadManager {
             this.logChangesSummary(counts, changeRequest.reasoning, options.agentName);
         }
         
+        // Analyze changes if requested
+        let analysis: PayloadAnalysisResult | undefined;
+        if (options?.analyzeChanges !== false) { // Default to true
+            const analyzer = new PayloadChangeAnalyzer();
+            analysis = analyzer.analyzeChangeRequest(originalPayload, changeRequest, result);
+            
+            // Add analysis warnings to the main warnings array
+            if (analysis.warnings.length > 0) {
+                warnings.push(...analysis.warnings.map(w => `[${w.severity}] ${w.message}`));
+            }
+        }
+        
+        // Generate diff if requested
+        let diff: PayloadDiff | undefined;
+        if (options?.generateDiff !== false) { // Default to true
+            const differ = new PayloadDiffer();
+            diff = differ.diff(originalPayload, result);
+        }
+        
         return {
             result,
             applied: counts,
-            warnings
+            warnings,
+            analysis,
+            diff,
+            requiresFeedback: analysis?.requiresFeedback || false,
+            timestamp: new Date()
         };
     }
 
@@ -789,12 +851,7 @@ export class PayloadManager {
         changeRequest: AgentPayloadChangeRequest<P>,
         upstreamPaths: string[],
         subAgentName: string
-    ): {
-        result: P;
-        applied: { additions: number; updates: number; deletions: number; };
-        warnings: string[];
-        blocked: number;
-    } {
+    ): PayloadManagerResult<P> & { blocked: number } {
         // First apply the full change request
         const changeResult = this.applyAgentChangeRequest(
             parentPayload,
@@ -814,9 +871,8 @@ export class PayloadManager {
         const blocked = this.countBlockedChanges(parentPayload, changeResult.result, guardedPayload);
         
         return {
+            ...changeResult,
             result: guardedPayload,
-            applied: changeResult.applied,
-            warnings: changeResult.warnings,
             blocked
         };
     }
