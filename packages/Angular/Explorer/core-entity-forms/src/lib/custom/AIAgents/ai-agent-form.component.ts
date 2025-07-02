@@ -452,8 +452,32 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
     public formatExecutionTimeFromDates(startDate: Date, endDate: Date): string {
         if (!startDate || !endDate) return 'N/A';
-        
-        const milliseconds = endDate.getTime() - startDate.getTime();
+
+        // check to see if we have dates or timestamps
+        let startTime;
+        let endTime;
+        if (typeof startDate === 'string') {
+            startTime = new Date(startDate).getTime();
+        }
+        else if (typeof startDate === 'number') {   
+            startTime = startDate;
+        }
+        else {
+            startTime = startDate.getTime();
+        }
+        if (typeof endDate === 'string') {
+            endTime = new Date(endDate).getTime();
+        }
+        else if (typeof endDate === 'number') {
+            endTime = endDate;
+        }
+        else {
+            endTime = endDate.getTime();
+        }
+
+        if (isNaN(startTime) || isNaN(endTime)) 
+            return 'N/A';        
+        const milliseconds = endTime - startTime;
         return this.formatExecutionTime(milliseconds);
     }
 
