@@ -41,6 +41,14 @@ Simple orchestrator that:
 - Instantiates correct agent class using ClassFactory
 - Executes agents with provided context
 
+### PayloadManager
+Advanced payload access control for hierarchical agent execution:
+- Controls which payload paths sub-agents can read (downstream)
+- Controls which payload paths sub-agents can write (upstream)
+- Supports JSON path patterns with wildcards
+- Detects suspicious changes with configurable rules
+- Generates human-readable diffs for audit trails
+
 ## Installation
 
 ```bash
@@ -144,6 +152,38 @@ export class MyCustomAgentType extends BaseAgentType {
 
 ## Advanced Features
 
+### Payload Management and Change Detection
+
+The framework includes sophisticated payload management with automatic change detection:
+
+```typescript
+// Payload changes are automatically analyzed
+const changeResult = payloadManager.applyAgentChangeRequest(
+    originalPayload,
+    changeRequest,
+    {
+        analyzeChanges: true,    // Detect suspicious changes
+        generateDiff: true,      // Create audit trail
+        agentName: 'MyAgent'
+    }
+);
+
+// Suspicious changes are flagged:
+// - Content truncation (>70% reduction)
+// - Non-empty key removal
+// - Type changes (object→primitive)
+// - Pattern anomalies (placeholder replacement)
+```
+
+**Sub-agent Payload Access Control**:
+```typescript
+// In AIAgent entity configuration:
+{
+    PayloadDownstreamPaths: ["customer.id", "order.*"],  // What sub-agent can read
+    PayloadUpstreamPaths: ["analysis.*", "recommendations"]  // What sub-agent can write
+}
+```
+
 ### Hierarchical Prompt Execution
 ```typescript
 // System prompt provides base behavior
@@ -194,10 +234,15 @@ Key entities used by the agent framework:
 
 - **AIAgentType**: Agent behavior patterns and system prompts
 - **AIAgent**: Configured agent instances
+  - `PayloadDownstreamPaths`: JSON array of paths sub-agents can read
+  - `PayloadUpstreamPaths`: JSON array of paths sub-agents can write
 - **AIPrompt**: Reusable prompt templates with placeholders
 - **AIAgentPrompt**: Links agents to prompts with execution order
 - **AIAgentRun**: Tracks complete agent executions
 - **AIAgentRunStep**: Records individual steps within runs
+  - `PayloadAtStart`: JSON snapshot of payload before step
+  - `PayloadAtEnd`: JSON snapshot of payload after step
+  - `OutputData`: Includes `payloadChangeResult` with analysis
 - **AIAgentRunStepAction**: Details of actions executed
 - **AIAgentRunStepPrompt**: Prompt execution details
 
@@ -210,6 +255,8 @@ Key entities used by the agent framework:
 5. **Comprehensive Tracking**: Leverage built-in tracking for debugging and analysis
 6. **Context Efficiency**: Let the framework handle context compression automatically
 7. **Error Handling**: Implement robust error handling in custom agent types
+8. **Payload Security**: Use path-based access control for sub-agents
+9. **Change Monitoring**: Review payload change warnings in OutputData
 
 ## Examples
 
@@ -251,10 +298,6 @@ export class DecisionTreeAgent extends BaseAgentType {
 ## Architecture Documentation
 
 For detailed architecture information, see [agent-architecture.md](./agent-architecture.md).
-
-## Payload and State Management
-
-For comprehensive information about managing payload flow between agents and sub-agents, including access control and best practices, see [PAYLOAD_STATE_MANAGEMENT.md](./PAYLOAD_STATE_MANAGEMENT.md).
 
 ## Contributing
 

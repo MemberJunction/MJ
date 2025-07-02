@@ -4,7 +4,8 @@ import {
   BaseEmbeddings, 
   ModelUsage, 
   EmbedTextResult, 
-  EmbedTextsResult 
+  EmbedTextsResult,
+  ErrorAnalyzer 
 } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 import { VertexAI } from '@google-cloud/vertexai';
@@ -82,7 +83,17 @@ export class VertexEmbedding extends BaseEmbeddings {
         throw new Error('No embeddings returned from Vertex AI');
       }
     } catch (error) {
-      throw new Error(`Error generating embedding: ${error.message}`);
+      // Log error details for debugging
+      const errorInfo = ErrorAnalyzer.analyzeError(error, 'Vertex');
+      console.error('Vertex embedding error:', errorInfo);
+      
+      // Return error result
+      return {
+        object: "object" as "object" | "list",
+        model: params.model || 'textembedding-gecko',
+        ModelUsage: new ModelUsage(0, 0),
+        vector: []
+      };
     }
   }
 
@@ -151,7 +162,17 @@ export class VertexEmbedding extends BaseEmbeddings {
         vectors: vectors
       };
     } catch (error) {
-      throw new Error(`Error generating embeddings: ${error.message}`);
+      // Log error details for debugging
+      const errorInfo = ErrorAnalyzer.analyzeError(error, 'Vertex');
+      console.error('Vertex embedding error:', errorInfo);
+      
+      // Return error result
+      return {
+        object: "list",
+        model: params.model || 'textembedding-gecko',
+        ModelUsage: new ModelUsage(0, 0),
+        vectors: []
+      };
     }
   }
 
@@ -167,7 +188,8 @@ export class VertexEmbedding extends BaseEmbeddings {
         "textembedding-gecko-multilingual"
       ];
     } catch (error) {
-      throw new Error(`Error listing embedding models: ${error.message}`);
+      console.error('Error listing Vertex embedding models:', ErrorAnalyzer.analyzeError(error, 'Vertex'));
+      return [];
     }
   }
 }

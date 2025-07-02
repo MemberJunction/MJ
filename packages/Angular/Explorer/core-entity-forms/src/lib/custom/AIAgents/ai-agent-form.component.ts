@@ -146,8 +146,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             const subAgentResult = await rv.RunView<AIAgentEntity>({
                 EntityName: 'AI Agents',
                 ExtraFilter: `ParentID='${this.record.ID}'`,
-                OrderBy: 'Name ASC',
-                ResultType: 'entity_object'
+                OrderBy: 'Name ASC' 
             });
             this.subAgents = subAgentResult.Results || [];
             this.subAgentCount = subAgentResult.TotalRowCount || 0;
@@ -163,8 +162,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             const actionResult = await rv.RunView<ActionEntity>({
                 EntityName: 'Actions',
                 ExtraFilter: `ID IN (SELECT ActionID FROM __mj.vwAIAgentActions WHERE AgentID='${this.record.ID}')`,
-                OrderBy: 'Name ASC',
-                ResultType: 'entity_object'
+                OrderBy: 'Name ASC' 
             });
             
             this.agentActions = actionResult.Results || [];
@@ -176,8 +174,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             const learningResult = await rv.RunView<AIAgentLearningCycleEntity>({
                 EntityName: 'AI Agent Learning Cycles',
                 ExtraFilter: `AgentID='${this.record.ID}'`,
-                OrderBy: 'StartedAt DESC',
-                ResultType: 'entity_object'
+                OrderBy: 'StartedAt DESC' 
             });
             this.learningCycles = learningResult.Results || [];
             this.learningCycleCount = learningResult.TotalRowCount || 0;
@@ -185,8 +182,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             // Load notes with data
             const noteResult = await rv.RunView<AIAgentNoteEntity>({
                 EntityName: 'AI Agent Notes',
-                ExtraFilter: `AgentID='${this.record.ID}'`,
-                ResultType: 'entity_object'
+                ExtraFilter: `AgentID='${this.record.ID}'` 
             });
             this.agentNotes = noteResult.Results || [];
             this.noteCount = noteResult.TotalRowCount || 0;
@@ -195,8 +191,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             const historyResult = await rv.RunView<AIAgentRunEntity>({
                 EntityName: 'MJ: AI Agent Runs',
                 ExtraFilter: `AgentID='${this.record.ID}'`,
-                OrderBy: '__mj_CreatedAt DESC',
-                ResultType: 'entity_object'
+                OrderBy: '__mj_CreatedAt DESC' 
             });
             this.recentExecutions = historyResult.Results || [];
             this.executionHistoryCount = historyResult.TotalRowCount || 0;
@@ -717,8 +712,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 const rv = new RunView();
                 const linkResult = await rv.RunView<AIAgentPromptEntity>({
                     EntityName: 'AI Agent Prompts',
-                    ExtraFilter: `AgentID='${this.record.ID}' AND PromptID='${prompt.ID}'`,
-                    ResultType: 'entity_object'
+                    ExtraFilter: `AgentID='${this.record.ID}' AND PromptID='${prompt.ID}'` 
                 });
 
                 if (linkResult.Results && linkResult.Results.length > 0) {
@@ -773,8 +767,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 const rv = new RunView();
                 const linkResult = await rv.RunView<AIAgentActionEntity>({
                     EntityName: 'AI Agent Actions',
-                    ExtraFilter: `AgentID='${this.record.ID}' AND ActionID='${action.ID}'`,
-                    ResultType: 'entity_object'
+                    ExtraFilter: `AgentID='${this.record.ID}' AND ActionID='${action.ID}'` 
                 });
 
                 if (linkResult.Results && linkResult.Results.length > 0) {

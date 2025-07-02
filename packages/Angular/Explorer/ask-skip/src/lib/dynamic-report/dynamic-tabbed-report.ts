@@ -121,8 +121,7 @@ export class SkipDynamicTabbedReportComponent extends SkipDynamicReportBase impl
     const rv = new RunView();
     const result = await rv.RunView<BaseEntity>({
       EntityName: info.EntityName,
-      ExtraFilter: filter,
-      ResultType: 'entity_object'
+      ExtraFilter: filter 
     })
     if (result && result.Success && result.Results.length === 1) {
       const record = result.Results[0];

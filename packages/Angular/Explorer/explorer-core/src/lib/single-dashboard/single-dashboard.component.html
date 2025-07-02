@@ -10,14 +10,14 @@
     <div class="dashboard-title">
       <div *ngIf="isEditDashboardNameDialogOpened; else dashboard_name_header" class="dashboard-header k-d-flex k-flex-row k-justify-content-flex-end">
         <input class="k-textbox k-input k-input-md k-rounded-md k-input-solid" (keydown.enter)="saveDashboardName()" type="text" placeholder="Enter name here" id="txtDashboardName" #dashboardNameInput>
-        <kendo-button (click)="saveDashboardName()">
+        <button kendoButton (click)="saveDashboardName()">
           <span class="k-i-check k-button-icon k-icon ng-star-inserted"></span>
           Save
-        </kendo-button>
-        <kendo-button (click)="cancelNameChange()" >
+        </button>
+        <button kendoButton (click)="cancelNameChange()" >
           <span class="k-icon k-i-cancel"></span>
           Cancel
-        </kendo-button>
+        </button>
       </div>
       <ng-template #dashboard_name_header>
         <span class="k-icon k-i-star"></span>
@@ -26,24 +26,24 @@
     </div>
     <div class="dashboard-header k-d-flex k-flex-row k-justify-content-flex-end">
       <div *ngIf="isEditingDashboard; else edit_dashboard_buttons">
-        <kendo-button (click)="onClickSaveDashboard()">
+        <button kendoButton (click)="onClickSaveDashboard()">
           <span class="fa-solid fa-check"></span>
           Save
-        </kendo-button>
-        <kendo-button (click)="onclickCancelChanges()">
+        </button>
+        <button kendoButton (click)="onclickCancelChanges()">
           <span class="fa-solid fa-xmark"></span>
           Cancel
-        </kendo-button>
+        </button>
       </div>
       <ng-template #edit_dashboard_buttons>
-        <kendo-button (click)="addItem()">
+        <button kendoButton (click)="addItem()">
           <span class="fa-solid fa-plus"></span>
           Add Item
-        </kendo-button>
-        <kendo-button (click)="toggleEditDashboard(true)" >
+        </button>
+        <button kendoButton (click)="toggleEditDashboard(true)" >
           <span class="fa-solid fa-gear"></span>
           Edit Dashboard
-        </kendo-button>
+        </button>
       </ng-template>
     </div>
   </div>
@@ -53,10 +53,10 @@
       <i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>
       <h3>This dashboard is empty</h3>
       <p>Start by adding reports or user views to your dashboard</p>
-      <kendo-button themeColor="primary" (click)="addItem()">
+      <button kendoButton themeColor="primary" (click)="addItem()">
         <span class="fa-solid fa-plus"></span>
         Add Item
-      </kendo-button>
+      </button>
     </div>
     
     <!-- Show tile layout if there are items or if editing -->
