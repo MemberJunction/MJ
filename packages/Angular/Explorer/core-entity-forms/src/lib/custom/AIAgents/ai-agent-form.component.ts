@@ -540,7 +540,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /**
      * Gets a preview of the execution result for collapsed view
      */
-    public getExecutionResultPreview(execution: AIAgentRunEntity): string {
+    public getExecutionResultPreview(execution: AIAgentRunEntity, trimLongMessages: boolean): string {
         try {
             if (!execution.Result) return 'No result';
             
@@ -550,16 +550,25 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             // Extract the user message if it exists
             if (parsed.returnValue?.nextStep?.userMessage) {
                 const message = parsed.returnValue.nextStep.userMessage;
-                return message.length > 120 ? message.substring(0, 120) + '...' : message;
+                if (trimLongMessages)
+                    return message.length > 120 ? message.substring(0, 120) + '...' : message;
+                else
+                    return message;
             }
             
             // Otherwise return the stringified result
-            const stringified = JSON.stringify(parsed);
-            return stringified.length > 120 ? stringified.substring(0, 120) + '...' : stringified;
+            const stringified = JSON.stringify(parsed, null, 2);
+            if (trimLongMessages)
+                return stringified.length > 120 ? stringified.substring(0, 120) + '...' : stringified;
+            else
+                return stringified;
         } catch {
             // If not JSON, just return the string
             const result = execution.Result || '';
-            return result.length > 120 ? result.substring(0, 120) + '...' : result;
+            if (trimLongMessages)
+                return result.length > 120 ? result.substring(0, 120) + '...' : result;
+            else
+                return result;
         }
     }
     

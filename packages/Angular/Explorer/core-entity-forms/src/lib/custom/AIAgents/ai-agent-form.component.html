@@ -485,20 +485,25 @@
                                                                 Execution #{{ execution.ID.substring(0, 8) }}
                                                                 <span class="timeline-date">{{ execution.__mj_CreatedAt | date:'MMM d, h:mm a' }}</span>
                                                             </div>
-                                                        <div class="timeline-meta">
-                                                            <span class="status-badge" [style.background-color]="getExecutionStatusColor(execution.Status)">
-                                                                {{ execution.Status || 'Unknown' }}
-                                                            </span>
-                                                            @if (execution.CompletedAt) {
-                                                                <span class="execution-time">
-                                                                    <i class="fa-solid fa-stopwatch"></i>
-                                                                    {{ formatExecutionTimeFromDates(execution.StartedAt, execution.CompletedAt) }}
+                                                            <div class="timeline-meta">
+                                                                <span class="status-badge" [style.background-color]="getExecutionStatusColor(execution.Status)">
+                                                                    {{ execution.Status || 'Unknown' }}
                                                                 </span>
+                                                                @if (execution.CompletedAt) {
+                                                                    <span class="execution-time">
+                                                                        <i class="fa-solid fa-stopwatch"></i>
+                                                                        {{ formatExecutionTimeFromDates(execution.StartedAt, execution.CompletedAt) }}
+                                                                    </span>
+                                                                }
+                                                                <div class="timeline-actions">
+                                                                    <button class="btn-primary" (click)="openExecutionRecord(execution.ID); $event.stopPropagation()">
+                                                                        <i class="fa-solid fa-external-link-alt"></i>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                            @if (execution.Result && !expandedExecutions[execution.ID]) {
+                                                                <div class="timeline-preview">{{ getExecutionResultPreview(execution, true) }}</div>
                                                             }
-                                                        </div>
-                                                        @if (execution.Result && !expandedExecutions[execution.ID]) {
-                                                            <div class="timeline-preview">{{ getExecutionResultPreview(execution) }}</div>
-                                                        }
                                                         </div>
                                                     </div>
                                                     @if (expandedExecutions[execution.ID]) {
@@ -506,7 +511,13 @@
                                                             @if (execution.Result) {
                                                                 <div class="result-section">
                                                                     <h5>Result</h5>
-                                                                    <div class="result-content">{{ getExecutionResultMessage(execution) }}</div>
+                                                                    <mj-code-editor 
+                                                                        [value]="getExecutionResultPreview(execution, false)"
+                                                                        [readonly]="true"
+                                                                        language="json"
+                                                                        [lineWrapping]="true"
+                                                                        style="max-height: 200px; width: 100%;">
+                                                                    </mj-code-editor>
                                                                 </div>
                                                             }
                                                             @if (execution.ErrorMessage) {
@@ -532,11 +543,6 @@
                                                                         <span class="detail-value">{{ execution.ConversationID }}</span>
                                                                     </div>
                                                                 }
-                                                            </div>
-                                                            <div class="timeline-actions">
-                                                                <button class="btn-primary" (click)="openExecutionRecord(execution.ID); $event.stopPropagation()">
-                                                                    <i class="fa-solid fa-external-link-alt"></i> View Full Details
-                                                                </button>
                                                             </div>
                                                         </div>
                                                     }
