@@ -339,7 +339,12 @@
   border-radius: 8px;
   border: 1px solid #e0e6ed;
   overflow: auto;
+  padding: 20px;
+  gap: 10px;
+  min-height: 0;
+  margin-bottom: 45px;
 }
+
 
 .json-toolbar {
   display: flex;
@@ -715,15 +720,6 @@
   text-decoration: none;
 }
 
-.json-viewer {
-  flex: 1;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 0;
-  overflow: auto;
-}
 
 .json-toolbar {
   display: flex;
