@@ -1,5 +1,17 @@
 # @memberjunction/ai-core-plus
 
+## 2.62.0
+
+### Patch Changes
+
+- c995603: Better Error Handling and Failover in AI core and Promts
+- Updated dependencies [c995603]
+  - @memberjunction/ai@2.62.0
+  - @memberjunction/core-entities@2.62.0
+  - @memberjunction/actions-base@2.62.0
+  - @memberjunction/core@2.62.0
+  - @memberjunction/global@2.62.0
+
 ## 2.61.0
 
 ### Minor Changes

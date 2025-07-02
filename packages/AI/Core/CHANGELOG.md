@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ai
 
+## 2.62.0
+
+### Patch Changes
+
+- c995603: Better Error Handling and Failover in AI core and Promts
+  - @memberjunction/global@2.62.0
+
 ## 2.61.0
 
 ### Patch Changes

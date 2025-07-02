@@ -1,5 +1,24 @@
 # @memberjunction/ai-prompts
 
+## 2.62.0
+
+### Minor Changes
+
+- 4a4b488: Failover support
+
+### Patch Changes
+
+- c995603: Better Error Handling and Failover in AI core and Promts
+- Updated dependencies [c995603]
+  - @memberjunction/ai@2.62.0
+  - @memberjunction/ai-core-plus@2.62.0
+  - @memberjunction/core-entities@2.62.0
+  - @memberjunction/aiengine@2.62.0
+  - @memberjunction/templates@2.62.0
+  - @memberjunction/templates-base-types@2.62.0
+  - @memberjunction/core@2.62.0
+  - @memberjunction/global@2.62.0
+
 ## 2.61.0
 
 ### Patch Changes
