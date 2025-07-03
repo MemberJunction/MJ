@@ -1,6 +1,6 @@
 import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
-import { BaseEntity, Metadata, LogError } from "@memberjunction/core";
+import { BaseEntity, Metadata, LogError, CompositeKey } from "@memberjunction/core";
 
 /**
  * Abstract base class for record mutation actions (Create, Update, Delete).
@@ -128,7 +128,8 @@ export abstract class BaseRecordMutationAction extends BaseAction {
         }
         
         // Load the record using LoadFromData which works for both single and composite keys
-        const loadResult = await entity.LoadFromData(keyData);
+        const pkey = CompositeKey.FromObject(keyData);        
+        const loadResult = await entity.InnerLoad(pkey);
 
         if (!loadResult) {
             // Check if it's a permission issue or record not found

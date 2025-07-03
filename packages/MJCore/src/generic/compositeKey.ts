@@ -374,6 +374,17 @@ export class CompositeKey extends FieldValueCollection {
     }
 
     /**
+     * Creates a CompositeKey from a simple object where the keys are the field names and the values are the values.
+     * @param obj 
+     * @returns 
+     */
+    public static FromObject(obj: any): CompositeKey {
+        let compositeKey = new CompositeKey();
+        compositeKey.LoadFromSimpleObject(obj);
+        return compositeKey;
+    }
+
+    /**
     * Utility function to compare this composite key to another
     * @param compositeKey the composite key to compare against
     * @returns true if the primary key values are the same, false if they are different
