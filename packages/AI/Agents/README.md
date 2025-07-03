@@ -76,6 +76,15 @@ const result = await agent.Execute({
     conversationMessages: messages,
     contextUser: user
 });
+
+// Using run chaining to maintain context across multiple runs
+const followUpResult = await runner.RunAgent({
+    agent: agentEntity,
+    conversationMessages: newMessages,
+    contextUser: user,
+    lastRunId: result.agentRun.ID,
+    autoPopulateLastRunPayload: true // Automatically use previous run's final payload
+});
 ```
 
 ## Agent Configuration
@@ -151,6 +160,33 @@ export class MyCustomAgentType extends BaseAgentType {
    - Errors and outputs captured
 
 ## Advanced Features
+
+### Run Chaining
+
+The framework supports linking multiple agent runs together to maintain context across interactions:
+
+```typescript
+// Execute an agent with run chaining
+const result = await agent.Execute({
+    agent: agentEntity,
+    conversationMessages: messages,
+    contextUser: user,
+    lastRunId: previousRunId,        // Links to previous run
+    autoPopulateLastRunPayload: true  // Auto-loads previous payload
+});
+
+// The framework will:
+// 1. Load the FinalPayload from the previous run
+// 2. Set it as StartingPayload for the new run
+// 3. Use it as the initial payload if none provided
+// 4. Validate against circular references in the chain
+```
+
+Key features:
+- **LastRunID**: Links runs in a chain (different from ParentRunID for sub-agents)
+- **StartingPayload**: Captures the initial state of each run
+- **Auto-population**: Reduces bandwidth by avoiding payload round-trips
+- **Circular reference detection**: Prevents infinite loops in run chains
 
 ### Payload Management and Change Detection
 
@@ -239,6 +275,8 @@ Key entities used by the agent framework:
 - **AIPrompt**: Reusable prompt templates with placeholders
 - **AIAgentPrompt**: Links agents to prompts with execution order
 - **AIAgentRun**: Tracks complete agent executions
+  - `LastRunID`: Links to previous run in a chain (for run chaining)
+  - `StartingPayload`: Initial payload for the run
 - **AIAgentRunStep**: Records individual steps within runs
   - `PayloadAtStart`: JSON snapshot of payload before step
   - `PayloadAtEnd`: JSON snapshot of payload after step
