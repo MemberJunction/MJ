@@ -3,6 +3,7 @@ import { TwitterBaseAction, CreateTweetData, Tweet } from '../twitter-base.actio
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { MediaFile, SocialPost } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to create a thread (series of connected tweets) on Twitter/X

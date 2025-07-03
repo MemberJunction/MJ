@@ -3,6 +3,7 @@ import { HootSuiteBaseAction } from '../hootsuite-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { MediaFile } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to update a scheduled post in HootSuite

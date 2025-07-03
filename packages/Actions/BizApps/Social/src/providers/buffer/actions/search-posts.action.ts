@@ -2,6 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BufferBaseAction } from '../buffer-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { SocialPost } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to search historical posts in Buffer across profiles and date ranges

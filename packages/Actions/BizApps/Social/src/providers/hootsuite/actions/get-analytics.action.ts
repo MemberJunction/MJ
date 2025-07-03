@@ -3,6 +3,7 @@ import { HootSuiteBaseAction, HootSuiteAnalytics } from '../hootsuite-base.actio
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { SocialAnalytics } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to retrieve analytics data from HootSuite

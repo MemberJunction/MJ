@@ -3,6 +3,7 @@ import { BaseSocialMediaAction, SocialPost, SocialAnalytics, MediaFile } from '.
 import { UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import FormData from 'form-data';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Base class for all Buffer social media actions.

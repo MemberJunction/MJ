@@ -3,6 +3,7 @@ import { BaseSocialMediaAction, MediaFile, SocialPost, SearchParams, SocialAnaly
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { ActionParam } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Base class for all LinkedIn actions.

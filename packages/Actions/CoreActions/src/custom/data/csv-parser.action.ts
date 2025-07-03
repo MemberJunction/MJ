@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseFileHandlerAction } from "../utilities/base-file-handler";
 import * as Papa from "papaparse";
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action that parses CSV data into structured JSON format

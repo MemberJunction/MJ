@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseFileHandlerAction } from "../utilities/base-file-handler";
 import * as ExcelJS from "exceljs";
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action that reads Excel files and converts them to JSON format

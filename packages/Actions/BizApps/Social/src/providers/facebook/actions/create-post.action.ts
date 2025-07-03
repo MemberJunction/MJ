@@ -3,6 +3,7 @@ import { FacebookBaseAction, CreatePostData } from '../facebook-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { MediaFile, SocialMediaErrorCode } from '../../../base/base-social.action';
 import { LogStatus, LogError } from '@memberjunction/core';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Creates a new post on a Facebook page.

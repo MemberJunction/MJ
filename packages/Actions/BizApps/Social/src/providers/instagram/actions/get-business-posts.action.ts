@@ -3,6 +3,7 @@ import { InstagramBaseAction } from '../instagram-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogError } from '@memberjunction/core';
 import { SocialPost } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Retrieves posts from an Instagram Business account.

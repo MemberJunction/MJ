@@ -4,6 +4,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 import { SocialMediaErrorCode } from '../../../base/base-social.action';
 import { LogStatus, LogError } from '@memberjunction/core';
 import axios from 'axios';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Boosts (promotes) a Facebook post to reach a wider audience.

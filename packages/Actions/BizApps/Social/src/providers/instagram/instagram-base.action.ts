@@ -2,6 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseSocialMediaAction, MediaFile } from '../../base/base-social.action';
 import { UserInfo, LogStatus, LogError } from '@memberjunction/core';
 import axios, { AxiosInstance, AxiosError } from 'axios';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Base class for all Instagram actions.

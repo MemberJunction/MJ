@@ -2,6 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseSocialMediaAction, SocialPost, SocialAnalytics, MediaFile } from '../../base/base-social.action';
 import { LogError, LogStatus } from '@memberjunction/core';
 import axios, { AxiosInstance, AxiosError } from 'axios';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * TikTok video information

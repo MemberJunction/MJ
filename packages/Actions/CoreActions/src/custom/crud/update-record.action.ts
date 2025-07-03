@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { LogError } from "@memberjunction/core";
 import { BaseRecordMutationAction } from "./base-record-mutation.action";
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Generic action for updating existing entity records in the database.

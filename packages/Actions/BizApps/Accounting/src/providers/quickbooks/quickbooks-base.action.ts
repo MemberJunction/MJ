@@ -3,6 +3,7 @@ import { BaseAccountingAction } from '../../base/base-accounting-action';
 import { UserInfo } from '@memberjunction/core';
 import { CompanyIntegrationEntity } from '@memberjunction/core-entities';
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Base class for all QuickBooks Online actions.

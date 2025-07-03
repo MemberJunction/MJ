@@ -1,6 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseFileHandlerAction } from "../utilities/base-file-handler";
+import { BaseAction } from '@memberjunction/actions';
 const pdfParse = require('pdf-parse');
 
 /**

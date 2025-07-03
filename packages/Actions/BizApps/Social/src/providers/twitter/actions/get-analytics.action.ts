@@ -3,6 +3,7 @@ import { TwitterBaseAction, Tweet, TwitterMetrics } from '../twitter-base.action
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { SocialAnalytics } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to get analytics for tweets or user account from Twitter/X

@@ -3,6 +3,7 @@ import { BaseSocialMediaAction } from '../../base/base-social.action';
 import { UserInfo } from '@memberjunction/core';
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { SocialPost, MediaFile } from '../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Base class for all YouTube actions.

@@ -5,6 +5,7 @@ import * as xml2js from "xml2js";
 import * as xpath from "xpath";
 import { DOMParser } from "@xmldom/xmldom";
 import { JSONParamHelper } from "../utilities/json-param-helper";
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action that parses XML data and extracts content using XPath expressions

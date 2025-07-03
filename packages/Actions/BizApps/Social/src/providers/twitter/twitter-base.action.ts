@@ -4,6 +4,7 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 import { ActionParam } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import FormData from 'form-data';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Base class for all Twitter/X actions.

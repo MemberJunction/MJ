@@ -2,6 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { YouTubeBaseAction } from '../youtube-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { SocialPost, SearchParams } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to search for YouTube videos including historical content

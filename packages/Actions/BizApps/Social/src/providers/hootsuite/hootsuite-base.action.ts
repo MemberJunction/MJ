@@ -3,6 +3,7 @@ import { BaseSocialMediaAction, MediaFile, SocialPost, SearchParams } from '../.
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { ActionParam } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Base class for all HootSuite actions.

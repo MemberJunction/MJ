@@ -5,6 +5,7 @@ import { MediaFile, SocialMediaErrorCode } from '../../../base/base-social.actio
 import { LogStatus, LogError } from '@memberjunction/core';
 import axios from 'axios';
 import FormData from 'form-data';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Creates a photo album on a Facebook page and optionally uploads photos to it.

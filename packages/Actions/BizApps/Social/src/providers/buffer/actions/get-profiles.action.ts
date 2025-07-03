@@ -1,6 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BufferBaseAction } from '../buffer-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to get all Buffer profiles (social media accounts) for the authenticated user

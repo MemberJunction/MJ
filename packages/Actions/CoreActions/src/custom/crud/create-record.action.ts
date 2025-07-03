@@ -1,6 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseRecordMutationAction } from "./base-record-mutation.action";
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Generic action for creating new entity records in the database.

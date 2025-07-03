@@ -3,6 +3,7 @@ import { HootSuiteBaseAction, HootSuitePost } from '../hootsuite-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { MediaFile } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Interface for bulk post data

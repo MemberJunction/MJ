@@ -3,6 +3,7 @@ import { InstagramBaseAction } from '../instagram-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogError } from '@memberjunction/core';
 import { MediaFile } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Creates an Instagram Story with images or videos.

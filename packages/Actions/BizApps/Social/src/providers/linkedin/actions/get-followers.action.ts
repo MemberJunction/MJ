@@ -2,6 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { LinkedInBaseAction } from '../linkedin-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to get follower statistics for LinkedIn profiles and organizations

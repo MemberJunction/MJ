@@ -1,6 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { LearnWorldsBaseAction } from '../learnworlds-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to retrieve comprehensive analytics for a LearnWorlds course

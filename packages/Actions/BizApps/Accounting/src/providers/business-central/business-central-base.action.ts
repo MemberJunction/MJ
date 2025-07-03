@@ -2,6 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseAccountingAction } from '../../base/base-accounting-action';
 import { UserInfo } from '@memberjunction/core';
 import { CompanyIntegrationEntity } from '@memberjunction/core-entities';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Base class for all Microsoft Dynamics 365 Business Central actions.

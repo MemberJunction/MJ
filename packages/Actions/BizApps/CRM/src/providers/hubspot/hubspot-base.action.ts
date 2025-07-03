@@ -2,6 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseCRMAction } from '../../base/base-crm.action';
 import { UserInfo } from '@memberjunction/core';
 import { CompanyIntegrationEntity } from '@memberjunction/core-entities';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Base class for all HubSpot CRM actions.

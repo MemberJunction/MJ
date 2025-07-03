@@ -2,6 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { TwitterBaseAction } from '../twitter-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to delete a tweet from Twitter/X
