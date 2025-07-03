@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { HubSpotBaseAction } from '../hubspot-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to merge duplicate contacts in HubSpot
  */
-@RegisterClass(HubSpotBaseAction, 'MergeContactsAction')
+@RegisterClass(BaseAction, 'MergeContactsAction')
 export class MergeContactsAction extends HubSpotBaseAction {
     /**
      * Merge duplicate contacts

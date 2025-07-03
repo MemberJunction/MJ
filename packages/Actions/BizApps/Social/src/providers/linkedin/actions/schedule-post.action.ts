@@ -3,13 +3,14 @@ import { LinkedInBaseAction, LinkedInShareData } from '../linkedin-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { MediaFile } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to schedule a post on LinkedIn
  * Note: LinkedIn API v2 does not have native scheduling support.
  * This action stores the post data for later publishing via a separate scheduler service.
  */
-@RegisterClass(LinkedInBaseAction, 'LinkedInSchedulePostAction')
+@RegisterClass(BaseAction, 'LinkedInSchedulePostAction')
 export class LinkedInSchedulePostAction extends LinkedInBaseAction {
     /**
      * Schedule a post for future publishing on LinkedIn

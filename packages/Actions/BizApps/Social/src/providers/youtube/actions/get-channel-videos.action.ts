@@ -2,11 +2,12 @@ import { RegisterClass } from '@memberjunction/global';
 import { YouTubeBaseAction } from '../youtube-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { SocialPost } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to get videos from a YouTube channel
  */
-@RegisterClass(YouTubeBaseAction, 'YouTubeGetChannelVideosAction')
+@RegisterClass(BaseAction, 'YouTubeGetChannelVideosAction')
 export class YouTubeGetChannelVideosAction extends YouTubeBaseAction {
     /**
      * Get videos from a YouTube channel

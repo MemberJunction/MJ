@@ -2,6 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseSocialMediaAction, SocialPost, SocialAnalytics, MediaFile } from '../../base/base-social.action';
 import { LogError, LogStatus } from '@memberjunction/core';
 import axios, { AxiosInstance, AxiosError } from 'axios';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * TikTok video information
@@ -40,7 +41,7 @@ export interface TikTokUser {
  * Base class for all TikTok social media actions.
  * Handles TikTok-specific authentication and API interaction patterns.
  */
-@RegisterClass(BaseSocialMediaAction, 'TikTokBaseAction')
+@RegisterClass(BaseAction, 'TikTokBaseAction')
 export abstract class TikTokBaseAction extends BaseSocialMediaAction {
     
     protected get platformName(): string {

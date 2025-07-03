@@ -3,12 +3,13 @@ import { BaseAccountingAction } from '../../base/base-accounting-action';
 import { UserInfo } from '@memberjunction/core';
 import { CompanyIntegrationEntity } from '@memberjunction/core-entities';
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Base class for all QuickBooks Online actions.
  * Handles QB-specific authentication and API interaction patterns.
  */
-@RegisterClass(BaseAccountingAction, 'QuickBooksBaseAction')
+@RegisterClass(BaseAction, 'QuickBooksBaseAction')
 export abstract class QuickBooksBaseAction extends BaseAccountingAction {
     protected accountingProvider = 'QuickBooks Online';
     protected integrationName = 'QuickBooks Online';

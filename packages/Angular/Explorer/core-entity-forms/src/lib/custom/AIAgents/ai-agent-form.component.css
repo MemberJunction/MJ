@@ -1287,6 +1287,13 @@
     overflow-y: auto;
 }
 
+/* Code editor styling within result section */
+.result-section mj-code-editor {
+    border: 1px solid #e0e6ed;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
 .error-content {
     background: #f8d7da;
     border-color: #f5c6cb;

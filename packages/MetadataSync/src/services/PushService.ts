@@ -127,7 +127,9 @@ export class PushService {
       }
       
       // Find entity directories to process
-      const entityDirs = this.findEntityDirectories(configDir);
+      // Note: If options.dir is specified, configDir already points to that directory
+      // So we don't need to pass it as specificDir
+      const entityDirs = this.findEntityDirectories(configDir, undefined, this.syncConfig?.directoryOrder);
       
       if (entityDirs.length === 0) {
         throw new Error('No entity directories found');
@@ -958,7 +960,7 @@ export class PushService {
     return `${absolutePath}:${lineNumber}`;
   }
   
-  private findEntityDirectories(baseDir: string, specificDir?: string): string[] {
+  private findEntityDirectories(baseDir: string, specificDir?: string, directoryOrder?: string[]): string[] {
     const dirs: string[] = [];
     
     if (specificDir) {
@@ -985,6 +987,31 @@ export class PushService {
     } else {
       // Find all entity directories
       this.findEntityDirectoriesRecursive(baseDir, dirs);
+    }
+    
+    // Apply directory ordering if specified
+    if (directoryOrder && directoryOrder.length > 0 && !specificDir) {
+      // Create a map of directory name to order index
+      const orderMap = new Map<string, number>();
+      directoryOrder.forEach((dir, index) => {
+        orderMap.set(dir, index);
+      });
+      
+      // Sort directories based on the order map
+      dirs.sort((a, b) => {
+        const nameA = path.basename(a);
+        const nameB = path.basename(b);
+        const orderA = orderMap.get(nameA) ?? Number.MAX_SAFE_INTEGER;
+        const orderB = orderMap.get(nameB) ?? Number.MAX_SAFE_INTEGER;
+        
+        // If both have specified orders, use them
+        if (orderA !== Number.MAX_SAFE_INTEGER || orderB !== Number.MAX_SAFE_INTEGER) {
+          return orderA - orderB;
+        }
+        
+        // Otherwise, maintain original order (stable sort)
+        return 0;
+      });
     }
     
     return dirs;

@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { HubSpotBaseAction } from '../hubspot-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to update an existing company in HubSpot
  */
-@RegisterClass(HubSpotBaseAction, 'UpdateCompanyAction')
+@RegisterClass(BaseAction, 'UpdateCompanyAction')
 export class UpdateCompanyAction extends HubSpotBaseAction {
     /**
      * Update an existing company

@@ -3,11 +3,12 @@ import { TwitterBaseAction, Tweet } from '../twitter-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { SocialPost } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to get timeline tweets (home timeline or user timeline) from Twitter/X
  */
-@RegisterClass(TwitterBaseAction, 'TwitterGetTimelineAction')
+@RegisterClass(BaseAction, 'TwitterGetTimelineAction')
 export class TwitterGetTimelineAction extends TwitterBaseAction {
     /**
      * Get timeline tweets from Twitter

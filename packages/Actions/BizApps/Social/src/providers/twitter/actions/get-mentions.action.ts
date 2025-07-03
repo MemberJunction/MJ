@@ -3,11 +3,12 @@ import { TwitterBaseAction, Tweet } from '../twitter-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { SocialPost } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to get mentions (tweets that mention the authenticated user) from Twitter/X
  */
-@RegisterClass(TwitterBaseAction, 'TwitterGetMentionsAction')
+@RegisterClass(BaseAction, 'TwitterGetMentionsAction')
 export class TwitterGetMentionsAction extends TwitterBaseAction {
     /**
      * Get mentions from Twitter

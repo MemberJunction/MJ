@@ -339,7 +339,12 @@
   border-radius: 8px;
   border: 1px solid #e0e6ed;
   overflow: auto;
+  padding: 20px;
+  gap: 10px;
+  min-height: 0;
+  margin-bottom: 45px;
 }
+
 
 .json-toolbar {
   display: flex;
@@ -715,15 +720,6 @@
   text-decoration: none;
 }
 
-.json-viewer {
-  flex: 1;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 0;
-  overflow: auto;
-}
 
 .json-toolbar {
   display: flex;
@@ -829,4 +825,90 @@
   .timeline-content {
     margin-left: 10px;
   }
+}
+
+/* Entity Link Styles */
+.entity-link {
+  color: #2196f3;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  border-bottom: 1px solid transparent;
+  display: inline-block;
+}
+
+.entity-link:hover {
+  color: #1976d2;
+  border-bottom-color: #1976d2;
+}
+
+.entity-link:active {
+  color: #0d47a1;
+}
+
+/* Detail Pane Tabs */
+.detail-pane-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0 0 0;
+  border-bottom: 1px solid #e0e6ed;
+  padding: 0 16px;
+}
+
+.detail-tab {
+  padding: 10px 16px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: #6c757d;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.detail-tab:hover {
+  color: #495057;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.detail-tab.active {
+  color: #2196f3;
+  border-bottom-color: #2196f3;
+}
+
+.detail-tab i {
+  font-size: 14px;
+}
+
+/* Detail Pane Content */
+.detail-pane-content {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  margin-bottom: 35px;
+}
+
+.detail-pane-content.with-tabs {
+  /* When tabs are shown, content starts right after tabs */
+  margin-top: 0;
+}
+
+/* Step Payload Diff */
+.step-payload-diff {
+  height: 100%;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.step-payload-diff mj-deep-diff {
+  display: block;
+  height: 100%;
+}
+
+/* JSON Viewer adjustments when no tabs */
+.detail-pane-content:not(.with-tabs) .json-viewer {
+  margin-top: 16px;
 }

@@ -3,11 +3,12 @@ import { HootSuiteBaseAction, HootSuitePost } from '../hootsuite-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { SocialPost } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to retrieve scheduled posts from HootSuite
  */
-@RegisterClass(HootSuiteBaseAction, 'HootSuiteGetScheduledPostsAction')
+@RegisterClass(BaseAction, 'HootSuiteGetScheduledPostsAction')
 export class HootSuiteGetScheduledPostsAction extends HootSuiteBaseAction {
     /**
      * Get scheduled posts from HootSuite

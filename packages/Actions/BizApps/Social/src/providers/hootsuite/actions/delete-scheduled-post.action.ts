@@ -2,10 +2,11 @@ import { RegisterClass } from '@memberjunction/global';
 import { HootSuiteBaseAction } from '../hootsuite-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
+import { BaseAction } from '@memberjunction/actions';
 /**
  * Action to delete a scheduled post from HootSuite
  */
-@RegisterClass(HootSuiteBaseAction, 'HootSuiteDeleteScheduledPostAction')
+@RegisterClass(BaseAction, 'HootSuiteDeleteScheduledPostAction')
 export class HootSuiteDeleteScheduledPostAction extends HootSuiteBaseAction {
     /**
      * Delete a scheduled post from HootSuite

@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { HubSpotBaseAction } from '../hubspot-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to get activity history for a contact in HubSpot
  */
-@RegisterClass(HubSpotBaseAction, 'GetActivitiesByContactAction')
+@RegisterClass(BaseAction, 'GetActivitiesByContactAction')
 export class GetActivitiesByContactAction extends HubSpotBaseAction {
     /**
      * Get activity history for a specific contact

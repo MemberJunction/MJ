@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { YouTubeBaseAction } from '../youtube-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to schedule a YouTube video for publishing
  */
-@RegisterClass(YouTubeBaseAction, 'YouTubeScheduleVideoAction')
+@RegisterClass(BaseAction, 'YouTubeScheduleVideoAction')
 export class YouTubeScheduleVideoAction extends YouTubeBaseAction {
     /**
      * Schedule a video for publishing on YouTube

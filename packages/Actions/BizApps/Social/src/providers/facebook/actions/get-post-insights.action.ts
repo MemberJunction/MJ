@@ -4,12 +4,13 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 import { SocialMediaErrorCode } from '../../../base/base-social.action';
 import { LogStatus, LogError } from '@memberjunction/core';
 import axios from 'axios';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Retrieves detailed insights and analytics for a specific Facebook post.
  * Provides metrics like reach, impressions, engagement, and more.
  */
-@RegisterClass(FacebookBaseAction, 'FacebookGetPostInsightsAction')
+@RegisterClass(BaseAction, 'FacebookGetPostInsightsAction')
 export class FacebookGetPostInsightsAction extends FacebookBaseAction {
     /**
      * Get action description

@@ -124,18 +124,60 @@
                   </button>
                 </div>
                 
-                <div class="json-viewer">
-                  <div class="json-toolbar">
-                    <button class="btn-icon" title="Copy JSON" (click)="copyToClipboard(getSelectedItemJson())">
-                      <i class="fas fa-copy"></i>
+                <!-- Tab Navigation - Only show when we have both options -->
+                @if (showStepPayloadDiff) {
+                  <div class="detail-pane-tabs">
+                    <button 
+                      class="detail-tab" 
+                      [class.active]="detailPaneTab === 'diff'"
+                      (click)="detailPaneTab = 'diff'">
+                      <i class="fa-solid fa-code-branch"></i>
+                      Payload Changes
+                    </button>
+                    <button 
+                      class="detail-tab" 
+                      [class.active]="detailPaneTab === 'json'"
+                      (click)="detailPaneTab = 'json'">
+                      <i class="fa-solid fa-code"></i>
+                      Full JSON
                     </button>
                   </div>
-                  <mj-code-editor
-                    [(ngModel)]="selectedItemJsonString"
-                    [language]="'json'"
-                    [readonly]="true"
-                    style="height: calc(100% - 160px); width: 100%;">
-                  </mj-code-editor>
+                }
+                
+                <!-- Tab Content -->
+                <div class="detail-pane-content" [class.with-tabs]="showStepPayloadDiff">
+                  <!-- Payload Diff Tab -->
+                  @if (detailPaneTab === 'diff' && showStepPayloadDiff) {
+                    <div class="step-payload-diff">
+                      <mj-deep-diff
+                        [oldValue]="stepPayloadAtStartObject"
+                        [newValue]="stepPayloadAtEndObject"
+                        [title]="''"
+                        [showSummary]="true"
+                        [showUnchanged]="false"
+                        [expandAll]="false"
+                        [maxDepth]="8"
+                        [maxStringLength]="150">
+                      </mj-deep-diff>
+                    </div>
+                  }
+                  
+                  <!-- Full JSON Tab -->
+                  @if (detailPaneTab === 'json' || !showStepPayloadDiff) {
+                    <div class="json-viewer">
+                      <div class="json-toolbar">
+                        <button class="btn-icon" title="Copy JSON" (click)="copyToClipboard(getSelectedItemJson())">
+                          <i class="fas fa-copy"></i>
+                        </button>
+                      </div>
+                      <mj-code-editor
+                        [(ngModel)]="selectedItemJsonString"
+                        [language]="'json'"
+                        [readonly]="true"
+                        style="height: calc(100% - 40px); width: 100%;">
+                      </mj-code-editor>
+                    </div>
+                  }
                 </div>
               </div>
             </div>
@@ -150,28 +192,48 @@
             <ng-template kendoPanelBarContent>
               <div class="details-grid">
                 <div class="detail-item">
-                  <label>Run ID</label>
-                  <span>{{ record.ID }}</span>
-                </div>
-                <div class="detail-item">
-                  <label>Agent ID</label>
-                  <span>{{ record.AgentID }}</span>
-                </div>
-                <div class="detail-item">
-                  <label>Agent Name</label>
-                  <span>{{ agent?.Name || 'N/A' }}</span>
+                  <label>Agent</label>
+                  <span>
+                    <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('AI Agents', record.AgentID)">
+                      {{ agent?.Name || 'N/A' }}
+                    </a>
+                  </span>
                 </div>
                 <div class="detail-item">
                   <label>Parent Run ID</label>
-                  <span>{{ record.ParentRunID || 'None (Root)' }}</span>
+                  <span>
+                    <a *ngIf="record.ParentRunID" href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: AI Agent Runs', record.ParentRunID)">
+                      {{ record.ParentRunID }}
+                    </a>
+                    <span *ngIf="!record.ParentRunID">None (Root)</span>
+                  </span>
+                </div>
+                <div class="detail-item">
+                  <label>Last Run ID</label>
+                  <span>
+                    <a *ngIf="record.LastRunID" href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: AI Agent Runs', record.LastRunID)">
+                      {{ record.LastRunID }}
+                    </a>
+                    <span *ngIf="!record.LastRunID">None</span>
+                  </span>
                 </div>
                 <div class="detail-item">
                   <label>Conversation ID</label>
-                  <span>{{ record.ConversationID || 'N/A' }}</span>
+                  <span>
+                    <a *ngIf="record.ConversationID" href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('AI Conversations', record.ConversationID)">
+                      {{ record.ConversationID }}
+                    </a>
+                    <span *ngIf="!record.ConversationID">N/A</span>
+                  </span>
                 </div>
                 <div class="detail-item">
                   <label>User</label>
-                  <span>{{ record.User || 'N/A' }}</span>
+                  <span>
+                    <a *ngIf="record.UserID" href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('Users', record.UserID)">
+                      {{ record.User || 'N/A' }}
+                    </a>
+                    <span *ngIf="!record.UserID">N/A</span>
+                  </span>
                 </div>
               </div>
             </ng-template>
@@ -236,6 +298,19 @@
             </ng-template>
           </kendo-panelbar-item>
           
+          <kendo-panelbar-item title="Starting Payload" *ngIf="record.StartingPayload">
+            <ng-template kendoPanelBarContent>
+              <div class="result-viewer">
+                <mj-code-editor
+                  [ngModel]="parsedStartingPayload"
+                  [language]="'json'"
+                  [readonly]="true"
+                  style="height: 300px; width: 100%;">
+                </mj-code-editor>
+              </div>
+            </ng-template>
+          </kendo-panelbar-item>
+          
           <kendo-panelbar-item title="Final Payload" *ngIf="record.FinalPayload">
             <ng-template kendoPanelBarContent>
               <div class="result-viewer">
@@ -245,6 +320,23 @@
                   [readonly]="true"
                   style="height: 300px; width: 100%;">
                 </mj-code-editor>
+              </div>
+            </ng-template>
+          </kendo-panelbar-item>
+          
+          <kendo-panelbar-item title="Payload Diff" *ngIf="showPayloadDiff">
+            <ng-template kendoPanelBarContent>
+              <div style="padding: 20px; background: #f8f9fa;">
+                <mj-deep-diff
+                  [oldValue]="startingPayloadObject"
+                  [newValue]="finalPayloadObject"
+                  [title]="''"
+                  [showSummary]="true"
+                  [showUnchanged]="false"
+                  [expandAll]="false"
+                  [maxDepth]="10"
+                  [maxStringLength]="200">
+                </mj-deep-diff>
               </div>
             </ng-template>
           </kendo-panelbar-item>

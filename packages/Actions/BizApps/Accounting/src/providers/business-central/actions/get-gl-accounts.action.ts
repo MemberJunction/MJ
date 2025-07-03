@@ -1,6 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BusinessCentralBaseAction } from '../business-central-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Interface for a GL Account (Chart of Accounts) entry from Business Central
@@ -25,7 +26,7 @@ export interface BCGLAccount {
 /**
  * Action to retrieve the Chart of Accounts from Microsoft Dynamics 365 Business Central
  */
-@RegisterClass(BusinessCentralBaseAction, 'GetBusinessCentralGLAccountsAction')
+@RegisterClass(BaseAction, 'GetBusinessCentralGLAccountsAction')
 export class GetBusinessCentralGLAccountsAction extends BusinessCentralBaseAction {
     
     /**

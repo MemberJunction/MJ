@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { HubSpotBaseAction } from '../hubspot-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to get upcoming tasks by owner in HubSpot
  */
-@RegisterClass(HubSpotBaseAction, 'GetUpcomingTasksAction')
+@RegisterClass(BaseAction, 'GetUpcomingTasksAction')
 export class GetUpcomingTasksAction extends HubSpotBaseAction {
     /**
      * Get upcoming tasks filtered by owner and other criteria

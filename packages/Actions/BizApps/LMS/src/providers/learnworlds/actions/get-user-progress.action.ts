@@ -1,6 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { LearnWorldsBaseAction } from '../learnworlds-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Interface for user progress in a course
@@ -120,7 +121,7 @@ export interface UserLearningProgress {
 /**
  * Action to retrieve detailed progress information for a LearnWorlds user
  */
-@RegisterClass(LearnWorldsBaseAction, 'GetLearnWorldsUserProgressAction')
+@RegisterClass(BaseAction, 'GetLearnWorldsUserProgressAction')
 export class GetLearnWorldsUserProgressAction extends LearnWorldsBaseAction {
     
     /**

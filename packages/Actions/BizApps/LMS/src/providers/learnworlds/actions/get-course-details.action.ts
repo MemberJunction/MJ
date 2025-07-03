@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { LearnWorldsBaseAction } from '../learnworlds-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to retrieve comprehensive course details including curriculum structure
  */
-@RegisterClass(LearnWorldsBaseAction, 'GetLearnWorldsCourseDetailsAction')
+@RegisterClass(BaseAction, 'GetLearnWorldsCourseDetailsAction')
 export class GetLearnWorldsCourseDetailsAction extends LearnWorldsBaseAction {
     /**
      * Get comprehensive details about a specific course including curriculum

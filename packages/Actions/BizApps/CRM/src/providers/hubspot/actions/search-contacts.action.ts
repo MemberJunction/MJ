@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { HubSpotBaseAction } from '../hubspot-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to search contacts in HubSpot by various criteria
  */
-@RegisterClass(HubSpotBaseAction, 'SearchContactsAction')
+@RegisterClass(BaseAction, 'SearchContactsAction')
 export class SearchContactsAction extends HubSpotBaseAction {
     /**
      * Search contacts by criteria

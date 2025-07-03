@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { TikTokBaseAction } from '../tiktok-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to get trending hashtags on TikTok
  */
-@RegisterClass(TikTokBaseAction, 'GetTrendingHashtagsAction')
+@RegisterClass(BaseAction, 'GetTrendingHashtagsAction')
 export class GetTrendingHashtagsAction extends TikTokBaseAction {
     
     /**

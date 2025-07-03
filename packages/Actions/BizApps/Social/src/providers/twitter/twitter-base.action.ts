@@ -4,13 +4,14 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 import { ActionParam } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import FormData from 'form-data';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Base class for all Twitter/X actions.
  * Handles Twitter-specific authentication, API interactions, and rate limiting.
  * Uses Twitter API v2 with OAuth 2.0.
  */
-@RegisterClass(BaseSocialMediaAction, 'TwitterBaseAction')
+@RegisterClass(BaseAction, 'TwitterBaseAction')
 export abstract class TwitterBaseAction extends BaseSocialMediaAction {
     protected get platformName(): string {
         return 'Twitter';

@@ -3,12 +3,13 @@ import { BaseSocialMediaAction } from '../../base/base-social.action';
 import { UserInfo } from '@memberjunction/core';
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { SocialPost, MediaFile } from '../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Base class for all YouTube actions.
  * Handles YouTube Data API v3 authentication and common functionality.
  */
-@RegisterClass(BaseSocialMediaAction, 'YouTubeBaseAction')
+@RegisterClass(BaseAction, 'YouTubeBaseAction')
 export abstract class YouTubeBaseAction extends BaseSocialMediaAction {
     protected override get platformName(): string {
         return 'YouTube';

@@ -412,6 +412,53 @@ export class BaseAgent {
     }
 
     /**
+     * Validates that there are no circular references in the run chain.
+     * Follows the LastRunID chain to ensure it doesn't loop back to the current run.
+     * 
+     * @param {string} lastRunId - The ID of the last run to check
+     * @param {UserInfo} [contextUser] - Optional user context
+     * @private
+     */
+    private async validateRunChain(lastRunId: string, contextUser?: UserInfo): Promise<void> {
+        const visitedRunIds = new Set<string>();
+        visitedRunIds.add(this._agentRun!.ID); // Add current run ID
+        
+        let currentRunId = lastRunId;
+        const maxChainLength = 1000; // Reasonable limit to prevent infinite loops
+        let chainLength = 0;
+        
+        while (currentRunId) {
+            // Check if we've seen this run ID before
+            if (visitedRunIds.has(currentRunId)) {
+                throw new Error(`Circular reference detected in run chain. Run ID '${currentRunId}' creates a loop.`);
+            }
+            
+            // Check chain length
+            if (++chainLength > maxChainLength) {
+                throw new Error(`Run chain exceeds maximum length of ${maxChainLength}. This may indicate a data issue.`);
+            }
+            
+            visitedRunIds.add(currentRunId);
+            
+            // Load the run to check its LastRunID
+            const rv = new RunView();
+            const result = await rv.RunView({
+                EntityName: 'MJ: AI Agent Runs',
+                ExtraFilter: `ID='${currentRunId}'`,
+                ResultType: 'simple'
+            }, contextUser);
+            
+            if (!result.Success || result.Results.length === 0) {
+                // Run not found, chain ends here
+                break;
+            }
+            
+            // Get the LastRunID from this run to continue checking
+            currentRunId = result.Results[0].LastRunID;
+        }
+    }
+
+    /**
      * Validates that the agent is active and ready for execution.
      * 
      * @param {AIAgentEntity} agent - The agent to validate
@@ -1019,6 +1066,39 @@ export class BaseAgent {
      * @param {ExecuteAgentParams} params - The execution parameters
      */
     private async initializeAgentRun(params: ExecuteAgentParams): Promise<void> {
+        // Handle autoPopulateLastRunPayload if requested
+        let modifiedParams = params;
+        if (params.lastRunId && params.autoPopulateLastRunPayload) {
+            // Load the last run to get its FinalPayload
+            const rv = new RunView();
+            const lastRunResult = await rv.RunView({
+                EntityName: 'MJ: AI Agent Runs',
+                ExtraFilter: `ID='${params.lastRunId}'`,
+                ResultType: 'simple' // Avoid recursive loading
+            }, params.contextUser);
+            
+            if (lastRunResult.Success && lastRunResult.Results.length > 0) {
+                const lastRun = lastRunResult.Results[0];
+                if (lastRun.FinalPayload) {
+                    try {
+                        const lastPayload = JSON.parse(lastRun.FinalPayload);
+                        // Only set payload if not explicitly provided
+                        if (!params.payload) {
+                            modifiedParams = {
+                                ...params,
+                                payload: lastPayload
+                            };
+                        }
+                    } catch (e) {
+                        this.logError(`Failed to parse FinalPayload from last run: ${e}`, {
+                            category: 'LastRunPayload',
+                            metadata: { lastRunId: params.lastRunId }
+                        });
+                    }
+                }
+            }
+        }
+        
         // Create AIAgentRunEntity
         this._agentRun = await this._metadata.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', params.contextUser);
         this._agentRun.AgentID = params.agent.ID;
@@ -1028,6 +1108,19 @@ export class BaseAgent {
         
         // Set parent run ID if we're in a sub-agent context
         this._agentRun.ParentRunID = params.parentRun?.ID;
+        
+        // Set LastRunID for run chaining (different from ParentRunID)
+        if (params.lastRunId) {
+            // Check for circular references in the run chain
+            await this.validateRunChain(params.lastRunId, params.contextUser);
+            
+            this._agentRun.LastRunID = params.lastRunId;
+        }
+        
+        // Set StartingPayload if we have a payload (either from params or auto-populated)
+        if (modifiedParams.payload) {
+            this._agentRun.StartingPayload = JSON.stringify(modifiedParams.payload);
+        }
         
         // Save the agent run
         if (!await this._agentRun.Save()) {
@@ -1043,6 +1136,13 @@ export class BaseAgent {
 
         // Reset execution chain and progress tracking
         this._allProgressSteps = [];
+        
+        // Update params with the modified payload if auto-populated
+        if (modifiedParams !== params && modifiedParams.payload !== undefined) {
+            // Directly update the params object's payload property
+            // This ensures the rest of the execution uses the correct payload
+            params.payload = modifiedParams.payload;
+        }
     }
 
     /**
