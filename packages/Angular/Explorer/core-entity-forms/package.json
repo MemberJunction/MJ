@@ -29,6 +29,7 @@
     "@memberjunction/core-entities": "2.63.0",
     "@memberjunction/ai-core-plus": "2.63.0",
     "@memberjunction/ng-base-forms": "2.63.0",
+    "@memberjunction/ng-deep-diff": "2.63.0",
     "@memberjunction/ng-form-toolbar": "2.63.0",
     "@memberjunction/ng-tabstrip": "2.63.0",
     "@memberjunction/ng-container-directives": "2.63.0",
