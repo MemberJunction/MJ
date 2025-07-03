@@ -13,9 +13,11 @@ npm install @memberjunction/global
 The `@memberjunction/global` library serves as the foundation for cross-component communication and coordination in MemberJunction applications. It provides:
 
 - **Global Singleton Management** - Ensures true singleton instances across module boundaries
-- **Class Factory System** - Dynamic class registration and instantiation with inheritance support
+- **Class Factory System** - Dynamic class registration and instantiation with automatic root class detection
 - **Event System** - RxJS-based event bus for component communication
 - **Object Caching** - In-memory object cache for application lifetime
+- **Class Reflection Utilities** - Runtime class hierarchy inspection and analysis
+- **Deep Diff Engine** - Comprehensive object comparison and change tracking
 - **Utility Functions** - Common string manipulation, JSON parsing (including recursive nested JSON parsing), and formatting utilities
 
 ## Core Components
@@ -54,21 +56,27 @@ const replaySubscription = mjGlobal.GetEventListener(true).subscribe(event => {
 
 ### Class Factory System
 
-Register and instantiate classes dynamically with support for inheritance and key-based selection.
+Register and instantiate classes dynamically with automatic root class detection and inheritance chain support.
 
 ```typescript
 import { RegisterClass, MJGlobal } from '@memberjunction/global';
 
-// Define a base class
+// Define a base class hierarchy
 class BaseProcessor {
   process(data: any): void {
     console.log('Base processing');
   }
 }
 
-// Register a subclass using the decorator
-@RegisterClass(BaseProcessor, 'custom', 100)
-class CustomProcessor extends BaseProcessor {
+class SpecialProcessor extends BaseProcessor {
+  process(data: any): void {
+    console.log('Special processing');
+  }
+}
+
+// Register a subclass - automatically registers with root class (BaseProcessor)
+@RegisterClass(SpecialProcessor, 'custom')
+class CustomProcessor extends SpecialProcessor {
   process(data: any): void {
     console.log('Custom processing');
   }
@@ -78,6 +86,15 @@ class CustomProcessor extends BaseProcessor {
 const factory = MJGlobal.Instance.ClassFactory;
 const processor = factory.CreateInstance<BaseProcessor>(BaseProcessor, 'custom');
 processor.process(data); // Uses CustomProcessor
+
+// Key Features:
+// 1. Auto-registers with root class by default (BaseProcessor in this case)
+// 2. Ensures proper priority ordering in inheritance chains
+// 3. Can opt-out with autoRegisterWithRootClass: false
+@RegisterClass(SpecialProcessor, 'special', 0, false, false) // Last param disables auto-root registration
+class DirectRegistration extends SpecialProcessor {
+  // This registers directly to SpecialProcessor, not BaseProcessor
+}
 ```
 
 ### Object Cache
@@ -125,6 +142,117 @@ export class MyService extends BaseSingleton<MyService> {
 // Usage anywhere in your app
 const service = MyService.Instance;
 service.addData('example');
+```
+
+### Class Reflection Utilities
+
+Runtime utilities for inspecting and analyzing class hierarchies.
+
+```typescript
+import { 
+  GetSuperclass, 
+  GetRootClass, 
+  IsSubclassOf,
+  IsRootClass,
+  IsDescendantClassOf,
+  GetClassInheritance,
+  GetFullClassHierarchy,
+  IsClassConstructor,
+  GetClassName
+} from '@memberjunction/global';
+
+// Example class hierarchy
+class Animal {}
+class Mammal extends Animal {}
+class Dog extends Mammal {}
+class GoldenRetriever extends Dog {}
+
+// Get immediate superclass
+const parent = GetSuperclass(GoldenRetriever); // Returns: Dog
+
+// Get root class of hierarchy
+const root = GetRootClass(GoldenRetriever); // Returns: Animal
+
+// Check inheritance relationships
+IsSubclassOf(GoldenRetriever, Animal); // true (checks entire chain)
+IsDescendantClassOf(GoldenRetriever, Animal); // true (alias for IsSubclassOf)
+IsRootClass(Animal); // true
+IsRootClass(Dog); // false
+
+// Get inheritance chain
+const chain = GetClassInheritance(GoldenRetriever);
+// Returns: [
+//   { name: 'Dog', reference: Dog },
+//   { name: 'Mammal', reference: Mammal },
+//   { name: 'Animal', reference: Animal }
+// ]
+
+// Get full hierarchy including the class itself
+const fullChain = GetFullClassHierarchy(GoldenRetriever);
+// Returns: [
+//   { name: 'GoldenRetriever', reference: GoldenRetriever },
+//   { name: 'Dog', reference: Dog },
+//   { name: 'Mammal', reference: Mammal },
+//   { name: 'Animal', reference: Animal }
+// ]
+
+// Utility functions
+IsClassConstructor(Dog); // true
+IsClassConstructor(() => {}); // false
+GetClassName(GoldenRetriever); // "GoldenRetriever"
+```
+
+### Deep Diff Engine
+
+Comprehensive object comparison and change tracking with hierarchical diff visualization.
+
+```typescript
+import { DeepDiffer, DiffChangeType } from '@memberjunction/global';
+
+// Create a differ instance
+const differ = new DeepDiffer({
+  includeUnchanged: false,  // Don't track unchanged values
+  maxDepth: 10,             // Maximum recursion depth
+  maxStringLength: 100      // Truncate long strings
+});
+
+// Compare two objects
+const oldData = {
+  user: { name: 'John', age: 30, role: 'admin' },
+  settings: { theme: 'dark', notifications: true },
+  tags: ['important', 'active']
+};
+
+const newData = {
+  user: { name: 'John', age: 31, role: 'superadmin' },
+  settings: { theme: 'light', notifications: true, language: 'en' },
+  tags: ['important', 'active', 'premium']
+};
+
+// Get the diff
+const result = differ.diff(oldData, newData);
+
+// Access summary
+console.log(result.summary);
+// { added: 2, removed: 0, modified: 3, unchanged: 3, total: 8 }
+
+// Iterate through changes
+result.changes.forEach(change => {
+  console.log(`${change.path}: ${change.type} - ${change.description}`);
+});
+// Output:
+// user.age: Modified - Changed from 30 to 31
+// user.role: Modified - Changed from "admin" to "superadmin"
+// settings.theme: Modified - Changed from "dark" to "light"
+// settings.language: Added - Value: "en"
+// tags[2]: Added - Value: "premium"
+
+// Filter changes by type
+const additions = result.changes.filter(c => c.type === DiffChangeType.Added);
+const modifications = result.changes.filter(c => c.type === DiffChangeType.Modified);
+
+// Update configuration on the fly
+differ.updateConfig({ includeUnchanged: true });
 ```
 
 ## Event Types
@@ -255,6 +383,45 @@ InvokeManualResize(50, myComponent);
 
 ## Advanced Usage
 
+### Class Factory with Root Class Detection
+
+The Class Factory automatically detects and uses root classes for registration, ensuring proper priority ordering in inheritance hierarchies:
+
+```typescript
+class BaseEntity {} // Root class
+
+class UserEntity extends BaseEntity {}
+
+// This automatically registers with BaseEntity (the root)
+@RegisterClass(UserEntity, 'Admin')
+class AdminUserEntity extends UserEntity {}
+
+// Also registers with BaseEntity, gets higher priority
+@RegisterClass(AdminUserEntity, 'SuperAdmin')  
+class SuperAdminEntity extends AdminUserEntity {}
+
+// All of these create SuperAdminEntity (highest priority)
+factory.CreateInstance(BaseEntity, 'SuperAdmin');      // ✓ Works
+factory.CreateInstance(UserEntity, 'SuperAdmin');      // ✓ Works  
+factory.CreateInstance(AdminUserEntity, 'SuperAdmin'); // ✓ Works
+```
+
+### Disabling Auto-Root Registration
+
+Sometimes you want to register at a specific level in the hierarchy:
+
+```typescript
+// Register directly to UserEntity, not BaseEntity
+@RegisterClass(UserEntity, 'Special', 0, false, false) // Last param = false
+class SpecialUserEntity extends UserEntity {
+  // This only matches when creating from UserEntity, not BaseEntity
+}
+
+// Direct registration queries
+factory.CreateInstance(UserEntity, 'Special');   // ✓ Returns SpecialUserEntity
+factory.CreateInstance(BaseEntity, 'Special');   // ✗ Returns BaseEntity instance
+```
+
 ### Class Factory with Parameters
 
 ```typescript
@@ -287,6 +454,23 @@ class AdvancedDataHandler extends BaseHandler {}
 
 // Will create AdvancedDataHandler instance
 const handler = factory.CreateInstance<BaseHandler>(BaseHandler, 'data');
+```
+
+### Inspecting Registrations
+
+```typescript
+// Get all registrations for a base class
+const registrations = factory.GetAllRegistrations(BaseEntity, 'Users');
+
+// Get registrations by root class
+const rootRegistrations = factory.GetRegistrationsByRootClass(BaseEntity);
+
+// Each registration contains:
+// - BaseClass: The class it's registered to (usually root)
+// - SubClass: The actual implementation class
+// - RootClass: The detected root of the hierarchy
+// - Key: The registration key
+// - Priority: The priority number
 ```
 
 ### Global Properties
