@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 import { DeepDiffer, DeepDiffResult, DiffChangeType, DiffChange } from '@memberjunction/global';
 
 export interface DeepDiffItem extends DiffChange {
@@ -30,7 +30,7 @@ export class DeepDiffComponent implements OnInit, OnChanges {
   
   private differ: DeepDiffer;
 
-  constructor() {
+  constructor(private cdr: ChangeDetectorRef) {
     this.differ = new DeepDiffer({
       includeUnchanged: false,
       maxDepth: this.maxDepth,
@@ -93,7 +93,7 @@ export class DeepDiffComponent implements OnInit, OnChanges {
       const item: DeepDiffItem = {
         ...change,
         level,
-        isExpanded: false,
+        isExpanded: level === 0,  // Expand only root level items by default
         children: [],
         parentPath
       };
@@ -112,6 +112,7 @@ export class DeepDiffComponent implements OnInit, OnChanges {
 
   toggleItem(item: DeepDiffItem): void {
     item.isExpanded = !item.isExpanded;
+    this.cdr.markForCheck();
   }
 
   expandAllItems(): void {
@@ -124,6 +125,7 @@ export class DeepDiffComponent implements OnInit, OnChanges {
       }
     };
     expand(this.diffItems);
+    this.cdr.markForCheck();
   }
 
   collapseAllItems(): void {
@@ -136,6 +138,7 @@ export class DeepDiffComponent implements OnInit, OnChanges {
       }
     };
     collapse(this.diffItems);
+    this.cdr.markForCheck();
   }
 
   get filteredItems(): DeepDiffItem[] {
@@ -163,7 +166,7 @@ export class DeepDiffComponent implements OnInit, OnChanges {
           acc.push({
             ...item,
             children: childMatches,
-            isExpanded: childMatches.length > 0 ? true : item.isExpanded
+            isExpanded: item.isExpanded  // Preserve the original expanded state
           });
         }
         return acc;
