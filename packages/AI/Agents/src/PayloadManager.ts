@@ -32,9 +32,9 @@
 
 import { LogError, LogStatus } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
+import { DeepDiffer, DeepDiffResult } from '@memberjunction/global';
 import * as _ from 'lodash';
 import { PayloadChangeAnalyzer, PayloadAnalysisResult, PayloadWarning } from './PayloadChangeAnalyzer';
-import { PayloadDiffer, PayloadDiff } from './PayloadDiff';
 
 /**
  * Result of applying a payload change request with enhanced tracking
@@ -53,7 +53,7 @@ export interface PayloadManagerResult<P = any> {
     /** Detailed analysis of suspicious changes */
     analysis?: PayloadAnalysisResult;
     /** Diff between original and result payload */
-    diff?: PayloadDiff;
+    diff?: DeepDiffResult;
     /** Whether feedback is required from the agent */
     requiresFeedback?: boolean;
     /** Timestamp of the operation */
@@ -603,9 +603,9 @@ export class PayloadManager {
         }
         
         // Generate diff if requested
-        let diff: PayloadDiff | undefined;
+        let diff: DeepDiffResult | undefined;
         if (options?.generateDiff !== false) { // Default to true
-            const differ = new PayloadDiffer();
+            const differ = new DeepDiffer();
             diff = differ.diff(originalPayload, result);
         }
         

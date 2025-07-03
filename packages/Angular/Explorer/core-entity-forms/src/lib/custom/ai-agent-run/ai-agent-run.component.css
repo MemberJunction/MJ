@@ -826,3 +826,21 @@
     margin-left: 10px;
   }
 }
+
+/* Entity Link Styles */
+.entity-link {
+  color: #2196f3;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  border-bottom: 1px solid transparent;
+  display: inline-block;
+}
+
+.entity-link:hover {
+  color: #1976d2;
+  border-bottom-color: #1976d2;
+}
+
+.entity-link:active {
+  color: #0d47a1;
+}

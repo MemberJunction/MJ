@@ -10,6 +10,7 @@ export * from './interface'
 export * from './util'
 export * from './ObjectCache'
 export * from './BaseSingleton'
+export * from './DeepDiff'
 
 /**
  * Global class used for coordinating events, creating class instances, and managing components across MemberJunction

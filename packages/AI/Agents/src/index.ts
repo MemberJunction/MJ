@@ -16,5 +16,4 @@ export * from './agent-types';
 export * from './AgentRunner';
 export * from './PayloadManager';
 export * from './PayloadChangeAnalyzer';
-export * from './PayloadDiff';
 export * from './PayloadFeedbackManager';

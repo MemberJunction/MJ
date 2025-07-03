@@ -107,6 +107,12 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     SharedService.Instance.OpenEntityRecord("Action Execution Logs", CompositeKey.FromID(logId));
   }
   
+  openEntityRecord(entityName: string, recordId: string | null) {
+    if (recordId) {
+      SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromID(recordId));
+    }
+  }
+  
   navigateToEntityRecord(event: { entityName: string; recordId: string }) {
     SharedService.Instance.OpenEntityRecord(event.entityName, CompositeKey.FromID(event.recordId));
   }
@@ -192,6 +198,35 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   }
   
   /**
+   * Get the Starting Payload field with recursive JSON parsing applied
+   */
+  get parsedStartingPayload(): string {
+    if (!this.record?.StartingPayload) return '';
+    
+    try {
+      // First, check if StartingPayload is a JSON string that needs to be parsed
+      let payloadData = this.record.StartingPayload;
+      try {
+        // If StartingPayload is a JSON string, parse it first
+        payloadData = JSON.parse(this.record.StartingPayload);
+      } catch {
+        // If it's not valid JSON, use it as-is
+        payloadData = this.record.StartingPayload;
+      }
+      
+      const parseOptions: ParseJSONOptions = {
+        extractInlineJson: true,
+        maxDepth: 100,
+        debug: false
+      };
+      const parsed = ParseJSONRecursive(payloadData, parseOptions);
+      return JSON.stringify(parsed, null, 2);
+    } catch (e) {
+      return this.record.StartingPayload;
+    }
+  }
+
+  /**
    * Get the Final Payload (state) field with recursive JSON parsing applied
    */
   get parsedFinalPayload(): string {
@@ -218,6 +253,69 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     } catch (e) {
       return this.record.FinalPayload;
     }
+  }
+
+  /**
+   * Get parsed Starting Payload as an object for deep diff
+   */
+  get startingPayloadObject(): any {
+    if (!this.record?.StartingPayload) return null;
+    
+    try {
+      // First, check if StartingPayload is a JSON string that needs to be parsed
+      let payloadData = this.record.StartingPayload;
+      try {
+        // If StartingPayload is a JSON string, parse it first
+        payloadData = JSON.parse(this.record.StartingPayload);
+      } catch {
+        // If it's not valid JSON, use it as-is
+        payloadData = this.record.StartingPayload;
+      }
+      
+      const parseOptions: ParseJSONOptions = {
+        extractInlineJson: true,
+        maxDepth: 100,
+        debug: false
+      };
+      return ParseJSONRecursive(payloadData, parseOptions);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * Get parsed Final Payload as an object for deep diff
+   */
+  get finalPayloadObject(): any {
+    if (!this.record?.FinalPayload) return null;
+    
+    try {
+      // First, check if FinalPayload is a JSON string that needs to be parsed
+      let payloadData = this.record.FinalPayload;
+      try {
+        // If FinalPayload is a JSON string, parse it first
+        payloadData = JSON.parse(this.record.FinalPayload);
+      } catch {
+        // If it's not valid JSON, use it as-is
+        payloadData = this.record.FinalPayload;
+      }
+      
+      const parseOptions: ParseJSONOptions = {
+        extractInlineJson: true,
+        maxDepth: 100,
+        debug: false
+      };
+      return ParseJSONRecursive(payloadData, parseOptions);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * Check if we have both payloads to show diff
+   */
+  get showPayloadDiff(): boolean {
+    return !!(this.record?.StartingPayload && this.record?.FinalPayload);
   }
 }
 
