@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, IRunViewProvider, RunView, TransactionGroupBase } from "@memberjunction/core";
+import { BaseEntity, BaseEntityResult, CompositeKey, EntitySaveOptions, IMetadataProvider, IRunViewProvider, LogError, LogErrorEx, RunView, TransactionGroupBase } from "@memberjunction/core";
 import { compareStringsByLine, RegisterClass, uuidv4 } from "@memberjunction/global";
 import { TemplateCategoryEntity, TemplateContentEntity, TemplateContentTypeEntity, TemplateEntity, AIPromptEntityExtended } from "@memberjunction/core-entities";
 
@@ -117,20 +117,45 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
         const md = this.ProviderToUse as any as IMetadataProvider;
 
         // now do the work of creating or updating the Template and Template Contents
+        let success = true;
         if (this.TemplateID === null && this.TemplateText?.trim().length > 0) {
             const template = await this.CreateLinkedTemplateAndTemplateContents(md);
             if (template) {
                 this.TemplateID = template.ID; // link the Template to this AI Prompt
             }
+            else {
+                success = false; // if we failed to create the linked Template, we should not save the AI Prompt
+                // we need to push an error to the Results of the BaseEntity
+                const result = new BaseEntityResult();
+                result.Success = false;
+                result.Message = "Failed to create linked Template for the AI Prompt. Please check the logs for more details.";
+                this.ResultHistory.push(result);
+            }
         }
         else if (this.TemplateID && this.TemplateText?.trim().length > 0 && this.TemplateTextDirty) {
             // we have a linked Template, so update the Template Contents associated with it
-            await this.UpdateLinkedTemplateContents(md);
+            if (! await this.UpdateLinkedTemplateContents(md)){
+                success = false; // if we failed to update the linked Template Contents, we should not save the AI Prompt
+                // we need to push an error to the Results of the BaseEntity
+                const result = new BaseEntityResult();
+                result.Success = false;
+                result.Message = "Failed to update linked Template Contents for the AI Prompt. Please check the logs for more details.";
+                this.ResultHistory.push(result);
+            }
         }
-        // now save the AI Prompt itself
-        if (await super.Save(options) ) {
-            this._originalTemplateText = this.TemplateText; // store the original text for comparison later
-            return true;
+        if (success) {
+            // now save the AI Prompt itself
+            if (await super.Save(options) ) {
+                this._originalTemplateText = this.TemplateText; // store the original text for comparison later
+                return true;
+            }
+            else {
+                return false;
+            }
+        }
+        else {
+            // if we failed to create or update the linked Template or Template Contents, we should not save the AI Prompt
+            return false;
         }
     }
 
@@ -139,47 +164,57 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
      * be overridden by subclasses to provide custom logic for updating the Template Contents.
      * @param md 
      * @param tg 
-     * @returns 
+     * @returns true if the update was successful, false otherwise.
      */
-    protected async UpdateLinkedTemplateContents(md: IMetadataProvider, tg?: TransactionGroupBase): Promise<void> {
-        // we have a linked Template, so update the Template Contents associated with it
-        if (!this.TemplateID) {
-            throw new Error("Cannot update linked Template Contents because TemplateID is null.");
+    protected async UpdateLinkedTemplateContents(md: IMetadataProvider, tg?: TransactionGroupBase): Promise<boolean> {
+        try {
+            // we have a linked Template, so update the Template Contents associated with it        
+            if (!this.TemplateID) {
+                throw new Error("Cannot update linked Template Contents because TemplateID is null.");
+            }
+            const rv = new RunView(this.ProviderToUse as any as IRunViewProvider);
+            const result = await rv.RunView<TemplateContentEntity>({
+                EntityName: "Template Contents",
+                ExtraFilter: `TemplateID='${this.TemplateID}'`,
+                OrderBy: "__mj_CreatedAt ASC", // first one
+                ResultType: 'entity_object',
+                MaxRows: 1 // should only be one row
+            }, this.ContextCurrentUser);
+            let tc: TemplateContentEntity | undefined = undefined;
+            if (result && result.Success && result.Results.length > 0) {
+                // we found an existing Template Content, so update it
+                tc = result.Results[0];
+            }
+            else {
+                tc = await md.GetEntityObject<TemplateContentEntity>("Template Contents", this.ContextCurrentUser);
+                tc.NewRecord();
+                tc.TemplateID = this.TemplateID; // link to the existing Template
+                tc.TypeID = await this.getTemplateContentTypeID(); // use the Template Content Type ID for AI Prompts
+                tc.Priority = 1; // default priority
+                tc.IsActive = true; // set it to active by default
+            }
+            // for both new and existing Template Contents, we set the Template Text
+            tc.TemplateText = this.TemplateText; // set the Template Text
+            if (tg) {
+                tc.TransactionGroup = tg; // link to the transaction group if provided
+            }
+            // now save the Template Contents
+            if (await tc.Save()) {
+                // if we saved successfully, we can return
+                return true;
+            }
+            else {
+                // if we failed to save, throw an error
+                throw new Error("Failed to update linked Template Contents for the AI Prompt: " + tc.LatestResult.Message);
+            }
         }
-        const rv = new RunView(this.ProviderToUse as any as IRunViewProvider);
-        const result = await rv.RunView<TemplateContentEntity>({
-            EntityName: "Template Contents",
-            ExtraFilter: `TemplateID='${this.TemplateID}'`,
-            OrderBy: "__mj_CreatedAt ASC", // first one
-            ResultType: 'entity_object',
-            MaxRows: 1 // should only be one row
-        }, this.ContextCurrentUser);
-        let tc: TemplateContentEntity | undefined = undefined;
-        if (result && result.Success && result.Results.length > 0) {
-            // we found an existing Template Content, so update it
-            tc = result.Results[0];
-        }
-        else {
-            tc = await md.GetEntityObject<TemplateContentEntity>("Template Contents", this.ContextCurrentUser);
-            tc.NewRecord();
-            tc.TemplateID = this.TemplateID; // link to the existing Template
-            tc.TypeID = await this.getTemplateContentTypeID(); // use the Template Content Type ID for AI Prompts
-            tc.Priority = 1; // default priority
-            tc.IsActive = true; // set it to active by default
-        }
-        // for both new and existing Template Contents, we set the Template Text
-        tc.TemplateText = this.TemplateText; // set the Template Text
-        if (tg) {
-            tc.TransactionGroup = tg; // link to the transaction group if provided
-        }
-        // now save the Template Contents
-        if (await tc.Save()) {
-            // if we saved successfully, we can return
-            return;
-        }
-        else {
-            // if we failed to save, throw an error
-            throw new Error("Failed to update linked Template Contents for the AI Prompt.");
+        catch (e) {
+            LogErrorEx({
+                message: e.message,
+                includeStack: true,
+                additionalArgs: e,
+            });
+            return false;
         }
     }
 
@@ -190,34 +225,45 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
      * @returns {Promise<TemplateEntity | null>} The created Template entity record or null if not created.
      */
     protected async CreateLinkedTemplateAndTemplateContents(md: IMetadataProvider): Promise<TemplateEntity | null> {
-        // we have no linked template, but we have template text, so create a new template and template contents
-        const t = await md.GetEntityObject<TemplateEntity>("Templates", this.ContextCurrentUser);
-        t.NewRecord();
-        t.ID = uuidv4(); // generate a new ID - we want to do this explicitly so that we can control the ID that goes into the SQL script so this can be part of a migration file
-        t.Name = this.Name; // propagate the name
-        t.Description = "Template for AI Prompt: " + this.Name;
-        t.UserID = this.ContextCurrentUser.ID;
-        t.CategoryID = await this.getOrCreateRootTemplateCategoryID();
-        t.IsActive = true;
-        if (await t.Save()) {
-            // now create the template contents
-            const tc = await md.GetEntityObject<TemplateContentEntity>("Template Contents", this.ContextCurrentUser);
-            tc.NewRecord();
-            tc.ID = uuidv4(); // generate a new ID for the Template Content - do here as well for same reason as above with Template.ID
-            tc.TemplateID = t.ID;
-            tc.TypeID = await this.getTemplateContentTypeID();
-            tc.TemplateText = this.TemplateText;
-            tc.Priority = 1; // default priority
-            tc.IsActive = true;
-            if (await tc.Save()) {
-                return t;
-            } 
+        try {
+            // we have no linked template, but we have template text, so create a new template and template contents
+            const t = await md.GetEntityObject<TemplateEntity>("Templates", this.ContextCurrentUser);
+            t.NewRecord();
+            t.ID = uuidv4(); // generate a new ID - we want to do this explicitly so that we can control the ID that goes into the SQL script so this can be part of a migration file
+            t.Name = this.Name; // propagate the name
+            t.Description = "Template for AI Prompt: " + this.Name;
+            t.UserID = this.ContextCurrentUser.ID;
+            t.CategoryID = await this.getOrCreateRootTemplateCategoryID();
+            t.IsActive = true;
+            if (await t.Save()) {
+                // now create the template contents
+                const tc = await md.GetEntityObject<TemplateContentEntity>("Template Contents", this.ContextCurrentUser);
+                tc.NewRecord();
+                tc.ID = uuidv4(); // generate a new ID for the Template Content - do here as well for same reason as above with Template.ID
+                tc.TemplateID = t.ID;
+                tc.TypeID = await this.getTemplateContentTypeID();
+                tc.TemplateText = this.TemplateText;
+                tc.Priority = 1; // default priority
+                tc.IsActive = true;
+                if (await tc.Save()) {
+                    return t;
+                } 
+                else {
+                    throw new Error("Failed to save Template Contents for the new Template.");
+                }
+            }
             else {
-                throw new Error("Failed to save Template Contents for the new Template.");
+                throw new Error("Failed to save new Template for the AI Prompt.");
             }
         }
-        else {
-            throw new Error("Failed to save new Template for the AI Prompt.");
+        catch (e) {
+            // log the error and return null
+            LogErrorEx({
+                message: e.message,
+                includeStack: true,
+                additionalArgs: e,
+            });
+            return null; // return null if we failed to create the linked Template
         }
     }
 
