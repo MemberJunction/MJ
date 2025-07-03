@@ -1,5 +1,27 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.63.1
+
+### Patch Changes
+
+- 2f18672: Added dep for @memberjunction/ng-deep-diff to core-entity-forms
+- Updated dependencies [59e2c4b]
+  - @memberjunction/global@2.63.1
+  - @memberjunction/ai-engine-base@2.63.1
+  - @memberjunction/ai-core-plus@2.63.1
+  - @memberjunction/ng-base-forms@2.63.1
+  - @memberjunction/ng-form-toolbar@2.63.1
+  - @memberjunction/ng-code-editor@2.63.1
+  - @memberjunction/ng-container-directives@2.63.1
+  - @memberjunction/ng-deep-diff@2.63.1
+  - @memberjunction/ng-join-grid@2.63.1
+  - @memberjunction/ng-timeline@2.63.1
+  - @memberjunction/core@2.63.1
+  - @memberjunction/core-entities@2.63.1
+  - @memberjunction/ng-ai-test-harness@2.63.1
+  - @memberjunction/ng-action-gallery@2.63.1
+  - @memberjunction/ng-tabstrip@2.63.1
+
 ## 2.63.0
 
 ### Minor Changes

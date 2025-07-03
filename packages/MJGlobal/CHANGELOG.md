@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/global
 
+## 2.63.1
+
+### Patch Changes
+
+- 59e2c4b: Improved RegisterClass/ClassFactory and added a bunch of utility functions for walking the inheritance hierarchy
+
 ## 2.63.0
 
 ## 2.62.0
