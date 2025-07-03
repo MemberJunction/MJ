@@ -3,13 +3,14 @@ import { BaseSocialMediaAction, MediaFile, SocialPost, SearchParams, SocialAnaly
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { ActionParam } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Base class for all LinkedIn actions.
  * Handles LinkedIn-specific authentication, API interactions, and rate limiting.
  * Uses LinkedIn Marketing Developer Platform API v2.
  */
-@RegisterClass(BaseSocialMediaAction, 'LinkedInBaseAction')
+@RegisterClass(BaseAction, 'LinkedInBaseAction')
 export abstract class LinkedInBaseAction extends BaseSocialMediaAction {
     protected get platformName(): string {
         return 'LinkedIn';

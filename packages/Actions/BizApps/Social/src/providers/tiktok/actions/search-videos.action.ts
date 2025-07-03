@@ -2,12 +2,13 @@ import { RegisterClass } from '@memberjunction/global';
 import { TikTokBaseAction, TikTokVideo } from '../tiktok-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { SocialPost, SearchParams } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to search for videos on TikTok
  * Note: TikTok API only allows searching within authenticated user's own videos
  */
-@RegisterClass(TikTokBaseAction, 'SearchVideosAction')
+@RegisterClass(BaseAction, 'SearchVideosAction')
 export class SearchVideosAction extends TikTokBaseAction {
     
     /**

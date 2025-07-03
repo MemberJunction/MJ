@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BufferBaseAction } from '../buffer-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to reorder posts in a Buffer profile's queue
  */
-@RegisterClass(BufferBaseAction, 'BufferReorderQueueAction')
+@RegisterClass(BaseAction, 'BufferReorderQueueAction')
 export class BufferReorderQueueAction extends BufferBaseAction {
     /**
      * Reorder posts in the queue

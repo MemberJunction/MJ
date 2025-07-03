@@ -1,0 +1,40 @@
+@if (visible) {
+  <div class="dialog-overlay" (click)="closeDialog()">
+    <div 
+      class="dialog-container" 
+      [style.width]="dialogWidth" 
+      [style.height]="dialogHeight"
+      (click)="$event.stopPropagation()">
+      
+      <!-- Dialog Header -->
+      <div class="dialog-header">
+        <h2 class="dialog-title">
+          <i class="fa-solid fa-code-branch"></i>
+          {{ title }}
+        </h2>
+        <div class="dialog-actions">
+          <button class="dialog-btn" (click)="toggleMaximize()" [title]="isMaximized ? 'Restore' : 'Maximize'">
+            <i class="fa-solid" [class.fa-window-maximize]="!isMaximized" [class.fa-window-restore]="isMaximized"></i>
+          </button>
+          <button class="dialog-btn close-btn" (click)="closeDialog()" title="Close">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Dialog Content -->
+      <div class="dialog-content">
+        <mj-deep-diff
+          [oldValue]="oldValue"
+          [newValue]="newValue"
+          [title]="''"
+          [showSummary]="showSummary"
+          [showUnchanged]="showUnchanged"
+          [expandAll]="expandAll"
+          [maxDepth]="maxDepth"
+          [maxStringLength]="maxStringLength">
+        </mj-deep-diff>
+      </div>
+    </div>
+  </div>
+}

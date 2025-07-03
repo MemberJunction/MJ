@@ -4,12 +4,13 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 import { SocialMediaErrorCode } from '../../../base/base-social.action';
 import { LogStatus, LogError } from '@memberjunction/core';
 import axios from 'axios';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Retrieves comprehensive analytics and insights for a Facebook page.
  * Provides metrics like page views, likes, engagement, demographics, and more.
  */
-@RegisterClass(FacebookBaseAction, 'FacebookGetPageInsightsAction')
+@RegisterClass(BaseAction, 'FacebookGetPageInsightsAction')
 export class FacebookGetPageInsightsAction extends FacebookBaseAction {
     /**
      * Get action description

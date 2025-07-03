@@ -1,6 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseRecordMutationAction } from "./base-record-mutation.action";
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Generic action for deleting entity records from the database.
@@ -43,7 +44,7 @@ import { BaseRecordMutationAction } from "./base-record-mutation.action";
  * });
  * ```
  */
-@RegisterClass(BaseRecordMutationAction, "DeleteRecordAction")
+@RegisterClass(BaseAction, "DeleteRecordAction")
 export class DeleteRecordAction extends BaseRecordMutationAction {
     /**
      * Deletes a record for the specified entity type using its primary key.

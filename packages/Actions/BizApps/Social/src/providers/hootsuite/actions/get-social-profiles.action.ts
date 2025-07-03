@@ -2,10 +2,11 @@ import { RegisterClass } from '@memberjunction/global';
 import { HootSuiteBaseAction, HootSuiteProfile } from '../hootsuite-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
+import { BaseAction } from '@memberjunction/actions';
 /**
  * Action to retrieve social profiles connected to HootSuite account
  */
-@RegisterClass(HootSuiteBaseAction, 'HootSuiteGetSocialProfilesAction')
+@RegisterClass(BaseAction, 'HootSuiteGetSocialProfilesAction')
 export class HootSuiteGetSocialProfilesAction extends HootSuiteBaseAction {
     /**
      * Get social profiles from HootSuite

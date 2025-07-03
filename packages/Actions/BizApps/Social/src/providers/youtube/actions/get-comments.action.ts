@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { YouTubeBaseAction } from '../youtube-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to get comments from YouTube videos
  */
-@RegisterClass(YouTubeBaseAction, 'YouTubeGetCommentsAction')
+@RegisterClass(BaseAction, 'YouTubeGetCommentsAction')
 export class YouTubeGetCommentsAction extends YouTubeBaseAction {
     /**
      * Get comments from YouTube videos

@@ -3,6 +3,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { BaseFileHandlerAction } from "../utilities/base-file-handler";
 import * as ExcelJS from "exceljs";
 import { JSONParamHelper } from "../utilities/json-param-helper";
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action that creates Excel files from JSON data
@@ -46,7 +47,7 @@ import { JSONParamHelper } from "../utilities/json-param-helper";
  * });
  * ```
  */
-@RegisterClass(BaseFileHandlerAction, "Excel Writer")
+@RegisterClass(BaseAction, "Excel Writer")
 export class ExcelWriterAction extends BaseFileHandlerAction {
     
     /**

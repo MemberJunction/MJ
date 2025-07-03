@@ -3,12 +3,13 @@ import { FacebookBaseAction, GetPagePostsParams } from '../facebook-base.action'
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { SocialMediaErrorCode } from '../../../base/base-social.action';
 import { LogStatus, LogError } from '@memberjunction/core';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Retrieves posts from a Facebook page with optional date filtering.
  * Includes post content, media, and basic engagement metrics.
  */
-@RegisterClass(FacebookBaseAction, 'FacebookGetPagePostsAction')
+@RegisterClass(BaseAction, 'FacebookGetPagePostsAction')
 export class FacebookGetPagePostsAction extends FacebookBaseAction {
     /**
      * Get action description

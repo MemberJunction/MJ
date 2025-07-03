@@ -312,6 +312,23 @@ export type ExecuteAgentParams<TContext = any, P = any> = {
      * Can also be controlled via MJ_VERBOSE environment variable.
      */
     verbose?: boolean;
+    /**
+     * Optional ID of the last run in a run chain.
+     * When provided, this links the new run to a previous run, allowing
+     * agents to maintain context across multiple interactions.
+     * Different from parentRun which is for sub-agent hierarchy.
+     */
+    lastRunId?: string;
+    /**
+     * Optional flag to automatically populate the payload from the last run.
+     * When true and lastRunId is provided, the framework will:
+     * 1. Load the last run's FinalPayload
+     * 2. Set it as the StartingPayload for the new run
+     * 3. Use it as the initial payload if no payload is explicitly provided
+     * This helps maintain state across run chains and reduces
+     * bandwidth by avoiding passing large payloads back and forth.
+     */
+    autoPopulateLastRunPayload?: boolean;
 }
 
 /**

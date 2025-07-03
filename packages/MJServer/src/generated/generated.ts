@@ -1311,6 +1311,13 @@ export class AIAgentRun_ {
     @Field({nullable: true, description: `Final message from the agent to the end user at the end of a run`}) 
     Message?: string;
         
+    @Field({nullable: true, description: `Links to the previous run in a chain. Different from ParentRunID which is for sub-agent hierarchy.`}) 
+    @MaxLength(16)
+    LastRunID?: string;
+        
+    @Field({nullable: true, description: `The initial payload provided at the start of this run. Can be populated from the FinalPayload of the LastRun.`}) 
+    StartingPayload?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -1416,6 +1423,12 @@ export class CreateAIAgentRunInput {
 
     @Field({ nullable: true })
     Message: string | null;
+
+    @Field({ nullable: true })
+    LastRunID: string | null;
+
+    @Field({ nullable: true })
+    StartingPayload: string | null;
 }
     
 
@@ -1501,6 +1514,12 @@ export class UpdateAIAgentRunInput {
 
     @Field({ nullable: true })
     Message?: string | null;
+
+    @Field({ nullable: true })
+    LastRunID?: string | null;
+
+    @Field({ nullable: true })
+    StartingPayload?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

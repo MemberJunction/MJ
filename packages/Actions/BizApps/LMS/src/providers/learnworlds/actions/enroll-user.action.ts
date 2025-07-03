@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { LearnWorldsBaseAction } from '../learnworlds-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to enroll a user in a LearnWorlds course
  */
-@RegisterClass(LearnWorldsBaseAction, 'EnrollUserAction')
+@RegisterClass(BaseAction, 'EnrollUserAction')
 export class EnrollUserAction extends LearnWorldsBaseAction {
     /**
      * Enroll a user in a course

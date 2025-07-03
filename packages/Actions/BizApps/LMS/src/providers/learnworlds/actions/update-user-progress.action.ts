@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { LearnWorldsBaseAction } from '../learnworlds-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to update a user's course progress in LearnWorlds
  */
-@RegisterClass(LearnWorldsBaseAction, 'UpdateUserProgressAction')
+@RegisterClass(BaseAction, 'UpdateUserProgressAction')
 export class UpdateUserProgressAction extends LearnWorldsBaseAction {
     /**
      * Update user progress for a course or lesson

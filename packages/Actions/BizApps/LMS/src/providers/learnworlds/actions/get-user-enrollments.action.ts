@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { LearnWorldsBaseAction } from '../learnworlds-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to retrieve all course enrollments for a specific user
  */
-@RegisterClass(LearnWorldsBaseAction, 'GetUserEnrollmentsAction')
+@RegisterClass(BaseAction, 'GetUserEnrollmentsAction')
 export class GetUserEnrollmentsAction extends LearnWorldsBaseAction {
     /**
      * Get all enrollments for a user

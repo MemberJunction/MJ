@@ -2,12 +2,13 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseAccountingAction } from '../../base/base-accounting-action';
 import { UserInfo } from '@memberjunction/core';
 import { CompanyIntegrationEntity } from '@memberjunction/core-entities';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Base class for all Microsoft Dynamics 365 Business Central actions.
  * Handles BC-specific authentication and API interaction patterns.
  */
-@RegisterClass(BaseAccountingAction, 'BusinessCentralBaseAction')
+@RegisterClass(BaseAction, 'BusinessCentralBaseAction')
 export abstract class BusinessCentralBaseAction extends BaseAccountingAction {
     protected accountingProvider = 'Business Central';
     protected integrationName = 'Microsoft Dynamics 365 Business Central';
