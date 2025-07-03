@@ -124,18 +124,60 @@
                   </button>
                 </div>
                 
-                <div class="json-viewer">
-                  <div class="json-toolbar">
-                    <button class="btn-icon" title="Copy JSON" (click)="copyToClipboard(getSelectedItemJson())">
-                      <i class="fas fa-copy"></i>
+                <!-- Tab Navigation - Only show when we have both options -->
+                @if (showStepPayloadDiff) {
+                  <div class="detail-pane-tabs">
+                    <button 
+                      class="detail-tab" 
+                      [class.active]="detailPaneTab === 'diff'"
+                      (click)="detailPaneTab = 'diff'">
+                      <i class="fa-solid fa-code-branch"></i>
+                      Payload Changes
+                    </button>
+                    <button 
+                      class="detail-tab" 
+                      [class.active]="detailPaneTab === 'json'"
+                      (click)="detailPaneTab = 'json'">
+                      <i class="fa-solid fa-code"></i>
+                      Full JSON
                     </button>
                   </div>
-                  <mj-code-editor
-                    [(ngModel)]="selectedItemJsonString"
-                    [language]="'json'"
-                    [readonly]="true"
-                    style="height: calc(100% - 160px); width: 100%;">
-                  </mj-code-editor>
+                }
+                
+                <!-- Tab Content -->
+                <div class="detail-pane-content" [class.with-tabs]="showStepPayloadDiff">
+                  <!-- Payload Diff Tab -->
+                  @if (detailPaneTab === 'diff' && showStepPayloadDiff) {
+                    <div class="step-payload-diff">
+                      <mj-deep-diff
+                        [oldValue]="stepPayloadAtStartObject"
+                        [newValue]="stepPayloadAtEndObject"
+                        [title]="''"
+                        [showSummary]="true"
+                        [showUnchanged]="false"
+                        [expandAll]="false"
+                        [maxDepth]="8"
+                        [maxStringLength]="150">
+                      </mj-deep-diff>
+                    </div>
+                  }
+                  
+                  <!-- Full JSON Tab -->
+                  @if (detailPaneTab === 'json' || !showStepPayloadDiff) {
+                    <div class="json-viewer">
+                      <div class="json-toolbar">
+                        <button class="btn-icon" title="Copy JSON" (click)="copyToClipboard(getSelectedItemJson())">
+                          <i class="fas fa-copy"></i>
+                        </button>
+                      </div>
+                      <mj-code-editor
+                        [(ngModel)]="selectedItemJsonString"
+                        [language]="'json'"
+                        [readonly]="true"
+                        style="height: calc(100% - 40px); width: 100%;">
+                      </mj-code-editor>
+                    </div>
+                  }
                 </div>
               </div>
             </div>

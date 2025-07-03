@@ -29,6 +29,7 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   loading = false;
   error: string | null = null;
   selectedItemJsonString = '{}';
+  detailPaneTab: 'json' | 'diff' = 'diff';
   
   agent: AIAgentEntity | null = null;
 
@@ -84,6 +85,8 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     this.selectedTimelineItem = item;
     this.selectedItemJsonString = this.getSelectedItemJson();
     this.jsonPanelExpanded = true;
+    // Default to diff tab if step has payload diff, otherwise json tab
+    this.detailPaneTab = this.showStepPayloadDiff ? 'diff' : 'json';
     this.cdr.detectChanges();
   }
   
@@ -316,6 +319,88 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
    */
   get showPayloadDiff(): boolean {
     return !!(this.record?.StartingPayload && this.record?.FinalPayload);
+  }
+
+  /**
+   * Check if selected timeline item is a step with payload changes
+   */
+  get showStepPayloadDiff(): boolean {
+    if (!this.selectedTimelineItem || this.selectedTimelineItem.type !== 'step') {
+      return false;
+    }
+    
+    const stepData = this.selectedTimelineItem.data;
+    if (stepData && stepData.PayloadAtStart?.trim().length > 0 
+                 && stepData.PayloadAtEnd?.trim().length > 0) {
+      return !!(stepData.PayloadAtStart && stepData.PayloadAtEnd);
+    }
+    else {
+      return false;
+    }
+  }
+
+  /**
+   * Get parsed PayloadAtStart for the selected step
+   */
+  get stepPayloadAtStartObject(): any {
+    if (!this.selectedTimelineItem || this.selectedTimelineItem.type !== 'step') {
+      return null;
+    }
+    
+    const stepData = this.selectedTimelineItem.data;
+    if (!stepData || !stepData.PayloadAtStart) {
+      return null;
+    }
+    
+    try {
+      let payloadData = stepData.PayloadAtStart;
+      try {
+        payloadData = JSON.parse(stepData.PayloadAtStart);
+      } catch {
+        payloadData = stepData.PayloadAtStart;
+      }
+      
+      const parseOptions: ParseJSONOptions = {
+        extractInlineJson: true,
+        maxDepth: 100,
+        debug: false
+      };
+      return ParseJSONRecursive(payloadData, parseOptions);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * Get parsed PayloadAtEnd for the selected step
+   */
+  get stepPayloadAtEndObject(): any {
+    if (!this.selectedTimelineItem || this.selectedTimelineItem.type !== 'step') {
+      return null;
+    }
+    
+    const stepData = this.selectedTimelineItem.data;
+    if (!stepData || !stepData.PayloadAtEnd) {
+      return null;
+    }
+    
+    try {
+      let payloadData = stepData.PayloadAtEnd;
+      try {
+        payloadData = JSON.parse(stepData.PayloadAtEnd);
+      } catch {
+        payloadData = stepData.PayloadAtEnd;
+      }
+      
+      const parseOptions: ParseJSONOptions = {
+        extractInlineJson: true,
+        maxDepth: 100,
+        debug: false
+      };
+      return ParseJSONRecursive(payloadData, parseOptions);
+    } catch (e) {
+      return null;
+    }
   }
 }
 
