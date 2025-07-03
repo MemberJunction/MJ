@@ -20,7 +20,7 @@ export interface JournalEntryLine {
 /**
  * Action to create a journal entry in QuickBooks Online
  */
-@RegisterClass(QuickBooksBaseAction, 'CreateQuickBooksJournalEntryAction')
+@RegisterClass(BaseAction, 'CreateQuickBooksJournalEntryAction')
 export class CreateQuickBooksJournalEntryAction extends QuickBooksBaseAction {
     
     /**

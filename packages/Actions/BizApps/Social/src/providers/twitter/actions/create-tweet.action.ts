@@ -7,7 +7,7 @@ import { MediaFile } from '../../../base/base-social.action';
 /**
  * Action to create a tweet on Twitter/X
  */
-@RegisterClass(TwitterBaseAction, 'TwitterCreateTweetAction')
+@RegisterClass(BaseAction, 'TwitterCreateTweetAction')
 export class TwitterCreateTweetAction extends TwitterBaseAction {
     /**
      * Create a tweet on Twitter

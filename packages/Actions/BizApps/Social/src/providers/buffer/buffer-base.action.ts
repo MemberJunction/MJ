@@ -8,7 +8,7 @@ import FormData from 'form-data';
  * Base class for all Buffer social media actions.
  * Handles Buffer-specific authentication and API interaction patterns.
  */
-@RegisterClass(BaseSocialMediaAction, 'BufferBaseAction')
+@RegisterClass(BaseAction, 'BufferBaseAction')
 export abstract class BufferBaseAction extends BaseSocialMediaAction {
     protected get platformName(): string {
         return 'Buffer';

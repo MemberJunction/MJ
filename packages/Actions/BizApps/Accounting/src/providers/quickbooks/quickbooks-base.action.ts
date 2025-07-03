@@ -8,7 +8,7 @@ import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-bas
  * Base class for all QuickBooks Online actions.
  * Handles QB-specific authentication and API interaction patterns.
  */
-@RegisterClass(BaseAccountingAction, 'QuickBooksBaseAction')
+@RegisterClass(BaseAction, 'QuickBooksBaseAction')
 export abstract class QuickBooksBaseAction extends BaseAccountingAction {
     protected accountingProvider = 'QuickBooks Online';
     protected integrationName = 'QuickBooks Online';

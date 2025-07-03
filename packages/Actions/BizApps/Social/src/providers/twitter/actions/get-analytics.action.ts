@@ -7,7 +7,7 @@ import { SocialAnalytics } from '../../../base/base-social.action';
 /**
  * Action to get analytics for tweets or user account from Twitter/X
  */
-@RegisterClass(TwitterBaseAction, 'TwitterGetAnalyticsAction')
+@RegisterClass(BaseAction, 'TwitterGetAnalyticsAction')
 export class TwitterGetAnalyticsAction extends TwitterBaseAction {
     /**
      * Get analytics from Twitter

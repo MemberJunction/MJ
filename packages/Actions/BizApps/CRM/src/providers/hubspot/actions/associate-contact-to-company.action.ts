@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to associate contacts with companies in HubSpot
  */
-@RegisterClass(HubSpotBaseAction, 'AssociateContactToCompanyAction')
+@RegisterClass(BaseAction, 'AssociateContactToCompanyAction')
 export class AssociateContactToCompanyAction extends HubSpotBaseAction {
     /**
      * Associate contacts with companies

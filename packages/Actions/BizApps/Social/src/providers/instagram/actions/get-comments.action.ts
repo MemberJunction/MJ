@@ -7,7 +7,7 @@ import { LogError } from '@memberjunction/core';
  * Retrieves comments for an Instagram post, including nested replies.
  * Supports filtering, pagination, and sentiment analysis.
  */
-@RegisterClass(InstagramBaseAction, 'Instagram - Get Comments')
+@RegisterClass(BaseAction, 'Instagram - Get Comments')
 export class InstagramGetCommentsAction extends InstagramBaseAction {
     
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {

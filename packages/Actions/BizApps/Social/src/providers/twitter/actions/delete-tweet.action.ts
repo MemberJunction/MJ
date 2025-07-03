@@ -6,7 +6,7 @@ import { LogStatus, LogError } from '@memberjunction/core';
 /**
  * Action to delete a tweet from Twitter/X
  */
-@RegisterClass(TwitterBaseAction, 'TwitterDeleteTweetAction')
+@RegisterClass(BaseAction, 'TwitterDeleteTweetAction')
 export class TwitterDeleteTweetAction extends TwitterBaseAction {
     /**
      * Delete a tweet from Twitter

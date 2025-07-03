@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to retrieve comprehensive course details including curriculum structure
  */
-@RegisterClass(LearnWorldsBaseAction, 'GetLearnWorldsCourseDetailsAction')
+@RegisterClass(BaseAction, 'GetLearnWorldsCourseDetailsAction')
 export class GetLearnWorldsCourseDetailsAction extends LearnWorldsBaseAction {
     /**
      * Get comprehensive details about a specific course including curriculum

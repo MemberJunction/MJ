@@ -9,7 +9,7 @@ import { LogError } from '@memberjunction/core';
  * scheduling information that needs to be integrated with Facebook Creator Studio
  * or third-party scheduling tools.
  */
-@RegisterClass(InstagramBaseAction, 'Instagram - Schedule Post')
+@RegisterClass(BaseAction, 'Instagram - Schedule Post')
 export class InstagramSchedulePostAction extends InstagramBaseAction {
     
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {

@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to create a playlist on YouTube
  */
-@RegisterClass(YouTubeBaseAction, 'YouTubeCreatePlaylistAction')
+@RegisterClass(BaseAction, 'YouTubeCreatePlaylistAction')
 export class YouTubeCreatePlaylistAction extends YouTubeBaseAction {
     /**
      * Create a playlist on YouTube

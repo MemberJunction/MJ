@@ -8,7 +8,7 @@ import { LogStatus, LogError } from '@memberjunction/core';
  * Base class for all HootSuite actions.
  * Handles HootSuite-specific authentication, API interactions, and rate limiting.
  */
-@RegisterClass(BaseSocialMediaAction, 'HootSuiteBaseAction')
+@RegisterClass(BaseAction, 'HootSuiteBaseAction')
 export abstract class HootSuiteBaseAction extends BaseSocialMediaAction {
     protected get platformName(): string {
         return 'HootSuite';

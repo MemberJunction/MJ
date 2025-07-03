@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to reorder posts in a Buffer profile's queue
  */
-@RegisterClass(BufferBaseAction, 'BufferReorderQueueAction')
+@RegisterClass(BaseAction, 'BufferReorderQueueAction')
 export class BufferReorderQueueAction extends BufferBaseAction {
     /**
      * Reorder posts in the queue

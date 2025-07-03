@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to create a new user in LearnWorlds
  */
-@RegisterClass(LearnWorldsBaseAction, 'CreateUserAction')
+@RegisterClass(BaseAction, 'CreateUserAction')
 export class CreateUserAction extends LearnWorldsBaseAction {
     /**
      * Create a new user

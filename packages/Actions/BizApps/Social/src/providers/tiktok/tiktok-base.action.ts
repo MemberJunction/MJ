@@ -40,7 +40,7 @@ export interface TikTokUser {
  * Base class for all TikTok social media actions.
  * Handles TikTok-specific authentication and API interaction patterns.
  */
-@RegisterClass(BaseSocialMediaAction, 'TikTokBaseAction')
+@RegisterClass(BaseAction, 'TikTokBaseAction')
 export abstract class TikTokBaseAction extends BaseSocialMediaAction {
     
     protected get platformName(): string {

@@ -22,7 +22,7 @@ interface TikTokComment {
 /**
  * Action to get comments from TikTok videos
  */
-@RegisterClass(TikTokBaseAction, 'GetCommentsAction')
+@RegisterClass(BaseAction, 'GetCommentsAction')
 export class GetCommentsAction extends TikTokBaseAction {
     
     /**

@@ -6,7 +6,7 @@ import { LogStatus, LogError } from '@memberjunction/core';
 /**
  * Action to get follower statistics for LinkedIn profiles and organizations
  */
-@RegisterClass(LinkedInBaseAction, 'LinkedInGetFollowersAction')
+@RegisterClass(BaseAction, 'LinkedInGetFollowersAction')
 export class LinkedInGetFollowersAction extends LinkedInBaseAction {
     /**
      * Get follower statistics for personal profile or organization

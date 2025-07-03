@@ -6,7 +6,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
  * Action to create a video post on TikTok
  * Note: This requires special API approval from TikTok
  */
-@RegisterClass(TikTokBaseAction, 'CreateVideoPostAction')
+@RegisterClass(BaseAction, 'CreateVideoPostAction')
 export class CreateVideoPostAction extends TikTokBaseAction {
     
     /**

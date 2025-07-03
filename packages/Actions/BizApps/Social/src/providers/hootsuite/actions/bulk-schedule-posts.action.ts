@@ -19,7 +19,7 @@ interface BulkPostData {
 /**
  * Action to bulk schedule multiple posts in HootSuite
  */
-@RegisterClass(HootSuiteBaseAction, 'HootSuiteBulkSchedulePostsAction')
+@RegisterClass(BaseAction, 'HootSuiteBulkSchedulePostsAction')
 export class HootSuiteBulkSchedulePostsAction extends HootSuiteBaseAction {
     /**
      * Bulk schedule posts in HootSuite

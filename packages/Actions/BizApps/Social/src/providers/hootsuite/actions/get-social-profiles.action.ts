@@ -5,7 +5,7 @@ import { LogStatus, LogError } from '@memberjunction/core';
 /**
  * Action to retrieve social profiles connected to HootSuite account
  */
-@RegisterClass(HootSuiteBaseAction, 'HootSuiteGetSocialProfilesAction')
+@RegisterClass(BaseAction, 'HootSuiteGetSocialProfilesAction')
 export class HootSuiteGetSocialProfilesAction extends HootSuiteBaseAction {
     /**
      * Get social profiles from HootSuite

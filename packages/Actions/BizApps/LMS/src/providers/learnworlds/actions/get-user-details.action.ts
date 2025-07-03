@@ -70,7 +70,7 @@ export interface UserEnrollment {
 /**
  * Action to retrieve detailed information about a specific LearnWorlds user
  */
-@RegisterClass(LearnWorldsBaseAction, 'GetLearnWorldsUserDetailsAction')
+@RegisterClass(BaseAction, 'GetLearnWorldsUserDetailsAction')
 export class GetLearnWorldsUserDetailsAction extends LearnWorldsBaseAction {
     
     /**

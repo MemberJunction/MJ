@@ -58,7 +58,7 @@ import { JSONParamHelper } from "../utilities/json-param-helper";
  * });
  * ```
  */
-@RegisterClass(BaseFileHandlerAction, "File Compress")
+@RegisterClass(BaseAction, "File Compress")
 export class FileCompressAction extends BaseFileHandlerAction {
     
     /**

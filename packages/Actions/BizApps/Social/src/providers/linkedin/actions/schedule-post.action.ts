@@ -9,7 +9,7 @@ import { MediaFile } from '../../../base/base-social.action';
  * Note: LinkedIn API v2 does not have native scheduling support.
  * This action stores the post data for later publishing via a separate scheduler service.
  */
-@RegisterClass(LinkedInBaseAction, 'LinkedInSchedulePostAction')
+@RegisterClass(BaseAction, 'LinkedInSchedulePostAction')
 export class LinkedInSchedulePostAction extends LinkedInBaseAction {
     /**
      * Schedule a post for future publishing on LinkedIn

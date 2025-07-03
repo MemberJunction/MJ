@@ -7,7 +7,7 @@ import { CompanyIntegrationEntity } from '@memberjunction/core-entities';
  * Base class for all HubSpot CRM actions.
  * Handles HubSpot-specific authentication and API interaction patterns.
  */
-@RegisterClass(BaseCRMAction, 'HubSpotBaseAction')
+@RegisterClass(BaseAction, 'HubSpotBaseAction')
 export abstract class HubSpotBaseAction extends BaseCRMAction {
     protected crmProvider = 'HubSpot';
     protected integrationName = 'HubSpot';

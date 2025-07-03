@@ -7,7 +7,7 @@ import { MediaFile, SocialPost } from '../../../base/base-social.action';
 /**
  * Action to create a thread (series of connected tweets) on Twitter/X
  */
-@RegisterClass(TwitterBaseAction, 'TwitterCreateThreadAction')
+@RegisterClass(BaseAction, 'TwitterCreateThreadAction')
 export class TwitterCreateThreadAction extends TwitterBaseAction {
     /**
      * Create a thread on Twitter

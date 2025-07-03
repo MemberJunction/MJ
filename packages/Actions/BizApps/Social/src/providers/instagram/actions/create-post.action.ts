@@ -8,7 +8,7 @@ import { MediaFile } from '../../../base/base-social.action';
  * Creates a new Instagram post (feed post, carousel, or reel).
  * Supports images and videos with captions, hashtags, and location tagging.
  */
-@RegisterClass(InstagramBaseAction, 'Instagram - Create Post')
+@RegisterClass(BaseAction, 'Instagram - Create Post')
 export class InstagramCreatePostAction extends InstagramBaseAction {
     
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {

@@ -31,7 +31,7 @@ export interface LearnWorldsUser {
 /**
  * Action to retrieve users from LearnWorlds LMS
  */
-@RegisterClass(LearnWorldsBaseAction, 'GetLearnWorldsUsersAction')
+@RegisterClass(BaseAction, 'GetLearnWorldsUsersAction')
 export class GetLearnWorldsUsersAction extends LearnWorldsBaseAction {
     
     /**

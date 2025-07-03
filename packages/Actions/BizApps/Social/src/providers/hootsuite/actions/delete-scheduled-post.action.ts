@@ -5,7 +5,7 @@ import { LogStatus, LogError } from '@memberjunction/core';
 /**
  * Action to delete a scheduled post from HootSuite
  */
-@RegisterClass(HootSuiteBaseAction, 'HootSuiteDeleteScheduledPostAction')
+@RegisterClass(BaseAction, 'HootSuiteDeleteScheduledPostAction')
 export class HootSuiteDeleteScheduledPostAction extends HootSuiteBaseAction {
     /**
      * Delete a scheduled post from HootSuite

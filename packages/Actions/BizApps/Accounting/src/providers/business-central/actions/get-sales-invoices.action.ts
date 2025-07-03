@@ -58,7 +58,7 @@ export interface BCSalesInvoiceLine {
 /**
  * Action to retrieve sales invoices from Microsoft Dynamics 365 Business Central
  */
-@RegisterClass(BusinessCentralBaseAction, 'GetBusinessCentralSalesInvoicesAction')
+@RegisterClass(BaseAction, 'GetBusinessCentralSalesInvoicesAction')
 export class GetBusinessCentralSalesInvoicesAction extends BusinessCentralBaseAction {
     
     /**

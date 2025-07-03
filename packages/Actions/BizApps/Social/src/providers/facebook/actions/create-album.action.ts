@@ -10,7 +10,7 @@ import FormData from 'form-data';
  * Creates a photo album on a Facebook page and optionally uploads photos to it.
  * Albums help organize related photos together.
  */
-@RegisterClass(FacebookBaseAction, 'FacebookCreateAlbumAction')
+@RegisterClass(BaseAction, 'FacebookCreateAlbumAction')
 export class FacebookCreateAlbumAction extends FacebookBaseAction {
     /**
      * Get action description

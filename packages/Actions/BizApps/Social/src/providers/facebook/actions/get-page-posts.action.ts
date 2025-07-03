@@ -8,7 +8,7 @@ import { LogStatus, LogError } from '@memberjunction/core';
  * Retrieves posts from a Facebook page with optional date filtering.
  * Includes post content, media, and basic engagement metrics.
  */
-@RegisterClass(FacebookBaseAction, 'FacebookGetPagePostsAction')
+@RegisterClass(BaseAction, 'FacebookGetPagePostsAction')
 export class FacebookGetPagePostsAction extends FacebookBaseAction {
     /**
      * Get action description

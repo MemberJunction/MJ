@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to get all Buffer profiles (social media accounts) for the authenticated user
  */
-@RegisterClass(BufferBaseAction, 'BufferGetProfilesAction')
+@RegisterClass(BaseAction, 'BufferGetProfilesAction')
 export class BufferGetProfilesAction extends BufferBaseAction {
     /**
      * Get Buffer profiles

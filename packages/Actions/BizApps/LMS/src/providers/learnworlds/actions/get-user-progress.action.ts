@@ -120,7 +120,7 @@ export interface UserLearningProgress {
 /**
  * Action to retrieve detailed progress information for a LearnWorlds user
  */
-@RegisterClass(LearnWorldsBaseAction, 'GetLearnWorldsUserProgressAction')
+@RegisterClass(BaseAction, 'GetLearnWorldsUserProgressAction')
 export class GetLearnWorldsUserProgressAction extends LearnWorldsBaseAction {
     
     /**

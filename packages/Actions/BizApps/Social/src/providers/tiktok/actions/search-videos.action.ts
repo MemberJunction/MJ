@@ -7,7 +7,7 @@ import { SocialPost, SearchParams } from '../../../base/base-social.action';
  * Action to search for videos on TikTok
  * Note: TikTok API only allows searching within authenticated user's own videos
  */
-@RegisterClass(TikTokBaseAction, 'SearchVideosAction')
+@RegisterClass(BaseAction, 'SearchVideosAction')
 export class SearchVideosAction extends TikTokBaseAction {
     
     /**

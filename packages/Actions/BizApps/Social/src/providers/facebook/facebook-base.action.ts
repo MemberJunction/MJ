@@ -10,7 +10,7 @@ import FormData from 'form-data';
  * Handles Facebook-specific authentication, API interactions, and rate limiting.
  * Uses Facebook Graph API v18.0 with OAuth 2.0.
  */
-@RegisterClass(BaseSocialMediaAction, 'FacebookBaseAction')
+@RegisterClass(BaseAction, 'FacebookBaseAction')
 export abstract class FacebookBaseAction extends BaseSocialMediaAction {
     /**
      * Internal method that must be implemented by derived action classes

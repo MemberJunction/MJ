@@ -46,7 +46,7 @@ import * as ExcelJS from "exceljs";
  * });
  * ```
  */
-@RegisterClass(BaseFileHandlerAction, "Excel Reader")
+@RegisterClass(BaseAction, "Excel Reader")
 export class ExcelReaderAction extends BaseFileHandlerAction {
     
     /**

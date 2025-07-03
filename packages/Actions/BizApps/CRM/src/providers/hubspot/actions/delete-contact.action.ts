@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to delete/archive a contact in HubSpot
  */
-@RegisterClass(HubSpotBaseAction, 'DeleteContactAction')
+@RegisterClass(BaseAction, 'DeleteContactAction')
 export class DeleteContactAction extends HubSpotBaseAction {
     /**
      * Delete/archive a contact

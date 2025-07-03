@@ -9,7 +9,7 @@ import { MediaFile } from '../../../base/base-social.action';
  * Note: Twitter API v2 doesn't have native scheduling, so this action
  * saves the tweet data for later posting via a separate scheduler service
  */
-@RegisterClass(TwitterBaseAction, 'TwitterScheduleTweetAction')
+@RegisterClass(BaseAction, 'TwitterScheduleTweetAction')
 export class TwitterScheduleTweetAction extends TwitterBaseAction {
     /**
      * Schedule a tweet for future posting

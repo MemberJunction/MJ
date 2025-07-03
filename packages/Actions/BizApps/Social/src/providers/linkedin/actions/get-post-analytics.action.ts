@@ -7,7 +7,7 @@ import { SocialAnalytics } from '../../../base/base-social.action';
 /**
  * Action to get analytics for a LinkedIn post
  */
-@RegisterClass(LinkedInBaseAction, 'LinkedInGetPostAnalyticsAction')
+@RegisterClass(BaseAction, 'LinkedInGetPostAnalyticsAction')
 export class LinkedInGetPostAnalyticsAction extends LinkedInBaseAction {
     /**
      * Get analytics for a specific LinkedIn post

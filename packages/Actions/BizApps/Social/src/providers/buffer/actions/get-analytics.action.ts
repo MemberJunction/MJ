@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to get detailed analytics for a specific Buffer post
  */
-@RegisterClass(BufferBaseAction, 'BufferGetAnalyticsAction')
+@RegisterClass(BaseAction, 'BufferGetAnalyticsAction')
 export class BufferGetAnalyticsAction extends BufferBaseAction {
     /**
      * Get analytics for a Buffer post

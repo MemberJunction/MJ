@@ -7,7 +7,7 @@ import { SocialPost } from '../../../base/base-social.action';
 /**
  * Action to get mentions (tweets that mention the authenticated user) from Twitter/X
  */
-@RegisterClass(TwitterBaseAction, 'TwitterGetMentionsAction')
+@RegisterClass(BaseAction, 'TwitterGetMentionsAction')
 export class TwitterGetMentionsAction extends TwitterBaseAction {
     /**
      * Get mentions from Twitter

@@ -34,7 +34,7 @@ export interface BCDimensionSetLine {
 /**
  * Action to retrieve General Ledger Entries from Microsoft Dynamics 365 Business Central
  */
-@RegisterClass(BusinessCentralBaseAction, 'GetBusinessCentralGeneralLedgerEntriesAction')
+@RegisterClass(BaseAction, 'GetBusinessCentralGeneralLedgerEntriesAction')
 export class GetBusinessCentralGeneralLedgerEntriesAction extends BusinessCentralBaseAction {
     
     /**

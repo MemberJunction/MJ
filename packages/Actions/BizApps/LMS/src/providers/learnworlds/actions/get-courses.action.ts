@@ -111,7 +111,7 @@ export interface CourseCatalogSummary {
 /**
  * Action to retrieve courses from LearnWorlds LMS
  */
-@RegisterClass(LearnWorldsBaseAction, 'GetLearnWorldsCoursesAction')
+@RegisterClass(BaseAction, 'GetLearnWorldsCoursesAction')
 export class GetLearnWorldsCoursesAction extends LearnWorldsBaseAction {
     
     /**

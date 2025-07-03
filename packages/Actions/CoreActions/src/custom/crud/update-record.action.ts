@@ -34,7 +34,7 @@ import { BaseRecordMutationAction } from "./base-record-mutation.action";
  * });
  * ```
  */
-@RegisterClass(BaseRecordMutationAction, "UpdateRecordAction")
+@RegisterClass(BaseAction, "UpdateRecordAction")
 export class UpdateRecordAction extends BaseRecordMutationAction {
     /**
      * Updates an existing record for the specified entity type.

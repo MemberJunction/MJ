@@ -31,8 +31,8 @@ import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 import { LoadActionEntityServer } from '@memberjunction/actions';
 LoadActionEntityServer(); // prevent tree shaking for this dynamic module
 
-import { LoadGeneratedActions } from '@memberjunction/core-actions';
-LoadGeneratedActions(); // prevent tree shaking for this dynamic module
+import { LoadAllCoreActions } from '@memberjunction/core-actions';
+LoadAllCoreActions(); // prevent tree shaking for this dynamic module
 
 import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
 LoadCoreEntitiesServerSubClasses(); // prevent tree shaking for this dynamic module

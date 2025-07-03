@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to update an existing contact in HubSpot
  */
-@RegisterClass(HubSpotBaseAction, 'UpdateContactAction')
+@RegisterClass(BaseAction, 'UpdateContactAction')
 export class UpdateContactAction extends HubSpotBaseAction {
     /**
      * Update an existing contact

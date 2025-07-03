@@ -8,7 +8,7 @@ import { LogStatus, LogError } from '@memberjunction/core';
  * Creates a new post on a Facebook page.
  * Supports text, links, images, videos, and scheduling.
  */
-@RegisterClass(FacebookBaseAction, 'FacebookCreatePostAction') 
+@RegisterClass(BaseAction, 'FacebookCreatePostAction') 
 export class FacebookCreatePostAction extends FacebookBaseAction {
     /**
      * Get action description

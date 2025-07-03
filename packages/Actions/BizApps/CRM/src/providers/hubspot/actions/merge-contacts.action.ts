@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to merge duplicate contacts in HubSpot
  */
-@RegisterClass(HubSpotBaseAction, 'MergeContactsAction')
+@RegisterClass(BaseAction, 'MergeContactsAction')
 export class MergeContactsAction extends HubSpotBaseAction {
     /**
      * Merge duplicate contacts

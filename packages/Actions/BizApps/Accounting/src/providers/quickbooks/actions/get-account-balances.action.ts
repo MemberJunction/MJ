@@ -37,7 +37,7 @@ export interface TrialBalanceSummary {
 /**
  * Action to retrieve account balances (trial balance) from QuickBooks Online
  */
-@RegisterClass(QuickBooksBaseAction, 'GetQuickBooksAccountBalancesAction')
+@RegisterClass(BaseAction, 'GetQuickBooksAccountBalancesAction')
 export class GetQuickBooksAccountBalancesAction extends QuickBooksBaseAction {
     
     /**

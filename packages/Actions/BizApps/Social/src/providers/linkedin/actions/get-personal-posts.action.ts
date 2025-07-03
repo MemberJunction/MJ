@@ -7,7 +7,7 @@ import { SocialPost } from '../../../base/base-social.action';
 /**
  * Action to get posts from a LinkedIn personal profile
  */
-@RegisterClass(LinkedInBaseAction, 'LinkedInGetPersonalPostsAction')
+@RegisterClass(BaseAction, 'LinkedInGetPersonalPostsAction')
 export class LinkedInGetPersonalPostsAction extends LinkedInBaseAction {
     /**
      * Get posts from the authenticated user's LinkedIn profile

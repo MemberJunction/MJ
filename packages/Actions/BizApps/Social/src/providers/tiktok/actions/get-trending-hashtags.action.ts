@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to get trending hashtags on TikTok
  */
-@RegisterClass(TikTokBaseAction, 'GetTrendingHashtagsAction')
+@RegisterClass(BaseAction, 'GetTrendingHashtagsAction')
 export class GetTrendingHashtagsAction extends TikTokBaseAction {
     
     /**

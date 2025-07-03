@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to enroll a user in a LearnWorlds course
  */
-@RegisterClass(LearnWorldsBaseAction, 'EnrollUserAction')
+@RegisterClass(BaseAction, 'EnrollUserAction')
 export class EnrollUserAction extends LearnWorldsBaseAction {
     /**
      * Enroll a user in a course

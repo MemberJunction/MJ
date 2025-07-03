@@ -6,7 +6,7 @@ import { SocialPost } from '../../../base/base-social.action';
 /**
  * Action to get videos from a TikTok user account
  */
-@RegisterClass(TikTokBaseAction, 'GetUserVideosAction')
+@RegisterClass(BaseAction, 'GetUserVideosAction')
 export class GetUserVideosAction extends TikTokBaseAction {
     
     /**

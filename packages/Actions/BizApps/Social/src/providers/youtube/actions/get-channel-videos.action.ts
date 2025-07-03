@@ -6,7 +6,7 @@ import { SocialPost } from '../../../base/base-social.action';
 /**
  * Action to get videos from a YouTube channel
  */
-@RegisterClass(YouTubeBaseAction, 'YouTubeGetChannelVideosAction')
+@RegisterClass(BaseAction, 'YouTubeGetChannelVideosAction')
 export class YouTubeGetChannelVideosAction extends YouTubeBaseAction {
     /**
      * Get videos from a YouTube channel

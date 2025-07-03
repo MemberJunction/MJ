@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to get upcoming tasks by owner in HubSpot
  */
-@RegisterClass(HubSpotBaseAction, 'GetUpcomingTasksAction')
+@RegisterClass(BaseAction, 'GetUpcomingTasksAction')
 export class GetUpcomingTasksAction extends HubSpotBaseAction {
     /**
      * Get upcoming tasks filtered by owner and other criteria

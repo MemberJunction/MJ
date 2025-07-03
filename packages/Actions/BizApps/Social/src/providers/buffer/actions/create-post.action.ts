@@ -6,7 +6,7 @@ import { MediaFile } from '../../../base/base-social.action';
 /**
  * Action to create a new post in Buffer (scheduled or immediate)
  */
-@RegisterClass(BufferBaseAction, 'BufferCreatePostAction')
+@RegisterClass(BaseAction, 'BufferCreatePostAction')
 export class BufferCreatePostAction extends BufferBaseAction {
     /**
      * Create a Buffer post

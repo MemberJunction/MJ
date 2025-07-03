@@ -7,7 +7,7 @@ import { LogError } from '@memberjunction/core';
  * Retrieves account-level insights for an Instagram Business account.
  * Includes follower demographics, reach, impressions, and profile activity.
  */
-@RegisterClass(InstagramBaseAction, 'Instagram - Get Account Insights')
+@RegisterClass(BaseAction, 'Instagram - Get Account Insights')
 export class InstagramGetAccountInsightsAction extends InstagramBaseAction {
     
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {

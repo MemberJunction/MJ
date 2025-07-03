@@ -6,7 +6,7 @@ import { SocialPost } from '../../../base/base-social.action';
 /**
  * Action to search historical posts in Buffer across profiles and date ranges
  */
-@RegisterClass(BufferBaseAction, 'BufferSearchPostsAction')
+@RegisterClass(BaseAction, 'BufferSearchPostsAction')
 export class BufferSearchPostsAction extends BufferBaseAction {
     /**
      * Search for posts in Buffer

@@ -25,7 +25,7 @@ export interface BCGLAccount {
 /**
  * Action to retrieve the Chart of Accounts from Microsoft Dynamics 365 Business Central
  */
-@RegisterClass(BusinessCentralBaseAction, 'GetBusinessCentralGLAccountsAction')
+@RegisterClass(BaseAction, 'GetBusinessCentralGLAccountsAction')
 export class GetBusinessCentralGLAccountsAction extends BusinessCentralBaseAction {
     
     /**

@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to retrieve all course enrollments for a specific user
  */
-@RegisterClass(LearnWorldsBaseAction, 'GetUserEnrollmentsAction')
+@RegisterClass(BaseAction, 'GetUserEnrollmentsAction')
 export class GetUserEnrollmentsAction extends LearnWorldsBaseAction {
     /**
      * Get all enrollments for a user

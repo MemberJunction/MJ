@@ -37,7 +37,7 @@ export interface TransactionLine {
 /**
  * Action to retrieve transactions from QuickBooks Online
  */
-@RegisterClass(QuickBooksBaseAction, 'GetQuickBooksTransactionsAction')
+@RegisterClass(BaseAction, 'GetQuickBooksTransactionsAction')
 export class GetQuickBooksTransactionsAction extends QuickBooksBaseAction {
     
     /**

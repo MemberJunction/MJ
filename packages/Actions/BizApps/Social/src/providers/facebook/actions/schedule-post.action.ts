@@ -9,7 +9,7 @@ import axios from 'axios';
  * Schedules a post to be published on a Facebook page at a future time.
  * Posts can be scheduled from 10 minutes to 6 months in the future.
  */
-@RegisterClass(FacebookBaseAction, 'FacebookSchedulePostAction')
+@RegisterClass(BaseAction, 'FacebookSchedulePostAction')
 export class FacebookSchedulePostAction extends FacebookBaseAction {
     /**
      * Get action description

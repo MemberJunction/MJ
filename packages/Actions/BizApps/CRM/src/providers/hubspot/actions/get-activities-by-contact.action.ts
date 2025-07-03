@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to get activity history for a contact in HubSpot
  */
-@RegisterClass(HubSpotBaseAction, 'GetActivitiesByContactAction')
+@RegisterClass(BaseAction, 'GetActivitiesByContactAction')
 export class GetActivitiesByContactAction extends HubSpotBaseAction {
     /**
      * Get activity history for a specific contact

@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to update metadata for a YouTube video
  */
-@RegisterClass(YouTubeBaseAction, 'YouTubeUpdateVideoMetadataAction')
+@RegisterClass(BaseAction, 'YouTubeUpdateVideoMetadataAction')
 export class YouTubeUpdateVideoMetadataAction extends YouTubeBaseAction {
     /**
      * Update video metadata on YouTube

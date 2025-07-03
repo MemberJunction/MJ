@@ -9,7 +9,7 @@ import axios from 'axios';
  * Searches for historical posts on Facebook pages.
  * Provides powerful search capabilities including date ranges, keywords, and content types.
  */
-@RegisterClass(FacebookBaseAction, 'FacebookSearchPostsAction')
+@RegisterClass(BaseAction, 'FacebookSearchPostsAction')
 export class FacebookSearchPostsAction extends FacebookBaseAction {
     /**
      * Get action description

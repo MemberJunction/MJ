@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to create tasks in HubSpot
  */
-@RegisterClass(HubSpotBaseAction, 'CreateTaskAction')
+@RegisterClass(BaseAction, 'CreateTaskAction')
 export class CreateTaskAction extends HubSpotBaseAction {
     /**
      * Create a task in HubSpot

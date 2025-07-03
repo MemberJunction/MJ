@@ -8,7 +8,7 @@ import { SocialPost } from '../../../base/base-social.action';
  * Retrieves posts from an Instagram Business account.
  * Returns feed posts, carousels, reels, and IGTV videos with basic metrics.
  */
-@RegisterClass(InstagramBaseAction, 'Instagram - Get Business Posts')
+@RegisterClass(BaseAction, 'Instagram - Get Business Posts')
 export class InstagramGetBusinessPostsAction extends InstagramBaseAction {
     
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {

@@ -7,7 +7,7 @@ import { MediaFile } from '../../../base/base-social.action';
 /**
  * Action to update a scheduled post in HootSuite
  */
-@RegisterClass(HootSuiteBaseAction, 'HootSuiteUpdateScheduledPostAction')
+@RegisterClass(BaseAction, 'HootSuiteUpdateScheduledPostAction')
 export class HootSuiteUpdateScheduledPostAction extends HootSuiteBaseAction {
     /**
      * Update a scheduled post in HootSuite

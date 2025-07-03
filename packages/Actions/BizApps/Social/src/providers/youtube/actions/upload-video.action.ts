@@ -6,7 +6,7 @@ import { MediaFile } from '../../../base/base-social.action';
 /**
  * Action to upload a video to YouTube
  */
-@RegisterClass(YouTubeBaseAction, 'YouTubeUploadVideoAction')
+@RegisterClass(BaseAction, 'YouTubeUploadVideoAction')
 export class YouTubeUploadVideoAction extends YouTubeBaseAction {
     /**
      * Upload video to YouTube

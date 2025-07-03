@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to get sent (published) posts from Buffer
  */
-@RegisterClass(BufferBaseAction, 'BufferGetSentPostsAction')
+@RegisterClass(BaseAction, 'BufferGetSentPostsAction')
 export class BufferGetSentPostsAction extends BufferBaseAction {
     /**
      * Get sent posts from Buffer

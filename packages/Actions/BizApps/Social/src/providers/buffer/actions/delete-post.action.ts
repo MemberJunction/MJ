@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to delete a post from Buffer
  */
-@RegisterClass(BufferBaseAction, 'BufferDeletePostAction')
+@RegisterClass(BaseAction, 'BufferDeletePostAction')
 export class BufferDeletePostAction extends BufferBaseAction {
     /**
      * Delete a Buffer post

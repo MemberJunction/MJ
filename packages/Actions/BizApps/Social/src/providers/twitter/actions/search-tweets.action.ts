@@ -7,7 +7,7 @@ import { SocialPost, SearchParams } from '../../../base/base-social.action';
 /**
  * Action to search for tweets on Twitter/X with advanced operators and historical data
  */
-@RegisterClass(TwitterBaseAction, 'TwitterSearchTweetsAction')
+@RegisterClass(BaseAction, 'TwitterSearchTweetsAction')
 export class TwitterSearchTweetsAction extends TwitterBaseAction {
     /**
      * Search for tweets on Twitter

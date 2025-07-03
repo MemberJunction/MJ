@@ -7,7 +7,7 @@ import { MediaFile } from '../../../base/base-social.action';
 /**
  * Action to create a LinkedIn article (long-form content)
  */
-@RegisterClass(LinkedInBaseAction, 'LinkedInCreateArticleAction')
+@RegisterClass(BaseAction, 'LinkedInCreateArticleAction')
 export class LinkedInCreateArticleAction extends LinkedInBaseAction {
     /**
      * Create a LinkedIn article

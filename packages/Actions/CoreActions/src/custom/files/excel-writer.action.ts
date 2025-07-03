@@ -46,7 +46,7 @@ import { JSONParamHelper } from "../utilities/json-param-helper";
  * });
  * ```
  */
-@RegisterClass(BaseFileHandlerAction, "Excel Writer")
+@RegisterClass(BaseAction, "Excel Writer")
 export class ExcelWriterAction extends BaseFileHandlerAction {
     
     /**

@@ -6,7 +6,7 @@ import { SocialPost, SearchParams } from '../../../base/base-social.action';
 /**
  * Action to search for YouTube videos including historical content
  */
-@RegisterClass(YouTubeBaseAction, 'YouTubeSearchVideosAction')
+@RegisterClass(BaseAction, 'YouTubeSearchVideosAction')
 export class YouTubeSearchVideosAction extends YouTubeBaseAction {
     /**
      * Search for YouTube videos

@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to get analytics for a TikTok account
  */
-@RegisterClass(TikTokBaseAction, 'GetAccountAnalyticsAction')
+@RegisterClass(BaseAction, 'GetAccountAnalyticsAction')
 export class GetAccountAnalyticsAction extends TikTokBaseAction {
     
     /**

@@ -7,7 +7,7 @@ import { SearchParams, SocialPost } from '../../../base/base-social.action';
 /**
  * Action to search historical posts in HootSuite
  */
-@RegisterClass(HootSuiteBaseAction, 'HootSuiteSearchPostsAction')
+@RegisterClass(BaseAction, 'HootSuiteSearchPostsAction')
 export class HootSuiteSearchPostsAction extends HootSuiteBaseAction {
     /**
      * Search for posts in HootSuite

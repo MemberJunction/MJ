@@ -43,7 +43,7 @@ import * as Papa from "papaparse";
  * });
  * ```
  */
-@RegisterClass(BaseFileHandlerAction, "CSV Parser")
+@RegisterClass(BaseAction, "CSV Parser")
 export class CSVParserAction extends BaseFileHandlerAction {
     
     /**

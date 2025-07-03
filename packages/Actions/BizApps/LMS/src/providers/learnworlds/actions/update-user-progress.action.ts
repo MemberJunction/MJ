@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to update a user's course progress in LearnWorlds
  */
-@RegisterClass(LearnWorldsBaseAction, 'UpdateUserProgressAction')
+@RegisterClass(BaseAction, 'UpdateUserProgressAction')
 export class UpdateUserProgressAction extends LearnWorldsBaseAction {
     /**
      * Update user progress for a course or lesson

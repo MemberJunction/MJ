@@ -49,7 +49,7 @@ import { JSONParamHelper } from "../utilities/json-param-helper";
  * });
  * ```
  */
-@RegisterClass(BaseFileHandlerAction, "XML Parser")
+@RegisterClass(BaseAction, "XML Parser")
 export class XMLParserAction extends BaseFileHandlerAction {
     
     /**

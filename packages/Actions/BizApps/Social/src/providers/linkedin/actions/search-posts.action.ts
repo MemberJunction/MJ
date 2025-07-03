@@ -7,7 +7,7 @@ import { SocialPost, SearchParams } from '../../../base/base-social.action';
 /**
  * Action to search for historical posts on LinkedIn
  */
-@RegisterClass(LinkedInBaseAction, 'LinkedInSearchPostsAction')
+@RegisterClass(BaseAction, 'LinkedInSearchPostsAction')
 export class LinkedInSearchPostsAction extends LinkedInBaseAction {
     /**
      * Search for posts on LinkedIn with various filters

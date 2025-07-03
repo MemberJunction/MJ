@@ -7,7 +7,7 @@ import { SocialAnalytics } from '../../../base/base-social.action';
 /**
  * Action to retrieve analytics data from HootSuite
  */
-@RegisterClass(HootSuiteBaseAction, 'HootSuiteGetAnalyticsAction')
+@RegisterClass(BaseAction, 'HootSuiteGetAnalyticsAction')
 export class HootSuiteGetAnalyticsAction extends HootSuiteBaseAction {
     /**
      * Get analytics data from HootSuite

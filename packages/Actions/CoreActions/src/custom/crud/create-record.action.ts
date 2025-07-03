@@ -33,7 +33,7 @@ import { BaseRecordMutationAction } from "./base-record-mutation.action";
  * const primaryKey = result.Params.find(p => p.Name === 'PrimaryKey')?.Value;
  * ```
  */
-@RegisterClass(BaseRecordMutationAction, "CreateRecordAction")
+@RegisterClass(BaseAction, "CreateRecordAction")
 export class CreateRecordAction extends BaseRecordMutationAction {
     /**
      * Creates a new record for the specified entity type.

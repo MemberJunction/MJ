@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to search for deals in HubSpot
  */
-@RegisterClass(HubSpotBaseAction, 'SearchDealsAction')
+@RegisterClass(BaseAction, 'SearchDealsAction')
 export class SearchDealsAction extends HubSpotBaseAction {
     /**
      * Search for deals using various criteria

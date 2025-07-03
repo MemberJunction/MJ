@@ -44,7 +44,7 @@ interface QBOAccount {
 /**
  * Action to retrieve the Chart of Accounts (GL Codes) from QuickBooks Online
  */
-@RegisterClass(QuickBooksBaseAction, 'GetQuickBooksGLCodesAction')
+@RegisterClass(BaseAction, 'GetQuickBooksGLCodesAction')
 export class GetQuickBooksGLCodesAction extends QuickBooksBaseAction {
     
     /**

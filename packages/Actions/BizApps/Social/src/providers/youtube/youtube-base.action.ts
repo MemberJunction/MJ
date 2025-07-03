@@ -8,7 +8,7 @@ import { SocialPost, MediaFile } from '../../base/base-social.action';
  * Base class for all YouTube actions.
  * Handles YouTube Data API v3 authentication and common functionality.
  */
-@RegisterClass(BaseSocialMediaAction, 'YouTubeBaseAction')
+@RegisterClass(BaseAction, 'YouTubeBaseAction')
 export abstract class YouTubeBaseAction extends BaseSocialMediaAction {
     protected override get platformName(): string {
         return 'YouTube';

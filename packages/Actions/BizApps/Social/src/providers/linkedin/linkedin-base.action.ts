@@ -9,7 +9,7 @@ import { LogStatus, LogError } from '@memberjunction/core';
  * Handles LinkedIn-specific authentication, API interactions, and rate limiting.
  * Uses LinkedIn Marketing Developer Platform API v2.
  */
-@RegisterClass(BaseSocialMediaAction, 'LinkedInBaseAction')
+@RegisterClass(BaseAction, 'LinkedInBaseAction')
 export abstract class LinkedInBaseAction extends BaseSocialMediaAction {
     protected get platformName(): string {
         return 'LinkedIn';

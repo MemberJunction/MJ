@@ -7,7 +7,7 @@ import { MediaFile } from '../../../base/base-social.action';
 /**
  * Action to create a post on LinkedIn
  */
-@RegisterClass(LinkedInBaseAction, 'LinkedInCreatePostAction')
+@RegisterClass(BaseAction, 'LinkedInCreatePostAction')
 export class LinkedInCreatePostAction extends LinkedInBaseAction {
     /**
      * Create a post on LinkedIn (personal or organization)

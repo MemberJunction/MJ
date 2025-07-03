@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to retrieve certificates earned by users in LearnWorlds
  */
-@RegisterClass(LearnWorldsBaseAction, 'GetCertificatesAction')
+@RegisterClass(BaseAction, 'GetCertificatesAction')
 export class GetCertificatesAction extends LearnWorldsBaseAction {
     /**
      * Get certificates for a user or course

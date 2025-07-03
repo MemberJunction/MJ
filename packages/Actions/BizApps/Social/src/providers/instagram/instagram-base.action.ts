@@ -8,7 +8,7 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
  * Handles Instagram Graph API and Basic Display API authentication and common functionality.
  * Instagram uses Facebook's Graph API infrastructure.
  */
-@RegisterClass(BaseSocialMediaAction, 'InstagramBaseAction')
+@RegisterClass(BaseAction, 'InstagramBaseAction')
 export abstract class InstagramBaseAction extends BaseSocialMediaAction {
     protected get platformName(): string {
         return 'Instagram';

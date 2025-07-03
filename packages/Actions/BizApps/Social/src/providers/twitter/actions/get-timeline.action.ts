@@ -7,7 +7,7 @@ import { SocialPost } from '../../../base/base-social.action';
 /**
  * Action to get timeline tweets (home timeline or user timeline) from Twitter/X
  */
-@RegisterClass(TwitterBaseAction, 'TwitterGetTimelineAction')
+@RegisterClass(BaseAction, 'TwitterGetTimelineAction')
 export class TwitterGetTimelineAction extends TwitterBaseAction {
     /**
      * Get timeline tweets from Twitter

@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to get pending (scheduled) posts from Buffer
  */
-@RegisterClass(BufferBaseAction, 'BufferGetPendingPostsAction')
+@RegisterClass(BaseAction, 'BufferGetPendingPostsAction')
 export class BufferGetPendingPostsAction extends BufferBaseAction {
     /**
      * Get pending posts from Buffer

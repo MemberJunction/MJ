@@ -49,7 +49,7 @@ const pdfParse = require('pdf-parse');
  * });
  * ```
  */
-@RegisterClass(BaseFileHandlerAction, "PDF Extractor")
+@RegisterClass(BaseAction, "PDF Extractor")
 export class PDFExtractorAction extends BaseFileHandlerAction {
     
     /**

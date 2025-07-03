@@ -9,7 +9,7 @@ import axios from 'axios';
  * Retrieves detailed insights and analytics for a specific Facebook post.
  * Provides metrics like reach, impressions, engagement, and more.
  */
-@RegisterClass(FacebookBaseAction, 'FacebookGetPostInsightsAction')
+@RegisterClass(BaseAction, 'FacebookGetPostInsightsAction')
 export class FacebookGetPostInsightsAction extends FacebookBaseAction {
     /**
      * Get action description

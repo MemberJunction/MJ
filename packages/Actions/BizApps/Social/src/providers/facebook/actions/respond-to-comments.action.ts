@@ -9,7 +9,7 @@ import axios from 'axios';
  * Responds to comments on Facebook posts or other comments.
  * Supports replying to top-level comments and nested replies.
  */
-@RegisterClass(FacebookBaseAction, 'FacebookRespondToCommentsAction')
+@RegisterClass(BaseAction, 'FacebookRespondToCommentsAction')
 export class FacebookRespondToCommentsAction extends FacebookBaseAction {
     /**
      * Get action description

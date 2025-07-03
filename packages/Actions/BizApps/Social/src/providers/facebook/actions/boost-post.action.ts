@@ -9,7 +9,7 @@ import axios from 'axios';
  * Boosts (promotes) a Facebook post to reach a wider audience.
  * Creates a simple ad campaign to increase post visibility.
  */
-@RegisterClass(FacebookBaseAction, 'FacebookBoostPostAction')
+@RegisterClass(BaseAction, 'FacebookBoostPostAction')
 export class FacebookBoostPostAction extends FacebookBaseAction {
     /**
      * Get action description

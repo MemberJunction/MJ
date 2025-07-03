@@ -40,7 +40,7 @@ import { JSONParamHelper } from "../utilities/json-param-helper";
  * });
  * ```
  */
-@RegisterClass(BaseFileHandlerAction, "PDF Generator")
+@RegisterClass(BaseAction, "PDF Generator")
 export class PDFGeneratorAction extends BaseFileHandlerAction {
     
     /**

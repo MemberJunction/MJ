@@ -7,7 +7,7 @@ import { CompanyIntegrationEntity } from '@memberjunction/core-entities';
  * Base class for all LearnWorlds LMS actions.
  * Handles LearnWorlds-specific authentication and API interaction patterns.
  */
-@RegisterClass(BaseLMSAction, 'LearnWorldsBaseAction')
+@RegisterClass(BaseAction, 'LearnWorldsBaseAction')
 export abstract class LearnWorldsBaseAction extends BaseLMSAction {
     protected lmsProvider = 'LearnWorlds';
     protected integrationName = 'LearnWorlds';

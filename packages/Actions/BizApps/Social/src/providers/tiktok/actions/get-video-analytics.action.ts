@@ -6,7 +6,7 @@ import { SocialAnalytics } from '../../../base/base-social.action';
 /**
  * Action to get analytics for specific TikTok videos
  */
-@RegisterClass(TikTokBaseAction, 'GetVideoAnalyticsAction')
+@RegisterClass(BaseAction, 'GetVideoAnalyticsAction')
 export class GetVideoAnalyticsAction extends TikTokBaseAction {
     
     /**

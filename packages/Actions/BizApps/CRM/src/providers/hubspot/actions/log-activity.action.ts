@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to log activities (calls, emails, meetings, notes) in HubSpot
  */
-@RegisterClass(HubSpotBaseAction, 'LogActivityAction')
+@RegisterClass(BaseAction, 'LogActivityAction')
 export class LogActivityAction extends HubSpotBaseAction {
     /**
      * Log an activity (engagement) in HubSpot

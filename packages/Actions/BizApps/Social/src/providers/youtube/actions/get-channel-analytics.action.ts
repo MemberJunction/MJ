@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to get analytics for a YouTube channel
  */
-@RegisterClass(YouTubeBaseAction, 'YouTubeGetChannelAnalyticsAction')
+@RegisterClass(BaseAction, 'YouTubeGetChannelAnalyticsAction')
 export class YouTubeGetChannelAnalyticsAction extends YouTubeBaseAction {
     /**
      * Get analytics for a YouTube channel

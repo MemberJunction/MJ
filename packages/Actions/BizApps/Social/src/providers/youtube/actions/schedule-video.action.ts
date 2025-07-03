@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to schedule a YouTube video for publishing
  */
-@RegisterClass(YouTubeBaseAction, 'YouTubeScheduleVideoAction')
+@RegisterClass(BaseAction, 'YouTubeScheduleVideoAction')
 export class YouTubeScheduleVideoAction extends YouTubeBaseAction {
     /**
      * Schedule a video for publishing on YouTube

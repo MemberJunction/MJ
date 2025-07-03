@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to retrieve comprehensive analytics for a LearnWorlds course
  */
-@RegisterClass(LearnWorldsBaseAction, 'GetCourseAnalyticsAction')
+@RegisterClass(BaseAction, 'GetCourseAnalyticsAction')
 export class GetCourseAnalyticsAction extends LearnWorldsBaseAction {
     /**
      * Get course performance analytics

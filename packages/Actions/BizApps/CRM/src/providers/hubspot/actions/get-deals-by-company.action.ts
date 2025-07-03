@@ -5,7 +5,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 /**
  * Action to get all deals associated with a company in HubSpot
  */
-@RegisterClass(HubSpotBaseAction, 'GetDealsByCompanyAction')
+@RegisterClass(BaseAction, 'GetDealsByCompanyAction')
 export class GetDealsByCompanyAction extends HubSpotBaseAction {
     /**
      * Get all deals for a specific company

@@ -7,7 +7,7 @@ import { SocialPost } from '../../../base/base-social.action';
 /**
  * Action to get posts from a LinkedIn organization page
  */
-@RegisterClass(LinkedInBaseAction, 'LinkedInGetOrganizationPostsAction')
+@RegisterClass(BaseAction, 'LinkedInGetOrganizationPostsAction')
 export class LinkedInGetOrganizationPostsAction extends LinkedInBaseAction {
     /**
      * Get posts from a LinkedIn organization page

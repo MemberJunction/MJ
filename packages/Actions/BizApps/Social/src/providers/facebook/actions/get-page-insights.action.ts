@@ -9,7 +9,7 @@ import axios from 'axios';
  * Retrieves comprehensive analytics and insights for a Facebook page.
  * Provides metrics like page views, likes, engagement, demographics, and more.
  */
-@RegisterClass(FacebookBaseAction, 'FacebookGetPageInsightsAction')
+@RegisterClass(BaseAction, 'FacebookGetPageInsightsAction')
 export class FacebookGetPageInsightsAction extends FacebookBaseAction {
     /**
      * Get action description

@@ -9,7 +9,7 @@ import { MediaFile } from '../../../base/base-social.action';
  * Stories are temporary content that disappears after 24 hours.
  * Supports stickers, links, and interactive elements.
  */
-@RegisterClass(InstagramBaseAction, 'Instagram - Create Story')
+@RegisterClass(BaseAction, 'Instagram - Create Story')
 export class InstagramCreateStoryAction extends InstagramBaseAction {
     
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
