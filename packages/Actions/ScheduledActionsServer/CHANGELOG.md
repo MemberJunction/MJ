@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/scheduled-actions-server
 
+## 2.63.0
+
+### Patch Changes
+
+- Updated dependencies [28e8a85]
+  - @memberjunction/core-entities@2.63.0
+  - @memberjunction/actions@2.63.0
+  - @memberjunction/actions-content-autotag@2.63.0
+  - @memberjunction/scheduled-actions@2.63.0
+  - @memberjunction/ai-vectors-pinecone@2.63.0
+  - @memberjunction/ai-vector-sync@2.63.0
+  - @memberjunction/ai@2.63.0
+  - @memberjunction/ai-mistral@2.63.0
+  - @memberjunction/ai-openai@2.63.0
+  - @memberjunction/core@2.63.0
+
 ## 2.62.0
 
 ### Patch Changes

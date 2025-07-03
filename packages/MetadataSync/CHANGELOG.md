@@ -1,5 +1,18 @@
 # @memberjunction/metadata-sync
 
+## 2.63.0
+
+### Patch Changes
+
+- 00e19b4: fix up directoryOrder support for root level metadata sync
+- Updated dependencies [28e8a85]
+  - @memberjunction/core-entities@2.63.0
+  - @memberjunction/core-entities-server@2.63.0
+  - @memberjunction/graphql-dataprovider@2.63.0
+  - @memberjunction/sqlserver-dataprovider@2.63.0
+  - @memberjunction/core@2.63.0
+  - @memberjunction/global@2.63.0
+
 ## 2.62.0
 
 ### Patch Changes
