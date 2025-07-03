@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.63.0
+
+### Minor Changes
+
+- 28e8a85: Migration included to modify the AIAgentRun table, so minor bump
+
+### Patch Changes
+
+- @memberjunction/core@2.63.0
+- @memberjunction/global@2.63.0
+
 ## 2.62.0
 
 ### Patch Changes

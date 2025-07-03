@@ -1,5 +1,48 @@
 # Change Log - @memberjunction/server
 
+## 2.63.0
+
+### Minor Changes
+
+- 28e8a85: Migration included to modify the AIAgentRun table, so minor bump
+
+### Patch Changes
+
+- Updated dependencies [28e8a85]
+  - @memberjunction/ai-agents@2.63.0
+  - @memberjunction/ai-core-plus@2.63.0
+  - @memberjunction/core-entities@2.63.0
+  - @memberjunction/aiengine@2.63.0
+  - @memberjunction/ai-prompts@2.63.0
+  - @memberjunction/core-actions@2.63.0
+  - @memberjunction/actions@2.63.0
+  - @memberjunction/core-entities-server@2.63.0
+  - @memberjunction/ai-agent-manager-actions@2.63.0
+  - @memberjunction/actions-bizapps-accounting@2.63.0
+  - @memberjunction/actions-bizapps-lms@2.63.0
+  - @memberjunction/actions-bizapps-social@2.63.0
+  - @memberjunction/entity-communications-server@2.63.0
+  - @memberjunction/doc-utils@2.63.0
+  - @memberjunction/external-change-detection@2.63.0
+  - @memberjunction/graphql-dataprovider@2.63.0
+  - @memberjunction/data-context@2.63.0
+  - @memberjunction/queue@2.63.0
+  - @memberjunction/storage@2.63.0
+  - @memberjunction/sqlserver-dataprovider@2.63.0
+  - @memberjunction/skip-types@2.63.0
+  - @memberjunction/templates@2.63.0
+  - @memberjunction/ai-vectors-pinecone@2.63.0
+  - @memberjunction/actions-bizapps-crm@2.63.0
+  - @memberjunction/data-context-server@2.63.0
+  - @memberjunction/ai@2.63.0
+  - @memberjunction/ai-anthropic@2.63.0
+  - @memberjunction/ai-cerebras@2.63.0
+  - @memberjunction/ai-groq@2.63.0
+  - @memberjunction/ai-mistral@2.63.0
+  - @memberjunction/ai-openai@2.63.0
+  - @memberjunction/core@2.63.0
+  - @memberjunction/global@2.63.0
+
 ## 2.62.0
 
 ### Patch Changes

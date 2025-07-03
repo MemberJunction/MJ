@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ai-mistral
 
+## 2.63.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.63.0
+- @memberjunction/global@2.63.0
+
 ## 2.62.0
 
 ### Patch Changes
