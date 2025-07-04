@@ -1498,8 +1498,8 @@ export class BaseAgent {
             }
             
             let downstreamPayload = payload; // Start with current payload
-            if (params.agent.PayloadDownstreamPaths) {
-                const downstreamPaths = JSON.parse(params.agent.PayloadDownstreamPaths);
+            if (params.agent.PayloadSelfReadPaths) {
+                const downstreamPaths = JSON.parse(params.agent.PayloadSelfReadPaths);
                 // Extract only allowed downstream payload
                 downstreamPayload = this._payloadManager.extractDownstreamPayload(
                     `Self: ${params.agent.Name}`,
@@ -1586,8 +1586,8 @@ export class BaseAgent {
                 // now before we set finalPayload let's use the mergeUpstreamPayload function
                 // because just because and agent is running its own prompt doesn't mean
                 // we should allow it to write back EVERYTHING.
-                if (params.agent.PayloadUpstreamPaths) {
-                    const upstreamPaths = JSON.parse(params.agent.PayloadUpstreamPaths);
+                if (params.agent.PayloadSelfWritePaths) {
+                    const upstreamPaths = JSON.parse(params.agent.PayloadSelfWritePaths);
 
                     const mergedPayload = this._payloadManager.mergeUpstreamPayload(
                         `Self: ${params.agent.Name}`,
