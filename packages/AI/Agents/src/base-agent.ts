@@ -1497,7 +1497,20 @@ export class BaseAgent {
                 stepEntity.PayloadAtStart = JSON.stringify(payload);
             }
             
-            const promptParams = await this.preparePromptParams(config, payload, params);
+            let downstreamPayload = payload; // Start with current payload
+            if (params.agent.PayloadDownstreamPaths) {
+                const downstreamPaths = JSON.parse(params.agent.PayloadDownstreamPaths);
+                // Extract only allowed downstream payload
+                downstreamPayload = this._payloadManager.extractDownstreamPayload(
+                    `Self: ${params.agent.Name}`,
+                    payload, // our inbound payload before prompt
+                    downstreamPaths
+                );
+            }
+            // now prep the params using the downstream payload - which is often the full
+            // payload but the above allows us to narrow the scope of what we send back to the
+            // main prompt if desired in some prompting cases.
+            const promptParams = await this.preparePromptParams(config, downstreamPayload, params);
             
             // Pass cancellation token and streaming callbacks to prompt execution
             promptParams.cancellationToken = params.cancellationToken;
@@ -1549,6 +1562,7 @@ export class BaseAgent {
             let finalPayload = payload; // Start with current payload
             let currentStepPayloadChangeResult = undefined;
             if (nextStep.payloadChangeRequest) {
+                // First, we apply the changes to the payload and get a changeResult
                 const changeResult = this._payloadManager.applyAgentChangeRequest(
                     payload,
                     nextStep.payloadChangeRequest,
@@ -1568,8 +1582,25 @@ export class BaseAgent {
                 // Store payload change metadata for audit trail
                 // This will be merged into outputData later
                 currentStepPayloadChangeResult = this.buildPayloadChangeResultSummary(changeResult);
-                
-                finalPayload = changeResult.result;
+
+                // now before we set finalPayload let's use the mergeUpstreamPayload function
+                // because just because and agent is running its own prompt doesn't mean
+                // we should allow it to write back EVERYTHING.
+                if (params.agent.PayloadUpstreamPaths) {
+                    const upstreamPaths = JSON.parse(params.agent.PayloadUpstreamPaths);
+
+                    const mergedPayload = this._payloadManager.mergeUpstreamPayload(
+                        `Self: ${params.agent.Name}`,
+                        payload, // payload before the prompt
+                        changeResult.result, // payload after the prompt
+                        upstreamPaths
+                    );
+                    finalPayload = mergedPayload;
+                }
+                else {
+                    // no upstream paths defined, so we can just use the result
+                    finalPayload = changeResult.result;
+                }
             }
              
             // Prepare output data
@@ -1697,11 +1728,11 @@ export class BaseAgent {
             try {
                 // Note: TypeScript errors on PayloadDownstreamPaths/PayloadUpstreamPaths are expected
                 // until CodeGen runs after the migration to add these fields to AIAgentEntity
-                if ((subAgentEntity as any).PayloadDownstreamPaths) {
-                    downstreamPaths = JSON.parse((subAgentEntity as any).PayloadDownstreamPaths);
+                if (subAgentEntity.PayloadDownstreamPaths) {
+                    downstreamPaths = JSON.parse(subAgentEntity.PayloadDownstreamPaths);
                 }
-                if ((subAgentEntity as any).PayloadUpstreamPaths) {
-                    upstreamPaths = JSON.parse((subAgentEntity as any).PayloadUpstreamPaths);
+                if (subAgentEntity.PayloadUpstreamPaths) {
+                    upstreamPaths = JSON.parse(subAgentEntity.PayloadUpstreamPaths);
                 }
             } catch (parseError) {
                 this.logError(`Failed to parse payload paths for sub-agent ${subAgentRequest.name}: ${parseError.message}`, {
@@ -1710,8 +1741,8 @@ export class BaseAgent {
                         agentName: params.agent.Name,
                         subAgentName: subAgentRequest.name,
                         subAgentId: subAgentEntity.ID,
-                        downstreamPaths: (subAgentEntity as any).PayloadDownstreamPaths,
-                        upstreamPaths: (subAgentEntity as any).PayloadUpstreamPaths
+                        downstreamPaths: subAgentEntity.PayloadDownstreamPaths,
+                        upstreamPaths: subAgentEntity.PayloadUpstreamPaths
                     }
                 });
             }
