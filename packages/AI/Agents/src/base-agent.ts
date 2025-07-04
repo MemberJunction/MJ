@@ -330,8 +330,9 @@ export class BaseAgent {
 
             // Finalize the agent run
             this.logStatus(`✅ Finalizing execution for agent '${params.agent.Name}'`, true, params);
-           
-            return await this.finalizeAgentRun<R>(executionResult.finalStep, executionResult.finalStep.previousPayload, params.contextUser);
+
+            // finalize the run, favor the new payload if we have one, otehrwise fall back to the previous payload
+            return await this.finalizeAgentRun<R>(executionResult.finalStep, executionResult.finalStep.newPayload || executionResult.finalStep.previousPayload, params.contextUser);
         } catch (error) {
             // Check if error is due to cancellation
             if (params.cancellationToken?.aborted || error.message === 'Cancelled during execution') {
@@ -1401,7 +1402,8 @@ export class BaseAgent {
                     return { 
                         terminate: true,
                         step: 'Success', 
-                        previousPayload: previousDecision.previousPayload 
+                        previousPayload: previousDecision.previousPayload,
+                        newPayload: previousDecision.newPayload 
                     };
                 }
                 else {
@@ -1414,7 +1416,8 @@ export class BaseAgent {
                     return { 
                         terminate: true,
                         step: 'Failed', 
-                        previousPayload: previousDecision.previousPayload 
+                        previousPayload: previousDecision.previousPayload,
+                        newPayload: previousDecision.newPayload
                     };
                 }
                 else {
@@ -1512,7 +1515,8 @@ export class BaseAgent {
                     ...cancelledResult,
                     terminate: true, 
                     step: 'Failed', // Cancelled is treated as failed
-                    previousPayload: cancelledResult.payload,   
+                    previousPayload: cancelledResult.payload,
+                    newPayload: cancelledResult.payload // No changes, just return the same payload   
                 }
             }
 
@@ -1585,7 +1589,8 @@ export class BaseAgent {
             }
             
             // Update nextStep to include the final payload
-            nextStep.previousPayload = finalPayload;
+            nextStep.newPayload = finalPayload;
+            nextStep.previousPayload = payload;
             
             // Finalize step entity
             await this.finalizeStepEntity(stepEntity, promptResult.success, 
@@ -1858,7 +1863,8 @@ export class BaseAgent {
                 ...subAgentResult, 
                 step: subAgentResult.success ? 'Success' : 'Failed', 
                 terminate: shouldTerminate,
-                previousPayload: mergedPayload
+                previousPayload: previousDecision?.previousPayload,
+                newPayload: mergedPayload
             };            
         } catch (error) {
             await this.finalizeStepEntity(stepEntity, false, error.message);
@@ -2043,6 +2049,7 @@ export class BaseAgent {
                 terminate: false,
                 step: 'Retry',
                 previousPayload: previousDecision?.previousPayload || null,
+                newPayload: previousDecision?.previousPayload || null, // action steps don't modify the payload so we pass it through
                 priorStepResult: actionSummaries,
                 retryReason: failedActions.length > 0 
                     ? `Processing results with ${failedActions.length} failed action(s): ${failedActions.map(a => a.actionName).join(', ')}`
@@ -2079,6 +2086,7 @@ export class BaseAgent {
             reasoning: previousDecision.reasoning,
             confidence: previousDecision.confidence,
             previousPayload: previousDecision.previousPayload,
+            newPayload: previousDecision.previousPayload, // chat steps don't modify the payload
         };
     }
 

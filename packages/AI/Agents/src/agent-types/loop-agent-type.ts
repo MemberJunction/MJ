@@ -133,7 +133,8 @@ export class LoopAgentType extends BaseAgentType {
             switch (response.nextStep.type) {
                 case 'Sub-Agent':
                     if (!response.nextStep.subAgent) {
-                        retVal.step = 'Failed';
+                        retVal.step = 'Retry';
+                        retVal.message = 'When nextStep.type == "Sub-Agent", subAgent details must be specified';
                         retVal.errorMessage = 'Sub-agent details not specified';
                     }
                     else {
@@ -148,7 +149,8 @@ export class LoopAgentType extends BaseAgentType {
                     break;
                 case 'Actions':
                     if (!response.nextStep.actions || response.nextStep.actions.length === 0) {
-                        retVal.step = 'Failed';
+                        retVal.step = 'Retry';
+                        retVal.message = 'When nextStep.type == "Actions", 1 or more actions must be specified in the nextStep.actions array';
                         retVal.errorMessage = 'Actions not specified for action type';
                     }
                     else {

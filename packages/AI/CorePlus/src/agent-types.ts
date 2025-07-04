@@ -116,6 +116,10 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * @deprecated Use payloadChangeRequest instead for state mutations
      */
     previousPayload?: P;
+    /**
+     * This represents the new payload after the step was executed after the payloadChangeRequest is applied.
+     */
+    newPayload?: P;
     /** Error message when step is 'failed' */
     errorMessage?: string;
     /** Reason for retry when step is 'retry' (e.g., "Processing action results", "Handling error condition") */
