@@ -531,11 +531,11 @@ export class BaseAgent {
         }
 
         // Find the actual prompt entity
-        const childPrompt = engine.Prompts.find(p => p.ID === agentPrompt.PromptID);
+        const childPrompt = engine.Prompts.find(p => p.ID === agentPrompt?.PromptID);
         if (!childPrompt && !metadataOptional) {
             return {
                 success: false,
-                errorMessage: `Child prompt not found for ID: ${agentPrompt.PromptID}`
+                errorMessage: `Child prompt not found for ID: ${agentPrompt?.PromptID}`
             };
         }
 

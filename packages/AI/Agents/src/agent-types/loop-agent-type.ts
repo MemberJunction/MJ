@@ -211,14 +211,20 @@ export class LoopAgentType extends BaseAgentType {
 
         // nextStep is optional when taskComplete is true
         if (!response.taskComplete && !response.nextStep) {
-            if (response.message?.trim().length > 0) {
-                // in this situation we have a message coming back but a malformed response
+            if (response.message?.trim().length > 0 || response.reasoning?.trim().length > 0) {
+                // in this situation we have a message or reasoning coming back but a malformed response
                 // so we can consider it a chat response becuase it is trying to communicate
                 // something back, better to provide that back than discarding it entirely
                 // possibly we will make this configurable in the future
                 response.nextStep = {
                     type: 'Chat'
                 };
+
+                if (response.message?.trim().length === 0) {
+                    // this means reasoning was provided but no message, copy reasoning to message 
+                    // as you shouldn't ever have that but we can handle it gracefully
+                    response.message = response.reasoning;
+                }
             }
             else {
                 LogError('LoopAgentResponse requires nextStep when taskComplete is false');
