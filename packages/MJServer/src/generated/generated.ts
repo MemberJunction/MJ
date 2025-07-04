@@ -2204,6 +2204,14 @@ export class AIAgent_ {
     @Field({description: `JSON array of paths that define which parts of the payload sub-agents are allowed to write back upstream. Use ["*"] to allow all writes, or specify paths like ["analysis.results", "recommendations.*"]`}) 
     PayloadUpstreamPaths: string;
         
+    @Field({nullable: true, description: `JSON array of paths that specify what parts of the payload the agent's own prompt can read. Controls downstream data 
+flow when the agent executes its own prompt step.`}) 
+    PayloadSelfReadPaths?: string;
+        
+    @Field({nullable: true, description: `JSON array of paths that specify what parts of the payload the agent's own prompt can write back. Controls upstream 
+data flow when the agent executes its own prompt step.`}) 
+    PayloadSelfWritePaths?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -2309,6 +2317,12 @@ export class CreateAIAgentInput {
 
     @Field({ nullable: true })
     PayloadUpstreamPaths?: string;
+
+    @Field({ nullable: true })
+    PayloadSelfReadPaths: string | null;
+
+    @Field({ nullable: true })
+    PayloadSelfWritePaths: string | null;
 }
     
 
@@ -2373,6 +2387,12 @@ export class UpdateAIAgentInput {
 
     @Field({ nullable: true })
     PayloadUpstreamPaths?: string;
+
+    @Field({ nullable: true })
+    PayloadSelfReadPaths?: string | null;
+
+    @Field({ nullable: true })
+    PayloadSelfWritePaths?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
