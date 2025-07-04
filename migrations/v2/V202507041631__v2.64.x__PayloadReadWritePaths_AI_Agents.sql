@@ -1,0 +1,561 @@
+ALTER TABLE __mj.AIAgent
+ADD PayloadSelfReadPaths NVARCHAR(MAX) NULL,
+    PayloadSelfWritePaths NVARCHAR(MAX) NULL;
+GO
+-- Add extended properties for the new columns
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'JSON array of paths that specify what parts of the payload the agent''s own prompt can read. Controls downstream data 
+flow when the agent executes its own prompt step.',
+    @level0type = N'SCHEMA', @level0name = N'__mj',
+    @level1type = N'TABLE',  @level1name = N'AIAgent',
+    @level2type = N'COLUMN', @level2name = N'PayloadSelfReadPaths';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'JSON array of paths that specify what parts of the payload the agent''s own prompt can write back. Controls upstream 
+data flow when the agent executes its own prompt step.',
+    @level0type = N'SCHEMA', @level0name = N'__mj',
+    @level1type = N'TABLE',  @level1name = N'AIAgent',
+    @level2type = N'COLUMN', @level2name = N'PayloadSelfWritePaths';
+
+
+-- Code Gen Run
+
+
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [__mj].EntityField 
+         WHERE ID = 'ebf3b958-f07c-420b-82be-2cb1e396a0f5'  OR 
+               (EntityID = 'CDB135CC-6D3C-480B-90AE-25B7805F82C1' AND Name = 'PayloadSelfReadPaths')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [__mj].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'ebf3b958-f07c-420b-82be-2cb1e396a0f5',
+            'CDB135CC-6D3C-480B-90AE-25B7805F82C1', -- Entity: AI Agents
+            100022,
+            'PayloadSelfReadPaths',
+            'Payload Self Read Paths',
+            'JSON array of paths that specify what parts of the payload the agent''s own prompt can read. Controls downstream data 
+flow when the agent executes its own prompt step.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [__mj].EntityField 
+         WHERE ID = '61e51fc3-8efa-40d9-9525-f3fad0a95dca'  OR 
+               (EntityID = 'CDB135CC-6D3C-480B-90AE-25B7805F82C1' AND Name = 'PayloadSelfWritePaths')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [__mj].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '61e51fc3-8efa-40d9-9525-f3fad0a95dca',
+            'CDB135CC-6D3C-480B-90AE-25B7805F82C1', -- Entity: AI Agents
+            100023,
+            'PayloadSelfWritePaths',
+            'Payload Self Write Paths',
+            'JSON array of paths that specify what parts of the payload the agent''s own prompt can write back. Controls upstream 
+data flow when the agent executes its own prompt step.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* Index for Foreign Keys for AIAgent */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: AI Agents
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key ParentID in table AIAgent
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_ParentID' 
+    AND object_id = OBJECT_ID('[__mj].[AIAgent]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_ParentID ON [__mj].[AIAgent] ([ParentID]);
+
+-- Index for foreign key ContextCompressionPromptID in table AIAgent
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_ContextCompressionPromptID' 
+    AND object_id = OBJECT_ID('[__mj].[AIAgent]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_ContextCompressionPromptID ON [__mj].[AIAgent] ([ContextCompressionPromptID]);
+
+-- Index for foreign key TypeID in table AIAgent
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_TypeID' 
+    AND object_id = OBJECT_ID('[__mj].[AIAgent]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_TypeID ON [__mj].[AIAgent] ([TypeID]);
+
+/* Base View SQL for AI Agents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: AI Agents
+-- Item: vwAIAgents
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      AI Agents
+-----               SCHEMA:      __mj
+-----               BASE TABLE:  AIAgent
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DROP VIEW IF EXISTS [__mj].[vwAIAgents]
+GO
+
+CREATE VIEW [__mj].[vwAIAgents]
+AS
+SELECT
+    a.*,
+    AIAgent_ParentID.[Name] AS [Parent],
+    AIPrompt_ContextCompressionPromptID.[Name] AS [ContextCompressionPrompt],
+    AIAgentType_TypeID.[Name] AS [Type]
+FROM
+    [__mj].[AIAgent] AS a
+LEFT OUTER JOIN
+    [__mj].[AIAgent] AS AIAgent_ParentID
+  ON
+    [a].[ParentID] = AIAgent_ParentID.[ID]
+LEFT OUTER JOIN
+    [__mj].[AIPrompt] AS AIPrompt_ContextCompressionPromptID
+  ON
+    [a].[ContextCompressionPromptID] = AIPrompt_ContextCompressionPromptID.[ID]
+LEFT OUTER JOIN
+    [__mj].[AIAgentType] AS AIAgentType_TypeID
+  ON
+    [a].[TypeID] = AIAgentType_TypeID.[ID]
+GO
+GRANT SELECT ON [__mj].[vwAIAgents] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+
+/* Base View Permissions SQL for AI Agents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: AI Agents
+-- Item: Permissions for vwAIAgents
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [__mj].[vwAIAgents] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+/* spCreate SQL for AI Agents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: AI Agents
+-- Item: spCreateAIAgent
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR AIAgent
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [__mj].[spCreateAIAgent]
+GO
+
+CREATE PROCEDURE [__mj].[spCreateAIAgent]
+    @ID uniqueidentifier = NULL,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @LogoURL nvarchar(255),
+    @ParentID uniqueidentifier,
+    @ExposeAsAction bit,
+    @ExecutionOrder int,
+    @ExecutionMode nvarchar(20),
+    @EnableContextCompression bit,
+    @ContextCompressionMessageThreshold int,
+    @ContextCompressionPromptID uniqueidentifier,
+    @ContextCompressionMessageRetentionCount int,
+    @TypeID uniqueidentifier,
+    @Status nvarchar(20),
+    @DriverClass nvarchar(255),
+    @IconClass nvarchar(100),
+    @ModelSelectionMode nvarchar(50),
+    @PayloadDownstreamPaths nvarchar(MAX),
+    @PayloadUpstreamPaths nvarchar(MAX),
+    @PayloadSelfReadPaths nvarchar(MAX),
+    @PayloadSelfWritePaths nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [__mj].[AIAgent]
+            (
+                [ID],
+                [Name],
+                [Description],
+                [LogoURL],
+                [ParentID],
+                [ExposeAsAction],
+                [ExecutionOrder],
+                [ExecutionMode],
+                [EnableContextCompression],
+                [ContextCompressionMessageThreshold],
+                [ContextCompressionPromptID],
+                [ContextCompressionMessageRetentionCount],
+                [TypeID],
+                [Status],
+                [DriverClass],
+                [IconClass],
+                [ModelSelectionMode],
+                [PayloadDownstreamPaths],
+                [PayloadUpstreamPaths],
+                [PayloadSelfReadPaths],
+                [PayloadSelfWritePaths]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @Name,
+                @Description,
+                @LogoURL,
+                @ParentID,
+                @ExposeAsAction,
+                @ExecutionOrder,
+                @ExecutionMode,
+                @EnableContextCompression,
+                @ContextCompressionMessageThreshold,
+                @ContextCompressionPromptID,
+                @ContextCompressionMessageRetentionCount,
+                @TypeID,
+                @Status,
+                @DriverClass,
+                @IconClass,
+                @ModelSelectionMode,
+                @PayloadDownstreamPaths,
+                @PayloadUpstreamPaths,
+                @PayloadSelfReadPaths,
+                @PayloadSelfWritePaths
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [__mj].[AIAgent]
+            (
+                [Name],
+                [Description],
+                [LogoURL],
+                [ParentID],
+                [ExposeAsAction],
+                [ExecutionOrder],
+                [ExecutionMode],
+                [EnableContextCompression],
+                [ContextCompressionMessageThreshold],
+                [ContextCompressionPromptID],
+                [ContextCompressionMessageRetentionCount],
+                [TypeID],
+                [Status],
+                [DriverClass],
+                [IconClass],
+                [ModelSelectionMode],
+                [PayloadDownstreamPaths],
+                [PayloadUpstreamPaths],
+                [PayloadSelfReadPaths],
+                [PayloadSelfWritePaths]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @Name,
+                @Description,
+                @LogoURL,
+                @ParentID,
+                @ExposeAsAction,
+                @ExecutionOrder,
+                @ExecutionMode,
+                @EnableContextCompression,
+                @ContextCompressionMessageThreshold,
+                @ContextCompressionPromptID,
+                @ContextCompressionMessageRetentionCount,
+                @TypeID,
+                @Status,
+                @DriverClass,
+                @IconClass,
+                @ModelSelectionMode,
+                @PayloadDownstreamPaths,
+                @PayloadUpstreamPaths,
+                @PayloadSelfReadPaths,
+                @PayloadSelfWritePaths
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwAIAgents] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [__mj].[spCreateAIAgent] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spCreate Permissions for AI Agents */
+
+GRANT EXECUTE ON [__mj].[spCreateAIAgent] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spUpdate SQL for AI Agents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: AI Agents
+-- Item: spUpdateAIAgent
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR AIAgent
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [__mj].[spUpdateAIAgent]
+GO
+
+CREATE PROCEDURE [__mj].[spUpdateAIAgent]
+    @ID uniqueidentifier,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @LogoURL nvarchar(255),
+    @ParentID uniqueidentifier,
+    @ExposeAsAction bit,
+    @ExecutionOrder int,
+    @ExecutionMode nvarchar(20),
+    @EnableContextCompression bit,
+    @ContextCompressionMessageThreshold int,
+    @ContextCompressionPromptID uniqueidentifier,
+    @ContextCompressionMessageRetentionCount int,
+    @TypeID uniqueidentifier,
+    @Status nvarchar(20),
+    @DriverClass nvarchar(255),
+    @IconClass nvarchar(100),
+    @ModelSelectionMode nvarchar(50),
+    @PayloadDownstreamPaths nvarchar(MAX),
+    @PayloadUpstreamPaths nvarchar(MAX),
+    @PayloadSelfReadPaths nvarchar(MAX),
+    @PayloadSelfWritePaths nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [__mj].[AIAgent]
+    SET
+        [Name] = @Name,
+        [Description] = @Description,
+        [LogoURL] = @LogoURL,
+        [ParentID] = @ParentID,
+        [ExposeAsAction] = @ExposeAsAction,
+        [ExecutionOrder] = @ExecutionOrder,
+        [ExecutionMode] = @ExecutionMode,
+        [EnableContextCompression] = @EnableContextCompression,
+        [ContextCompressionMessageThreshold] = @ContextCompressionMessageThreshold,
+        [ContextCompressionPromptID] = @ContextCompressionPromptID,
+        [ContextCompressionMessageRetentionCount] = @ContextCompressionMessageRetentionCount,
+        [TypeID] = @TypeID,
+        [Status] = @Status,
+        [DriverClass] = @DriverClass,
+        [IconClass] = @IconClass,
+        [ModelSelectionMode] = @ModelSelectionMode,
+        [PayloadDownstreamPaths] = @PayloadDownstreamPaths,
+        [PayloadUpstreamPaths] = @PayloadUpstreamPaths,
+        [PayloadSelfReadPaths] = @PayloadSelfReadPaths,
+        [PayloadSelfWritePaths] = @PayloadSelfWritePaths
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT
+                                        *
+                                    FROM
+                                        [__mj].[vwAIAgents]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [__mj].[spUpdateAIAgent] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the AIAgent table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [__mj].trgUpdateAIAgent
+GO
+CREATE TRIGGER [__mj].trgUpdateAIAgent
+ON [__mj].[AIAgent]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [__mj].[AIAgent]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [__mj].[AIAgent] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for AI Agents */
+
+GRANT EXECUTE ON [__mj].[spUpdateAIAgent] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spDelete SQL for AI Agents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: AI Agents
+-- Item: spDeleteAIAgent
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR AIAgent
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [__mj].[spDeleteAIAgent]
+GO
+
+CREATE PROCEDURE [__mj].[spDeleteAIAgent]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [__mj].[AIAgent]
+    WHERE
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [__mj].[spDeleteAIAgent] TO [cdp_Integration]
+    
+
+/* spDelete Permissions for AI Agents */
+
+GRANT EXECUTE ON [__mj].[spDeleteAIAgent] TO [cdp_Integration]
+
+
+
