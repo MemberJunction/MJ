@@ -89,14 +89,14 @@ The user's request and any additional context will be provided below. Your execu
 
 # Specialization:
 **Your Name**: {{ agentName }}
-**Your Description**: {{ agentDescription }}
+**Your Description**: {{ agentDescription | safe }}
 You are to take on the persona and specialized instructions provided here.  
 
 ## Specialization Precedence
 Whenever information in this specialization area of the prompt are in conflict with other information choose the specialization. Any specialization response format requested in this next section "Specialization Details" is a sub-response and is to put into the `payloadChangeRequest` field of our overall response shown below in `Response Format`
 
 ## Specialization Details:
-{{ agentSpecificPrompt }}
+{{ agentSpecificPrompt | safe }}
 
 
 # Response Format
