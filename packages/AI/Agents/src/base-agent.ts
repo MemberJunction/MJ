@@ -388,21 +388,25 @@ export class BaseAgent {
             // Check if we should continue or terminate
             if (nextStep.terminate) {
                 continueExecution = false;
-                currentNextStep = nextStep;
                 this.logStatus(`🏁 Agent '${params.agent.Name}' terminating after ${stepCount} steps with result: ${nextStep.step}`, true, params);
             } else {
                 currentNextStep = nextStep;
-                // currentNextStep = {
-                //     ...nextStep,
-
-                //     // when we get here, we need to update the previousPayload to be the newPayload and set newPayload to null becuase the current
-                //     // next step is about to become the PREVIOUS STEP when we call executeNextStep again above...
-                //     previousPayload: currentNextStep?.newPayload || currentNextStep?.previousPayload || null,
-                //     newPayload: null, // Reset newPayload for the next iteration
-                //     payloadChangeRequest: null // Reset payload change request for the next iteration
-                // };
-                
+                // If the last step didn't have a new payload make sure to carry forward
+                // the previous payload to the next step
+                if (!currentNextStep.newPayload && currentNextStep.previousPayload) {
+                    currentNextStep.newPayload = currentNextStep.previousPayload;
+                }          
                 this.logStatus(`➡️ Agent '${params.agent.Name}' continuing to next step: ${nextStep.step}`, true, params);
+            }
+
+            // in both cases at the end of the loop we need to advanced the currentNextStep
+            currentNextStep = nextStep;
+            // if we get to the end and for some reason the newPayload is not set, we should
+            // grab the previousPayload to ensure we have something to for the next loop
+            // or to return as a failed step shouldn't kill the chain of execution's payload
+            // carryforward.
+            if (!currentNextStep.newPayload && currentNextStep.previousPayload) {
+                currentNextStep.newPayload = currentNextStep.previousPayload;
             }
         }
 
