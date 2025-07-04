@@ -492,9 +492,17 @@ export class BaseAgent {
     protected async loadAgentConfiguration(agent: AIAgentEntity): Promise<AgentConfiguration> {
         const engine = AIEngine.Instance;
 
+        // first check to see if we have a custom driver class if we do, we do NOT validate the rest of
+        // the metadata as the custom sub-class can do whatever it wants with/without prompts/etc.
+        let metadataOptional: boolean = false;
+        if (agent.DriverClass) {
+            this.logStatus(`🔧 Using custom driver class '${agent.DriverClass}' for agent '${agent.Name}'`, true);   
+            metadataOptional = true;
+        }
+
         // Find the agent type
         const agentType = engine.AgentTypes.find(at => at.ID === agent.TypeID);
-        if (!agentType) {
+        if (!agentType && !metadataOptional) {
             return {
                 success: false,
                 errorMessage: `Agent type not found for ID: ${agent.TypeID}`
@@ -503,7 +511,7 @@ export class BaseAgent {
 
         // Find the system prompt
         const systemPrompt = engine.Prompts.find(p => p.ID === agentType.SystemPromptID);
-        if (!systemPrompt) {
+        if (!systemPrompt && !metadataOptional) {
             return {
                 success: false,
                 errorMessage: `System prompt not found for agent type: ${agentType.Name}`
@@ -515,7 +523,7 @@ export class BaseAgent {
             .filter(ap => ap.AgentID === agent.ID && ap.Status === 'Active')
             .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder)[0];
         
-        if (!agentPrompt) {
+        if (!agentPrompt && !metadataOptional) {
             return {
                 success: false,
                 errorMessage: `No prompts configured for agent: ${agent.Name}`
@@ -524,7 +532,7 @@ export class BaseAgent {
 
         // Find the actual prompt entity
         const childPrompt = engine.Prompts.find(p => p.ID === agentPrompt.PromptID);
-        if (!childPrompt) {
+        if (!childPrompt && !metadataOptional) {
             return {
                 success: false,
                 errorMessage: `Child prompt not found for ID: ${agentPrompt.PromptID}`
@@ -532,7 +540,7 @@ export class BaseAgent {
         }
 
         // Validate placeholder configuration
-        if (!agentType.AgentPromptPlaceholder) {
+        if (!agentType.AgentPromptPlaceholder && !metadataOptional) {
             return {
                 success: false,
                 errorMessage: `Agent type '${agentType.Name}' does not have AgentPromptPlaceholder configured.`
