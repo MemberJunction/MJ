@@ -338,8 +338,7 @@ export class RunCodeGenBase {
         if (isVerbose) startSpinner('Generating Database Schema JSON Output...');
         const schemaGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<DBSchemaGeneratorBase>(DBSchemaGeneratorBase)!;
         if (!schemaGeneratorObject.generateDBSchemaJSONOutput(md.Entities, dbSchemaOutputDir)) {
-          failSpinner('Error generating Database Schema JSON Output');
-          return;
+          failSpinner('Error generating Database Schema JSON Output, non-fatal, continuing...');
         } else if (isVerbose) {
           succeedSpinner('Database Schema JSON Output generated');
         }
