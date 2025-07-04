@@ -37,7 +37,7 @@ export interface LoopAgentResponse<P = any> {
     message: string;
 
     /**
-     * Agent's payload change requests. Leave this as undefined if NO changes are needed.
+     * Agent's payload change requests. If no changes are needed, **OMIT** this field entirely.
      * See @see AgentPayloadChangeRequest for details on how to structure this.
      * @type {P}
      */
