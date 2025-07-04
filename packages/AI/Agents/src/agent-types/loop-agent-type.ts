@@ -209,11 +209,6 @@ export class LoopAgentType extends BaseAgentType {
             return false;
         }
 
-        if (typeof response.reasoning !== 'string') {
-            LogError('LoopAgentResponse missing required field: reasoning');
-            return false;
-        }
-
         // nextStep is optional when taskComplete is true
         if (!response.taskComplete && !response.nextStep) {
             if (response.message?.trim().length > 0) {
