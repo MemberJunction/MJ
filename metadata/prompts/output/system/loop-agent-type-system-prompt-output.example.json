@@ -1,10 +1,10 @@
 {
   "taskComplete": "[BOOLEAN: true if task is fully complete, false if more steps needed]",
-  "message": "[STRING: Human-readable message about current status or final result - this is what the user/caller sees - they do NOT see what is in the payload, so include EVERYTHING here that is important for the user even if it overlaps with the payload]",
+  "message?": "[STRING: Human-readable message about current status or final result - this is what the user/caller sees - they do NOT see what is in the payload]",
   "payloadChangeRequest*": {
     "[NOTE]": "Follow the format of AgentPayloadChangeRequest. OMIT payloadChangeRequest entirely if no changes are needed."
   },
-  "reasoning": "[STRING: Your internal explanation of why you made this decision - helps with debugging]",
+  "reasoning?": "[STRING: Your internal explanation of why you made this decision - helps with debugging]",
   "confidence?": "[OPTIONAL NUMBER: 0.0 to 1.0 indicating confidence in this decision]",
   "nextStep?": {
     "type": "[REQUIRED if taskComplete=false: Must be exactly one of the options specified in the type definition]",

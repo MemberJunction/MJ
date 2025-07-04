@@ -28,13 +28,13 @@ export interface LoopAgentResponse<P = any> {
      * include it here so that the user can read it.
      *
      * This message is returned regardless of whether taskComplete is true or false, allowing
-     * the agent to communicate with its caller.
+     * the agent to communicate with its caller. The message is not required if nextStep.type is 'Sub-Agent' or 'Actions'
      * 
      * In the event of taskComplete being false and the nextStep.type is 'chat', this message
      * will be sent to the user as a chat message.
      * @type {string}
      */
-    message: string;
+    message?: string;
 
     /**
      * Agent's payload change requests. If no changes are needed, **OMIT** this field entirely.
@@ -48,7 +48,7 @@ export interface LoopAgentResponse<P = any> {
      * This should be a clear, concise explanation of why the agent chose
      * the specific next step or to complete, helping with debugging and transparency.
      */
-    reasoning: string;
+    reasoning?: string;
     
     /**
      * The agent's confidence level in its decision (0.0 to 1.0).
