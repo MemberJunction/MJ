@@ -1,4 +1,4 @@
-import { SkipComponentRootSpec } from "./component-types";
+import { SkipComponentRootSpec } from "./root-spec";
 
 /**
  * Defines a given option for a generated component that the user can choose. The code/componentObjectName properties are used to render the component in the UI.
