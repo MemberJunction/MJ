@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.64.0
+
+### Minor Changes
+
+- e775f2b: Found bug in metadata extraction from SQL Server, fixed and migration to capture changes for 2.64.0
+
+### Patch Changes
+
+- @memberjunction/core@2.64.0
+- @memberjunction/global@2.64.0
+
 ## 2.63.1
 
 ### Patch Changes

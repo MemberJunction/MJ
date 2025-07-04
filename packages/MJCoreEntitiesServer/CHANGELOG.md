@@ -1,5 +1,24 @@
 # @memberjunction/core-entities-server
 
+## 2.64.0
+
+### Minor Changes
+
+- e775f2b: Found bug in metadata extraction from SQL Server, fixed and migration to capture changes for 2.64.0
+
+### Patch Changes
+
+- Updated dependencies [e775f2b]
+  - @memberjunction/core-entities@2.64.0
+  - @memberjunction/skip-types@2.64.0
+  - @memberjunction/ai-core-plus@2.64.0
+  - @memberjunction/aiengine@2.64.0
+  - @memberjunction/ai-prompts@2.64.0
+  - @memberjunction/ai-vector-dupe@2.64.0
+  - @memberjunction/sqlserver-dataprovider@2.64.0
+  - @memberjunction/core@2.64.0
+  - @memberjunction/global@2.64.0
+
 ## 2.63.1
 
 ### Patch Changes
