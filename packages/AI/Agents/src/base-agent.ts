@@ -730,7 +730,7 @@ export class BaseAgent {
             const engine = AIEngine.Instance;
             
             // Find sub-agents using AIEngine
-            const subAgents = engine.Agents.filter(a => a.ParentID === agent.ID)
+            const activeSubAgents = engine.Agents.filter(a => a.ParentID === agent.ID && a.Status === 'Active')
                 .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder);
             
             // Load available actions (placeholder for now - would integrate with Actions framework)
@@ -742,8 +742,8 @@ export class BaseAgent {
                 agentName: agent.Name,
                 agentDescription: agent.Description,
                 parentAgentName: agent.Parent ? agent.Parent.trim() : "",
-                subAgentCount: subAgents.length,
-                subAgentDetails: this.formatSubAgentDetails(subAgents),
+                subAgentCount: activeSubAgents.length,
+                subAgentDetails: this.formatSubAgentDetails(activeSubAgents),
                 actionCount: actions.length,
                 actionDetails: this.formatActionDetails(activeActions),
             };
