@@ -254,6 +254,17 @@ export class LoopAgentType extends BaseAgentType {
                 LogError('LoopAgentResponse requires subAgent object for sub-agent type');
                 return false;
             }
+
+            if (lcaseType === 'chat' && !response.message) {
+                // check to see if we have reasoning, if so, use that, otherwise we have to fail
+                if (!response.reasoning || response.reasoning.trim().length === 0) {
+                    LogError('LoopAgentResponse requires message for chat type');
+                    return false;
+                } else {
+                    // if we have reasoning, use that as the message
+                    response.message = response.reasoning;
+                }
+            }
         }
 
         return true;

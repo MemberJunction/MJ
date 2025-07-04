@@ -392,6 +392,16 @@ export class BaseAgent {
                 this.logStatus(`🏁 Agent '${params.agent.Name}' terminating after ${stepCount} steps with result: ${nextStep.step}`, true, params);
             } else {
                 currentNextStep = nextStep;
+                // currentNextStep = {
+                //     ...nextStep,
+
+                //     // when we get here, we need to update the previousPayload to be the newPayload and set newPayload to null becuase the current
+                //     // next step is about to become the PREVIOUS STEP when we call executeNextStep again above...
+                //     previousPayload: currentNextStep?.newPayload || currentNextStep?.previousPayload || null,
+                //     newPayload: null, // Reset newPayload for the next iteration
+                //     payloadChangeRequest: null // Reset payload change request for the next iteration
+                // };
+                
                 this.logStatus(`➡️ Agent '${params.agent.Name}' continuing to next step: ${nextStep.step}`, true, params);
             }
         }
@@ -1476,7 +1486,7 @@ export class BaseAgent {
             });
 
             // Prepare prompt parameters
-            const payload = previousDecision?.previousPayload || params.payload;
+            const payload = previousDecision?.newPayload || params.payload;
             
             // Set PayloadAtStart
             if (stepEntity && payload) {
@@ -1705,11 +1715,11 @@ export class BaseAgent {
             // Extract only allowed downstream payload
             const downstreamPayload = this._payloadManager.extractDownstreamPayload(
                 subAgentRequest.name,
-                previousDecision.previousPayload,
+                previousDecision.newPayload,
                 downstreamPaths
             );
             
-            stepEntity.PayloadAtStart = JSON.stringify(previousDecision.previousPayload);
+            stepEntity.PayloadAtStart = JSON.stringify(previousDecision.newPayload);
 
             // Execute sub-agent with filtered payload
             const subAgentResult = await this.ExecuteSubAgent(
@@ -1723,7 +1733,7 @@ export class BaseAgent {
             // Merge upstream changes back into parent payload
             const mergedPayload = this._payloadManager.mergeUpstreamPayload(
                 subAgentRequest.name,
-                previousDecision.previousPayload,
+                previousDecision.newPayload,
                 subAgentResult.payload,
                 upstreamPaths
             );
@@ -1737,14 +1747,14 @@ export class BaseAgent {
             };
             
             // Identify what changed in the merge by comparing original and merged payloads
-            const originalKeys = Object.keys(previousDecision.previousPayload || {});
+            const originalKeys = Object.keys(previousDecision.newPayload || {});
             const mergedKeys = Object.keys(mergedPayload || {});
             
             // Find updates and additions
             for (const key of mergedKeys) {
-                if (!(key in (previousDecision.previousPayload || {}))) {
+                if (!(key in (previousDecision.newPayload || {}))) {
                     mergeChangeRequest.newElements![key] = mergedPayload[key];
-                } else if (!_.isEqual(previousDecision.previousPayload[key], mergedPayload[key])) {
+                } else if (!_.isEqual(previousDecision.newPayload[key], mergedPayload[key])) {
                     mergeChangeRequest.updateElements![key] = mergedPayload[key];
                 }
             }
@@ -1835,8 +1845,10 @@ export class BaseAgent {
                 subAgentId: subAgentEntity.ID,
                 success: subAgentResult.success,
                 finalStep: subAgentResult.agentRun?.FinalStep,
-                payload: subAgentResult.payload,
                 errorMessage: subAgentResult.agentRun?.ErrorMessage || null
+                // do NOT include payload here as this goes to the LLM and
+                // we don't need that there, too many tokens and LLM already gets
+                // payload the normal way
             };
             
             // Add user message with the sub-agent results
@@ -1863,7 +1875,7 @@ export class BaseAgent {
                 ...subAgentResult, 
                 step: subAgentResult.success ? 'Success' : 'Failed', 
                 terminate: shouldTerminate,
-                previousPayload: previousDecision?.previousPayload,
+                previousPayload: previousDecision?.newPayload,
                 newPayload: mergedPayload
             };            
         } catch (error) {
@@ -2049,7 +2061,7 @@ export class BaseAgent {
                 terminate: false,
                 step: 'Retry',
                 previousPayload: previousDecision?.previousPayload || null,
-                newPayload: previousDecision?.previousPayload || null, // action steps don't modify the payload so we pass it through
+                newPayload: previousDecision?.newPayload || null, // action steps don't modify the payload so we pass it through
                 priorStepResult: actionSummaries,
                 retryReason: failedActions.length > 0 
                     ? `Processing results with ${failedActions.length} failed action(s): ${failedActions.map(a => a.actionName).join(', ')}`
@@ -2164,6 +2176,7 @@ export class BaseAgent {
 
             // Set the FinalPayloadObject - this will automatically stringify for the DB
             this._agentRun.FinalPayloadObject = payload;
+            this._agentRun.FinalPayload = payload ? JSON.stringify(payload) : null;
             
             // Calculate total tokens from all prompts and sub-agents
             const tokenStats = this.calculateTokenStats();
