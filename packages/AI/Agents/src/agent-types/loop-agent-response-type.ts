@@ -20,18 +20,16 @@ export interface LoopAgentResponse<P = any> {
     
     /**
      * A message that provides information to the caller, which is either a human, another computer system, or 
-     * a parent agent. This message should be readable, clear and provide insight. The structured
-     * details of the result of the agent's execution should not be here, but rather be included in the @see payload.
+     * another agent. This message should be readable, clear and provide insight. The structured
+     * details of the result of the agent's execution should **not** be here, but rather be included in the @see payload.
      * 
-     * This message should include EVERYTHING that you want the user to be able to read, they do not
-     * see what is in the payload, so even if this is redundant with the payload, it is important to
-     * include it here so that the user can read it.
-     *
-     * This message is returned regardless of whether taskComplete is true or false, allowing
+     * This message should be returned regardless of whether taskComplete is true or false, allowing
      * the agent to communicate with its caller. The message is not required if nextStep.type is 'Sub-Agent' or 'Actions'
      * 
      * In the event of taskComplete being false and the nextStep.type is 'chat', this message
      * will be sent to the user as a chat message.
+     * 
+     * Finally, this is a brief message, do not include markdown, HTML, or other formatting and limit it to 100 words.
      * @type {string}
      */
     message?: string;
