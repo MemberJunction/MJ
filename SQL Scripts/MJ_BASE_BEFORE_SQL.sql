@@ -1060,7 +1060,7 @@ BEGIN
         WHERE
             e.VirtualEntity = 0 
             AND excludedSchemas.value IS NULL -- Exclude rows with matching SchemaName
-            AND IIF(e.AutoUpdateDescription = 1, CONVERT(NVARCHAR(MAX), fromSQL.EntityDescription), e.Description) <> e.Description -- Only rows with changes
+            AND ISNULL(IIF(e.AutoUpdateDescription = 1, CONVERT(NVARCHAR(MAX), fromSQL.EntityDescription), e.Description),'') <> ISNULL(e.Description,'') -- Only rows with changes
 
     -- Perform the update
     UPDATE e
