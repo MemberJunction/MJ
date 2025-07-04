@@ -8,6 +8,8 @@ export * from './agent-types';
 export * from './artifact-types';
 export * from './auth-types';
 export * from './component-types';
+export * from './component-option';
+export * from './runtime-types';
 export * from './shared';
  
 export * from './util';
