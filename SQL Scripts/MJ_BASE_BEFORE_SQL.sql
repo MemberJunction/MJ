@@ -1187,7 +1187,7 @@ BEGIN
         AND ef.ID IS NOT NULL -- Only where we have already created EntityField records
         AND (
           -- this large filtering block includes ONLY the rows that have changes
-          LTRIM(RTRIM(ef.Description)) <> LTRIM(RTRIM(IIF(ef.AutoUpdateDescription=1, CONVERT(NVARCHAR(MAX), fromSQL.Description), ef.Description))) OR
+          ISNULL(LTRIM(RTRIM(ef.Description)), '') <> ISNULL(LTRIM(RTRIM(IIF(ef.AutoUpdateDescription=1, CONVERT(NVARCHAR(MAX), fromSQL.Description), ef.Description))), '') OR
           ef.Type <> fromSQL.Type OR
           ef.Length <> fromSQL.Length OR
           ef.Precision <> fromSQL.Precision OR
