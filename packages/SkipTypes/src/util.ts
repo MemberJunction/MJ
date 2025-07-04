@@ -1,6 +1,7 @@
 import { EntityFieldInfo, EntityFieldValueInfo, EntityInfo, EntityRelationshipInfo } from "@memberjunction/core";
 import { SkipEntityFieldInfo, SkipEntityFieldValueInfo, SkipEntityInfo, SkipEntityRelationshipInfo } from "./entity-metadata-types";
-import { SkipComponentChildSpec, SkipComponentRootSpec } from "./component-types";
+import { SkipComponentRootSpec } from "./root-spec";
+import { SkipComponentChildSpec } from "./child-spec";
 
 /**
  * Maps a MemberJunction EntityInfo object to a SkipEntityInfo object for use in the Skip query system.

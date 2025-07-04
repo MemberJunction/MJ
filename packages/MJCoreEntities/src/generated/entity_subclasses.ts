@@ -484,7 +484,8 @@ export const ActionSchema = z.object({
     Name: z.string().describe(`
         * * Field Name: Name
         * * Display Name: Name
-        * * SQL Data Type: nvarchar(425)`),
+        * * SQL Data Type: nvarchar(425)
+    * * Description: The name of the action. Must be unique within the combination of CategoryID and ParentID. Actions with the same name can exist in different categories or under different parents.`),
     Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
@@ -1037,7 +1038,8 @@ export const AIAgentSchema = z.object({
     LogoURL: z.string().nullable().describe(`
         * * Field Name: LogoURL
         * * Display Name: Logo URL
-        * * SQL Data Type: nvarchar(255)`),
+        * * SQL Data Type: nvarchar(255)
+    * * Description: URL to an image file or base64 data URI (e.g., data:image/png;base64,...) for the agent logo. Takes precedence over IconClass in UI display.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -11969,7 +11971,8 @@ export const UserSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
     Email: z.string().describe(`
         * * Field Name: Email
-        * * SQL Data Type: nvarchar(100)`),
+        * * SQL Data Type: nvarchar(100)
+    * * Description: Unique email address for the user. This field must be unique across all users in the system.`),
     Type: z.union([z.literal('User'), z.literal('Owner')]).describe(`
         * * Field Name: Type
         * * SQL Data Type: nchar(15)
@@ -13735,6 +13738,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     * * Field Name: Name
     * * Display Name: Name
     * * SQL Data Type: nvarchar(425)
+    * * Description: The name of the action. Must be unique within the combination of CategoryID and ParentID. Actions with the same name can exist in different categories or under different parents.
     */
     get Name(): string {
         return this.Get('Name');
@@ -14835,6 +14839,7 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
  * * Schema: __mj
  * * Base Table: AIAgentRequest
  * * Base View: vwAIAgentRequests
+ * * @description Table to log AI Agent requests, responses, and their statuses.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -15170,6 +15175,7 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     * * Field Name: LogoURL
     * * Display Name: Logo URL
     * * SQL Data Type: nvarchar(255)
+    * * Description: URL to an image file or base64 data URI (e.g., data:image/png;base64,...) for the agent logo. Takes precedence over IconClass in UI display.
     */
     get LogoURL(): string | null {
         return this.Get('LogoURL');
@@ -29849,6 +29855,7 @@ export class FileEntity extends BaseEntity<FileEntityType> {
  * * Schema: __mj
  * * Base Table: GeneratedCodeCategory
  * * Base View: vwGeneratedCodeCategories
+ * * @description Categorization for generated code, including optional parent-child relationships.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -29960,6 +29967,7 @@ export class GeneratedCodeCategoryEntity extends BaseEntity<GeneratedCodeCategor
  * * Schema: __mj
  * * Base Table: GeneratedCode
  * * Base View: vwGeneratedCodes
+ * * @description Stores LLM-generated code snippets, tracking their source, category, and validation status.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -31219,6 +31227,7 @@ export class ListEntity extends BaseEntity<ListEntityType> {
  * * Schema: __mj
  * * Base Table: AIAgentPrompt
  * * Base View: vwAIAgentPrompts
+ * * @description Links AI agents with the prompts they use, including execution order and context handling.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -31460,6 +31469,7 @@ export class AIAgentPromptEntity extends BaseEntity<AIAgentPromptEntityType> {
  * * Schema: __mj
  * * Base Table: AIAgentRunStep
  * * Base View: vwAIAgentRunSteps
+ * * @description Provides basic, step-by-step tracking of agent execution. Each step represents a discrete action within an agent run, such as prompt execution, tool usage, decision making, or sub-agent coordination.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -31764,6 +31774,7 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
  * * Schema: __mj
  * * Base Table: AIAgentRun
  * * Base View: vwAIAgentRuns
+ * * @description Tracks individual execution runs of AI agents, including hierarchical sub-agent runs. Provides basic logging, state persistence, and resource tracking for agent executions. Supports pause/resume functionality through state serialization.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -32238,6 +32249,7 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
  * * Schema: __mj
  * * Base Table: AIAgentType
  * * Base View: vwAIAgentTypes
+ * * @description Defines types of AI agents with their system prompts and behavioral characteristics. Each agent type represents a category of agents that share common system-level instructions and capabilities.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -32392,6 +32404,7 @@ export class AIAgentTypeEntity extends BaseEntity<AIAgentTypeEntityType> {
  * * Schema: __mj
  * * Base Table: AIConfigurationParam
  * * Base View: vwAIConfigurationParams
+ * * @description Stores configuration parameters that can be referenced by prompts and used to control execution behavior.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -32538,6 +32551,7 @@ export class AIConfigurationParamEntity extends BaseEntity<AIConfigurationParamE
  * * Schema: __mj
  * * Base Table: AIConfiguration
  * * Base View: vwAIConfigurations
+ * * @description Stores configurations for AI prompt execution environments and settings.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -32708,6 +32722,7 @@ export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType>
  * * Schema: __mj
  * * Base Table: AIModelCost
  * * Base View: vwAIModelCosts
+ * * @description Stores historical and current pricing information for AI models across different vendors, with optional temporal tracking and support for different processing types
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -33045,6 +33060,7 @@ export class AIModelCostEntity extends BaseEntity<AIModelCostEntityType> {
  * * Schema: __mj
  * * Base Table: AIModelPriceType
  * * Base View: vwAIModelPriceTypes
+ * * @description Defines the different types of pricing metrics used by AI model vendors (e.g., Tokens, Minutes, Characters, API Calls)
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -33161,6 +33177,7 @@ export class AIModelPriceTypeEntity extends BaseEntity<AIModelPriceTypeEntityTyp
  * * Schema: __mj
  * * Base Table: AIModelPriceUnitType
  * * Base View: vwAIModelPriceUnitTypes
+ * * @description Defines the unit scales used for pricing (e.g., Per 1M Tokens, Per 1K Tokens, Per Minute). Includes driver class for normalization calculations
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -33304,6 +33321,7 @@ export class AIModelPriceUnitTypeEntity extends BaseEntity<AIModelPriceUnitTypeE
  * * Schema: __mj
  * * Base Table: AIModelVendor
  * * Base View: vwAIModelVendors
+ * * @description Associates AI models with vendors providing them, including vendor-specific implementation details.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -33630,6 +33648,7 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
  * * Schema: __mj
  * * Base Table: AIPromptModel
  * * Base View: vwAIPromptModels
+ * * @description Associates AI prompts with specific models and configurations, including execution details.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -33979,6 +33998,7 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
  * * Schema: __mj
  * * Base Table: AIPromptRun
  * * Base View: vwAIPromptRuns
+ * * @description Tracks AI prompt executions including timings, inputs, outputs, and performance metrics.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -34901,6 +34921,7 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
  * * Schema: __mj
  * * Base Table: AIVendorTypeDefinition
  * * Base View: vwAIVendorTypeDefinitions
+ * * @description Defines the possible types of AI vendors, such as Model Developer or Inference Provider.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -34990,6 +35011,7 @@ export class AIVendorTypeDefinitionEntity extends BaseEntity<AIVendorTypeDefinit
  * * Schema: __mj
  * * Base Table: AIVendorType
  * * Base View: vwAIVendorTypes
+ * * @description Associates vendors with their types (Model Developer, Inference Provider) and tracks the status of each role.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -35158,6 +35180,7 @@ export class AIVendorTypeEntity extends BaseEntity<AIVendorTypeEntityType> {
  * * Schema: __mj
  * * Base Table: AIVendor
  * * Base View: vwAIVendors
+ * * @description Stores information about AI vendors providing models and/or inference services.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -35248,6 +35271,7 @@ export class AIVendorEntity extends BaseEntity<AIVendorEntityType> {
  * * Schema: __mj
  * * Base Table: ArtifactType
  * * Base View: vwArtifactTypes
+ * * @description Defines the types of artifacts that can be created within conversations
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -35364,6 +35388,7 @@ export class ArtifactTypeEntity extends BaseEntity<ArtifactTypeEntityType> {
  * * Schema: __mj
  * * Base Table: ConversationArtifactPermission
  * * Base View: vwConversationArtifactPermissions
+ * * @description Manages user permissions for conversation artifacts
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -35482,6 +35507,7 @@ export class ConversationArtifactPermissionEntity extends BaseEntity<Conversatio
  * * Schema: __mj
  * * Base Table: ConversationArtifactVersion
  * * Base View: vwConversationArtifactVersions
+ * * @description Stores versions of conversation artifacts
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -35647,6 +35673,7 @@ export class ConversationArtifactVersionEntity extends BaseEntity<ConversationAr
  * * Schema: __mj
  * * Base Table: ConversationArtifact
  * * Base View: vwConversationArtifacts
+ * * @description Stores metadata for artifacts created within conversations
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -35815,6 +35842,7 @@ export class ConversationArtifactEntity extends BaseEntity<ConversationArtifactE
  * * Schema: __mj
  * * Base Table: DashboardUserPreference
  * * Base View: vwDashboardUserPreferences
+ * * @description Stores dashboard preferences for users and system defaults. The absence of a record for a dashboard means it is not shown.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -36007,6 +36035,7 @@ export class DashboardUserPreferenceEntity extends BaseEntity<DashboardUserPrefe
  * * Schema: __mj
  * * Base Table: DashboardUserState
  * * Base View: vwDashboardUserStates
+ * * @description Stores user-specific dashboard state information
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -36130,6 +36159,7 @@ export class DashboardUserStateEntity extends BaseEntity<DashboardUserStateEntit
  * * Schema: __mj
  * * Base Table: ReportUserState
  * * Base View: vwReportUserStates
+ * * @description Tracks individual user state within interactive reports
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -36251,6 +36281,7 @@ export class ReportUserStateEntity extends BaseEntity<ReportUserStateEntityType>
  * * Schema: __mj
  * * Base Table: ReportVersion
  * * Base View: vwReportVersions
+ * * @description Stores iterations of report logic, structure, and layout changes
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -44166,6 +44197,7 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     /**
     * * Field Name: Email
     * * SQL Data Type: nvarchar(100)
+    * * Description: Unique email address for the user. This field must be unique across all users in the system.
     */
     get Email(): string {
         return this.Get('Email');

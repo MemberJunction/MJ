@@ -27,7 +27,7 @@ import type { SkipColumnInfo } from './entity-metadata-types';
 import type { SkipDataRequest } from './query-types';
 import type { SkipAPIArtifactRequest } from './artifact-types';
 import { SimpleDataContext } from './shared';
-import { SkipComponentOption } from './component-types';
+import { SkipComponentOption } from './component-option';
 
 /**
  * Defines an individual filter that will be used to filter the data in the view to the specific row or rows that the user clicked on for a drill down

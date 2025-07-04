@@ -131,7 +131,7 @@ export class GroqLLM extends BaseLLM {
                 message: {
                     role: ChatMessageRole.assistant,
                     content: extracted.content,
-                    thinking: extracted.thinking               
+                    thinking: extracted.thinking || choice.message.reasoning               
                 },
                 finish_reason: choice.finish_reason,
                 index: choice.index

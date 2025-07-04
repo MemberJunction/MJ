@@ -694,7 +694,7 @@ export class ExplorerNavigationItemResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Generated Code Categories
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Categorization for generated code, including optional parent-child relationships.` })
 export class GeneratedCodeCategory_ {
     @Field() 
     @MaxLength(16)
@@ -1212,7 +1212,7 @@ export class AIAgentNoteTypeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Agent Runs
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Tracks individual execution runs of AI agents, including hierarchical sub-agent runs. Provides basic logging, state persistence, and resource tracking for agent executions. Supports pause/resume functionality through state serialization.` })
 export class AIAgentRun_ {
     @Field({description: `Unique identifier for this agent run`}) 
     @MaxLength(16)
@@ -1644,7 +1644,7 @@ export class AIAgentRunResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Vendors
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Stores information about AI vendors providing models and/or inference services.` })
 export class AIVendor_ {
     @Field() 
     @MaxLength(16)
@@ -1868,7 +1868,7 @@ export class AIVendorResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Configurations
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Stores configurations for AI prompt execution environments and settings.` })
 export class AIConfiguration_ {
     @Field() 
     @MaxLength(16)
@@ -2139,7 +2139,7 @@ export class AIAgent_ {
     @Field({nullable: true, description: `A detailed description of the AI agent.`}) 
     Description?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `URL to an image file or base64 data URI (e.g., data:image/png;base64,...) for the agent logo. Takes precedence over IconClass in UI display.`}) 
     @MaxLength(510)
     LogoURL?: string;
         
@@ -2567,7 +2567,7 @@ export class AIAgentResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Model Costs
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Stores historical and current pricing information for AI models across different vendors, with optional temporal tracking and support for different processing types` })
 export class AIModelCost_ {
     @Field() 
     @MaxLength(16)
@@ -2827,7 +2827,7 @@ export class AIModelCostResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Prompt Models
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Associates AI prompts with specific models and configurations, including execution details.` })
 export class AIPromptModel_ {
     @Field() 
     @MaxLength(16)
@@ -3076,7 +3076,7 @@ export class AIPromptModelResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Agent Types
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Defines types of AI agents with their system prompts and behavioral characteristics. Each agent type represents a category of agents that share common system-level instructions and capabilities.` })
 export class AIAgentType_ {
     @Field({description: `Unique identifier for the agent type`}) 
     @MaxLength(16)
@@ -3631,7 +3631,7 @@ export class AIAgentActionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Model Price Types
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Defines the different types of pricing metrics used by AI model vendors (e.g., Tokens, Minutes, Characters, API Calls)` })
 export class AIModelPriceType_ {
     @Field() 
     @MaxLength(16)
@@ -9157,7 +9157,7 @@ export class User_ {
     @MaxLength(100)
     Title?: string;
         
-    @Field() 
+    @Field({description: `Unique email address for the user. This field must be unique across all users in the system.`}) 
     @MaxLength(200)
     Email: string;
         
@@ -28211,7 +28211,7 @@ export class Action_ {
     @MaxLength(16)
     CategoryID?: string;
         
-    @Field() 
+    @Field({description: `The name of the action. Must be unique within the combination of CategoryID and ParentID. Actions with the same name can exist in different categories or under different parents.`}) 
     @MaxLength(850)
     Name: string;
         
@@ -34770,7 +34770,7 @@ export class ResourceLinkResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Conversation Artifact Versions
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Stores versions of conversation artifacts` })
 export class ConversationArtifactVersion_ {
     @Field() 
     @MaxLength(16)
@@ -34960,7 +34960,7 @@ export class ConversationArtifactVersionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Agent Requests
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Table to log AI Agent requests, responses, and their statuses.` })
 export class AIAgentRequest_ {
     @Field({description: `Primary key for the AIAgentRequest table, uniquely identifies each record.`}) 
     @MaxLength(16)
@@ -35186,7 +35186,7 @@ export class AIAgentRequestResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Model Vendors
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Associates AI models with vendors providing them, including vendor-specific implementation details.` })
 export class AIModelVendor_ {
     @Field() 
     @MaxLength(16)
@@ -35450,7 +35450,7 @@ export class AIModelVendorResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Vendor Type Definitions
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Defines the possible types of AI vendors, such as Model Developer or Inference Provider.` })
 export class AIVendorTypeDefinition_ {
     @Field() 
     @MaxLength(16)
@@ -35622,7 +35622,7 @@ export class AIVendorTypeDefinitionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Report User States
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Tracks individual user state within interactive reports` })
 export class ReportUserState_ {
     @Field() 
     @MaxLength(16)
@@ -35941,7 +35941,7 @@ export class QueryEntityResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Dashboard User States
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Stores user-specific dashboard state information` })
 export class DashboardUserState_ {
     @Field() 
     @MaxLength(16)
@@ -36105,7 +36105,7 @@ export class DashboardUserStateResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Artifact Types
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Defines the types of artifacts that can be created within conversations` })
 export class ArtifactType_ {
     @Field() 
     @MaxLength(16)
@@ -36283,7 +36283,7 @@ export class ArtifactTypeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Vendor Types
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Associates vendors with their types (Model Developer, Inference Provider) and tracks the status of each role.` })
 export class AIVendorType_ {
     @Field() 
     @MaxLength(16)
@@ -36457,7 +36457,7 @@ export class AIVendorTypeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Conversation Artifacts
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Stores metadata for artifacts created within conversations` })
 export class ConversationArtifact_ {
     @Field() 
     @MaxLength(16)
@@ -36689,7 +36689,7 @@ export class ConversationArtifactResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Agent Prompts
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Links AI agents with the prompts they use, including execution order and context handling.` })
 export class AIAgentPrompt_ {
     @Field() 
     @MaxLength(16)
@@ -36905,7 +36905,7 @@ export class AIAgentPromptResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Dashboard User Preferences
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Stores dashboard preferences for users and system defaults. The absence of a record for a dashboard means it is not shown.` })
 export class DashboardUserPreference_ {
     @Field() 
     @MaxLength(16)
@@ -39118,7 +39118,7 @@ export class ContentItemTagResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Generated Codes
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Stores LLM-generated code snippets, tracking their source, category, and validation status.` })
 export class GeneratedCode_ {
     @Field() 
     @MaxLength(16)
@@ -39363,7 +39363,7 @@ export class GeneratedCodeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Prompt Runs
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Tracks AI prompt executions including timings, inputs, outputs, and performance metrics.` })
 export class AIPromptRun_ {
     @Field() 
     @MaxLength(16)
@@ -40073,7 +40073,7 @@ export class AIPromptRunResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Agent Run Steps
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Provides basic, step-by-step tracking of agent execution. Each step represents a discrete action within an agent run, such as prompt execution, tool usage, decision making, or sub-agent coordination.` })
 export class AIAgentRunStep_ {
     @Field({description: `Unique identifier for this execution step`}) 
     @MaxLength(16)
@@ -40343,7 +40343,7 @@ export class AIAgentRunStepResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Conversation Artifact Permissions
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Manages user permissions for conversation artifacts` })
 export class ConversationArtifactPermission_ {
     @Field() 
     @MaxLength(16)
@@ -40504,7 +40504,7 @@ export class ConversationArtifactPermissionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Model Price Unit Types
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Defines the unit scales used for pricing (e.g., Per 1M Tokens, Per 1K Tokens, Per Minute). Includes driver class for normalization calculations` })
 export class AIModelPriceUnitType_ {
     @Field() 
     @MaxLength(16)
@@ -40853,7 +40853,7 @@ export class AIAgentLearningCycleResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Report Versions
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Stores iterations of report logic, structure, and layout changes` })
 export class ReportVersion_ {
     @Field() 
     @MaxLength(16)
@@ -41040,7 +41040,7 @@ export class ReportVersionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Configuration Params
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Stores configuration parameters that can be referenced by prompts and used to control execution behavior.` })
 export class AIConfigurationParam_ {
     @Field() 
     @MaxLength(16)
