@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ai
 
+## 2.65.0
+
+### Patch Changes
+
+- 1d034b7: Added features for agent payload manager + api keys for models
+- Updated dependencies [619488f]
+  - @memberjunction/global@2.65.0
+
 ## 2.64.0
 
 ### Patch Changes

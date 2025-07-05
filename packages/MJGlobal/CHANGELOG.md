@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/global
 
+## 2.65.0
+
+### Patch Changes
+
+- 619488f: Pattern filtering for sql logging
+
 ## 2.64.0
 
 ## 2.63.1
