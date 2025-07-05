@@ -1,0 +1,63 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened]
+    # Not re-running review on updates
+    # types: [opened, synchronize]
+    branches: [next]
+    # Optional: Only run on specific file changes
+    # paths:
+    #   - "src/**/*.ts"
+    #   - "src/**/*.tsx"
+    #   - "src/**/*.js"
+    #   - "src/**/*.jsx"
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code Review
+        id: claude-review
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+
+          # Optional: Specify model (defaults to Claude Sonnet 4, uncomment for Claude Opus 4)
+          # model: "claude-opus-4-20250514"
+
+          direct_prompt: |
+            Please review this PR and provide inline feedback using the GitHub review system. Follow these steps:
+            1. **Start a review**: Use `mcp__github__create_pending_pull_request_review` to begin a pending review
+            2. **Get context of the feature**: Use `mcp__github__get_pull_request_files` to get the file names and their contents
+            3. **Get diff information**: Use `mcp__github__get_pull_request_diff` to understand the code changes and line numbers
+            4. **Add inline comments**: Use `mcp__github__add_pull_request_review_comment_to_pending_review` for each specific piece of feedback on particular lines
+            5. **Submit the review**: Use `mcp__github__submit_pending_pull_request_review` with event type "COMMENT" (not "REQUEST_CHANGES") to publish all comments as a non-blocking review
+
+            Please review this PR. Look at the changes and provide thoughtful feedback on:
+            - Code quality and best practices
+            - Potential bugs or issues
+            - Performance considerations
+            - Security concerns
+            - Unit test coverage for pure functions
+            - The final comment should be concise
+
+            For *.sql files in the migrations/ directory:
+            - Check all spCreate or INSERT statements and make sure they have hard-coded UUID ID columns
+
+            Be constructive and specific in your feedback.
+            Provide specific, actionable feedback. Use inline comments for line-specific issues and include an overall summary when submitting the review.
+            **Important**: Submit as "COMMENT" type so the review doesn't block the PR.
+
+          allowed_tools: 'mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_files'
