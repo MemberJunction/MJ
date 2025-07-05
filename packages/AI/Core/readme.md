@@ -842,7 +842,70 @@ AI_VENDOR_API_KEY__ANTHROPIC=your-api-key
 AI_VENDOR_API_KEY__MISTRAL=your-api-key
 ```
 
-You can extend the `AIAPIKeys` class to implement custom API key retrieval logic.
+#### Custom API Key Management
+
+You can extend the `AIAPIKeys` class to implement custom API key retrieval logic:
+
+```typescript
+import { AIAPIKeys, RegisterClass } from '@memberjunction/ai';
+
+@RegisterClass(AIAPIKeys, 'CustomAPIKeys', 2) // Priority 2 overrides default
+export class CustomAPIKeys extends AIAPIKeys {
+  public GetAPIKey(AIDriverName: string): string {
+    // Your custom logic here
+    // Could retrieve from database, vault, etc.
+    return super.GetAPIKey(AIDriverName); // Fallback to default
+  }
+}
+```
+
+#### Runtime API Key Override
+
+As of v2.50.0, you can provide API keys at runtime without modifying environment variables or global configuration. This is useful for multi-tenant applications or testing with different API keys.
+
+##### Direct Constructor Usage
+
+When creating AI model instances directly, pass the API key to the constructor:
+
+```typescript
+import { OpenAILLM } from '@memberjunction/ai-openai';
+
+const llm = new OpenAILLM('sk-your-runtime-api-key');
+```
+
+##### With Class Factory Pattern
+
+When using the class factory pattern, the API key is passed as the second parameter:
+
+```typescript
+import { BaseLLM } from '@memberjunction/ai';
+import { MJGlobal } from '@memberjunction/global';
+
+const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
+  BaseLLM,
+  'OpenAILLM',
+  'sk-your-runtime-api-key' // Runtime API key
+);
+```
+
+##### API Key Type Definition
+
+The package exports an `AIAPIKey` interface for structured API key configuration:
+
+```typescript
+export interface AIAPIKey {
+  /**
+   * The driver class name (e.g., 'OpenAILLM', 'AnthropicLLM', 'GroqLLM')
+   * This should match the exact driver class name used by the AI provider
+   */
+  driverClass: string;
+  
+  /**
+   * The API key value for the specified driver class
+   */
+  apiKey: string;
+}
+```
 
 ### Provider-Specific Settings
 

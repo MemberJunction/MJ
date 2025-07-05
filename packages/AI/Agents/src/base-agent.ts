@@ -611,16 +611,23 @@ export class BaseAgent {
         await atInstance.InjectPayload<P>(payload, promptParams);
 
         // Setup child prompt parameters
+        const childPromptParams: AIPromptParams = {
+            prompt: childPrompt,
+            data: promptTemplateData,
+            contextUser: params.contextUser,
+            conversationMessages: params.conversationMessages,
+            templateMessageRole: 'user',
+            verbose: params.verbose
+        };
+        
+        // Pass through API keys to child prompt if provided
+        if (params.apiKeys && params.apiKeys.length > 0) {
+            childPromptParams.apiKeys = params.apiKeys;
+        }
+        
         promptParams.childPrompts = [
             new ChildPromptParam(
-                {
-                    prompt: childPrompt,
-                    data: promptTemplateData,
-                    contextUser: params.contextUser,
-                    conversationMessages: params.conversationMessages,
-                    templateMessageRole: 'user',
-                    verbose: params.verbose
-                } as AIPromptParams,
+                childPromptParams,
                 agentType.AgentPromptPlaceholder
             )
         ];
@@ -637,6 +644,12 @@ export class BaseAgent {
         if (params.override) {
             promptParams.override = params.override;
             this.logStatus(`🎯 Using runtime override: ${params.override.modelId || 'model'} ${params.override.vendorId ? `from vendor ${params.override.vendorId}` : ''}`, true, params);
+        }
+
+        // Pass through API keys if provided
+        if (params.apiKeys && params.apiKeys.length > 0) {
+            promptParams.apiKeys = params.apiKeys;
+            this.logStatus(`🔑 Using ${params.apiKeys.length} API key(s) provided at runtime`, true, params);
         }
 
         return promptParams;
@@ -1562,7 +1575,12 @@ export class BaseAgent {
             let finalPayload = payload; // Start with current payload
             let currentStepPayloadChangeResult = undefined;
             if (nextStep.payloadChangeRequest) {
-                // First, we apply the changes to the payload and get a changeResult
+                // Parse the allowed paths if configured
+                const allowedPaths = params.agent.PayloadSelfWritePaths 
+                    ? JSON.parse(params.agent.PayloadSelfWritePaths) 
+                    : undefined;
+
+                // Apply the changes to the payload with operation control
                 const changeResult = this._payloadManager.applyAgentChangeRequest(
                     payload,
                     nextStep.payloadChangeRequest,
@@ -1571,7 +1589,8 @@ export class BaseAgent {
                         logChanges: true,
                         agentName: params.agent.Name,
                         analyzeChanges: true,
-                        generateDiff: true
+                        generateDiff: true,
+                        allowedPaths: allowedPaths
                     }
                 );
                 
@@ -1583,24 +1602,8 @@ export class BaseAgent {
                 // This will be merged into outputData later
                 currentStepPayloadChangeResult = this.buildPayloadChangeResultSummary(changeResult);
 
-                // now before we set finalPayload let's use the mergeUpstreamPayload function
-                // because just because and agent is running its own prompt doesn't mean
-                // we should allow it to write back EVERYTHING.
-                if (params.agent.PayloadSelfWritePaths) {
-                    const upstreamPaths = JSON.parse(params.agent.PayloadSelfWritePaths);
-
-                    const mergedPayload = this._payloadManager.mergeUpstreamPayload(
-                        `Self: ${params.agent.Name}`,
-                        payload, // payload before the prompt
-                        changeResult.result, // payload after the prompt
-                        upstreamPaths
-                    );
-                    finalPayload = mergedPayload;
-                }
-                else {
-                    // no upstream paths defined, so we can just use the result
-                    finalPayload = changeResult.result;
-                }
+                // Set the final payload - the changeResult already respects the allowed paths
+                finalPayload = changeResult.result;
             }
              
             // Prepare output data
