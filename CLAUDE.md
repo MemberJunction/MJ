@@ -128,6 +128,50 @@ Look for packages that depend on each other:
   - Break complex operations into smaller, well-named helper functions
   - Aim for functions that fit on a single screen when possible
 
+## 🚨 IMPORTANT: FUNCTIONAL DECOMPOSITION IS MANDATORY 🚨
+
+### Small, Focused Functions Are Required
+- **NEVER** write long, monolithic functions that do multiple things
+- **ALWAYS** decompose complex operations into smaller, well-named helper functions
+- **MAXIMUM** function length should be ~30-40 lines (excluding comments)
+- If a function is getting long, STOP and refactor it immediately
+
+### Benefits We Expect
+- **Readability**: Each function has a clear, single purpose
+- **Testability**: Small functions are easier to unit test
+- **Maintainability**: Bugs are easier to locate and fix
+- **Reusability**: Small functions can be composed and reused
+- **Debugging**: Stack traces are more meaningful with well-named functions
+
+### Example of Good Decomposition
+```typescript
+// BAD: One long function doing everything
+protected generateCascadeDeletes(entity: EntityInfo): string {
+    // 200+ lines of nested loops and complex logic...
+}
+
+// GOOD: Decomposed into focused functions
+protected generateCascadeDeletes(entity: EntityInfo): string {
+    const operations = this.findRelatedEntities(entity);
+    return operations.map(op => this.generateSingleOperation(op)).join('\n');
+}
+
+protected findRelatedEntities(entity: EntityInfo): Operation[] {
+    // Just finds the related entities
+}
+
+protected generateSingleOperation(operation: Operation): string {
+    // Handles one operation type
+}
+```
+
+### When to Decompose
+- Function exceeds 30-40 lines
+- You need to write a comment explaining what a section does
+- You have nested loops or conditions beyond 2 levels
+- You're repeating similar logic patterns
+- The function name would need "And" to be accurate
+
 ## Object-Oriented Design Principles
 
 ### Code Reuse and DRY (Don't Repeat Yourself)

@@ -1441,45 +1441,198 @@ GO${permissions}
         if (entity.CascadeDeletes) {
             const md = new Metadata();
 
-            // we need to find all of the fields in other entities that are foreign keys to this entity
-            // and generate DELETE statements for those tables
-            for (let i: number = 0; i < md.Entities.length; ++i) {
-                const e = md.Entities[i];
-                for (let j: number = 0; j < e.Fields.length; ++j) {
-                    const ef = e.Fields[j];
+            // Find all fields in other entities that are foreign keys to this entity
+            for (const e of md.Entities) {
+                for (const ef of e.Fields) {
                     if (ef.RelatedEntityID === entity.ID && ef.IsVirtual === false) {
-                        let sql: string = '';
-                        if (ef.AllowsNull === false) {
-                            // we have a non-virtual field that is a foreign key to this entity
-                            // and only those that are non-null. If they allow null we want to UPDATE those rows to be null
-                            // so we need to generate a DELETE statement for that table
-                            sql = `
-    -- Cascade delete from ${e.BaseTable}
-    DELETE FROM
-        [${e.SchemaName}].[${e.BaseTable}]
-    WHERE
-        [${ef.CodeName}] = @${entity.FirstPrimaryKey.CodeName}`;
+                        const sql = this.generateSingleCascadeOperation(entity, e, ef);
+                        
+                        if (sql !== '') {
+                            if (sOutput !== '')
+                                sOutput += '\n    ';
+                            sOutput += sql;
                         }
-                        else {
-                            // we have a non-virtual field that is a foreign key to this entity
-                            // and this field ALLOWS nulls, which means we don't delete the rows, we just update them to be null
-                            // so they don't have an orphaned foreign key
-                            sql = `
-    -- Cascade update on ${e.BaseTable} - set FK to null before deleting rows in ${entity.BaseTable}
-    UPDATE
-        [${e.SchemaName}].[${e.BaseTable}]
-    SET
-        [${ef.CodeName}] = NULL
-    WHERE
-        [${ef.CodeName}] = @${entity.FirstPrimaryKey.CodeName}`;
-                        }
-                        if (sOutput !== '')
-                            sOutput += '\n    ';
-                        sOutput += sql;
                     }
                 }
             }
         }
         return sOutput === '' ? '' : `${sOutput}\n    `;
+    }
+
+    protected generateSingleCascadeOperation(parentEntity: EntityInfo, relatedEntity: EntityInfo, fkField: EntityFieldInfo): string {
+        if (fkField.AllowsNull === false && relatedEntity.AllowDeleteAPI) {
+            // Non-nullable FK: generate cursor-based cascade delete
+            return this.generateCascadeCursorOperation(parentEntity, relatedEntity, fkField, 'delete');
+        }
+        else if (fkField.AllowsNull && relatedEntity.AllowUpdateAPI) {
+            // Nullable FK: generate cursor-based update to set FK to null
+            return this.generateCascadeCursorOperation(parentEntity, relatedEntity, fkField, 'update');
+        }
+        else if (fkField.AllowsNull && !relatedEntity.AllowUpdateAPI) {
+            // Nullable FK but no update API - this is a configuration error
+            const sqlComment = `WARNING: ${relatedEntity.BaseTable} has nullable FK to ${parentEntity.BaseTable} but doesn't allow update API - cascade operation will fail`;
+            const consoleMsg = `WARNING in spDelete${parentEntity.ClassName} generation: ${relatedEntity.BaseTable} has nullable FK to ${parentEntity.BaseTable} but doesn't allow update API - cascade operation will fail`;
+            logWarning(consoleMsg);
+            return `
+    -- ${sqlComment}
+    -- This will cause the delete operation to fail due to referential integrity`;
+        }
+        else if (!relatedEntity.AllowDeleteAPI) {
+            // Entity doesn't allow delete API, so we can't cascade delete
+            const sqlComment = `WARNING: ${relatedEntity.BaseTable} has non-nullable FK to ${parentEntity.BaseTable} but doesn't allow delete API - cascade operation will fail`;
+            const consoleMsg = `WARNING in spDelete${parentEntity.ClassName} generation: ${relatedEntity.BaseTable} has non-nullable FK to ${parentEntity.BaseTable} but doesn't allow delete API - cascade operation will fail`;
+            logWarning(consoleMsg);
+            return `
+    -- ${sqlComment}
+    -- This will cause a referential integrity violation`;
+        }
+        
+        return '';
+    }
+
+    protected generateCascadeCursorOperation(parentEntity: EntityInfo, relatedEntity: EntityInfo, fkField: EntityFieldInfo, operation: 'delete' | 'update'): string {
+        // Build the WHERE clause for matching foreign key(s)
+        // TODO: Future enhancement to support composite foreign keys
+        const whereClause = `[${fkField.CodeName}] = @${parentEntity.FirstPrimaryKey.CodeName}`;
+        
+        // Build variable declarations for the related entity's primary keys
+        const pkComponents = this.buildPrimaryKeyComponents(relatedEntity);
+        
+        // Generate unique cursor name using entity code names
+        const cursorName = `cascade_${operation}_${relatedEntity.CodeName}_cursor`;
+        
+        // Determine which SP to call
+        const spType = operation === 'delete' ? SPType.Delete : SPType.Update;
+        const spName = this.getSPName(relatedEntity, spType);
+        
+        // Build the parameters for the SP call
+        let spCallParams = pkComponents.spParams;
+        if (operation === 'update') {
+            // For update, we need to include all updateable fields
+            // We'll update just the FK field to NULL, keeping other fields the same
+            const updateParams = this.buildUpdateCursorParameters(relatedEntity, fkField);
+            spCallParams = updateParams.allParams;
+            
+            return `
+    -- Cascade update on ${relatedEntity.BaseTable} using cursor to call ${spName}
+    ${updateParams.declarations}
+    DECLARE ${pkComponents.varDeclarations}
+    DECLARE ${cursorName} CURSOR FOR 
+        SELECT ${updateParams.selectFields}
+        FROM [${relatedEntity.SchemaName}].[${relatedEntity.BaseTable}]
+        WHERE ${whereClause}
+    
+    OPEN ${cursorName}
+    FETCH NEXT FROM ${cursorName} INTO ${updateParams.fetchInto}
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @Update${fkField.CodeName} = NULL
+        
+        -- Call the update SP for the related entity
+        EXEC [${relatedEntity.SchemaName}].[${spName}] ${spCallParams}
+        
+        FETCH NEXT FROM ${cursorName} INTO ${updateParams.fetchInto}
+    END
+    
+    CLOSE ${cursorName}
+    DEALLOCATE ${cursorName}`;
+        }
+        
+        return `
+    -- Cascade delete from ${relatedEntity.BaseTable} using cursor to call ${spName}
+    DECLARE ${pkComponents.varDeclarations}
+    DECLARE ${cursorName} CURSOR FOR 
+        SELECT ${pkComponents.selectFields}
+        FROM [${relatedEntity.SchemaName}].[${relatedEntity.BaseTable}]
+        WHERE ${whereClause}
+    
+    OPEN ${cursorName}
+    FETCH NEXT FROM ${cursorName} INTO ${pkComponents.fetchInto}
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Call the delete SP for the related entity, which handles its own cascades
+        EXEC [${relatedEntity.SchemaName}].[${spName}] ${pkComponents.spParams}
+        
+        FETCH NEXT FROM ${cursorName} INTO ${pkComponents.fetchInto}
+    END
+    
+    CLOSE ${cursorName}
+    DEALLOCATE ${cursorName}`;
+    }
+
+    protected buildPrimaryKeyComponents(entity: EntityInfo): {
+        varDeclarations: string,
+        selectFields: string,
+        fetchInto: string,
+        spParams: string
+    } {
+        let varDeclarations = '';
+        let selectFields = '';
+        let fetchInto = '';
+        let spParams = '';
+        
+        for (const pk of entity.PrimaryKeys) {
+            if (varDeclarations !== '')
+                varDeclarations += ', ';
+            varDeclarations += `@Related${pk.CodeName} ${pk.SQLFullType}`;
+            
+            if (selectFields !== '')
+                selectFields += ', ';
+            selectFields += `[${pk.Name}]`;
+            
+            if (fetchInto !== '')
+                fetchInto += ', ';
+            fetchInto += `@Related${pk.CodeName}`;
+            
+            if (spParams !== '')
+                spParams += ', ';
+            spParams += `@Related${pk.CodeName}`;
+        }
+        
+        return { varDeclarations, selectFields, fetchInto, spParams };
+    }
+
+    protected buildUpdateCursorParameters(entity: EntityInfo, _fkField: EntityFieldInfo): {
+        declarations: string,
+        selectFields: string,
+        fetchInto: string,
+        allParams: string
+    } {
+        let declarations = '';
+        let selectFields = '';
+        let fetchInto = '';
+        let allParams = '';
+        
+        // First, handle primary keys
+        const pkComponents = this.buildPrimaryKeyComponents(entity);
+        selectFields = pkComponents.selectFields;
+        fetchInto = pkComponents.fetchInto;
+        allParams = pkComponents.spParams;
+        
+        // Then, add all updateable fields
+        for (const ef of entity.Fields) {
+            if (!ef.IsPrimaryKey && !ef.IsVirtual && ef.AllowUpdateAPI && !ef.AutoIncrement && !ef.IsSpecialDateField) {
+                if (declarations !== '')
+                    declarations += '\n    ';
+                declarations += `DECLARE @Update${ef.CodeName} ${ef.SQLFullType}`;
+                
+                if (selectFields !== '')
+                    selectFields += ', ';
+                selectFields += `[${ef.Name}]`;
+                
+                if (fetchInto !== '')
+                    fetchInto += ', ';
+                fetchInto += `@Update${ef.CodeName}`;
+                
+                if (allParams !== '')
+                    allParams += ', ';
+                allParams += `@Update${ef.CodeName}`;
+            }
+        }
+        
+        return { declarations, selectFields, fetchInto, allParams };
     }
 }
