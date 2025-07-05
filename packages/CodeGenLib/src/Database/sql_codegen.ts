@@ -1399,6 +1399,14 @@ ${deleteCode}`
 ${deleteCode}        AND ${EntityInfo.DeletedAtFieldName} IS NULL -- don't update the record if it's already been deleted via a soft delete`
         }
 
+        // Build the NULL select statement for when no rows are affected
+        let sNullSelect: string = '';
+        for (let k of entity.PrimaryKeys) {
+            if (sNullSelect !== '')
+                sNullSelect += ', ';
+            sNullSelect += `NULL AS [${k.Name}]`;
+        }
+
         return `
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR ${entity.BaseTable}
@@ -1414,7 +1422,11 @@ BEGIN
 
 ${deleteCode}
 
-    SELECT ${sSelect} -- Return the primary key to indicate we successfully deleted the record
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT ${sNullSelect} -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT ${sSelect} -- Return the primary key values to indicate we successfully deleted the record
 END
 GO${permissions}
     `
