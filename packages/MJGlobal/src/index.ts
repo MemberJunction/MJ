@@ -6,6 +6,7 @@ export * from './ObjectCache'
 export * from './BaseSingleton'
 export * from './DeepDiff'
 export * from './ClassUtils'
+export * from './util/PatternUtils';
 
 // Export the main classes
 export * from './Global'

@@ -15,6 +15,7 @@ import { ChatMessage } from '@memberjunction/ai';
 import { AIAgentEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
+import { AIAPIKey } from '@memberjunction/ai';
 
 
 /**
@@ -116,6 +117,10 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * @deprecated Use payloadChangeRequest instead for state mutations
      */
     previousPayload?: P;
+    /**
+     * This represents the new payload after the step was executed after the payloadChangeRequest is applied.
+     */
+    newPayload?: P;
     /** Error message when step is 'failed' */
     errorMessage?: string;
     /** Reason for retry when step is 'retry' (e.g., "Processing action results", "Handling error condition") */
@@ -312,6 +317,18 @@ export type ExecuteAgentParams<TContext = any, P = any> = {
      * Can also be controlled via MJ_VERBOSE environment variable.
      */
     verbose?: boolean;
+    /**
+     * Optional array of API keys to use for AI provider access during agent execution.
+     * When provided, these keys will be used instead of the default keys configured
+     * in the system. This allows for runtime-specific API key usage, useful for:
+     * - Multi-tenant scenarios where different users have different API keys
+     * - Testing with different API key configurations
+     * - Isolating API usage by application or user
+     * 
+     * Each key should specify the driverClass (e.g., 'OpenAILLM', 'AnthropicLLM')
+     * and the corresponding apiKey value.
+     */
+    apiKeys?: AIAPIKey[];
     /**
      * Optional ID of the last run in a run chain.
      * When provided, this links the new run to a previous run, allowing

@@ -135,6 +135,29 @@ export interface SqlLoggingOptions {
   sessionName?: string;
   /** Whether to output verbose debug information to console (default: false) */
   verboseOutput?: boolean;
+  /**
+   * Array of patterns to filter SQL statements.
+   * Supports both regex (RegExp objects) and simple wildcard patterns (strings).
+   * How these patterns are applied depends on filterType.
+   * 
+   * String patterns support:
+   * - Simple wildcards: "*AIPrompt*", "spCreate*", "*Run"
+   * - Regex strings: "/spCreate.*Run/i", "/^SELECT.*FROM/i"
+   * 
+   * RegExp examples:
+   * - /spCreateAIPromptRun/i - Match stored procedure calls
+   * - /^SELECT.*FROM.*vw.*Metadata/i - Match metadata view queries
+   * - /INSERT INTO EntityFieldValue/i - Match specific inserts
+   */
+  filterPatterns?: (string | RegExp)[];
+  /**
+   * Determines how filterPatterns are applied:
+   * - 'exclude': If ANY pattern matches, the SQL is NOT logged (default)
+   * - 'include': If ANY pattern matches, the SQL IS logged
+   * 
+   * Note: If filterPatterns is empty/undefined, all SQL is logged regardless of filterType.
+   */
+  filterType?: 'include' | 'exclude';
 }
 
 /**

@@ -2480,3 +2480,90 @@ VALUES ('System Prompt', 'Agent execution control wrapper', @TemplateID, 'System
 
 UPDATE AIAgentType SET SystemPromptID = @SystemPromptID WHERE Name = 'DataGatherAgent';
 ```
+
+## API Keys
+
+The AI Prompts system provides flexible API key management for runtime configuration without modifying environment variables or global settings.
+
+### Using Runtime API Keys
+
+You can provide API keys at prompt execution time, which is useful for:
+- Multi-tenant applications where different users have different API keys
+- Testing with different API providers or accounts
+- Isolating API usage by application or department
+- Temporary API key usage for specific operations
+
+```typescript
+import { AIPromptRunner, AIPromptParams } from '@memberjunction/ai-prompts';
+import { AIAPIKey } from '@memberjunction/ai';
+
+const runner = new AIPromptRunner();
+
+// Execute with specific API keys
+const result = await runner.ExecutePrompt({
+    prompt: myPrompt,
+    data: { query: 'Analyze this data' },
+    contextUser: currentUser,
+    apiKeys: [
+        { driverClass: 'OpenAILLM', apiKey: 'sk-user-specific-key' },
+        { driverClass: 'AnthropicLLM', apiKey: 'sk-ant-department-key' }
+    ]
+});
+```
+
+### API Key Precedence
+
+When executing prompts, API keys are resolved in this order:
+1. **Local API keys** provided in `AIPromptParams.apiKeys` (highest priority)
+2. **Global API keys** from environment variables or custom `AIAPIKeys` implementation
+
+If a driver class is not found in the local apiKeys array, the system falls back to the global API key management.
+
+### Hierarchical API Key Propagation
+
+For hierarchical prompt execution (prompts with child prompts), API keys are automatically propagated:
+
+```typescript
+const parentParams = new AIPromptParams();
+parentParams.prompt = parentPrompt;
+parentParams.childPrompts = [
+    new ChildPromptParam(childPrompt1, 'analysis'),
+    new ChildPromptParam(childPrompt2, 'summary')
+];
+parentParams.apiKeys = [
+    { driverClass: 'OpenAILLM', apiKey: 'sk-parent-key' }
+];
+
+// Child prompts automatically inherit the parent's API keys
+// This ensures consistent API key usage throughout the execution tree
+const result = await runner.ExecutePrompt(parentParams);
+```
+
+### Custom Global API Key Management
+
+For advanced scenarios, you can subclass the global `AIAPIKeys` object:
+
+```typescript
+import { AIAPIKeys, RegisterClass } from '@memberjunction/ai';
+
+@RegisterClass(AIAPIKeys, 'CustomAPIKeys', 2) // Priority 2 overrides default
+export class CustomAPIKeys extends AIAPIKeys {
+    public GetAPIKey(AIDriverName: string): string {
+        // Custom logic: database lookup, vault access, etc.
+        if (AIDriverName === 'OpenAILLM') {
+            return this.getFromVault('openai-key');
+        }
+        return super.GetAPIKey(AIDriverName); // Fallback to default
+    }
+}
+```
+
+### Security Best Practices
+
+1. **Never hardcode API keys** in your source code
+2. **Use environment-specific keys** for different environments (dev, staging, prod)
+3. **Rotate keys regularly** and have a process for key rotation
+4. **Monitor API key usage** to detect unauthorized access
+5. **Use the principle of least privilege** - give each user/app only the keys they need
+
+For more details on API key management, see the [AI Core API Keys documentation](../Core/README.md#api-key-management).

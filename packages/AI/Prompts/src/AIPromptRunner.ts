@@ -1848,17 +1848,23 @@ export class AIPromptRunner {
     templateMessageRole: TemplateMessageRole = 'system',
     cancellationToken?: AbortSignal,
   ): Promise<ChatResult> {
+    // define these variables here to ensure they're available in the catch block
+    let driverClass: string;
+    let apiName: string | undefined;
+    let llm: BaseLLM;
+    let chatParams: ChatParams;
+
     try {
+      // Get verbose flag for logging
+      const verbose = params.verbose === true || IsVerboseLoggingEnabled();
+      
+      // Get vendor-specific configuration
       // Check if model has pre-selected vendor info from selectModel
       const modelWithVendor = model as AIModelEntityExtended & { 
         _selectedVendorId?: string;
         _selectedDriverClass?: string;
         _selectedApiName?: string;
       };
-
-      // Get vendor-specific configuration
-      let driverClass: string;
-      let apiName: string | undefined;
 
       // If vendor info was pre-selected by selectModel, use it
       if (modelWithVendor._selectedDriverClass) {
@@ -1888,11 +1894,29 @@ export class AIPromptRunner {
       }
 
       // Create LLM instance with vendor-specific driver class
-      const apiKey = GetAIAPIKey(driverClass);
-      const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, driverClass, apiKey);
+      // Check for local API key first, then fall back to global
+      let apiKey: string;
+      if (params.apiKeys && params.apiKeys.length > 0) {
+        const localKey = params.apiKeys.find(k => k.driverClass === driverClass);
+        if (localKey) {
+          apiKey = localKey.apiKey;
+          if (verbose) {
+            console.log(`Using local API key for driver class: ${driverClass}`);
+          }
+        } else {
+          apiKey = GetAIAPIKey(driverClass);
+          if (verbose) {
+            console.log(`No local API key found for driver class ${driverClass}, using global key`);
+          }
+        }
+      } else {
+        apiKey = GetAIAPIKey(driverClass);
+      }
+      
+      llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, driverClass, apiKey);
 
       // Prepare chat parameters
-      const chatParams = new ChatParams();
+      chatParams = new ChatParams();
       if (!apiName) {
         throw new Error(`No API name found for model ${model.Name}. Please ensure the model or its vendor configuration includes an APIName.`);
       }

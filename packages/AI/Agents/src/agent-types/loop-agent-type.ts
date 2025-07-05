@@ -133,7 +133,8 @@ export class LoopAgentType extends BaseAgentType {
             switch (response.nextStep.type) {
                 case 'Sub-Agent':
                     if (!response.nextStep.subAgent) {
-                        retVal.step = 'Failed';
+                        retVal.step = 'Retry';
+                        retVal.message = 'When nextStep.type == "Sub-Agent", subAgent details must be specified';
                         retVal.errorMessage = 'Sub-agent details not specified';
                     }
                     else {
@@ -148,7 +149,8 @@ export class LoopAgentType extends BaseAgentType {
                     break;
                 case 'Actions':
                     if (!response.nextStep.actions || response.nextStep.actions.length === 0) {
-                        retVal.step = 'Failed';
+                        retVal.step = 'Retry';
+                        retVal.message = 'When nextStep.type == "Actions", 1 or more actions must be specified in the nextStep.actions array';
                         retVal.errorMessage = 'Actions not specified for action type';
                     }
                     else {
@@ -211,14 +213,20 @@ export class LoopAgentType extends BaseAgentType {
 
         // nextStep is optional when taskComplete is true
         if (!response.taskComplete && !response.nextStep) {
-            if (response.message?.trim().length > 0) {
-                // in this situation we have a message coming back but a malformed response
+            if (response.message?.trim().length > 0 || response.reasoning?.trim().length > 0) {
+                // in this situation we have a message or reasoning coming back but a malformed response
                 // so we can consider it a chat response becuase it is trying to communicate
                 // something back, better to provide that back than discarding it entirely
                 // possibly we will make this configurable in the future
                 response.nextStep = {
                     type: 'Chat'
                 };
+
+                if (response.message?.trim().length === 0) {
+                    // this means reasoning was provided but no message, copy reasoning to message 
+                    // as you shouldn't ever have that but we can handle it gracefully
+                    response.message = response.reasoning;
+                }
             }
             else {
                 LogError('LoopAgentResponse requires nextStep when taskComplete is false');
@@ -245,6 +253,17 @@ export class LoopAgentType extends BaseAgentType {
             if (lcaseType === 'sub-agent' && !response.nextStep.subAgent) {
                 LogError('LoopAgentResponse requires subAgent object for sub-agent type');
                 return false;
+            }
+
+            if (lcaseType === 'chat' && !response.message) {
+                // check to see if we have reasoning, if so, use that, otherwise we have to fail
+                if (!response.reasoning || response.reasoning.trim().length === 0) {
+                    LogError('LoopAgentResponse requires message for chat type');
+                    return false;
+                } else {
+                    // if we have reasoning, use that as the message
+                    response.message = response.reasoning;
+                }
             }
         }
 

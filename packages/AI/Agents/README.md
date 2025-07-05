@@ -220,6 +220,40 @@ const changeResult = payloadManager.applyAgentChangeRequest(
 }
 ```
 
+**Operation-Level Payload Control**:
+The framework supports fine-grained control over which operations (add, update, delete) are allowed on specific payload paths:
+
+```typescript
+// Basic syntax - all operations allowed (backward compatible)
+PayloadUpstreamPaths: ["analysis.*", "recommendations"]
+
+// Operation-specific syntax using colon notation
+PayloadUpstreamPaths: [
+    "analysis.*:add,update",      // Can add or update, but not delete
+    "recommendations:add",        // Can only add new recommendations
+    "summary:update",            // Can only update existing summary
+    "temp.*:delete",             // Can only delete temporary data
+    "metadata.tags:add,delete"   // Can add/remove tags but not modify existing
+]
+
+// For agent's own payload access (PayloadSelfWritePaths)
+PayloadSelfWritePaths: [
+    "workspace.*",               // Full access to workspace
+    "results:add",               // Can only add results, not modify
+    "status:update"              // Can only update status field
+]
+```
+
+Operation types:
+- `add` - Create new properties or array elements
+- `update` - Modify existing values
+- `delete` - Remove properties or array elements
+
+When operations are restricted, the framework will:
+- Log warnings when unauthorized operations are attempted
+- Block the disallowed changes while preserving allowed ones
+- Include operation details in the audit trail
+
 ### Hierarchical Prompt Execution
 ```typescript
 // System prompt provides base behavior
@@ -312,6 +346,40 @@ const result = await runner.RunAgent({
 });
 ```
 
+### Payload Operation Control Example
+```typescript
+// Configure an agent with specific operation permissions
+const analysisAgent = {
+    Name: 'DataAnalysisAgent',
+    PayloadSelfWritePaths: JSON.stringify([
+        "workspace.*",              // Full control over workspace
+        "analysis.results:add",     // Can only add new results
+        "analysis.status:update",   // Can only update status
+        "temp.*:add,delete"        // Can add/delete temp data, but not modify
+    ])
+};
+
+// Configure a sub-agent with restricted write access
+const validationAgent = {
+    Name: 'ValidationAgent',
+    PayloadDownstreamPaths: JSON.stringify([
+        "data.*",                   // Can read all data
+        "analysis.results"          // Can read analysis results
+    ]),
+    PayloadUpstreamPaths: JSON.stringify([
+        "data.validated:update",    // Can only update validation flag
+        "errors:add",              // Can only add errors, not modify
+        "warnings:add,delete"      // Can add/remove warnings
+    ])
+};
+
+// When the sub-agent tries unauthorized operations:
+// - Attempt to delete data.records → Blocked (no delete permission)
+// - Attempt to update errors → Blocked (only add permission)
+// - Add new warning → Allowed
+// - Update data.validated → Allowed
+```
+
 ### Custom Decision Tree Agent
 ```typescript
 @RegisterClass(BaseAgentType, "DecisionTreeAgent")
@@ -340,6 +408,45 @@ For detailed architecture information, see [agent-architecture.md](./agent-archi
 ## Contributing
 
 Contributions are welcome! Please see the main MemberJunction [contributing guide](../../../CONTRIBUTING.md).
+
+## API Keys
+
+The AI Agents framework supports flexible API key management through integration with the AI Prompts system. For detailed information about API key configuration, see the [AI Prompts API Keys documentation](../Prompts/README.md#api-keys).
+
+### Using Runtime API Keys with Agents
+
+You can provide API keys at agent execution time for multi-tenant scenarios:
+
+```typescript
+import { AgentRunner, ExecuteAgentParams } from '@memberjunction/ai-agents';
+import { AIAPIKey } from '@memberjunction/ai';
+
+const runner = new AgentRunner();
+
+// Execute agent with specific API keys
+const result = await runner.RunAgent({
+    agent: agentEntity,
+    conversationMessages: messages,
+    contextUser: user,
+    apiKeys: [
+        { driverClass: 'OpenAILLM', apiKey: 'sk-user-specific-key' },
+        { driverClass: 'AnthropicLLM', apiKey: 'sk-ant-department-key' }
+    ]
+});
+
+// API keys are automatically propagated to:
+// - All prompt executions by the agent
+// - Sub-agent executions
+// - Context compression operations
+```
+
+### Benefits for Agent Systems
+
+Runtime API keys are particularly useful for agent architectures:
+- **Multi-tenant isolation**: Different customers use their own API keys
+- **Cost attribution**: Track API usage per department or project
+- **Security**: Limit exposure of production API keys
+- **Testing**: Use test API keys for development agents
 
 ## License
 

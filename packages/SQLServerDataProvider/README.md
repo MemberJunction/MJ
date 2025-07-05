@@ -23,6 +23,7 @@ The `@memberjunction/sqlserver-dataprovider` package implements MemberJunction's
 - **Row-Level Security**: Enforce data access controls at the database level
 - **SQL Logging**: Real-time SQL statement capture for debugging and migration generation
 - **Session Management**: Multiple concurrent SQL logging sessions with user filtering
+- **Pattern Filtering**: Include/exclude SQL statements using simple wildcards or regex patterns ([details](#pattern-filtering))
 
 ## Installation
 
@@ -479,6 +480,7 @@ The SQL Server Data Provider includes comprehensive SQL logging capabilities tha
 - **Automatic cleanup** - Sessions auto-expire and clean up empty files
 - **Concurrent sessions** - Support multiple active logging sessions
 - **Parameter capture** - Logs both SQL statements and their parameters
+- **Pattern filtering** - Include/exclude statements using simple wildcards or regex
 
 ### Programmatic Usage
 
@@ -509,6 +511,89 @@ console.log(`Session ${logger.id} has captured ${logger.statementCount} statemen
 // Clean up the logging session
 await logger.dispose();
 ```
+
+### Pattern Filtering
+
+SQL logging sessions support pattern-based filtering to include or exclude specific SQL statements. You can use either **regex patterns** for advanced matching or **simple wildcard patterns** for ease of use.
+
+#### Pattern Types
+
+1. **Simple Wildcard Patterns** (Recommended for most users):
+   - Use `*` as a wildcard character
+   - Case-insensitive by default
+   - Examples:
+     - `*AIPrompt*` - Matches anything containing "AIPrompt"
+     - `spCreate*` - Matches anything starting with "spCreate"
+     - `*Run` - Matches anything ending with "Run"
+     - `UserTable` - Exact match only
+
+2. **Regular Expression Patterns** (For advanced users):
+   - Full regex support with flags
+   - More powerful but requires regex knowledge
+   - Examples:
+     - `/spCreate.*Run/i` - Case-insensitive regex
+     - `/^SELECT.*FROM.*vw/` - Queries from views
+     - `/INSERT INTO (Users|Roles)/i` - Insert into Users or Roles
+
+#### Exclude Mode (Default)
+
+```typescript
+// Exclude specific patterns from logging
+const logger = await dataProvider.createSqlLogger('./logs/sql/filtered.sql', {
+  sessionName: 'Production Operations',
+  filterPatterns: [
+    /spCreateAIPromptRun/i,          // Regex: Exclude AI prompt runs
+    /spUpdateAIPromptRun/i,          // Regex: Exclude AI prompt updates
+    /^SELECT.*FROM.*vw.*Metadata/i,  // Regex: Exclude metadata view queries
+    /INSERT INTO EntityFieldValue/i   // Regex: Exclude field value inserts
+  ],
+  filterType: 'exclude'  // Default - exclude matching patterns
+});
+```
+
+#### Include Mode
+
+```typescript
+// Only log specific patterns
+const auditLogger = await dataProvider.createSqlLogger('./logs/sql/audit.sql', {
+  sessionName: 'User Audit Trail',
+  filterPatterns: [
+    /INSERT INTO Users/i,
+    /UPDATE Users/i,
+    /DELETE FROM Users/i,
+    /sp_ChangePassword/i
+  ],
+  filterType: 'include'  // Only log statements matching these patterns
+});
+```
+
+#### Using with MetadataSync
+
+When configuring SQL logging in MetadataSync's `.mj-sync.json`, you can use string patterns that support both formats:
+
+```json
+{
+  "sqlLogging": {
+    "enabled": true,
+    "filterPatterns": [
+      "*AIPrompt*",              // Simple: Exclude anything with "AIPrompt"
+      "/^EXEC sp_/i",            // Regex: Exclude stored procedures
+      "*EntityFieldValue*",      // Simple: Exclude EntityFieldValue operations
+      "/INSERT INTO (__mj|mj)/i" // Regex: Exclude system table inserts
+    ],
+    "filterType": "exclude"
+  }
+}
+```
+
+#### Filter Pattern Options
+- `filterPatterns`: Array of patterns (RegExp objects in code, strings in config)
+- `filterType`: 
+  - `'exclude'` (default): Skip logging if ANY pattern matches
+  - `'include'`: Only log if ANY pattern matches
+- If no patterns are specified, all SQL is logged (backward compatible)
+
+> **Note**: Filtering is applied to the actual SQL that will be logged. If `logRecordChangeMetadata` is false and a simplified SQL fallback is provided, the filtering tests against the simplified version.
 
 ### Runtime Control via GraphQL
 

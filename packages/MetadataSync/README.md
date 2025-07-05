@@ -1116,6 +1116,8 @@ SQL logging is configured in the root-level `.mj-sync.json` file only (not inher
 | `enabled` | boolean | false | Whether to enable SQL logging during push operations |
 | `outputDirectory` | string | "./sql_logging" | Directory to output SQL log files (relative to command execution directory) |
 | `formatAsMigration` | boolean | false | Whether to format SQL as migration-ready files with Flyway schema placeholders |
+| `filterPatterns` | string[] | undefined | Array of patterns to filter SQL statements (see below) |
+| `filterType` | "exclude" \| "include" | "exclude" | How to apply filter patterns |
 
 #### SQL Log File Format
 
@@ -1160,6 +1162,52 @@ Migration files include:
    ```
 
 The SQL logging runs in parallel with the actual database operations, ensuring minimal performance impact while capturing all SQL statements for review and potential migration use.
+
+#### SQL Filtering Patterns
+
+The `filterPatterns` option allows you to include or exclude specific SQL statements from logging. It supports both regex patterns and simple wildcard patterns:
+
+**Pattern Types:**
+- **Regex patterns**: Start with `/` and optionally end with flags (e.g., `/spCreate.*Run/i`)
+- **Simple wildcards**: Use `*` as a wildcard (e.g., `*AIPrompt*`)
+
+**Examples:**
+
+```json
+{
+  "sqlLogging": {
+    "enabled": true,
+    "filterPatterns": [
+      "*AIPrompt*",           // Exclude anything containing "AIPrompt"
+      "/^EXEC sp_/i",         // Exclude stored procedures starting with "sp_"
+      "*EntityFieldValue*",   // Exclude EntityFieldValue operations
+      "/INSERT INTO (__mj|mj)/i"  // Exclude inserts to system tables
+    ],
+    "filterType": "exclude"   // Default - exclude matching patterns
+  }
+}
+```
+
+**Include Mode Example:**
+```json
+{
+  "sqlLogging": {
+    "enabled": true,
+    "filterPatterns": [
+      "*User*",               // Only log User-related SQL
+      "*Role*",               // Only log Role-related SQL
+      "/sp_ChangePassword/i"  // Include password change procedures
+    ],
+    "filterType": "include"   // Only log statements matching patterns
+  }
+}
+```
+
+**Simple Wildcard Syntax:**
+- `*pattern*` - Contains pattern (case-insensitive)
+- `pattern*` - Starts with pattern
+- `*pattern` - Ends with pattern
+- `pattern` - Exact match
 
 ### User Role Validation (NEW)
 

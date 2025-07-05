@@ -1142,6 +1142,18 @@ export const AIAgentSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)
         * * Default Value: ["*"]
     * * Description: JSON array of paths that define which parts of the payload sub-agents are allowed to write back upstream. Use ["*"] to allow all writes, or specify paths like ["analysis.results", "recommendations.*"]`),
+    PayloadSelfReadPaths: z.string().nullable().describe(`
+        * * Field Name: PayloadSelfReadPaths
+        * * Display Name: Payload Self Read Paths
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can read. Controls downstream data 
+flow when the agent executes its own prompt step.`),
+    PayloadSelfWritePaths: z.string().nullable().describe(`
+        * * Field Name: PayloadSelfWritePaths
+        * * Display Name: Payload Self Write Paths
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can write back. Controls upstream 
+data flow when the agent executes its own prompt step.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -15414,6 +15426,34 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     }
     set PayloadUpstreamPaths(value: string) {
         this.Set('PayloadUpstreamPaths', value);
+    }
+
+    /**
+    * * Field Name: PayloadSelfReadPaths
+    * * Display Name: Payload Self Read Paths
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can read. Controls downstream data 
+flow when the agent executes its own prompt step.
+    */
+    get PayloadSelfReadPaths(): string | null {
+        return this.Get('PayloadSelfReadPaths');
+    }
+    set PayloadSelfReadPaths(value: string | null) {
+        this.Set('PayloadSelfReadPaths', value);
+    }
+
+    /**
+    * * Field Name: PayloadSelfWritePaths
+    * * Display Name: Payload Self Write Paths
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can write back. Controls upstream 
+data flow when the agent executes its own prompt step.
+    */
+    get PayloadSelfWritePaths(): string | null {
+        return this.Get('PayloadSelfWritePaths');
+    }
+    set PayloadSelfWritePaths(value: string | null) {
+        this.Set('PayloadSelfWritePaths', value);
     }
 
     /**
