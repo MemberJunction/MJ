@@ -1,5 +1,14 @@
 # @memberjunction/ai-vertex
 
+## 2.65.0
+
+### Patch Changes
+
+- Updated dependencies [1d034b7]
+- Updated dependencies [619488f]
+  - @memberjunction/ai@2.65.0
+  - @memberjunction/global@2.65.0
+
 ## 2.64.0
 
 ### Patch Changes

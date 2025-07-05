@@ -1,5 +1,19 @@
 # @memberjunction/ai-core-plus
 
+## 2.65.0
+
+### Patch Changes
+
+- 1d034b7: Added features for agent payload manager + api keys for models
+- Updated dependencies [1d034b7]
+- Updated dependencies [619488f]
+- Updated dependencies [b029c5d]
+  - @memberjunction/ai@2.65.0
+  - @memberjunction/global@2.65.0
+  - @memberjunction/core-entities@2.65.0
+  - @memberjunction/actions-base@2.65.0
+  - @memberjunction/core@2.65.0
+
 ## 2.64.0
 
 ### Patch Changes
