@@ -10,6 +10,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { format as formatSql } from 'sql-formatter';
+import { ensureRegExps } from '@memberjunction/global';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 
 /**
@@ -27,12 +28,18 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
   private _emittedStatementCount: number = 0; // Track actually emitted statements
   private _fileHandle: fs.promises.FileHandle | null = null;
   private _disposed: boolean = false;
+  private _compiledPatterns: RegExp[] | undefined;
 
   constructor(id: string, filePath: string, options: SqlLoggingOptions = {}) {
     this.id = id;
     this.filePath = filePath;
     this.startTime = new Date();
     this.options = options;
+    
+    // Compile patterns once during construction
+    if (options.filterPatterns && options.filterPatterns.length > 0) {
+      this._compiledPatterns = ensureRegExps(options.filterPatterns);
+    }
   }
 
   /**
@@ -107,7 +114,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     }
     
     if (verbose) {
-      console.log(`Session ${this.id}: Statement passed filters, proceeding to log`);
+      console.log(`Session ${this.id}: Statement passed type filters, proceeding to process`);
     }
 
     let logEntry = '';
@@ -126,6 +133,31 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
       // Update description to indicate we're using the simplified version
       if (description && !description.includes('(core SP call only)')) {
         logEntry = logEntry.replace(`-- ${description}\n`, `-- ${description} (core SP call only)\n`);
+      }
+    }
+    
+    // Apply pattern filtering on the processed query
+    if (this._compiledPatterns && this._compiledPatterns.length > 0) {
+      const filterType = this.options.filterType || 'exclude'; // Default to exclude
+      const anyPatternMatches = this._compiledPatterns.some(pattern => pattern.test(processedQuery));
+      
+      if (verbose) {
+        console.log(`Session ${this.id}: Pattern filter check - filterType: ${filterType}, patterns: ${this._compiledPatterns.length}, anyMatch: ${anyPatternMatches}`);
+        console.log(`Session ${this.id}: Testing against processedQuery: ${processedQuery.substring(0, 100)}...`);
+      }
+      
+      if (filterType === 'exclude' && anyPatternMatches) {
+        if (verbose) {
+          console.log(`Session ${this.id}: Skipping - exclude pattern matched`);
+        }
+        return; // Skip logging if any exclude pattern matches
+      }
+      
+      if (filterType === 'include' && !anyPatternMatches) {
+        if (verbose) {
+          console.log(`Session ${this.id}: Skipping - no include pattern matched`);
+        }
+        return; // Skip logging if no include pattern matches
       }
     }
 

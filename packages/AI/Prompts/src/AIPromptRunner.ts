@@ -1855,6 +1855,9 @@ export class AIPromptRunner {
     let chatParams: ChatParams;
 
     try {
+      // Get verbose flag for logging
+      const verbose = params.verbose === true || IsVerboseLoggingEnabled();
+      
       // Get vendor-specific configuration
       // Check if model has pre-selected vendor info from selectModel
       const modelWithVendor = model as AIModelEntityExtended & { 
@@ -1891,7 +1894,25 @@ export class AIPromptRunner {
       }
 
       // Create LLM instance with vendor-specific driver class
-      const apiKey = GetAIAPIKey(driverClass);
+      // Check for local API key first, then fall back to global
+      let apiKey: string;
+      if (params.apiKeys && params.apiKeys.length > 0) {
+        const localKey = params.apiKeys.find(k => k.driverClass === driverClass);
+        if (localKey) {
+          apiKey = localKey.apiKey;
+          if (verbose) {
+            console.log(`Using local API key for driver class: ${driverClass}`);
+          }
+        } else {
+          apiKey = GetAIAPIKey(driverClass);
+          if (verbose) {
+            console.log(`No local API key found for driver class ${driverClass}, using global key`);
+          }
+        }
+      } else {
+        apiKey = GetAIAPIKey(driverClass);
+      }
+      
       llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, driverClass, apiKey);
 
       // Prepare chat parameters

@@ -114,6 +114,7 @@ Look for packages that depend on each other:
 - Always use MemberJunction generated `BaseEntity` sub-classes for all data work for strong typing
 - Study the data model in /packages/MJCoreEntities to understand the schema and use properties/fields defined there
 - No explicit `any` types - see CRITICAL RULES section above
+- Prefer union types over enums for better package exports (e.g., `type Status = 'active' | 'inactive'` instead of `enum Status`)
 - Prefer object shorthand syntax
 - Follow existing naming conventions:
   - PascalCase for classes and interfaces

@@ -18,7 +18,7 @@ The `@memberjunction/global` library serves as the foundation for cross-componen
 - **Object Caching** - In-memory object cache for application lifetime
 - **Class Reflection Utilities** - Runtime class hierarchy inspection and analysis
 - **Deep Diff Engine** - Comprehensive object comparison and change tracking
-- **Utility Functions** - Common string manipulation, JSON parsing (including recursive nested JSON parsing), and formatting utilities
+- **Utility Functions** - Common string manipulation, JSON parsing (including recursive nested JSON parsing), pattern matching, and formatting utilities
 
 ## Core Components
 
@@ -357,6 +357,92 @@ import { ConvertMarkdownStringToHtmlList } from '@memberjunction/global';
 // Convert markdown to HTML list
 const html = ConvertMarkdownStringToHtmlList('Unordered', '- Item 1\n- Item 2\n- Item 3');
 // Returns: <ul><li>Item 1</li><li>Item 2</li><li>Item 3</li></ul>
+```
+
+### Pattern Matching Utilities
+
+Convert string patterns to RegExp objects with support for simple wildcards and full regex syntax:
+
+```typescript
+import { 
+  parsePattern, 
+  parsePatterns, 
+  ensureRegExp, 
+  ensureRegExps,
+  matchesAnyPattern,
+  matchesAllPatterns
+} from '@memberjunction/global';
+
+// Parse simple wildcard patterns
+parsePattern('*AIPrompt*');    // Returns: /AIPrompt/i (case-insensitive)
+parsePattern('spCreate*');     // Returns: /^spCreate/i
+parsePattern('*Run');          // Returns: /Run$/i
+parsePattern('exact');         // Returns: /^exact$/i
+
+// Parse regex string patterns
+parsePattern('/spCreate.*Run/i');        // Returns: /spCreate.*Run/i
+parsePattern('/^SELECT.*FROM.*vw/');     // Returns: /^SELECT.*FROM.*vw/
+parsePattern('/INSERT INTO (Users|Roles)/i'); // Returns: /INSERT INTO (Users|Roles)/i
+
+// Parse multiple patterns at once
+const patterns = parsePatterns([
+  '*User*',              // Simple wildcard
+  '/^EXEC sp_/i',        // Regex string
+  '*EntityFieldValue*'   // Simple wildcard
+]);
+
+// Convert mixed string/RegExp arrays
+const mixed = ['*User*', /^Admin/i, '/DELETE.*WHERE/i'];
+const regexps = ensureRegExps(mixed);  // All converted to RegExp objects
+
+// Test if text matches any pattern
+const sql = 'SELECT * FROM Users WHERE Active = 1';
+matchesAnyPattern(sql, ['*User*', '*Role*', '/^UPDATE/i']);  // true
+
+// Test if text matches all patterns
+const filename = 'UserRoleManager.ts';
+matchesAllPatterns(filename, ['*User*', '*Role*', '*.ts']);  // true
+```
+
+#### Pattern Syntax
+
+**Simple Wildcard Patterns** (Recommended for most users):
+- `*` acts as a wildcard matching any characters
+- Case-insensitive by default
+- Examples:
+  - `*pattern*` - Contains "pattern" anywhere
+  - `pattern*` - Starts with "pattern"
+  - `*pattern` - Ends with "pattern"
+  - `pattern` - Exact match only
+
+**Regex String Patterns** (For advanced users):
+- Must start with `/` to be recognized as regex
+- Optionally end with flags like `/pattern/i`
+- Full JavaScript regex syntax supported
+- Examples:
+  - `/^start/i` - Case-insensitive start match
+  - `/end$/` - Case-sensitive end match
+  - `/(option1|option2)/` - Match alternatives
+
+#### Common Use Cases
+
+```typescript
+// SQL statement filtering
+const sqlFilters = [
+  '*AIPrompt*',           // Exclude AI prompt operations
+  '/^EXEC sp_/i',         // Exclude system stored procedures
+  '*EntityFieldValue*'    // Exclude field value operations
+];
+
+const shouldLog = !matchesAnyPattern(sqlStatement, sqlFilters);
+
+// File pattern matching
+const includePatterns = ['*.ts', '*.js', '/^(?!test)/'];  // TS/JS files not starting with "test"
+const shouldProcess = matchesAnyPattern(filename, includePatterns);
+
+// User input validation
+const allowedFormats = ['*@*.com', '*@*.org', '*@company.net'];
+const isValidEmail = matchesAnyPattern(email, allowedFormats);
 ```
 
 ### Global Object Store
