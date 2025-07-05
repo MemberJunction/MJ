@@ -28,9 +28,6 @@ import { requireSystemUserDirective, publicDirective } from './directives/index.
 import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 
-import { LoadActionEntityServer } from '@memberjunction/actions';
-LoadActionEntityServer(); // prevent tree shaking for this dynamic module
-
 import { LoadAllCoreActions } from '@memberjunction/core-actions';
 LoadAllCoreActions(); // prevent tree shaking for this dynamic module
 

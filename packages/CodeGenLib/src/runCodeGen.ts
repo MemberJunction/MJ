@@ -24,6 +24,9 @@ import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
 import { SQLLogging } from './Misc/sql_logging';
 import { SystemIntegrityBase } from './Misc/system_integrity';
 import { ActionEngineBase } from '@memberjunction/actions-base';
+import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
+
+LoadCoreEntitiesServerSubClasses(); // Load the core entities server subclasses to ensure they are registered and not tree shaken
 
 /** Extract core schema name from configuration */
 const { mjCoreSchema } = configInfo;

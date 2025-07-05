@@ -4,9 +4,10 @@ import path from 'path';
 import { makeDir } from '../Misc/util';
 import { RegisterClass } from '@memberjunction/global';
 import { ActionEntity, ActionLibraryEntity } from '@memberjunction/core-entities';
+import { ActionEntityServerEntity } from '@memberjunction/core-entities-server';
 import { logError, logMessage, logStatus } from './status_logging';
 import { mkdirSync } from 'fs-extra';
-import { ActionEngineServer, ActionEntityServerEntity } from '@memberjunction/actions';
+import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionEntityExtended } from '@memberjunction/actions-base';
 
 /**

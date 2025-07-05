@@ -1,0 +1,12 @@
+[
+    {
+        "fields": {
+            "Name": "Create Conversation Record",
+            "ParentID": "@lookup:Actions.Name=Create Record&Category=Data",
+            "Description": "Creates a record in the Conversations entity.",
+            "UserPrompt": "Create a record in the Conversations entity using parameters from this action and maps to the parent Create Record action and its format for parameters.",
+            "Type": "Generated",
+            "Status": "Active"
+        }
+    }
+]
