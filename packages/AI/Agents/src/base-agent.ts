@@ -1606,15 +1606,11 @@ export class BaseAgent {
                 finalPayload = changeResult.result;
             }
              
-            // Prepare output data
+            // Prepare output data, these are simple elements of the state that are not typically
+            // included in payload but are helpful. We do not include the prompt result here
+            // or the payload as those are stored already(prompt result via TargetLogID -> AIPromptRunEntity)
+            // and payload via the specialied PayloadAtStart/End fields on the step entity.
             const outputData = {
-                promptResult: {
-                    success: promptResult.success,
-                    llmResponse: promptResult.rawResult,
-                    modelUsed: promptResult.modelInfo?.modelName,
-                    tokensUsed: promptResult?.promptRun?.TokensUsed,
-                    totalCost: promptResult?.promptRun?.TotalCost
-                },
                 nextStep: {
                     decision: nextStep.step,
                     reasoning: this.getNextStepReasoning(nextStep),
@@ -1855,14 +1851,14 @@ export class BaseAgent {
             // Prepare output data
             const outputData = {
                 subAgentResult: {
+                    // we have a link to the AIAgentRunEntity via the TargetLogID above
+                    // but we throw in just a few things here for convenience/summary that are
+                    // light - we don't want to store the payload again for example
+                    // that is stored in PayloadAtEnd on the step and also in PayloadAtEnd in the sub-agent's run
                     success: subAgentResult.success,
                     finalStep: subAgentResult.agentRun?.FinalStep,
-                    payload: subAgentResult.payload,
                     errorMessage: subAgentResult.agentRun?.ErrorMessage,
-                    agentRunId: subAgentResult.agentRun?.ID,
                     stepCount: subAgentResult.agentRun?.Steps?.length || 0,
-                    downstreamPaths,
-                    upstreamPaths
                 },
                 shouldTerminate: shouldTerminate,
                 nextStep: shouldTerminate ? 'success' : 'retry',
@@ -2023,7 +2019,7 @@ export class BaseAgent {
                 // Override step number to ensure unique values for parallel actions
                 stepEntity.StepNumber = baseStepNumber + numActionsProcessed++;
                 
-                let actionResult;
+                let actionResult: ActionResult;
                 try {
                     // Execute the action
                     actionResult = await this.ExecuteSingleAction(params, aa, actionEntity, params.contextUser);
@@ -2071,9 +2067,8 @@ export class BaseAgent {
                 
                 return {
                     actionName: result.action.name,
-                    actionId: result.actionEntity?.ID,
-                    params: result.result?.Params || {},
                     success: result.success,
+                    params: result.result?.Params.filter(p => p.Type ==='Both' || p.Type ==='Output'), // only emit the output params which are type of output or both. This reduces tokens going back to LLM
                     resultCode: actionResult?.Result?.ResultCode || (result.success ? 'SUCCESS' : 'ERROR'),
                     message: result.success ? actionResult?.Message || 'Action completed' : result.error
                 };
@@ -2083,9 +2078,7 @@ export class BaseAgent {
             const failedActions = actionSummaries.filter(a => !a.success);
             
             // Add user message with the results
-            const resultsMessage = failedActions.length > 0
-                ? `Action results (${failedActions.length} failed):\n${JSON.stringify(actionSummaries, null, 2)}`
-                : `Action results (all succeeded):\n${JSON.stringify(actionSummaries, null, 2)}`;
+            const resultsMessage = (failedActions.length > 0 ? `${failedActions.length} of ${actionSummaries.length} failed:` : `Action results:`) + `\n${JSON.stringify(actionSummaries, null, 2)}`;
                 
             params.conversationMessages.push({
                 role: 'user',
@@ -2110,7 +2103,7 @@ export class BaseAgent {
             return {
                 terminate: false,
                 step: 'Retry',
-                errorMessage: e && e.message ? e.message : e ? e : 'Unknown error execution actions',
+                errorMessage: e && e.message ? e.message : e ? e : 'Unknown error executing actions',
                 retryReason: 'Error while processing actions, retry'
             };
         }
