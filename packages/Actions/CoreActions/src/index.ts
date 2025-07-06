@@ -112,6 +112,7 @@ import { LoadRetryAction } from './custom/workflow/retry.action';
 import { LoadDelayAction } from './custom/workflow/delay.action';
 import { LoadExecuteAIPromptAction } from './custom/ai/execute-ai-prompt.action';
 import { LoadGeneratedActions } from './generated/action_subclasses';
+import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
 
 export function LoadAllCoreActions() {
     LoadGeneratedActions()
@@ -162,3 +163,6 @@ export function LoadAllCoreActions() {
     LoadDelayAction();
     LoadExecuteAIPromptAction();
 }
+
+// ensure that the core entities server sub-classes are loaded and not tree-shaken out
+LoadCoreEntitiesServerSubClasses();

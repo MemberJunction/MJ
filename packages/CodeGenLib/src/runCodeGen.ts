@@ -12,14 +12,14 @@ import { SQLServerDataProvider, UserCache, setupSQLServerClient } from '@memberj
 import { MSSQLConnection } from './Config/db-connection';
 import { ManageMetadataBase } from './Database/manage-metadata';
 import { outputDir, commands, mj_core_schema, configInfo, getSettingValue } from './Config/config';
-import { logError, logMessage, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
+import { logError, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
 import * as MJ from '@memberjunction/core';
 import { RunCommandsBase } from './Misc/runCommand';
 import { DBSchemaGeneratorBase } from './Database/dbSchema';
 import { AngularClientGeneratorBase } from './Angular/angular-codegen';
 import { SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { CreateNewUserBase } from './Misc/createNewUser';
-import { MJGlobal, RegisterClass } from '@memberjunction/global';
+import { MJGlobal } from '@memberjunction/global';
 import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
 import { SQLLogging } from './Misc/sql_logging';
 import { SystemIntegrityBase } from './Misc/system_integrity';

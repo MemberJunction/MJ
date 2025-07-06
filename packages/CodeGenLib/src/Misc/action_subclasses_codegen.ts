@@ -59,6 +59,8 @@ export class ActionSubClassGeneratorBase {
 import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunction/actions-base";
 import { BaseAction, ActionEngineServer } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
+import { MJGlobal } from "@memberjunction/global";
+import { Metadata, RunView, RunQuery } from "@memberjunction/core";
 ${allActionLibraries.map(lib => `import { ${lib.ItemsUsedArray.map(item => item).join(', ')} } from "${lib.Library}";`).join('\n')}
 `;
             let sCode: string = "";

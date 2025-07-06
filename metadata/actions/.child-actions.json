@@ -1,12 +1,38 @@
 [
-    {
-        "fields": {
-            "Name": "Create Conversation Record",
-            "ParentID": "@lookup:Actions.Name=Create Record&Category=Data",
-            "Description": "Creates a record in the Conversations entity.",
-            "UserPrompt": "Create a record in the Conversations entity using parameters from this action and maps to the parent Create Record action and its format for parameters.",
-            "Type": "Generated",
-            "Status": "Active"
-        }
+  {
+    "fields": {
+      "Name": "Create Conversation Record",
+      "ParentID": "@lookup:Actions.Name=Create Record&Category=Data",
+      "Description": "Creates a record in the Conversations entity.",
+      "UserPrompt": "Create a record in the Conversations entity using parameters from this action and maps to the parent Create Record action and its format for parameters",
+      "Type": "Generated",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "2B89D422-FD0C-4ACF-81DD-8C1E46AF0B21"
+    },
+    "sync": {
+      "lastModified": "2025-07-06T00:17:56.772Z",
+      "checksum": "db255d4b28fbb9986094d18a76c5cc50d81622405ab2475481b0698b872eea07"
     }
+  },
+  {
+    "fields": {
+      "Name": "Get AI Model Cost",
+      "ParentID": "@lookup:Actions.Name=Get Record&Category=Data",
+      "Description": "Gets an AI Model Cost record from the database.",
+      "UserPrompt": "Get an AI Model Cost record from the database using parameters from this action and maps to the parent Get Record action and its format for parameters",
+      "CodeApprovalStatus": "Approved",
+      "Type": "Generated",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "CB13539A-5558-47AA-9E35-B36677A39959"
+    },
+    "sync": {
+      "lastModified": "2025-07-06T00:17:56.794Z",
+      "checksum": "f64789628c4da9541a51c3ce415183a80505e64e57136524e588686b8a0a802a"
+    }
+  }
 ]
