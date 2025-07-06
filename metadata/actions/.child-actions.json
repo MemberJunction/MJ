@@ -2,6 +2,7 @@
   {
     "fields": {
       "Name": "Create Conversation Record",
+      "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
       "ParentID": "@lookup:Actions.Name=Create Record&Category=Data",
       "Description": "Creates a record in the Conversations entity.",
       "UserPrompt": "Create a record in the Conversations entity using parameters from this action and maps to the parent Create Record action and its format for parameters",
@@ -10,16 +11,17 @@
       "Status": "Active"
     },
     "primaryKey": {
-      "ID": "2B89D422-FD0C-4ACF-81DD-8C1E46AF0B21"
+      "ID": "DD7AFB84-8381-482A-B6C7-88DDE4D2FF17"
     },
     "sync": {
-      "lastModified": "2025-07-06T00:17:56.772Z",
-      "checksum": "db255d4b28fbb9986094d18a76c5cc50d81622405ab2475481b0698b872eea07"
+      "lastModified": "2025-07-06T00:59:45.141Z",
+      "checksum": "08127194e8654f45a1bed268a30d046361ba726cfe41b4c2eedda1dd4c8cfcd8"
     }
   },
   {
     "fields": {
       "Name": "Get AI Model Cost",
+      "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
       "ParentID": "@lookup:Actions.Name=Get Record&Category=Data",
       "Description": "Gets an AI Model Cost record from the database.",
       "UserPrompt": "Get an AI Model Cost record from the database using parameters from this action and maps to the parent Get Record action and its format for parameters",
@@ -28,11 +30,11 @@
       "Status": "Active"
     },
     "primaryKey": {
-      "ID": "CB13539A-5558-47AA-9E35-B36677A39959"
+      "ID": "6A699E09-87ED-45F1-B7D2-0C38286C2EFF"
     },
     "sync": {
-      "lastModified": "2025-07-06T00:17:56.794Z",
-      "checksum": "f64789628c4da9541a51c3ce415183a80505e64e57136524e588686b8a0a802a"
+      "lastModified": "2025-07-06T00:59:45.168Z",
+      "checksum": "0ca9440cc241683a352c4cda09cff82a9d3c11a8066399530e83ec3500df8e5b"
     }
   }
 ]

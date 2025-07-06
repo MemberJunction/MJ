@@ -11,138 +11,6 @@ import { Metadata, RunView, RunQuery } from "@memberjunction/core";
 
             
 /**
- * Create Conversation Record
- * Generated Class
- * User Prompt: Create a record in the Conversations entity using parameters from this action and maps to the parent Create Record action and its format for parameters
- */
-@RegisterClass(BaseAction, "Create Conversation Record")
-export class Create_Conversation_Record_Action extends BaseAction {
-    /*
-		This child action creates a new record in the Conversations entity by accepting user-friendly, entity-specific parameters such as UserID, Type, Name, Description, etc. It validates that required fields (UserID, Type) are provided, maps the input parameters to the parent Create Record action's expected format (EntityName='Conversations', Fields=object of relevant columns), and invokes the parent action. It then extracts the created ConversationID from the parent's output and makes it available as an output parameter. Errors such as missing required fields, missing primary key, or parent action failure are returned with specific result codes for clarity.
-	*/
-    protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        // 1. Extract and validate input parameters needed for creating a Conversations record
-		// The minimal required parameters for Conversations are UserID and Type, but we support optional fields too.
-		// Extract each expected input parameter
-		const userID = params.Params.find(p => p.Name.trim().toLowerCase() === 'userid')?.Value;
-		const type = params.Params.find(p => p.Name.trim().toLowerCase() === 'type')?.Value;
-		const name = params.Params.find(p => p.Name.trim().toLowerCase() === 'name')?.Value;
-		const description = params.Params.find(p => p.Name.trim().toLowerCase() === 'description')?.Value;
-		const externalID = params.Params.find(p => p.Name.trim().toLowerCase() === 'externalid')?.Value;
-		const isArchived = params.Params.find(p => p.Name.trim().toLowerCase() === 'isarchived')?.Value;
-		const linkedEntityID = params.Params.find(p => p.Name.trim().toLowerCase() === 'linkedentityid')?.Value;
-		const linkedRecordID = params.Params.find(p => p.Name.trim().toLowerCase() === 'linkedrecordid')?.Value;
-		const dataContextID = params.Params.find(p => p.Name.trim().toLowerCase() === 'datacontextid')?.Value;
-		const status = params.Params.find(p => p.Name.trim().toLowerCase() === 'status')?.Value;
-		
-		// Validate required parameters
-		if (!userID || typeof userID !== 'string' || userID.trim() === '') {
-		    return {
-		        Success: false,
-		        ResultCode: 'ValidationError',
-		        Message: 'UserID is required to create a Conversation.'
-		    };
-		}
-		if (!type || typeof type !== 'string' || type.trim() === '') {
-		    return {
-		        Success: false,
-		        ResultCode: 'ValidationError',
-		        Message: 'Type is required to create a Conversation.'
-		    };
-		}
-		
-		// 2. Pre-process: Build fields object according to Conversations entity fields
-		const conversationFields: Record<string, any> = {
-		    UserID: userID,
-		    Type: type
-		};
-		if (name !== undefined) conversationFields.Name = name;
-		if (description !== undefined) conversationFields.Description = description;
-		if (externalID !== undefined) conversationFields.ExternalID = externalID;
-		if (typeof isArchived !== 'undefined') conversationFields.IsArchived = isArchived;
-		if (linkedEntityID !== undefined) conversationFields.LinkedEntityID = linkedEntityID;
-		if (linkedRecordID !== undefined) conversationFields.LinkedRecordID = linkedRecordID;
-		if (dataContextID !== undefined) conversationFields.DataContextID = dataContextID;
-		if (status !== undefined) conversationFields.Status = status;
-		
-		const mappedParams: ActionParam[] = [
-		    {
-		        Name: 'EntityName',
-		        Type: 'Input' as 'Input' | 'Output' | 'Both',
-		        Value: 'Conversations'
-		    },
-		    {
-		        Name: 'Fields',
-		        Type: 'Input' as 'Input' | 'Output' | 'Both',
-		        Value: conversationFields
-		    }
-		];
-		
-		try {
-		    // 3. Invoke parent Create Record action for Conversations
-		    const a = ActionEngineServer.Instance.Actions.find(a => a.ID.trim().toLowerCase() === '2504e288-adf7-4913-a627-aa14276baa55');
-		    const parentResult = await ActionEngineServer.Instance.RunAction({
-		        Action: a,
-		        Params: mappedParams,
-		        ContextUser: params.ContextUser,
-		        Filters: []
-		    });
-		
-		    // 4. Check for parent action execution errors
-		    if (!parentResult.Success) {
-		        // If the parent failed, report failure
-		        return {
-		            Success: false,
-		            ResultCode: 'ParentActionFailed',
-		            Message: 'Create Conversation failed: ' + (parentResult.Message || 'Unknown error')
-		        };
-		    }
-		
-		    // 5. Extract new ConversationID from parent output (PrimaryKey.ID)
-		    let conversationID: string | undefined = undefined;
-		    if (parentResult.Params) {
-		        const pkParam = parentResult.Params.find(p => p.Name.trim().toLowerCase() === 'primarykey');
-		        if (pkParam && pkParam.Value && typeof pkParam.Value === 'object') {
-		            // Conversations uses 'ID' as the primary key
-		            conversationID = pkParam.Value.ID || undefined;
-		        }
-		    }
-		    if (!conversationID) {
-		        // Shouldn't happen but handle gracefully
-		        return {
-		            Success: false,
-		            ResultCode: 'NoPrimaryKeyReturned',
-		            Message: 'Conversation was created, but no ConversationID was returned.'
-		        };
-		    }
-		
-		    // 6. Add output parameter for ConversationID
-		    params.Params.push({
-		        Name: 'ConversationID',
-		        Type: 'Output' as 'Input' | 'Output' | 'Both',
-		        Value: conversationID
-		    });
-		
-		    // 7. Return success
-		    return {
-		        Success: true,
-		        ResultCode: 'Success',
-		        Message: 'Conversation created successfully with ID: ' + conversationID
-		    };
-		
-		} catch (error: any) {
-		    // Catch-all for unexpected errors
-		    return {
-		        Success: false,
-		        ResultCode: 'Exception',
-		        Message: 'An exception occurred: ' + (error?.message || error?.toString())
-		    };
-		}
-    }
-}        
-            
-            
-/**
  * Get AI Model Cost
  * Generated Class
  * User Prompt: Get an AI Model Cost record from the database using parameters from this action and maps to the parent Get Record action and its format for parameters
@@ -150,45 +18,162 @@ export class Create_Conversation_Record_Action extends BaseAction {
 @RegisterClass(BaseAction, "Get AI Model Cost")
 export class Get_AI_Model_Cost_Action extends BaseAction {
     /*
-		This code defines a child action that retrieves an AI Model Cost record using its ID. It:
-		1. Validates the 'ID' parameter is provided and non-empty.
-		2. Maps the specific 'ID' into the 'PrimaryKey' object and sets the entity name to 'MJ: AI Model Costs' for the parent 'Get Record' action.
-		3. Invokes the parent action by its exact ID, handling any runtime errors.
-		4. Checks the parent's response: if it fails or the record isn't found, an appropriate error/result code and message are returned.
-		5. If the record is retrieved, it is added to output parameters as 'AIModelCost'.
-		6. Returns a clear result code/message for success, validation, parent failures, and record-not-found scenarios.
-		This provides a user-friendly and robust way to retrieve a single AI Model Cost record by ID, abstracting direct use of generic parent logic.
+		This child action retrieves a single AI Model Cost record from the database by its ID. 
+		
+		- It expects a single input parameter: 'ID' (the primary key of the AI Model Cost record).
+		- It validates that the ID is provided, and if missing, returns a 'ValidationError'.
+		- It then maps the simple child interface (just 'ID') into the parameters expected by the parent 'Get Record' action (specifying both the primary key and the entity name).
+		- The parent action (Get Record) is invoked using its specific ID for reliability.
+		- If the parent action fails, the code returns a 'ParentActionFailed' result code and passes along the error message.
+		- If the parent action reports success but does not return a record (likely meaning not found), it returns a 'RecordNotFound' result code.
+		- If a valid record is found, it adds the result as an output parameter named 'ModelCostRecord' and returns success. 
+		- All errors are handled gracefully, with clear and informative error messages.
+		
 	*/
     protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         // 1. Extract and validate input parameters
-		const idParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'id');
-		const ID = idParam?.Value;
+		const id = params.Params.find(p => p.Name.trim().toLowerCase() === 'id')?.Value;
 		
-		if (ID === undefined || ID === null || ID === '') {
-		    return {
-		        Success: false,
-		        ResultCode: 'ValidationError',
-		        Message: 'The required parameter "ID" was not provided or is empty.'
-		    };
+		// Validate required parameter
+		if (!id) {
+		  return {
+		    Success: false,
+		    ResultCode: 'ValidationError',
+		    Message: 'The parameter "ID" is required to get an AI Model Cost record.'
+		  };
 		}
 		
-		// 2. Pre-process: Map input to parent's required parameters
-		// The entity name for AI Model Cost is exactly 'MJ: AI Model Costs'
+		// 2. Pre-process: Map child params to parent Get Record format
 		const mappedParams: ActionParam[] = [
+		  {
+		    Name: 'PrimaryKey',
+		    Type: 'Input' as 'Input' | 'Output' | 'Both',
+		    Value: { ID: id } // AI Model Cost entity uses single PK called ID
+		  },
 		  {
 		    Name: 'EntityName',
 		    Type: 'Input' as 'Input' | 'Output' | 'Both',
 		    Value: 'MJ: AI Model Costs'
-		  },
-		  {
-		    Name: 'PrimaryKey',
-		    Type: 'Input' as 'Input' | 'Output' | 'Both',
-		    Value: { ID: ID }
 		  }
 		];
 		
-		// 3. Invoke parent action (Get Record)
-		const a = ActionEngineServer.Instance.Actions.find(a => a.ID.trim().toLowerCase() === '49e30665-1a90-45ca-9129-c33959a51b4f');
+		try {
+		  // 3. Invoke parent action (Get Record)
+		  const a = ActionEngineServer.Instance.Actions.find(a => a.ID.trim().toLowerCase() === '49e30665-1a90-45ca-9129-c33959a51b4f');
+		  const parentResult = await ActionEngineServer.Instance.RunAction({
+		    Action: a,
+		    Params: mappedParams,
+		    ContextUser: params.ContextUser,
+		    Filters: []
+		  });
+		
+		  // 4. Check parent result
+		  if (!parentResult.Success) {
+		    return {
+		      Success: false,
+		      ResultCode: 'ParentActionFailed',
+		      Message: 'Failed to retrieve AI Model Cost record: ' + (parentResult.Message || 'Unknown error from parent action')
+		    };
+		  }
+		
+		  const modelCostRecord = parentResult.Params.find(p => p.Name === 'Record')?.Value;
+		
+		  if (!modelCostRecord) {
+		    return {
+		      Success: false,
+		      ResultCode: 'RecordNotFound',
+		      Message: `No AI Model Cost record found with ID: ${id}`
+		    };
+		  }
+		
+		  // 5. Push output parameter for downstream or workflow use
+		  params.Params.push({
+		    Name: 'ModelCostRecord',
+		    Type: 'Output' as 'Input' | 'Output' | 'Both',
+		    Value: modelCostRecord
+		  });
+		
+		  // 6. Return success
+		  return {
+		    Success: true,
+		    ResultCode: 'Success',
+		    Message: 'AI Model Cost record retrieved successfully.'
+		  };
+		
+		} catch (error: any) {
+		  // General error handler
+		  return {
+		    Success: false,
+		    ResultCode: 'Failed',
+		    Message: 'Unhandled exception while retrieving AI Model Cost record: ' + (error?.message || error?.toString() || 'Unknown error')
+		  };
+		}
+    }
+}        
+            
+            
+/**
+ * Create Conversation Record
+ * Generated Class
+ * User Prompt: Create a record in the Conversations entity using parameters from this action and maps to the parent Create Record action and its format for parameters
+ */
+@RegisterClass(BaseAction, "Create Conversation Record")
+export class Create_Conversation_Record_Action extends BaseAction {
+    /*
+		This child action creates a new record in the Conversations entity by collecting a set of user-provided parameters. It validates that required fields (UserID and Type) are present. It then constructs the parent action parameters in the format expected by the generic Create Record action, explicitly setting the EntityName to 'Conversations' and mapping all supplied fields. It attempts to call the parent Create Record action. If that succeeds, it extracts the primary key ('ID') from the parent output and adds it as the output parameter 'ConversationID'. Errors such as missing required fields, parent action errors, or missing output values are handled with specific result codes and messages. On success, it clearly signals completion and returns the new ConversationID.
+	*/
+    protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        // 1. Extract and validate input parameters
+		const name = params.Params.find(p => p.Name.trim().toLowerCase() === 'name')?.Value;
+		const userID = params.Params.find(p => p.Name.trim().toLowerCase() === 'userid')?.Value;
+		const type = params.Params.find(p => p.Name.trim().toLowerCase() === 'type')?.Value;
+		const status = params.Params.find(p => p.Name.trim().toLowerCase() === 'status')?.Value;
+		const description = params.Params.find(p => p.Name.trim().toLowerCase() === 'description')?.Value;
+		const externalID = params.Params.find(p => p.Name.trim().toLowerCase() === 'externalid')?.Value;
+		const linkedEntityID = params.Params.find(p => p.Name.trim().toLowerCase() === 'linkedentityid')?.Value;
+		const linkedRecordID = params.Params.find(p => p.Name.trim().toLowerCase() === 'linkedrecordid')?.Value;
+		const dataContextID = params.Params.find(p => p.Name.trim().toLowerCase() === 'datacontextid')?.Value;
+		const isArchived = params.Params.find(p => p.Name.trim().toLowerCase() === 'isarchived')?.Value;
+		
+		// Validate required fields for Conversations: UserID and Type
+		if (!userID || !type) {
+		    return {
+		        Success: false,
+		        ResultCode: 'ValidationError',
+		        Message: 'UserID and Type are required fields to create a Conversation.'
+		    };
+		}
+		
+		// 2. Pre-process: Map to parent Create Record action
+		const fields: any = {
+		    UserID: userID,
+		    Type: type
+		};
+		
+		if (typeof name !== 'undefined') fields.Name = name;
+		if (typeof status !== 'undefined') fields.Status = status;
+		if (typeof description !== 'undefined') fields.Description = description;
+		if (typeof externalID !== 'undefined') fields.ExternalID = externalID;
+		if (typeof linkedEntityID !== 'undefined') fields.LinkedEntityID = linkedEntityID;
+		if (typeof linkedRecordID !== 'undefined') fields.LinkedRecordID = linkedRecordID;
+		if (typeof dataContextID !== 'undefined') fields.DataContextID = dataContextID;
+		if (typeof isArchived !== 'undefined') fields.IsArchived = isArchived;
+		
+		const mappedParams: ActionParam[] = [
+		    {
+		        Name: 'EntityName',
+		        Type: 'Input',
+		        Value: 'Conversations'
+		    },
+		    {
+		        Name: 'Fields',
+		        Type: 'Input',
+		        Value: fields
+		    }
+		];
+		
+		// 3. Invoke parent action, We always look up by ID for accuracy
+		const a = ActionEngineServer.Instance.Actions.find(a => a.ID.trim().toLowerCase() === '2504e288-adf7-4913-a627-aa14276baa55');
 		let parentResult;
 		try {
 		    parentResult = await ActionEngineServer.Instance.RunAction({
@@ -201,52 +186,48 @@ export class Get_AI_Model_Cost_Action extends BaseAction {
 		    return {
 		        Success: false,
 		        ResultCode: 'ParentActionError',
-		        Message: 'Failed to execute parent Get Record action: ' + (err?.message || String(err))
+		        Message: 'Error invoking parent action: ' + (err?.message || err)
 		    };
 		}
 		
-		// 4. Check result from parent
+		// 4. Check parent result
 		if (!parentResult?.Success) {
-		    // Parent could not find the record or failed
-		    let msg = parentResult?.Message || 'Unknown error calling parent action.';
-		    // Try to give specific result code if record is not found
-		    if ((parentResult?.ResultCode?.toLowerCase() || '').includes('notfound')) {
-		        return {
-		            Success: false,
-		            ResultCode: 'RecordNotFound',
-		            Message: 'No AI Model Cost record found for the specified ID.'
-		        };
-		    }
+		    let resultCode = 'ParentActionFailed';
+		    if (parentResult?.ResultCode) resultCode = parentResult.ResultCode;
 		    return {
 		        Success: false,
-		        ResultCode: 'ParentActionFailed',
-		        Message: 'Parent action failed: ' + msg
+		        ResultCode: resultCode,
+		        Message: 'Parent action failed: ' + (parentResult?.Message || 'Unknown error')
 		    };
 		}
 		
-		const record = parentResult?.Params?.find(p => p.Name.trim().toLowerCase() === 'record')?.Value;
-		
-		// 5. Post-process: Carry result record into output param, if found
+		// 5. Post-process: extract and return new Conversation ID. For Conversations, primary key is 'ID'.
+		let conversationID = null;
+		if (parentResult.Params) {
+		    // Look for output param 'PrimaryKey' and inside it, field 'ID'
+		    const primaryKeyObj = parentResult.Params.find(p => p.Name.trim().toLowerCase() === 'primarykey')?.Value;
+		    if (primaryKeyObj && typeof primaryKeyObj === 'object' && 'ID' in primaryKeyObj) {
+		        conversationID = primaryKeyObj.ID;
+		    }
+		}
+		if (!conversationID) {
+		    return {
+		        Success: false,
+		        ResultCode: 'MissingOutput',
+		        Message: 'Failed to retrieve created Conversation ID from parent action.'
+		    };
+		}
+		// Add output param
 		params.Params.push({
-		    Name: 'AIModelCost',
-		    Type: 'Output' as 'Input' | 'Output' | 'Both',
-		    Value: record
+		    Name: 'ConversationID',
+		    Type: 'Output',
+		    Value: conversationID
 		});
 		
-		// 6. Handle record not found at parent even if Success=true (defensive)
-		if (!record) {
-		    return {
-		        Success: false,
-		        ResultCode: 'RecordNotFound',
-		        Message: 'No AI Model Cost record found for the specified ID.'
-		    };
-		}
-		
-		// 7. Return success
 		return {
 		    Success: true,
 		    ResultCode: 'Success',
-		    Message: 'AI Model Cost record retrieved successfully.'
+		    Message: 'Conversation record created successfully.'
 		};
     }
 }        
