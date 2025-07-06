@@ -24,6 +24,7 @@
     "@memberjunction/global": "2.65.0",
     "@memberjunction/core": "2.65.0",
     "@memberjunction/core-entities": "2.65.0",
+    "@memberjunction/core-entities-server": "2.65.0",
     "@memberjunction/ai": "2.65.0",
     "@memberjunction/aiengine": "2.65.0",
     "zod": "^3.23.8"
