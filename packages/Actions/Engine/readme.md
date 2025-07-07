@@ -328,13 +328,14 @@ Abstract base class for action filters.
 
 #### ActionEntityServerEntity
 
-Server-side entity class for Actions with AI-powered code generation.
+Server-side entity class for Actions with AI-powered code generation. This class is located in the `@memberjunction/core-entities-server` package.
 
 **Key Features:**
 - Automatic code generation from natural language prompts
 - Code validation and improvement through AI
 - Library dependency management
 - Transaction-safe save operations
+- Automatic creation of action parameters and result codes from AI-generated definitions
 
 ### Types and Interfaces
 

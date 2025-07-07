@@ -1,27 +1,4 @@
 /**
- * @fileoverview Entity metadata and schema types for Skip API
- * 
- * This file contains types that describe database entities, fields, relationships, and metadata
- * structures used by the Skip API system. These types define the structure for:
- * 
- * - Entity schema information (SkipEntityInfo)
- * - Field definitions and metadata (SkipEntityFieldInfo, SkipEntityFieldValueInfo)
- * - Entity relationships (SkipEntityRelationshipInfo)
- * - Column descriptions for report data (SkipColumnInfo)
- * 
- * These types are essential for communicating database schema information to Skip, allowing
- * the AI to understand the structure, relationships, and constraints of the underlying data.
- * This metadata enables Skip to generate appropriate SQL queries, understand data relationships,
- * and provide meaningful analysis and reports.
- * 
- * The entity metadata includes information about primary keys, foreign keys, data types,
- * constraints, and relationships that Skip uses to navigate and query the database effectively.
- * 
- * @author MemberJunction
- * @since 2.0.0
- */
-
-/**
  * For each Skip API Analysis result, it is possible for Skip to provide a set of tableDataColumns that describe the data that is being returned in this shape.
  */
 export class SkipColumnInfo {
