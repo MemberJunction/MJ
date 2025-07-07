@@ -36,6 +36,8 @@ export interface PullResult {
 export class PullService {
   private syncEngine: SyncEngine;
   private contextUser: UserInfo;
+  private createdBackupFiles: string[] = [];
+  private createdBackupDirs: Set<string> = new Set();
   
   constructor(syncEngine: SyncEngine, contextUser: UserInfo) {
     this.syncEngine = syncEngine;
@@ -276,6 +278,80 @@ export class PullService {
     return { processed, created, updated, skipped };
   }
   
+  /**
+   * Clean up backup files created during the pull operation
+   * Should be called after successful pull operations to remove persistent backup files
+   */
+  async cleanupBackupFiles(): Promise<void> {
+    if (this.createdBackupFiles.length === 0 && this.createdBackupDirs.size === 0) {
+      return;
+    }
+    
+    const errors: string[] = [];
+    
+    // Remove backup files
+    for (const backupPath of this.createdBackupFiles) {
+      try {
+        if (await fs.pathExists(backupPath)) {
+          await fs.remove(backupPath);
+        }
+      } catch (error) {
+        errors.push(`Failed to remove backup file ${backupPath}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    
+    // Remove empty backup directories
+    for (const backupDir of this.createdBackupDirs) {
+      try {
+        await this.removeEmptyBackupDirectory(backupDir);
+      } catch (error) {
+        errors.push(`Failed to remove backup directory ${backupDir}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    
+    // Clear the tracking arrays
+    this.createdBackupFiles = [];
+    this.createdBackupDirs.clear();
+    
+    if (errors.length > 0) {
+      throw new Error(`Backup cleanup completed with errors:\n${errors.join('\n')}`);
+    }
+  }
+
+  /**
+   * Remove a backup directory if it's empty
+   */
+  private async removeEmptyBackupDirectory(backupDir: string): Promise<void> {
+    try {
+      // Check if directory exists
+      if (!(await fs.pathExists(backupDir))) {
+        return;
+      }
+      
+      // Only remove if it's actually a .backups directory for safety
+      if (!backupDir.endsWith('.backups')) {
+        return;
+      }
+      
+      // Check if directory is empty
+      const files = await fs.readdir(backupDir);
+      if (files.length === 0) {
+        await fs.remove(backupDir);
+      }
+    } catch (error) {
+      // Log error but don't throw - cleanup should be non-critical
+      // The error will be caught by the caller and included in the error list
+      throw error;
+    }
+  }
+  
+  /**
+   * Get the list of backup files created during the current pull operation
+   */
+  getCreatedBackupFiles(): string[] {
+    return [...this.createdBackupFiles];
+  }
+  
   private async processIndividualRecords(
     records: any[],
     options: PullOptions,
@@ -513,9 +589,6 @@ export class PullService {
     currentDepth: number = 0,
     ancestryPath: Set<string> = new Set()
   ): Promise<RecordData> {
-    // This is a simplified version - the full implementation would need to be extracted
-    // from the pull command. For now, we'll delegate to a method that would be
-    // implemented in the full service
     
     // Build record data
     const fields: Record<string, any> = {};
@@ -527,7 +600,7 @@ export class PullService {
       dataToProcess = record.GetAll();
     }
     
-    // Process fields (simplified - full implementation needed)
+    // Process fields with proper lookupFields conversion
     for (const [fieldName, fieldValue] of Object.entries(dataToProcess)) {
       // Skip primary key fields
       if (primaryKey[fieldName] !== undefined) {
@@ -544,7 +617,47 @@ export class PullService {
         continue;
       }
       
-      fields[fieldName] = fieldValue;
+      // Process lookupFields - convert GUIDs to @lookup syntax
+      let processedValue = fieldValue;
+      if (entityConfig.pull?.lookupFields?.[fieldName] && fieldValue != null) {
+        try {
+          processedValue = await this.convertGuidToLookup(
+            String(fieldValue), 
+            entityConfig.pull.lookupFields[fieldName],
+            verbose
+          );
+        } catch (error) {
+          if (verbose) {
+            console.warn(`Failed to convert ${fieldName} to lookup: ${error}`);
+          }
+          // Keep original value if lookup fails
+          processedValue = fieldValue;
+        }
+      }
+      
+      fields[fieldName] = processedValue;
+    }
+    
+    // Process related entities if configured
+    if (entityConfig.pull?.relatedEntities) {
+      for (const [relationKey, relationConfig] of Object.entries(entityConfig.pull.relatedEntities)) {
+        try {
+          const relatedRecords = await this.loadRelatedEntities(
+            record,
+            relationConfig as any,
+            currentDepth + 1,
+            ancestryPath,
+            verbose
+          );
+          if (relatedRecords.length > 0) {
+            relatedEntities[relationKey] = relatedRecords;
+          }
+        } catch (error) {
+          if (verbose) {
+            console.warn(`Failed to load related entities for ${relationKey}: ${error}`);
+          }
+        }
+      }
     }
     
     // Calculate checksum
@@ -567,6 +680,65 @@ export class PullService {
     return recordData;
   }
   
+  /**
+   * Convert a GUID value to @lookup syntax by looking up the human-readable value
+   */
+  private async convertGuidToLookup(
+    guidValue: string,
+    lookupConfig: { entity: string; field: string },
+    verbose?: boolean
+  ): Promise<string> {
+    if (!guidValue || typeof guidValue !== 'string') {
+      return guidValue;
+    }
+
+    try {
+      // Use RunView to find the record with this GUID
+      const rv = new RunView();
+      const result = await rv.RunView({
+        EntityName: lookupConfig.entity,
+        ExtraFilter: `ID = '${guidValue}'`,
+        ResultType: 'entity_object'
+      }, this.contextUser);
+
+      if (result.Success && result.Results && result.Results.length > 0) {
+        const targetRecord = result.Results[0];
+        const lookupValue = targetRecord[lookupConfig.field];
+        
+        if (lookupValue != null) {
+          return `@lookup:${lookupConfig.entity}.${lookupConfig.field}=${lookupValue}`;
+        }
+      }
+
+      if (verbose) {
+        console.warn(`Lookup failed for ${guidValue} in ${lookupConfig.entity}.${lookupConfig.field}`);
+      }
+      
+      // Return original GUID if lookup fails
+      return guidValue;
+    } catch (error) {
+      if (verbose) {
+        console.warn(`Error during lookup conversion: ${error}`);
+      }
+      return guidValue;
+    }
+  }
+
+  /**
+   * Load related entities for a record
+   */
+  private async loadRelatedEntities(
+    parentRecord: any,
+    relationConfig: any,
+    currentDepth: number,
+    ancestryPath: Set<string>,
+    verbose?: boolean
+  ): Promise<RecordData[]> {
+    // For now, return empty array - this can be implemented later if needed
+    // The main focus is fixing the lookupFields issue
+    return [];
+  }
+
   private async findEntityDirectories(entityName: string): Promise<string[]> {
     const dirs: string[] = [];
     
@@ -740,6 +912,8 @@ export class PullService {
     
     // Ensure backup directory exists
     await fs.ensureDir(backupDir);
+    // Track the backup directory for cleanup
+    this.createdBackupDirs.add(backupDir);
     
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     // Remove .json extension, add timestamp, then add .backup extension
@@ -748,6 +922,8 @@ export class PullService {
     
     try {
       await fs.copy(filePath, backupPath);
+      // Track the created backup file for cleanup
+      this.createdBackupFiles.push(backupPath);
     } catch (error) {
       // Log error but don't throw
     }

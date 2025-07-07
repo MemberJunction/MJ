@@ -8,13 +8,30 @@
       "SystemPromptID": "@lookup:AI Prompts.Name=Loop Agent Type: System Prompt",
       "IsActive": true
     },
-    "relatedEntities": {},
     "primaryKey": {
       "ID": "F7926101-5099-4FA5-836A-479D9707C818"
     },
     "sync": {
-      "lastModified": "2025-06-24T17:33:34.288Z",
-      "checksum": "1fdf686c688c48843bfb8ed8a6991a8d9e0ebd7c41b7aea3361398c8a01b6674"
+      "lastModified": "2025-07-07T22:40:23.530Z",
+      "checksum": "652012dd299e0bc62d3bc031eddbf934959122f7caf46047afa67bc02027ab42"
+    },
+    "relatedEntities": {}
+  },
+  {
+    "fields": {
+      "Name": "Base Agent",
+      "Description": "Foundational agent type that provides core AI agent capabilities including decision-making, tool execution, conversation management, and hierarchical agent coordination. This type defines the standard behavior for all other specialized agent types.",
+      "SystemPromptID": null,
+      "IsActive": true,
+      "AgentPromptPlaceholder": null,
+      "DriverClass": null
+    },
+    "primaryKey": {
+      "ID": "A7B8C9D0-E1F2-3456-7890-123456789ABC"
+    },
+    "sync": {
+      "lastModified": "2025-07-07T22:40:23.531Z",
+      "checksum": "18028f6d380f0d247a726bbf1f04292516ab913ef8b87955652b9678a404e15d"
     }
   }
 ]
