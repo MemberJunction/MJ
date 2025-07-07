@@ -47,7 +47,7 @@ jobs:
             Only look at PR files from the migrations/ directory. Do not review any other files in the PR.
             For each *.sql file in the migrations/ directory:
             - Identify all instances of raw INSERT statements or calls to any stored procedure starting with "spCreate"
-            - Confirm that each statement has hard-coded UUID ID columns and is suitable for an immutable and deterministic migration
+            - Confirm that each statement has hard-coded UUID ID columns (with stored procedures it will use @ID) and is suitable for an immutable and deterministic migration
 
             Be constructive and specific in your feedback.
             Provide specific, actionable feedback. Use inline comments for line-specific issues and include an overall summary when submitting the review.
