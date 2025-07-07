@@ -1,5 +1,14 @@
 # @memberjunction/ng-action-gallery
 
+## 2.66.0
+
+### Patch Changes
+
+- @memberjunction/ng-ai-test-harness@2.66.0
+- @memberjunction/ng-container-directives@2.66.0
+- @memberjunction/core@2.66.0
+- @memberjunction/core-entities@2.66.0
+
 ## 2.65.0
 
 ### Patch Changes

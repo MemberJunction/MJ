@@ -1,5 +1,18 @@
 # @memberjunction/ai-mcp-server
 
+## 2.66.0
+
+### Patch Changes
+
+- Updated dependencies [8d3d322]
+- Updated dependencies [1be2d4c]
+- Updated dependencies [a4f3631]
+  - @memberjunction/ai-agents@2.66.0
+  - @memberjunction/sqlserver-dataprovider@2.66.0
+  - @memberjunction/core@2.66.0
+  - @memberjunction/core-entities@2.66.0
+  - @memberjunction/global@2.66.0
+
 ## 2.65.0
 
 ### Patch Changes

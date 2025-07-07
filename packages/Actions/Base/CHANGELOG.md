@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/actions-base
 
+## 2.66.0
+
+### Minor Changes
+
+- 7e22e3e: Child Generated Actions - completed implementation!
+
+### Patch Changes
+
+- @memberjunction/core@2.66.0
+- @memberjunction/core-entities@2.66.0
+- @memberjunction/global@2.66.0
+
 ## 2.65.0
 
 ### Patch Changes

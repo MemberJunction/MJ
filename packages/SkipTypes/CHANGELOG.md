@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/skip-types
 
+## 2.66.0
+
+### Patch Changes
+
+- 22c1340: Remove unneeded JSDoc
+  - @memberjunction/core@2.66.0
+  - @memberjunction/core-entities@2.66.0
+  - @memberjunction/data-context@2.66.0
+
 ## 2.65.0
 
 ### Patch Changes

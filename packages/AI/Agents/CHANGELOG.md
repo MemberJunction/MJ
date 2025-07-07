@@ -1,5 +1,26 @@
 # @memberjunction/ai-agents
 
+## 2.66.0
+
+### Minor Changes
+
+- 8d3d322: migration
+- a4f3631: minor due to migrations
+
+### Patch Changes
+
+- 1be2d4c: clean up outputdata
+- Updated dependencies [7e22e3e]
+  - @memberjunction/actions-base@2.66.0
+  - @memberjunction/actions@2.66.0
+  - @memberjunction/ai-core-plus@2.66.0
+  - @memberjunction/aiengine@2.66.0
+  - @memberjunction/ai-prompts@2.66.0
+  - @memberjunction/ai@2.66.0
+  - @memberjunction/core@2.66.0
+  - @memberjunction/core-entities@2.66.0
+  - @memberjunction/global@2.66.0
+
 ## 2.65.0
 
 ### Patch Changes
