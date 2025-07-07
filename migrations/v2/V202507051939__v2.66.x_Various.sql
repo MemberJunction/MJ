@@ -359,7 +359,7 @@ try {
     return {
       Success: false,
       ResultCode: ''RecordNotFound'',
-      Message: `No AI Model Cost record found with ID: ${id}`
+      Message: ''No AI Model Cost record found with ID: '' + id
     };
   }
 
