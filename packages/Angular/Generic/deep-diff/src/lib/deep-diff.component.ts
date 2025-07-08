@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, OnInit, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { DeepDiffer, DeepDiffResult, DiffChangeType, DiffChange } from '@memberjunction/global';
 
 export interface DeepDiffItem extends DiffChange {
@@ -11,22 +11,74 @@ export interface DeepDiffItem extends DiffChange {
 @Component({
   selector: 'mj-deep-diff',
   templateUrl: './deep-diff.component.html',
-  styleUrls: ['./deep-diff.component.css']
+  styleUrls: ['./deep-diff.component.css'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class DeepDiffComponent implements OnInit, OnChanges {
-  @Input() oldValue: any;
-  @Input() newValue: any;
+export class DeepDiffComponent implements OnInit {
+  private _oldValue: any;
+  private _newValue: any;
+  private _showUnchanged: boolean = false;
+  private _maxDepth: number = 10;
+  private _maxStringLength: number = 100;
+
+  @Input()
+  get oldValue(): any {
+    return this._oldValue;
+  }
+  set oldValue(value: any) {
+    this._oldValue = value;
+    this.generateDiff();
+  }
+
+  @Input()
+  get newValue(): any {
+    return this._newValue;
+  }
+  set newValue(value: any) {
+    this._newValue = value;
+    this.generateDiff();
+  }
+
+  @Input()
+  get showUnchanged(): boolean {
+    return this._showUnchanged;
+  }
+  set showUnchanged(value: boolean) {
+    this._showUnchanged = value;
+    this.updateDifferConfig();
+    this.generateDiff();
+  }
+
+  @Input()
+  get maxDepth(): number {
+    return this._maxDepth;
+  }
+  set maxDepth(value: number) {
+    this._maxDepth = value;
+    this.updateDifferConfig();
+    this.generateDiff();
+  }
+
+  @Input()
+  get maxStringLength(): number {
+    return this._maxStringLength;
+  }
+  set maxStringLength(value: number) {
+    this._maxStringLength = value;
+    this.updateDifferConfig();
+    this.generateDiff();
+  }
+
   @Input() title: string = 'Deep Diff Analysis';
   @Input() showSummary: boolean = true;
-  @Input() showUnchanged: boolean = false;
   @Input() expandAll: boolean = false;
-  @Input() maxDepth: number = 10;
-  @Input() maxStringLength: number = 100;
+  @Input() truncateValues: boolean = true;
 
   diffResult: DeepDiffResult | null = null;
   diffItems: DeepDiffItem[] = [];
   filter: string = '';
   filterType: 'all' | 'added' | 'removed' | 'modified' | 'unchanged' = 'all';
+  expandedValuesMap: { [key: string]: boolean } = {};
   
   private differ: DeepDiffer;
 
@@ -42,13 +94,6 @@ export class DeepDiffComponent implements OnInit, OnChanges {
     this.generateDiff();
   }
 
-  ngOnChanges(changes: SimpleChanges): void {
-    if (changes['oldValue'] || changes['newValue'] || changes['showUnchanged'] || 
-        changes['maxDepth'] || changes['maxStringLength']) {
-      this.updateDifferConfig();
-      this.generateDiff();
-    }
-  }
 
   private updateDifferConfig(): void {
     this.differ.updateConfig({
@@ -196,27 +241,107 @@ export class DeepDiffComponent implements OnInit, OnChanges {
     }
   }
 
-  formatValue(value: any): string {
+  formatValue(value: any, path: string): string {
     if (value === undefined) return 'undefined';
     if (value === null) return 'null';
+    
+    const isExpanded = !!this.expandedValuesMap[path];
+    const shouldTruncate = this.truncateValues && !isExpanded;
+    
     if (typeof value === 'string') {
-      return value.length > this.maxStringLength ? 
-        `"${value.substring(0, this.maxStringLength)}..."` : 
-        `"${value}"`;
+      if (shouldTruncate && value.length > this.maxStringLength) {
+        return `"${value.substring(0, this.maxStringLength)}..."`;
+      }
+      return `"${value}"`;
     }
+    
     if (typeof value === 'object') {
       try {
         const json = JSON.stringify(value, null, 2);
-        return json.length > 200 ? json.substring(0, 200) + '...' : json;
+        if (shouldTruncate && json.length > 200) {
+          // Show a preview for objects
+          const preview = JSON.stringify(value).substring(0, 50);
+          return `${preview}... (${this.getObjectSize(value)} properties)`;
+        }
+        return json;
       } catch {
         return String(value);
       }
     }
+    
     return String(value);
+  }
+  
+  isValueTruncated(value: any, path: string): boolean {
+    if (!this.truncateValues || this.expandedValuesMap[path]) {
+      return false;
+    }
+    
+    if (typeof value === 'string') {
+      return value.length > this.maxStringLength;
+    }
+    
+    if (typeof value === 'object' && value !== null) {
+      try {
+        const json = JSON.stringify(value, null, 2);
+        return json.length > 200;
+      } catch {
+        return false;
+      }
+    }
+    
+    return false;
+  }
+  
+  toggleValueExpansion(path: string, event: Event): void {
+    event.stopPropagation();
+    
+    // Create a new object to trigger change detection
+    this.expandedValuesMap = {
+      ...this.expandedValuesMap,
+      [path]: !this.expandedValuesMap[path]
+    };
+    
+    // Force change detection
+    this.cdr.markForCheck();
+  }
+  
+  private getObjectSize(obj: any): number {
+    if (Array.isArray(obj)) {
+      return obj.length;
+    }
+    return Object.keys(obj).length;
   }
 
   copyToClipboard(text: string): void {
     navigator.clipboard.writeText(text).then(() => {
+      // Could add a toast notification here
+    });
+  }
+  
+  isExpanded(path: string): boolean {
+    return !!this.expandedValuesMap[path];
+  }
+  
+  copyValueToClipboard(value: any, event: Event): void {
+    event.stopPropagation();
+    let textToCopy: string;
+    
+    if (value === undefined) {
+      textToCopy = 'undefined';
+    } else if (value === null) {
+      textToCopy = 'null';
+    } else if (typeof value === 'object') {
+      try {
+        textToCopy = JSON.stringify(value, null, 2);
+      } catch {
+        textToCopy = String(value);
+      }
+    } else {
+      textToCopy = String(value);
+    }
+    
+    navigator.clipboard.writeText(textToCopy).then(() => {
       // Could add a toast notification here
     });
   }

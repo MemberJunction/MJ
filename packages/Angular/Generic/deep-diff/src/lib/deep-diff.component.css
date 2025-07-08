@@ -337,13 +337,20 @@
   font-size: 12px;
 }
 
-.item-header:hover .btn-copy {
+.item-header:hover .btn-copy,
+.value-row:hover .btn-copy {
   opacity: 1;
 }
 
 .btn-copy:hover {
   background: #e9ecef;
   color: #495057;
+}
+
+/* Value row copy button */
+.value-row .btn-copy {
+  flex-shrink: 0;
+  margin-left: 8px;
 }
 
 /* Type-specific styling */
@@ -377,6 +384,7 @@
   gap: 12px;
   margin-bottom: 8px;
   align-items: flex-start;
+  position: relative;
 }
 
 .value-row:last-child {
@@ -415,6 +423,30 @@
   background: #f4fdf6;
   border-color: #d4edda;
   color: #155724;
+}
+
+/* Expand/Collapse Value Button */
+.btn-expand-value {
+  background: none;
+  border: 1px solid #dee2e6;
+  color: #6c757d;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  font-size: 11px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.btn-expand-value:hover {
+  background: #e9ecef;
+  color: #495057;
+  border-color: #adb5bd;
+}
+
+.btn-expand-value i {
+  font-size: 10px;
 }
 
 /* Children */
