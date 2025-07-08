@@ -1,5 +1,19 @@
 # @memberjunction/ai-agents
 
+## 2.67.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.67.0
+- @memberjunction/ai-core-plus@2.67.0
+- @memberjunction/aiengine@2.67.0
+- @memberjunction/ai-prompts@2.67.0
+- @memberjunction/actions-base@2.67.0
+- @memberjunction/actions@2.67.0
+- @memberjunction/core@2.67.0
+- @memberjunction/core-entities@2.67.0
+- @memberjunction/global@2.67.0
+
 ## 2.66.0
 
 ### Minor Changes
