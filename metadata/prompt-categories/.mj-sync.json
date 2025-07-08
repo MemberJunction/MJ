@@ -15,6 +15,9 @@
         "entity": "AI Prompt Categories",
         "field": "Name"
       }
-    }
+    }, 
+    "excludeFields": [
+      "Parent"
+    ]
   }
 }
