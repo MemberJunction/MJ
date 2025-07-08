@@ -300,10 +300,16 @@ export class CodeEditorComponent implements OnInit, OnDestroy, ControlValueAcces
         return json();
       case 'javascript':
       case 'js':
-        return javascript();
+        return javascript({
+          typescript: false,
+          jsx: true, // Enable JSX support for JavaScript files
+        });
       case 'typescript':
       case 'ts':
-        return javascript(); // Use JavaScript extension for TypeScript files
+        return javascript({
+          typescript: true,
+          jsx: true, // Enable JSX support for TypeScript files
+        });  
       case 'sql':
         return sql();
       case 'python':
