@@ -150,6 +150,11 @@ export function BuildSkipComponentChildCode(child: SkipComponentChildSpec): stri
     // Start with the base code for the child component
     let code = child.componentCode;
     // Recursively replace placeholders for child components with their generated code
+    if (!child.components || child.components.length === 0) {
+        // If there are no child components, return the base code for this child
+        return code;
+    }
+    
     for (const sub of child.components) {
         const subCode = BuildSkipComponentChildCode(sub);
         // Replace the placeholder in the parent component's code with the actual child component code
