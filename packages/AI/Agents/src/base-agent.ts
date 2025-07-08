@@ -927,7 +927,10 @@ export class BaseAgent {
                 parentDepth: this._depth,
                 parentRun: this._agentRun,
                 payload: payload, // pass the payload if provided
-                data: subAgentRequest.templateParameters,
+                data: {
+                        ...subAgentRequest.templateParameters,
+                        ...params.data, 
+                      }, // merge any template parameters, but override with explicitly provided data so that hallucinated input params don't override data provided by caller
                 context: params.context, // pass along our context to sub-agents so they can keep passing it down and pass to actions as well
                 verbose: params.verbose // pass verbose flag to sub-agent
             });
