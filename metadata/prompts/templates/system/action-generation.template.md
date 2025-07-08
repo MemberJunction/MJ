@@ -7,7 +7,7 @@ Entities are tables and have unique names and columns. You **must** refer to thi
  
 {{ entityInfo | dump | safe }}
 
-## Your Task
+## Your Task  
 
 {% if IsChildAction %}
 You will be creating a **child action** that orchestrates and extends a parent action. Child actions add value by:

@@ -1448,6 +1448,7 @@ export class AIPromptRunner {
         promptRun.Messages = JSON.stringify({
           data: params.data,
           templateData: params.templateData,
+          messages: params.conversationMessages || [],
         });
       }
 
