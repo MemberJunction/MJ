@@ -45,6 +45,8 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   private actionLogsSubject$ = new BehaviorSubject<ActionExecutionLogEntity[]>([]);
   private promptRunsSubject$ = new BehaviorSubject<AIPromptRunEntity[]>([]);
   
+  private _agentRun: AIAgentRunEntity | null = null;
+
   // Public observables
   steps$ = this.stepsSubject$.asObservable();
   subRuns$ = this.subRunsSubject$.asObservable();
@@ -76,7 +78,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
     if (this.aiAgentRunId) {
       this.loadData();
       
-      if (this.autoRefresh) {
+      if (this.autoRefresh && this._agentRun?.Status == 'Running') {
         this.startAutoRefresh();
       }
     }
@@ -90,6 +92,9 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   private startAutoRefresh() {
     const interval = setInterval(() => {
       this.loadData();
+      if (this._agentRun?.Status !== 'Running') {
+        clearInterval(interval);
+      }
     }, this.refreshInterval);
     
     this.destroy$.subscribe(() => clearInterval(interval));
@@ -113,7 +118,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   
   private async loadStepsAndSubRuns() {
     const rv = new RunView();
-    const [stepsResult, subRunsResult] = await rv.RunViews([
+    const [stepsResult, subRunsResult, runResult] = await rv.RunViews([
       {
         EntityName: 'MJ: AI Agent Run Steps',
         ExtraFilter: `AgentRunID='${this.aiAgentRunId}'`,
@@ -123,6 +128,11 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
         EntityName: 'MJ: AI Agent Runs',
         ExtraFilter: `ParentRunID='${this.aiAgentRunId}'`,
         OrderBy: 'StartedAt' 
+      },
+      {
+        EntityName: 'MJ: AI Agent Runs',
+        ExtraFilter: `ID='${this.aiAgentRunId}'`,
+        ResultType: 'entity_object'
       }
     ]);
     
@@ -149,6 +159,10 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
       
       // For each sub-run that has its own sub-runs, we'll need to handle that in the component
       // This creates the hierarchical structure
+    }
+
+    if (runResult.Success) {
+      this._agentRun = runResult.Results[0] as AIAgentRunEntity;
     }
   }
   
