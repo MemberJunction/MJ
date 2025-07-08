@@ -164,6 +164,10 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     // Replace schema names with Flyway placeholders if migration format
     if (this.options.formatAsMigration) {
       processedQuery = processedQuery.replace(/\[(\w+)\]\./g, '[${flyway:defaultSchema}].');
+      
+      // Escape ${...} patterns within SQL string literals to prevent Flyway from treating them as placeholders
+      // This regex matches string literals and replaces ${...} with $' + '{...} within them
+      processedQuery = this._escapeFlywaySyntaxInStrings(processedQuery);
     }
 
     // Apply pretty printing if enabled
@@ -327,6 +331,35 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     // Fix EXEC keyword - ensure it's on its own line
     // Match: any non-whitespace followed by space(s) followed by EXEC (word boundary)
     sql = sql.replace(/(\S)\s+(EXEC\b)/g, '$1\n$2');
+
+    return sql;
+  }
+
+  /**
+   * Escapes ${...} patterns within SQL string literals to prevent Flyway from interpreting them as placeholders.
+   * Converts ${templateVariable} to $' + '{templateVariable} within string literals.
+   * 
+   * @param sql - The SQL statement to process
+   * @param quoteIdentifier - The quote character used for string literals (default: single quote)
+   * @returns The SQL with escaped template syntax within strings
+   */
+  private _escapeFlywaySyntaxInStrings(sql: string, quoteIdentifier: string = "'"): string {
+    if (!sql) return sql;
+
+    // Build regex pattern based on the quote identifier
+    // This pattern matches string literals enclosed by the specified quote character
+    const regexPattern = new RegExp(`${quoteIdentifier}([^${quoteIdentifier}]*)${quoteIdentifier}`, 'g');
+    
+    // Process the SQL to find and escape ${...} patterns within string literals
+    sql = sql.replace(regexPattern, (match, content) => {
+      // Check if the content contains ${...} patterns
+      if (content.includes('${')) {
+        // Replace ${...} with $<quote> + <quote>{...} within the string content
+        const escapedContent = content.replace(/\$\{/g, `$${quoteIdentifier} + ${quoteIdentifier}{`);
+        return `${quoteIdentifier}${escapedContent}${quoteIdentifier}`;
+      }
+      return match;
+    });
 
     return sql;
   }

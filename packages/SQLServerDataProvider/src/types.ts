@@ -115,7 +115,7 @@ export class SQLServerProviderConfigData extends ProviderConfigDataBase {
  * Configuration options for SQL logging sessions
  */
 export interface SqlLoggingOptions {
-  /** Whether to format output as a migration file with schema placeholders */
+  /** Whether to format output as a flyway migration file with schema placeholders */
   formatAsMigration?: boolean;
   /** Optional description to include as a comment at the start of the log */
   description?: string;
