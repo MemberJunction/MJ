@@ -4,6 +4,8 @@ import { RunView, Metadata, EntityInfo, UserInfo } from '@memberjunction/core';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
 import { loadEntityConfig, RelatedEntityConfig } from '../config';
 import { configManager } from '../lib/config-manager';
+import { JsonWriteHelper } from '../lib/json-write-helper';
+import { FileWriteBatch } from '../lib/file-write-batch';
 
 export interface PullOptions {
   entity: string;
@@ -38,13 +40,18 @@ export class PullService {
   private contextUser: UserInfo;
   private createdBackupFiles: string[] = [];
   private createdBackupDirs: Set<string> = new Set();
+  private fileWriteBatch: FileWriteBatch;
   
   constructor(syncEngine: SyncEngine, contextUser: UserInfo) {
     this.syncEngine = syncEngine;
     this.contextUser = contextUser;
+    this.fileWriteBatch = new FileWriteBatch();
   }
   
   async pull(options: PullOptions, callbacks?: PullCallbacks): Promise<PullResult> {
+    // Clear any previous batch operations
+    this.fileWriteBatch.clear();
+    
     let targetDir: string;
     let entityConfig: any;
     
@@ -145,6 +152,14 @@ export class PullService {
       callbacks
     );
     
+    // Write all batched file changes at once
+    if (!options.dryRun) {
+      const filesWritten = await this.fileWriteBatch.flush();
+      if (options.verbose && filesWritten > 0) {
+        callbacks?.onSuccess?.(`Wrote ${filesWritten} files with consistent property ordering`);
+      }
+    }
+    
     return {
       ...pullResult,
       targetDir
@@ -243,12 +258,12 @@ export class PullService {
         }
       }
       
-      // Write all records to single file
+      // Queue all records to single file for batched write
       if (allRecords.length > 0) {
         const fileName = options.multiFile.endsWith('.json') ? options.multiFile : `${options.multiFile}.json`;
         const filePath = path.join(targetDir, fileName);
-        await fs.writeJson(filePath, allRecords, { spaces: 2 });
-        callbacks?.onSuccess?.(`Pulled ${processed} records to ${path.basename(filePath)}`);
+        this.fileWriteBatch.queueWrite(filePath, allRecords);
+        callbacks?.onSuccess?.(`Queued ${processed} records for ${path.basename(filePath)}`);
       }
     } else {
       // Smart update logic for single-file-per-record
@@ -467,18 +482,14 @@ export class PullService {
           entityConfig.pull?.preserveFields || []
         );
         
-        // Write updated data
+        // Queue updated data for batched write
         if (Array.isArray(existingData)) {
-          // Update the record in the array
-          const index = existingData.findIndex(r => 
-            this.createPrimaryKeyLookup(r.primaryKey || {}) === this.createPrimaryKeyLookup(primaryKey)
-          );
-          if (index >= 0) {
-            existingData[index] = mergedData;
-            await fs.writeJson(filePath, existingData, { spaces: 2 });
-          }
+          // Queue array update - batch will handle merging
+          const primaryKeyLookup = this.createPrimaryKeyLookup(primaryKey);
+          this.fileWriteBatch.queueArrayUpdate(filePath, mergedData, primaryKeyLookup);
         } else {
-          await fs.writeJson(filePath, mergedData, { spaces: 2 });
+          // Queue single record update
+          this.fileWriteBatch.queueSingleUpdate(filePath, mergedData);
         }
         
         updated++;
@@ -497,20 +508,13 @@ export class PullService {
       callbacks?.onProgress?.(`Creating new records (0/${newRecords.length})`);
       
       if (entityConfig.pull?.appendRecordsToExistingFile && entityConfig.pull?.newFileName) {
-        // Append all new records to a single file
+        // Append all new records to a single file using individual array updates to preserve existing updates
         const fileName = entityConfig.pull.newFileName.endsWith('.json') 
           ? entityConfig.pull.newFileName 
           : `${entityConfig.pull.newFileName}.json`;
         const filePath = path.join(targetDir, fileName);
         
-        // Load existing file if it exists
-        let existingData: RecordData[] = [];
-        if (await fs.pathExists(filePath)) {
-          const fileData = await fs.readJson(filePath);
-          existingData = Array.isArray(fileData) ? fileData : [fileData];
-        }
-        
-        // Process and append all new records
+        // Process and append all new records using queueArrayUpdate to preserve existing changes
         for (const { record, primaryKey } of newRecords) {
           try {
             // For new records, pass isNewRecord = true (default)
@@ -522,7 +526,12 @@ export class PullService {
               options.verbose, 
               true
             );
-            existingData.push(recordData);
+            
+            // Use queueArrayUpdate to append the new record without overwriting existing updates
+            // For new records, we can use a special lookup key since they don't exist yet
+            const newRecordLookup = this.createPrimaryKeyLookup(primaryKey);
+            this.fileWriteBatch.queueArrayUpdate(filePath, recordData, newRecordLookup);
+            
             created++;
             processed++;
             
@@ -534,11 +543,8 @@ export class PullService {
           }
         }
         
-        // Write the combined data
-        await fs.writeJson(filePath, existingData, { spaces: 2 });
-        
         if (options.verbose) {
-          callbacks?.onLog?.(`Appended ${created} new records to: ${filePath}`);
+          callbacks?.onLog?.(`Queued ${created} new records for: ${filePath}`);
         }
       } else {
         // Create individual files for each new record
@@ -574,9 +580,10 @@ export class PullService {
     const fileName = this.buildFileName(primaryKey, entityConfig);
     const filePath = path.join(targetDir, fileName);
     
-    // Write JSON file
-    await fs.writeJson(filePath, recordData, { spaces: 2 });
+    // Queue JSON file for batched write with controlled property order
+    this.fileWriteBatch.queueWrite(filePath, recordData);
   }
+
   
   private async processRecordData(
     record: any, 
@@ -663,23 +670,21 @@ export class PullService {
     // Calculate checksum
     const checksum = this.syncEngine.calculateChecksum(fields);
     
-    // Build the final record data
-    const recordData: RecordData = {
+    // Build the final record data with explicit property order control
+    const recordData = JsonWriteHelper.createOrderedRecordData(
       fields,
+      relatedEntities,
       primaryKey,
-      sync: {
+      {
         lastModified: new Date().toISOString(),
         checksum: checksum
       }
-    };
-    
-    if (Object.keys(relatedEntities).length > 0) {
-      recordData.relatedEntities = relatedEntities;
-    }
+    );
     
     return recordData;
   }
   
+
   /**
    * Convert a GUID value to @lookup syntax by looking up the human-readable value
    */

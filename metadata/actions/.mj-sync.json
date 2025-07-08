@@ -17,7 +17,7 @@
     "mergeStrategy": "merge",
     "backupBeforeUpdate": true,
     "backupDirectory": ".backups",
-    "filter": "CategoryID IN (SELECT ID FROM [__mj].vwActions WHERE Name = 'System')",
+    "filter": "CategoryID IN (SELECT ID FROM [__mj].vwActionCategories WHERE Name = 'System')",
     "externalizeFields": [],
     "lookupFields": {
       "CategoryID": {
