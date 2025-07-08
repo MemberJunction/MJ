@@ -130,11 +130,14 @@ export function MapEntityRelationshipInfoToSkipEntityRelationshipInfo(re: Entity
  */
 export function BuildSkipComponentCompleteCode(spec: SkipComponentRootSpec): string {
     // Start with the base code for the root component
-    let code = spec.componentCode;
+    let code = spec.componentCode || '// Generation Error: No root component code provided! \n\n';
     // Recursively replace placeholders for child components with their generated code
     for (const child of spec.childComponents) {
         const childCode = BuildSkipComponentChildCode(child);
-        code += '\n\n' + childCode;
+        if (childCode && childCode.length > 0) {
+            // Append the generated code for this child component to the root component code
+            code += '\n\n' + childCode;
+        }
     }
     // Return the complete code for this component
     return code;
@@ -156,7 +159,9 @@ export function BuildSkipComponentChildCode(child: SkipComponentChildSpec): stri
 
     for (const sub of child.components) {
         const subCode = BuildSkipComponentChildCode(sub);
-        code += '\n\n' + subCode;
+        if (subCode && subCode.length > 0) {
+            code += '\n\n' + subCode;
+        }
     }
     // Return the complete code for this child component
     return code;
