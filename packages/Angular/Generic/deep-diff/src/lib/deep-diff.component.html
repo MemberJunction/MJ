@@ -137,25 +137,69 @@
       <div class="value-details">
         <div class="value-row old">
           <span class="value-label">Old:</span>
-          <code class="value-content">{{ formatValue(item.oldValue) }}</code>
+          <code class="value-content">{{ formatValue(item.oldValue, item.path + '_old') }}</code>
+          <button class="btn-copy" (click)="copyValueToClipboard(item.oldValue, $event)" title="Copy value">
+            <i class="fa-solid fa-copy"></i>
+          </button>
+          @if (isValueTruncated(item.oldValue, item.path + '_old') || isExpanded(item.path + '_old')) {
+            <button class="btn-expand-value" 
+                    (click)="toggleValueExpansion(item.path + '_old', $event)" 
+                    title="{{ isExpanded(item.path + '_old') ? 'Collapse' : 'Expand' }}">
+              <i class="fa-solid" 
+                 [ngClass]="isExpanded(item.path + '_old') ? 'fa-compress-alt' : 'fa-expand-alt'"></i>
+            </button>
+          }
         </div>
         <div class="value-row new">
           <span class="value-label">New:</span>
-          <code class="value-content">{{ formatValue(item.newValue) }}</code>
+          <code class="value-content">{{ formatValue(item.newValue, item.path + '_new') }}</code>
+          <button class="btn-copy" (click)="copyValueToClipboard(item.newValue, $event)" title="Copy value">
+            <i class="fa-solid fa-copy"></i>
+          </button>
+          @if (isValueTruncated(item.newValue, item.path + '_new') || isExpanded(item.path + '_new')) {
+            <button class="btn-expand-value" 
+                    (click)="toggleValueExpansion(item.path + '_new', $event)"
+                    title="{{ isExpanded(item.path + '_new') ? 'Collapse' : 'Expand' }}">
+              <i class="fa-solid" 
+                 [ngClass]="isExpanded(item.path + '_new') ? 'fa-compress-alt' : 'fa-expand-alt'"></i>
+            </button>
+          }
         </div>
       </div>
     } @else if (item.type === 'added') {
       <div class="value-details">
         <div class="value-row new">
           <span class="value-label">Value:</span>
-          <code class="value-content">{{ formatValue(item.newValue) }}</code>
+          <code class="value-content">{{ formatValue(item.newValue, item.path) }}</code>
+          <button class="btn-copy" (click)="copyValueToClipboard(item.newValue, $event)" title="Copy value">
+            <i class="fa-solid fa-copy"></i>
+          </button>
+          @if (isValueTruncated(item.newValue, item.path) || isExpanded(item.path)) {
+            <button class="btn-expand-value" 
+                    (click)="toggleValueExpansion(item.path, $event)"
+                    title="{{ isExpanded(item.path) ? 'Collapse' : 'Expand' }}">
+              <i class="fa-solid" 
+                 [ngClass]="isExpanded(item.path) ? 'fa-compress-alt' : 'fa-expand-alt'"></i>
+            </button>
+          }
         </div>
       </div>
     } @else if (item.type === 'removed') {
       <div class="value-details">
         <div class="value-row old">
           <span class="value-label">Value:</span>
-          <code class="value-content">{{ formatValue(item.oldValue) }}</code>
+          <code class="value-content">{{ formatValue(item.oldValue, item.path) }}</code>
+          <button class="btn-copy" (click)="copyValueToClipboard(item.oldValue, $event)" title="Copy value">
+            <i class="fa-solid fa-copy"></i>
+          </button>
+          @if (isValueTruncated(item.oldValue, item.path) || isExpanded(item.path)) {
+            <button class="btn-expand-value" 
+                    (click)="toggleValueExpansion(item.path, $event)"
+                    title="{{ isExpanded(item.path) ? 'Collapse' : 'Expand' }}">
+              <i class="fa-solid" 
+                 [ngClass]="isExpanded(item.path) ? 'fa-compress-alt' : 'fa-expand-alt'"></i>
+            </button>
+          }
         </div>
       </div>
     }

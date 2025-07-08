@@ -262,21 +262,8 @@ const mjServerConfig = {
     apiKey: process.env.ASK_SKIP_API_KEY,  
     organizationInfo: process.env.ASK_SKIP_ORGANIZATION_INFO,
     entitiesToSend: {
-      excludeSchemas: ['__mj'],
+      excludeSchemas: [],
       includeEntitiesFromExcludedSchemas: [
-        'Entities',
-        'Entity Fields',
-        'Content Items',
-        'Content Item Tags',
-        'Content Item Attributes',
-        'Content Types',
-        'Content Type Attributes',
-        'Content File Types',
-        'Content Sources',
-        'Content Source Types',
-        'Content Source Params',
-        'Content Source Type Params',
-        'Content Process Runs',
       ],
     },
   }  
