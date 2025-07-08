@@ -770,7 +770,7 @@ export class BaseAgent {
                 .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder);
             
             // Load available actions (placeholder for now - would integrate with Actions framework)
-            const agentActions = engine.AgentActions.filter(aa => aa.AgentID === agent.ID);
+            const agentActions = engine.AgentActions.filter(aa => aa.AgentID === agent.ID && aa.Status === 'Active');
             const actions: ActionEntityExtended[] = ActionEngineServer.Instance.Actions.filter(a => agentActions.some(aa => aa.ActionID === a.ID));
             const activeActions = actions.filter(a => a.Status === 'Active');
 

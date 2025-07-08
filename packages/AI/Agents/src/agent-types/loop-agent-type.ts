@@ -156,7 +156,6 @@ export class LoopAgentType extends BaseAgentType {
                     else {
                         retVal.step = 'Actions',
                         retVal.actions = response.nextStep.actions.map(action => ({
-                            id: action.id,
                             name: action.name,
                             params: action.params
                         }))
