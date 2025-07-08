@@ -163,11 +163,23 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
 
     // Replace schema names with Flyway placeholders if migration format
     if (this.options.formatAsMigration) {
-      processedQuery = processedQuery.replace(/\[(\w+)\]\./g, '[${flyway:defaultSchema}].');
-      
       // Escape ${...} patterns within SQL string literals to prevent Flyway from treating them as placeholders
       // This regex matches string literals and replaces ${...} with $' + '{...} within them
       processedQuery = this._escapeFlywaySyntaxInStrings(processedQuery);
+
+      // now, replace schema names with Flyway placeholders
+      const schemaName = this.options.defaultSchemaName;
+      if (schemaName?.length > 0) {
+        // Create a regex that matches the schema name with optional brackets
+        const schemaRegex = new RegExp(`\\[?${schemaName}\\]?\\.`, 'g');
+        processedQuery = processedQuery.replace(schemaRegex, '[${flyway:defaultSchema}].');
+      }
+      else {
+        // no default schema name provided
+        if (verbose) {
+          console.warn(`Session ${this.id}: No default schema name provided for Flyway migration format, using [\${flyway:defaultSchema}] placeholder`);
+        }
+      }
     }
 
     // Apply pretty printing if enabled
@@ -343,23 +355,11 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    * @returns The SQL with escaped template syntax within strings
    */
   private _escapeFlywaySyntaxInStrings(sql: string): string {
-    if (!sql) return sql;
-
-    // Hardcoded regex pattern for single quotes (SQL Server standard)
-    // This pattern matches string literals enclosed by single quotes
-    const regexPattern = /'([^']*)'/g;
-    
-    // Process the SQL to find and escape ${...} patterns within string literals
-    sql = sql.replace(regexPattern, (match, content) => {
-      // Check if the content contains ${...} patterns
-      if (content.includes('${')) {
-        // Replace ${...} with $' + '{...} within the string content
-        const escapedContent = content.replace(/\$\{/g, "$' + '{");
-        return `'${escapedContent}'`;
-      }
-      return match;
-    });
-
-    return sql;
-  }
+    // Regex /\$\{/g matches all occurrences of "${" literally:
+    // - \$ escapes the dollar sign (which is a special regex character)
+    // - \{ escapes the opening brace (also a special regex character)
+    // - /g flag ensures all occurrences are replaced, not just the first one
+    // The replacement "$'+'{ " breaks up the ${ pattern so Flyway won't interpret it as a placeholder    
+    return sql.replaceAll(/\$\{/g, "$$'+'{");
+  }  
 }

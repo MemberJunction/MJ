@@ -117,6 +117,13 @@ export class SQLServerProviderConfigData extends ProviderConfigDataBase {
 export interface SqlLoggingOptions {
   /** Whether to format output as a flyway migration file with schema placeholders */
   formatAsMigration?: boolean;
+
+  /**
+   * Optional default schema name to use for Flyway migrations for replacing schema names with 
+   * the placeholder ${flyway:defaultSchema}
+   */
+  defaultSchemaName?: string;
+
   /** Optional description to include as a comment at the start of the log */
   description?: string;
   /** Which types of statements to log: 'queries' (all), 'mutations' (only data changes), 'both' (default) */

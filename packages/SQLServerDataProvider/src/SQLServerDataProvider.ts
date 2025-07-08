@@ -437,7 +437,13 @@ export class SQLServerDataProvider
    */
   public async CreateSqlLogger(filePath: string, options?: SqlLoggingOptions): Promise<SqlLoggingSession> {
     const sessionId = uuidv4();
-    const session = new SqlLoggingSessionImpl(sessionId, filePath, options);
+    const mjCoreSchema = this.ConfigData.MJCoreSchemaName;
+    const session = new SqlLoggingSessionImpl(sessionId, filePath, 
+      {
+        defaultSchemaName: mjCoreSchema,
+        ...options // if defaultSchemaName is not provided, it will use the MJCoreSchemaName, otherwise
+        // the caller's defaultSchemaName will be used
+      });
 
     // Initialize the session (create file, write header)
     await session.initialize();

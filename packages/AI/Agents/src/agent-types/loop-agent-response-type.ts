@@ -86,10 +86,10 @@ export interface LoopAgentResponse<P = any> {
              * Parameters to pass to the action.
              * Keys must match the parameter names defined in the action's schema.
              * Values should match the expected types for each parameter.
-             */
+             */  
             params: Record<string, unknown>;
         }>;
-        
+         
         /**
          * Sub-agent to invoke. Required when type is 'sub-agent'.
          * Only one sub-agent can be invoked at a time.
