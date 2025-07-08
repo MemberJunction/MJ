@@ -134,8 +134,7 @@ export function BuildSkipComponentCompleteCode(spec: SkipComponentRootSpec): str
     // Recursively replace placeholders for child components with their generated code
     for (const child of spec.childComponents) {
         const childCode = BuildSkipComponentChildCode(child);
-        // Replace the placeholder in the parent component's code with the actual child component code
-        code = replacePlaceholderWithCode(code, child.componentName, childCode);
+        code += '\n\n' + childCode;
     }
     // Return the complete code for this component
     return code;
@@ -154,62 +153,12 @@ export function BuildSkipComponentChildCode(child: SkipComponentChildSpec): stri
         // If there are no child components, return the base code for this child
         return code;
     }
-    
+
     for (const sub of child.components) {
         const subCode = BuildSkipComponentChildCode(sub);
-        // Replace the placeholder in the parent component's code with the actual child component code
-        code = replacePlaceholderWithCode(code, sub.componentName, subCode);
+        code += '\n\n' + subCode;
     }
     // Return the complete code for this child component
     return code;
 }
-
-/**
- * Replaces a placeholder with code, handling commented placeholders and maintaining proper indentation.
- * 
- * This function finds the entire line containing the placeholder (including if it's commented out)
- * and replaces it with the provided code, maintaining the original indentation level for all
- * inserted lines.
- * 
- * @param sourceCode - The source code containing the placeholder
- * @param placeholder - The placeholder name (without << >> brackets)
- * @param replacementCode - The code to insert in place of the placeholder
- * @returns The source code with the placeholder replaced
- */
-function replacePlaceholderWithCode(sourceCode: string, placeholder: string, replacementCode: string): string {
-    // Split the source code into lines
-    const lines = sourceCode.split('\n');
-    
-    // Find the line containing the placeholder (with or without comment prefix)
-    // Look for patterns like: <<placeholder>>, // <<placeholder>>, /* <<placeholder>> */, etc.
-    const placeholderPattern = new RegExp(`<<${placeholder}>>`);
-    const lineIndex = lines.findIndex(line => placeholderPattern.test(line));
-    
-    if (lineIndex === -1) {
-        // Placeholder not found, return original code
-        console.warn(`Placeholder <<${placeholder}>> not found in code`);
-        return sourceCode;
-    }
-    
-    // Get the line with the placeholder
-    const placeholderLine = lines[lineIndex];
-    
-    // Calculate the indentation (number of leading spaces/tabs)
-    const indentMatch = placeholderLine.match(/^(\s*)/);
-    const indent = indentMatch ? indentMatch[1] : '';
-    
-    // Split the replacement code into lines
-    const replacementLines = replacementCode.split('\n');
-    
-    // Add the indentation to each line of the replacement code
-    const indentedReplacementLines = replacementLines.map(line => {
-        // Don't add indentation to empty lines
-        return line.trim() === '' ? line : indent + line;
-    });
-    
-    // Replace the placeholder line with the indented replacement lines
-    lines.splice(lineIndex, 1, ...indentedReplacementLines);
-    
-    // Join the lines back together
-    return lines.join('\n');
-}
+ 
