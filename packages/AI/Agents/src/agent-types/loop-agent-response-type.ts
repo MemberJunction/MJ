@@ -77,12 +77,6 @@ export interface LoopAgentResponse<P = any> {
          */
         actions?: Array<{
             /**
-             * The unique identifier (UUID) of the action to execute.
-             * Must match an action ID from the available actions list.
-             */
-            id: string;
-            
-            /**
              * The human-readable name of the action.
              * Should match the name from the available actions list.
              */
@@ -102,12 +96,6 @@ export interface LoopAgentResponse<P = any> {
          * @optional
          */
         subAgent?: {
-            /**
-             * The unique identifier (UUID) of the sub-agent to execute.
-             * Must match a sub-agent ID from the available sub-agents list.
-             */
-            id: string;
-            
             /**
              * The human-readable name of the sub-agent.
              * Should match the name from the available sub-agents list.
