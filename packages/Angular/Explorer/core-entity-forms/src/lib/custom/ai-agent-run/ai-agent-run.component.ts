@@ -330,9 +330,9 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     }
     
     const stepData = this.selectedTimelineItem.data;
-    if (stepData && stepData.PayloadAtStart?.trim().length > 0 
-                 && stepData.PayloadAtEnd?.trim().length > 0) {
-      return !!(stepData.PayloadAtStart && stepData.PayloadAtEnd);
+    if (stepData && (stepData.PayloadAtStart?.trim().length > 0 
+                 || stepData.PayloadAtEnd?.trim().length > 0)) {
+      return stepData.PayloadAtStart !== stepData.PayloadAtEnd;
     }
     else {
       return false;
