@@ -315,7 +315,6 @@ export class AIPromptRunner {
         
         // Render all child prompt templates recursively
         childTemplateRenderingResult = await this.renderChildPromptTemplates(params.childPrompts, params, params.cancellationToken);
-        
         // Render the parent prompt with child templates embedded
         renderedPromptText = await this.renderPromptWithChildTemplates(prompt, params, childTemplateRenderingResult.renderedTemplates);
         
@@ -889,7 +888,9 @@ export class AIPromptRunner {
           failedPlaceholders: failedChildren.map(fc => fc.placeholder)
         }
       });
-      // Continue with available results rather than failing completely
+
+      // any child render failure means we must throw an error
+      throw new Error(`Failed to render ${failedChildren.length} child prompt templates: ${failedChildren.map(fc => fc.placeholder).join(', ')}`);
     }
 
     // Build rendered templates map
