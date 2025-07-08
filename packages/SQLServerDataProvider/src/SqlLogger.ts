@@ -340,23 +340,22 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    * Converts ${templateVariable} to $' + '{templateVariable} within string literals.
    * 
    * @param sql - The SQL statement to process
-   * @param quoteIdentifier - The quote character used for string literals (default: single quote)
    * @returns The SQL with escaped template syntax within strings
    */
-  private _escapeFlywaySyntaxInStrings(sql: string, quoteIdentifier: string = "'"): string {
+  private _escapeFlywaySyntaxInStrings(sql: string): string {
     if (!sql) return sql;
 
-    // Build regex pattern based on the quote identifier
-    // This pattern matches string literals enclosed by the specified quote character
-    const regexPattern = new RegExp(`${quoteIdentifier}([^${quoteIdentifier}]*)${quoteIdentifier}`, 'g');
+    // Hardcoded regex pattern for single quotes (SQL Server standard)
+    // This pattern matches string literals enclosed by single quotes
+    const regexPattern = /'([^']*)'/g;
     
     // Process the SQL to find and escape ${...} patterns within string literals
     sql = sql.replace(regexPattern, (match, content) => {
       // Check if the content contains ${...} patterns
       if (content.includes('${')) {
-        // Replace ${...} with $<quote> + <quote>{...} within the string content
-        const escapedContent = content.replace(/\$\{/g, `$${quoteIdentifier} + ${quoteIdentifier}{`);
-        return `${quoteIdentifier}${escapedContent}${quoteIdentifier}`;
+        // Replace ${...} with $' + '{...} within the string content
+        const escapedContent = content.replace(/\$\{/g, "$' + '{");
+        return `'${escapedContent}'`;
       }
       return match;
     });
