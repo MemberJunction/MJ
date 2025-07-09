@@ -34,6 +34,20 @@
  * // Added: hobbies[1]
  * //   Added "gaming"
  * ```
+ * 
+ * @example
+ * ```typescript
+ * // With treatNullAsUndefined option
+ * const differ = new DeepDiffer({ treatNullAsUndefined: true });
+ * const diff = differ.diff(
+ *   { name: null, status: 'active', oldProp: 'value' },
+ *   { name: 'John', status: null, newProp: 'value' }
+ * );
+ * // name: shows as Added (not Modified)
+ * // status: shows as Removed (not Modified)
+ * // oldProp: shows as Removed
+ * // newProp: shows as Added
+ * ```
  */
 
 import * as _ from 'lodash';
@@ -124,6 +138,15 @@ export interface DeepDiffConfig {
     includeArrayIndices: boolean;
     
     /**
+     * Whether to treat null values as equivalent to undefined.
+     * When true, transitions between null and undefined are not considered changes,
+     * and null values in the old object are treated as "not present" for new values.
+     * Useful for APIs where null and undefined are used interchangeably.
+     * @default false
+     */
+    treatNullAsUndefined: boolean;
+    
+    /**
      * Custom value formatter for the formatted output.
      * Allows customization of how values are displayed.
      * @param value - The value to format
@@ -152,6 +175,7 @@ export class DeepDiffer {
             maxDepth: 10,
             maxStringLength: 100,
             includeArrayIndices: true,
+            treatNullAsUndefined: false,
             ...config
         };
     }
@@ -232,8 +256,22 @@ export class DeepDiffer {
         
         const pathStr = path.join('.');
         
+        // Helper to check if a value is effectively undefined (includes null if treatNullAsUndefined is true)
+        const isEffectivelyUndefined = (value: any): boolean => {
+            return value === undefined || (this.config.treatNullAsUndefined && value === null);
+        };
+        
+        // Helper to check if values are effectively equal
+        const areEffectivelyEqual = (val1: any, val2: any): boolean => {
+            if (val1 === val2) return true;
+            if (this.config.treatNullAsUndefined && isEffectivelyUndefined(val1) && isEffectivelyUndefined(val2)) {
+                return true;
+            }
+            return false;
+        };
+        
         // Handle different cases
-        if (oldValue === newValue) {
+        if (areEffectivelyEqual(oldValue, newValue)) {
             if (this.config.includeUnchanged) {
                 changes.push({
                     path: pathStr || 'root',
@@ -243,14 +281,14 @@ export class DeepDiffer {
                     description: 'No change'
                 });
             }
-        } else if (oldValue === undefined && newValue !== undefined) {
+        } else if (isEffectivelyUndefined(oldValue) && !isEffectivelyUndefined(newValue)) {
             changes.push({
                 path: pathStr || 'root',
                 type: DiffChangeType.Added,
                 newValue,
                 description: this.describeValue(newValue, 'Added')
             });
-        } else if (oldValue !== undefined && newValue === undefined) {
+        } else if (!isEffectivelyUndefined(oldValue) && isEffectivelyUndefined(newValue)) {
             changes.push({
                 path: pathStr || 'root',
                 type: DiffChangeType.Removed,
