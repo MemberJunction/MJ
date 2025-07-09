@@ -347,26 +347,14 @@ import { marked } from 'marked';
             </div>
           }
           
-          <!-- React component container -->
-          <div #htmlContainer style="flex: 1; position: relative; min-height: 0; overflow: auto;">
-            <!-- Content will be rendered here by React host -->
-            
-            <!-- Error overlay (shown on top of content when needed) -->
+          <!-- React component container or error display -->
           @if (currentError) {
-            <div style="position: absolute; 
-                        top: 0; 
-                        left: 0; 
-                        right: 0; 
-                        bottom: 0; 
-                        display: flex;
-                        align-items: flex-start;
-                        justify-content: center;
-                        padding-top: 20px;
-                        background: rgba(255, 255, 255, 0.95);
-                        z-index: 10;">
+            <!-- Error display container with proper height -->
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center; 
+                        min-height: 400px; padding: 20px; background: rgba(255, 255, 255, 0.95);">
               <div style="width: 90%; 
                           max-width: 600px; 
-                          height: 500px;
+                          max-height: 80vh;
                           background-color: #f8f9fa; 
                           border: 2px solid #dc3545; 
                           border-radius: 8px; 
@@ -413,8 +401,12 @@ import { marked } from 'marked';
                 </button>
               </div>
             </div>
+          } @else {
+            <!-- React component container (only shown when no error) -->
+            <div #htmlContainer style="flex: 1; position: relative; min-height: 0; overflow: auto;">
+              <!-- Content will be rendered here by React host -->
+            </div>
           }
-          </div>
         </div>
       </div>
     }
@@ -1249,6 +1241,9 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             } else if (e.message?.includes('is not defined')) {
                 errorType = 'Missing Dependency';
                 errorMessage = 'The component is trying to use a feature or library that is not available.';
+            } else if (e.message?.includes('Missing required child components')) {
+                errorType = 'Incomplete Component Specification';
+                errorMessage = e.message;
             } else if (e.message?.includes('Cannot read properties')) {
                 errorType = 'Property Access Error';
                 errorMessage = 'The component is trying to access data that doesn\'t exist. This often happens when property names don\'t match the data structure.';

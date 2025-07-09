@@ -462,6 +462,7 @@ export class SkipReactComponentHost {
     
     const registry = GlobalComponentRegistry.Instance;
     const components: any = {};
+    const missingComponents: string[] = [];
     
     console.log('Creating components object. Required:', this.config.metadata.requiredChildComponents);
     console.log('Available components in registry:', registry.getRegisteredKeys());
@@ -479,7 +480,15 @@ export class SkipReactComponentHost {
         console.log(`Found component "${childName}"`);
       } else {
         console.warn(`Component "${childName}" not found in registry. Tried contexts: ${this.config.metadata.componentContext}, Global`);
+        missingComponents.push(childName);
       }
+    }
+    
+    // If any required components are missing, throw a descriptive error
+    if (missingComponents.length > 0) {
+      const errorMessage = `Missing required child components: ${missingComponents.join(', ')}. ` +
+        `This usually means the component specification is incomplete or child components failed to compile.`;
+      throw new Error(errorMessage);
     }
     
     return components;
