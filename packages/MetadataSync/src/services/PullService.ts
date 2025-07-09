@@ -1,8 +1,8 @@
 import fs from 'fs-extra';
 import path from 'path';
-import { RunView, Metadata, EntityInfo, UserInfo } from '@memberjunction/core';
+import { RunView, Metadata, EntityInfo, UserInfo, BaseEntity } from '@memberjunction/core';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
-import { loadEntityConfig, RelatedEntityConfig } from '../config';
+import { loadEntityConfig, RelatedEntityConfig, EntityConfig } from '../config';
 import { configManager } from '../lib/config-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
 import { FileWriteBatch } from '../lib/file-write-batch';
@@ -53,7 +53,7 @@ export class PullService {
     this.fileWriteBatch.clear();
     
     let targetDir: string;
-    let entityConfig: any;
+    let entityConfig: EntityConfig | null;
     
     // Check if we should use a specific target directory
     if (options.targetDir) {
@@ -94,7 +94,7 @@ export class PullService {
     }
     
     // Show configuration notice only if relevant and in verbose mode
-    if (options.verbose && entityConfig.pull?.appendRecordsToExistingFile && entityConfig.pull?.newFileName) {
+    if (options.verbose && entityConfig?.pull?.appendRecordsToExistingFile && entityConfig?.pull?.newFileName) {
       const targetFile = path.join(targetDir, entityConfig.pull.newFileName.endsWith('.json') 
         ? entityConfig.pull.newFileName 
         : `${entityConfig.pull.newFileName}.json`);
@@ -111,7 +111,7 @@ export class PullService {
     let filter = '';
     if (options.filter) {
       filter = options.filter;
-    } else if (entityConfig.pull?.filter) {
+    } else if (entityConfig?.pull?.filter) {
       filter = entityConfig.pull.filter;
     }
     
@@ -139,7 +139,7 @@ export class PullService {
     }
     
     // Check if we need to wait for async property loading
-    if (entityConfig.pull?.externalizeFields && result.Results.length > 0) {
+    if (entityConfig?.pull?.externalizeFields && result.Results.length > 0) {
       await this.handleAsyncPropertyLoading(options.entity, entityConfig, options.verbose, callbacks);
     }
     
@@ -168,7 +168,7 @@ export class PullService {
   
   private async handleAsyncPropertyLoading(
     entityName: string,
-    entityConfig: any,
+    entityConfig: EntityConfig,
     verbose?: boolean,
     callbacks?: PullCallbacks
   ): Promise<void> {
@@ -177,7 +177,7 @@ export class PullService {
     
     if (!entityInfo) return;
     
-    const externalizeConfig = entityConfig.pull.externalizeFields;
+    const externalizeConfig = entityConfig.pull?.externalizeFields;
     let fieldsToExternalize: string[] = [];
     
     if (Array.isArray(externalizeConfig)) {
@@ -187,7 +187,7 @@ export class PullService {
         fieldsToExternalize = (externalizeConfig as Array<{field: string; pattern: string}>)
           .map(item => item.field);
       }
-    } else {
+    } else if (externalizeConfig) {
       fieldsToExternalize = Object.keys(externalizeConfig);
     }
     
@@ -209,10 +209,10 @@ export class PullService {
   }
   
   private async processRecords(
-    records: any[],
+    records: BaseEntity[],
     options: PullOptions,
     targetDir: string,
-    entityConfig: any,
+    entityConfig: EntityConfig,
     callbacks?: PullCallbacks
   ): Promise<Omit<PullResult, 'targetDir'>> {
     const entityInfo = this.syncEngine.getEntityInfo(options.entity);
@@ -235,7 +235,7 @@ export class PullService {
           // Build primary key
           const primaryKey: Record<string, any> = {};
           for (const pk of entityInfo.PrimaryKeys) {
-            primaryKey[pk.Name] = record[pk.Name];
+            primaryKey[pk.Name] = (record as any)[pk.Name];
           }
           
           // Process record for multi-file
@@ -368,10 +368,10 @@ export class PullService {
   }
   
   private async processIndividualRecords(
-    records: any[],
+    records: BaseEntity[],
     options: PullOptions,
     targetDir: string,
-    entityConfig: any,
+    entityConfig: EntityConfig,
     entityInfo: EntityInfo,
     callbacks?: PullCallbacks
   ): Promise<{ processed: number; updated: number; created: number; skipped: number }> {
@@ -397,14 +397,14 @@ export class PullService {
     }
     
     // Separate records into new and existing
-    const newRecords: Array<{ record: any; primaryKey: Record<string, any> }> = [];
-    const existingRecordsToUpdate: Array<{ record: any; primaryKey: Record<string, any>; filePath: string }> = [];
+    const newRecords: Array<{ record: BaseEntity; primaryKey: Record<string, any> }> = [];
+    const existingRecordsToUpdate: Array<{ record: BaseEntity; primaryKey: Record<string, any>; filePath: string }> = [];
     
     for (const record of records) {
       // Build primary key
       const primaryKey: Record<string, any> = {};
       for (const pk of entityInfo.PrimaryKeys) {
-        primaryKey[pk.Name] = record[pk.Name];
+        primaryKey[pk.Name] = (record as any)[pk.Name];
       }
       
       // Create lookup key
@@ -568,10 +568,10 @@ export class PullService {
   }
   
   private async processRecord(
-    record: any, 
+    record: BaseEntity, 
     primaryKey: Record<string, any>,
     targetDir: string, 
-    entityConfig: any,
+    entityConfig: EntityConfig,
     verbose?: boolean
   ): Promise<void> {
     const recordData = await this.processRecordData(record, primaryKey, targetDir, entityConfig, verbose, true);
@@ -586,10 +586,10 @@ export class PullService {
 
   
   private async processRecordData(
-    record: any, 
+    record: BaseEntity, 
     primaryKey: Record<string, any>,
     targetDir: string, 
-    entityConfig: any,
+    entityConfig: EntityConfig,
     verbose?: boolean,
     isNewRecord: boolean = true,
     existingRecordData?: RecordData,
@@ -675,12 +675,13 @@ export class PullService {
         if (Array.isArray(externalizeConfig)) {
           if (externalizeConfig.length > 0 && typeof externalizeConfig[0] === 'string') {
             // Simple string array format
-            if (externalizeConfig.includes(fieldName)) {
+            if ((externalizeConfig as string[]).includes(fieldName)) {
               externalizePattern = `@file:{Name}.${fieldName.toLowerCase()}.md`;
             }
           } else {
             // Array of objects format
-            const fieldConfig = externalizeConfig.find(config => config.field === fieldName);
+            const fieldConfig = (externalizeConfig as Array<{field: string; pattern: string}>)
+              .find(config => config.field === fieldName);
             if (fieldConfig) {
               externalizePattern = fieldConfig.pattern;
             }
@@ -732,7 +733,7 @@ export class PullService {
         try {
           const relatedRecords = await this.loadRelatedEntities(
             record,
-            relationConfig as any,
+            relationConfig,
             entityConfig,
             existingRecordData?.relatedEntities?.[relationKey] || [],
             currentDepth + 1,
@@ -852,7 +853,7 @@ export class PullService {
     fieldName: string,
     fieldValue: any,
     pattern: string,
-    recordData: any,
+    recordData: BaseEntity,
     targetDir: string,
     existingFileReference?: string,
     mergeStrategy: string = 'merge',
@@ -879,19 +880,19 @@ export class PullService {
       let processedPattern = pattern;
       
       // Replace common placeholders
-      if (recordData.Name) {
-        const sanitizedName = this.sanitizeForFilename(recordData.Name);
+      if ((recordData as any).Name) {
+        const sanitizedName = this.sanitizeForFilename((recordData as any).Name);
         processedPattern = processedPattern.replace(/\{Name\}/g, sanitizedName);
       }
       
-      if (recordData.ID) {
-        processedPattern = processedPattern.replace(/\{ID\}/g, recordData.ID);
+      if ((recordData as any).ID) {
+        processedPattern = processedPattern.replace(/\{ID\}/g, (recordData as any).ID);
       }
       
       processedPattern = processedPattern.replace(/\{FieldName\}/g, fieldName);
       
       // Replace any other field placeholders
-      for (const [key, value] of Object.entries(recordData)) {
+      for (const [key, value] of Object.entries(recordData as any)) {
         if (value != null) {
           const sanitizedValue = this.sanitizeForFilename(String(value));
           processedPattern = processedPattern.replace(new RegExp(`\\{${key}\\}`, 'g'), sanitizedValue);
@@ -988,9 +989,9 @@ export class PullService {
    * Load related entities for a record
    */
   private async loadRelatedEntities(
-    parentRecord: any,
+    parentRecord: BaseEntity,
     relationConfig: RelatedEntityConfig,
-    parentEntityConfig: any,
+    parentEntityConfig: EntityConfig,
     existingRelatedEntities: RecordData[],
     currentDepth: number,
     ancestryPath: Set<string>,
@@ -1102,7 +1103,7 @@ export class PullService {
             
             // Process the modified record data with existing data for change detection
             const recordData = await this.processRecordData(
-              modifiedRecord,
+              dbRecord,
               relatedRecordPrimaryKey,
               '', // targetDir not needed for related entities
               relatedEntityConfig,
@@ -1124,7 +1125,7 @@ export class PullService {
           
           // Process the related record data with existing data for change detection
           const recordData = await this.processRecordData(
-            modifiedRecord,
+            dbRecord,
             relatedRecordPrimaryKey,
             '', // targetDir not needed for related entities
             relatedEntityConfig,
@@ -1170,7 +1171,7 @@ export class PullService {
             
             // Process the modified record data (no existing data for new records)
             const recordData = await this.processRecordData(
-              modifiedRecord,
+              relatedRecord,
               relatedRecordPrimaryKey,
               '', // targetDir not needed for related entities
               relatedEntityConfig,
@@ -1192,7 +1193,7 @@ export class PullService {
           
           // Process the related record data (no existing data for new records)
           const recordData = await this.processRecordData(
-            modifiedRecord,
+            relatedRecord,
             relatedRecordPrimaryKey,
             '', // targetDir not needed for related entities
             relatedEntityConfig,
@@ -1221,11 +1222,11 @@ export class PullService {
   /**
    * Get the primary key value from a record
    */
-  private getRecordPrimaryKey(record: any): string | null {
+  private getRecordPrimaryKey(record: BaseEntity): string | null {
     if (!record) return null;
     
     // Try to get ID directly
-    if (record.ID) return record.ID;
+    if ((record as any).ID) return (record as any).ID;
     
     // Try to get from GetAll() method if it's an entity object
     if (typeof record.GetAll === 'function') {
@@ -1234,8 +1235,8 @@ export class PullService {
     }
     
     // Try common variations
-    if (record.id) return record.id;
-    if (record.Id) return record.Id;
+    if ((record as any).id) return (record as any).id;
+    if ((record as any).Id) return (record as any).Id;
     
     return null;
   }
@@ -1243,11 +1244,11 @@ export class PullService {
   /**
    * Get a field value from a record, handling both entity objects and plain objects
    */
-  private getFieldValue(record: any, fieldName: string): any {
+  private getFieldValue(record: BaseEntity, fieldName: string): any {
     if (!record) return null;
     
-    // Try to get field directly
-    if (record[fieldName] !== undefined) return record[fieldName];
+    // Try to get field directly using bracket notation with type assertion
+    if ((record as any)[fieldName] !== undefined) return (record as any)[fieldName];
     
     // Try to get from GetAll() method if it's an entity object
     if (typeof record.GetAll === 'function') {
@@ -1284,7 +1285,7 @@ export class PullService {
     return dirs;
   }
   
-  private buildFileName(primaryKey: Record<string, any>, entityConfig: any): string {
+  private buildFileName(primaryKey: Record<string, any>, _entityConfig: EntityConfig): string {
     // Use primary key values to build filename
     const keys = Object.values(primaryKey);
     
@@ -1337,7 +1338,7 @@ export class PullService {
   
   private async loadExistingRecords(
     files: string[], 
-    entityInfo: EntityInfo
+    _entityInfo: EntityInfo
   ): Promise<Map<string, { filePath: string; recordData: RecordData }>> {
     const recordsMap = new Map<string, { filePath: string; recordData: RecordData }>();
     
