@@ -677,6 +677,7 @@ export class PullService {
             record,
             relationConfig as any,
             entityConfig,
+            existingRecordData?.relatedEntities?.[relationKey] || [],
             currentDepth + 1,
             ancestryPath,
             verbose
@@ -695,15 +696,35 @@ export class PullService {
     // Calculate checksum
     const checksum = this.syncEngine.calculateChecksum(fields);
     
+    // Determine if data has actually changed by comparing checksums
+    let finalSyncData: { lastModified: string; checksum: string };
+    
+    if (existingRecordData?.sync?.checksum === checksum) {
+      // No change detected - preserve existing sync metadata
+      finalSyncData = {
+        lastModified: existingRecordData.sync.lastModified,
+        checksum: checksum
+      };
+      if (verbose) {
+        console.log(`No changes detected for record, preserving existing timestamp`);
+      }
+    } else {
+      // Change detected - update timestamp
+      finalSyncData = {
+        lastModified: new Date().toISOString(),
+        checksum: checksum
+      };
+      if (verbose && existingRecordData?.sync?.checksum) {
+        console.log(`Changes detected for record, updating timestamp`);
+      }
+    }
+    
     // Build the final record data with explicit property order control
     const recordData = JsonWriteHelper.createOrderedRecordData(
       fields,
       relatedEntities,
       primaryKey,
-      {
-        lastModified: new Date().toISOString(),
-        checksum: checksum
-      }
+      finalSyncData
     );
     
     return recordData;
@@ -761,6 +782,7 @@ export class PullService {
     parentRecord: any,
     relationConfig: RelatedEntityConfig,
     parentEntityConfig: any,
+    existingRelatedEntities: RecordData[],
     currentDepth: number,
     ancestryPath: Set<string>,
     verbose?: boolean
@@ -804,33 +826,120 @@ export class PullService {
         console.log(`Found ${result.Results.length} related records for ${relationConfig.entity}`);
       }
 
-      // Process each related record
-      const relatedRecords: RecordData[] = [];
+      // Create a mock entity config for the related entity processing
+      // Inherit ignoreVirtualFields and ignoreNullFields from parent entity config
+      const relatedEntityConfig = {
+        entity: relationConfig.entity,
+        pull: {
+          excludeFields: relationConfig.excludeFields || [],
+          lookupFields: relationConfig.lookupFields || {},
+          externalizeFields: relationConfig.externalizeFields || [],
+          relatedEntities: relationConfig.relatedEntities || {},
+          ignoreVirtualFields: parentEntityConfig.pull?.ignoreVirtualFields || false,
+          ignoreNullFields: parentEntityConfig.pull?.ignoreNullFields || false
+        }
+      };
+
+      // Build a map of database records by primary key for efficient lookup
+      const dbRecordMap = new Map<string, any>();
       for (const relatedRecord of result.Results) {
-        // Build primary key for the related record
         const relatedPrimaryKey = this.getRecordPrimaryKey(relatedRecord);
-        if (!relatedPrimaryKey) {
+        if (relatedPrimaryKey) {
+          dbRecordMap.set(relatedPrimaryKey, relatedRecord);
+        }
+      }
+
+      // Process existing related entities first (preserving their order)
+      const processedIds = new Set<string>();
+      const relatedRecords: RecordData[] = [];
+
+      for (const existingRelatedEntity of existingRelatedEntities) {
+        const existingPrimaryKey = existingRelatedEntity.primaryKey?.ID;
+        if (!existingPrimaryKey) {
           if (verbose) {
-            console.warn(`Unable to determine primary key for related record, skipping`);
+            console.warn(`Existing related entity missing primary key, skipping`);
           }
           continue;
         }
 
-        // Create a mock entity config for the related entity processing
-        // Inherit ignoreVirtualFields and ignoreNullFields from parent entity config
-        const relatedEntityConfig = {
-          entity: relationConfig.entity,
-          pull: {
-            excludeFields: relationConfig.excludeFields || [],
-            lookupFields: relationConfig.lookupFields || {},
-            externalizeFields: relationConfig.externalizeFields || [],
-            relatedEntities: relationConfig.relatedEntities || {},
-            ignoreVirtualFields: parentEntityConfig.pull?.ignoreVirtualFields || false,
-            ignoreNullFields: parentEntityConfig.pull?.ignoreNullFields || false
+        // Check if this record still exists in the database
+        const dbRecord = dbRecordMap.get(existingPrimaryKey);
+        if (!dbRecord) {
+          if (verbose) {
+            console.log(`Related entity ${existingPrimaryKey} no longer exists in database, removing from results`);
           }
-        };
+          continue; // Skip deleted records
+        }
 
-        // Build primary key with the foreign key field set to @parent:ID
+        // Build primary key for this record
+        const relatedRecordPrimaryKey: Record<string, any> = {};
+        for (const pk of this.syncEngine.getEntityInfo(relationConfig.entity)?.PrimaryKeys || []) {
+          if (pk.Name === 'ID') {
+            relatedRecordPrimaryKey[pk.Name] = existingPrimaryKey;
+          } else {
+            // For compound keys, get the value from the related record
+            relatedRecordPrimaryKey[pk.Name] = this.getFieldValue(dbRecord, pk.Name);
+          }
+        }
+
+        // Replace the foreign key field with @parent:ID syntax BEFORE processing
+        // This ensures the checksum calculation includes the @parent:ID value, not the GUID
+        if (typeof dbRecord.GetAll === 'function') {
+          const data = dbRecord.GetAll();
+          if (data[relationConfig.foreignKey] !== undefined) {
+            // Create a temporary modified version for processing
+            const modifiedRecord = { ...data };
+            modifiedRecord[relationConfig.foreignKey] = '@parent:ID';
+            
+            // Process the modified record data with existing data for change detection
+            const recordData = await this.processRecordData(
+              modifiedRecord,
+              relatedRecordPrimaryKey,
+              '', // targetDir not needed for related entities
+              relatedEntityConfig,
+              verbose,
+              false, // isNewRecord = false for existing records
+              existingRelatedEntity, // Pass existing data for change detection
+              currentDepth + 1,
+              ancestryPath
+            );
+            
+            relatedRecords.push(recordData);
+          }
+        } else {
+          // Handle plain object case
+          const modifiedRecord = { ...dbRecord };
+          if (modifiedRecord[relationConfig.foreignKey] !== undefined) {
+            modifiedRecord[relationConfig.foreignKey] = '@parent:ID';
+          }
+          
+          // Process the related record data with existing data for change detection
+          const recordData = await this.processRecordData(
+            modifiedRecord,
+            relatedRecordPrimaryKey,
+            '', // targetDir not needed for related entities
+            relatedEntityConfig,
+            verbose,
+            false, // isNewRecord = false for existing records
+            existingRelatedEntity, // Pass existing data for change detection
+            currentDepth + 1,
+            ancestryPath
+          );
+          
+          relatedRecords.push(recordData);
+        }
+
+        processedIds.add(existingPrimaryKey);
+      }
+
+      // Process new related entities (append to end)
+      for (const relatedRecord of result.Results) {
+        const relatedPrimaryKey = this.getRecordPrimaryKey(relatedRecord);
+        if (!relatedPrimaryKey || processedIds.has(relatedPrimaryKey)) {
+          continue; // Skip already processed records
+        }
+
+        // Build primary key for this record
         const relatedRecordPrimaryKey: Record<string, any> = {};
         for (const pk of this.syncEngine.getEntityInfo(relationConfig.entity)?.PrimaryKeys || []) {
           if (pk.Name === 'ID') {
@@ -841,25 +950,54 @@ export class PullService {
           }
         }
 
-        // Process the related record data
-        const recordData = await this.processRecordData(
-          relatedRecord,
-          relatedRecordPrimaryKey,
-          '', // targetDir not needed for related entities
-          relatedEntityConfig,
-          verbose,
-          true, // isNewRecord
-          undefined, // existingRecordData
-          currentDepth + 1,
-          ancestryPath
-        );
-
-        // After processing, replace the foreign key field with @parent:ID syntax
-        if (recordData.fields && recordData.fields[relationConfig.foreignKey] !== undefined) {
-          recordData.fields[relationConfig.foreignKey] = '@parent:ID';
+        // Replace the foreign key field with @parent:ID syntax BEFORE processing
+        // This ensures the checksum calculation includes the @parent:ID value, not the GUID
+        if (typeof relatedRecord.GetAll === 'function') {
+          const data = relatedRecord.GetAll();
+          if (data[relationConfig.foreignKey] !== undefined) {
+            // Create a temporary modified version for processing
+            const modifiedRecord = { ...data };
+            modifiedRecord[relationConfig.foreignKey] = '@parent:ID';
+            
+            // Process the modified record data (no existing data for new records)
+            const recordData = await this.processRecordData(
+              modifiedRecord,
+              relatedRecordPrimaryKey,
+              '', // targetDir not needed for related entities
+              relatedEntityConfig,
+              verbose,
+              true, // isNewRecord = true for new records
+              undefined, // No existing data for new records
+              currentDepth + 1,
+              ancestryPath
+            );
+            
+            relatedRecords.push(recordData);
+          }
+        } else {
+          // Handle plain object case
+          const modifiedRecord = { ...relatedRecord };
+          if (modifiedRecord[relationConfig.foreignKey] !== undefined) {
+            modifiedRecord[relationConfig.foreignKey] = '@parent:ID';
+          }
+          
+          // Process the related record data (no existing data for new records)
+          const recordData = await this.processRecordData(
+            modifiedRecord,
+            relatedRecordPrimaryKey,
+            '', // targetDir not needed for related entities
+            relatedEntityConfig,
+            verbose,
+            true, // isNewRecord = true for new records
+            undefined, // No existing data for new records
+            currentDepth + 1,
+            ancestryPath
+          );
+          
+          relatedRecords.push(recordData);
         }
-
-        relatedRecords.push(recordData);
+        
+        processedIds.add(relatedPrimaryKey);
       }
 
       return relatedRecords;

@@ -6,7 +6,11 @@
       "DriverClass": "__AutotagAndVectorizeContent",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-tag"
+      "IconClass": "fa-solid fa-tag",
+      "CategoryID": "@lookup:Action Categories.Name=System",
+      "CodeApprovalStatus": "Pending",
+      "CodeLocked": false,
+      "ForceCodeGeneration": false
     },
     "relatedEntities": {
       "Action Params": [
@@ -105,8 +109,8 @@
       "ID": "D8781B41-9C76-EF11-9C36-000D3A9EBD44"
     },
     "sync": {
-      "lastModified": "2025-06-24T17:33:33.412Z",
-      "checksum": "55e22c5ded50984e2c52e8e975660d8747289156a4e7941bcb8b2d4f8a0b8170"
+      "lastModified": "2025-07-09T05:33:37.391Z",
+      "checksum": "491151d6529c9cbcce771c24000ebb04984145beeec09618eab8c6cd5fd61f3b"
     }
   },
   {
@@ -115,7 +119,11 @@
       "Description": "Action that vectorizes entities by creating and storing vector embeddings for entity documents.",
       "DriverClass": "__VectorizeEntity",
       "Type": "Custom",
-      "Status": "Active"
+      "Status": "Active",
+      "CategoryID": "@lookup:Action Categories.Name=System",
+      "CodeApprovalStatus": "Pending",
+      "CodeLocked": false,
+      "ForceCodeGeneration": false
     },
     "relatedEntities": {
       "Action Params": [
@@ -175,8 +183,8 @@
       "ID": "1D4A644B-7356-403F-B726-77A1D4DA8EDB"
     },
     "sync": {
-      "lastModified": "2025-06-24T17:33:33.416Z",
-      "checksum": "66571b24c262239bb71bba2ac4180b2a52b64e448c5901835036bdfca5bab52e"
+      "lastModified": "2025-07-09T05:33:37.517Z",
+      "checksum": "c5b992e5929e5cf79e8f00e1a5dee2be5efc613859b8878fc5b46b39ede5b460"
     }
   },
   {
@@ -185,7 +193,11 @@
       "Description": "Executes the External Change Detection process to identify changes in data that bypassed MemberJunction.",
       "DriverClass": "__RunExternalChangeDetection",
       "Type": "Custom",
-      "Status": "Active"
+      "Status": "Active",
+      "CategoryID": "@lookup:Action Categories.Name=System",
+      "CodeApprovalStatus": "Pending",
+      "CodeLocked": false,
+      "ForceCodeGeneration": false
     },
     "relatedEntities": {
       "Action Params": [
@@ -245,8 +257,8 @@
       "ID": "E9ED9885-8A46-4EA2-8EAD-69087B9F1E20"
     },
     "sync": {
-      "lastModified": "2025-06-24T17:33:33.420Z",
-      "checksum": "962a6ea2549af8a324ddec1eed98873a6cf60f686cb6ebd55c6e54313fe856ca"
+      "lastModified": "2025-07-09T05:33:37.509Z",
+      "checksum": "44b0a7f53b5ea86f77f621f68ac6ef1c7683ed80914dd2547e6b7f786e70cbc8"
     }
   },
   {
