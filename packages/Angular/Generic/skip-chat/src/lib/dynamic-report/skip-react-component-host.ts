@@ -1,5 +1,5 @@
 import { SimpleChanges, EventEmitter, ElementRef, Injectable } from '@angular/core';
-import { SkipComponentCallbacks, SkipComponentStyles, SkipComponentUtilities } from '@memberjunction/skip-types';
+import { SkipComponentCallbacks, SkipComponentChildSpec, SkipComponentRootSpec, SkipComponentStyles, SkipComponentUtilities } from '@memberjunction/skip-types';
 import { LogError } from '@memberjunction/core';
 import { BaseSingleton } from '@memberjunction/global';
 
@@ -181,8 +181,7 @@ export class GlobalComponentRegistry extends BaseSingleton<GlobalComponentRegist
  * Configuration for a React component to be hosted in Angular
  */
 export interface ReactComponentConfig {
-  /** The generated component code that includes the createComponent function */
-  componentCode: string;
+  component: SkipComponentRootSpec 
   
   /** The HTML container element where the React component will be rendered */
   container: HTMLElement;
@@ -362,20 +361,20 @@ export class SkipReactComponentHost {
     
     console.log('Creating components object. Required:', this.config.metadata.requiredChildComponents);
     console.log('Available components in registry:', registry.getRegisteredKeys());
-    
-    for (const componentName of this.config.metadata.requiredChildComponents) {
+
+    for (const child of this.config.metadata.requiredChildComponents as unknown as SkipComponentChildSpec[]) {
       // Try to resolve the component with metadata context
       const component = registry.getWithFallback(
-        componentName,
+        child.componentName,
         this.config.metadata.componentContext,
         this.config.metadata.version
       );
       
       if (component) {
-        components[componentName] = component;
-        console.log(`Found component "${componentName}"`);
+        components[child.componentName] = component;
+        console.log(`Found component "${child.componentName}"`);
       } else {
-        console.warn(`Component "${componentName}" not found in registry. Tried contexts: ${this.config.metadata.componentContext}, Global`);
+        console.warn(`Component "${child.componentName}" not found in registry. Tried contexts: ${this.config.metadata.componentContext}, Global`);
       }
     }
     
@@ -592,7 +591,8 @@ export class SkipReactComponentHost {
       // Transpile the JSX code to JavaScript
       let transpiledCode: string;
       try {
-        const result = Babel.transform(this.config.componentCode, {
+        const wrappedCode = generateComponentWrapper(this.config.component.componentCode,this.config.component.componentName)
+        const result = Babel.transform(wrappedCode, {
           presets: ['react'],
           filename: 'component.jsx'
         });
@@ -2030,8 +2030,64 @@ export function testGlobalComponentRegistry() {
 }
 
 /**
+ * Generate a createComponent wrapper around component code
+ * This wrapper provides React context and expected factory interface
+ */
+function generateComponentWrapper(componentCode: string, componentName: string): string {
+  return `function createComponent(React, ReactDOM, useState, useEffect, useCallback, createStateUpdater, createStandardEventHandler, libraries) {
+  ${componentCode}
+  
+  return {
+    component: ${componentName},
+    print: function() { window.print(); },
+    refresh: function() { /* Managed by parent */ }
+  };
+}`;
+}
+
+/**
+ * Transpile JSX code to JavaScript using Babel
+ */
+function transpileJSX(code: string, filename: string): string {
+  const Babel = (window as any).Babel;
+  if (!Babel) {
+    throw new Error('Babel not loaded - cannot transpile JSX');
+  }
+  
+  const result = Babel.transform(code, {
+    presets: ['react'],
+    filename: filename
+  });
+  
+  return result.code;
+}
+
+/**
+ * Get React context and libraries for component compilation
+ */
+function getReactContext() {
+  const React = (window as any).React;
+  const ReactDOM = (window as any).ReactDOM;
+  
+  if (!React || !ReactDOM) {
+    throw new Error('React and ReactDOM must be loaded before compiling components');
+  }
+  
+  const libraries = {
+    antd: (window as any).antd,
+    ReactBootstrap: (window as any).ReactBootstrap,
+    d3: (window as any).d3,
+    Chart: (window as any).Chart,
+    _: (window as any)._,
+    dayjs: (window as any).dayjs
+  };
+  
+  return { React, ReactDOM, libraries };
+}
+
+/**
  * Compile and register a component from string code
- * This simulates how AI-generated components are processed
+ * Always wraps plain function components with createComponent factory
  */
 export async function compileAndRegisterComponent(
   componentName: string,
@@ -2042,30 +2098,13 @@ export async function compileAndRegisterComponent(
   const registry = GlobalComponentRegistry.Instance;
   
   try {
-    // Get Babel for transpilation
-    const Babel = (window as any).Babel;
-    if (!Babel) {
-      console.error('Babel not loaded - cannot compile component');
-      return false;
-    }
+    const { React, ReactDOM, libraries } = getReactContext();
     
-    // Transpile the code
-    const transpiledCode = Babel.transform(componentCode, {
-      presets: ['react'],
-      filename: `${componentName}.jsx`
-    }).code;
+    // Auto-generate wrapper around the component code
+    const wrappedCode = generateComponentWrapper(componentCode, componentName);
     
-    // Get React and other dependencies
-    const React = (window as any).React;
-    const ReactDOM = (window as any).ReactDOM;
-    const libraries = {
-      antd: (window as any).antd,
-      ReactBootstrap: (window as any).ReactBootstrap,
-      d3: (window as any).d3,
-      Chart: (window as any).Chart,
-      _: (window as any)._,
-      dayjs: (window as any).dayjs
-    };
+    // Transpile the wrapped code
+    const transpiledCode = transpileJSX(wrappedCode, `${componentName}.jsx`);
     
     // Create the component factory
     const createComponent = new Function(

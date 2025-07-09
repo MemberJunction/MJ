@@ -1202,27 +1202,14 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         if (!container) return;
 
         try {
-            const componentCode = BuildSkipComponentCompleteCode(option.option);
-
-            // Check for unresolved placeholders in the code
-            if (componentCode.includes('<<') && componentCode.includes('>>')) {
-                const placeholderMatch = componentCode.match(/<<([^>]+)>>/);
-                const placeholderName = placeholderMatch ? placeholderMatch[1] : 'Unknown';
-                
-                this.currentError = {
-                    type: 'Incomplete Component',
-                    message: `This component option contains unresolved placeholders (${placeholderName}). The component generation was not completed successfully.`,
-                    technicalDetails: `The component code contains placeholder tokens that should have been replaced with actual implementations. This typically happens when the AI generation process was interrupted or encountered an error.\n\nPlaceholder found: <<${placeholderName}>>`
-                };
-                return;
-            }
+            const component = option.option; 
             
             const md = new Metadata();
             const data = this.getFlattenedDataContext();
             
             // Create the React component host directly in the tab container
             const reactHost = new SkipReactComponentHost({
-                componentCode: componentCode,
+                component,
                 container: container,
                 callbacks: this.callbacks,
                 data: data,

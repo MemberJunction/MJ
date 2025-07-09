@@ -15,7 +15,7 @@ import {
 } from '@angular/core';
 import { Location } from '@angular/common';
 import { ActivatedRoute, ActivationEnd, Router } from '@angular/router';
-import { LogError, UserInfo, CompositeKey, LogStatus, RunView } from '@memberjunction/core';
+import { LogError, UserInfo, CompositeKey, LogStatus, RunView, RunViewParams, RunViewResult } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
 import { Container } from '@memberjunction/ng-container-directives';
@@ -27,6 +27,7 @@ import {
   MJAPISkipResult,
   SkipAPIAnalysisCompleteResponse,
   SkipAPIResponse,
+  SimpleRunView,
   SkipResponsePhase,
 } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
@@ -2284,7 +2285,14 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       return [componentName];
     } else {
       // For user-added components, return all registered components
-      return Array.from(this.registeredTestComponents.keys());
+      const item = this.registeredTestComponents.get(componentName);
+      if (item) {
+        return item.childComponents;
+      }
+      else {
+        console.warn(`No registered components found for ${componentName}`);
+        return [];
+      }
     }
   }
   
@@ -2301,7 +2309,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     const registeredComponents: string[] = [];
     
     try {
-      // Register root component
+      // Register root component (plain function, auto-wrapped)
       const rootComponentName = rootName || spec.componentName;
       const success = await compileAndRegisterComponent(
         rootComponentName,
@@ -2317,7 +2325,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         errors.push(`Failed to register root component: ${rootComponentName}`);
       }
       
-      // Recursively register child components
+      // Recursively register child components (plain functions, auto-wrapped)
       if (spec.childComponents && Array.isArray(spec.childComponents)) {
         for (const child of spec.childComponents) {
           await this.registerComponentHierarchy(child, registeredComponents, errors);
@@ -2351,6 +2359,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   ): Promise<void> {
     try {
       if (spec.componentCode) {
+        // Child components are plain functions, auto-wrapped
         const success = await compileAndRegisterComponent(
           spec.componentName,
           spec.componentCode,
@@ -2707,22 +2716,22 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     tempContainer.style.display = 'none';
     document.body.appendChild(tempContainer);
     
-    const tempHost = new SkipReactComponentHost({
-      componentCode: 'function createComponent(React) { return { component: () => null }; }',
-      container: tempContainer,
-      data: {},
-      metadata: { requiredChildComponents: [], componentContext: 'Global', version: 'v1' }
-    });
+    // const tempHost = new SkipReactComponentHost({
+    //   componentCode: 'function createComponent(React) { return { component: () => null }; }',
+    //   container: tempContainer,
+    //   data: {},
+    //   metadata: { requiredChildComponents: [], componentContext: 'Global', version: 'v1' }
+    // });
     
-    try {
-      await tempHost.initialize();
-      console.log('Libraries loaded via temporary host');
-    } catch (error) {
-      console.error('Error loading libraries:', error);
-    } finally {
-      tempHost.destroy();
-      document.body.removeChild(tempContainer);
-    }
+    // try {
+    //   await tempHost.initialize();
+    //   console.log('Libraries loaded via temporary host');
+    // } catch (error) {
+    //   console.error('Error loading libraries:', error);
+    // } finally {
+    //   tempHost.destroy();
+    //   document.body.removeChild(tempContainer);
+    // }
     
     // Now register the pre-built test components
     await this.registerPrebuiltComponents();
@@ -2952,15 +2961,16 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
           return { component: WrapperComponent };
         }
       `;
-      
+     
+      const item = this.registeredTestComponents.get(componentName);
       const host = new SkipReactComponentHost({
-        componentCode: wrapperCode,
+        component: item,
         container: container,
         data: {},
         initialState: {},
         utilities: {
           md: {} as any,
-          rv: new RunView() as any,
+          rv: new TestRunView() as SimpleRunView,
           rq: {} as any
         },
         metadata: {
@@ -2985,5 +2995,21 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       container.innerHTML = `<div style="color: red; padding: 20px;">Error rendering component: ${error}</div>`;
       return null;
     }
+  }
+}
+
+
+class TestRunView implements SimpleRunView {
+  private _rv: RunView;
+  constructor() {
+    this._rv = new RunView();
+  }
+  public runView(params: RunViewParams): Promise<RunViewResult> {
+    console.log('Running single view with params:', params);
+    return this._rv.RunView(params);
+  }
+  public runViews(params: RunViewParams[]): Promise<RunViewResult[]> {
+    console.log('Running multiple views with params:', params);
+    return this._rv.RunViews(params);
   }
 }
