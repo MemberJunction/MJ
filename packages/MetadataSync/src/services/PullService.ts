@@ -584,6 +584,121 @@ export class PullService {
     this.fileWriteBatch.queueWrite(filePath, recordData);
   }
 
+  /**
+   * Gets ALL properties from a BaseEntity object, including both:
+   * 1. Database fields (from record.GetAll())
+   * 2. Virtual properties (getters defined in subclasses like TemplateText)
+   */
+  private getAllEntityProperties(record: BaseEntity): Record<string, any> {
+    const allProperties: Record<string, any> = {};
+    
+    // 1. Get database fields using GetAll()
+    if (typeof record.GetAll === 'function') {
+      const dbFields = record.GetAll();
+      Object.assign(allProperties, dbFields);
+    }
+    
+    // 2. Discover virtual properties by walking the prototype chain
+    const virtualProperties = this.discoverVirtualProperties(record);
+    
+    // 3. Get values for virtual properties using bracket notation
+    for (const propertyName of virtualProperties) {
+      try {
+        // Use bracket notation to access the getter
+        const value = (record as any)[propertyName];
+        
+        // Only include if the value is not undefined and not a function
+        if (value !== undefined && typeof value !== 'function') {
+          allProperties[propertyName] = value;
+        }
+      } catch (error) {
+        // Skip properties that throw errors when accessed
+        continue;
+      }
+    }
+    
+    return allProperties;
+  }
+
+  /**
+   * Discovers virtual properties (getters) defined in BaseEntity subclasses
+   * Returns property names that are getters but not in the base database fields
+   */
+  private discoverVirtualProperties(record: BaseEntity): string[] {
+    const virtualProperties: string[] = [];
+    const dbFieldNames = new Set<string>();
+    
+    // Get database field names to exclude them
+    if (typeof record.GetAll === 'function') {
+      const dbFields = record.GetAll();
+      Object.keys(dbFields).forEach(key => dbFieldNames.add(key));
+    }
+    
+    // Walk the prototype chain to find getters
+    let currentPrototype = Object.getPrototypeOf(record);
+    
+    while (currentPrototype && currentPrototype !== Object.prototype) {
+      const propertyNames = Object.getOwnPropertyNames(currentPrototype);
+      
+      for (const propertyName of propertyNames) {
+        // Skip if already found or is a database field
+        if (virtualProperties.includes(propertyName) || dbFieldNames.has(propertyName)) {
+          continue;
+        }
+        
+        // Skip internal properties and methods
+        if (this.shouldSkipProperty(propertyName)) {
+          continue;
+        }
+        
+        // Check if it's a getter
+        const descriptor = Object.getOwnPropertyDescriptor(currentPrototype, propertyName);
+        if (descriptor && typeof descriptor.get === 'function' && !descriptor.set) {
+          // Read-only getter - might be computed property, skip
+          continue;
+        }
+        
+        if (descriptor && typeof descriptor.get === 'function' && typeof descriptor.set === 'function') {
+          // Read-write getter/setter pair - this is likely a virtual property
+          virtualProperties.push(propertyName);
+        }
+      }
+      
+      // Move up the prototype chain
+      currentPrototype = Object.getPrototypeOf(currentPrototype);
+    }
+    
+    return virtualProperties;
+  }
+
+  /**
+   * Determines if a property should be skipped during virtual property discovery
+   */
+  private shouldSkipProperty(propertyName: string): boolean {
+    // Skip private properties (starting with _ or __)
+    if (propertyName.startsWith('_') || propertyName.startsWith('__')) {
+      return true;
+    }
+    
+    // Skip constructor and common Object.prototype methods
+    if (propertyName === 'constructor' || propertyName === 'toString' || propertyName === 'valueOf') {
+      return true;
+    }
+    
+    // Skip known BaseEntity methods and properties
+    const baseEntityMethods = [
+      'Get', 'Set', 'GetAll', 'SetMany', 'LoadFromData', 'Save', 'Load', 'Delete',
+      'Fields', 'Dirty', 'IsSaved', 'PrimaryKeys', 'EntityInfo', 'ContextCurrentUser',
+      'ProviderToUse', 'RecordChanges', 'TransactionGroup'
+    ];
+    
+    if (baseEntityMethods.includes(propertyName)) {
+      return true;
+    }
+    
+    return false;
+  }
+
   
   private async processRecordData(
     record: BaseEntity, 
@@ -601,17 +716,14 @@ export class PullService {
     const fields: Record<string, any> = {};
     const relatedEntities: Record<string, RecordData[]> = {};
     
-    // Get the underlying data from the entity object
-    let dataToProcess = record;
-    if (typeof record.GetAll === 'function') {
-      dataToProcess = record.GetAll();
-    }
+    // Get ALL properties: both database fields AND virtual properties
+    const allProperties = this.getAllEntityProperties(record);
     
     // Get entity metadata to check for virtual fields
     const entityInfo = this.syncEngine.getEntityInfo(entityConfig.entity);
     
     // Process fields with proper lookupFields conversion
-    for (const [fieldName, fieldValue] of Object.entries(dataToProcess)) {
+    for (const [fieldName, fieldValue] of Object.entries(allProperties)) {
       // Skip primary key fields
       if (primaryKey[fieldName] !== undefined) {
         continue;
@@ -704,7 +816,7 @@ export class PullService {
               fieldName,
               processedValue,
               externalizePattern,
-              dataToProcess,
+              record,
               targetDir,
               existingFileReference,
               entityConfig.pull?.mergeStrategy || 'merge',
