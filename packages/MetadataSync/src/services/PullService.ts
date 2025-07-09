@@ -666,6 +666,63 @@ export class PullService {
         processedValue = processedValue.trim();
       }
       
+      // Handle field externalization if configured
+      if (entityConfig.pull?.externalizeFields && processedValue != null) {
+        const externalizeConfig = entityConfig.pull.externalizeFields;
+        let externalizePattern: string | null = null;
+        
+        // Check if this field should be externalized
+        if (Array.isArray(externalizeConfig)) {
+          if (externalizeConfig.length > 0 && typeof externalizeConfig[0] === 'string') {
+            // Simple string array format
+            if (externalizeConfig.includes(fieldName)) {
+              externalizePattern = `@file:{Name}.${fieldName.toLowerCase()}.md`;
+            }
+          } else {
+            // Array of objects format
+            const fieldConfig = externalizeConfig.find(config => config.field === fieldName);
+            if (fieldConfig) {
+              externalizePattern = fieldConfig.pattern;
+            }
+          }
+        } else {
+          // Object format
+          const fieldConfig = externalizeConfig[fieldName];
+          if (fieldConfig) {
+            const extension = fieldConfig.extension || '.md';
+            externalizePattern = `@file:{Name}.${fieldName.toLowerCase()}${extension}`;
+          }
+        }
+        
+        if (externalizePattern) {
+          try {
+            // Check if we have existing data with @file: reference for merge strategy
+            const existingFileReference = existingRecordData?.fields?.[fieldName];
+            
+            const externalizedValue = await this.externalizeField(
+              fieldName,
+              processedValue,
+              externalizePattern,
+              dataToProcess,
+              targetDir,
+              existingFileReference,
+              entityConfig.pull?.mergeStrategy || 'merge',
+              verbose
+            );
+            processedValue = externalizedValue;
+            
+            if (verbose) {
+              console.log(`Externalized field ${fieldName} to file`);  
+            }
+          } catch (error) {
+            if (verbose) {
+              console.warn(`Failed to externalize field ${fieldName}: ${error}`);
+            }
+            // Keep original value if externalization fails
+          }
+        }
+      }
+      
       fields[fieldName] = processedValue;
     }
     
@@ -693,8 +750,21 @@ export class PullService {
       }
     }
     
-    // Calculate checksum
-    const checksum = this.syncEngine.calculateChecksum(fields);
+    // Calculate checksum - include external file content if there are externalized fields
+    let checksum: string;
+    const hasExternalizedFields = entityConfig.pull?.externalizeFields && 
+      Object.values(fields).some(value => typeof value === 'string' && value.startsWith('@file:'));
+    
+    if (hasExternalizedFields) {
+      // Use checksum calculation that resolves @file references
+      checksum = await this.syncEngine.calculateChecksumWithFileContent(fields, targetDir);
+      if (verbose) {
+        console.log(`Calculated checksum including external file content for record`);
+      }
+    } else {
+      // Use standard checksum calculation
+      checksum = this.syncEngine.calculateChecksum(fields);
+    }
     
     // Determine if data has actually changed by comparing checksums
     let finalSyncData: { lastModified: string; checksum: string };
@@ -773,6 +843,145 @@ export class PullService {
       }
       return guidValue;
     }
+  }
+
+  /**
+   * Externalize a field value to a separate file and return @file: reference
+   */
+  private async externalizeField(
+    fieldName: string,
+    fieldValue: any,
+    pattern: string,
+    recordData: any,
+    targetDir: string,
+    existingFileReference?: string,
+    mergeStrategy: string = 'merge',
+    verbose?: boolean
+  ): Promise<string> {
+    const fs = await import('fs-extra');
+    const path = await import('path');
+    
+    let finalFilePath: string;
+    let fileReference: string;
+    
+    // Check if we should use existing file reference (for merge strategy)
+    if (mergeStrategy === 'merge' && existingFileReference && typeof existingFileReference === 'string' && existingFileReference.startsWith('@file:')) {
+      // Use existing file reference
+      const existingPath = existingFileReference.substring(6); // Remove @file: prefix
+      finalFilePath = path.resolve(targetDir, existingPath);
+      fileReference = existingFileReference;
+      
+      if (verbose) {
+        console.log(`Using existing external file: ${finalFilePath}`);
+      }
+    } else {
+      // Create new file using pattern
+      let processedPattern = pattern;
+      
+      // Replace common placeholders
+      if (recordData.Name) {
+        const sanitizedName = this.sanitizeForFilename(recordData.Name);
+        processedPattern = processedPattern.replace(/\{Name\}/g, sanitizedName);
+      }
+      
+      if (recordData.ID) {
+        processedPattern = processedPattern.replace(/\{ID\}/g, recordData.ID);
+      }
+      
+      processedPattern = processedPattern.replace(/\{FieldName\}/g, fieldName);
+      
+      // Replace any other field placeholders
+      for (const [key, value] of Object.entries(recordData)) {
+        if (value != null) {
+          const sanitizedValue = this.sanitizeForFilename(String(value));
+          processedPattern = processedPattern.replace(new RegExp(`\\{${key}\\}`, 'g'), sanitizedValue);
+        }
+      }
+      
+      // Remove @file: prefix if present
+      if (processedPattern.startsWith('@file:')) {
+        processedPattern = processedPattern.substring(6);
+      }
+      
+      finalFilePath = path.resolve(targetDir, processedPattern);
+      fileReference = `@file:${processedPattern}`;
+      
+      if (verbose) {
+        console.log(`Creating new external file: ${finalFilePath}`);
+      }
+    }
+    
+    // Check if file already exists and compare content
+    let shouldWriteFile = true;
+    if (await fs.pathExists(finalFilePath)) {
+      try {
+        const existingContent = await fs.readFile(finalFilePath, 'utf8');
+        
+        // Prepare the new content
+        let contentToWrite = String(fieldValue);
+        
+        // If the value looks like JSON, try to pretty-print it
+        if (fieldName.toLowerCase().includes('json') || fieldName.toLowerCase().includes('example')) {
+          try {
+            const parsed = JSON.parse(contentToWrite);
+            contentToWrite = JSON.stringify(parsed, null, 2);
+          } catch {
+            // Not valid JSON, use as-is
+          }
+        }
+        
+        // Only write if content has changed
+        shouldWriteFile = existingContent !== contentToWrite;
+        
+        if (verbose && !shouldWriteFile) {
+          console.log(`External file ${finalFilePath} unchanged, skipping write`);
+        }
+      } catch (error) {
+        if (verbose) {
+          console.warn(`Error reading existing file ${finalFilePath}: ${error}`);
+        }
+        shouldWriteFile = true; // Write if we can't read existing file
+      }
+    }
+    
+    if (shouldWriteFile) {
+      // Ensure the directory exists
+      await fs.ensureDir(path.dirname(finalFilePath));
+      
+      // Write the field value to the file
+      let contentToWrite = String(fieldValue);
+      
+      // If the value looks like JSON, try to pretty-print it
+      if (fieldName.toLowerCase().includes('json') || fieldName.toLowerCase().includes('example')) {
+        try {
+          const parsed = JSON.parse(contentToWrite);
+          contentToWrite = JSON.stringify(parsed, null, 2);
+        } catch {
+          // Not valid JSON, use as-is
+        }
+      }
+      
+      await fs.writeFile(finalFilePath, contentToWrite, 'utf8');
+      
+      if (verbose) {
+        console.log(`Wrote externalized field ${fieldName} to ${finalFilePath}`);
+      }
+    }
+    
+    // Return the @file: reference
+    return fileReference;
+  }
+  
+  /**
+   * Sanitize a string for use in filenames
+   */
+  private sanitizeForFilename(input: string): string {
+    return input
+      .toLowerCase()
+      .replace(/\s+/g, '-') // Replace spaces with hyphens
+      .replace(/[^a-z0-9.-]/g, '') // Remove special characters except dots and hyphens
+      .replace(/--+/g, '-') // Replace multiple hyphens with single hyphen
+      .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
   }
 
   /**
