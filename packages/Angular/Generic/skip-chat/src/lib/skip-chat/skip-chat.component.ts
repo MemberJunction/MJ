@@ -29,6 +29,7 @@ import {
   SkipAPIResponse,
   SimpleRunView,
   SkipResponsePhase,
+  SkipComponentRootSpec,
 } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
 import { CopyScalarsAndArrays, InvokeManualResize, MJEvent, MJEventType, MJGlobal, SafeJSONParse } from '@memberjunction/global';
@@ -2715,23 +2716,38 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     const tempContainer = document.createElement('div');
     tempContainer.style.display = 'none';
     document.body.appendChild(tempContainer);
+
+    // this is done to get React loaded
+    const tempSpec: SkipComponentRootSpec = {
+      componentCode: 'function TempComponent() {};',
+      componentName: 'TempComponent',
+      functionalRequirements: 'Load React and other libraries',
+      technicalDesign: 'Temporary component to load libraries',
+      componentType: 'report',
+      title: 'Temporary Component',
+      description: 'This component is used to load React and other libraries for testing purposes',
+      callbackStrategy: 'none',
+      childComponents: [],
+      stateStructure: {},
+      userExplanation: 'This component is used to load React and other libraries for testing purposes',
+      techExplanation: 'This component is used to load React and other libraries for testing purposes'
+    }
+    const tempHost = new SkipReactComponentHost({
+      component: tempSpec,
+      container: tempContainer,
+      data: {},
+      metadata: { requiredChildComponents: [], componentContext: 'Global', version: 'v1' }
+    });
     
-    // const tempHost = new SkipReactComponentHost({
-    //   componentCode: 'function createComponent(React) { return { component: () => null }; }',
-    //   container: tempContainer,
-    //   data: {},
-    //   metadata: { requiredChildComponents: [], componentContext: 'Global', version: 'v1' }
-    // });
-    
-    // try {
-    //   await tempHost.initialize();
-    //   console.log('Libraries loaded via temporary host');
-    // } catch (error) {
-    //   console.error('Error loading libraries:', error);
-    // } finally {
-    //   tempHost.destroy();
-    //   document.body.removeChild(tempContainer);
-    // }
+    try {
+      await tempHost.initialize();
+      console.log('Libraries loaded via temporary host');
+    } catch (error) {
+      console.error('Error loading libraries:', error);
+    } finally {
+      tempHost.destroy();
+      document.body.removeChild(tempContainer);
+    }
     
     // Now register the pre-built test components
     await this.registerPrebuiltComponents();
