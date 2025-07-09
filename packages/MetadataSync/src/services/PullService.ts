@@ -607,6 +607,9 @@ export class PullService {
       dataToProcess = record.GetAll();
     }
     
+    // Get entity metadata to check for virtual fields
+    const entityInfo = this.syncEngine.getEntityInfo(entityConfig.entity);
+    
     // Process fields with proper lookupFields conversion
     for (const [fieldName, fieldValue] of Object.entries(dataToProcess)) {
       // Skip primary key fields
@@ -622,6 +625,17 @@ export class PullService {
       // Skip excluded fields
       if (entityConfig.pull?.excludeFields?.includes(fieldName)) {
         continue;
+      }
+      
+      // Skip virtual fields (fields that exist only in the view, not in the underlying table)
+      if (entityInfo) {
+        const fieldInfo = entityInfo.Fields.find(f => f.Name === fieldName);
+        if (fieldInfo && fieldInfo.IsVirtual) {
+          if (verbose) {
+            console.log(`Skipping virtual field: ${fieldName} for entity ${entityConfig.entity}`);
+          }
+          continue;
+        }
       }
       
       // Skip null fields if ignoreNullFields is enabled
@@ -645,6 +659,11 @@ export class PullService {
           // Keep original value if lookup fails
           processedValue = fieldValue;
         }
+      }
+      
+      // Trim string values to remove leading/trailing whitespace
+      if (typeof processedValue === 'string') {
+        processedValue = processedValue.trim();
       }
       
       fields[fieldName] = processedValue;
@@ -739,14 +758,152 @@ export class PullService {
    */
   private async loadRelatedEntities(
     parentRecord: any,
-    relationConfig: any,
+    relationConfig: RelatedEntityConfig,
     currentDepth: number,
     ancestryPath: Set<string>,
     verbose?: boolean
   ): Promise<RecordData[]> {
-    // For now, return empty array - this can be implemented later if needed
-    // The main focus is fixing the lookupFields issue
-    return [];
+    try {
+      // Get the parent record's primary key value
+      const parentPrimaryKey = this.getRecordPrimaryKey(parentRecord);
+      if (!parentPrimaryKey) {
+        if (verbose) {
+          console.warn(`Unable to determine primary key for parent record to load related entities`);
+        }
+        return [];
+      }
+
+      // Build the filter for the related entity query
+      let filter = `${relationConfig.foreignKey} = '${parentPrimaryKey}'`;
+      if (relationConfig.filter) {
+        filter += ` AND (${relationConfig.filter})`;
+      }
+
+      if (verbose) {
+        console.log(`Loading related entities: ${relationConfig.entity} with filter: ${filter}`);
+      }
+
+      // Query for related entities
+      const rv = new RunView();
+      const result = await rv.RunView({
+        EntityName: relationConfig.entity,
+        ExtraFilter: filter,
+        ResultType: 'entity_object'
+      }, this.contextUser);
+
+      if (!result.Success) {
+        if (verbose) {
+          console.warn(`Failed to load related entities ${relationConfig.entity}: ${result.ErrorMessage}`);
+        }
+        return [];
+      }
+
+      if (verbose) {
+        console.log(`Found ${result.Results.length} related records for ${relationConfig.entity}`);
+      }
+
+      // Process each related record
+      const relatedRecords: RecordData[] = [];
+      for (const relatedRecord of result.Results) {
+        // Build primary key for the related record
+        const relatedPrimaryKey = this.getRecordPrimaryKey(relatedRecord);
+        if (!relatedPrimaryKey) {
+          if (verbose) {
+            console.warn(`Unable to determine primary key for related record, skipping`);
+          }
+          continue;
+        }
+
+        // Create a mock entity config for the related entity processing
+        const relatedEntityConfig = {
+          entity: relationConfig.entity,
+          pull: {
+            excludeFields: relationConfig.excludeFields || [],
+            lookupFields: relationConfig.lookupFields || {},
+            externalizeFields: relationConfig.externalizeFields || [],
+            relatedEntities: relationConfig.relatedEntities || {}
+          }
+        };
+
+        // Build primary key with the foreign key field set to @parent:ID
+        const relatedRecordPrimaryKey: Record<string, any> = {};
+        for (const pk of this.syncEngine.getEntityInfo(relationConfig.entity)?.PrimaryKeys || []) {
+          if (pk.Name === 'ID') {
+            relatedRecordPrimaryKey[pk.Name] = relatedPrimaryKey;
+          } else {
+            // For compound keys, get the value from the related record
+            relatedRecordPrimaryKey[pk.Name] = this.getFieldValue(relatedRecord, pk.Name);
+          }
+        }
+
+        // Process the related record data
+        const recordData = await this.processRecordData(
+          relatedRecord,
+          relatedRecordPrimaryKey,
+          '', // targetDir not needed for related entities
+          relatedEntityConfig,
+          verbose,
+          true, // isNewRecord
+          undefined, // existingRecordData
+          currentDepth + 1,
+          ancestryPath
+        );
+
+        // After processing, replace the foreign key field with @parent:ID syntax
+        if (recordData.fields && recordData.fields[relationConfig.foreignKey] !== undefined) {
+          recordData.fields[relationConfig.foreignKey] = '@parent:ID';
+        }
+
+        relatedRecords.push(recordData);
+      }
+
+      return relatedRecords;
+    } catch (error) {
+      if (verbose) {
+        console.error(`Error loading related entities for ${relationConfig.entity}: ${error}`);
+      }
+      return [];
+    }
+  }
+
+  /**
+   * Get the primary key value from a record
+   */
+  private getRecordPrimaryKey(record: any): string | null {
+    if (!record) return null;
+    
+    // Try to get ID directly
+    if (record.ID) return record.ID;
+    
+    // Try to get from GetAll() method if it's an entity object
+    if (typeof record.GetAll === 'function') {
+      const data = record.GetAll();
+      if (data.ID) return data.ID;
+    }
+    
+    // Try common variations
+    if (record.id) return record.id;
+    if (record.Id) return record.Id;
+    
+    return null;
+  }
+
+  /**
+   * Get a field value from a record, handling both entity objects and plain objects
+   */
+  private getFieldValue(record: any, fieldName: string): any {
+    if (!record) return null;
+    
+    // Try to get field directly
+    if (record[fieldName] !== undefined) return record[fieldName];
+    
+    // Try to get from GetAll() method if it's an entity object
+    if (typeof record.GetAll === 'function') {
+      const data = record.GetAll();
+      if (data[fieldName] !== undefined) return data[fieldName];
+    }
+    
+    return null;
   }
 
   private async findEntityDirectories(entityName: string): Promise<string[]> {

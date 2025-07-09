@@ -26,6 +26,15 @@
         "field": "Name"
       }
     },
-    "relatedEntities": {}
+    "relatedEntities": {
+      "Action Params": {
+        "entity": "Action Params",
+        "foreignKey": "ActionID"
+      },
+      "Action Result Codes": {
+        "entity": "Action Result Codes",
+        "foreignKey": "ActionID"
+      }
+    }
   }
 }
