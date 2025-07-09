@@ -1117,6 +1117,10 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             }
         });
         this.reactHostCache.clear();
+        
+        // Clean up registered components from the GlobalComponentRegistry
+        // Note: We don't remove them as they might be used by other instances
+        // The registry is designed to be a singleton that persists across component instances
     }
     
     ngOnChanges(changes: SimpleChanges): void {
@@ -1191,6 +1195,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         } 
     }
 
+
     /**
      * Create a React host for a specific option index
      */
@@ -1202,12 +1207,12 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         if (!container) return;
 
         try {
-            const component = option.option; 
-            
+            const component = option.option;
             const md = new Metadata();
             const data = this.getFlattenedDataContext();
             
             // Create the React component host directly in the tab container
+            // The host will handle registration automatically
             const reactHost = new SkipReactComponentHost({
                 component,
                 container: container,
@@ -1215,6 +1220,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
                 data: data,
                 utilities: this.SetupUtilities(md),
                 styles: this.SetupStyles()
+                // metadata will be auto-populated from component.childComponents
             });
             
             // Initialize and render the React component

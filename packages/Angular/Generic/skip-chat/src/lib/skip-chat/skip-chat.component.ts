@@ -2978,9 +2978,22 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         }
       `;
      
-      const item = this.registeredTestComponents.get(componentName);
+      // The React host will handle all registration automatically
       const host = new SkipReactComponentHost({
-        component: item,
+        component: {
+          componentName: 'TestWrapper',
+          componentCode: wrapperCode,
+          componentType: 'other',
+          childComponents: [], // No child components for the wrapper
+          functionalRequirements: 'Test wrapper component',
+          technicalDesign: 'Wrapper for testing components',
+          description: 'Wrapper component for testing',
+          callbackStrategy: 'none',
+          stateStructure: {},
+          title: 'Test Wrapper',
+          userExplanation: 'This is a test wrapper',
+          techExplanation: 'Wraps components for testing'
+        } as SkipComponentRootSpec,
         container: container,
         data: {},
         initialState: {},

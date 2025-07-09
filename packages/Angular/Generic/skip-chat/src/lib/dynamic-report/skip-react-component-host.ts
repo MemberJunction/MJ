@@ -1,5 +1,5 @@
 import { SimpleChanges, EventEmitter, ElementRef, Injectable } from '@angular/core';
-import { SkipComponentCallbacks, SkipComponentChildSpec, SkipComponentRootSpec, SkipComponentStyles, SkipComponentUtilities } from '@memberjunction/skip-types';
+import { SkipComponentCallbacks, SkipComponentRootSpec, SkipComponentStyles, SkipComponentUtilities, SkipComponentChildSpec } from '@memberjunction/skip-types';
 import { LogError } from '@memberjunction/core';
 import { BaseSingleton } from '@memberjunction/global';
 
@@ -345,7 +345,111 @@ export class SkipReactComponentHost {
   private static libraryLoadPromise: Promise<any> | null = null;
 
   constructor(private config: ReactComponentConfig) {
-    this.loadReactLibraries();
+    // Auto-populate metadata if not provided
+    if (!this.config.metadata) {
+      const childComponentNames = (this.config.component.childComponents || []).map(
+        (child: SkipComponentChildSpec) => child.componentName
+      );
+      this.config.metadata = {
+        requiredChildComponents: childComponentNames,
+        componentContext: 'Global',
+        version: 'v1'
+      };
+    }
+  }
+
+  /**
+   * Register all components in the hierarchy before initialization
+   * This ensures all child components are available in the registry
+   */
+  private async registerComponentHierarchy(): Promise<{
+    success: boolean;
+    registeredComponents: string[];
+    errors: string[];
+  }> {
+    const errors: string[] = [];
+    const registeredComponents: string[] = [];
+    
+    try {
+      // Get React context for registration
+      const reactContext = {
+        React: this.React,
+        ReactDOM: this.ReactDOM,
+        libraries: {} // Libraries will be loaded later
+      };
+      
+      // Register root component
+      const rootComponentName = this.config.component.componentName;
+      const success = await compileAndRegisterComponent(
+        rootComponentName,
+        this.config.component.componentCode,
+        this.config.metadata?.componentContext || 'Global',
+        this.config.metadata?.version || 'v1',
+        reactContext
+      );
+      
+      if (success) {
+        registeredComponents.push(rootComponentName);
+      } else {
+        errors.push(`Failed to register root component: ${rootComponentName}`);
+      }
+      
+      // Recursively register child components if they exist
+      if (this.config.component.childComponents && Array.isArray(this.config.component.childComponents)) {
+        for (const child of this.config.component.childComponents) {
+          await this.registerChildComponent(child, registeredComponents, errors, reactContext);
+        }
+      }
+      
+      return {
+        success: errors.length === 0,
+        registeredComponents,
+        errors
+      };
+    } catch (error: any) {
+      errors.push(`Error processing component hierarchy: ${error.message}`);
+      return {
+        success: false,
+        registeredComponents,
+        errors
+      };
+    }
+  }
+  
+  /**
+   * Recursively register child components
+   */
+  private async registerChildComponent(
+    spec: SkipComponentChildSpec,
+    registeredComponents: string[],
+    errors: string[],
+    reactContext: { React: any; ReactDOM: any; libraries: any }
+  ): Promise<void> {
+    try {
+      if (spec.componentCode) {
+        const success = await compileAndRegisterComponent(
+          spec.componentName,
+          spec.componentCode,
+          this.config.metadata?.componentContext || 'Global',
+          this.config.metadata?.version || 'v1',
+          reactContext
+        );
+        
+        if (success) {
+          registeredComponents.push(spec.componentName);
+        } else {
+          errors.push(`Failed to register component: ${spec.componentName}`);
+        }
+      }
+      
+      // Process nested children
+      const childArray = spec.components || [];
+      for (const child of childArray) {
+        await this.registerChildComponent(child, registeredComponents, errors, reactContext);
+      }
+    } catch (error: any) {
+      errors.push(`Error registering ${spec.componentName}: ${error.message}`);
+    }
   }
   
   /**
@@ -362,19 +466,19 @@ export class SkipReactComponentHost {
     console.log('Creating components object. Required:', this.config.metadata.requiredChildComponents);
     console.log('Available components in registry:', registry.getRegisteredKeys());
 
-    for (const child of this.config.metadata.requiredChildComponents as unknown as SkipComponentChildSpec[]) {
+    for (const childName of this.config.metadata.requiredChildComponents) {
       // Try to resolve the component with metadata context
       const component = registry.getWithFallback(
-        child.componentName,
+        childName,
         this.config.metadata.componentContext,
         this.config.metadata.version
       );
       
       if (component) {
-        components[child.componentName] = component;
-        console.log(`Found component "${child.componentName}"`);
+        components[childName] = component;
+        console.log(`Found component "${childName}"`);
       } else {
-        console.warn(`Component "${child.componentName}" not found in registry. Tried contexts: ${this.config.metadata.componentContext}, Global`);
+        console.warn(`Component "${childName}" not found in registry. Tried contexts: ${this.config.metadata.componentContext}, Global`);
       }
     }
     
@@ -558,14 +662,31 @@ export class SkipReactComponentHost {
    */
   public async initialize(): Promise<void> {
     try {
-      // First load React to ensure it's available globally
+      // Step 1: Load React and ReactDOM first
       await this.loadReactLibraries();
       
-      // Then load Babel and common libraries in parallel
-      const [Babel, libraries] = await Promise.all([
-        this.loadBabel(),
-        this.loadCommonLibraries()
-      ]);
+      // Step 2: Load Babel (needed for JSX transpilation during component registration)
+      const Babel = await this.loadBabel();
+      
+      // Step 3: Now we can register components (React and Babel are both loaded)
+      const registrationResult = await this.registerComponentHierarchy();
+      
+      if (!registrationResult.success) {
+        const errorMessage = `Failed to register components: ${registrationResult.errors.join(', ')}`;
+        LogError(errorMessage);
+        if (this.config.callbacks?.NotifyEvent) {
+          this.config.callbacks.NotifyEvent('componentError', {
+            error: errorMessage,
+            source: 'Component Registration'
+          });
+        }
+        throw new Error(errorMessage);
+      }
+      
+      console.log('Successfully registered components:', registrationResult.registeredComponents);
+      
+      // Step 4: Load common libraries
+      const libraries = await this.loadCommonLibraries();
       
       // Register example components if needed (for testing)
       if (this.config.metadata?.requiredChildComponents?.length) {
@@ -2093,12 +2214,13 @@ export async function compileAndRegisterComponent(
   componentName: string,
   componentCode: string,
   context: string = 'Global',
-  version: string = 'v1'
+  version: string = 'v1',
+  reactContext?: { React: any; ReactDOM: any; libraries: any }
 ): Promise<boolean> {
   const registry = GlobalComponentRegistry.Instance;
   
   try {
-    const { React, ReactDOM, libraries } = getReactContext();
+    const { React, ReactDOM, libraries } = reactContext || getReactContext();
     
     // Auto-generate wrapper around the component code
     const wrappedCode = generateComponentWrapper(componentCode, componentName);
