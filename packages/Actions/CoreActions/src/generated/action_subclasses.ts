@@ -18,7 +18,7 @@ import { Metadata, RunView, RunQuery } from "@memberjunction/core";
 @RegisterClass(BaseAction, "Get AI Model Cost")
 export class Get_AI_Model_Cost_Action extends BaseAction {
     /*
-		This child action retrieves a single AI Model Cost record from the database by its ID. 
+		This child action retrieves a single AI Model Cost record from the database by its ID.
 		
 		- It expects a single input parameter: 'ID' (the primary key of the AI Model Cost record).
 		- It validates that the ID is provided, and if missing, returns a 'ValidationError'.
@@ -26,7 +26,7 @@ export class Get_AI_Model_Cost_Action extends BaseAction {
 		- The parent action (Get Record) is invoked using its specific ID for reliability.
 		- If the parent action fails, the code returns a 'ParentActionFailed' result code and passes along the error message.
 		- If the parent action reports success but does not return a record (likely meaning not found), it returns a 'RecordNotFound' result code.
-		- If a valid record is found, it adds the result as an output parameter named 'ModelCostRecord' and returns success. 
+		- If a valid record is found, it adds the result as an output parameter named 'ModelCostRecord' and returns success.
 		- All errors are handled gracefully, with clear and informative error messages.
 		
 	*/
@@ -82,7 +82,7 @@ export class Get_AI_Model_Cost_Action extends BaseAction {
 		    return {
 		      Success: false,
 		      ResultCode: 'RecordNotFound',
-		      Message: `No AI Model Cost record found with ID: ${id}`
+		      Message: 'No AI Model Cost record found with ID: ' + id
 		    };
 		  }
 		

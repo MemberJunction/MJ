@@ -3969,15 +3969,15 @@ export class AIPrompt_ {
     @Field(() => Int, {nullable: true, description: `Default number of top log probabilities to include when IncludeLogProbs is true. Can be overridden at runtime.`}) 
     TopLogProbs?: number;
         
+    @Field({description: `Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None`}) 
+    @MaxLength(100)
+    FailoverStrategy: string;
+        
     @Field(() => Int, {nullable: true, description: `Maximum number of failover attempts before giving up`}) 
     FailoverMaxAttempts?: number;
         
     @Field(() => Int, {nullable: true, description: `Initial delay in seconds between failover attempts`}) 
     FailoverDelaySeconds?: number;
-        
-    @Field({description: `Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None`}) 
-    @MaxLength(100)
-    FailoverStrategy: string;
         
     @Field({description: `Strategy for selecting failover models. Options: PreferSameModel, PreferDifferentModel, RequireSameModel`}) 
     @MaxLength(100)
@@ -4170,14 +4170,14 @@ export class CreateAIPromptInput {
     @Field(() => Int, { nullable: true })
     TopLogProbs: number | null;
 
+    @Field({ nullable: true })
+    FailoverStrategy?: string;
+
     @Field(() => Int, { nullable: true })
     FailoverMaxAttempts?: number | null;
 
     @Field(() => Int, { nullable: true })
     FailoverDelaySeconds?: number | null;
-
-    @Field({ nullable: true })
-    FailoverStrategy?: string;
 
     @Field({ nullable: true })
     FailoverModelStrategy?: string;
@@ -4321,14 +4321,14 @@ export class UpdateAIPromptInput {
     @Field(() => Int, { nullable: true })
     TopLogProbs?: number | null;
 
+    @Field({ nullable: true })
+    FailoverStrategy?: string;
+
     @Field(() => Int, { nullable: true })
     FailoverMaxAttempts?: number | null;
 
     @Field(() => Int, { nullable: true })
     FailoverDelaySeconds?: number | null;
-
-    @Field({ nullable: true })
-    FailoverStrategy?: string;
 
     @Field({ nullable: true })
     FailoverModelStrategy?: string;
@@ -39577,16 +39577,16 @@ export class AIPromptRun_ {
     @Field({nullable: true, description: `JSON array of duration in milliseconds for each failover attempt`}) 
     FailoverDurations?: string;
         
+    @Field({nullable: true, description: `The AI Model ID that was originally attempted before any failovers`}) 
+    @MaxLength(16)
+    OriginalModelID?: string;
+        
     @Field({nullable: true, description: `Timestamp when the original request started, before any failovers`}) 
     @MaxLength(8)
     OriginalRequestStartTime?: Date;
         
     @Field(() => Int, {nullable: true, description: `Total time spent in failover attempts in milliseconds`}) 
     TotalFailoverDuration?: number;
-        
-    @Field({nullable: true, description: `The AI Model ID that was originally attempted before any failovers`}) 
-    @MaxLength(16)
-    OriginalModelID?: string;
         
     @Field() 
     @MaxLength(510)
@@ -39791,13 +39791,13 @@ export class CreateAIPromptRunInput {
     FailoverDurations: string | null;
 
     @Field({ nullable: true })
+    OriginalModelID: string | null;
+
+    @Field({ nullable: true })
     OriginalRequestStartTime: Date | null;
 
     @Field(() => Int, { nullable: true })
     TotalFailoverDuration: number | null;
-
-    @Field({ nullable: true })
-    OriginalModelID: string | null;
 }
     
 
@@ -39972,13 +39972,13 @@ export class UpdateAIPromptRunInput {
     FailoverDurations?: string | null;
 
     @Field({ nullable: true })
+    OriginalModelID?: string | null;
+
+    @Field({ nullable: true })
     OriginalRequestStartTime?: Date | null;
 
     @Field(() => Int, { nullable: true })
     TotalFailoverDuration?: number | null;
-
-    @Field({ nullable: true })
-    OriginalModelID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

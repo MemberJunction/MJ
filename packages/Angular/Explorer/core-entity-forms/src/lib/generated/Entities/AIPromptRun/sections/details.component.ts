@@ -418,6 +418,15 @@ import { AIPromptRunEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="OriginalModelID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="OriginalRequestStartTime"
             Type="datepicker"
             [EditMode]="EditMode"
@@ -428,15 +437,6 @@ import { AIPromptRunEntity } from '@memberjunction/core-entities';
             FieldName="TotalFailoverDuration"
             Type="numerictextbox"
             [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="OriginalModelID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
