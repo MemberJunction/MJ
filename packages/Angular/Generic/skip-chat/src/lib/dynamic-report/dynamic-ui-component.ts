@@ -992,18 +992,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
                 });
                 markdown += '\n';
             }
-        }
-        
-        if (dataReq.hybridStrategy) {
-            markdown += `### Hybrid Strategy\n\n${dataReq.hybridStrategy.description}\n\n`;
-            if (dataReq.hybridStrategy.performanceNotes) {
-                markdown += `**Performance Notes:** ${dataReq.hybridStrategy.performanceNotes}\n\n`;
-            }
-        }
-        
-        if (dataReq.securityNotes) {
-            markdown += `### Security Considerations\n\n${dataReq.securityNotes}\n`;
-        }
+        } 
         
         const html = marked.parse(markdown);
         return this.sanitizer.sanitize(1, html);
