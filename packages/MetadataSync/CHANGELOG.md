@@ -1,5 +1,43 @@
 # @memberjunction/metadata-sync
 
+## 2.67.0
+
+### Patch Changes
+
+- Updated dependencies [1fbfc26]
+  - @memberjunction/sqlserver-dataprovider@2.67.0
+  - @memberjunction/core-entities-server@2.67.0
+  - @memberjunction/graphql-dataprovider@2.67.0
+  - @memberjunction/core@2.67.0
+  - @memberjunction/core-entities@2.67.0
+  - @memberjunction/global@2.67.0
+
+## 2.66.0
+
+### Patch Changes
+
+- Updated dependencies [7e22e3e]
+  - @memberjunction/core-entities-server@2.66.0
+  - @memberjunction/graphql-dataprovider@2.66.0
+  - @memberjunction/sqlserver-dataprovider@2.66.0
+  - @memberjunction/core@2.66.0
+  - @memberjunction/core-entities@2.66.0
+  - @memberjunction/global@2.66.0
+
+## 2.65.0
+
+### Patch Changes
+
+- 619488f: Pattern filtering for sql logging
+- Updated dependencies [619488f]
+- Updated dependencies [b029c5d]
+  - @memberjunction/global@2.65.0
+  - @memberjunction/sqlserver-dataprovider@2.65.0
+  - @memberjunction/core-entities@2.65.0
+  - @memberjunction/core-entities-server@2.65.0
+  - @memberjunction/graphql-dataprovider@2.65.0
+  - @memberjunction/core@2.65.0
+
 ## 2.64.0
 
 ### Patch Changes

@@ -88,6 +88,20 @@ export interface SyncConfig {
     outputDirectory?: string;
     /** Whether to format SQL as migration-ready files with Flyway schema placeholders */
     formatAsMigration?: boolean;
+    /**
+     * Array of patterns to filter SQL statements.
+     * Supports both regex strings and simple wildcard patterns:
+     * - Regex: "/spCreate.*Run/i" (must start with "/" and optionally end with flags)
+     * - Simple: "*spCreateAIPromptRun*" (uses * as wildcard, case-insensitive by default)
+     * Examples: ["*AIPrompt*", "/^EXEC sp_/i", "*EntityFieldValue*"]
+     */
+    filterPatterns?: string[];
+    /**
+     * Determines how filterPatterns are applied:
+     * - 'exclude': If ANY pattern matches, the SQL is NOT logged (default)
+     * - 'include': If ANY pattern matches, the SQL IS logged
+     */
+    filterType?: 'exclude' | 'include';
   };
   /** Watch command configuration */
   watch?: {

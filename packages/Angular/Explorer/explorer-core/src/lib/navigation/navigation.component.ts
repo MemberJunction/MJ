@@ -16,6 +16,7 @@ import { MJTabStripComponent, TabClosedEvent, TabContextMenuEvent, TabEvent } fr
 import { TemplateEngineBase } from '@memberjunction/templates-base-types';
 import { CommunicationEngineBase } from '@memberjunction/communication-types';
 import { EntityCommunicationsEngineClient } from '@memberjunction/entity-communications-client';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 export interface Tab {
   id?: string;
@@ -850,6 +851,12 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       wsItem.Sequence = index;
       wsItem.Configuration = JSON.stringify(tab.data.Configuration);// JSON.stringify({ Entity: tab.data.Entity });
       const result = await wsItem.Save();
+      if (!result) {
+        // do a console error and display a simple notification
+        LogError(`Error saving workspace item ${wsItem.Name} to the database. ${wsItem.LatestResult.Message}`);
+        MJNotificationService.Instance.CreateSimpleNotification(`Error saving workspace item ${wsItem.Name} to the database. ${wsItem.LatestResult.Message}`, 'error', 5000);
+        return false;
+      }
       tab.id = wsItem.ID;
       return result;
     }

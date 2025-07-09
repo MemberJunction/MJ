@@ -1,5 +1,50 @@
 # Change Log - @memberjunction/ai-vector-dupe
 
+## 2.67.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.67.0
+- @memberjunction/aiengine@2.67.0
+- @memberjunction/ai-vectors-pinecone@2.67.0
+- @memberjunction/ai-vectors@2.67.0
+- @memberjunction/ai-vectordb@2.67.0
+- @memberjunction/ai-vector-sync@2.67.0
+- @memberjunction/core@2.67.0
+- @memberjunction/core-entities@2.67.0
+- @memberjunction/global@2.67.0
+
+## 2.66.0
+
+### Patch Changes
+
+- @memberjunction/aiengine@2.66.0
+- @memberjunction/ai-vectors-pinecone@2.66.0
+- @memberjunction/ai-vectors@2.66.0
+- @memberjunction/ai-vector-sync@2.66.0
+- @memberjunction/ai@2.66.0
+- @memberjunction/ai-vectordb@2.66.0
+- @memberjunction/core@2.66.0
+- @memberjunction/core-entities@2.66.0
+- @memberjunction/global@2.66.0
+
+## 2.65.0
+
+### Patch Changes
+
+- Updated dependencies [1d034b7]
+- Updated dependencies [619488f]
+- Updated dependencies [b029c5d]
+  - @memberjunction/ai@2.65.0
+  - @memberjunction/global@2.65.0
+  - @memberjunction/core-entities@2.65.0
+  - @memberjunction/aiengine@2.65.0
+  - @memberjunction/ai-vectors@2.65.0
+  - @memberjunction/ai-vector-sync@2.65.0
+  - @memberjunction/ai-vectors-pinecone@2.65.0
+  - @memberjunction/ai-vectordb@2.65.0
+  - @memberjunction/core@2.65.0
+
 ## 2.64.0
 
 ### Patch Changes

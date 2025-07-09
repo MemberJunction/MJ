@@ -113,7 +113,9 @@ export class PushService {
             formatAsMigration: this.syncConfig.sqlLogging?.formatAsMigration || false,
             description: 'MetadataSync push operation',
             statementTypes: "mutations",
-            prettyPrint: true,            
+            prettyPrint: true,
+            filterPatterns: this.syncConfig.sqlLogging?.filterPatterns,
+            filterType: this.syncConfig.sqlLogging?.filterType,
           });
           
           if (options.verbose) {

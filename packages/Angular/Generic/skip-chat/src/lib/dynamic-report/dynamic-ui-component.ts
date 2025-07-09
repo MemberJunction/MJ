@@ -127,6 +127,7 @@ import { marked } from 'marked';
                               <div class="details-content code-content">
                                 <mj-code-editor
                                   [value]="getComponentCode(option)"
+                                  [language]="'javascript'"
                                   [autoFocus]="false"
                                   [indentWithTab]="true"
                                   [readonly]="true"
@@ -325,6 +326,7 @@ import { marked } from 'marked';
                     <ng-template kendoTabContent>
                       <div class="details-content code-content">
                         <mj-code-editor
+                          [language]="'javascript'"
                           [value]="getComponentCode(reportOptions[0])"
                           [autoFocus]="false"
                           [indentWithTab]="true"

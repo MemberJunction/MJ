@@ -44,7 +44,7 @@
           <span class="label">Duration</span>
           <span class="value">{{ calculateDuration(record.StartedAt, record.CompletedAt) }}</span>
         </div>
-        <div class="stat" *ngIf="record.Success !== null">
+        <div class="stat" *ngIf="record.Success !== null && record.CompletedAt !== null">
           <span class="label">Result</span>
           <span class="value" [class.success]="record.Success" [class.error]="!record.Success">
             {{ record.Success ? 'Success' : 'Failed' }}

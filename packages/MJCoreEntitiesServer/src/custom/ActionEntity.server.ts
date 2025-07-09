@@ -269,6 +269,7 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
     protected async PreparePromptData(): Promise<Record<string, any>> {
         const data: Record<string, any> = {
             userPrompt: this.UserPrompt,
+            entityInfo: this.PrepareEntityInfo(),
             availableLibraries: this.GenerateLibrariesContext(),
             IsChildAction: !!this.ParentID  // Template variable for conditional sections
         };
@@ -279,6 +280,7 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
             if (parentAction) {
                 // Create the ChildActionInfo template variable with all parent details
                 data.ChildActionInfo = `
+**Parent Action ID:** ${parentAction.ID.trim().toLowerCase() /*just to make sure casing doesn't mess up the string we pass in*/}
 **Parent Action Name:** ${parentAction.Name}
 **Parent Description:** ${parentAction.Description || 'No description provided'}
 
@@ -298,12 +300,43 @@ ${JSON.stringify(parentAction.Params.map(p => {
                 // Also include the parent action object for template access
                 data.parentAction = {
                     Name: parentAction.Name,
-                    Description: parentAction.Description
+                    Description: parentAction.Description,
+                    Category: parentAction.Category
                 };
+                data.actionParams = parentAction.Params.map(p => {
+                    return {
+                        Name: p.Name,
+                        Type: p.Type,
+                        ValueType: p.ValueType,
+                        IsArray: p.IsArray,
+                        IsRequired: p.IsRequired,
+                        DefaultValue: p.DefaultValue,
+                        Description: p.Description
+                    };
+                });
             }
         }
 
         return data;
+    }
+
+    /**
+     * Returns a simplified object with basic entity info: Name, Description and field list.
+     */
+    protected PrepareEntityInfo(): any {
+        const md = new Metadata();
+        const entities = md.Entities.map(entity => ({
+            Name: entity.Name,
+            Description: entity.Description,
+            Fields: entity.Fields.map(field => ({
+                Name: field.Name,
+                NeedsQuotes: field.NeedsQuotes,
+                ReadOnly: field.ReadOnly,
+                AllowsNull: field.AllowsNull
+            }))
+        }));
+
+        return entities;
     }
 
     /**
@@ -514,19 +547,29 @@ ${JSON.stringify(parentAction.Params.map(p => {
     /**
      * Generates the libraries context for the prompt
      */
-    protected GenerateLibrariesContext(): string {
+    protected GenerateLibrariesContext(): 
+        {
+            Name: string;
+            Description: string;
+            Items: {
+                Name: string;
+                Content: string;
+            }[];
+        }[] 
+    {
         return DocumentationEngine.Instance.Libraries.map((library: LibraryEntityExtended) => {
-            return library.Items.map((item: LibraryItemEntityExtended) => {
-                return JSON.stringify({
-                    LibraryName: library.Name,
-                    ItemName: item.Name,
-                    Content: item.HTMLContent
-                });
-            }).join('\n');
-        }).join('\n');
+            return {
+                Name: library.Name,
+                Description: library.Description,
+                Items: library.Items.map((item: LibraryItemEntityExtended) => {
+                    return {
+                        Name: item.Name,
+                        Content: item.HTMLContent
+                    };
+                })
+            };
+        });
     }
-
-
 }
 
 export function LoadActionEntityServer() {

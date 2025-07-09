@@ -1,5 +1,56 @@
 # @memberjunction/core-entities-server
 
+## 2.67.0
+
+### Patch Changes
+
+- Updated dependencies [1fbfc26]
+  - @memberjunction/sqlserver-dataprovider@2.67.0
+  - @memberjunction/ai-core-plus@2.67.0
+  - @memberjunction/aiengine@2.67.0
+  - @memberjunction/ai-prompts@2.67.0
+  - @memberjunction/ai-vector-dupe@2.67.0
+  - @memberjunction/core@2.67.0
+  - @memberjunction/core-entities@2.67.0
+  - @memberjunction/global@2.67.0
+  - @memberjunction/skip-types@2.67.0
+
+## 2.66.0
+
+### Minor Changes
+
+- 7e22e3e: Child Generated Actions - completed implementation!
+
+### Patch Changes
+
+- Updated dependencies [22c1340]
+  - @memberjunction/skip-types@2.66.0
+  - @memberjunction/ai-core-plus@2.66.0
+  - @memberjunction/aiengine@2.66.0
+  - @memberjunction/sqlserver-dataprovider@2.66.0
+  - @memberjunction/ai-prompts@2.66.0
+  - @memberjunction/ai-vector-dupe@2.66.0
+  - @memberjunction/core@2.66.0
+  - @memberjunction/core-entities@2.66.0
+  - @memberjunction/global@2.66.0
+
+## 2.65.0
+
+### Patch Changes
+
+- Updated dependencies [1d034b7]
+- Updated dependencies [619488f]
+- Updated dependencies [b029c5d]
+  - @memberjunction/ai-core-plus@2.65.0
+  - @memberjunction/global@2.65.0
+  - @memberjunction/sqlserver-dataprovider@2.65.0
+  - @memberjunction/core-entities@2.65.0
+  - @memberjunction/aiengine@2.65.0
+  - @memberjunction/ai-prompts@2.65.0
+  - @memberjunction/ai-vector-dupe@2.65.0
+  - @memberjunction/core@2.65.0
+  - @memberjunction/skip-types@2.65.0
+
 ## 2.64.0
 
 ### Minor Changes

@@ -611,16 +611,23 @@ export class BaseAgent {
         await atInstance.InjectPayload<P>(payload, promptParams);
 
         // Setup child prompt parameters
+        const childPromptParams: AIPromptParams = {
+            prompt: childPrompt,
+            data: promptTemplateData,
+            contextUser: params.contextUser,
+            conversationMessages: params.conversationMessages,
+            templateMessageRole: 'user',
+            verbose: params.verbose
+        };
+        
+        // Pass through API keys to child prompt if provided
+        if (params.apiKeys && params.apiKeys.length > 0) {
+            childPromptParams.apiKeys = params.apiKeys;
+        }
+        
         promptParams.childPrompts = [
             new ChildPromptParam(
-                {
-                    prompt: childPrompt,
-                    data: promptTemplateData,
-                    contextUser: params.contextUser,
-                    conversationMessages: params.conversationMessages,
-                    templateMessageRole: 'user',
-                    verbose: params.verbose
-                } as AIPromptParams,
+                childPromptParams,
                 agentType.AgentPromptPlaceholder
             )
         ];
@@ -637,6 +644,12 @@ export class BaseAgent {
         if (params.override) {
             promptParams.override = params.override;
             this.logStatus(`🎯 Using runtime override: ${params.override.modelId || 'model'} ${params.override.vendorId ? `from vendor ${params.override.vendorId}` : ''}`, true, params);
+        }
+
+        // Pass through API keys if provided
+        if (params.apiKeys && params.apiKeys.length > 0) {
+            promptParams.apiKeys = params.apiKeys;
+            this.logStatus(`🔑 Using ${params.apiKeys.length} API key(s) provided at runtime`, true, params);
         }
 
         return promptParams;
@@ -757,7 +770,7 @@ export class BaseAgent {
                 .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder);
             
             // Load available actions (placeholder for now - would integrate with Actions framework)
-            const agentActions = engine.AgentActions.filter(aa => aa.AgentID === agent.ID);
+            const agentActions = engine.AgentActions.filter(aa => aa.AgentID === agent.ID && aa.Status === 'Active');
             const actions: ActionEntityExtended[] = ActionEngineServer.Instance.Actions.filter(a => agentActions.some(aa => aa.ActionID === a.ID));
             const activeActions = actions.filter(a => a.Status === 'Active');
 
@@ -914,7 +927,10 @@ export class BaseAgent {
                 parentDepth: this._depth,
                 parentRun: this._agentRun,
                 payload: payload, // pass the payload if provided
-                data: subAgentRequest.templateParameters,
+                data: {
+                        ...subAgentRequest.templateParameters,
+                        ...params.data, 
+                      }, // merge any template parameters, but override with explicitly provided data so that hallucinated input params don't override data provided by caller
                 context: params.context, // pass along our context to sub-agents so they can keep passing it down and pass to actions as well
                 verbose: params.verbose // pass verbose flag to sub-agent
             });
@@ -1562,7 +1578,12 @@ export class BaseAgent {
             let finalPayload = payload; // Start with current payload
             let currentStepPayloadChangeResult = undefined;
             if (nextStep.payloadChangeRequest) {
-                // First, we apply the changes to the payload and get a changeResult
+                // Parse the allowed paths if configured
+                const allowedPaths = params.agent.PayloadSelfWritePaths 
+                    ? JSON.parse(params.agent.PayloadSelfWritePaths) 
+                    : undefined;
+
+                // Apply the changes to the payload with operation control
                 const changeResult = this._payloadManager.applyAgentChangeRequest(
                     payload,
                     nextStep.payloadChangeRequest,
@@ -1571,7 +1592,8 @@ export class BaseAgent {
                         logChanges: true,
                         agentName: params.agent.Name,
                         analyzeChanges: true,
-                        generateDiff: true
+                        generateDiff: true,
+                        allowedPaths: allowedPaths
                     }
                 );
                 
@@ -1583,35 +1605,15 @@ export class BaseAgent {
                 // This will be merged into outputData later
                 currentStepPayloadChangeResult = this.buildPayloadChangeResultSummary(changeResult);
 
-                // now before we set finalPayload let's use the mergeUpstreamPayload function
-                // because just because and agent is running its own prompt doesn't mean
-                // we should allow it to write back EVERYTHING.
-                if (params.agent.PayloadSelfWritePaths) {
-                    const upstreamPaths = JSON.parse(params.agent.PayloadSelfWritePaths);
-
-                    const mergedPayload = this._payloadManager.mergeUpstreamPayload(
-                        `Self: ${params.agent.Name}`,
-                        payload, // payload before the prompt
-                        changeResult.result, // payload after the prompt
-                        upstreamPaths
-                    );
-                    finalPayload = mergedPayload;
-                }
-                else {
-                    // no upstream paths defined, so we can just use the result
-                    finalPayload = changeResult.result;
-                }
+                // Set the final payload - the changeResult already respects the allowed paths
+                finalPayload = changeResult.result;
             }
              
-            // Prepare output data
+            // Prepare output data, these are simple elements of the state that are not typically
+            // included in payload but are helpful. We do not include the prompt result here
+            // or the payload as those are stored already(prompt result via TargetLogID -> AIPromptRunEntity)
+            // and payload via the specialied PayloadAtStart/End fields on the step entity.
             const outputData = {
-                promptResult: {
-                    success: promptResult.success,
-                    llmResponse: promptResult.rawResult,
-                    modelUsed: promptResult.modelInfo?.modelName,
-                    tokensUsed: promptResult?.promptRun?.TokensUsed,
-                    totalCost: promptResult?.promptRun?.TotalCost
-                },
                 nextStep: {
                     decision: nextStep.step,
                     reasoning: this.getNextStepReasoning(nextStep),
@@ -1852,14 +1854,14 @@ export class BaseAgent {
             // Prepare output data
             const outputData = {
                 subAgentResult: {
+                    // we have a link to the AIAgentRunEntity via the TargetLogID above
+                    // but we throw in just a few things here for convenience/summary that are
+                    // light - we don't want to store the payload again for example
+                    // that is stored in PayloadAtEnd on the step and also in PayloadAtEnd in the sub-agent's run
                     success: subAgentResult.success,
                     finalStep: subAgentResult.agentRun?.FinalStep,
-                    payload: subAgentResult.payload,
                     errorMessage: subAgentResult.agentRun?.ErrorMessage,
-                    agentRunId: subAgentResult.agentRun?.ID,
                     stepCount: subAgentResult.agentRun?.Steps?.length || 0,
-                    downstreamPaths,
-                    upstreamPaths
                 },
                 shouldTerminate: shouldTerminate,
                 nextStep: shouldTerminate ? 'success' : 'retry',
@@ -2020,7 +2022,7 @@ export class BaseAgent {
                 // Override step number to ensure unique values for parallel actions
                 stepEntity.StepNumber = baseStepNumber + numActionsProcessed++;
                 
-                let actionResult;
+                let actionResult: ActionResult;
                 try {
                     // Execute the action
                     actionResult = await this.ExecuteSingleAction(params, aa, actionEntity, params.contextUser);
@@ -2068,9 +2070,8 @@ export class BaseAgent {
                 
                 return {
                     actionName: result.action.name,
-                    actionId: result.actionEntity?.ID,
-                    params: result.result?.Params || {},
                     success: result.success,
+                    params: result.result?.Params.filter(p => p.Type ==='Both' || p.Type ==='Output'), // only emit the output params which are type of output or both. This reduces tokens going back to LLM
                     resultCode: actionResult?.Result?.ResultCode || (result.success ? 'SUCCESS' : 'ERROR'),
                     message: result.success ? actionResult?.Message || 'Action completed' : result.error
                 };
@@ -2080,9 +2081,7 @@ export class BaseAgent {
             const failedActions = actionSummaries.filter(a => !a.success);
             
             // Add user message with the results
-            const resultsMessage = failedActions.length > 0
-                ? `Action results (${failedActions.length} failed):\n${JSON.stringify(actionSummaries, null, 2)}`
-                : `Action results (all succeeded):\n${JSON.stringify(actionSummaries, null, 2)}`;
+            const resultsMessage = (failedActions.length > 0 ? `${failedActions.length} of ${actionSummaries.length} failed:` : `Action results:`) + `\n${JSON.stringify(actionSummaries, null, 2)}`;
                 
             params.conversationMessages.push({
                 role: 'user',
@@ -2107,7 +2106,7 @@ export class BaseAgent {
             return {
                 terminate: false,
                 step: 'Retry',
-                errorMessage: e && e.message ? e.message : e ? e : 'Unknown error execution actions',
+                errorMessage: e && e.message ? e.message : e ? e : 'Unknown error executing actions',
                 retryReason: 'Error while processing actions, retry'
             };
         }

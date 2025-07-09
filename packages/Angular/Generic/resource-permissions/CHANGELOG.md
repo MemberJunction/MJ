@@ -1,5 +1,43 @@
 # Change Log - @memberjunction/ng-resource-permissions
 
+## 2.67.0
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@2.67.0
+- @memberjunction/ng-container-directives@2.67.0
+- @memberjunction/ng-generic-dialog@2.67.0
+- @memberjunction/ng-notifications@2.67.0
+- @memberjunction/core@2.67.0
+- @memberjunction/core-entities@2.67.0
+- @memberjunction/global@2.67.0
+
+## 2.66.0
+
+### Patch Changes
+
+- @memberjunction/ng-notifications@2.66.0
+- @memberjunction/ng-base-types@2.66.0
+- @memberjunction/ng-container-directives@2.66.0
+- @memberjunction/ng-generic-dialog@2.66.0
+- @memberjunction/core@2.66.0
+- @memberjunction/core-entities@2.66.0
+- @memberjunction/global@2.66.0
+
+## 2.65.0
+
+### Patch Changes
+
+- Updated dependencies [619488f]
+- Updated dependencies [b029c5d]
+  - @memberjunction/global@2.65.0
+  - @memberjunction/core-entities@2.65.0
+  - @memberjunction/ng-base-types@2.65.0
+  - @memberjunction/ng-container-directives@2.65.0
+  - @memberjunction/ng-notifications@2.65.0
+  - @memberjunction/core@2.65.0
+  - @memberjunction/ng-generic-dialog@2.65.0
+
 ## 2.64.0
 
 ### Patch Changes

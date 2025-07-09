@@ -1,5 +1,68 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.67.0
+
+### Patch Changes
+
+- Updated dependencies [1fbfc26]
+  - @memberjunction/sqlserver-dataprovider@2.67.0
+  - @memberjunction/core-entities-server@2.67.0
+  - @memberjunction/ai@2.67.0
+  - @memberjunction/aiengine@2.67.0
+  - @memberjunction/ai-anthropic@2.67.0
+  - @memberjunction/ai-groq@2.67.0
+  - @memberjunction/ai-mistral@2.67.0
+  - @memberjunction/ai-openai@2.67.0
+  - @memberjunction/actions@2.67.0
+  - @memberjunction/core@2.67.0
+  - @memberjunction/core-entities@2.67.0
+  - @memberjunction/global@2.67.0
+
+## 2.66.0
+
+### Minor Changes
+
+- 7e22e3e: Child Generated Actions - completed implementation!
+
+### Patch Changes
+
+- Updated dependencies [7e22e3e]
+  - @memberjunction/actions@2.66.0
+  - @memberjunction/core-entities-server@2.66.0
+  - @memberjunction/aiengine@2.66.0
+  - @memberjunction/sqlserver-dataprovider@2.66.0
+  - @memberjunction/ai@2.66.0
+  - @memberjunction/ai-anthropic@2.66.0
+  - @memberjunction/ai-groq@2.66.0
+  - @memberjunction/ai-mistral@2.66.0
+  - @memberjunction/ai-openai@2.66.0
+  - @memberjunction/core@2.66.0
+  - @memberjunction/core-entities@2.66.0
+  - @memberjunction/global@2.66.0
+
+## 2.65.0
+
+### Minor Changes
+
+- b029c5d: Added fields to AIAgent table
+
+### Patch Changes
+
+- Updated dependencies [1d034b7]
+- Updated dependencies [619488f]
+- Updated dependencies [b029c5d]
+  - @memberjunction/ai@2.65.0
+  - @memberjunction/global@2.65.0
+  - @memberjunction/sqlserver-dataprovider@2.65.0
+  - @memberjunction/core-entities@2.65.0
+  - @memberjunction/aiengine@2.65.0
+  - @memberjunction/ai-anthropic@2.65.0
+  - @memberjunction/ai-groq@2.65.0
+  - @memberjunction/ai-mistral@2.65.0
+  - @memberjunction/ai-openai@2.65.0
+  - @memberjunction/actions@2.65.0
+  - @memberjunction/core@2.65.0
+
 ## 2.64.0
 
 ### Patch Changes
