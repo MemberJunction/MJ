@@ -2300,7 +2300,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   /**
    * Process a SkipComponentRootSpec and register all components recursively
    */
-  private async processSkipComponentSpec(spec: any, rootName?: string): Promise<{
+  private async processSkipComponentSpec(spec: any): Promise<{
     success: boolean;
     rootComponentName: string;
     registeredComponents: string[];
@@ -2311,7 +2311,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     
     try {
       // Register root component (plain function, auto-wrapped)
-      const rootComponentName = rootName || spec.componentName;
+      const rootComponentName = spec.componentName;
       const success = await compileAndRegisterComponent(
         rootComponentName,
         spec.componentCode,
@@ -2862,7 +2862,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
           counter++;
         }
         
-        const result = await this.processSkipComponentSpec(spec, componentName);
+        const result = await this.processSkipComponentSpec(spec);
         
         if (result.success) {
           // Add to dropdown
