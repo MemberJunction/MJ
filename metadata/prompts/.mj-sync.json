@@ -13,6 +13,7 @@
     "newFileName": ".prompts.json",
     "appendRecordsToExistingFile": true,
     "updateExistingRecords": true,
+    "ignoreNullFields": true,
     "preserveFields": [
       "TemplateText",
       "OutputExample"
