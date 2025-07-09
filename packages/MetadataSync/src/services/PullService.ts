@@ -588,8 +588,10 @@ export class PullService {
    * Gets ALL properties from a BaseEntity object, including both:
    * 1. Database fields (from record.GetAll())
    * 2. Virtual properties (getters defined in subclasses like TemplateText)
+   * @param record The BaseEntity object to get properties from
+   * @param fieldOverrides Optional field value overrides (e.g., for @parent:ID syntax)
    */
-  private getAllEntityProperties(record: BaseEntity): Record<string, any> {
+  private getAllEntityProperties(record: BaseEntity, fieldOverrides?: Record<string, any>): Record<string, any> {
     const allProperties: Record<string, any> = {};
     
     // 1. Get database fields using GetAll()
@@ -598,12 +600,22 @@ export class PullService {
       Object.assign(allProperties, dbFields);
     }
     
-    // 2. Discover virtual properties by walking the prototype chain
+    // 2. Apply field overrides (e.g., for @parent:ID replacement in related entities)
+    if (fieldOverrides) {
+      Object.assign(allProperties, fieldOverrides);
+    }
+    
+    // 3. Discover virtual properties by walking the prototype chain
     const virtualProperties = this.discoverVirtualProperties(record);
     
-    // 3. Get values for virtual properties using bracket notation
+    // 4. Get values for virtual properties using bracket notation
     for (const propertyName of virtualProperties) {
       try {
+        // Skip if this property is overridden
+        if (fieldOverrides && propertyName in fieldOverrides) {
+          continue;
+        }
+        
         // Use bracket notation to access the getter
         const value = (record as any)[propertyName];
         
@@ -709,7 +721,8 @@ export class PullService {
     isNewRecord: boolean = true,
     existingRecordData?: RecordData,
     currentDepth: number = 0,
-    ancestryPath: Set<string> = new Set()
+    ancestryPath: Set<string> = new Set(),
+    fieldOverrides?: Record<string, any>
   ): Promise<RecordData> {
     
     // Build record data
@@ -717,7 +730,7 @@ export class PullService {
     const relatedEntities: Record<string, RecordData[]> = {};
     
     // Get ALL properties: both database fields AND virtual properties
-    const allProperties = this.getAllEntityProperties(record);
+    const allProperties = this.getAllEntityProperties(record, fieldOverrides);
     
     // Get entity metadata to check for virtual fields
     const entityInfo = this.syncEngine.getEntityInfo(entityConfig.entity);
@@ -1209,11 +1222,10 @@ export class PullService {
         if (typeof dbRecord.GetAll === 'function') {
           const data = dbRecord.GetAll();
           if (data[relationConfig.foreignKey] !== undefined) {
-            // Create a temporary modified version for processing
-            const modifiedRecord = { ...data };
-            modifiedRecord[relationConfig.foreignKey] = '@parent:ID';
+            // Create field override with @parent:ID replacement
+            const fieldOverrides = { [relationConfig.foreignKey]: '@parent:ID' };
             
-            // Process the modified record data with existing data for change detection
+            // Process the record data with field override for @parent:ID syntax
             const recordData = await this.processRecordData(
               dbRecord,
               relatedRecordPrimaryKey,
@@ -1223,32 +1235,34 @@ export class PullService {
               false, // isNewRecord = false for existing records
               existingRelatedEntity, // Pass existing data for change detection
               currentDepth + 1,
-              ancestryPath
+              ancestryPath,
+              fieldOverrides // Pass the field override for @parent:ID
             );
             
             relatedRecords.push(recordData);
           }
         } else {
           // Handle plain object case
-          const modifiedRecord = { ...dbRecord };
-          if (modifiedRecord[relationConfig.foreignKey] !== undefined) {
-            modifiedRecord[relationConfig.foreignKey] = '@parent:ID';
+          if ((dbRecord as any)[relationConfig.foreignKey] !== undefined) {
+            // Create field override with @parent:ID replacement
+            const fieldOverrides = { [relationConfig.foreignKey]: '@parent:ID' };
+            
+            // Process the related record data with field override for @parent:ID syntax
+            const recordData = await this.processRecordData(
+              dbRecord,
+              relatedRecordPrimaryKey,
+              '', // targetDir not needed for related entities
+              relatedEntityConfig,
+              verbose,
+              false, // isNewRecord = false for existing records
+              existingRelatedEntity, // Pass existing data for change detection
+              currentDepth + 1,
+              ancestryPath,
+              fieldOverrides // Pass the field override for @parent:ID
+            );
+            
+            relatedRecords.push(recordData);
           }
-          
-          // Process the related record data with existing data for change detection
-          const recordData = await this.processRecordData(
-            dbRecord,
-            relatedRecordPrimaryKey,
-            '', // targetDir not needed for related entities
-            relatedEntityConfig,
-            verbose,
-            false, // isNewRecord = false for existing records
-            existingRelatedEntity, // Pass existing data for change detection
-            currentDepth + 1,
-            ancestryPath
-          );
-          
-          relatedRecords.push(recordData);
         }
 
         processedIds.add(existingPrimaryKey);
@@ -1277,11 +1291,10 @@ export class PullService {
         if (typeof relatedRecord.GetAll === 'function') {
           const data = relatedRecord.GetAll();
           if (data[relationConfig.foreignKey] !== undefined) {
-            // Create a temporary modified version for processing
-            const modifiedRecord = { ...data };
-            modifiedRecord[relationConfig.foreignKey] = '@parent:ID';
+            // Create field override with @parent:ID replacement
+            const fieldOverrides = { [relationConfig.foreignKey]: '@parent:ID' };
             
-            // Process the modified record data (no existing data for new records)
+            // Process the record data with field override for @parent:ID syntax
             const recordData = await this.processRecordData(
               relatedRecord,
               relatedRecordPrimaryKey,
@@ -1291,32 +1304,34 @@ export class PullService {
               true, // isNewRecord = true for new records
               undefined, // No existing data for new records
               currentDepth + 1,
-              ancestryPath
+              ancestryPath,
+              fieldOverrides // Pass the field override for @parent:ID
             );
             
             relatedRecords.push(recordData);
           }
         } else {
           // Handle plain object case
-          const modifiedRecord = { ...relatedRecord };
-          if (modifiedRecord[relationConfig.foreignKey] !== undefined) {
-            modifiedRecord[relationConfig.foreignKey] = '@parent:ID';
+          if ((relatedRecord as any)[relationConfig.foreignKey] !== undefined) {
+            // Create field override with @parent:ID replacement
+            const fieldOverrides = { [relationConfig.foreignKey]: '@parent:ID' };
+            
+            // Process the related record data with field override for @parent:ID syntax
+            const recordData = await this.processRecordData(
+              relatedRecord,
+              relatedRecordPrimaryKey,
+              '', // targetDir not needed for related entities
+              relatedEntityConfig,
+              verbose,
+              true, // isNewRecord = true for new records
+              undefined, // No existing data for new records
+              currentDepth + 1,
+              ancestryPath,
+              fieldOverrides // Pass the field override for @parent:ID
+            );
+            
+            relatedRecords.push(recordData);
           }
-          
-          // Process the related record data (no existing data for new records)
-          const recordData = await this.processRecordData(
-            relatedRecord,
-            relatedRecordPrimaryKey,
-            '', // targetDir not needed for related entities
-            relatedEntityConfig,
-            verbose,
-            true, // isNewRecord = true for new records
-            undefined, // No existing data for new records
-            currentDepth + 1,
-            ancestryPath
-          );
-          
-          relatedRecords.push(recordData);
         }
         
         processedIds.add(relatedPrimaryKey);

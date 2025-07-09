@@ -14,6 +14,7 @@
     "appendRecordsToExistingFile": true,
     "updateExistingRecords": true,
     "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
     "preserveFields": [
       "TemplateText",
       "OutputExample"
