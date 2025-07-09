@@ -17,6 +17,7 @@ export class DeepDiffDialogComponent {
   @Input() expandAll: boolean = false;
   @Input() maxDepth: number = 10;
   @Input() maxStringLength: number = 100;
+  @Input() treatNullAsUndefined: boolean = false;
   @Input() visible: boolean = false;
   @Input() width: string = '80%';
   @Input() height: string = '80vh';

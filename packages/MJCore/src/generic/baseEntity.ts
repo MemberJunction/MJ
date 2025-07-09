@@ -380,6 +380,18 @@ export class EntityField {
     }
 
     /**
+     * This property temporarily will set the active status assertions for this particular instance of EntityField.
+     * It is temporary because other behaviors in the class instance could reset this value for example calling
+     * ResetOldValue() or another caller setting this property to another value.
+     */
+    public get ActiveStatusAssertions(): boolean {
+        return this._assertActiveStatusRequired;
+    }
+    public set ActiveStatusAssertions(value: boolean) {
+        this._assertActiveStatusRequired = value;
+    }
+
+    /**
      * Returns the old value of the field. This is the value that was set when the field was last loaded from the database.
      */
     public get OldValue(): any {
@@ -782,8 +794,9 @@ export abstract class BaseEntity<T = unknown> {
      * @param object
      * @param ignoreNonExistentFields - if set to true, fields that don't exist on the entity object will be ignored, if false, an error will be thrown if a field doesn't exist
      * @param replaceOldValues - if set to true, the old values of the fields will be reset to the values provided in the object parameter, if false, they will be left alone
+     * @param ignoreActiveStatusAssertions - if set to true, the active status assertions for the fields will be ignored, if false, an error will be thrown if a field is not active. Defaults to false.
      */
-    public SetMany(object: any, ignoreNonExistentFields: boolean = false, replaceOldValues: boolean = false) {
+    public SetMany(object: any, ignoreNonExistentFields: boolean = false, replaceOldValues: boolean = false, ignoreActiveStatusAssertions: boolean = false) {
         if (!object)
             throw new Error('calling BaseEntity.SetMany(), object cannot be null or undefined');
 
@@ -791,9 +804,16 @@ export abstract class BaseEntity<T = unknown> {
             const field = this.GetFieldByName(key);
             if (field) {
                 // check to see if key matches a field name, if so, set it
+                const priorActiveStatusAssertions = field.ActiveStatusAssertions; // save the current active status assertions
+                if (ignoreActiveStatusAssertions) {
+                    field.ActiveStatusAssertions = false; // disable active status assertions for this field
+                }
                 this.Set(key, object[key]);
                 if (replaceOldValues) {
                     field.ResetOldValue();
+                }
+                if (ignoreActiveStatusAssertions) {
+                    field.ActiveStatusAssertions = priorActiveStatusAssertions; // restore the active status assertions
                 }
             }
             else {
@@ -801,9 +821,16 @@ export abstract class BaseEntity<T = unknown> {
                 // because some objects passed in will use the code name
                 const field = this.Fields.find(f => f.CodeName.trim().toLowerCase() == key.trim().toLowerCase());
                 if (field) {
+                    const priorActiveStatusAssertions = field.ActiveStatusAssertions; // save the current active status assertions
+                    if (ignoreActiveStatusAssertions) {
+                        field.ActiveStatusAssertions = false; // disable active status assertions for this field
+                    }
                     this.Set(field.Name, object[key]);
                     if (replaceOldValues) {
                         field.ResetOldValue();
+                    }
+                    if (ignoreActiveStatusAssertions) {
+                        field.ActiveStatusAssertions = priorActiveStatusAssertions; // restore the active status assertions
                     }
                 }
                 else {
@@ -1172,7 +1199,7 @@ export abstract class BaseEntity<T = unknown> {
     private finalizeSave(data: any, saveSubType: BaseEntityEvent["saveSubType"]): boolean {
         if (data) {
             this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
-            this.SetMany(data, false, true); // set the new values from the data returned from the save, this will also reset the old values
+            this.SetMany(data, false, true, true); // set the new values from the data returned from the save, this will also reset the old values
             this._everSaved = true; // Mark as saved after successful save
             const result = this.LatestResult;
             if (result)
@@ -1313,7 +1340,7 @@ export abstract class BaseEntity<T = unknown> {
                 return false; // no data loaded, return false
             }
 
-            this.SetMany(data, false, true); // don't ignore non-existent fields, but DO replace old values
+            this.SetMany(data, false, true, true); // don't ignore non-existent fields, but DO replace old values
             if (EntityRelationshipsToLoad) {
                 for (let relationship of EntityRelationshipsToLoad) {
                     if (data[relationship]) {
@@ -1384,7 +1411,7 @@ export abstract class BaseEntity<T = unknown> {
      * @returns Promise<boolean> - Returns true if the load was successful
      */
     public async LoadFromData(data: any, _replaceOldValues: boolean = false): Promise<boolean> {
-        this.SetMany(data, true);
+        this.SetMany(data, true, _replaceOldValues, true); // ignore non-existent fields, but DO replace old values based on the provided param
         // now, check to see if we have the primary key set, if so, we should consider ourselves
         // loaded from the database and set the _recordLoaded flag to true along with the _everSaved flag
         if (this.PrimaryKeys && this.PrimaryKeys.length > 0) {
@@ -1626,7 +1653,7 @@ export abstract class BaseEntity<T = unknown> {
         if(schema){
             const parseResult = schema.safeParse(data);
             if(parseResult.success){
-                this.SetMany(parseResult.data);
+                this.SetMany(parseResult.data, false, false, true);
                 return true;
             }
             else{
@@ -1635,7 +1662,7 @@ export abstract class BaseEntity<T = unknown> {
             }
         }
         else{
-            this.SetMany(data);
+            this.SetMany(data, false, false, true);
             return true;
         }
     }

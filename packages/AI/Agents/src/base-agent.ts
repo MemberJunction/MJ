@@ -688,6 +688,44 @@ export class BaseAgent {
         this.logStatus(`🎯 Agent type '${agentType.Name}' determining next step`, true, params);
         const nextStep = await agentTypeInstance.DetermineNextStep<P>(promptResult);
         
+        // for next step, let's do a little quick validation here for sub-agent and actions to ensure requests are valid
+        if (nextStep.step === 'Sub-Agent') {
+            // check to make sure the current agent can execute the specified sub-agent
+            const name = nextStep.subAgent?.name;
+            const curAgentSubAgents = AIEngine.Instance.Agents.filter(a => a.ParentID === params.agent.ID && a.Status === 'Active');
+            if (!name || !curAgentSubAgents.some(a => a.Name.trim().toLowerCase() === name?.trim().toLowerCase())) {
+                this.logError(`Sub-agent '${name}' not found or not active for agent '${params.agent.Name}'`, {
+                    agent: params.agent,
+                    category: 'SubAgentExecution'
+                });
+                return {
+                    step: 'Retry',
+                    terminate: false, // this will kick it back to the prompt to run again
+                    errorMessage: `Sub-agent '${name}' not found or not active`
+                };
+            }
+        }
+        else if (nextStep.step === 'Actions') {
+            // check to make sure the current agent can execute the specified action
+            const curAgentActions = AIEngine.Instance.AgentActions.filter(aa => aa.AgentID === params.agent.ID && aa.Status === 'Active');
+            const missingActions = nextStep.actions?.filter(action => 
+                !curAgentActions.some(aa => aa.Action.trim().toLowerCase() === action.name.trim().toLowerCase())
+            );
+            // we should have zero missing actions, if we do, we need to log an error and return a retry step
+            if (missingActions && missingActions.length > 0) {
+                const missingActionNames = missingActions.map(a => a.name).join(', ');
+                this.logError(`Actions '${missingActionNames}' not found or not active for agent '${params.agent.Name}'`, {
+                    agent: params.agent,
+                    category: 'ActionExecution'
+                });
+                return {
+                    step: 'Retry',
+                    terminate: false, // this will kick it back to the prompt to run again
+                    errorMessage: `Actions '${missingActionNames}' not found or not active`
+                };
+            }
+        }
+
         this.logStatus(`📌 Next step determined: ${nextStep.step}${nextStep.terminate ? ' (terminating)' : ''}`, true, params);
 
         // Return the next step directly - execution handling is done in execute NextStep

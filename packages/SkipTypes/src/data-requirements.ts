@@ -8,9 +8,9 @@ import { DataContext } from "@memberjunction/data-context";
 export interface SkipComponentDataRequirements {
     /**
      * The primary data access mode for this component.
-     * - 'static': Data is pre-loaded and passed to the component during initialization
      * - 'dynamic': Component fetches data at runtime using MJ utilities
-     * - 'hybrid': Component uses both static and dynamic data access patterns
+     * - 'static': Static is deprecated, use dynamic. Data is pre-loaded and passed to the component during initialization
+     * - 'hybrid': Hybrid is deprecated, use dynamic. Uses both static and dynamic data access patterns
      */
     mode: 'static' | 'dynamic' | 'hybrid';
     
@@ -21,6 +21,7 @@ export interface SkipComponentDataRequirements {
      * - Reports with fixed datasets
      * - Components where users don't need entity-level permissions
      * - Scenarios requiring reduced database load
+     * @deprecated Use dynamicData instead
      */
     staticData?: {
         /**
@@ -58,35 +59,10 @@ export interface SkipComponentDataRequirements {
     };
     
     /**
-     * For hybrid mode: Components can use both static and dynamic data access.
-     * Both staticData and dynamicData sections should be populated.
-     * Hybrid mode is useful for:
-     * - Components with both summary (static) and detail (dynamic) views
-     * - Optimizing performance while maintaining interactivity
-     */
-    hybridStrategy?: {
-        /**
-         * Description of how the component decides when to use static vs dynamic data
-         */
-        description: string;
-        
-        /**
-         * Optional performance considerations for the hybrid approach
-         */
-        performanceNotes?: string;
-    };
-    
-    /**
      * General description of the component's data requirements and access patterns.
      * This should provide a high-level overview of the data strategy.
      */
     description?: string;
-    
-    /**
-     * Security considerations for data access
-     * @since 2.1.0
-     */
-    securityNotes?: string;
 }
 
 /**
