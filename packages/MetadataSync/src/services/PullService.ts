@@ -624,6 +624,11 @@ export class PullService {
         continue;
       }
       
+      // Skip null fields if ignoreNullFields is enabled
+      if (entityConfig.pull?.ignoreNullFields && fieldValue === null) {
+        continue;
+      }
+      
       // Process lookupFields - convert GUIDs to @lookup syntax
       let processedValue = fieldValue;
       if (entityConfig.pull?.lookupFields?.[fieldName] && fieldValue != null) {

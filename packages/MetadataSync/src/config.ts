@@ -246,6 +246,8 @@ export interface EntityConfig {
         field: string;
       };
     };
+    /** Whether to ignore null field values during pull (defaults to false) */
+    ignoreNullFields?: boolean;
   };
 }
 

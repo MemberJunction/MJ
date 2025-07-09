@@ -1549,6 +1549,7 @@ The pull command now supports smart update capabilities with extensive configura
 | `excludeFields` | string[] | [] | Fields to completely omit from pulled data (see detailed explanation below) |
 | `lookupFields` | object | - | Foreign keys to convert to @lookup references |
 | `relatedEntities` | object | - | Related entities to pull as embedded collections |
+| `ignoreNullFields` | boolean | false | Exclude fields with null values from pulled data |
 
 > **⚠️ Important Configuration Warning**
 > 
