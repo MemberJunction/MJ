@@ -248,6 +248,8 @@ export interface EntityConfig {
     };
     /** Whether to ignore null field values during pull (defaults to false) */
     ignoreNullFields?: boolean;
+    /** Whether to ignore virtual fields during pull (defaults to false) */
+    ignoreVirtualFields?: boolean;
   };
 }
 

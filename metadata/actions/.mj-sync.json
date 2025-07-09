@@ -20,6 +20,7 @@
     "filter": "CategoryID IN (SELECT ID FROM [__mj].vwActionCategories WHERE Name = 'System')",
     "externalizeFields": [],
     "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
     "lookupFields": {
       "CategoryID": {
         "entity": "Action Categories",

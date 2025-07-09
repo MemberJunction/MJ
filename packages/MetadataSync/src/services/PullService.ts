@@ -627,8 +627,8 @@ export class PullService {
         continue;
       }
       
-      // Skip virtual fields (fields that exist only in the view, not in the underlying table)
-      if (entityInfo) {
+      // Skip virtual fields if ignoreVirtualFields is enabled (fields that exist only in the view, not in the underlying table)
+      if (entityConfig.pull?.ignoreVirtualFields && entityInfo) {
         const fieldInfo = entityInfo.Fields.find(f => f.Name === fieldName);
         if (fieldInfo && fieldInfo.IsVirtual) {
           if (verbose) {
@@ -676,6 +676,7 @@ export class PullService {
           const relatedRecords = await this.loadRelatedEntities(
             record,
             relationConfig as any,
+            entityConfig,
             currentDepth + 1,
             ancestryPath,
             verbose
@@ -759,6 +760,7 @@ export class PullService {
   private async loadRelatedEntities(
     parentRecord: any,
     relationConfig: RelatedEntityConfig,
+    parentEntityConfig: any,
     currentDepth: number,
     ancestryPath: Set<string>,
     verbose?: boolean
@@ -815,13 +817,16 @@ export class PullService {
         }
 
         // Create a mock entity config for the related entity processing
+        // Inherit ignoreVirtualFields and ignoreNullFields from parent entity config
         const relatedEntityConfig = {
           entity: relationConfig.entity,
           pull: {
             excludeFields: relationConfig.excludeFields || [],
             lookupFields: relationConfig.lookupFields || {},
             externalizeFields: relationConfig.externalizeFields || [],
-            relatedEntities: relationConfig.relatedEntities || {}
+            relatedEntities: relationConfig.relatedEntities || {},
+            ignoreVirtualFields: parentEntityConfig.pull?.ignoreVirtualFields || false,
+            ignoreNullFields: parentEntityConfig.pull?.ignoreNullFields || false
           }
         };
 

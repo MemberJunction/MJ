@@ -1550,6 +1550,7 @@ The pull command now supports smart update capabilities with extensive configura
 | `lookupFields` | object | - | Foreign keys to convert to @lookup references |
 | `relatedEntities` | object | - | Related entities to pull as embedded collections |
 | `ignoreNullFields` | boolean | false | Exclude fields with null values from pulled data |
+| `ignoreVirtualFields` | boolean | false | Exclude virtual fields (view-only fields) from pulled data |
 
 > **⚠️ Important Configuration Warning**
 > 
@@ -1647,6 +1648,61 @@ Example configuration:
 "pull": {
   "backupBeforeUpdate": true,
   "backupDirectory": ".backups"  // Custom backup directory name
+}
+```
+
+#### Virtual Fields Configuration
+
+The `ignoreVirtualFields` option controls whether virtual fields are included in pulled data:
+
+```json
+"pull": {
+  "ignoreVirtualFields": true  // Exclude virtual fields from pulled data
+}
+```
+
+**What are Virtual Fields?**
+Virtual fields are computed fields that exist only in database views, not in the underlying tables. They typically contain:
+- Foreign key display names (e.g., `"User": "John Smith"` alongside `"UserID": "123"`)
+- Computed/calculated values
+- Aggregate data from related tables
+- Derived fields from database functions
+
+**When to use `ignoreVirtualFields: true`:**
+- **Cleaner JSON files**: Remove read-only display fields that don't need version control
+- **Reducing file size**: Eliminate redundant data that's computed from other fields
+- **Preventing confusion**: Avoid fields that can't be modified during push operations
+- **Database-focused workflow**: When you only want to manage actual table columns
+
+**When to use `ignoreVirtualFields: false` (default):**
+- **Complete data capture**: Include all available information for reference
+- **Display purposes**: Keep human-readable field values for easy review
+- **Documentation**: Maintain context about related entity names and computed values
+
+**Example difference:**
+
+With `ignoreVirtualFields: false`:
+```json
+{
+  "fields": {
+    "Name": "Test Action",
+    "CategoryID": "@lookup:Action Categories.Name=System",
+    "Category": "System",  // ← Virtual field (display name)
+    "UserID": "123",
+    "User": "John Smith"   // ← Virtual field (display name)
+  }
+}
+```
+
+With `ignoreVirtualFields: true`:
+```json
+{
+  "fields": {
+    "Name": "Test Action", 
+    "CategoryID": "@lookup:Action Categories.Name=System",
+    "UserID": "123"
+    // Virtual fields excluded
+  }
 }
 ```
 
