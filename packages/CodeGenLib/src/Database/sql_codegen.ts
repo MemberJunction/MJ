@@ -1495,9 +1495,6 @@ GO${permissions}
         // TODO: Future enhancement to support composite foreign keys
         const whereClause = `[${fkField.CodeName}] = @${parentEntity.FirstPrimaryKey.CodeName}`;
         
-        // Build variable declarations for the related entity's primary keys
-        const pkComponents = this.buildPrimaryKeyComponents(relatedEntity);
-        
         // Generate unique cursor name using entity code names
         const cursorName = `cascade_${operation}_${relatedEntity.CodeName}_cursor`;
         
@@ -1505,18 +1502,15 @@ GO${permissions}
         const spType = operation === 'delete' ? SPType.Delete : SPType.Update;
         const spName = this.getSPName(relatedEntity, spType);
         
-        // Build the parameters for the SP call
-        let spCallParams = pkComponents.spParams;
         if (operation === 'update') {
             // For update, we need to include all updateable fields
-            // We'll update just the FK field to NULL, keeping other fields the same
-            const updateParams = this.buildUpdateCursorParameters(relatedEntity, fkField);
-            spCallParams = updateParams.allParams;
+            // Use the related entity's code name as prefix to ensure uniqueness
+            const updateParams = this.buildUpdateCursorParameters(relatedEntity, fkField, relatedEntity.CodeName);
+            const spCallParams = updateParams.allParams;
             
             return `
     -- Cascade update on ${relatedEntity.BaseTable} using cursor to call ${spName}
     ${updateParams.declarations}
-    DECLARE ${pkComponents.varDeclarations}
     DECLARE ${cursorName} CURSOR FOR 
         SELECT ${updateParams.selectFields}
         FROM [${relatedEntity.SchemaName}].[${relatedEntity.BaseTable}]
@@ -1528,7 +1522,7 @@ GO${permissions}
     WHILE @@FETCH_STATUS = 0
     BEGIN
         -- Set the FK field to NULL
-        SET @Update${fkField.CodeName} = NULL
+        SET @${relatedEntity.CodeName}_${fkField.CodeName} = NULL
         
         -- Call the update SP for the related entity
         EXEC [${relatedEntity.SchemaName}].[${spName}] ${spCallParams}
@@ -1539,6 +1533,9 @@ GO${permissions}
     CLOSE ${cursorName}
     DEALLOCATE ${cursorName}`;
         }
+        
+        // For delete operation, use a simpler prefix for primary keys only
+        const pkComponents = this.buildPrimaryKeyComponents(relatedEntity, relatedEntity.CodeName);
         
         return `
     -- Cascade delete from ${relatedEntity.BaseTable} using cursor to call ${spName}
@@ -1563,7 +1560,7 @@ GO${permissions}
     DEALLOCATE ${cursorName}`;
     }
 
-    protected buildPrimaryKeyComponents(entity: EntityInfo): {
+    protected buildPrimaryKeyComponents(entity: EntityInfo, prefix: string = ''): {
         varDeclarations: string,
         selectFields: string,
         fetchInto: string,
@@ -1574,10 +1571,12 @@ GO${permissions}
         let fetchInto = '';
         let spParams = '';
         
+        const varPrefix = prefix || 'Related';
+        
         for (const pk of entity.PrimaryKeys) {
             if (varDeclarations !== '')
                 varDeclarations += ', ';
-            varDeclarations += `@Related${pk.CodeName} ${pk.SQLFullType}`;
+            varDeclarations += `@${varPrefix}${pk.CodeName} ${pk.SQLFullType}`;
             
             if (selectFields !== '')
                 selectFields += ', ';
@@ -1585,17 +1584,17 @@ GO${permissions}
             
             if (fetchInto !== '')
                 fetchInto += ', ';
-            fetchInto += `@Related${pk.CodeName}`;
+            fetchInto += `@${varPrefix}${pk.CodeName}`;
             
             if (spParams !== '')
                 spParams += ', ';
-            spParams += `@Related${pk.CodeName}`;
+            spParams += `@${varPrefix}${pk.CodeName}`;
         }
         
         return { varDeclarations, selectFields, fetchInto, spParams };
     }
 
-    protected buildUpdateCursorParameters(entity: EntityInfo, _fkField: EntityFieldInfo): {
+    protected buildUpdateCursorParameters(entity: EntityInfo, _fkField: EntityFieldInfo, prefix: string = ''): {
         declarations: string,
         selectFields: string,
         fetchInto: string,
@@ -1606,18 +1605,25 @@ GO${permissions}
         let fetchInto = '';
         let allParams = '';
         
-        // First, handle primary keys
-        const pkComponents = this.buildPrimaryKeyComponents(entity);
+        const varPrefix = prefix || entity.CodeName;
+        
+        // First, handle primary keys with the entity-specific prefix
+        const pkComponents = this.buildPrimaryKeyComponents(entity, varPrefix);
+        
+        // Add primary key declarations to the declarations string
+        // Need to add DECLARE keyword since buildPrimaryKeyComponents doesn't include it
+        declarations = pkComponents.varDeclarations.split(', ').map(decl => `DECLARE ${decl}`).join('\n    ');
+        
         selectFields = pkComponents.selectFields;
         fetchInto = pkComponents.fetchInto;
         allParams = pkComponents.spParams;
         
-        // Then, add all updateable fields
+        // Then, add all updateable fields with the same prefix
         for (const ef of entity.Fields) {
             if (!ef.IsPrimaryKey && !ef.IsVirtual && ef.AllowUpdateAPI && !ef.AutoIncrement && !ef.IsSpecialDateField) {
                 if (declarations !== '')
                     declarations += '\n    ';
-                declarations += `DECLARE @Update${ef.CodeName} ${ef.SQLFullType}`;
+                declarations += `DECLARE @${varPrefix}_${ef.CodeName} ${ef.SQLFullType}`;
                 
                 if (selectFields !== '')
                     selectFields += ', ';
@@ -1625,11 +1631,11 @@ GO${permissions}
                 
                 if (fetchInto !== '')
                     fetchInto += ', ';
-                fetchInto += `@Update${ef.CodeName}`;
+                fetchInto += `@${varPrefix}_${ef.CodeName}`;
                 
                 if (allParams !== '')
                     allParams += ', ';
-                allParams += `@Update${ef.CodeName}`;
+                allParams += `@${varPrefix}_${ef.CodeName}`;
             }
         }
         
