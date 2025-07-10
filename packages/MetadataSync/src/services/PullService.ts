@@ -54,6 +54,8 @@ export class PullService {
   async pull(options: PullOptions, callbacks?: PullCallbacks): Promise<PullResult> {
     // Clear any previous batch operations
     this.fileWriteBatch.clear();
+    this.createdBackupFiles = [];
+    this.createdBackupDirs.clear();
     
     let targetDir: string;
     let entityConfig: EntityConfig | null;
@@ -146,21 +148,45 @@ export class PullService {
       await this.handleAsyncPropertyLoading(options.entity, entityConfig, options.verbose, callbacks);
     }
     
-    // Process records
-    const pullResult = await this.processRecords(
-      result.Results,
-      options,
-      targetDir,
-      entityConfig,
-      callbacks
-    );
+    // Process records with error handling and rollback
+    let pullResult: Omit<PullResult, 'targetDir'>;
     
-    // Write all batched file changes at once
-    if (!options.dryRun) {
-      const filesWritten = await this.fileWriteBatch.flush();
-      if (options.verbose && filesWritten > 0) {
-        callbacks?.onSuccess?.(`Wrote ${filesWritten} files with consistent property ordering`);
+    try {
+      pullResult = await this.processRecords(
+        result.Results,
+        options,
+        targetDir,
+        entityConfig,
+        callbacks
+      );
+      
+      // Write all batched file changes at once
+      if (!options.dryRun) {
+        const filesWritten = await this.fileWriteBatch.flush();
+        if (options.verbose && filesWritten > 0) {
+          callbacks?.onSuccess?.(`Wrote ${filesWritten} files with consistent property ordering`);
+        }
       }
+      
+      // Operation succeeded - clean up backup files
+      if (!options.dryRun) {
+        await this.cleanupBackupFiles();
+      }
+      
+    } catch (error) {
+      callbacks?.onError?.(`Pull operation failed: ${(error as any).message || error}`);
+      
+      // Attempt to rollback file changes if not in dry run mode
+      if (!options.dryRun) {
+        try {
+          await this.rollbackFileChanges(callbacks);
+          callbacks?.onWarn?.('File changes have been rolled back due to operation failure');
+        } catch (rollbackError) {
+          callbacks?.onError?.(`Rollback failed: ${(rollbackError as any).message || rollbackError}`);
+        }
+      }
+      
+      throw error;
     }
     
     return {
@@ -232,8 +258,10 @@ export class PullService {
     // If multi-file flag is set, collect all records
     if (options.multiFile) {
       const allRecords: RecordData[] = [];
+      const errors: string[] = [];
       
-      for (const record of records) {
+      // Process records in parallel for multi-file mode
+      const recordPromises = records.map(async (record, index) => {
         try {
           // Build primary key
           const primaryKey: Record<string, any> = {};
@@ -250,15 +278,28 @@ export class PullService {
             options.verbose, 
             true
           );
-          allRecords.push(recordData);
-          processed++;
           
-          if (options.verbose) {
-            callbacks?.onProgress?.(`Processing records (${processed}/${records.length})`);
-          }
+          return { success: true, recordData, index };
         } catch (error) {
-          callbacks?.onWarn?.(`Failed to process record: ${(error as any).message || error}`);
+          const errorMessage = `Failed to process record ${index + 1}: ${(error as any).message || error}`;
+          errors.push(errorMessage);
+          callbacks?.onWarn?.(errorMessage);
+          return { success: false, recordData: null, index };
         }
+      });
+      
+      const recordResults = await Promise.all(recordPromises);
+      
+      // Collect successful records
+      for (const result of recordResults) {
+        if (result.success && result.recordData) {
+          allRecords.push(result.recordData);
+          processed++;
+        }
+      }
+      
+      if (options.verbose) {
+        callbacks?.onProgress?.(`Processed ${processed}/${records.length} records in parallel`);
       }
       
       // Queue all records to single file for batched write
@@ -267,6 +308,11 @@ export class PullService {
         const filePath = path.join(targetDir, fileName);
         this.fileWriteBatch.queueWrite(filePath, allRecords);
         callbacks?.onSuccess?.(`Queued ${processed} records for ${path.basename(filePath)}`);
+      }
+      
+      // If there were errors during parallel processing, throw them
+      if (errors.length > 0) {
+        throw new Error(`Multi-file processing completed with ${errors.length} errors:\n${errors.join('\n')}`);
       }
     } else {
       // Smart update logic for single-file-per-record
@@ -370,6 +416,47 @@ export class PullService {
     return [...this.createdBackupFiles];
   }
   
+  /**
+   * Rollback file changes by restoring from backup files
+   * Called when pull operation fails after files have been modified
+   */
+  private async rollbackFileChanges(callbacks?: PullCallbacks): Promise<void> {
+    if (this.createdBackupFiles.length === 0) {
+      callbacks?.onLog?.('No backup files found - no rollback needed');
+      return;
+    }
+    
+    callbacks?.onProgress?.(`Rolling back ${this.createdBackupFiles.length} file changes...`);
+    
+    const errors: string[] = [];
+    let restoredCount = 0;
+    
+    for (const backupPath of this.createdBackupFiles) {
+      try {
+        // Extract original file path from backup path
+        const backupDir = path.dirname(backupPath);
+        const backupFileName = path.basename(backupPath);
+        
+        // Remove timestamp and .backup extension to get original filename
+        const originalFileName = backupFileName.replace(/\.\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.backup$/, '.json');
+        const originalFilePath = path.join(path.dirname(backupDir), originalFileName);
+        
+        if (await fs.pathExists(backupPath)) {
+          await fs.copy(backupPath, originalFilePath);
+          restoredCount++;
+        }
+      } catch (error) {
+        errors.push(`Failed to restore ${backupPath}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    
+    if (errors.length > 0) {
+      throw new Error(`Rollback completed with ${errors.length} errors (${restoredCount} files restored):\n${errors.join('\n')}`);
+    }
+    
+    callbacks?.onSuccess?.(`Successfully rolled back ${restoredCount} file changes`);
+  }
+  
   private async processIndividualRecords(
     records: BaseEntity[],
     options: PullOptions,
@@ -439,86 +526,99 @@ export class PullService {
     
     // Track which files have been backed up to avoid duplicates
     const backedUpFiles = new Set<string>();
+    const errors: string[] = [];
     
-    // Process existing records updates
-    for (const { record, primaryKey, filePath } of existingRecordsToUpdate) {
-      try {
-        callbacks?.onProgress?.(`Updating existing records (${updated + 1}/${existingRecordsToUpdate.length})`);
-        
-        // Create backup if configured (only once per file)
-        if (entityConfig.pull?.backupBeforeUpdate && !backedUpFiles.has(filePath)) {
-          await this.createBackup(filePath, entityConfig.pull?.backupDirectory);
-          backedUpFiles.add(filePath);
-        }
-        
-        // Load existing file data
-        const existingData = await fs.readJson(filePath);
-        
-        // Find the specific existing record that matches this primary key
-        let existingRecordData: RecordData;
-        if (Array.isArray(existingData)) {
-          // Find the matching record in the array
-          const matchingRecord = existingData.find(r => 
-            this.createPrimaryKeyLookup(r.primaryKey || {}) === this.createPrimaryKeyLookup(primaryKey)
+    // Process existing records updates in parallel
+    if (existingRecordsToUpdate.length > 0) {
+      callbacks?.onProgress?.(`Updating existing records (parallel processing)`);
+      
+      const updatePromises = existingRecordsToUpdate.map(async ({ record, primaryKey, filePath }, index) => {
+        try {
+          // Create backup if configured (only once per file)
+          if (entityConfig.pull?.backupBeforeUpdate && !backedUpFiles.has(filePath)) {
+            await this.createBackup(filePath, entityConfig.pull?.backupDirectory);
+            backedUpFiles.add(filePath);
+          }
+          
+          // Load existing file data
+          const existingData = await fs.readJson(filePath);
+          
+          // Find the specific existing record that matches this primary key
+          let existingRecordData: RecordData;
+          if (Array.isArray(existingData)) {
+            // Find the matching record in the array
+            const matchingRecord = existingData.find(r => 
+              this.createPrimaryKeyLookup(r.primaryKey || {}) === this.createPrimaryKeyLookup(primaryKey)
+            );
+            existingRecordData = matchingRecord || existingData[0]; // Fallback to first if not found
+          } else {
+            existingRecordData = existingData;
+          }
+          
+          // Process the new record data (isNewRecord = false for updates)
+          const newRecordData = await this.recordProcessor.processRecord(
+            record, 
+            primaryKey, 
+            targetDir, 
+            entityConfig, 
+            options.verbose, 
+            false, 
+            existingRecordData
           );
-          existingRecordData = matchingRecord || existingData[0]; // Fallback to first if not found
-        } else {
-          existingRecordData = existingData;
+          
+          // Apply merge strategy
+          const mergedData = await this.mergeRecords(
+            existingRecordData,
+            newRecordData,
+            entityConfig.pull?.mergeStrategy || 'merge',
+            entityConfig.pull?.preserveFields || []
+          );
+          
+          // Queue updated data for batched write
+          if (Array.isArray(existingData)) {
+            // Queue array update - batch will handle merging
+            const primaryKeyLookup = this.createPrimaryKeyLookup(primaryKey);
+            this.fileWriteBatch.queueArrayUpdate(filePath, mergedData, primaryKeyLookup);
+          } else {
+            // Queue single record update
+            this.fileWriteBatch.queueSingleUpdate(filePath, mergedData);
+          }
+          
+          if (options.verbose) {
+            callbacks?.onLog?.(`Updated: ${filePath}`);
+          }
+          
+          return { success: true, index };
+        } catch (error) {
+          const errorMessage = `Failed to update record ${index + 1}: ${(error as any).message || error}`;
+          errors.push(errorMessage);
+          callbacks?.onWarn?.(errorMessage);
+          return { success: false, index };
         }
-        
-        // Process the new record data (isNewRecord = false for updates)
-        const newRecordData = await this.recordProcessor.processRecord(
-          record, 
-          primaryKey, 
-          targetDir, 
-          entityConfig, 
-          options.verbose, 
-          false, 
-          existingRecordData
-        );
-        
-        // Apply merge strategy
-        const mergedData = await this.mergeRecords(
-          existingRecordData,
-          newRecordData,
-          entityConfig.pull?.mergeStrategy || 'merge',
-          entityConfig.pull?.preserveFields || []
-        );
-        
-        // Queue updated data for batched write
-        if (Array.isArray(existingData)) {
-          // Queue array update - batch will handle merging
-          const primaryKeyLookup = this.createPrimaryKeyLookup(primaryKey);
-          this.fileWriteBatch.queueArrayUpdate(filePath, mergedData, primaryKeyLookup);
-        } else {
-          // Queue single record update
-          this.fileWriteBatch.queueSingleUpdate(filePath, mergedData);
-        }
-        
-        updated++;
-        processed++;
-        
-        if (options.verbose) {
-          callbacks?.onLog?.(`Updated: ${filePath}`);
-        }
-      } catch (error) {
-        callbacks?.onWarn?.(`Failed to update record: ${(error as any).message || error}`);
+      });
+      
+      const updateResults = await Promise.all(updatePromises);
+      updated = updateResults.filter(r => r.success).length;
+      processed += updated;
+      
+      if (options.verbose) {
+        callbacks?.onSuccess?.(`Completed ${updated}/${existingRecordsToUpdate.length} record updates`);
       }
     }
     
-    // Process new records
+    // Process new records in parallel
     if (newRecords.length > 0) {
-      callbacks?.onProgress?.(`Creating new records (0/${newRecords.length})`);
+      callbacks?.onProgress?.(`Creating new records (parallel processing)`);
       
       if (entityConfig.pull?.appendRecordsToExistingFile && entityConfig.pull?.newFileName) {
-        // Append all new records to a single file using individual array updates to preserve existing updates
+        // Append all new records to a single file using parallel processing
         const fileName = entityConfig.pull.newFileName.endsWith('.json') 
           ? entityConfig.pull.newFileName 
           : `${entityConfig.pull.newFileName}.json`;
         const filePath = path.join(targetDir, fileName);
         
-        // Process and append all new records using queueArrayUpdate to preserve existing changes
-        for (const { record, primaryKey } of newRecords) {
+        // Process all new records in parallel
+        const newRecordPromises = newRecords.map(async ({ record, primaryKey }, index) => {
           try {
             // For new records, pass isNewRecord = true (default)
             const recordData = await this.recordProcessor.processRecord(
@@ -535,36 +635,49 @@ export class PullService {
             const newRecordLookup = this.createPrimaryKeyLookup(primaryKey);
             this.fileWriteBatch.queueArrayUpdate(filePath, recordData, newRecordLookup);
             
-            created++;
-            processed++;
-            
-            if (options.verbose) {
-              callbacks?.onProgress?.(`Creating new records (${created}/${newRecords.length})`);
-            }
+            return { success: true, index };
           } catch (error) {
-            callbacks?.onWarn?.(`Failed to process new record: ${(error as any).message || error}`);
+            const errorMessage = `Failed to process new record ${index + 1}: ${(error as any).message || error}`;
+            errors.push(errorMessage);
+            callbacks?.onWarn?.(errorMessage);
+            return { success: false, index };
           }
-        }
+        });
+        
+        const newRecordResults = await Promise.all(newRecordPromises);
+        created = newRecordResults.filter(r => r.success).length;
+        processed += created;
         
         if (options.verbose) {
           callbacks?.onLog?.(`Queued ${created} new records for: ${filePath}`);
         }
       } else {
-        // Create individual files for each new record
-        for (const { record, primaryKey } of newRecords) {
+        // Create individual files for each new record in parallel
+        const individualRecordPromises = newRecords.map(async ({ record, primaryKey }, index) => {
           try {
             await this.processRecord(record, primaryKey, targetDir, entityConfig, options.verbose);
-            created++;
-            processed++;
-            
-            if (options.verbose) {
-              callbacks?.onProgress?.(`Creating new records (${created}/${newRecords.length})`);
-            }
+            return { success: true, index };
           } catch (error) {
-            callbacks?.onWarn?.(`Failed to process new record: ${(error as any).message || error}`);
+            const errorMessage = `Failed to process new record ${index + 1}: ${(error as any).message || error}`;
+            errors.push(errorMessage);
+            callbacks?.onWarn?.(errorMessage);
+            return { success: false, index };
           }
+        });
+        
+        const individualResults = await Promise.all(individualRecordPromises);
+        created = individualResults.filter(r => r.success).length;
+        processed += created;
+        
+        if (options.verbose) {
+          callbacks?.onSuccess?.(`Created ${created}/${newRecords.length} individual record files`);
         }
       }
+    }
+    
+    // If there were errors during parallel processing, throw them
+    if (errors.length > 0) {
+      throw new Error(`Parallel processing completed with ${errors.length} errors:\n${errors.join('\n')}`);
     }
     
     return { processed, updated, created, skipped };
