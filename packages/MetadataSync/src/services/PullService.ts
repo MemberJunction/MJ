@@ -1,6 +1,6 @@
 import fs from 'fs-extra';
 import path from 'path';
-import { RunView, Metadata, EntityInfo, UserInfo, BaseEntity } from '@memberjunction/core';
+import { RunView, EntityInfo, UserInfo, BaseEntity } from '@memberjunction/core';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
 import { loadEntityConfig, EntityConfig } from '../config';
 import { configManager } from '../lib/config-manager';
@@ -143,11 +143,6 @@ export class PullService {
       };
     }
     
-    // Check if we need to wait for async property loading
-    if (entityConfig?.pull?.externalizeFields && result.Results.length > 0) {
-      await this.handleAsyncPropertyLoading(options.entity, entityConfig, options.verbose, callbacks);
-    }
-    
     // Process records with error handling and rollback
     let pullResult: Omit<PullResult, 'targetDir'>;
     
@@ -193,48 +188,6 @@ export class PullService {
       ...pullResult,
       targetDir
     };
-  }
-  
-  private async handleAsyncPropertyLoading(
-    entityName: string,
-    entityConfig: EntityConfig,
-    verbose?: boolean,
-    callbacks?: PullCallbacks
-  ): Promise<void> {
-    const metadata = new Metadata();
-    const entityInfo = metadata.EntityByName(entityName);
-    
-    if (!entityInfo) return;
-    
-    const externalizeConfig = entityConfig.pull?.externalizeFields;
-    let fieldsToExternalize: string[] = [];
-    
-    if (Array.isArray(externalizeConfig)) {
-      if (externalizeConfig.length > 0 && typeof externalizeConfig[0] === 'string') {
-        fieldsToExternalize = externalizeConfig as string[];
-      } else {
-        fieldsToExternalize = (externalizeConfig as Array<{field: string; pattern: string}>)
-          .map(item => item.field);
-      }
-    } else if (externalizeConfig) {
-      fieldsToExternalize = Object.keys(externalizeConfig);
-    }
-    
-    // Get all field names from entity metadata
-    const metadataFieldNames = entityInfo.Fields.map(f => f.Name);
-    
-    // Check if any externalized fields are NOT in metadata (likely computed properties)
-    const computedFields = fieldsToExternalize.filter(f => !metadataFieldNames.includes(f));
-    
-    if (computedFields.length > 0) {
-      if (verbose) {
-        callbacks?.onProgress?.(`Waiting 5 seconds for async property loading in ${entityName} (${computedFields.join(', ')})...`);
-      }
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      if (verbose) {
-        callbacks?.onSuccess?.('Async property loading wait complete');
-      }
-    }
   }
   
   private async processRecords(
