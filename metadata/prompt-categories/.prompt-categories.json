@@ -2,15 +2,14 @@
   {
     "fields": {
       "Name": "MJ: System",
-      "Description": "System-level prompts for MemberJunction framework functionality",
-      "ParentID": null
+      "Description": "System-level prompts for MemberJunction framework functionality"
     },
     "primaryKey": {
       "ID": "7D2DEF7F-138F-4620-8309-33964A97A997"
     },
     "sync": {
-      "lastModified": "2025-07-08T02:31:26.533Z",
-      "checksum": "65e143bcfed5d2f51d84de91fae5a681d86ba9b9a67cca2f8ab051ccd06d897c"
+      "lastModified": "2025-06-24T17:33:34.348Z",
+      "checksum": "4ba8d8ad492c8ca68df969c950040e61a54a591f16c2d20e8167eab16daf9b14"
     }
   },
   {
@@ -23,64 +22,8 @@
       "ID": "9A66484D-1B88-43D9-A166-692ABF7BFE64"
     },
     "sync": {
-      "lastModified": "2025-07-08T02:31:26.538Z",
+      "lastModified": "2025-06-24T17:33:34.351Z",
       "checksum": "f3e3218c21f49003943cd36c7672927d3868747659f77fd534a5ce32f4d6ea11"
-    }
-  },
-  {
-    "fields": {
-      "Name": "Demo",
-      "ParentID": null,
-      "Description": "Demo Prompts"
-    },
-    "primaryKey": {
-      "ID": "89E8D4AC-EAC6-4597-9956-0DA717F4CEC9"
-    },
-    "sync": {
-      "lastModified": "2025-07-08T02:31:26.539Z",
-      "checksum": "a04f5497fd216872c9a6624b61c26de267fac223d6d3573bb3e1a2bca455d6b6"
-    }
-  },
-  {
-    "fields": {
-      "Name": "Marketing Agents",
-      "ParentID": null,
-      "Description": "Prompts for Marketing Agent System"
-    },
-    "primaryKey": {
-      "ID": "A4EE59FE-1C90-47D8-B25F-3764A5BC279A"
-    },
-    "sync": {
-      "lastModified": "2025-07-08T02:31:26.539Z",
-      "checksum": "db0dfa262b98f02c5626697778bdba982fc606be4b47626eec862b408e1dde42"
-    }
-  },
-  {
-    "fields": {
-      "Name": "Agent Management",
-      "ParentID": null,
-      "Description": "Prompts for Agent Management System"
-    },
-    "primaryKey": {
-      "ID": "5A9E8840-2813-4DF6-9FB9-4793FCD36F28"
-    },
-    "sync": {
-      "lastModified": "2025-07-08T02:31:26.539Z",
-      "checksum": "07a73eb58a80487f27d47e31e8bc2e57019fd13e770d20d8e4603f7fe515715a"
-    }
-  },
-  {
-    "fields": {
-      "Name": "Agent Type System Prompts",
-      "ParentID": null,
-      "Description": "System Prompts for Agent Types"
-    },
-    "primaryKey": {
-      "ID": "838572BE-9464-4935-BC34-4806FD80A69C"
-    },
-    "sync": {
-      "lastModified": "2025-07-08T02:31:26.539Z",
-      "checksum": "3b5594eee38a9e654bc46ce0237016b963e20873df5e1b9c043ca0b33a47f35e"
     }
   }
 ]
