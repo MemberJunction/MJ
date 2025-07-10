@@ -1,5 +1,5 @@
 {
-  "taskComplete": "[BOOLEAN: true if task is fully complete, false if more steps needed]",
+  "taskComplete?": "[BOOLEAN: true if task is fully complete, false if more steps needed, defaults to false]",
   "message?": "[STRING: A brief, human-readable message about current status or final result. Limit to 100 words.]",
   "payloadChangeRequest*": {
     "[NOTE]": "Follow the format of AgentPayloadChangeRequest. OMIT payloadChangeRequest entirely if no changes are needed."

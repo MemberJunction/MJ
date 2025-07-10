@@ -14,9 +14,9 @@ export interface LoopAgentResponse<P = any> {
     /**
      * Indicates whether the entire task has been completed successfully.
      * When true, the agent loop will terminate and return the final result.
-     * When false, processing will continue based on nextStep.
+     * Defaults to false. When false, processing will continue based on nextStep.
      */
-    taskComplete: boolean;
+    taskComplete?: boolean;
     
     /**
      * A message that provides information to the caller, which is either a human, another computer system, or 
