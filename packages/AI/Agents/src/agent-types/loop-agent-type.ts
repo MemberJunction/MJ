@@ -206,6 +206,11 @@ export class LoopAgentType extends BaseAgentType {
             return {success: false, message: 'Invalid response format'};
         }
 
+        if (!response.taskComplete) {
+            // if not provided, default to false to make processing work
+            response.taskComplete = false;
+        }
+
         if (typeof response.taskComplete !== 'boolean') {
             LogError('LoopAgentResponse missing required field: taskComplete');
             return {success: false, message: 'Missing required field: taskComplete'};
