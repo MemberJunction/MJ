@@ -308,19 +308,17 @@ export class AIPromptRunner {
         if (!selectedModel) {
           throw new Error(`No suitable model found for prompt ${modelSelectionPrompt.Name}`);
         }
-
-        // Create parent prompt run for the final composed prompt execution
-        parentPromptRun = await this.createPromptRun(prompt, selectedModel, params, startTime, params.override?.vendorId);
-        this.logStatus(`📝 Created prompt run ${parentPromptRun.ID} for hierarchical template composition`, true, params);
         
         // Render all child prompt templates recursively
         childTemplateRenderingResult = await this.renderChildPromptTemplates(params.childPrompts, params, params.cancellationToken);
-        
         // Render the parent prompt with child templates embedded
         renderedPromptText = await this.renderPromptWithChildTemplates(prompt, params, childTemplateRenderingResult.renderedTemplates);
         
         this.logStatus(`✅ Hierarchical template composition completed with ${Object.keys(childTemplateRenderingResult.renderedTemplates).length} child templates embedded`, true, params);
-        
+
+          // Create parent prompt run for the final composed prompt execution
+        parentPromptRun = await this.createPromptRun(prompt, selectedModel, params, renderedPromptText, startTime, params.override?.vendorId);
+        this.logStatus(`📝 Created prompt run ${parentPromptRun.ID} for hierarchical template composition`, true, params);
       } else if (prompt.TemplateID && (!params.conversationMessages || params.templateMessageRole !== 'none')) {
         // Regular template rendering mode
         // Initialize template engine
@@ -448,7 +446,7 @@ export class AIPromptRunner {
     }
 
     // Use existing prompt run if provided (hierarchical case) or create new one
-    const promptRun = existingPromptRun || await this.createPromptRun(prompt, selectedModel, params, startTime, params.override?.vendorId);
+    const promptRun = existingPromptRun || await this.createPromptRun(prompt, selectedModel, params, renderedPromptText, startTime, params.override?.vendorId);
 
     // Check for cancellation before model execution
     if (params.cancellationToken?.aborted) {
@@ -600,7 +598,7 @@ export class AIPromptRunner {
     }
 
     // Use existing prompt run if provided (hierarchical case) or create new one
-    const consolidatedPromptRun = existingPromptRun || await this.createPromptRun(prompt, selectedResult.task.model, params, startTime, params.override?.vendorId);
+    const consolidatedPromptRun = existingPromptRun || await this.createPromptRun(prompt, selectedResult.task.model, params, renderedPromptText, startTime, params.override?.vendorId);
 
     // Update with parallel execution metadata
     const endTime = new Date();
@@ -637,6 +635,7 @@ export class AIPromptRunner {
         data: params.data,
         templateData: params.templateData,
         parallelExecution: parallelMetadata,
+        messages: params.conversationMessages || [],
       });
     }
 
@@ -889,7 +888,9 @@ export class AIPromptRunner {
           failedPlaceholders: failedChildren.map(fc => fc.placeholder)
         }
       });
-      // Continue with available results rather than failing completely
+
+      // any child render failure means we must throw an error
+      throw new Error(`Failed to render ${failedChildren.length} child prompt templates: ${failedChildren.map(fc => fc.placeholder).join(', ')}`);
     }
 
     // Build rendered templates map
@@ -1327,6 +1328,7 @@ export class AIPromptRunner {
     prompt: AIPromptEntity,
     model: AIModelEntityExtended,
     params: AIPromptParams,
+    systemPromptText: string, 
     startTime: Date,
     vendorId?: string,
   ): Promise<AIPromptRunEntity> {
@@ -1397,17 +1399,17 @@ export class AIPromptRunner {
       }
 
       // Save the actual values that will be used (either from prompt defaults or additionalParameters)
-      // First, apply defaults from prompt entity (TODO: uncomment after CodeGen)
-      // if (prompt.Temperature != null) promptRun.Temperature = prompt.Temperature;
-      // if (prompt.TopP != null) promptRun.TopP = prompt.TopP;
-      // if (prompt.TopK != null) promptRun.TopK = prompt.TopK;
-      // if (prompt.MinP != null) promptRun.MinP = prompt.MinP;
-      // if (prompt.FrequencyPenalty != null) promptRun.FrequencyPenalty = prompt.FrequencyPenalty;
-      // if (prompt.PresencePenalty != null) promptRun.PresencePenalty = prompt.PresencePenalty;
-      // if (prompt.Seed != null) promptRun.Seed = prompt.Seed;
-      // if (prompt.StopSequences) promptRun.StopSequences = prompt.StopSequences;
-      // if (prompt.IncludeLogProbs != null) promptRun.LogProbs = prompt.IncludeLogProbs;
-      // if (prompt.TopLogProbs != null) promptRun.TopLogProbs = prompt.TopLogProbs;
+      // First, apply defaults from prompt entity 
+      if (prompt.Temperature != null) promptRun.Temperature = prompt.Temperature;
+      if (prompt.TopP != null) promptRun.TopP = prompt.TopP;
+      if (prompt.TopK != null) promptRun.TopK = prompt.TopK;
+      if (prompt.MinP != null) promptRun.MinP = prompt.MinP;
+      if (prompt.FrequencyPenalty != null) promptRun.FrequencyPenalty = prompt.FrequencyPenalty;
+      if (prompt.PresencePenalty != null) promptRun.PresencePenalty = prompt.PresencePenalty;
+      if (prompt.Seed != null) promptRun.Seed = prompt.Seed;
+      if (prompt.StopSequences) promptRun.StopSequences = prompt.StopSequences;
+      if (prompt.IncludeLogProbs != null) promptRun.LogProbs = prompt.IncludeLogProbs;
+      if (prompt.TopLogProbs != null) promptRun.TopLogProbs = prompt.TopLogProbs;
       
       // Then override with additionalParameters if provided
       if (params.additionalParameters) {
@@ -1444,10 +1446,19 @@ export class AIPromptRunner {
       }
 
       // Store the input data/context as JSON in Messages field
-      if (params.data || params.templateData) {
+      if (params.data || params.templateData || systemPromptText) {
+        const messages: ChatMessage[] = [];
+        if (systemPromptText) {
+          messages.push({ 
+            role: 'system',
+            content: systemPromptText
+          });
+          messages.push(...params.conversationMessages || []);
+        }
         promptRun.Messages = JSON.stringify({
           data: params.data,
           templateData: params.templateData,
+          messages: messages || [],
         });
       }
 
@@ -1848,17 +1859,23 @@ export class AIPromptRunner {
     templateMessageRole: TemplateMessageRole = 'system',
     cancellationToken?: AbortSignal,
   ): Promise<ChatResult> {
+    // define these variables here to ensure they're available in the catch block
+    let driverClass: string;
+    let apiName: string | undefined;
+    let llm: BaseLLM;
+    let chatParams: ChatParams;
+
     try {
+      // Get verbose flag for logging
+      const verbose = params.verbose === true || IsVerboseLoggingEnabled();
+      
+      // Get vendor-specific configuration
       // Check if model has pre-selected vendor info from selectModel
       const modelWithVendor = model as AIModelEntityExtended & { 
         _selectedVendorId?: string;
         _selectedDriverClass?: string;
         _selectedApiName?: string;
       };
-
-      // Get vendor-specific configuration
-      let driverClass: string;
-      let apiName: string | undefined;
 
       // If vendor info was pre-selected by selectModel, use it
       if (modelWithVendor._selectedDriverClass) {
@@ -1888,11 +1905,29 @@ export class AIPromptRunner {
       }
 
       // Create LLM instance with vendor-specific driver class
-      const apiKey = GetAIAPIKey(driverClass);
-      const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, driverClass, apiKey);
+      // Check for local API key first, then fall back to global
+      let apiKey: string;
+      if (params.apiKeys && params.apiKeys.length > 0) {
+        const localKey = params.apiKeys.find(k => k.driverClass === driverClass);
+        if (localKey) {
+          apiKey = localKey.apiKey;
+          if (verbose) {
+            console.log(`Using local API key for driver class: ${driverClass}`);
+          }
+        } else {
+          apiKey = GetAIAPIKey(driverClass);
+          if (verbose) {
+            console.log(`No local API key found for driver class ${driverClass}, using global key`);
+          }
+        }
+      } else {
+        apiKey = GetAIAPIKey(driverClass);
+      }
+      
+      llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, driverClass, apiKey);
 
       // Prepare chat parameters
-      const chatParams = new ChatParams();
+      chatParams = new ChatParams();
       if (!apiName) {
         throw new Error(`No API name found for model ${model.Name}. Please ensure the model or its vendor configuration includes an APIName.`);
       }

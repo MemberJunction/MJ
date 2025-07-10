@@ -86,6 +86,38 @@ Actions are discrete units of business logic that:
 - Support transactions and error handling
 - Are discoverable through the MemberJunction metadata system
 
+### Child Actions
+Child actions provide type-safe specializations of more generic parent actions:
+- **Purpose**: Create strongly-typed, narrowly-scoped versions of generic actions
+- **Inheritance**: Child actions reference their parent via `ParentID` field
+- **Independent Execution**: Children execute as standalone actions (no special engine handling)
+- **Multi-level Support**: Actions can have children, grandchildren, etc.
+
+#### Examples:
+
+1. **Type Specialization**:
+   - Parent: `CreateRecord` - Generic action accepting JSON payload
+   - Child: `CreateCustomer` - Strongly-typed with specific parameters for customer fields
+   - Child: `CreateOrder` - Strongly-typed with order-specific parameters
+
+2. **Scope Restriction**:
+   - Parent: `FileAccess` - General file system access (not exposed to agents)
+   - Child: `ReadLogFiles` - Can only read `.log` files from `/var/logs/`
+   - Child: `ReadUserDocuments` - Limited to user's document directory
+
+#### Benefits:
+- **Security**: Parent actions can be restricted while children have controlled access
+- **Type Safety**: Strong typing for specific use cases
+- **AI Code Generation**: Child actions receive parent context for better code generation
+- **Discoverability**: Narrowly-scoped actions are easier to understand and use
+
+#### AI Code Generation:
+When generating child actions, the AI automatically:
+- Creates appropriate action parameters based on the specialization
+- Generates action result codes for different outcomes
+- Implements scope restrictions in the generated code
+- Maintains consistency with the parent action's behavior
+
 ### Entity Actions
 Special actions that operate on entity records:
 - Can be triggered on Create, Update, or Delete events

@@ -2,12 +2,13 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseCRMAction } from '../../base/base-crm.action';
 import { UserInfo } from '@memberjunction/core';
 import { CompanyIntegrationEntity } from '@memberjunction/core-entities';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Base class for all HubSpot CRM actions.
  * Handles HubSpot-specific authentication and API interaction patterns.
  */
-@RegisterClass(BaseCRMAction, 'HubSpotBaseAction')
+@RegisterClass(BaseAction, 'HubSpotBaseAction')
 export abstract class HubSpotBaseAction extends BaseCRMAction {
     protected crmProvider = 'HubSpot';
     protected integrationName = 'HubSpot';

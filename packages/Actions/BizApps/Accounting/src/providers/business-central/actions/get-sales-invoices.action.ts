@@ -1,6 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BusinessCentralBaseAction } from '../business-central-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Interface for a Sales Invoice from Business Central
@@ -58,7 +59,7 @@ export interface BCSalesInvoiceLine {
 /**
  * Action to retrieve sales invoices from Microsoft Dynamics 365 Business Central
  */
-@RegisterClass(BusinessCentralBaseAction, 'GetBusinessCentralSalesInvoicesAction')
+@RegisterClass(BaseAction, 'GetBusinessCentralSalesInvoicesAction')
 export class GetBusinessCentralSalesInvoicesAction extends BusinessCentralBaseAction {
     
     /**

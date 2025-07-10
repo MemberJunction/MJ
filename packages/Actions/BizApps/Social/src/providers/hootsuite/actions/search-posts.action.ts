@@ -3,11 +3,12 @@ import { HootSuiteBaseAction, HootSuitePost } from '../hootsuite-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { SearchParams, SocialPost } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to search historical posts in HootSuite
  */
-@RegisterClass(HootSuiteBaseAction, 'HootSuiteSearchPostsAction')
+@RegisterClass(BaseAction, 'HootSuiteSearchPostsAction')
 export class HootSuiteSearchPostsAction extends HootSuiteBaseAction {
     /**
      * Search for posts in HootSuite

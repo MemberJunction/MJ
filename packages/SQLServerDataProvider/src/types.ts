@@ -115,8 +115,15 @@ export class SQLServerProviderConfigData extends ProviderConfigDataBase {
  * Configuration options for SQL logging sessions
  */
 export interface SqlLoggingOptions {
-  /** Whether to format output as a migration file with schema placeholders */
+  /** Whether to format output as a flyway migration file with schema placeholders */
   formatAsMigration?: boolean;
+
+  /**
+   * Optional default schema name to use for Flyway migrations for replacing schema names with 
+   * the placeholder ${flyway:defaultSchema}
+   */
+  defaultSchemaName?: string;
+
   /** Optional description to include as a comment at the start of the log */
   description?: string;
   /** Which types of statements to log: 'queries' (all), 'mutations' (only data changes), 'both' (default) */
@@ -135,6 +142,29 @@ export interface SqlLoggingOptions {
   sessionName?: string;
   /** Whether to output verbose debug information to console (default: false) */
   verboseOutput?: boolean;
+  /**
+   * Array of patterns to filter SQL statements.
+   * Supports both regex (RegExp objects) and simple wildcard patterns (strings).
+   * How these patterns are applied depends on filterType.
+   * 
+   * String patterns support:
+   * - Simple wildcards: "*AIPrompt*", "spCreate*", "*Run"
+   * - Regex strings: "/spCreate.*Run/i", "/^SELECT.*FROM/i"
+   * 
+   * RegExp examples:
+   * - /spCreateAIPromptRun/i - Match stored procedure calls
+   * - /^SELECT.*FROM.*vw.*Metadata/i - Match metadata view queries
+   * - /INSERT INTO EntityFieldValue/i - Match specific inserts
+   */
+  filterPatterns?: (string | RegExp)[];
+  /**
+   * Determines how filterPatterns are applied:
+   * - 'exclude': If ANY pattern matches, the SQL is NOT logged (default)
+   * - 'include': If ANY pattern matches, the SQL IS logged
+   * 
+   * Note: If filterPatterns is empty/undefined, all SQL is logged regardless of filterType.
+   */
+  filterType?: 'include' | 'exclude';
 }
 
 /**

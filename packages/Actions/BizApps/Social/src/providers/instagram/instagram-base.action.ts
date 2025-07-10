@@ -2,13 +2,14 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseSocialMediaAction, MediaFile } from '../../base/base-social.action';
 import { UserInfo, LogStatus, LogError } from '@memberjunction/core';
 import axios, { AxiosInstance, AxiosError } from 'axios';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Base class for all Instagram actions.
  * Handles Instagram Graph API and Basic Display API authentication and common functionality.
  * Instagram uses Facebook's Graph API infrastructure.
  */
-@RegisterClass(BaseSocialMediaAction, 'InstagramBaseAction')
+@RegisterClass(BaseAction, 'InstagramBaseAction')
 export abstract class InstagramBaseAction extends BaseSocialMediaAction {
     protected get platformName(): string {
         return 'Instagram';

@@ -4,12 +4,13 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 import { SocialPost, SearchParams, SocialMediaErrorCode } from '../../../base/base-social.action';
 import { LogStatus, LogError } from '@memberjunction/core';
 import axios from 'axios';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Searches for historical posts on Facebook pages.
  * Provides powerful search capabilities including date ranges, keywords, and content types.
  */
-@RegisterClass(FacebookBaseAction, 'FacebookSearchPostsAction')
+@RegisterClass(BaseAction, 'FacebookSearchPostsAction')
 export class FacebookSearchPostsAction extends FacebookBaseAction {
     /**
      * Get action description

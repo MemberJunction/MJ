@@ -29,6 +29,7 @@ import { AITestHarnessModule } from "@memberjunction/ng-ai-test-harness";
 import { ActionGalleryModule } from "@memberjunction/ng-action-gallery";
 import { JoinGridModule } from "@memberjunction/ng-join-grid";
 import { CodeEditorModule } from "@memberjunction/ng-code-editor";
+import { DeepDiffModule } from "@memberjunction/ng-deep-diff";
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
 import { EntitySelectorDialogComponent } from "./shared/entity-selector-dialog.component";
 import { AIPromptRunFormComponentExtended } from "./AIPromptRuns/ai-prompt-run-form.component";
@@ -94,6 +95,7 @@ import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-no
         MJTabStripModule,
         ContainerDirectivesModule,
         CodeEditorModule,
+        DeepDiffModule,
         TreeViewModule,
         AITestHarnessModule,
         ActionGalleryModule

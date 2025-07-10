@@ -4,12 +4,13 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 import { SocialMediaErrorCode } from '../../../base/base-social.action';
 import { LogStatus, LogError } from '@memberjunction/core';
 import axios from 'axios';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Responds to comments on Facebook posts or other comments.
  * Supports replying to top-level comments and nested replies.
  */
-@RegisterClass(FacebookBaseAction, 'FacebookRespondToCommentsAction')
+@RegisterClass(BaseAction, 'FacebookRespondToCommentsAction')
 export class FacebookRespondToCommentsAction extends FacebookBaseAction {
     /**
      * Get action description

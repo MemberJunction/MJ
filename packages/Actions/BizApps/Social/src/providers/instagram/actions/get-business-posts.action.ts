@@ -3,12 +3,13 @@ import { InstagramBaseAction } from '../instagram-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogError } from '@memberjunction/core';
 import { SocialPost } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Retrieves posts from an Instagram Business account.
  * Returns feed posts, carousels, reels, and IGTV videos with basic metrics.
  */
-@RegisterClass(InstagramBaseAction, 'Instagram - Get Business Posts')
+@RegisterClass(BaseAction, 'Instagram - Get Business Posts')
 export class InstagramGetBusinessPostsAction extends InstagramBaseAction {
     
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {

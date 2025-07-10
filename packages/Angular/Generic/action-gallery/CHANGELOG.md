@@ -1,5 +1,72 @@
 # @memberjunction/ng-action-gallery
 
+## 2.67.0
+
+### Patch Changes
+
+- @memberjunction/ng-ai-test-harness@2.67.0
+- @memberjunction/ng-container-directives@2.67.0
+- @memberjunction/core@2.67.0
+- @memberjunction/core-entities@2.67.0
+
+## 2.66.0
+
+### Patch Changes
+
+- @memberjunction/ng-ai-test-harness@2.66.0
+- @memberjunction/ng-container-directives@2.66.0
+- @memberjunction/core@2.66.0
+- @memberjunction/core-entities@2.66.0
+
+## 2.65.0
+
+### Patch Changes
+
+- Updated dependencies [b029c5d]
+  - @memberjunction/core-entities@2.65.0
+  - @memberjunction/ng-container-directives@2.65.0
+  - @memberjunction/core@2.65.0
+  - @memberjunction/ng-ai-test-harness@2.65.0
+
+## 2.64.0
+
+### Patch Changes
+
+- Updated dependencies [e775f2b]
+  - @memberjunction/core-entities@2.64.0
+  - @memberjunction/ng-ai-test-harness@2.64.0
+  - @memberjunction/ng-container-directives@2.64.0
+  - @memberjunction/core@2.64.0
+
+## 2.63.1
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.63.1
+- @memberjunction/core@2.63.1
+- @memberjunction/core-entities@2.63.1
+- @memberjunction/ng-ai-test-harness@2.63.1
+
+## 2.63.0
+
+### Patch Changes
+
+- Updated dependencies [28e8a85]
+  - @memberjunction/core-entities@2.63.0
+  - @memberjunction/ng-ai-test-harness@2.63.0
+  - @memberjunction/ng-container-directives@2.63.0
+  - @memberjunction/core@2.63.0
+
+## 2.62.0
+
+### Patch Changes
+
+- Updated dependencies [c995603]
+  - @memberjunction/core-entities@2.62.0
+  - @memberjunction/ng-ai-test-harness@2.62.0
+  - @memberjunction/ng-container-directives@2.62.0
+  - @memberjunction/core@2.62.0
+
 ## 2.61.0
 
 ### Patch Changes

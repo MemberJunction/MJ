@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BufferBaseAction } from '../buffer-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to get detailed analytics for a specific Buffer post
  */
-@RegisterClass(BufferBaseAction, 'BufferGetAnalyticsAction')
+@RegisterClass(BaseAction, 'BufferGetAnalyticsAction')
 export class BufferGetAnalyticsAction extends BufferBaseAction {
     /**
      * Get analytics for a Buffer post

@@ -1,5 +1,66 @@
 # Change Log - @memberjunction/cli
 
+## 2.67.0
+
+### Patch Changes
+
+- Updated dependencies [1fbfc26]
+  - @memberjunction/sqlserver-dataprovider@2.67.0
+  - @memberjunction/codegen-lib@2.67.0
+  - @memberjunction/metadata-sync@2.67.0
+
+## 2.66.0
+
+### Patch Changes
+
+- Updated dependencies [7e22e3e]
+  - @memberjunction/codegen-lib@2.66.0
+  - @memberjunction/sqlserver-dataprovider@2.66.0
+  - @memberjunction/metadata-sync@2.66.0
+
+## 2.65.0
+
+### Patch Changes
+
+- Updated dependencies [619488f]
+- Updated dependencies [b029c5d]
+  - @memberjunction/metadata-sync@2.65.0
+  - @memberjunction/sqlserver-dataprovider@2.65.0
+  - @memberjunction/codegen-lib@2.65.0
+
+## 2.64.0
+
+### Patch Changes
+
+- @memberjunction/codegen-lib@2.64.0
+- @memberjunction/metadata-sync@2.64.0
+- @memberjunction/sqlserver-dataprovider@2.64.0
+
+## 2.63.1
+
+### Patch Changes
+
+- @memberjunction/codegen-lib@2.63.1
+- @memberjunction/metadata-sync@2.63.1
+- @memberjunction/sqlserver-dataprovider@2.63.1
+
+## 2.63.0
+
+### Patch Changes
+
+- Updated dependencies [00e19b4]
+  - @memberjunction/metadata-sync@2.63.0
+  - @memberjunction/codegen-lib@2.63.0
+  - @memberjunction/sqlserver-dataprovider@2.63.0
+
+## 2.62.0
+
+### Patch Changes
+
+- @memberjunction/codegen-lib@2.62.0
+- @memberjunction/sqlserver-dataprovider@2.62.0
+- @memberjunction/metadata-sync@2.62.0
+
 ## 2.61.0
 
 ### Patch Changes

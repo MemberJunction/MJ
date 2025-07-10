@@ -1,5 +1,27 @@
 # Change Log - @memberjunction/global
 
+## 2.67.0
+
+## 2.66.0
+
+## 2.65.0
+
+### Patch Changes
+
+- 619488f: Pattern filtering for sql logging
+
+## 2.64.0
+
+## 2.63.1
+
+### Patch Changes
+
+- 59e2c4b: Improved RegisterClass/ClassFactory and added a bunch of utility functions for walking the inheritance hierarchy
+
+## 2.63.0
+
+## 2.62.0
+
 ## 2.61.0
 
 ## 2.60.0

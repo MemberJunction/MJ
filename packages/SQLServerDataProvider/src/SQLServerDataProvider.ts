@@ -437,7 +437,13 @@ export class SQLServerDataProvider
    */
   public async CreateSqlLogger(filePath: string, options?: SqlLoggingOptions): Promise<SqlLoggingSession> {
     const sessionId = uuidv4();
-    const session = new SqlLoggingSessionImpl(sessionId, filePath, options);
+    const mjCoreSchema = this.ConfigData.MJCoreSchemaName;
+    const session = new SqlLoggingSessionImpl(sessionId, filePath, 
+      {
+        defaultSchemaName: mjCoreSchema,
+        ...options // if defaultSchemaName is not provided, it will use the MJCoreSchemaName, otherwise
+        // the caller's defaultSchemaName will be used
+      });
 
     // Initialize the session (create file, write header)
     await session.initialize();
@@ -1979,7 +1985,13 @@ export class SQLServerDataProvider
               entityResult.Success = true;
               return result[0];
             } else {
-              throw new Error(`SQL Error: No result row returned from SQL: ` + sSQL);
+              if (bNewRecord) {
+                throw new Error(`SQL Error: Error creating new record, no rows returned from SQL: ` + sSQL);
+              }
+              else {
+                // if we get here that means that SQL did NOT find a matching row to update in the DB, so we need to throw an error
+                throw new Error(`SQL Error: Error updating record, no MATCHING rows found within the database: ` + sSQL);
+              }
             }
           }
         } else {
@@ -2453,6 +2465,7 @@ export class SQLServerDataProvider
 
   public async Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo): Promise<boolean> {
     const result = new BaseEntityResult();
+    let startedTransaction = false; // tracking if we started a transaction or not, so we can commit/rollback as needed
     try {
       entity.RegisterTransactionPreprocessing();
 
@@ -2538,6 +2551,8 @@ export class SQLServerDataProvider
           d = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
         } else {
           // Execute SQL with optional simple SQL fallback for loggers
+          await this.BeginTransaction(); // we are NOT in a trans group, so we need to start a transaction
+          startedTransaction = true;
           d = await this.ExecuteSQL(sSQL, null, { 
             isMutation: true, 
             description: `Delete ${entity.EntityInfo.Name}`,
@@ -2549,6 +2564,11 @@ export class SQLServerDataProvider
           // SP executed, now make sure the return value matches up as that is how we know the SP was succesfully internally
           for (const key of entity.PrimaryKeys) {
             if (key.Value !== d[0][key.Name]) {
+              // we can get here if the sp returns NULL for a given key. The reason that would be the case is if the record
+              // was not found in the DB. This was the existing logic prior to the SP modifications in 2.68.0, just documenting
+              // it here for clarity.
+              result.Message = `Transaction failed to commit, record with primary key ${key.Name}=${key.Value} not found`;
+              result.Success = false;
               return false;
             }
           }
@@ -2557,19 +2577,37 @@ export class SQLServerDataProvider
           this.HandleEntityActions(entity, 'delete', false, user);
           this.HandleEntityAIActions(entity, 'delete', false, user);
 
+          if (startedTransaction) {
+            // if we started a transaction, we need to commit it
+            await this.CommitTransaction();
+          } 
+
           result.EndedAt = new Date();
           return true;
         } else {
+          if (startedTransaction) {
+            // if we started a transaction, we need to rollback
+            startedTransaction = false;
+            await this.RollbackTransaction();
+          }
+
           result.Message = 'No result returned from SQL';
           result.EndedAt = new Date();
           return false;
         }
       }
     } catch (e) {
+      LogError(e);
       result.Message = e.message;
       result.Success = false;
       result.EndedAt = new Date();
-      LogError(e);
+
+      if (startedTransaction) {
+        // if we started a transaction, we need to rollback
+        startedTransaction = false;
+        await this.RollbackTransaction();
+      }
+
       return false;
     }
   }

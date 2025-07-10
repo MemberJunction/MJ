@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { YouTubeBaseAction } from '../youtube-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to get analytics for a YouTube channel
  */
-@RegisterClass(YouTubeBaseAction, 'YouTubeGetChannelAnalyticsAction')
+@RegisterClass(BaseAction, 'YouTubeGetChannelAnalyticsAction')
 export class YouTubeGetChannelAnalyticsAction extends YouTubeBaseAction {
     /**
      * Get analytics for a YouTube channel

@@ -9,7 +9,7 @@ export class ActionEntityExtended extends ActionEntity {
      * Returns true if this action is a core MemberJunction framework action, false otherwise.
      */
     public get IsCoreAction(): boolean {
-        return this.Category?.trim().toLowerCase() === ActionEngineBase.Instance.CoreCategoryName.trim().toLowerCase();
+        return ActionEngineBase.Instance.IsCoreAction(this);
     }
 
     /**

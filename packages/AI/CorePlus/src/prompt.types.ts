@@ -10,7 +10,7 @@
  */
 
 import { AIPromptEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
-import { ChatResult, ChatMessage } from '@memberjunction/ai';
+import { ChatResult, ChatMessage, AIAPIKey } from '@memberjunction/ai';
 import { UserInfo } from '@memberjunction/core';
 
 
@@ -406,6 +406,24 @@ export class AIPromptParams {
    * Can also be controlled via MJ_AI_VERBOSE environment variable.
    */
   verbose?: boolean;
+
+  /**
+   * Optional API keys to use for this prompt execution.
+   * When provided, these keys will override the global API keys for the specified driver classes.
+   * This allows for runtime API key configuration without modifying environment variables
+   * or global settings.
+   * 
+   * @example
+   * ```typescript
+   * const params = new AIPromptParams();
+   * params.prompt = myPrompt;
+   * params.apiKeys = [
+   *   { driverClass: 'OpenAILLM', apiKey: 'sk-...' },
+   *   { driverClass: 'AnthropicLLM', apiKey: 'sk-ant-...' }
+   * ];
+   * ```
+   */
+  apiKeys?: AIAPIKey[];
 }
 
 

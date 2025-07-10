@@ -1,6 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BusinessCentralBaseAction } from '../business-central-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Interface for a Customer from Business Central
@@ -40,7 +41,7 @@ export interface BCAddress {
 /**
  * Action to retrieve customers from Microsoft Dynamics 365 Business Central
  */
-@RegisterClass(BusinessCentralBaseAction, 'GetBusinessCentralCustomersAction')
+@RegisterClass(BaseAction, 'GetBusinessCentralCustomersAction')
 export class GetBusinessCentralCustomersAction extends BusinessCentralBaseAction {
     
     /**

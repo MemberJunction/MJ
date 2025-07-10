@@ -2,12 +2,13 @@ import { RegisterClass } from '@memberjunction/global';
 import { InstagramBaseAction } from '../instagram-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogError } from '@memberjunction/core';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Retrieves detailed insights and analytics for a specific Instagram post.
  * Available metrics vary by post type (feed, reels, stories).
  */
-@RegisterClass(InstagramBaseAction, 'Instagram - Get Post Insights')
+@RegisterClass(BaseAction, 'Instagram - Get Post Insights')
 export class InstagramGetPostInsightsAction extends InstagramBaseAction {
     
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {

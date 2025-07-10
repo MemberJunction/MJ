@@ -1,6 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseRecordMutationAction } from "./base-record-mutation.action";
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Generic action for creating new entity records in the database.
@@ -33,7 +34,7 @@ import { BaseRecordMutationAction } from "./base-record-mutation.action";
  * const primaryKey = result.Params.find(p => p.Name === 'PrimaryKey')?.Value;
  * ```
  */
-@RegisterClass(BaseRecordMutationAction, "CreateRecordAction")
+@RegisterClass(BaseAction, "CreateRecordAction")
 export class CreateRecordAction extends BaseRecordMutationAction {
     /**
      * Creates a new record for the specified entity type.

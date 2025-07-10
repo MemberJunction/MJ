@@ -15,7 +15,7 @@ import {
 } from '@angular/core';
 import { Location } from '@angular/common';
 import { ActivatedRoute, ActivationEnd, Router } from '@angular/router';
-import { LogError, UserInfo, CompositeKey, LogStatus, RunView } from '@memberjunction/core';
+import { LogError, UserInfo, CompositeKey, LogStatus, RunView, RunViewParams, RunViewResult } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
 import { Container } from '@memberjunction/ng-container-directives';
@@ -27,7 +27,9 @@ import {
   MJAPISkipResult,
   SkipAPIAnalysisCompleteResponse,
   SkipAPIResponse,
+  SimpleRunView,
   SkipResponsePhase,
+  SkipComponentRootSpec,
 } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
 import { CopyScalarsAndArrays, InvokeManualResize, MJEvent, MJEventType, MJGlobal, SafeJSONParse } from '@memberjunction/global';
@@ -2284,14 +2286,21 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       return [componentName];
     } else {
       // For user-added components, return all registered components
-      return Array.from(this.registeredTestComponents.keys());
+      const item = this.registeredTestComponents.get(componentName);
+      if (item) {
+        return item.childComponents;
+      }
+      else {
+        console.warn(`No registered components found for ${componentName}`);
+        return [];
+      }
     }
   }
   
   /**
    * Process a SkipComponentRootSpec and register all components recursively
    */
-  private async processSkipComponentSpec(spec: any, rootName?: string): Promise<{
+  private async processSkipComponentSpec(spec: any): Promise<{
     success: boolean;
     rootComponentName: string;
     registeredComponents: string[];
@@ -2301,8 +2310,8 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     const registeredComponents: string[] = [];
     
     try {
-      // Register root component
-      const rootComponentName = rootName || spec.componentName;
+      // Register root component (plain function, auto-wrapped)
+      const rootComponentName = spec.componentName;
       const success = await compileAndRegisterComponent(
         rootComponentName,
         spec.componentCode,
@@ -2317,7 +2326,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         errors.push(`Failed to register root component: ${rootComponentName}`);
       }
       
-      // Recursively register child components
+      // Recursively register child components (plain functions, auto-wrapped)
       if (spec.childComponents && Array.isArray(spec.childComponents)) {
         for (const child of spec.childComponents) {
           await this.registerComponentHierarchy(child, registeredComponents, errors);
@@ -2351,6 +2360,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   ): Promise<void> {
     try {
       if (spec.componentCode) {
+        // Child components are plain functions, auto-wrapped
         const success = await compileAndRegisterComponent(
           spec.componentName,
           spec.componentCode,
@@ -2706,9 +2716,24 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     const tempContainer = document.createElement('div');
     tempContainer.style.display = 'none';
     document.body.appendChild(tempContainer);
-    
+
+    // this is done to get React loaded
+    const tempSpec: SkipComponentRootSpec = {
+      componentCode: 'function TempComponent() {};',
+      componentName: 'TempComponent',
+      functionalRequirements: 'Load React and other libraries',
+      technicalDesign: 'Temporary component to load libraries',
+      componentType: 'report',
+      title: 'Temporary Component',
+      description: 'This component is used to load React and other libraries for testing purposes',
+      callbackStrategy: 'none',
+      childComponents: [],
+      stateStructure: {},
+      userExplanation: 'This component is used to load React and other libraries for testing purposes',
+      techExplanation: 'This component is used to load React and other libraries for testing purposes'
+    }
     const tempHost = new SkipReactComponentHost({
-      componentCode: 'function createComponent(React) { return { component: () => null }; }',
+      component: tempSpec,
       container: tempContainer,
       data: {},
       metadata: { requiredChildComponents: [], componentContext: 'Global', version: 'v1' }
@@ -2837,7 +2862,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
           counter++;
         }
         
-        const result = await this.processSkipComponentSpec(spec, componentName);
+        const result = await this.processSkipComponentSpec(spec);
         
         if (result.success) {
           // Add to dropdown
@@ -2952,15 +2977,29 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
           return { component: WrapperComponent };
         }
       `;
-      
+     
+      // The React host will handle all registration automatically
       const host = new SkipReactComponentHost({
-        componentCode: wrapperCode,
+        component: {
+          componentName: 'TestWrapper',
+          componentCode: wrapperCode,
+          componentType: 'other',
+          childComponents: [], // No child components for the wrapper
+          functionalRequirements: 'Test wrapper component',
+          technicalDesign: 'Wrapper for testing components',
+          description: 'Wrapper component for testing',
+          callbackStrategy: 'none',
+          stateStructure: {},
+          title: 'Test Wrapper',
+          userExplanation: 'This is a test wrapper',
+          techExplanation: 'Wraps components for testing'
+        } as SkipComponentRootSpec,
         container: container,
         data: {},
         initialState: {},
         utilities: {
           md: {} as any,
-          rv: new RunView() as any,
+          rv: new TestRunView() as SimpleRunView,
           rq: {} as any
         },
         metadata: {
@@ -2985,5 +3024,21 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       container.innerHTML = `<div style="color: red; padding: 20px;">Error rendering component: ${error}</div>`;
       return null;
     }
+  }
+}
+
+
+class TestRunView implements SimpleRunView {
+  private _rv: RunView;
+  constructor() {
+    this._rv = new RunView();
+  }
+  public runView(params: RunViewParams): Promise<RunViewResult> {
+    console.log('Running single view with params:', params);
+    return this._rv.RunView(params);
+  }
+  public runViews(params: RunViewParams[]): Promise<RunViewResult[]> {
+    console.log('Running multiple views with params:', params);
+    return this._rv.RunViews(params);
   }
 }

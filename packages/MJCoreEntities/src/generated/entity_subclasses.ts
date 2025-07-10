@@ -484,7 +484,8 @@ export const ActionSchema = z.object({
     Name: z.string().describe(`
         * * Field Name: Name
         * * Display Name: Name
-        * * SQL Data Type: nvarchar(425)`),
+        * * SQL Data Type: nvarchar(425)
+    * * Description: The name of the action. Must be unique within the combination of CategoryID and ParentID. Actions with the same name can exist in different categories or under different parents.`),
     Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
@@ -1037,7 +1038,8 @@ export const AIAgentSchema = z.object({
     LogoURL: z.string().nullable().describe(`
         * * Field Name: LogoURL
         * * Display Name: Logo URL
-        * * SQL Data Type: nvarchar(255)`),
+        * * SQL Data Type: nvarchar(255)
+    * * Description: URL to an image file or base64 data URI (e.g., data:image/png;base64,...) for the agent logo. Takes precedence over IconClass in UI display.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -1140,6 +1142,18 @@ export const AIAgentSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)
         * * Default Value: ["*"]
     * * Description: JSON array of paths that define which parts of the payload sub-agents are allowed to write back upstream. Use ["*"] to allow all writes, or specify paths like ["analysis.results", "recommendations.*"]`),
+    PayloadSelfReadPaths: z.string().nullable().describe(`
+        * * Field Name: PayloadSelfReadPaths
+        * * Display Name: Payload Self Read Paths
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can read. Controls downstream data 
+flow when the agent executes its own prompt step.`),
+    PayloadSelfWritePaths: z.string().nullable().describe(`
+        * * Field Name: PayloadSelfWritePaths
+        * * Display Name: Payload Self Write Paths
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can write back. Controls upstream 
+data flow when the agent executes its own prompt step.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -1711,6 +1725,12 @@ export const AIPromptSchema = z.object({
         * * Display Name: Top Log Probs
         * * SQL Data Type: int
     * * Description: Default number of top log probabilities to include when IncludeLogProbs is true. Can be overridden at runtime.`),
+    FailoverStrategy: z.string().describe(`
+        * * Field Name: FailoverStrategy
+        * * Display Name: Failover Strategy
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: SameModelDifferentVendor
+    * * Description: Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None`),
     FailoverMaxAttempts: z.number().nullable().describe(`
         * * Field Name: FailoverMaxAttempts
         * * Display Name: Failover Max Attempts
@@ -1723,12 +1743,6 @@ export const AIPromptSchema = z.object({
         * * SQL Data Type: int
         * * Default Value: 5
     * * Description: Initial delay in seconds between failover attempts`),
-    FailoverStrategy: z.string().describe(`
-        * * Field Name: FailoverStrategy
-        * * Display Name: Failover Strategy
-        * * SQL Data Type: nvarchar(50)
-        * * Default Value: SameModelDifferentVendor
-    * * Description: Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None`),
     FailoverModelStrategy: z.string().describe(`
         * * Field Name: FailoverModelStrategy
         * * Display Name: Failover Model Strategy
@@ -7550,6 +7564,17 @@ export const AIAgentRunSchema = z.object({
         * * Display Name: Message
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Final message from the agent to the end user at the end of a run`),
+    LastRunID: z.string().nullable().describe(`
+        * * Field Name: LastRunID
+        * * Display Name: Last Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: Links to the previous run in a chain. Different from ParentRunID which is for sub-agent hierarchy.`),
+    StartingPayload: z.string().nullable().describe(`
+        * * Field Name: StartingPayload
+        * * Display Name: Starting Payload
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: The initial payload provided at the start of this run. Can be populated from the FinalPayload of the LastRun.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -8470,6 +8495,12 @@ export const AIPromptRunSchema = z.object({
         * * Display Name: Failover Durations
         * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON array of duration in milliseconds for each failover attempt`),
+    OriginalModelID: z.string().nullable().describe(`
+        * * Field Name: OriginalModelID
+        * * Display Name: Original Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    * * Description: The AI Model ID that was originally attempted before any failovers`),
     OriginalRequestStartTime: z.date().nullable().describe(`
         * * Field Name: OriginalRequestStartTime
         * * Display Name: Original Request Start Time
@@ -8480,12 +8511,6 @@ export const AIPromptRunSchema = z.object({
         * * Display Name: Total Failover Duration
         * * SQL Data Type: int
     * * Description: Total time spent in failover attempts in milliseconds`),
-    OriginalModelID: z.string().nullable().describe(`
-        * * Field Name: OriginalModelID
-        * * Display Name: Original Model ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
-    * * Description: The AI Model ID that was originally attempted before any failovers`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -11958,7 +11983,8 @@ export const UserSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
     Email: z.string().describe(`
         * * Field Name: Email
-        * * SQL Data Type: nvarchar(100)`),
+        * * SQL Data Type: nvarchar(100)
+    * * Description: Unique email address for the user. This field must be unique across all users in the system.`),
     Type: z.union([z.literal('User'), z.literal('Owner')]).describe(`
         * * Field Name: Type
         * * SQL Data Type: nchar(15)
@@ -13724,6 +13750,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     * * Field Name: Name
     * * Display Name: Name
     * * SQL Data Type: nvarchar(425)
+    * * Description: The name of the action. Must be unique within the combination of CategoryID and ParentID. Actions with the same name can exist in different categories or under different parents.
     */
     get Name(): string {
         return this.Get('Name');
@@ -14824,6 +14851,7 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
  * * Schema: __mj
  * * Base Table: AIAgentRequest
  * * Base View: vwAIAgentRequests
+ * * @description Table to log AI Agent requests, responses, and their statuses.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -15159,6 +15187,7 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     * * Field Name: LogoURL
     * * Display Name: Logo URL
     * * SQL Data Type: nvarchar(255)
+    * * Description: URL to an image file or base64 data URI (e.g., data:image/png;base64,...) for the agent logo. Takes precedence over IconClass in UI display.
     */
     get LogoURL(): string | null {
         return this.Get('LogoURL');
@@ -15397,6 +15426,34 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     }
     set PayloadUpstreamPaths(value: string) {
         this.Set('PayloadUpstreamPaths', value);
+    }
+
+    /**
+    * * Field Name: PayloadSelfReadPaths
+    * * Display Name: Payload Self Read Paths
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can read. Controls downstream data 
+flow when the agent executes its own prompt step.
+    */
+    get PayloadSelfReadPaths(): string | null {
+        return this.Get('PayloadSelfReadPaths');
+    }
+    set PayloadSelfReadPaths(value: string | null) {
+        this.Set('PayloadSelfReadPaths', value);
+    }
+
+    /**
+    * * Field Name: PayloadSelfWritePaths
+    * * Display Name: Payload Self Write Paths
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can write back. Controls upstream 
+data flow when the agent executes its own prompt step.
+    */
+    get PayloadSelfWritePaths(): string | null {
+        return this.Get('PayloadSelfWritePaths');
+    }
+    set PayloadSelfWritePaths(value: string | null) {
+        this.Set('PayloadSelfWritePaths', value);
     }
 
     /**
@@ -16169,22 +16226,25 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
 
     /**
     * Validate() method override for AI Prompts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * FailoverStrategy: This rule ensures that the FailoverStrategy field, if specified, must be either 'None', 'PowerRank', 'NextBestModel', 'SameModelDifferentVendor', or left blank (unset).
+    * * FailoverModelStrategy: This rule ensures that the value for FailoverModelStrategy is either 'RequireSameModel', 'PreferDifferentModel', 'PreferSameModel', or left blank (not set). Any other value is not allowed.
+    * * FailoverErrorScope: This rule ensures that the FailoverErrorScope field can only be set to 'ServiceErrorOnly', 'RateLimitOnly', 'NetworkOnly', 'All', or left empty.
     * * CacheSimilarityThreshold: This rule ensures that if a cache similarity threshold is provided, it must be a value between 0 and 1, inclusive. If no value is provided, that's also allowed.
     * * CacheTTLSeconds: This rule ensures that if the cache expiration time in seconds is provided, it must be greater than zero.
     * * Table-Level: This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.
     * * Table-Level: This rule ensures that if the cache match type is set to 'Vector', the cache similarity threshold must be specified. If the match type is anything other than 'Vector', the similarity threshold can be left empty.
     * * Table-Level: This rule ensures that if the parallelization mode is set to 'StaticCount', then the number of parallel tasks (ParallelCount) must be provided.
     * * Table-Level: This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then the Parallel Config Param field must be filled in. For any other mode, the Parallel Config Param can be left empty.
-    * * Table-Level: This rule ensures that if the OutputType is set to 'object', an OutputExample must be provided. If the OutputType is anything other than 'object', providing an OutputExample is not required.
-    * * FailoverErrorScope: This rule ensures that the FailoverErrorScope field can only be set to 'ServiceErrorOnly', 'RateLimitOnly', 'NetworkOnly', 'All', or left empty.
-    * * FailoverStrategy: This rule ensures that the FailoverStrategy field, if specified, must be either 'None', 'PowerRank', 'NextBestModel', 'SameModelDifferentVendor', or left blank (unset).
-    * * FailoverModelStrategy: This rule ensures that the value for FailoverModelStrategy is either 'RequireSameModel', 'PreferDifferentModel', 'PreferSameModel', or left blank (not set). Any other value is not allowed.  
+    * * Table-Level: This rule ensures that if the OutputType is set to 'object', an OutputExample must be provided. If the OutputType is anything other than 'object', providing an OutputExample is not required.  
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
+        this.ValidateFailoverStrategyAllowedValues(result);
+        this.ValidateFailoverModelStrategyAgainstAllowedValues(result);
+        this.ValidateFailoverErrorScopeAgainstAllowedValues(result);
         this.ValidateCacheSimilarityThresholdIsBetweenZeroAndOne(result);
         this.ValidateCacheTTLSecondsGreaterThanZero(result);
         this.ValidateResultSelectorPromptIDNotEqualID(result);
@@ -16192,11 +16252,65 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
         this.ValidateParallelCountWhenParallelizationModeIsStaticCount(result);
         this.ValidateParallelConfigParamRequiredForConfigParamMode(result);
         this.ValidateOutputExampleWhenOutputTypeObject(result);
-        this.ValidateFailoverErrorScopeAgainstAllowedValues(result);
-        this.ValidateFailoverStrategyAllowedValues(result);
-        this.ValidateFailoverModelStrategyAgainstAllowedValues(result);
 
         return result;
+    }
+
+    /**
+    * This rule ensures that the FailoverStrategy field, if specified, must be either 'None', 'PowerRank', 'NextBestModel', 'SameModelDifferentVendor', or left blank (unset).
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateFailoverStrategyAllowedValues(result: ValidationResult) {
+    	const allowed = [
+    		"None",
+    		"PowerRank",
+    		"NextBestModel",
+    		"SameModelDifferentVendor",
+    		null, // Allowing null/undefined as valid per the constraint
+    		undefined
+    	];
+    	if (!allowed.includes(this.FailoverStrategy)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"FailoverStrategy",
+    			"The failover strategy must be 'None', 'PowerRank', 'NextBestModel', 'SameModelDifferentVendor', or left blank.",
+    			this.FailoverStrategy,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * This rule ensures that the value for FailoverModelStrategy is either 'RequireSameModel', 'PreferDifferentModel', 'PreferSameModel', or left blank (not set). Any other value is not allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateFailoverModelStrategyAgainstAllowedValues(result: ValidationResult) {
+    	const allowedValues = ["RequireSameModel", "PreferDifferentModel", "PreferSameModel", null];
+    	if (this.FailoverModelStrategy !== null &&
+    		!allowedValues.includes(this.FailoverModelStrategy)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"FailoverModelStrategy",
+    			"FailoverModelStrategy must be null or one of: 'RequireSameModel', 'PreferDifferentModel', 'PreferSameModel'.",
+    			this.FailoverModelStrategy,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * This rule ensures that the FailoverErrorScope field can only be set to 'ServiceErrorOnly', 'RateLimitOnly', 'NetworkOnly', 'All', or left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateFailoverErrorScopeAgainstAllowedValues(result: ValidationResult) {
+    	const allowedValues = ["ServiceErrorOnly", "RateLimitOnly", "NetworkOnly", "All", null];
+    	if (!allowedValues.includes(this.FailoverErrorScope)) {
+    		result.Errors.push(new ValidationErrorInfo("FailoverErrorScope", "The failover error scope must be one of: 'ServiceErrorOnly', 'RateLimitOnly', 'NetworkOnly', 'All', or left empty.", this.FailoverErrorScope, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -16280,63 +16394,6 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     public ValidateOutputExampleWhenOutputTypeObject(result: ValidationResult) {
     	if (this.OutputType === "object" && (this.OutputExample === null || this.OutputExample === undefined)) {
     		result.Errors.push(new ValidationErrorInfo("OutputExample", "When OutputType is 'object', OutputExample must be provided.", this.OutputExample, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the FailoverErrorScope field can only be set to 'ServiceErrorOnly', 'RateLimitOnly', 'NetworkOnly', 'All', or left empty.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateFailoverErrorScopeAgainstAllowedValues(result: ValidationResult) {
-    	const allowedValues = ["ServiceErrorOnly", "RateLimitOnly", "NetworkOnly", "All", null];
-    	if (!allowedValues.includes(this.FailoverErrorScope)) {
-    		result.Errors.push(new ValidationErrorInfo("FailoverErrorScope", "The failover error scope must be one of: 'ServiceErrorOnly', 'RateLimitOnly', 'NetworkOnly', 'All', or left empty.", this.FailoverErrorScope, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the FailoverStrategy field, if specified, must be either 'None', 'PowerRank', 'NextBestModel', 'SameModelDifferentVendor', or left blank (unset).
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateFailoverStrategyAllowedValues(result: ValidationResult) {
-    	const allowed = [
-    		"None",
-    		"PowerRank",
-    		"NextBestModel",
-    		"SameModelDifferentVendor",
-    		null, // Allowing null/undefined as valid per the constraint
-    		undefined
-    	];
-    	if (!allowed.includes(this.FailoverStrategy)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"FailoverStrategy",
-    			"The failover strategy must be 'None', 'PowerRank', 'NextBestModel', 'SameModelDifferentVendor', or left blank.",
-    			this.FailoverStrategy,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    }
-
-    /**
-    * This rule ensures that the value for FailoverModelStrategy is either 'RequireSameModel', 'PreferDifferentModel', 'PreferSameModel', or left blank (not set). Any other value is not allowed.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateFailoverModelStrategyAgainstAllowedValues(result: ValidationResult) {
-    	const allowedValues = ["RequireSameModel", "PreferDifferentModel", "PreferSameModel", null];
-    	if (this.FailoverModelStrategy !== null &&
-    		!allowedValues.includes(this.FailoverModelStrategy)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"FailoverModelStrategy",
-    			"FailoverModelStrategy must be null or one of: 'RequireSameModel', 'PreferDifferentModel', 'PreferSameModel'.",
-    			this.FailoverModelStrategy,
-    			ValidationErrorType.Failure
-    		));
     	}
     }
 
@@ -17001,6 +17058,20 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     }
 
     /**
+    * * Field Name: FailoverStrategy
+    * * Display Name: Failover Strategy
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: SameModelDifferentVendor
+    * * Description: Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None
+    */
+    get FailoverStrategy(): string {
+        return this.Get('FailoverStrategy');
+    }
+    set FailoverStrategy(value: string) {
+        this.Set('FailoverStrategy', value);
+    }
+
+    /**
     * * Field Name: FailoverMaxAttempts
     * * Display Name: Failover Max Attempts
     * * SQL Data Type: int
@@ -17026,20 +17097,6 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     }
     set FailoverDelaySeconds(value: number | null) {
         this.Set('FailoverDelaySeconds', value);
-    }
-
-    /**
-    * * Field Name: FailoverStrategy
-    * * Display Name: Failover Strategy
-    * * SQL Data Type: nvarchar(50)
-    * * Default Value: SameModelDifferentVendor
-    * * Description: Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None
-    */
-    get FailoverStrategy(): string {
-        return this.Get('FailoverStrategy');
-    }
-    set FailoverStrategy(value: string) {
-        this.Set('FailoverStrategy', value);
     }
 
     /**
@@ -29838,6 +29895,7 @@ export class FileEntity extends BaseEntity<FileEntityType> {
  * * Schema: __mj
  * * Base Table: GeneratedCodeCategory
  * * Base View: vwGeneratedCodeCategories
+ * * @description Categorization for generated code, including optional parent-child relationships.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -29949,6 +30007,7 @@ export class GeneratedCodeCategoryEntity extends BaseEntity<GeneratedCodeCategor
  * * Schema: __mj
  * * Base Table: GeneratedCode
  * * Base View: vwGeneratedCodes
+ * * @description Stores LLM-generated code snippets, tracking their source, category, and validation status.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -31208,6 +31267,7 @@ export class ListEntity extends BaseEntity<ListEntityType> {
  * * Schema: __mj
  * * Base Table: AIAgentPrompt
  * * Base View: vwAIAgentPrompts
+ * * @description Links AI agents with the prompts they use, including execution order and context handling.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -31449,6 +31509,7 @@ export class AIAgentPromptEntity extends BaseEntity<AIAgentPromptEntityType> {
  * * Schema: __mj
  * * Base Table: AIAgentRunStep
  * * Base View: vwAIAgentRunSteps
+ * * @description Provides basic, step-by-step tracking of agent execution. Each step represents a discrete action within an agent run, such as prompt execution, tool usage, decision making, or sub-agent coordination.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -31753,6 +31814,7 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
  * * Schema: __mj
  * * Base Table: AIAgentRun
  * * Base View: vwAIAgentRuns
+ * * @description Tracks individual execution runs of AI agents, including hierarchical sub-agent runs. Provides basic logging, state persistence, and resource tracking for agent executions. Supports pause/resume functionality through state serialization.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -32167,6 +32229,33 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     }
 
     /**
+    * * Field Name: LastRunID
+    * * Display Name: Last Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: Links to the previous run in a chain. Different from ParentRunID which is for sub-agent hierarchy.
+    */
+    get LastRunID(): string | null {
+        return this.Get('LastRunID');
+    }
+    set LastRunID(value: string | null) {
+        this.Set('LastRunID', value);
+    }
+
+    /**
+    * * Field Name: StartingPayload
+    * * Display Name: Starting Payload
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The initial payload provided at the start of this run. Can be populated from the FinalPayload of the LastRun.
+    */
+    get StartingPayload(): string | null {
+        return this.Get('StartingPayload');
+    }
+    set StartingPayload(value: string | null) {
+        this.Set('StartingPayload', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -32200,6 +32289,7 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
  * * Schema: __mj
  * * Base Table: AIAgentType
  * * Base View: vwAIAgentTypes
+ * * @description Defines types of AI agents with their system prompts and behavioral characteristics. Each agent type represents a category of agents that share common system-level instructions and capabilities.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -32354,6 +32444,7 @@ export class AIAgentTypeEntity extends BaseEntity<AIAgentTypeEntityType> {
  * * Schema: __mj
  * * Base Table: AIConfigurationParam
  * * Base View: vwAIConfigurationParams
+ * * @description Stores configuration parameters that can be referenced by prompts and used to control execution behavior.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -32500,6 +32591,7 @@ export class AIConfigurationParamEntity extends BaseEntity<AIConfigurationParamE
  * * Schema: __mj
  * * Base Table: AIConfiguration
  * * Base View: vwAIConfigurations
+ * * @description Stores configurations for AI prompt execution environments and settings.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -32670,6 +32762,7 @@ export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType>
  * * Schema: __mj
  * * Base Table: AIModelCost
  * * Base View: vwAIModelCosts
+ * * @description Stores historical and current pricing information for AI models across different vendors, with optional temporal tracking and support for different processing types
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -33007,6 +33100,7 @@ export class AIModelCostEntity extends BaseEntity<AIModelCostEntityType> {
  * * Schema: __mj
  * * Base Table: AIModelPriceType
  * * Base View: vwAIModelPriceTypes
+ * * @description Defines the different types of pricing metrics used by AI model vendors (e.g., Tokens, Minutes, Characters, API Calls)
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -33123,6 +33217,7 @@ export class AIModelPriceTypeEntity extends BaseEntity<AIModelPriceTypeEntityTyp
  * * Schema: __mj
  * * Base Table: AIModelPriceUnitType
  * * Base View: vwAIModelPriceUnitTypes
+ * * @description Defines the unit scales used for pricing (e.g., Per 1M Tokens, Per 1K Tokens, Per Minute). Includes driver class for normalization calculations
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -33266,6 +33361,7 @@ export class AIModelPriceUnitTypeEntity extends BaseEntity<AIModelPriceUnitTypeE
  * * Schema: __mj
  * * Base Table: AIModelVendor
  * * Base View: vwAIModelVendors
+ * * @description Associates AI models with vendors providing them, including vendor-specific implementation details.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -33592,6 +33688,7 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
  * * Schema: __mj
  * * Base Table: AIPromptModel
  * * Base View: vwAIPromptModels
+ * * @description Associates AI prompts with specific models and configurations, including execution details.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -33941,6 +34038,7 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
  * * Schema: __mj
  * * Base Table: AIPromptRun
  * * Base View: vwAIPromptRuns
+ * * @description Tracks AI prompt executions including timings, inputs, outputs, and performance metrics.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -34763,6 +34861,20 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     }
 
     /**
+    * * Field Name: OriginalModelID
+    * * Display Name: Original Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    * * Description: The AI Model ID that was originally attempted before any failovers
+    */
+    get OriginalModelID(): string | null {
+        return this.Get('OriginalModelID');
+    }
+    set OriginalModelID(value: string | null) {
+        this.Set('OriginalModelID', value);
+    }
+
+    /**
     * * Field Name: OriginalRequestStartTime
     * * Display Name: Original Request Start Time
     * * SQL Data Type: datetime
@@ -34786,20 +34898,6 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     }
     set TotalFailoverDuration(value: number | null) {
         this.Set('TotalFailoverDuration', value);
-    }
-
-    /**
-    * * Field Name: OriginalModelID
-    * * Display Name: Original Model ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
-    * * Description: The AI Model ID that was originally attempted before any failovers
-    */
-    get OriginalModelID(): string | null {
-        return this.Get('OriginalModelID');
-    }
-    set OriginalModelID(value: string | null) {
-        this.Set('OriginalModelID', value);
     }
 
     /**
@@ -34863,6 +34961,7 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
  * * Schema: __mj
  * * Base Table: AIVendorTypeDefinition
  * * Base View: vwAIVendorTypeDefinitions
+ * * @description Defines the possible types of AI vendors, such as Model Developer or Inference Provider.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -34952,6 +35051,7 @@ export class AIVendorTypeDefinitionEntity extends BaseEntity<AIVendorTypeDefinit
  * * Schema: __mj
  * * Base Table: AIVendorType
  * * Base View: vwAIVendorTypes
+ * * @description Associates vendors with their types (Model Developer, Inference Provider) and tracks the status of each role.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -35120,6 +35220,7 @@ export class AIVendorTypeEntity extends BaseEntity<AIVendorTypeEntityType> {
  * * Schema: __mj
  * * Base Table: AIVendor
  * * Base View: vwAIVendors
+ * * @description Stores information about AI vendors providing models and/or inference services.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -35210,6 +35311,7 @@ export class AIVendorEntity extends BaseEntity<AIVendorEntityType> {
  * * Schema: __mj
  * * Base Table: ArtifactType
  * * Base View: vwArtifactTypes
+ * * @description Defines the types of artifacts that can be created within conversations
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -35326,6 +35428,7 @@ export class ArtifactTypeEntity extends BaseEntity<ArtifactTypeEntityType> {
  * * Schema: __mj
  * * Base Table: ConversationArtifactPermission
  * * Base View: vwConversationArtifactPermissions
+ * * @description Manages user permissions for conversation artifacts
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -35444,6 +35547,7 @@ export class ConversationArtifactPermissionEntity extends BaseEntity<Conversatio
  * * Schema: __mj
  * * Base Table: ConversationArtifactVersion
  * * Base View: vwConversationArtifactVersions
+ * * @description Stores versions of conversation artifacts
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -35609,6 +35713,7 @@ export class ConversationArtifactVersionEntity extends BaseEntity<ConversationAr
  * * Schema: __mj
  * * Base Table: ConversationArtifact
  * * Base View: vwConversationArtifacts
+ * * @description Stores metadata for artifacts created within conversations
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -35777,6 +35882,7 @@ export class ConversationArtifactEntity extends BaseEntity<ConversationArtifactE
  * * Schema: __mj
  * * Base Table: DashboardUserPreference
  * * Base View: vwDashboardUserPreferences
+ * * @description Stores dashboard preferences for users and system defaults. The absence of a record for a dashboard means it is not shown.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -35969,6 +36075,7 @@ export class DashboardUserPreferenceEntity extends BaseEntity<DashboardUserPrefe
  * * Schema: __mj
  * * Base Table: DashboardUserState
  * * Base View: vwDashboardUserStates
+ * * @description Stores user-specific dashboard state information
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -36092,6 +36199,7 @@ export class DashboardUserStateEntity extends BaseEntity<DashboardUserStateEntit
  * * Schema: __mj
  * * Base Table: ReportUserState
  * * Base View: vwReportUserStates
+ * * @description Tracks individual user state within interactive reports
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -36213,6 +36321,7 @@ export class ReportUserStateEntity extends BaseEntity<ReportUserStateEntityType>
  * * Schema: __mj
  * * Base Table: ReportVersion
  * * Base View: vwReportVersions
+ * * @description Stores iterations of report logic, structure, and layout changes
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -44128,6 +44237,7 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     /**
     * * Field Name: Email
     * * SQL Data Type: nvarchar(100)
+    * * Description: Unique email address for the user. This field must be unique across all users in the system.
     */
     get Email(): string {
         return this.Get('Email');

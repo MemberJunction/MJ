@@ -14,30 +14,28 @@ export interface LoopAgentResponse<P = any> {
     /**
      * Indicates whether the entire task has been completed successfully.
      * When true, the agent loop will terminate and return the final result.
-     * When false, processing will continue based on nextStep.
+     * Defaults to false. When false, processing will continue based on nextStep.
      */
-    taskComplete: boolean;
+    taskComplete?: boolean;
     
     /**
      * A message that provides information to the caller, which is either a human, another computer system, or 
-     * a parent agent. This message should be readable, clear and provide insight. The structured
-     * details of the result of the agent's execution should not be here, but rather be included in the @see payload.
+     * another agent. This message should be readable, clear and provide insight. The structured
+     * details of the result of the agent's execution should **not** be here, but rather be included in the @see payload.
      * 
-     * This message should include EVERYTHING that you want the user to be able to read, they do not
-     * see what is in the payload, so even if this is redundant with the payload, it is important to
-     * include it here so that the user can read it.
-     *
-     * This message is returned regardless of whether taskComplete is true or false, allowing
-     * the agent to communicate with its caller.
+     * This message should be returned regardless of whether taskComplete is true or false, allowing
+     * the agent to communicate with its caller. The message is not required if nextStep.type is 'Sub-Agent' or 'Actions'
      * 
      * In the event of taskComplete being false and the nextStep.type is 'chat', this message
      * will be sent to the user as a chat message.
+     * 
+     * Finally, this is a brief message, do not include markdown, HTML, or other formatting and limit it to 100 words.
      * @type {string}
      */
-    message: string;
+    message?: string;
 
     /**
-     * Agent's payload change requests. Leave this as undefined if NO changes are needed.
+     * Agent's payload change requests. If no changes are needed, **OMIT** this field entirely.
      * See @see AgentPayloadChangeRequest for details on how to structure this.
      * @type {P}
      */
@@ -48,7 +46,7 @@ export interface LoopAgentResponse<P = any> {
      * This should be a clear, concise explanation of why the agent chose
      * the specific next step or to complete, helping with debugging and transparency.
      */
-    reasoning: string;
+    reasoning?: string;
     
     /**
      * The agent's confidence level in its decision (0.0 to 1.0).
@@ -79,12 +77,6 @@ export interface LoopAgentResponse<P = any> {
          */
         actions?: Array<{
             /**
-             * The unique identifier (UUID) of the action to execute.
-             * Must match an action ID from the available actions list.
-             */
-            id: string;
-            
-            /**
              * The human-readable name of the action.
              * Should match the name from the available actions list.
              */
@@ -94,22 +86,16 @@ export interface LoopAgentResponse<P = any> {
              * Parameters to pass to the action.
              * Keys must match the parameter names defined in the action's schema.
              * Values should match the expected types for each parameter.
-             */
+             */  
             params: Record<string, unknown>;
         }>;
-        
+         
         /**
          * Sub-agent to invoke. Required when type is 'sub-agent'.
          * Only one sub-agent can be invoked at a time.
          * @optional
          */
         subAgent?: {
-            /**
-             * The unique identifier (UUID) of the sub-agent to execute.
-             * Must match a sub-agent ID from the available sub-agents list.
-             */
-            id: string;
-            
             /**
              * The human-readable name of the sub-agent.
              * Should match the name from the available sub-agents list.

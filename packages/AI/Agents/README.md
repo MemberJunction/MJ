@@ -76,6 +76,15 @@ const result = await agent.Execute({
     conversationMessages: messages,
     contextUser: user
 });
+
+// Using run chaining to maintain context across multiple runs
+const followUpResult = await runner.RunAgent({
+    agent: agentEntity,
+    conversationMessages: newMessages,
+    contextUser: user,
+    lastRunId: result.agentRun.ID,
+    autoPopulateLastRunPayload: true // Automatically use previous run's final payload
+});
 ```
 
 ## Agent Configuration
@@ -152,6 +161,33 @@ export class MyCustomAgentType extends BaseAgentType {
 
 ## Advanced Features
 
+### Run Chaining
+
+The framework supports linking multiple agent runs together to maintain context across interactions:
+
+```typescript
+// Execute an agent with run chaining
+const result = await agent.Execute({
+    agent: agentEntity,
+    conversationMessages: messages,
+    contextUser: user,
+    lastRunId: previousRunId,        // Links to previous run
+    autoPopulateLastRunPayload: true  // Auto-loads previous payload
+});
+
+// The framework will:
+// 1. Load the FinalPayload from the previous run
+// 2. Set it as StartingPayload for the new run
+// 3. Use it as the initial payload if none provided
+// 4. Validate against circular references in the chain
+```
+
+Key features:
+- **LastRunID**: Links runs in a chain (different from ParentRunID for sub-agents)
+- **StartingPayload**: Captures the initial state of each run
+- **Auto-population**: Reduces bandwidth by avoiding payload round-trips
+- **Circular reference detection**: Prevents infinite loops in run chains
+
 ### Payload Management and Change Detection
 
 The framework includes sophisticated payload management with automatic change detection:
@@ -183,6 +219,40 @@ const changeResult = payloadManager.applyAgentChangeRequest(
     PayloadUpstreamPaths: ["analysis.*", "recommendations"]  // What sub-agent can write
 }
 ```
+
+**Operation-Level Payload Control**:
+The framework supports fine-grained control over which operations (add, update, delete) are allowed on specific payload paths:
+
+```typescript
+// Basic syntax - all operations allowed (backward compatible)
+PayloadUpstreamPaths: ["analysis.*", "recommendations"]
+
+// Operation-specific syntax using colon notation
+PayloadUpstreamPaths: [
+    "analysis.*:add,update",      // Can add or update, but not delete
+    "recommendations:add",        // Can only add new recommendations
+    "summary:update",            // Can only update existing summary
+    "temp.*:delete",             // Can only delete temporary data
+    "metadata.tags:add,delete"   // Can add/remove tags but not modify existing
+]
+
+// For agent's own payload access (PayloadSelfWritePaths)
+PayloadSelfWritePaths: [
+    "workspace.*",               // Full access to workspace
+    "results:add",               // Can only add results, not modify
+    "status:update"              // Can only update status field
+]
+```
+
+Operation types:
+- `add` - Create new properties or array elements
+- `update` - Modify existing values
+- `delete` - Remove properties or array elements
+
+When operations are restricted, the framework will:
+- Log warnings when unauthorized operations are attempted
+- Block the disallowed changes while preserving allowed ones
+- Include operation details in the audit trail
 
 ### Hierarchical Prompt Execution
 ```typescript
@@ -239,6 +309,8 @@ Key entities used by the agent framework:
 - **AIPrompt**: Reusable prompt templates with placeholders
 - **AIAgentPrompt**: Links agents to prompts with execution order
 - **AIAgentRun**: Tracks complete agent executions
+  - `LastRunID`: Links to previous run in a chain (for run chaining)
+  - `StartingPayload`: Initial payload for the run
 - **AIAgentRunStep**: Records individual steps within runs
   - `PayloadAtStart`: JSON snapshot of payload before step
   - `PayloadAtEnd`: JSON snapshot of payload after step
@@ -274,6 +346,40 @@ const result = await runner.RunAgent({
 });
 ```
 
+### Payload Operation Control Example
+```typescript
+// Configure an agent with specific operation permissions
+const analysisAgent = {
+    Name: 'DataAnalysisAgent',
+    PayloadSelfWritePaths: JSON.stringify([
+        "workspace.*",              // Full control over workspace
+        "analysis.results:add",     // Can only add new results
+        "analysis.status:update",   // Can only update status
+        "temp.*:add,delete"        // Can add/delete temp data, but not modify
+    ])
+};
+
+// Configure a sub-agent with restricted write access
+const validationAgent = {
+    Name: 'ValidationAgent',
+    PayloadDownstreamPaths: JSON.stringify([
+        "data.*",                   // Can read all data
+        "analysis.results"          // Can read analysis results
+    ]),
+    PayloadUpstreamPaths: JSON.stringify([
+        "data.validated:update",    // Can only update validation flag
+        "errors:add",              // Can only add errors, not modify
+        "warnings:add,delete"      // Can add/remove warnings
+    ])
+};
+
+// When the sub-agent tries unauthorized operations:
+// - Attempt to delete data.records → Blocked (no delete permission)
+// - Attempt to update errors → Blocked (only add permission)
+// - Add new warning → Allowed
+// - Update data.validated → Allowed
+```
+
 ### Custom Decision Tree Agent
 ```typescript
 @RegisterClass(BaseAgentType, "DecisionTreeAgent")
@@ -302,6 +408,45 @@ For detailed architecture information, see [agent-architecture.md](./agent-archi
 ## Contributing
 
 Contributions are welcome! Please see the main MemberJunction [contributing guide](../../../CONTRIBUTING.md).
+
+## API Keys
+
+The AI Agents framework supports flexible API key management through integration with the AI Prompts system. For detailed information about API key configuration, see the [AI Prompts API Keys documentation](../Prompts/README.md#api-keys).
+
+### Using Runtime API Keys with Agents
+
+You can provide API keys at agent execution time for multi-tenant scenarios:
+
+```typescript
+import { AgentRunner, ExecuteAgentParams } from '@memberjunction/ai-agents';
+import { AIAPIKey } from '@memberjunction/ai';
+
+const runner = new AgentRunner();
+
+// Execute agent with specific API keys
+const result = await runner.RunAgent({
+    agent: agentEntity,
+    conversationMessages: messages,
+    contextUser: user,
+    apiKeys: [
+        { driverClass: 'OpenAILLM', apiKey: 'sk-user-specific-key' },
+        { driverClass: 'AnthropicLLM', apiKey: 'sk-ant-department-key' }
+    ]
+});
+
+// API keys are automatically propagated to:
+// - All prompt executions by the agent
+// - Sub-agent executions
+// - Context compression operations
+```
+
+### Benefits for Agent Systems
+
+Runtime API keys are particularly useful for agent architectures:
+- **Multi-tenant isolation**: Different customers use their own API keys
+- **Cost attribution**: Track API usage per department or project
+- **Security**: Limit exposure of production API keys
+- **Testing**: Use test API keys for development agents
 
 ## License
 

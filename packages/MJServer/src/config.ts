@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { cosmiconfigSync } from 'cosmiconfig';
-import { LogError } from '@memberjunction/core';
+import { LogError, LogStatus } from '@memberjunction/core';
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
@@ -191,6 +191,7 @@ export function loadConfig() {
   if (configSearchResult.isEmpty) {
     throw new Error(`Config file ${configSearchResult.filepath} is empty or does not exist.`);
   }
+  LogStatus(`Config file found at ${configSearchResult.filepath}`);
 
   const configParsing = configInfoSchema.safeParse(configSearchResult.config);
   if (!configParsing.success) {

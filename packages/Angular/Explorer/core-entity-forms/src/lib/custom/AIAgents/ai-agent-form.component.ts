@@ -452,8 +452,32 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
     public formatExecutionTimeFromDates(startDate: Date, endDate: Date): string {
         if (!startDate || !endDate) return 'N/A';
-        
-        const milliseconds = endDate.getTime() - startDate.getTime();
+
+        // check to see if we have dates or timestamps
+        let startTime;
+        let endTime;
+        if (typeof startDate === 'string') {
+            startTime = new Date(startDate).getTime();
+        }
+        else if (typeof startDate === 'number') {   
+            startTime = startDate;
+        }
+        else {
+            startTime = startDate.getTime();
+        }
+        if (typeof endDate === 'string') {
+            endTime = new Date(endDate).getTime();
+        }
+        else if (typeof endDate === 'number') {
+            endTime = endDate;
+        }
+        else {
+            endTime = endDate.getTime();
+        }
+
+        if (isNaN(startTime) || isNaN(endTime)) 
+            return 'N/A';        
+        const milliseconds = endTime - startTime;
         return this.formatExecutionTime(milliseconds);
     }
 
@@ -516,7 +540,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /**
      * Gets a preview of the execution result for collapsed view
      */
-    public getExecutionResultPreview(execution: AIAgentRunEntity): string {
+    public getExecutionResultPreview(execution: AIAgentRunEntity, trimLongMessages: boolean): string {
         try {
             if (!execution.Result) return 'No result';
             
@@ -526,16 +550,25 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             // Extract the user message if it exists
             if (parsed.returnValue?.nextStep?.userMessage) {
                 const message = parsed.returnValue.nextStep.userMessage;
-                return message.length > 120 ? message.substring(0, 120) + '...' : message;
+                if (trimLongMessages)
+                    return message.length > 120 ? message.substring(0, 120) + '...' : message;
+                else
+                    return message;
             }
             
             // Otherwise return the stringified result
-            const stringified = JSON.stringify(parsed);
-            return stringified.length > 120 ? stringified.substring(0, 120) + '...' : stringified;
+            const stringified = JSON.stringify(parsed, null, 2);
+            if (trimLongMessages)
+                return stringified.length > 120 ? stringified.substring(0, 120) + '...' : stringified;
+            else
+                return stringified;
         } catch {
             // If not JSON, just return the string
             const result = execution.Result || '';
-            return result.length > 120 ? result.substring(0, 120) + '...' : result;
+            if (trimLongMessages)
+                return result.length > 120 ? result.substring(0, 120) + '...' : result;
+            else
+                return result;
         }
     }
     

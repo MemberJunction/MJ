@@ -2,11 +2,12 @@ import { RegisterClass } from '@memberjunction/global';
 import { YouTubeBaseAction } from '../youtube-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { MediaFile } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to upload a video to YouTube
  */
-@RegisterClass(YouTubeBaseAction, 'YouTubeUploadVideoAction')
+@RegisterClass(BaseAction, 'YouTubeUploadVideoAction')
 export class YouTubeUploadVideoAction extends YouTubeBaseAction {
     /**
      * Upload video to YouTube

@@ -333,6 +333,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /** Track the last processed run ID to avoid reprocessing same data */
     private lastProcessedRunId: string | null = null;
     
+    /** Track the last agent run ID for run chaining */
+    private lastAgentRunId: string | null = null;
+    
     /** Agent conversation state tracking */
     private agentConversationState: any = null;
     private lastAgentPayload: any = null;
@@ -957,6 +960,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         // Clear execution data and tracking when explicitly resetting
         this.currentAgentRun = null;
         this.lastProcessedRunId = null;
+        this.lastAgentRunId = null; // Clear run chaining
         this.executionMonitorMode = 'historical';
         // Reset conversation state
         this.agentConversationState = null;
@@ -997,6 +1001,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         // Clear execution data when explicitly starting a new conversation
         this.currentAgentRun = null;
         this.lastProcessedRunId = null;
+        this.lastAgentRunId = null; // Clear run chaining
         
         this.resetHarness();
         MJNotificationService.Instance.CreateSimpleNotification(
@@ -1267,8 +1272,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             
             // Execute the agent
             const query = `
-                mutation RunAIAgent($agentId: String!, $messages: String!, $sessionId: String!, $data: String, $templateData: String) {
-                    RunAIAgent(agentId: $agentId, messages: $messages, sessionId: $sessionId, data: $data, templateData: $templateData) {
+                mutation RunAIAgent($agentId: String!, $messages: String!, $sessionId: String!, $data: String, $templateData: String, $lastRunId: String, $autoPopulateLastRunPayload: Boolean) {
+                    RunAIAgent(agentId: $agentId, messages: $messages, sessionId: $sessionId, data: $data, templateData: $templateData, lastRunId: $lastRunId, autoPopulateLastRunPayload: $autoPopulateLastRunPayload) {
                         success
                         errorMessage
                         executionTimeMs
@@ -1282,7 +1287,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 messages: JSON.stringify(messages),
                 sessionId: sessionId,
                 data: Object.keys(dataContext).length > 0 ? JSON.stringify(dataContext) : null,
-                templateData: Object.keys(templateData).length > 0 ? JSON.stringify(templateData) : null
+                templateData: Object.keys(templateData).length > 0 ? JSON.stringify(templateData) : null,
+                lastRunId: this.lastAgentRunId,
+                autoPopulateLastRunPayload: this.lastAgentRunId ? true : false
             };
 
             
@@ -1374,6 +1381,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 
                 // Update the tracking ID when we set new execution data
                 this.lastProcessedRunId = assistantMessage.agentRunId || null;
+                
+                // Update the last agent run ID for run chaining
+                if (fullResult.agentRun?.ID) {
+                    this.lastAgentRunId = fullResult.agentRun.ID;
+                }
                 
                 // Store the full result as raw content for debugging/inspection
                 assistantMessage.rawContent = executionResult.payload;

@@ -1,5 +1,130 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
+## 2.67.0
+
+### Patch Changes
+
+- @memberjunction/ng-base-forms@2.67.0
+- @memberjunction/ng-entity-form-dialog@2.67.0
+- @memberjunction/ng-entity-permissions@2.67.0
+- @memberjunction/ng-shared@2.67.0
+- @memberjunction/ng-simple-record-list@2.67.0
+- @memberjunction/ng-user-view-grid@2.67.0
+- @memberjunction/ng-container-directives@2.67.0
+- @memberjunction/ng-notifications@2.67.0
+- @memberjunction/ng-tabstrip@2.67.0
+- @memberjunction/core@2.67.0
+- @memberjunction/core-entities@2.67.0
+- @memberjunction/global@2.67.0
+
+## 2.66.0
+
+### Patch Changes
+
+- @memberjunction/ng-user-view-grid@2.66.0
+- @memberjunction/ng-shared@2.66.0
+- @memberjunction/ng-notifications@2.66.0
+- @memberjunction/ng-base-forms@2.66.0
+- @memberjunction/ng-entity-form-dialog@2.66.0
+- @memberjunction/ng-entity-permissions@2.66.0
+- @memberjunction/ng-simple-record-list@2.66.0
+- @memberjunction/ng-container-directives@2.66.0
+- @memberjunction/ng-tabstrip@2.66.0
+- @memberjunction/core@2.66.0
+- @memberjunction/core-entities@2.66.0
+- @memberjunction/global@2.66.0
+
+## 2.65.0
+
+### Patch Changes
+
+- Updated dependencies [619488f]
+- Updated dependencies [b029c5d]
+  - @memberjunction/global@2.65.0
+  - @memberjunction/core-entities@2.65.0
+  - @memberjunction/ng-base-forms@2.65.0
+  - @memberjunction/ng-entity-form-dialog@2.65.0
+  - @memberjunction/ng-entity-permissions@2.65.0
+  - @memberjunction/ng-simple-record-list@2.65.0
+  - @memberjunction/ng-user-view-grid@2.65.0
+  - @memberjunction/ng-container-directives@2.65.0
+  - @memberjunction/ng-notifications@2.65.0
+  - @memberjunction/core@2.65.0
+  - @memberjunction/ng-shared@2.65.0
+  - @memberjunction/ng-tabstrip@2.65.0
+
+## 2.64.0
+
+### Patch Changes
+
+- Updated dependencies [e775f2b]
+  - @memberjunction/core-entities@2.64.0
+  - @memberjunction/ng-entity-form-dialog@2.64.0
+  - @memberjunction/ng-entity-permissions@2.64.0
+  - @memberjunction/ng-shared@2.64.0
+  - @memberjunction/ng-simple-record-list@2.64.0
+  - @memberjunction/ng-user-view-grid@2.64.0
+  - @memberjunction/ng-notifications@2.64.0
+  - @memberjunction/ng-base-forms@2.64.0
+  - @memberjunction/ng-container-directives@2.64.0
+  - @memberjunction/ng-tabstrip@2.64.0
+  - @memberjunction/core@2.64.0
+  - @memberjunction/global@2.64.0
+
+## 2.63.1
+
+### Patch Changes
+
+- Updated dependencies [59e2c4b]
+  - @memberjunction/global@2.63.1
+  - @memberjunction/ng-base-forms@2.63.1
+  - @memberjunction/ng-entity-form-dialog@2.63.1
+  - @memberjunction/ng-entity-permissions@2.63.1
+  - @memberjunction/ng-simple-record-list@2.63.1
+  - @memberjunction/ng-user-view-grid@2.63.1
+  - @memberjunction/ng-container-directives@2.63.1
+  - @memberjunction/ng-notifications@2.63.1
+  - @memberjunction/core@2.63.1
+  - @memberjunction/core-entities@2.63.1
+  - @memberjunction/ng-shared@2.63.1
+  - @memberjunction/ng-tabstrip@2.63.1
+
+## 2.63.0
+
+### Patch Changes
+
+- Updated dependencies [28e8a85]
+  - @memberjunction/core-entities@2.63.0
+  - @memberjunction/ng-entity-form-dialog@2.63.0
+  - @memberjunction/ng-entity-permissions@2.63.0
+  - @memberjunction/ng-shared@2.63.0
+  - @memberjunction/ng-simple-record-list@2.63.0
+  - @memberjunction/ng-user-view-grid@2.63.0
+  - @memberjunction/ng-notifications@2.63.0
+  - @memberjunction/ng-base-forms@2.63.0
+  - @memberjunction/ng-container-directives@2.63.0
+  - @memberjunction/ng-tabstrip@2.63.0
+  - @memberjunction/core@2.63.0
+  - @memberjunction/global@2.63.0
+
+## 2.62.0
+
+### Patch Changes
+
+- Updated dependencies [c995603]
+  - @memberjunction/core-entities@2.62.0
+  - @memberjunction/ng-entity-form-dialog@2.62.0
+  - @memberjunction/ng-entity-permissions@2.62.0
+  - @memberjunction/ng-shared@2.62.0
+  - @memberjunction/ng-simple-record-list@2.62.0
+  - @memberjunction/ng-user-view-grid@2.62.0
+  - @memberjunction/ng-notifications@2.62.0
+  - @memberjunction/ng-base-forms@2.62.0
+  - @memberjunction/ng-container-directives@2.62.0
+  - @memberjunction/ng-tabstrip@2.62.0
+  - @memberjunction/core@2.62.0
+  - @memberjunction/global@2.62.0
+
 ## 2.61.0
 
 ### Patch Changes

@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { HubSpotBaseAction } from '../hubspot-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to get all deals associated with a company in HubSpot
  */
-@RegisterClass(HubSpotBaseAction, 'GetDealsByCompanyAction')
+@RegisterClass(BaseAction, 'GetDealsByCompanyAction')
 export class GetDealsByCompanyAction extends HubSpotBaseAction {
     /**
      * Get all deals for a specific company

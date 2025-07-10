@@ -1,5 +1,5 @@
 import { BaseEngine, IMetadataProvider, UserInfo } from "@memberjunction/core";
-import { ActionEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
+import { ActionCategoryEntity, ActionEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
 import { ActionEntityExtended } from "./ActionEntity-Extended";
 
 
@@ -189,7 +189,7 @@ export class RunActionParams<TContext = any> {
  * Base class for Action metadata. 
  */
 export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
-   private __coreCategoryName = '__mj';
+   private __coreRootCategoryID = '15E03732-607E-4125-86F4-8C846EE88749'; // UUID within MJ forever for the ROOT category of System Actions
 
    /**
     * Returns the global instance of the class. This is a singleton class, so there is only one instance of it in the application. Do not directly create new instances of it, always use this method to get the instance.
@@ -199,6 +199,7 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
    }
 
     private _Actions: ActionEntityExtended[];
+    private _ActionCategories: ActionCategoryEntity[];
     private _Filters: ActionFilterEntity[];
     private _Params: ActionParamEntity[];
     private _ActionResultCodes: ActionResultCodeEntity[];
@@ -215,6 +216,10 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
          {
                EntityName: 'Actions',
                PropertyName: '_Actions'
+         }, 
+         {
+               EntityName: 'Action Categories',
+               PropertyName: '_ActionCategories'
          }, 
          {
                EntityName: 'Action Filters',
@@ -239,6 +244,9 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
     public get Actions(): ActionEntityExtended[] {
       return this._Actions;
     }
+    public get ActionCategories(): ActionCategoryEntity[] {
+      return this._ActionCategories;
+    }
     public get ActionParams(): ActionParamEntity[] {
       return this._Params;
     }
@@ -252,17 +260,75 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
       return this._ActionLibraries;
     }
 
+    /**
+     * Returns a list of all core actions.
+     */
     public get CoreActions(): ActionEntityExtended[] {
-      return this._Actions.filter((a) => a.IsCoreAction);
+      return this._Actions.filter((a) => this.IsCoreAction(a));
     }
+    /**
+     * Returns a list of all non-core actions.
+     */
     public get NonCoreActions(): ActionEntityExtended[] {
-      return this._Actions.filter((a) => !a.IsCoreAction);
+      return this._Actions.filter((a) => !this.IsCoreAction(a));
     }
 
-    public get CoreCategoryName(): string {
-      return this.__coreCategoryName;
-    }
-     
+   /**
+    * Returns the root category ID for core actions.
+    */
+   public get CoreActionsRootCategoryID(): string {
+      return this.__coreRootCategoryID;
+   }
+
+   /**
+    * Utility method that determines if a given Action Category ID is a child of the specified parent category ID.
+    * @param categoryId - The ID of the category to check.
+    * @param parentCategoryId - The ID of the parent category to check against.
+    * @returns True if the categoryId is a child of the parentCategoryId, false otherwise.
+    */
+   public IsChildCategoryOf(categoryId: string, parentCategoryId: string): boolean {
+      if (!categoryId || !parentCategoryId) {
+         return false;
+      }
+      if (categoryId.trim().toLowerCase() === parentCategoryId.trim().toLowerCase()) {
+         return true;
+      }
+      const category = this._ActionCategories.find(c => c.ID.trim().toLowerCase() === categoryId.trim().toLowerCase());
+      if (!category) {
+         return false;
+      }
+      // Check if the parent ID matches the parentCategoryId or if it is a child of the parentCategoryId
+      if (category.ParentID?.trim().toLowerCase() === parentCategoryId.trim().toLowerCase()) {
+         return true;
+      }
+      // If the parent ID is not the parentCategoryId, recursively check the parent category
+      return this.IsChildCategoryOf(category.ParentID, parentCategoryId);
+   }
+
+   /**
+    * Checks if the specified action is a core action by checking if its category is a child of the core actions root category.
+    * @param action - The action entity to check.
+    * @returns True if the action is a core action, false otherwise.
+    */
+   public IsCoreAction(action: ActionEntityExtended): boolean {
+      if (!action) {
+         return false;
+      }
+      return this.IsChildCategoryOf(action.CategoryID, this.CoreActionsRootCategoryID);
+   }
+
+   /**
+    * Checks if the specified category ID is a core action category at any level, using recursion to check the entire hierarchy.
+    * @param categoryId 
+    * @returns 
+    */
+   public IsCoreActionCategory(categoryId: string): boolean {
+      if (!categoryId) {
+         return false;
+      }
+      return this.IsChildCategoryOf(categoryId, this.CoreActionsRootCategoryID);
+   }
+
    /**
     * Returns an action based on its name
     * @param actionName 

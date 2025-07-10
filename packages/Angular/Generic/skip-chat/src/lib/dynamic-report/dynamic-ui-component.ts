@@ -127,6 +127,7 @@ import { marked } from 'marked';
                               <div class="details-content code-content">
                                 <mj-code-editor
                                   [value]="getComponentCode(option)"
+                                  [language]="'javascript'"
                                   [autoFocus]="false"
                                   [indentWithTab]="true"
                                   [readonly]="true"
@@ -325,6 +326,7 @@ import { marked } from 'marked';
                     <ng-template kendoTabContent>
                       <div class="details-content code-content">
                         <mj-code-editor
+                          [language]="'javascript'"
                           [value]="getComponentCode(reportOptions[0])"
                           [autoFocus]="false"
                           [indentWithTab]="true"
@@ -345,26 +347,14 @@ import { marked } from 'marked';
             </div>
           }
           
-          <!-- React component container -->
-          <div #htmlContainer style="flex: 1; position: relative; min-height: 0; overflow: auto;">
-            <!-- Content will be rendered here by React host -->
-            
-            <!-- Error overlay (shown on top of content when needed) -->
+          <!-- React component container or error display -->
           @if (currentError) {
-            <div style="position: absolute; 
-                        top: 0; 
-                        left: 0; 
-                        right: 0; 
-                        bottom: 0; 
-                        display: flex;
-                        align-items: flex-start;
-                        justify-content: center;
-                        padding-top: 20px;
-                        background: rgba(255, 255, 255, 0.95);
-                        z-index: 10;">
+            <!-- Error display container with proper height -->
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center; 
+                        min-height: 400px; padding: 20px; background: rgba(255, 255, 255, 0.95);">
               <div style="width: 90%; 
                           max-width: 600px; 
-                          height: 500px;
+                          max-height: 80vh;
                           background-color: #f8f9fa; 
                           border: 2px solid #dc3545; 
                           border-radius: 8px; 
@@ -411,8 +401,12 @@ import { marked } from 'marked';
                 </button>
               </div>
             </div>
+          } @else {
+            <!-- React component container (only shown when no error) -->
+            <div #htmlContainer style="flex: 1; position: relative; min-height: 0; overflow: auto;">
+              <!-- Content will be rendered here by React host -->
+            </div>
           }
-          </div>
         </div>
       </div>
     }
@@ -998,18 +992,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
                 });
                 markdown += '\n';
             }
-        }
-        
-        if (dataReq.hybridStrategy) {
-            markdown += `### Hybrid Strategy\n\n${dataReq.hybridStrategy.description}\n\n`;
-            if (dataReq.hybridStrategy.performanceNotes) {
-                markdown += `**Performance Notes:** ${dataReq.hybridStrategy.performanceNotes}\n\n`;
-            }
-        }
-        
-        if (dataReq.securityNotes) {
-            markdown += `### Security Considerations\n\n${dataReq.securityNotes}\n`;
-        }
+        } 
         
         const html = marked.parse(markdown);
         return this.sanitizer.sanitize(1, html);
@@ -1115,6 +1098,10 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             }
         });
         this.reactHostCache.clear();
+        
+        // Clean up registered components from the GlobalComponentRegistry
+        // Note: We don't remove them as they might be used by other instances
+        // The registry is designed to be a singleton that persists across component instances
     }
     
     ngOnChanges(changes: SimpleChanges): void {
@@ -1189,6 +1176,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         } 
     }
 
+
     /**
      * Create a React host for a specific option index
      */
@@ -1200,32 +1188,20 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         if (!container) return;
 
         try {
-            const componentCode = BuildSkipComponentCompleteCode(option.option);
-
-            // Check for unresolved placeholders in the code
-            if (componentCode.includes('<<') && componentCode.includes('>>')) {
-                const placeholderMatch = componentCode.match(/<<([^>]+)>>/);
-                const placeholderName = placeholderMatch ? placeholderMatch[1] : 'Unknown';
-                
-                this.currentError = {
-                    type: 'Incomplete Component',
-                    message: `This component option contains unresolved placeholders (${placeholderName}). The component generation was not completed successfully.`,
-                    technicalDetails: `The component code contains placeholder tokens that should have been replaced with actual implementations. This typically happens when the AI generation process was interrupted or encountered an error.\n\nPlaceholder found: <<${placeholderName}>>`
-                };
-                return;
-            }
-            
+            const component = option.option;
             const md = new Metadata();
             const data = this.getFlattenedDataContext();
             
             // Create the React component host directly in the tab container
+            // The host will handle registration automatically
             const reactHost = new SkipReactComponentHost({
-                componentCode: componentCode,
+                component,
                 container: container,
                 callbacks: this.callbacks,
                 data: data,
                 utilities: this.SetupUtilities(md),
                 styles: this.SetupStyles()
+                // metadata will be auto-populated from component.childComponents
             });
             
             // Initialize and render the React component
@@ -1254,6 +1230,9 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             } else if (e.message?.includes('is not defined')) {
                 errorType = 'Missing Dependency';
                 errorMessage = 'The component is trying to use a feature or library that is not available.';
+            } else if (e.message?.includes('Missing required child components')) {
+                errorType = 'Incomplete Component Specification';
+                errorMessage = e.message;
             } else if (e.message?.includes('Cannot read properties')) {
                 errorType = 'Property Access Error';
                 errorMessage = 'The component is trying to access data that doesn\'t exist. This often happens when property names don\'t match the data structure.';

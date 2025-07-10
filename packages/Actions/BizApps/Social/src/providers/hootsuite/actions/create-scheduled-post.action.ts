@@ -3,11 +3,12 @@ import { HootSuiteBaseAction } from '../hootsuite-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { MediaFile } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to create a scheduled post in HootSuite
  */
-@RegisterClass(HootSuiteBaseAction, 'HootSuiteCreateScheduledPostAction')
+@RegisterClass(BaseAction, 'HootSuiteCreateScheduledPostAction')
 export class HootSuiteCreateScheduledPostAction extends HootSuiteBaseAction {
     /**
      * Create a scheduled post in HootSuite

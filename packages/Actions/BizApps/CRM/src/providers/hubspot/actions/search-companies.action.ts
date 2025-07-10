@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { HubSpotBaseAction } from '../hubspot-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to search for companies in HubSpot
  */
-@RegisterClass(HubSpotBaseAction, 'SearchCompaniesAction')
+@RegisterClass(BaseAction, 'SearchCompaniesAction')
 export class SearchCompaniesAction extends HubSpotBaseAction {
     /**
      * Search for companies

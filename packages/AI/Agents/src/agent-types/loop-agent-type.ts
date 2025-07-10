@@ -86,17 +86,18 @@ export class LoopAgentType extends BaseAgentType {
             } catch (parseError) {
                 return {
                     terminate: false,
-                    step: 'Failed',
+                    step: 'Retry',
                     errorMessage: `Failed to parse JSON response: ${parseError.message}`
                 };
             }
             
             // Validate the response structure
-            if (!this.isValidLoopResponse(response)) {
+            const validationResult = this.isValidLoopResponse(response);
+            if (!validationResult.success) {
                 return {
                     terminate: false,
-                    step: 'Failed',
-                    errorMessage: 'Invalid response structure from loop agent prompt'
+                    step: 'Retry',
+                    errorMessage: validationResult.message
                 };
             }
 
@@ -120,7 +121,7 @@ export class LoopAgentType extends BaseAgentType {
             if (!response.nextStep) {
                 return {
                     terminate: false,
-                    step: 'Failed',
+                    step: 'Retry',
                     errorMessage: 'Task not complete but no next step provided'
                 };
             }
@@ -133,7 +134,8 @@ export class LoopAgentType extends BaseAgentType {
             switch (response.nextStep.type) {
                 case 'Sub-Agent':
                     if (!response.nextStep.subAgent) {
-                        retVal.step = 'Failed';
+                        retVal.step = 'Retry';
+                        retVal.message = 'When nextStep.type == "Sub-Agent", subAgent details must be specified';
                         retVal.errorMessage = 'Sub-agent details not specified';
                     }
                     else {
@@ -148,13 +150,13 @@ export class LoopAgentType extends BaseAgentType {
                     break;
                 case 'Actions':
                     if (!response.nextStep.actions || response.nextStep.actions.length === 0) {
-                        retVal.step = 'Failed';
+                        retVal.step = 'Retry';
+                        retVal.message = 'When nextStep.type == "Actions", 1 or more actions must be specified in the nextStep.actions array';
                         retVal.errorMessage = 'Actions not specified for action type';
                     }
                     else {
                         retVal.step = 'Actions',
                         retVal.actions = response.nextStep.actions.map(action => ({
-                            id: action.id,
                             name: action.name,
                             params: action.params
                         }))
@@ -162,7 +164,7 @@ export class LoopAgentType extends BaseAgentType {
                     break;
                 case 'Chat':
                     if (!response.message) {
-                        retVal.step = 'Failed';
+                        retVal.step = 'Retry';
                         retVal.errorMessage = 'Chat type specified but no user message provided';
                     }
                     else {
@@ -172,7 +174,7 @@ export class LoopAgentType extends BaseAgentType {
                     }
                     break;
                 default:
-                    retVal.step = 'Failed';
+                    retVal.step = 'Retry';
                     retVal.errorMessage = `Unknown next step type: ${response.nextStep.type}`;
                     break;
             }
@@ -181,7 +183,7 @@ export class LoopAgentType extends BaseAgentType {
             LogError(`Error in LoopAgentType.DetermineNextStep: ${error.message}`);
             return {
                 terminate: false,
-                step: 'Failed',
+                step: 'Retry',
                 errorMessage: `Failed to parse loop agent response: ${error.message}`
             };
         }
@@ -195,39 +197,45 @@ export class LoopAgentType extends BaseAgentType {
      * 
      * @private
      */
-    private isValidLoopResponse(simpleResponse: any): boolean {
+    private isValidLoopResponse(simpleResponse: any): {success: boolean, message?: string} {
         // Check required fields, first cast the simpleResponse to LoopAgentResponse
         // so we get the benefit of TypeScript's type checking below in this method
         const response = simpleResponse as LoopAgentResponse;
 
         if (typeof response !== 'object' || response === null) {
-            return false;
+            return {success: false, message: 'Invalid response format'};
+        }
+
+        if (!response.taskComplete) {
+            // if not provided, default to false to make processing work
+            response.taskComplete = false;
         }
 
         if (typeof response.taskComplete !== 'boolean') {
             LogError('LoopAgentResponse missing required field: taskComplete');
-            return false;
-        }
-
-        if (typeof response.reasoning !== 'string') {
-            LogError('LoopAgentResponse missing required field: reasoning');
-            return false;
+            return {success: false, message: 'Missing required field: taskComplete'};
         }
 
         // nextStep is optional when taskComplete is true
         if (!response.taskComplete && !response.nextStep) {
-            if (response.message?.trim().length > 0) {
-                // in this situation we have a message coming back but a malformed response
+            if (response.message?.trim().length > 0 || response.reasoning?.trim().length > 0) {
+                // in this situation we have a message or reasoning coming back but a malformed response
                 // so we can consider it a chat response becuase it is trying to communicate
                 // something back, better to provide that back than discarding it entirely
                 // possibly we will make this configurable in the future
                 response.nextStep = {
                     type: 'Chat'
                 };
+
+                if (response.message?.trim().length === 0) {
+                    // this means reasoning was provided but no message, copy reasoning to message 
+                    // as you shouldn't ever have that but we can handle it gracefully
+                    response.message = response.reasoning;
+                }
             }
             else {
                 LogError('LoopAgentResponse requires nextStep when taskComplete is false');
-                return false;
+                return {success: false, message: 'Missing nextStep is a required field when taskComplete is false'};
             }
         }
 
@@ -237,48 +245,40 @@ export class LoopAgentType extends BaseAgentType {
             const lcaseType = response.nextStep.type?.toLowerCase().trim();
             // allow the AI to mess up the case, but we need to validate it
             if (!validStepTypes.includes(lcaseType)) {
-                LogError(`LoopAgentResponse has invalid nextStep.type: ${response.nextStep.type}`);
-                return false;
+                const message = `LoopAgentResponse has invalid nextStep.type: ${response.nextStep.type}`;
+                LogError(message);
+                return {success: false, message};
             }
 
             // Validate specific fields based on type
             if (lcaseType === 'actions' && !response.nextStep.actions) {
-                LogError('LoopAgentResponse requires actions array for action type');
-                return false;
+                const message = 'LoopAgentResponse requires actions array for action type';
+                LogError(message);
+                return {success: false, message};
             }
 
             if (lcaseType === 'sub-agent' && !response.nextStep.subAgent) {
-                LogError('LoopAgentResponse requires subAgent object for sub-agent type');
-                return false;
+                const message = 'LoopAgentResponse requires subAgent object for sub-agent type';
+                LogError(message);
+                return {success: false, message};
+            }
+
+            if (lcaseType === 'chat' && !response.message) {
+                // check to see if we have reasoning, if so, use that, otherwise we have to fail
+                if (!response.reasoning || response.reasoning.trim().length === 0) {
+                    const message = 'LoopAgentResponse requires message for chat type';
+                    LogError(message);
+                    return {success: false, message};
+                } else {
+                    // if we have reasoning, use that as the message
+                    response.message = response.reasoning;
+                }
             }
         }
 
-        return true;
+        return {success: true};
     }
-
-    // /**
-    //  * Retrieves the payload from the prompt result.
-    //  * For LoopAgentType, this returns the parsed LoopAgentResponse.
-    //  * 
-    //  * @param {AIPromptRunResult} promptResult - The result from executing the agent's prompt
-    //  * @returns {Promise<T>} The extracted payload
-    //  */
-    // public async RetrievePayload<T = LoopAgentResponse>(promptResult: AIPromptRunResult): Promise<T> {
-    //     // the promptResult.result should be the LoopAgentResponse
-    //     if (!promptResult.success || !promptResult.result) {
-    //         throw new Error('Prompt execution Failed or returned no result');
-    //     }
-
-    //     const loopAgentResponse = promptResult.result as LoopAgentResponse;
-    //     if (!this.isValidLoopResponse(loopAgentResponse)) {
-    //         throw new Error('Invalid LoopAgentResponse structure');
-    //     }
-
-    //     // Return the response (the framework will handle applying payload changes)
-    //     return loopAgentResponse.payloadChangeRequest as T;
-    // }
-
-
+ 
     public static CURRENT_PAYLOAD_PLACHOLDER = '_CURRENT_PAYLOAD';
     /**
      * Injects a payload into the prompt parameters.

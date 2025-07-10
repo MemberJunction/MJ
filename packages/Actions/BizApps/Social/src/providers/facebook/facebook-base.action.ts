@@ -4,13 +4,14 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import FormData from 'form-data';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Base class for all Facebook actions.
  * Handles Facebook-specific authentication, API interactions, and rate limiting.
  * Uses Facebook Graph API v18.0 with OAuth 2.0.
  */
-@RegisterClass(BaseSocialMediaAction, 'FacebookBaseAction')
+@RegisterClass(BaseAction, 'FacebookBaseAction')
 export abstract class FacebookBaseAction extends BaseSocialMediaAction {
     /**
      * Internal method that must be implemented by derived action classes

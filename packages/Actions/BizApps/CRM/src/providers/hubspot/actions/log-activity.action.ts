@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { HubSpotBaseAction } from '../hubspot-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to log activities (calls, emails, meetings, notes) in HubSpot
  */
-@RegisterClass(HubSpotBaseAction, 'LogActivityAction')
+@RegisterClass(BaseAction, 'LogActivityAction')
 export class LogActivityAction extends HubSpotBaseAction {
     /**
      * Log an activity (engagement) in HubSpot

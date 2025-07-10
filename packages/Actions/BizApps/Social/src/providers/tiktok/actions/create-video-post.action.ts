@@ -1,12 +1,13 @@
 import { RegisterClass } from '@memberjunction/global';
 import { TikTokBaseAction } from '../tiktok-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to create a video post on TikTok
  * Note: This requires special API approval from TikTok
  */
-@RegisterClass(TikTokBaseAction, 'CreateVideoPostAction')
+@RegisterClass(BaseAction, 'CreateVideoPostAction')
 export class CreateVideoPostAction extends TikTokBaseAction {
     
     /**

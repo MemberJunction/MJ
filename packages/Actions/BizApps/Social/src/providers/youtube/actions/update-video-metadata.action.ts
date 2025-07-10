@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { YouTubeBaseAction } from '../youtube-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to update metadata for a YouTube video
  */
-@RegisterClass(YouTubeBaseAction, 'YouTubeUpdateVideoMetadataAction')
+@RegisterClass(BaseAction, 'YouTubeUpdateVideoMetadataAction')
 export class YouTubeUpdateVideoMetadataAction extends YouTubeBaseAction {
     /**
      * Update video metadata on YouTube

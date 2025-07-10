@@ -1,5 +1,51 @@
 # Change Log - @memberjunction/ai
 
+## 2.67.0
+
+### Patch Changes
+
+- @memberjunction/global@2.67.0
+
+## 2.66.0
+
+### Patch Changes
+
+- @memberjunction/global@2.66.0
+
+## 2.65.0
+
+### Patch Changes
+
+- 1d034b7: Added features for agent payload manager + api keys for models
+- Updated dependencies [619488f]
+  - @memberjunction/global@2.65.0
+
+## 2.64.0
+
+### Patch Changes
+
+- @memberjunction/global@2.64.0
+
+## 2.63.1
+
+### Patch Changes
+
+- Updated dependencies [59e2c4b]
+  - @memberjunction/global@2.63.1
+
+## 2.63.0
+
+### Patch Changes
+
+- @memberjunction/global@2.63.0
+
+## 2.62.0
+
+### Patch Changes
+
+- c995603: Better Error Handling and Failover in AI core and Promts
+  - @memberjunction/global@2.62.0
+
 ## 2.61.0
 
 ### Patch Changes

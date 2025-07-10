@@ -694,7 +694,7 @@ export class ExplorerNavigationItemResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Generated Code Categories
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Categorization for generated code, including optional parent-child relationships.` })
 export class GeneratedCodeCategory_ {
     @Field() 
     @MaxLength(16)
@@ -1212,7 +1212,7 @@ export class AIAgentNoteTypeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Agent Runs
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Tracks individual execution runs of AI agents, including hierarchical sub-agent runs. Provides basic logging, state persistence, and resource tracking for agent executions. Supports pause/resume functionality through state serialization.` })
 export class AIAgentRun_ {
     @Field({description: `Unique identifier for this agent run`}) 
     @MaxLength(16)
@@ -1310,6 +1310,13 @@ export class AIAgentRun_ {
         
     @Field({nullable: true, description: `Final message from the agent to the end user at the end of a run`}) 
     Message?: string;
+        
+    @Field({nullable: true, description: `Links to the previous run in a chain. Different from ParentRunID which is for sub-agent hierarchy.`}) 
+    @MaxLength(16)
+    LastRunID?: string;
+        
+    @Field({nullable: true, description: `The initial payload provided at the start of this run. Can be populated from the FinalPayload of the LastRun.`}) 
+    StartingPayload?: string;
         
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -1416,6 +1423,12 @@ export class CreateAIAgentRunInput {
 
     @Field({ nullable: true })
     Message: string | null;
+
+    @Field({ nullable: true })
+    LastRunID: string | null;
+
+    @Field({ nullable: true })
+    StartingPayload: string | null;
 }
     
 
@@ -1501,6 +1514,12 @@ export class UpdateAIAgentRunInput {
 
     @Field({ nullable: true })
     Message?: string | null;
+
+    @Field({ nullable: true })
+    LastRunID?: string | null;
+
+    @Field({ nullable: true })
+    StartingPayload?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -1625,7 +1644,7 @@ export class AIAgentRunResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Vendors
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Stores information about AI vendors providing models and/or inference services.` })
 export class AIVendor_ {
     @Field() 
     @MaxLength(16)
@@ -1849,7 +1868,7 @@ export class AIVendorResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Configurations
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Stores configurations for AI prompt execution environments and settings.` })
 export class AIConfiguration_ {
     @Field() 
     @MaxLength(16)
@@ -2120,7 +2139,7 @@ export class AIAgent_ {
     @Field({nullable: true, description: `A detailed description of the AI agent.`}) 
     Description?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `URL to an image file or base64 data URI (e.g., data:image/png;base64,...) for the agent logo. Takes precedence over IconClass in UI display.`}) 
     @MaxLength(510)
     LogoURL?: string;
         
@@ -2184,6 +2203,14 @@ export class AIAgent_ {
         
     @Field({description: `JSON array of paths that define which parts of the payload sub-agents are allowed to write back upstream. Use ["*"] to allow all writes, or specify paths like ["analysis.results", "recommendations.*"]`}) 
     PayloadUpstreamPaths: string;
+        
+    @Field({nullable: true, description: `JSON array of paths that specify what parts of the payload the agent's own prompt can read. Controls downstream data 
+flow when the agent executes its own prompt step.`}) 
+    PayloadSelfReadPaths?: string;
+        
+    @Field({nullable: true, description: `JSON array of paths that specify what parts of the payload the agent's own prompt can write back. Controls upstream 
+data flow when the agent executes its own prompt step.`}) 
+    PayloadSelfWritePaths?: string;
         
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -2290,6 +2317,12 @@ export class CreateAIAgentInput {
 
     @Field({ nullable: true })
     PayloadUpstreamPaths?: string;
+
+    @Field({ nullable: true })
+    PayloadSelfReadPaths: string | null;
+
+    @Field({ nullable: true })
+    PayloadSelfWritePaths: string | null;
 }
     
 
@@ -2354,6 +2387,12 @@ export class UpdateAIAgentInput {
 
     @Field({ nullable: true })
     PayloadUpstreamPaths?: string;
+
+    @Field({ nullable: true })
+    PayloadSelfReadPaths?: string | null;
+
+    @Field({ nullable: true })
+    PayloadSelfWritePaths?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -2548,7 +2587,7 @@ export class AIAgentResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Model Costs
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Stores historical and current pricing information for AI models across different vendors, with optional temporal tracking and support for different processing types` })
 export class AIModelCost_ {
     @Field() 
     @MaxLength(16)
@@ -2808,7 +2847,7 @@ export class AIModelCostResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Prompt Models
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Associates AI prompts with specific models and configurations, including execution details.` })
 export class AIPromptModel_ {
     @Field() 
     @MaxLength(16)
@@ -3057,7 +3096,7 @@ export class AIPromptModelResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Agent Types
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Defines types of AI agents with their system prompts and behavioral characteristics. Each agent type represents a category of agents that share common system-level instructions and capabilities.` })
 export class AIAgentType_ {
     @Field({description: `Unique identifier for the agent type`}) 
     @MaxLength(16)
@@ -3612,7 +3651,7 @@ export class AIAgentActionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Model Price Types
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Defines the different types of pricing metrics used by AI model vendors (e.g., Tokens, Minutes, Characters, API Calls)` })
 export class AIModelPriceType_ {
     @Field() 
     @MaxLength(16)
@@ -3930,15 +3969,15 @@ export class AIPrompt_ {
     @Field(() => Int, {nullable: true, description: `Default number of top log probabilities to include when IncludeLogProbs is true. Can be overridden at runtime.`}) 
     TopLogProbs?: number;
         
+    @Field({description: `Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None`}) 
+    @MaxLength(100)
+    FailoverStrategy: string;
+        
     @Field(() => Int, {nullable: true, description: `Maximum number of failover attempts before giving up`}) 
     FailoverMaxAttempts?: number;
         
     @Field(() => Int, {nullable: true, description: `Initial delay in seconds between failover attempts`}) 
     FailoverDelaySeconds?: number;
-        
-    @Field({description: `Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None`}) 
-    @MaxLength(100)
-    FailoverStrategy: string;
         
     @Field({description: `Strategy for selecting failover models. Options: PreferSameModel, PreferDifferentModel, RequireSameModel`}) 
     @MaxLength(100)
@@ -4131,14 +4170,14 @@ export class CreateAIPromptInput {
     @Field(() => Int, { nullable: true })
     TopLogProbs: number | null;
 
+    @Field({ nullable: true })
+    FailoverStrategy?: string;
+
     @Field(() => Int, { nullable: true })
     FailoverMaxAttempts?: number | null;
 
     @Field(() => Int, { nullable: true })
     FailoverDelaySeconds?: number | null;
-
-    @Field({ nullable: true })
-    FailoverStrategy?: string;
 
     @Field({ nullable: true })
     FailoverModelStrategy?: string;
@@ -4282,14 +4321,14 @@ export class UpdateAIPromptInput {
     @Field(() => Int, { nullable: true })
     TopLogProbs?: number | null;
 
+    @Field({ nullable: true })
+    FailoverStrategy?: string;
+
     @Field(() => Int, { nullable: true })
     FailoverMaxAttempts?: number | null;
 
     @Field(() => Int, { nullable: true })
     FailoverDelaySeconds?: number | null;
-
-    @Field({ nullable: true })
-    FailoverStrategy?: string;
 
     @Field({ nullable: true })
     FailoverModelStrategy?: string;
@@ -9138,7 +9177,7 @@ export class User_ {
     @MaxLength(100)
     Title?: string;
         
-    @Field() 
+    @Field({description: `Unique email address for the user. This field must be unique across all users in the system.`}) 
     @MaxLength(200)
     Email: string;
         
@@ -28192,7 +28231,7 @@ export class Action_ {
     @MaxLength(16)
     CategoryID?: string;
         
-    @Field() 
+    @Field({description: `The name of the action. Must be unique within the combination of CategoryID and ParentID. Actions with the same name can exist in different categories or under different parents.`}) 
     @MaxLength(850)
     Name: string;
         
@@ -34751,7 +34790,7 @@ export class ResourceLinkResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Conversation Artifact Versions
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Stores versions of conversation artifacts` })
 export class ConversationArtifactVersion_ {
     @Field() 
     @MaxLength(16)
@@ -34941,7 +34980,7 @@ export class ConversationArtifactVersionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Agent Requests
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Table to log AI Agent requests, responses, and their statuses.` })
 export class AIAgentRequest_ {
     @Field({description: `Primary key for the AIAgentRequest table, uniquely identifies each record.`}) 
     @MaxLength(16)
@@ -35167,7 +35206,7 @@ export class AIAgentRequestResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Model Vendors
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Associates AI models with vendors providing them, including vendor-specific implementation details.` })
 export class AIModelVendor_ {
     @Field() 
     @MaxLength(16)
@@ -35431,7 +35470,7 @@ export class AIModelVendorResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Vendor Type Definitions
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Defines the possible types of AI vendors, such as Model Developer or Inference Provider.` })
 export class AIVendorTypeDefinition_ {
     @Field() 
     @MaxLength(16)
@@ -35603,7 +35642,7 @@ export class AIVendorTypeDefinitionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Report User States
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Tracks individual user state within interactive reports` })
 export class ReportUserState_ {
     @Field() 
     @MaxLength(16)
@@ -35922,7 +35961,7 @@ export class QueryEntityResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Dashboard User States
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Stores user-specific dashboard state information` })
 export class DashboardUserState_ {
     @Field() 
     @MaxLength(16)
@@ -36086,7 +36125,7 @@ export class DashboardUserStateResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Artifact Types
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Defines the types of artifacts that can be created within conversations` })
 export class ArtifactType_ {
     @Field() 
     @MaxLength(16)
@@ -36264,7 +36303,7 @@ export class ArtifactTypeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Vendor Types
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Associates vendors with their types (Model Developer, Inference Provider) and tracks the status of each role.` })
 export class AIVendorType_ {
     @Field() 
     @MaxLength(16)
@@ -36438,7 +36477,7 @@ export class AIVendorTypeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Conversation Artifacts
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Stores metadata for artifacts created within conversations` })
 export class ConversationArtifact_ {
     @Field() 
     @MaxLength(16)
@@ -36670,7 +36709,7 @@ export class ConversationArtifactResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Agent Prompts
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Links AI agents with the prompts they use, including execution order and context handling.` })
 export class AIAgentPrompt_ {
     @Field() 
     @MaxLength(16)
@@ -36886,7 +36925,7 @@ export class AIAgentPromptResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Dashboard User Preferences
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Stores dashboard preferences for users and system defaults. The absence of a record for a dashboard means it is not shown.` })
 export class DashboardUserPreference_ {
     @Field() 
     @MaxLength(16)
@@ -39099,7 +39138,7 @@ export class ContentItemTagResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Generated Codes
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Stores LLM-generated code snippets, tracking their source, category, and validation status.` })
 export class GeneratedCode_ {
     @Field() 
     @MaxLength(16)
@@ -39344,7 +39383,7 @@ export class GeneratedCodeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Prompt Runs
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Tracks AI prompt executions including timings, inputs, outputs, and performance metrics.` })
 export class AIPromptRun_ {
     @Field() 
     @MaxLength(16)
@@ -39538,16 +39577,16 @@ export class AIPromptRun_ {
     @Field({nullable: true, description: `JSON array of duration in milliseconds for each failover attempt`}) 
     FailoverDurations?: string;
         
+    @Field({nullable: true, description: `The AI Model ID that was originally attempted before any failovers`}) 
+    @MaxLength(16)
+    OriginalModelID?: string;
+        
     @Field({nullable: true, description: `Timestamp when the original request started, before any failovers`}) 
     @MaxLength(8)
     OriginalRequestStartTime?: Date;
         
     @Field(() => Int, {nullable: true, description: `Total time spent in failover attempts in milliseconds`}) 
     TotalFailoverDuration?: number;
-        
-    @Field({nullable: true, description: `The AI Model ID that was originally attempted before any failovers`}) 
-    @MaxLength(16)
-    OriginalModelID?: string;
         
     @Field() 
     @MaxLength(510)
@@ -39752,13 +39791,13 @@ export class CreateAIPromptRunInput {
     FailoverDurations: string | null;
 
     @Field({ nullable: true })
+    OriginalModelID: string | null;
+
+    @Field({ nullable: true })
     OriginalRequestStartTime: Date | null;
 
     @Field(() => Int, { nullable: true })
     TotalFailoverDuration: number | null;
-
-    @Field({ nullable: true })
-    OriginalModelID: string | null;
 }
     
 
@@ -39933,13 +39972,13 @@ export class UpdateAIPromptRunInput {
     FailoverDurations?: string | null;
 
     @Field({ nullable: true })
+    OriginalModelID?: string | null;
+
+    @Field({ nullable: true })
     OriginalRequestStartTime?: Date | null;
 
     @Field(() => Int, { nullable: true })
     TotalFailoverDuration?: number | null;
-
-    @Field({ nullable: true })
-    OriginalModelID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -40054,7 +40093,7 @@ export class AIPromptRunResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Agent Run Steps
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Provides basic, step-by-step tracking of agent execution. Each step represents a discrete action within an agent run, such as prompt execution, tool usage, decision making, or sub-agent coordination.` })
 export class AIAgentRunStep_ {
     @Field({description: `Unique identifier for this execution step`}) 
     @MaxLength(16)
@@ -40324,7 +40363,7 @@ export class AIAgentRunStepResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Conversation Artifact Permissions
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Manages user permissions for conversation artifacts` })
 export class ConversationArtifactPermission_ {
     @Field() 
     @MaxLength(16)
@@ -40485,7 +40524,7 @@ export class ConversationArtifactPermissionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Model Price Unit Types
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Defines the unit scales used for pricing (e.g., Per 1M Tokens, Per 1K Tokens, Per Minute). Includes driver class for normalization calculations` })
 export class AIModelPriceUnitType_ {
     @Field() 
     @MaxLength(16)
@@ -40834,7 +40873,7 @@ export class AIAgentLearningCycleResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Report Versions
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Stores iterations of report logic, structure, and layout changes` })
 export class ReportVersion_ {
     @Field() 
     @MaxLength(16)
@@ -41021,7 +41060,7 @@ export class ReportVersionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Configuration Params
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Stores configuration parameters that can be referenced by prompts and used to control execution behavior.` })
 export class AIConfigurationParam_ {
     @Field() 
     @MaxLength(16)

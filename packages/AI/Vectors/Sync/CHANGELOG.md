@@ -1,5 +1,121 @@
 # Change Log - @memberjunction/ai-vector-sync
 
+## 2.67.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.67.0
+- @memberjunction/aiengine@2.67.0
+- @memberjunction/ai-mistral@2.67.0
+- @memberjunction/ai-openai@2.67.0
+- @memberjunction/ai-vectors-pinecone@2.67.0
+- @memberjunction/ai-vectors@2.67.0
+- @memberjunction/ai-vectordb@2.67.0
+- @memberjunction/core@2.67.0
+- @memberjunction/global@2.67.0
+- @memberjunction/templates-base-types@2.67.0
+- @memberjunction/templates@2.67.0
+
+## 2.66.0
+
+### Patch Changes
+
+- @memberjunction/aiengine@2.66.0
+- @memberjunction/ai-vectors-pinecone@2.66.0
+- @memberjunction/ai-vectors@2.66.0
+- @memberjunction/templates@2.66.0
+- @memberjunction/ai@2.66.0
+- @memberjunction/ai-mistral@2.66.0
+- @memberjunction/ai-openai@2.66.0
+- @memberjunction/ai-vectordb@2.66.0
+- @memberjunction/core@2.66.0
+- @memberjunction/global@2.66.0
+- @memberjunction/templates-base-types@2.66.0
+
+## 2.65.0
+
+### Patch Changes
+
+- Updated dependencies [1d034b7]
+- Updated dependencies [619488f]
+  - @memberjunction/ai@2.65.0
+  - @memberjunction/global@2.65.0
+  - @memberjunction/aiengine@2.65.0
+  - @memberjunction/ai-mistral@2.65.0
+  - @memberjunction/ai-openai@2.65.0
+  - @memberjunction/ai-vectors@2.65.0
+  - @memberjunction/templates@2.65.0
+  - @memberjunction/ai-vectors-pinecone@2.65.0
+  - @memberjunction/ai-vectordb@2.65.0
+  - @memberjunction/core@2.65.0
+  - @memberjunction/templates-base-types@2.65.0
+
+## 2.64.0
+
+### Patch Changes
+
+- @memberjunction/aiengine@2.64.0
+- @memberjunction/ai-vectors@2.64.0
+- @memberjunction/templates-base-types@2.64.0
+- @memberjunction/templates@2.64.0
+- @memberjunction/ai-vectors-pinecone@2.64.0
+- @memberjunction/ai@2.64.0
+- @memberjunction/ai-mistral@2.64.0
+- @memberjunction/ai-openai@2.64.0
+- @memberjunction/ai-vectordb@2.64.0
+- @memberjunction/core@2.64.0
+- @memberjunction/global@2.64.0
+
+## 2.63.1
+
+### Patch Changes
+
+- Updated dependencies [59e2c4b]
+  - @memberjunction/global@2.63.1
+  - @memberjunction/ai@2.63.1
+  - @memberjunction/aiengine@2.63.1
+  - @memberjunction/ai-mistral@2.63.1
+  - @memberjunction/ai-openai@2.63.1
+  - @memberjunction/ai-vectors-pinecone@2.63.1
+  - @memberjunction/ai-vectors@2.63.1
+  - @memberjunction/ai-vectordb@2.63.1
+  - @memberjunction/core@2.63.1
+  - @memberjunction/templates-base-types@2.63.1
+  - @memberjunction/templates@2.63.1
+
+## 2.63.0
+
+### Patch Changes
+
+- @memberjunction/aiengine@2.63.0
+- @memberjunction/ai-vectors@2.63.0
+- @memberjunction/templates-base-types@2.63.0
+- @memberjunction/templates@2.63.0
+- @memberjunction/ai-vectors-pinecone@2.63.0
+- @memberjunction/ai@2.63.0
+- @memberjunction/ai-mistral@2.63.0
+- @memberjunction/ai-openai@2.63.0
+- @memberjunction/ai-vectordb@2.63.0
+- @memberjunction/core@2.63.0
+- @memberjunction/global@2.63.0
+
+## 2.62.0
+
+### Patch Changes
+
+- Updated dependencies [c995603]
+  - @memberjunction/ai@2.62.0
+  - @memberjunction/aiengine@2.62.0
+  - @memberjunction/ai-mistral@2.62.0
+  - @memberjunction/ai-openai@2.62.0
+  - @memberjunction/ai-vectors@2.62.0
+  - @memberjunction/templates@2.62.0
+  - @memberjunction/templates-base-types@2.62.0
+  - @memberjunction/ai-vectors-pinecone@2.62.0
+  - @memberjunction/ai-vectordb@2.62.0
+  - @memberjunction/core@2.62.0
+  - @memberjunction/global@2.62.0
+
 ## 2.61.0
 
 ### Patch Changes

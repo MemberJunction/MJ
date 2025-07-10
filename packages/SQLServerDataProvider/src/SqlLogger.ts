@@ -10,6 +10,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { format as formatSql } from 'sql-formatter';
+import { ensureRegExps } from '@memberjunction/global';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 
 /**
@@ -27,12 +28,18 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
   private _emittedStatementCount: number = 0; // Track actually emitted statements
   private _fileHandle: fs.promises.FileHandle | null = null;
   private _disposed: boolean = false;
+  private _compiledPatterns: RegExp[] | undefined;
 
   constructor(id: string, filePath: string, options: SqlLoggingOptions = {}) {
     this.id = id;
     this.filePath = filePath;
     this.startTime = new Date();
     this.options = options;
+    
+    // Compile patterns once during construction
+    if (options.filterPatterns && options.filterPatterns.length > 0) {
+      this._compiledPatterns = ensureRegExps(options.filterPatterns);
+    }
   }
 
   /**
@@ -107,7 +114,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     }
     
     if (verbose) {
-      console.log(`Session ${this.id}: Statement passed filters, proceeding to log`);
+      console.log(`Session ${this.id}: Statement passed type filters, proceeding to process`);
     }
 
     let logEntry = '';
@@ -128,10 +135,51 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
         logEntry = logEntry.replace(`-- ${description}\n`, `-- ${description} (core SP call only)\n`);
       }
     }
+    
+    // Apply pattern filtering on the processed query
+    if (this._compiledPatterns && this._compiledPatterns.length > 0) {
+      const filterType = this.options.filterType || 'exclude'; // Default to exclude
+      const anyPatternMatches = this._compiledPatterns.some(pattern => pattern.test(processedQuery));
+      
+      if (verbose) {
+        console.log(`Session ${this.id}: Pattern filter check - filterType: ${filterType}, patterns: ${this._compiledPatterns.length}, anyMatch: ${anyPatternMatches}`);
+        console.log(`Session ${this.id}: Testing against processedQuery: ${processedQuery.substring(0, 100)}...`);
+      }
+      
+      if (filterType === 'exclude' && anyPatternMatches) {
+        if (verbose) {
+          console.log(`Session ${this.id}: Skipping - exclude pattern matched`);
+        }
+        return; // Skip logging if any exclude pattern matches
+      }
+      
+      if (filterType === 'include' && !anyPatternMatches) {
+        if (verbose) {
+          console.log(`Session ${this.id}: Skipping - no include pattern matched`);
+        }
+        return; // Skip logging if no include pattern matches
+      }
+    }
 
     // Replace schema names with Flyway placeholders if migration format
     if (this.options.formatAsMigration) {
-      processedQuery = processedQuery.replace(/\[(\w+)\]\./g, '[${flyway:defaultSchema}].');
+      // Escape ${...} patterns within SQL string literals to prevent Flyway from treating them as placeholders
+      // This regex matches string literals and replaces ${...} with $' + '{...} within them
+      processedQuery = this._escapeFlywaySyntaxInStrings(processedQuery);
+
+      // now, replace schema names with Flyway placeholders
+      const schemaName = this.options.defaultSchemaName;
+      if (schemaName?.length > 0) {
+        // Create a regex that matches the schema name with optional brackets
+        const schemaRegex = new RegExp(`\\[?${schemaName}\\]?\\.`, 'g');
+        processedQuery = processedQuery.replace(schemaRegex, '[${flyway:defaultSchema}].');
+      }
+      else {
+        // no default schema name provided
+        if (verbose) {
+          console.warn(`Session ${this.id}: No default schema name provided for Flyway migration format, using [\${flyway:defaultSchema}] placeholder`);
+        }
+      }
     }
 
     // Apply pretty printing if enabled
@@ -298,4 +346,20 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
 
     return sql;
   }
+
+  /**
+   * Escapes ${...} patterns within SQL string literals to prevent Flyway from interpreting them as placeholders.
+   * Converts ${templateVariable} to $' + '{templateVariable} within string literals.
+   * 
+   * @param sql - The SQL statement to process
+   * @returns The SQL with escaped template syntax within strings
+   */
+  private _escapeFlywaySyntaxInStrings(sql: string): string {
+    // Regex /\$\{/g matches all occurrences of "${" literally:
+    // - \$ escapes the dollar sign (which is a special regex character)
+    // - \{ escapes the opening brace (also a special regex character)
+    // - /g flag ensures all occurrences are replaced, not just the first one
+    // The replacement "$'+'{ " breaks up the ${ pattern so Flyway won't interpret it as a placeholder    
+    return sql.replaceAll(/\$\{/g, "$$'+'{");
+  }  
 }

@@ -1,6 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { LearnWorldsBaseAction } from '../learnworlds-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Interface for a LearnWorlds user
@@ -31,7 +32,7 @@ export interface LearnWorldsUser {
 /**
  * Action to retrieve users from LearnWorlds LMS
  */
-@RegisterClass(LearnWorldsBaseAction, 'GetLearnWorldsUsersAction')
+@RegisterClass(BaseAction, 'GetLearnWorldsUsersAction')
 export class GetLearnWorldsUsersAction extends LearnWorldsBaseAction {
     
     /**
