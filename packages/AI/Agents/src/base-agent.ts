@@ -677,14 +677,15 @@ export class BaseAgent {
     protected async determineNextStep<P>(
         params: ExecuteAgentParams,
         agentType: AIAgentTypeEntity,
-        promptResult: AIPromptRunResult
+        promptResult: AIPromptRunResult,
+        currentPayload: P
     ): Promise<BaseAgentNextStep<P>> {
         this.logStatus(`🤔 Processing next step for agent '${params.agent.Name}' with agent type '${agentType.Name}'`, true, params);
         const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(agentType);
 
         // Let the agent type determine the next step
         this.logStatus(`🎯 Agent type '${agentType.Name}' determining next step`, true, params);
-        const nextStep = await agentTypeInstance.DetermineNextStep<P>(promptResult);
+        const nextStep = await agentTypeInstance.DetermineNextStep<P>(promptResult, currentPayload);
         return nextStep;
     }
 
@@ -703,22 +704,23 @@ export class BaseAgent {
      */
     protected async validateNextStep<P>(
         params: ExecuteAgentParams,
-        nextStep: BaseAgentNextStep<P>
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P
     ): Promise<BaseAgentNextStep<P>> {
         // for next step, let's do a little quick validation here for sub-agent and actions to ensure requests are valid
         switch (nextStep.step) {
             case 'Sub-Agent':           
-                return this.validateSubAgentNextStep<P>(params, nextStep);
+                return this.validateSubAgentNextStep<P>(params, nextStep, currentPayload);
             case 'Actions':
-                return this.validateActionsNextStep<P>(params, nextStep);
+                return this.validateActionsNextStep<P>(params, nextStep, currentPayload);
             case 'Success':
-                return this.validateSuccessNextStep<P>(params, nextStep);
+                return this.validateSuccessNextStep<P>(params, nextStep, currentPayload);
             case 'Chat':
-                return this.validateChatNextStep<P>(params, nextStep);
+                return this.validateChatNextStep<P>(params, nextStep, currentPayload);
             case 'Retry':
-                return this.validateRetryNextStep<P>(params, nextStep);
+                return this.validateRetryNextStep<P>(params, nextStep, currentPayload);
             case 'Failed':
-                return this.validateFailedNextStep<P>(params, nextStep);
+                return this.validateFailedNextStep<P>(params, nextStep, currentPayload);
             default:
                 // if we get here, the next step is not recognized, we can return a retry step
                 this.logError(`Invalid next step '${nextStep.step}' for agent '${params.agent.Name}'`, {
@@ -742,7 +744,8 @@ export class BaseAgent {
      */
     protected async validateSubAgentNextStep<P>(
         params: ExecuteAgentParams,
-        nextStep: BaseAgentNextStep<P>
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P
     ): Promise<BaseAgentNextStep<P>> {
         // check to make sure the current agent can execute the specified sub-agent
         const name = nextStep.subAgent?.name;
@@ -772,7 +775,8 @@ export class BaseAgent {
      */
     protected async validateActionsNextStep<P>(
         params: ExecuteAgentParams,
-        nextStep: BaseAgentNextStep<P>
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P
     ): Promise<BaseAgentNextStep<P>> {
         // check to make sure the current agent can execute the specified action
         const curAgentActions = AIEngine.Instance.AgentActions.filter(aa => aa.AgentID === params.agent.ID && aa.Status === 'Active');
@@ -807,7 +811,8 @@ export class BaseAgent {
      */
     protected async validateSuccessNextStep<P>(
         params: ExecuteAgentParams,
-        nextStep: BaseAgentNextStep<P>
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P
     ): Promise<BaseAgentNextStep<P>> {
         // currently the base class doesn't do anything, subclasses can implement any custom logic in their override
         return nextStep;
@@ -822,7 +827,8 @@ export class BaseAgent {
      */
     protected async validateFailedNextStep<P>(
         params: ExecuteAgentParams,
-        nextStep: BaseAgentNextStep<P>
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P
     ): Promise<BaseAgentNextStep<P>> {
         // currently the base class doesn't do anything, subclasses can implement any custom logic in their override
         return nextStep;
@@ -838,7 +844,8 @@ export class BaseAgent {
      */
     protected async validateRetryNextStep<P>(
         params: ExecuteAgentParams,
-        nextStep: BaseAgentNextStep<P>
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P
     ): Promise<BaseAgentNextStep<P>> {
         // currently the base class doesn't do anything, subclasses can implement any custom logic in their override
         return nextStep;
@@ -853,7 +860,8 @@ export class BaseAgent {
      */
     protected async validateChatNextStep<P>(
         params: ExecuteAgentParams,
-        nextStep: BaseAgentNextStep<P>
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P
     ): Promise<BaseAgentNextStep<P>> {
         // currently the base class doesn't do anything, subclasses can implement any custom logic in their override
         return nextStep;
@@ -872,10 +880,11 @@ export class BaseAgent {
     protected async processNextStep<P>(
         params: ExecuteAgentParams,
         agentType: AIAgentTypeEntity,
-        promptResult: AIPromptRunResult
+        promptResult: AIPromptRunResult,
+        currentPayload: P
     ): Promise<BaseAgentNextStep<P>> {
-        const nextStep = await this.determineNextStep<P>(params, agentType, promptResult);
-        const validatedNextStep = await this.validateNextStep<P>(params, nextStep);
+        const nextStep = await this.determineNextStep<P>(params, agentType, promptResult, currentPayload);
+        const validatedNextStep = await this.validateNextStep<P>(params, nextStep, currentPayload);
         this.logStatus(`📌 Next step determined: ${validatedNextStep.step}${validatedNextStep.terminate ? ' (terminating)' : ''}`, true, params);
 
         // Return the next step directly - execution handling is done in execute NextStep
@@ -1760,7 +1769,7 @@ export class BaseAgent {
             });
             
             // Determine next step using agent type
-            const nextStep = await this.processNextStep<P>(params, config.agentType!, promptResult);
+            const nextStep = await this.processNextStep<P>(params, config.agentType!, promptResult, payload);
             
             // Apply payload changes if provided
             let finalPayload = payload; // Start with current payload
