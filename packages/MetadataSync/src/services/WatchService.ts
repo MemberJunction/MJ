@@ -6,6 +6,7 @@ import { SyncEngine, RecordData } from '../lib/sync-engine';
 import { loadEntityConfig, loadSyncConfig } from '../config';
 import { findEntityDirectories } from '../lib/provider-utils';
 import { configManager } from '../lib/config-manager';
+import { JsonWriteHelper } from '../lib/json-write-helper';
 import type { SqlLoggingSession } from '@memberjunction/sqlserver-dataprovider';
 
 export interface WatchOptions {
@@ -306,7 +307,7 @@ export class WatchService {
         recordData.fields = originalFields;
         
         // Write back to file
-        await fs.writeJson(filePath, recordData, { spaces: 2 });
+        await JsonWriteHelper.writeOrderedRecordData(filePath, recordData);
       }
     }
   }
@@ -334,7 +335,7 @@ export class WatchService {
           lastModified: new Date().toISOString(),
           checksum: recordData.sync?.checksum || ''
         };
-        await fs.writeJson(jsonFilePath, recordData, { spaces: 2 });
+        await JsonWriteHelper.writeOrderedRecordData(jsonFilePath, recordData);
         
         callbacks?.onLog?.(`Updated sync metadata for ${jsonFileName} due to external file change`);
       }
