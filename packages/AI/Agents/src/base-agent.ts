@@ -16,7 +16,7 @@ import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogError
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
-import { CopyScalarsAndArrays, MJGlobal } from '@memberjunction/global';
+import { CopyScalarsAndArrays } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import {
@@ -667,6 +667,200 @@ export class BaseAgent {
     }
 
     /**
+     * Base class method that determines the next step by contacting the agent type class for the specified agent type and delegating
+     * that decision. Sub-classes can override this method to implement custom next step logic if needed.
+     * @param params 
+     * @param agentType 
+     * @param promptResult 
+     * @returns 
+     */
+    protected async determineNextStep<P>(
+        params: ExecuteAgentParams,
+        agentType: AIAgentTypeEntity,
+        promptResult: AIPromptRunResult
+    ): Promise<BaseAgentNextStep<P>> {
+        this.logStatus(`🤔 Processing next step for agent '${params.agent.Name}' with agent type '${agentType.Name}'`, true, params);
+        const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(agentType);
+
+        // Let the agent type determine the next step
+        this.logStatus(`🎯 Agent type '${agentType.Name}' determining next step`, true, params);
+        const nextStep = await agentTypeInstance.DetermineNextStep<P>(promptResult);
+        return nextStep;
+    }
+
+
+    /**
+     * Validates if the next step is valid, or not. If the next step is invalid, it returns a retry step with an error message
+     * that can be processed by the agent via a retry prompt to attempt to correct the issue. Alternatively, subclasses can
+     * handle this scenario differently as desired. 
+     * 
+     * The BaseAgent class implements checking for sub-agents and actions to ensure that the next step is valid in the 
+     * context of the current agent. If the next step is a sub-agent, it checks if the sub-agent is active and available for execution.
+     * If the next step is actions, it checks if the actions are valid and available for execution.
+     * @param params 
+     * @param nextStep 
+     * @returns 
+     */
+    protected async validateNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>
+    ): Promise<BaseAgentNextStep<P>> {
+        // for next step, let's do a little quick validation here for sub-agent and actions to ensure requests are valid
+        switch (nextStep.step) {
+            case 'Sub-Agent':           
+                return this.validateSubAgentNextStep<P>(params, nextStep);
+            case 'Actions':
+                return this.validateActionsNextStep<P>(params, nextStep);
+            case 'Success':
+                return this.validateSuccessNextStep<P>(params, nextStep);
+            case 'Chat':
+                return this.validateChatNextStep<P>(params, nextStep);
+            case 'Retry':
+                return this.validateRetryNextStep<P>(params, nextStep);
+            case 'Failed':
+                return this.validateFailedNextStep<P>(params, nextStep);
+            default:
+                // if we get here, the next step is not recognized, we can return a retry step
+                this.logError(`Invalid next step '${nextStep.step}' for agent '${params.agent.Name}'`, {
+                    agent: params.agent,
+                    category: 'NextStepValidation'
+                });
+                return {
+                    step: 'Failed',
+                    terminate: true, // final condition
+                    errorMessage: `Invalid next step '${nextStep.step}'`
+                };
+        }
+    }
+
+    /**
+     * Validates that the sub-agent next step is valid and can be executed by the current agent. Subclasses can override 
+     * this method to implement custom validation logic if needed.
+     * @param params 
+     * @param nextStep 
+     * @returns 
+     */
+    protected async validateSubAgentNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>
+    ): Promise<BaseAgentNextStep<P>> {
+        // check to make sure the current agent can execute the specified sub-agent
+        const name = nextStep.subAgent?.name;
+        const curAgentSubAgents = AIEngine.Instance.Agents.filter(a => a.ParentID === params.agent.ID && a.Status === 'Active');
+        if (!name || !curAgentSubAgents.some(a => a.Name.trim().toLowerCase() === name?.trim().toLowerCase())) {
+            this.logError(`Sub-agent '${name}' not found or not active for agent '${params.agent.Name}'`, {
+                agent: params.agent,
+                category: 'SubAgentExecution'
+            });
+            return {
+                step: 'Retry',
+                terminate: false, // this will kick it back to the prompt to run again
+                errorMessage: `Sub-agent '${name}' not found or not active`
+            };
+        }
+
+        // if we get here, the next step is valid and we can return it
+        return nextStep;
+    }
+
+    /**
+     * Validates that the actions next step is valid and can be executed by the current agent. Subclasses can override
+     * this method to implement custom validation logic if needed.
+     * @param params 
+     * @param nextStep 
+     * @returns 
+     */
+    protected async validateActionsNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>
+    ): Promise<BaseAgentNextStep<P>> {
+        // check to make sure the current agent can execute the specified action
+        const curAgentActions = AIEngine.Instance.AgentActions.filter(aa => aa.AgentID === params.agent.ID && aa.Status === 'Active');
+        const missingActions = nextStep.actions?.filter(action => 
+            !curAgentActions.some(aa => aa.Action.trim().toLowerCase() === action.name.trim().toLowerCase())
+        );
+        // we should have zero missing actions, if we do, we need to log an error and return a retry step
+        if (missingActions && missingActions.length > 0) {
+            const missingActionNames = missingActions.map(a => a.name).join(', ');
+            this.logError(`Actions '${missingActionNames}' not found or not active for agent '${params.agent.Name}'`, {
+                agent: params.agent,
+                category: 'ActionExecution'
+            });
+            return {
+                step: 'Retry',
+                terminate: false, // this will kick it back to the prompt to run again
+                errorMessage: `Actions '${missingActionNames}' not found or not active`
+            };
+        }
+
+        // if we get here, the next step is valid and we can return it
+        return nextStep;
+    }
+
+
+    /**
+     * Validates that the Success next step is valid and can be executed by the current agent. Subclasses can override
+     * this method to implement custom validation logic if needed.
+     * @param params 
+     * @param nextStep 
+     * @returns 
+     */
+    protected async validateSuccessNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>
+    ): Promise<BaseAgentNextStep<P>> {
+        // currently the base class doesn't do anything, subclasses can implement any custom logic in their override
+        return nextStep;
+    }
+
+    /**
+     * Validates that the Failed next step is valid and can be executed by the current agent. Subclasses can override
+     * this method to implement custom validation logic if needed.
+     * @param params 
+     * @param nextStep 
+     * @returns 
+     */
+    protected async validateFailedNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>
+    ): Promise<BaseAgentNextStep<P>> {
+        // currently the base class doesn't do anything, subclasses can implement any custom logic in their override
+        return nextStep;
+    }
+
+    /**
+     * Validates that the Retry next step is valid and can be executed by the current agent. Subclasses can override
+     * this method to implement custom validation logic if needed. The retry step is typically used to
+     * handle cases where the agent needs to re-attempt a step due to an error or invalid state.
+     * @param params 
+     * @param nextStep 
+     * @returns 
+     */
+    protected async validateRetryNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>
+    ): Promise<BaseAgentNextStep<P>> {
+        // currently the base class doesn't do anything, subclasses can implement any custom logic in their override
+        return nextStep;
+    }
+
+    /**
+     * Validates that the Chat next step is valid and can be executed by the current agent. Subclasses can override
+     * this method to implement custom validation logic if needed.
+     * @param params 
+     * @param nextStep 
+     * @returns 
+     */
+    protected async validateChatNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>
+    ): Promise<BaseAgentNextStep<P>> {
+        // currently the base class doesn't do anything, subclasses can implement any custom logic in their override
+        return nextStep;
+    }
+
+
+    /**
      * Processes the next step based on agent type determination.
      * 
      * @param {ExecuteAgentParams} params - Original execution parameters
@@ -680,56 +874,12 @@ export class BaseAgent {
         agentType: AIAgentTypeEntity,
         promptResult: AIPromptRunResult
     ): Promise<BaseAgentNextStep<P>> {
-        this.logStatus(`🤔 Processing next step for agent '${params.agent.Name}' with agent type '${agentType.Name}'`, true, params);
-
-        const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(agentType);
-
-        // Let the agent type determine the next step
-        this.logStatus(`🎯 Agent type '${agentType.Name}' determining next step`, true, params);
-        const nextStep = await agentTypeInstance.DetermineNextStep<P>(promptResult);
-        
-        // for next step, let's do a little quick validation here for sub-agent and actions to ensure requests are valid
-        if (nextStep.step === 'Sub-Agent') {
-            // check to make sure the current agent can execute the specified sub-agent
-            const name = nextStep.subAgent?.name;
-            const curAgentSubAgents = AIEngine.Instance.Agents.filter(a => a.ParentID === params.agent.ID && a.Status === 'Active');
-            if (!name || !curAgentSubAgents.some(a => a.Name.trim().toLowerCase() === name?.trim().toLowerCase())) {
-                this.logError(`Sub-agent '${name}' not found or not active for agent '${params.agent.Name}'`, {
-                    agent: params.agent,
-                    category: 'SubAgentExecution'
-                });
-                return {
-                    step: 'Retry',
-                    terminate: false, // this will kick it back to the prompt to run again
-                    errorMessage: `Sub-agent '${name}' not found or not active`
-                };
-            }
-        }
-        else if (nextStep.step === 'Actions') {
-            // check to make sure the current agent can execute the specified action
-            const curAgentActions = AIEngine.Instance.AgentActions.filter(aa => aa.AgentID === params.agent.ID && aa.Status === 'Active');
-            const missingActions = nextStep.actions?.filter(action => 
-                !curAgentActions.some(aa => aa.Action.trim().toLowerCase() === action.name.trim().toLowerCase())
-            );
-            // we should have zero missing actions, if we do, we need to log an error and return a retry step
-            if (missingActions && missingActions.length > 0) {
-                const missingActionNames = missingActions.map(a => a.name).join(', ');
-                this.logError(`Actions '${missingActionNames}' not found or not active for agent '${params.agent.Name}'`, {
-                    agent: params.agent,
-                    category: 'ActionExecution'
-                });
-                return {
-                    step: 'Retry',
-                    terminate: false, // this will kick it back to the prompt to run again
-                    errorMessage: `Actions '${missingActionNames}' not found or not active`
-                };
-            }
-        }
-
-        this.logStatus(`📌 Next step determined: ${nextStep.step}${nextStep.terminate ? ' (terminating)' : ''}`, true, params);
+        const nextStep = await this.determineNextStep<P>(params, agentType, promptResult);
+        const validatedNextStep = await this.validateNextStep<P>(params, nextStep);
+        this.logStatus(`📌 Next step determined: ${validatedNextStep.step}${validatedNextStep.terminate ? ' (terminating)' : ''}`, true, params);
 
         // Return the next step directly - execution handling is done in execute NextStep
-        return nextStep;
+        return validatedNextStep;
     }
  
     /**
