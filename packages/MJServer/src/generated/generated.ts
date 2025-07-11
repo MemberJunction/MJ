@@ -2252,6 +2252,12 @@ Retry mode. After reaching this limit, the validation will fail permanently.`})
   if this limit is exceeded.`}) 
     MaxTimePerRun?: number;
         
+    @Field(() => Int, {nullable: true, description: `When acting as a sub-agent, minimum number of times this agent must be executed per parent agent run`}) 
+    MinExecutionsPerRun?: number;
+        
+    @Field(() => Int, {nullable: true, description: `When acting as a sub-agent, maximum number of times this agent can be executed per parent agent run`}) 
+    MaxExecutionsPerRun?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -2387,6 +2393,12 @@ export class CreateAIAgentInput {
 
     @Field(() => Int, { nullable: true })
     MaxTimePerRun: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MinExecutionsPerRun: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxExecutionsPerRun: number | null;
 }
     
 
@@ -2481,6 +2493,12 @@ export class UpdateAIAgentInput {
 
     @Field(() => Int, { nullable: true })
     MaxTimePerRun?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MinExecutionsPerRun?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxExecutionsPerRun?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -3600,6 +3618,12 @@ export class AIAgentAction_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field(() => Int, {nullable: true, description: `Minimum number of times this action must be executed per agent run`}) 
+    MinExecutionsPerRun?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Maximum number of times this action can be executed per agent run`}) 
+    MaxExecutionsPerRun?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -3626,6 +3650,12 @@ export class CreateAIAgentActionInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => Int, { nullable: true })
+    MinExecutionsPerRun: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxExecutionsPerRun: number | null;
 }
     
 
@@ -3645,6 +3675,12 @@ export class UpdateAIAgentActionInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => Int, { nullable: true })
+    MinExecutionsPerRun?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxExecutionsPerRun?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

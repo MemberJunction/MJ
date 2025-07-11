@@ -133,6 +133,23 @@ export class BaseAgent {
     private _payloadManager: PayloadManager = new PayloadManager();
 
     /**
+     * Counter for tracking validation retry attempts during FinalPayloadValidation.
+     * Reset at the start of each agent run.
+     * @private
+     */
+    private _validationRetryCount: number = 0;
+
+    /**
+     * Gets the current validation retry count for the agent run.
+     * This count tracks how many times the agent has retried validation
+     * during the FinalPayloadValidation step.
+     * @readonly
+     */
+    public get ValidationRetryCount(): number {
+        return this._validationRetryCount;
+    }
+
+    /**
      * Helper method for status logging with verbose control
      * @param message The message to log
      * @param verboseOnly Whether this is a verbose-only message
@@ -285,6 +302,9 @@ export class BaseAgent {
 
             // Initialize execution tracking
             await this.initializeAgentRun(wrappedParams);
+
+            // Reset validation retry counter for this run
+            this._validationRetryCount = 0;
 
             // Initialize engines
             await this.initializeEngines(params.contextUser);
@@ -894,6 +914,19 @@ export class BaseAgent {
 
             // Validation passed
             this.logStatus(`✅ Final payload validation passed for agent ${agent.Name}`, true, params);
+            
+            // Save success result to step
+            try {
+                currentStep.FinalPayloadValidationResult = 'Pass';
+                currentStep.FinalPayloadValidationMessages = null; // Clear any previous messages
+                await currentStep.Save();
+            } catch (error) {
+                this.logError(`Failed to save validation success result: ${error.message}`, {
+                    category: 'PayloadValidation', 
+                    metadata: { stepId: currentStep.ID }
+                });
+            }
+            
             return nextStep;
 
         } catch (error) {
@@ -931,60 +964,91 @@ export class BaseAgent {
     ): Promise<BaseAgentNextStep<P>> {
         const validationFeedback = `Final payload validation failed:\n${errorMessages.map((e, i) => `${i + 1}. ${e}`).join('\n')}`;
 
-        switch (mode) {
-            case 'Retry':
-                // Convert success to retry with validation feedback
-                return {
-                    ...nextStep,
-                    step: 'Retry',
-                    message: validationFeedback,
-                    terminate: false
-                };
-
-            case 'Fail':
-                // Convert success to error
-                return {
-                    ...nextStep,
-                    step: 'Failed',
-                    message: validationFeedback,
-                    terminate: true
-                };
-
-            case 'Warn':
-                // Log warning but allow success
-                this.logStatus(`⚠️ WARNING: ${validationFeedback}`, false, params);
-                
-                // Save warning to OutputData
-                try {
-                    const curOutputData = currentStep.OutputData ? JSON.parse(currentStep.OutputData) : {};
-                    currentStep.OutputData = JSON.stringify({
-                        ...curOutputData,
-                        finalPayloadValidation: {
-                            success: false,
-                            mode: 'Warn',
-                            errors: errorMessages,
-                            timestamp: new Date().toISOString()
-                        }
-                    });
+        // Always save validation results to the new fields
+        try {
+            currentStep.FinalPayloadValidationMessages = errorMessages.join('; ');
+            
+            switch (mode) {
+                case 'Retry':
+                    // Increment retry counter
+                    this._validationRetryCount++;
+                    
+                    // Check if max retries exceeded
+                    const maxRetries = params.agent.FinalPayloadValidationMaxRetries || 3;
+                    if (this._validationRetryCount >= maxRetries) {
+                        // Max retries exceeded, force to Fail
+                        this.logStatus(`❌ Max validation retries (${maxRetries}) exceeded, forcing failure`, false, params);
+                        
+                        currentStep.FinalPayloadValidationResult = 'Fail';
+                        await currentStep.Save();
+                        
+                        return {
+                            ...nextStep,
+                            step: 'Failed',
+                            message: `${validationFeedback}\n\nMax validation retries (${maxRetries}) exceeded.`,
+                            terminate: true
+                        };
+                    }
+                    
+                    // Still have retries left
+                    currentStep.FinalPayloadValidationResult = 'Retry';
                     await currentStep.Save();
-                    this.logStatus(`📝 Saved final payload validation warning to step OutputData`, true, params);
-                } catch (error) {
-                    this.logError(`Failed to save validation warning to OutputData: ${error.message}`, {
-                        category: 'PayloadValidation',
-                        metadata: { stepId: currentStep.ID }
-                    });
-                }
-                
-                return nextStep; // Return original success
+                    
+                    this.logStatus(`🔄 Validation retry ${this._validationRetryCount}/${maxRetries}`, true, params);
+                    
+                    return {
+                        ...nextStep,
+                        step: 'Retry',
+                        message: `${validationFeedback}\n\nRetry attempt ${this._validationRetryCount} of ${maxRetries}`,
+                        terminate: false
+                    };
 
-            default:
-                // Default to retry
-                return {
-                    ...nextStep,
-                    step: 'Retry',
-                    message: validationFeedback,
-                    terminate: false
-                };
+                case 'Fail':
+                    // Convert success to error
+                    currentStep.FinalPayloadValidationResult = 'Fail';
+                    await currentStep.Save();
+                    
+                    return {
+                        ...nextStep,
+                        step: 'Failed',
+                        message: validationFeedback,
+                        terminate: true
+                    };
+
+                case 'Warn':
+                    // Log warning but allow success
+                    this.logStatus(`⚠️ WARNING: ${validationFeedback}`, false, params);
+                    
+                    currentStep.FinalPayloadValidationResult = 'Warn';
+                    await currentStep.Save();
+                    
+                    return nextStep; // Return original success
+
+                default:
+                    // Default to retry
+                    this._validationRetryCount++;
+                    currentStep.FinalPayloadValidationResult = 'Retry';
+                    await currentStep.Save();
+                    
+                    return {
+                        ...nextStep,
+                        step: 'Retry',
+                        message: validationFeedback,
+                        terminate: false
+                    };
+            }
+        } catch (error) {
+            this.logError(`Failed to save validation results: ${error.message}`, {
+                category: 'PayloadValidation',
+                metadata: { stepId: currentStep.ID }
+            });
+            // Still return the appropriate result even if save failed
+            return mode === 'Warn' ? nextStep : {
+                ...nextStep,
+                step: mode === 'Fail' ? 'Failed' : 'Retry',
+                message: validationFeedback,
+                terminate: mode === 'Fail'
+            };
         }
     }
 
@@ -1045,6 +1109,150 @@ export class BaseAgent {
 
 
     /**
+     * Checks execution guardrails and modifies next step if limits are exceeded.
+     * This method is called after validation but before execution of non-terminal steps.
+     * 
+     * @param params - Execution parameters
+     * @param nextStep - The validated next step
+     * @param currentPayload - Current payload
+     * @param agentRun - Current agent run
+     * @param currentStep - Current execution step
+     * @returns Modified next step if guardrails exceeded, or original next step
+     * @protected
+     */
+    protected async checkExecutionGuardrails<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        agentRun: AIAgentRunEntityExtended,
+        currentStep: AIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        // Skip guardrail checks for terminal steps
+        if (nextStep.step === 'Success' || nextStep.step === 'Failed' || nextStep.step === 'Chat') {
+            return nextStep;
+        }
+
+        // Check if any guardrails are exceeded
+        const guardrailResult = await this.hasExceededAgentRunGuardrails(params, agentRun);
+        
+        if (guardrailResult.exceeded) {
+            // Log the guardrail violation
+            this.logStatus(`⛔ Execution guardrail exceeded: ${guardrailResult.reason}`, false, params);
+            
+            // Update the current step with guardrail information
+            try {
+                const outputData = currentStep.OutputData ? JSON.parse(currentStep.OutputData) : {};
+                currentStep.OutputData = JSON.stringify({
+                    ...outputData,
+                    guardrailExceeded: {
+                        type: guardrailResult.type,
+                        limit: guardrailResult.limit,
+                        current: guardrailResult.current,
+                        reason: guardrailResult.reason,
+                        timestamp: new Date().toISOString()
+                    }
+                });
+                await currentStep.Save();
+            } catch (error) {
+                this.logError(`Failed to save guardrail violation to step: ${error.message}`, {
+                    category: 'Guardrails',
+                    metadata: { stepId: currentStep.ID }
+                });
+            }
+            
+            // Convert next step to Failed with guardrail reason
+            return {
+                ...nextStep,
+                step: 'Failed',
+                terminate: true,
+                message: guardrailResult.reason,
+                errorMessage: guardrailResult.reason
+            };
+        }
+        
+        // No guardrails exceeded, return original next step
+        return nextStep;
+    }
+
+    /**
+     * Checks if any agent run guardrails have been exceeded.
+     * Override this method to implement custom guardrail logic.
+     * 
+     * @param params - Execution parameters
+     * @param agentRun - Current agent run
+     * @returns Object indicating if guardrails exceeded and details
+     * @protected
+     */
+    protected async hasExceededAgentRunGuardrails(
+        params: ExecuteAgentParams,
+        agentRun: AIAgentRunEntityExtended
+    ): Promise<{
+        exceeded: boolean;
+        type?: 'cost' | 'tokens' | 'iterations' | 'time';
+        limit?: number;
+        current?: number;
+        reason?: string;
+    }> {
+        const agent = params.agent;
+        
+        // Check cost limit
+        if (agent.MaxCostPerRun && agentRun.TotalCost) {
+            if (agentRun.TotalCost >= agent.MaxCostPerRun) {
+                return {
+                    exceeded: true,
+                    type: 'cost',
+                    limit: agent.MaxCostPerRun,
+                    current: agentRun.TotalCost,
+                    reason: `Maximum cost limit of $${agent.MaxCostPerRun} exceeded. Current cost: $${agentRun.TotalCost.toFixed(4)}`
+                };
+            }
+        }
+        
+        // Check token limit
+        if (agent.MaxTokensPerRun && agentRun.TotalTokensUsed) {
+            if (agentRun.TotalTokensUsed >= agent.MaxTokensPerRun) {
+                return {
+                    exceeded: true,
+                    type: 'tokens',
+                    limit: agent.MaxTokensPerRun,
+                    current: agentRun.TotalTokensUsed,
+                    reason: `Maximum token limit of ${agent.MaxTokensPerRun} exceeded. Current tokens: ${agentRun.TotalTokensUsed}`
+                };
+            }
+        }
+        
+        // Check iteration limit
+        if (agent.MaxIterationsPerRun && agentRun.TotalPromptIterations) {
+            if (agentRun.TotalPromptIterations >= agent.MaxIterationsPerRun) {
+                return {
+                    exceeded: true,
+                    type: 'iterations',
+                    limit: agent.MaxIterationsPerRun,
+                    current: agentRun.TotalPromptIterations,
+                    reason: `Maximum iteration limit of ${agent.MaxIterationsPerRun} exceeded. Current iterations: ${agentRun.TotalPromptIterations}`
+                };
+            }
+        }
+        
+        // Check time limit
+        if (agent.MaxTimePerRun && agentRun.StartedAt) {
+            const elapsedSeconds = Math.floor((Date.now() - new Date(agentRun.StartedAt).getTime()) / 1000);
+            if (elapsedSeconds >= agent.MaxTimePerRun) {
+                return {
+                    exceeded: true,
+                    type: 'time',
+                    limit: agent.MaxTimePerRun,
+                    current: elapsedSeconds,
+                    reason: `Maximum time limit of ${agent.MaxTimePerRun} seconds exceeded. Elapsed time: ${elapsedSeconds} seconds`
+                };
+            }
+        }
+        
+        // No guardrails exceeded
+        return { exceeded: false };
+    }
+
+    /**
      * Processes the next step based on agent type determination.
      * 
      * @param {ExecuteAgentParams} params - Original execution parameters
@@ -1062,10 +1270,20 @@ export class BaseAgent {
     ): Promise<BaseAgentNextStep<P>> {
         const nextStep = await this.determineNextStep<P>(params, agentType, promptResult, currentPayload);
         const validatedNextStep = await this.validateNextStep<P>(params, nextStep, currentPayload, this._agentRun, currentStep);
-        this.logStatus(`📌 Next step determined: ${validatedNextStep.step}${validatedNextStep.terminate ? ' (terminating)' : ''}`, true, params);
+        
+        // Check guardrails if next step would continue execution
+        const guardrailCheckedStep = await this.checkExecutionGuardrails<P>(
+            params, 
+            validatedNextStep, 
+            currentPayload, 
+            this._agentRun!, 
+            currentStep
+        );
+        
+        this.logStatus(`📌 Next step determined: ${guardrailCheckedStep.step}${guardrailCheckedStep.terminate ? ' (terminating)' : ''}`, true, params);
 
         // Return the next step directly - execution handling is done in execute NextStep
-        return validatedNextStep;
+        return guardrailCheckedStep;
     }
  
     /**
@@ -1922,6 +2140,12 @@ export class BaseAgent {
                 stepEntity.TargetLogID = promptResult.promptRun.ID;
                 stepEntity.PromptRun = promptResult.promptRun; // Store the prompt run object
                 // don't save here, we save when we call finalizeStepEntity()
+            }
+            
+            // Increment prompt iterations counter
+            if (this._agentRun) {
+                this._agentRun.TotalPromptIterations = (this._agentRun.TotalPromptIterations || 0) + 1;
+                // We don't save here as the run will be saved later with all accumulated data
             }
             
             // Check for cancellation after prompt execution
