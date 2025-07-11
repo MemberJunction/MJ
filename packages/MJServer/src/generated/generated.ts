@@ -2222,6 +2222,10 @@ data flow when the agent executes its own prompt step.`})
     @MaxLength(50)
     FinalPayloadValidationMode: string;
         
+    @Field(() => Int, {description: `Maximum number of retry attempts allowed when FinalPayloadValidation fails with
+Retry mode. After reaching this limit, the validation will fail permanently.`}) 
+    FinalPayloadValidationMaxRetries: number;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -2342,6 +2346,9 @@ export class CreateAIAgentInput {
 
     @Field({ nullable: true })
     FinalPayloadValidationMode?: string;
+
+    @Field(() => Int, { nullable: true })
+    FinalPayloadValidationMaxRetries?: number;
 }
     
 
@@ -2421,6 +2428,9 @@ export class UpdateAIAgentInput {
 
     @Field({ nullable: true })
     FinalPayloadValidationMode?: string;
+
+    @Field(() => Int, { nullable: true })
+    FinalPayloadValidationMaxRetries?: number;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -40188,6 +40198,16 @@ export class AIAgentRunStep_ {
     @Field({nullable: true, description: `JSON serialization of the Payload state at the end of this step`}) 
     PayloadAtEnd?: string;
         
+    @Field({nullable: true, description: `Result of the final payload validation for this step. Pass indicates successful
+validation, Retry means validation failed but will retry, Fail means validation failed
+permanently, Warn means validation failed but execution continues.`}) 
+    @MaxLength(50)
+    FinalPayloadValidationResult?: string;
+        
+    @Field({nullable: true, description: `Validation error messages or warnings from final payload validation. Contains
+detailed information about what validation rules failed.`}) 
+    FinalPayloadValidationMessages?: string;
+        
 }
 
 //****************************************************************************
@@ -40242,6 +40262,12 @@ export class CreateAIAgentRunStepInput {
 
     @Field({ nullable: true })
     PayloadAtEnd: string | null;
+
+    @Field({ nullable: true })
+    FinalPayloadValidationResult: string | null;
+
+    @Field({ nullable: true })
+    FinalPayloadValidationMessages: string | null;
 }
     
 
@@ -40297,6 +40323,12 @@ export class UpdateAIAgentRunStepInput {
 
     @Field({ nullable: true })
     PayloadAtEnd?: string | null;
+
+    @Field({ nullable: true })
+    FinalPayloadValidationResult?: string | null;
+
+    @Field({ nullable: true })
+    FinalPayloadValidationMessages?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

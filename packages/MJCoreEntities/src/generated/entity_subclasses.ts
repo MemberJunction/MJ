@@ -1175,6 +1175,13 @@ data flow when the agent executes its own prompt step.`),
     *   * Fail
     *   * Warn
     * * Description: Determines how to handle validation failures when FinalPayloadValidation is specified. Options: Retry (default) - retry the agent with validation feedback, Fail - fail the agent run immediately, Warn - log a warning but allow success.`),
+    FinalPayloadValidationMaxRetries: z.number().describe(`
+        * * Field Name: FinalPayloadValidationMaxRetries
+        * * Display Name: Final Payload Validation Max Retries
+        * * SQL Data Type: int
+        * * Default Value: 3
+    * * Description: Maximum number of retry attempts allowed when FinalPayloadValidation fails with
+Retry mode. After reaching this limit, the validation will fail permanently.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -7407,6 +7414,19 @@ export const AIAgentRunStepSchema = z.object({
         * * Display Name: Payload At End
         * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON serialization of the Payload state at the end of this step`),
+    FinalPayloadValidationResult: z.string().nullable().describe(`
+        * * Field Name: FinalPayloadValidationResult
+        * * Display Name: Final Payload Validation Result
+        * * SQL Data Type: nvarchar(25)
+    * * Description: Result of the final payload validation for this step. Pass indicates successful
+validation, Retry means validation failed but will retry, Fail means validation failed
+permanently, Warn means validation failed but execution continues.`),
+    FinalPayloadValidationMessages: z.string().nullable().describe(`
+        * * Field Name: FinalPayloadValidationMessages
+        * * Display Name: Final Payload Validation Messages
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Validation error messages or warnings from final payload validation. Contains
+detailed information about what validation rules failed.`),
 });
 
 export type AIAgentRunStepEntityType = z.infer<typeof AIAgentRunStepSchema>;
@@ -15520,6 +15540,21 @@ data flow when the agent executes its own prompt step.
     }
     set FinalPayloadValidationMode(value: 'Retry' | 'Fail' | 'Warn') {
         this.Set('FinalPayloadValidationMode', value);
+    }
+
+    /**
+    * * Field Name: FinalPayloadValidationMaxRetries
+    * * Display Name: Final Payload Validation Max Retries
+    * * SQL Data Type: int
+    * * Default Value: 3
+    * * Description: Maximum number of retry attempts allowed when FinalPayloadValidation fails with
+Retry mode. After reaching this limit, the validation will fail permanently.
+    */
+    get FinalPayloadValidationMaxRetries(): number {
+        return this.Get('FinalPayloadValidationMaxRetries');
+    }
+    set FinalPayloadValidationMaxRetries(value: number) {
+        this.Set('FinalPayloadValidationMaxRetries', value);
     }
 
     /**
@@ -31602,7 +31637,8 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
 
     /**
     * Validate() method override for MJ: AI Agent Run Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * StepNumber: This rule ensures that the step number must always be greater than zero.  
+    * * StepNumber: This rule ensures that the step number must always be greater than zero.
+    * * FinalPayloadValidationResult: This rule ensures that the FinalPayloadValidationResult field is either left blank or is set to one of the following values: 'Warn', 'Fail', 'Retry', or 'Pass'. No other values are allowed.  
     * @public
     * @method
     * @override
@@ -31610,6 +31646,7 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateStepNumberGreaterThanZero(result);
+        this.ValidateFinalPayloadValidationResultAllowedValues(result);
 
         return result;
     }
@@ -31623,6 +31660,24 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
     public ValidateStepNumberGreaterThanZero(result: ValidationResult) {
     	if (this.StepNumber <= 0) {
     		result.Errors.push(new ValidationErrorInfo("StepNumber", "Step number must be greater than zero.", this.StepNumber, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the FinalPayloadValidationResult field is either left blank or is set to one of the following values: 'Warn', 'Fail', 'Retry', or 'Pass'. No other values are allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateFinalPayloadValidationResultAllowedValues(result: ValidationResult) {
+    	const allowedValues = ["Warn", "Fail", "Retry", "Pass"];
+    	if (this.FinalPayloadValidationResult !== null && !allowedValues.includes(this.FinalPayloadValidationResult)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"FinalPayloadValidationResult",
+    			"If a final payload validation result is specified, it must be either 'Warn', 'Fail', 'Retry', or 'Pass'.",
+    			this.FinalPayloadValidationResult,
+    			ValidationErrorType.Failure
+    		));
     	}
     }
 
@@ -31871,6 +31926,35 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
     }
     set PayloadAtEnd(value: string | null) {
         this.Set('PayloadAtEnd', value);
+    }
+
+    /**
+    * * Field Name: FinalPayloadValidationResult
+    * * Display Name: Final Payload Validation Result
+    * * SQL Data Type: nvarchar(25)
+    * * Description: Result of the final payload validation for this step. Pass indicates successful
+validation, Retry means validation failed but will retry, Fail means validation failed
+permanently, Warn means validation failed but execution continues.
+    */
+    get FinalPayloadValidationResult(): string | null {
+        return this.Get('FinalPayloadValidationResult');
+    }
+    set FinalPayloadValidationResult(value: string | null) {
+        this.Set('FinalPayloadValidationResult', value);
+    }
+
+    /**
+    * * Field Name: FinalPayloadValidationMessages
+    * * Display Name: Final Payload Validation Messages
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Validation error messages or warnings from final payload validation. Contains
+detailed information about what validation rules failed.
+    */
+    get FinalPayloadValidationMessages(): string | null {
+        return this.Get('FinalPayloadValidationMessages');
+    }
+    set FinalPayloadValidationMessages(value: string | null) {
+        this.Set('FinalPayloadValidationMessages', value);
     }
 }
 
