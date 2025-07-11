@@ -2212,6 +2212,16 @@ flow when the agent executes its own prompt step.`})
 data flow when the agent executes its own prompt step.`}) 
     PayloadSelfWritePaths?: string;
         
+    @Field({nullable: true, description: `Defines the scope/path within the parent payload that this sub-agent operates on. When set, the sub-agent receives only this portion of the payload and all change requests are relative to this scope. Format: /path/to/scope (e.g. /PropA/SubProp1)`}) 
+    PayloadScope?: string;
+        
+    @Field({nullable: true, description: `Optional JSON schema or requirements that define the expected structure and content of the agent's final payload. Used to validate the output when the agent declares success. Similar to OutputExample in AI Prompts.`}) 
+    FinalPayloadValidation?: string;
+        
+    @Field({description: `Determines how to handle validation failures when FinalPayloadValidation is specified. Options: Retry (default) - retry the agent with validation feedback, Fail - fail the agent run immediately, Warn - log a warning but allow success.`}) 
+    @MaxLength(50)
+    FinalPayloadValidationMode: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -2323,6 +2333,15 @@ export class CreateAIAgentInput {
 
     @Field({ nullable: true })
     PayloadSelfWritePaths: string | null;
+
+    @Field({ nullable: true })
+    PayloadScope: string | null;
+
+    @Field({ nullable: true })
+    FinalPayloadValidation: string | null;
+
+    @Field({ nullable: true })
+    FinalPayloadValidationMode?: string;
 }
     
 
@@ -2393,6 +2412,15 @@ export class UpdateAIAgentInput {
 
     @Field({ nullable: true })
     PayloadSelfWritePaths?: string | null;
+
+    @Field({ nullable: true })
+    PayloadScope?: string | null;
+
+    @Field({ nullable: true })
+    FinalPayloadValidation?: string | null;
+
+    @Field({ nullable: true })
+    FinalPayloadValidationMode?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

@@ -1154,6 +1154,27 @@ flow when the agent executes its own prompt step.`),
         * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can write back. Controls upstream 
 data flow when the agent executes its own prompt step.`),
+    PayloadScope: z.string().nullable().describe(`
+        * * Field Name: PayloadScope
+        * * Display Name: Payload Scope
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Defines the scope/path within the parent payload that this sub-agent operates on. When set, the sub-agent receives only this portion of the payload and all change requests are relative to this scope. Format: /path/to/scope (e.g. /PropA/SubProp1)`),
+    FinalPayloadValidation: z.string().nullable().describe(`
+        * * Field Name: FinalPayloadValidation
+        * * Display Name: Final Payload Validation
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON schema or requirements that define the expected structure and content of the agent's final payload. Used to validate the output when the agent declares success. Similar to OutputExample in AI Prompts.`),
+    FinalPayloadValidationMode: z.union([z.literal('Retry'), z.literal('Fail'), z.literal('Warn')]).describe(`
+        * * Field Name: FinalPayloadValidationMode
+        * * Display Name: Final Payload Validation Mode
+        * * SQL Data Type: nvarchar(25)
+        * * Default Value: Retry
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Retry
+    *   * Fail
+    *   * Warn
+    * * Description: Determines how to handle validation failures when FinalPayloadValidation is specified. Options: Retry (default) - retry the agent with validation feedback, Fail - fail the agent run immediately, Warn - log a warning but allow success.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -15454,6 +15475,51 @@ data flow when the agent executes its own prompt step.
     }
     set PayloadSelfWritePaths(value: string | null) {
         this.Set('PayloadSelfWritePaths', value);
+    }
+
+    /**
+    * * Field Name: PayloadScope
+    * * Display Name: Payload Scope
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Defines the scope/path within the parent payload that this sub-agent operates on. When set, the sub-agent receives only this portion of the payload and all change requests are relative to this scope. Format: /path/to/scope (e.g. /PropA/SubProp1)
+    */
+    get PayloadScope(): string | null {
+        return this.Get('PayloadScope');
+    }
+    set PayloadScope(value: string | null) {
+        this.Set('PayloadScope', value);
+    }
+
+    /**
+    * * Field Name: FinalPayloadValidation
+    * * Display Name: Final Payload Validation
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON schema or requirements that define the expected structure and content of the agent's final payload. Used to validate the output when the agent declares success. Similar to OutputExample in AI Prompts.
+    */
+    get FinalPayloadValidation(): string | null {
+        return this.Get('FinalPayloadValidation');
+    }
+    set FinalPayloadValidation(value: string | null) {
+        this.Set('FinalPayloadValidation', value);
+    }
+
+    /**
+    * * Field Name: FinalPayloadValidationMode
+    * * Display Name: Final Payload Validation Mode
+    * * SQL Data Type: nvarchar(25)
+    * * Default Value: Retry
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Retry
+    *   * Fail
+    *   * Warn
+    * * Description: Determines how to handle validation failures when FinalPayloadValidation is specified. Options: Retry (default) - retry the agent with validation feedback, Fail - fail the agent run immediately, Warn - log a warning but allow success.
+    */
+    get FinalPayloadValidationMode(): 'Retry' | 'Fail' | 'Warn' {
+        return this.Get('FinalPayloadValidationMode');
+    }
+    set FinalPayloadValidationMode(value: 'Retry' | 'Fail' | 'Warn') {
+        this.Set('FinalPayloadValidationMode', value);
     }
 
     /**
