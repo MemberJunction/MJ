@@ -95,6 +95,13 @@ export class BaseAgent {
     private _metadata: Metadata = new Metadata();
 
     /**
+     * Map to track execution counts for actions and sub-agents.
+     * Key is the item ID (action ID or sub-agent ID), value is the count.
+     * @private
+     */
+    private _executionCounts: Map<string, number> = new Map();
+
+    /**
      * Current agent run entity.
      * @private
      */
@@ -773,8 +780,10 @@ export class BaseAgent {
     ): Promise<BaseAgentNextStep<P>> {
         // check to make sure the current agent can execute the specified sub-agent
         const name = nextStep.subAgent?.name;
-        const curAgentSubAgents = AIEngine.Instance.Agents.filter(a => a.ParentID === params.agent.ID && a.Status === 'Active');
-        if (!name || !curAgentSubAgents.some(a => a.Name.trim().toLowerCase() === name?.trim().toLowerCase())) {
+        const curAgentSubAgents = AIEngine.Instance.GetSubAgents(params.agent.ID, 'Active');
+        const subAgent = curAgentSubAgents.find(a => a.Name.trim().toLowerCase() === name?.trim().toLowerCase());
+        
+        if (!name || !subAgent) {
             this.logError(`Sub-agent '${name}' not found or not active for agent '${params.agent.Name}'`, {
                 agent: params.agent,
                 category: 'SubAgentExecution'
@@ -784,6 +793,27 @@ export class BaseAgent {
                 terminate: false, // this will kick it back to the prompt to run again
                 errorMessage: `Sub-agent '${name}' not found or not active`
             };
+        }
+
+        // Check MaxExecutionsPerRun limit
+        if (subAgent.MaxExecutionsPerRun != null) {
+            const executionCount = await this.getSubAgentExecutionCount(agentRun.ID, subAgent.ID);
+            if (executionCount >= subAgent.MaxExecutionsPerRun) {
+                this.logError(`Sub-agent '${name}' has reached its maximum execution limit of ${subAgent.MaxExecutionsPerRun}`, {
+                    agent: params.agent,
+                    category: 'SubAgentExecution',
+                    metadata: {
+                        subAgentName: name,
+                        executionCount,
+                        maxExecutions: subAgent.MaxExecutionsPerRun
+                    }
+                });
+                return {
+                    step: 'Retry',
+                    terminate: false,
+                    errorMessage: `Sub-agent '${name}' has reached its maximum execution limit of ${subAgent.MaxExecutionsPerRun}`
+                };
+            }
         }
 
         // if we get here, the next step is valid and we can return it
@@ -823,6 +853,40 @@ export class BaseAgent {
             };
         }
 
+        // Check MaxExecutionsPerRun limits for each action
+        if (nextStep.actions) {
+            const violatedActions: string[] = [];
+            
+            for (const action of nextStep.actions) {
+                const agentAction = curAgentActions.find(aa => 
+                    aa.Action.trim().toLowerCase() === action.name.trim().toLowerCase()
+                );
+                
+                if (agentAction && agentAction.MaxExecutionsPerRun != null) {
+                    const executionCount = await this.getActionExecutionCount(agentRun.ID, agentAction.ActionID);
+                    if (executionCount >= agentAction.MaxExecutionsPerRun) {
+                        violatedActions.push(`${action.name} (limit: ${agentAction.MaxExecutionsPerRun}, current: ${executionCount})`);
+                    }
+                }
+            }
+            
+            if (violatedActions.length > 0) {
+                const violationMessage = `Actions have reached execution limits: ${violatedActions.join(', ')}`;
+                this.logError(violationMessage, {
+                    agent: params.agent,
+                    category: 'ActionExecution',
+                    metadata: {
+                        violatedActions
+                    }
+                });
+                return {
+                    step: 'Retry',
+                    terminate: false,
+                    errorMessage: violationMessage
+                };
+            }
+        }
+
         // if we get here, the next step is valid and we can return it
         return nextStep;
     }
@@ -842,6 +906,22 @@ export class BaseAgent {
         agentRun: AIAgentRunEntityExtended,
         currentStep: AIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
+        // First check minimum execution requirements
+        const minViolations = await this.checkMinimumExecutionRequirements(params.agent, agentRun);
+        if (minViolations.length > 0) {
+            const violationMessage = `Minimum execution requirements not met:\n${minViolations.join('\n')}`;
+            this.logError(violationMessage, {
+                agent: params.agent,
+                category: 'MinimumExecutionValidation'
+            });
+            
+            return {
+                step: 'Retry',
+                terminate: false,
+                errorMessage: violationMessage
+            };
+        }
+
         // Check if the agent has FinalPayloadValidation configured
         const agent = params.agent;
         if (!agent.FinalPayloadValidation || !currentPayload) {
@@ -2320,6 +2400,9 @@ export class BaseAgent {
         }
         const stepEntity = await this.createStepEntity('Sub-Agent', `Execute Sub-Agent: ${subAgentRequest.name}`, params.contextUser, subAgentEntity.ID, inputData);
         
+        // Increment execution count for this sub-agent
+        this.incrementExecutionCount(subAgentEntity.ID);
+        
         try {
             // Parse payload access paths
             let downstreamPaths: string[] = ['*'];
@@ -2650,6 +2733,9 @@ export class BaseAgent {
                 // Override step number to ensure unique values for parallel actions
                 stepEntity.StepNumber = baseStepNumber + numActionsProcessed++;
                 
+                // Increment execution count for this action
+                this.incrementExecutionCount(actionEntity.ID);
+                
                 let actionResult: ActionResult;
                 try {
                     // Execute the action
@@ -2893,6 +2979,91 @@ export class BaseAgent {
         }
 
         return { totalTokens, promptTokens, completionTokens, totalCost };
+    }
+
+    /**
+     * Gets the count of how many times a specific action has been executed in this agent run.
+     * 
+     * @param agentRunId - The agent run ID (not used anymore, kept for signature compatibility)
+     * @param actionId - The action ID to count
+     * @returns The number of times the action has been executed
+     */
+    protected async getActionExecutionCount(agentRunId: string, actionId: string): Promise<number> {
+        return this.getExecutionCount(actionId);
+    }
+
+    /**
+     * Gets the count of how many times a specific sub-agent has been executed in this agent run.
+     * 
+     * @param agentRunId - The agent run ID (not used anymore, kept for signature compatibility)
+     * @param subAgentId - The sub-agent ID to count
+     * @returns The number of times the sub-agent has been executed
+     */
+    protected async getSubAgentExecutionCount(agentRunId: string, subAgentId: string): Promise<number> {
+        return this.getExecutionCount(subAgentId);
+    }
+
+    /**
+     * Increments the execution count for an item (action or sub-agent).
+     * 
+     * @param itemId - The item ID to increment (action ID or sub-agent ID)
+     * @private
+     */
+    private incrementExecutionCount(itemId: string): void {
+        const currentCount = this._executionCounts.get(itemId) || 0;
+        this._executionCounts.set(itemId, currentCount + 1);
+    }
+
+    /**
+     * Gets the execution count for an item (action or sub-agent).
+     * 
+     * @param itemId - The item ID to get count for
+     * @returns The execution count (0 if never executed)
+     * @private
+     */
+    private getExecutionCount(itemId: string): number {
+        return this._executionCounts.get(itemId) || 0;
+    }
+
+    /**
+     * Checks if all minimum execution requirements are met for actions and sub-agents.
+     * 
+     * @param agent - The agent to check
+     * @param agentRun - The current agent run
+     * @returns Array of violation messages (empty if all requirements are met)
+     */
+    protected async checkMinimumExecutionRequirements(agent: AIAgentEntity, agentRun: AIAgentRunEntityExtended): Promise<string[]> {
+        const violations: string[] = [];
+        
+        // Check action minimum requirements
+        const agentActions = AIEngine.Instance.AgentActions.filter(aa => 
+            aa.AgentID === agent.ID && 
+            aa.Status === 'Active' && 
+            aa.MinExecutionsPerRun != null && 
+            aa.MinExecutionsPerRun > 0
+        );
+        
+        for (const agentAction of agentActions) {
+            const executionCount = await this.getActionExecutionCount(agentRun.ID, agentAction.ActionID);
+            if (executionCount < agentAction.MinExecutionsPerRun) {
+                violations.push(`Action '${agentAction.Action}' requires ${agentAction.MinExecutionsPerRun} execution(s) but was executed ${executionCount} time(s)`);
+            }
+        }
+        
+        // Check sub-agent minimum requirements
+        const subAgents = AIEngine.Instance.GetSubAgents(agent.ID, "Active").filter(a => 
+            a.MinExecutionsPerRun != null && 
+            a.MinExecutionsPerRun > 0
+        );
+
+        for (const subAgent of subAgents) {
+            const executionCount = await this.getSubAgentExecutionCount(agentRun.ID, subAgent.ID);
+            if (executionCount < subAgent.MinExecutionsPerRun) {
+                violations.push(`Sub-agent '${subAgent.Name}' requires ${subAgent.MinExecutionsPerRun} execution(s) but was executed ${executionCount} time(s)`);
+            }
+        }
+        
+        return violations;
     }
 }
 
