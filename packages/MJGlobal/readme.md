@@ -211,9 +211,10 @@ import { DeepDiffer, DiffChangeType } from '@memberjunction/global';
 
 // Create a differ instance
 const differ = new DeepDiffer({
-  includeUnchanged: false,  // Don't track unchanged values
-  maxDepth: 10,             // Maximum recursion depth
-  maxStringLength: 100      // Truncate long strings
+  includeUnchanged: false,      // Don't track unchanged values
+  maxDepth: 10,                 // Maximum recursion depth
+  maxStringLength: 100,         // Truncate long strings
+  treatNullAsUndefined: false   // Treat null and undefined as distinct (default: false)
 });
 
 // Compare two objects
@@ -253,6 +254,33 @@ const modifications = result.changes.filter(c => c.type === DiffChangeType.Modif
 
 // Update configuration on the fly
 differ.updateConfig({ includeUnchanged: true });
+```
+
+#### Treating null as undefined
+
+When working with APIs or databases where `null` and `undefined` are used interchangeably, you can enable the `treatNullAsUndefined` option:
+
+```typescript
+const differ = new DeepDiffer({ treatNullAsUndefined: true });
+
+const oldData = {
+  name: null,
+  status: 'active',
+  oldProp: 'value'
+};
+
+const newData = {
+  name: 'John',      // Will show as "Added" instead of "Modified"
+  status: null,      // Will show as "Removed" instead of "Modified"
+  newProp: 'value'
+};
+
+const result = differ.diff(oldData, newData);
+// With treatNullAsUndefined: true
+// - name: Added (not Modified, since null is treated as non-existent)
+// - status: Removed (not Modified, since null is treated as non-existent)
+// - oldProp: Removed
+// - newProp: Added
 ```
 
 ## Event Types

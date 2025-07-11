@@ -20,6 +20,7 @@ export class DeepDiffComponent implements OnInit {
   private _showUnchanged: boolean = false;
   private _maxDepth: number = 10;
   private _maxStringLength: number = 100;
+  private _treatNullAsUndefined: boolean = false;
 
   @Input()
   get oldValue(): any {
@@ -69,6 +70,16 @@ export class DeepDiffComponent implements OnInit {
     this.generateDiff();
   }
 
+  @Input()
+  get treatNullAsUndefined(): boolean {
+    return this._treatNullAsUndefined;
+  }
+  set treatNullAsUndefined(value: boolean) {
+    this._treatNullAsUndefined = value;
+    this.updateDifferConfig();
+    this.generateDiff();
+  }
+
   @Input() title: string = 'Deep Diff Analysis';
   @Input() showSummary: boolean = true;
   @Input() expandAll: boolean = false;
@@ -86,7 +97,8 @@ export class DeepDiffComponent implements OnInit {
     this.differ = new DeepDiffer({
       includeUnchanged: false,
       maxDepth: this.maxDepth,
-      maxStringLength: this.maxStringLength
+      maxStringLength: this.maxStringLength,
+      treatNullAsUndefined: this.treatNullAsUndefined
     });
   }
 
@@ -99,7 +111,8 @@ export class DeepDiffComponent implements OnInit {
     this.differ.updateConfig({
       includeUnchanged: this.showUnchanged,
       maxDepth: this.maxDepth,
-      maxStringLength: this.maxStringLength
+      maxStringLength: this.maxStringLength,
+      treatNullAsUndefined: this.treatNullAsUndefined
     });
   }
 

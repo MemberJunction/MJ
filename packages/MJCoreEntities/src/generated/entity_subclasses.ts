@@ -1725,6 +1725,12 @@ export const AIPromptSchema = z.object({
         * * Display Name: Top Log Probs
         * * SQL Data Type: int
     * * Description: Default number of top log probabilities to include when IncludeLogProbs is true. Can be overridden at runtime.`),
+    FailoverStrategy: z.string().describe(`
+        * * Field Name: FailoverStrategy
+        * * Display Name: Failover Strategy
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: SameModelDifferentVendor
+    * * Description: Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None`),
     FailoverMaxAttempts: z.number().nullable().describe(`
         * * Field Name: FailoverMaxAttempts
         * * Display Name: Failover Max Attempts
@@ -1737,12 +1743,6 @@ export const AIPromptSchema = z.object({
         * * SQL Data Type: int
         * * Default Value: 5
     * * Description: Initial delay in seconds between failover attempts`),
-    FailoverStrategy: z.string().describe(`
-        * * Field Name: FailoverStrategy
-        * * Display Name: Failover Strategy
-        * * SQL Data Type: nvarchar(50)
-        * * Default Value: SameModelDifferentVendor
-    * * Description: Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None`),
     FailoverModelStrategy: z.string().describe(`
         * * Field Name: FailoverModelStrategy
         * * Display Name: Failover Model Strategy
@@ -8495,6 +8495,12 @@ export const AIPromptRunSchema = z.object({
         * * Display Name: Failover Durations
         * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON array of duration in milliseconds for each failover attempt`),
+    OriginalModelID: z.string().nullable().describe(`
+        * * Field Name: OriginalModelID
+        * * Display Name: Original Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    * * Description: The AI Model ID that was originally attempted before any failovers`),
     OriginalRequestStartTime: z.date().nullable().describe(`
         * * Field Name: OriginalRequestStartTime
         * * Display Name: Original Request Start Time
@@ -8505,12 +8511,6 @@ export const AIPromptRunSchema = z.object({
         * * Display Name: Total Failover Duration
         * * SQL Data Type: int
     * * Description: Total time spent in failover attempts in milliseconds`),
-    OriginalModelID: z.string().nullable().describe(`
-        * * Field Name: OriginalModelID
-        * * Display Name: Original Model ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
-    * * Description: The AI Model ID that was originally attempted before any failovers`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -16226,11 +16226,11 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
 
     /**
     * Validate() method override for AI Prompts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * CacheSimilarityThreshold: This rule ensures that if a cache similarity threshold is provided, it must be a value between 0 and 1, inclusive. If no value is provided, that's also allowed.
-    * * CacheTTLSeconds: This rule ensures that if the cache expiration time in seconds is provided, it must be greater than zero.
     * * FailoverStrategy: This rule ensures that the FailoverStrategy field, if specified, must be either 'None', 'PowerRank', 'NextBestModel', 'SameModelDifferentVendor', or left blank (unset).
     * * FailoverModelStrategy: This rule ensures that the value for FailoverModelStrategy is either 'RequireSameModel', 'PreferDifferentModel', 'PreferSameModel', or left blank (not set). Any other value is not allowed.
     * * FailoverErrorScope: This rule ensures that the FailoverErrorScope field can only be set to 'ServiceErrorOnly', 'RateLimitOnly', 'NetworkOnly', 'All', or left empty.
+    * * CacheSimilarityThreshold: This rule ensures that if a cache similarity threshold is provided, it must be a value between 0 and 1, inclusive. If no value is provided, that's also allowed.
+    * * CacheTTLSeconds: This rule ensures that if the cache expiration time in seconds is provided, it must be greater than zero.
     * * Table-Level: This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.
     * * Table-Level: This rule ensures that if the cache match type is set to 'Vector', the cache similarity threshold must be specified. If the match type is anything other than 'Vector', the similarity threshold can be left empty.
     * * Table-Level: This rule ensures that if the parallelization mode is set to 'StaticCount', then the number of parallel tasks (ParallelCount) must be provided.
@@ -16242,11 +16242,11 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateCacheSimilarityThresholdIsBetweenZeroAndOne(result);
-        this.ValidateCacheTTLSecondsGreaterThanZero(result);
         this.ValidateFailoverStrategyAllowedValues(result);
         this.ValidateFailoverModelStrategyAgainstAllowedValues(result);
         this.ValidateFailoverErrorScopeAgainstAllowedValues(result);
+        this.ValidateCacheSimilarityThresholdIsBetweenZeroAndOne(result);
+        this.ValidateCacheTTLSecondsGreaterThanZero(result);
         this.ValidateResultSelectorPromptIDNotEqualID(result);
         this.ValidateCacheSimilarityThresholdRequiredForVectorCache(result);
         this.ValidateParallelCountWhenParallelizationModeIsStaticCount(result);
@@ -16254,30 +16254,6 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
         this.ValidateOutputExampleWhenOutputTypeObject(result);
 
         return result;
-    }
-
-    /**
-    * This rule ensures that if a cache similarity threshold is provided, it must be a value between 0 and 1, inclusive. If no value is provided, that's also allowed.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateCacheSimilarityThresholdIsBetweenZeroAndOne(result: ValidationResult) {
-    	if (this.CacheSimilarityThreshold !== null && (this.CacheSimilarityThreshold < 0 || this.CacheSimilarityThreshold > 1)) {
-    		result.Errors.push(new ValidationErrorInfo("CacheSimilarityThreshold", "Cache similarity threshold must be between 0 and 1.", this.CacheSimilarityThreshold, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if the cache expiration time in seconds is provided, it must be greater than zero.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateCacheTTLSecondsGreaterThanZero(result: ValidationResult) {
-    	if (this.CacheTTLSeconds !== null && this.CacheTTLSeconds <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("CacheTTLSeconds", "If cache expiration time (CacheTTLSeconds) is specified, it must be greater than zero.", this.CacheTTLSeconds, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -16334,6 +16310,30 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     	const allowedValues = ["ServiceErrorOnly", "RateLimitOnly", "NetworkOnly", "All", null];
     	if (!allowedValues.includes(this.FailoverErrorScope)) {
     		result.Errors.push(new ValidationErrorInfo("FailoverErrorScope", "The failover error scope must be one of: 'ServiceErrorOnly', 'RateLimitOnly', 'NetworkOnly', 'All', or left empty.", this.FailoverErrorScope, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if a cache similarity threshold is provided, it must be a value between 0 and 1, inclusive. If no value is provided, that's also allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCacheSimilarityThresholdIsBetweenZeroAndOne(result: ValidationResult) {
+    	if (this.CacheSimilarityThreshold !== null && (this.CacheSimilarityThreshold < 0 || this.CacheSimilarityThreshold > 1)) {
+    		result.Errors.push(new ValidationErrorInfo("CacheSimilarityThreshold", "Cache similarity threshold must be between 0 and 1.", this.CacheSimilarityThreshold, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the cache expiration time in seconds is provided, it must be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCacheTTLSecondsGreaterThanZero(result: ValidationResult) {
+    	if (this.CacheTTLSeconds !== null && this.CacheTTLSeconds <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("CacheTTLSeconds", "If cache expiration time (CacheTTLSeconds) is specified, it must be greater than zero.", this.CacheTTLSeconds, ValidationErrorType.Failure));
     	}
     }
 
@@ -17058,6 +17058,20 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     }
 
     /**
+    * * Field Name: FailoverStrategy
+    * * Display Name: Failover Strategy
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: SameModelDifferentVendor
+    * * Description: Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None
+    */
+    get FailoverStrategy(): string {
+        return this.Get('FailoverStrategy');
+    }
+    set FailoverStrategy(value: string) {
+        this.Set('FailoverStrategy', value);
+    }
+
+    /**
     * * Field Name: FailoverMaxAttempts
     * * Display Name: Failover Max Attempts
     * * SQL Data Type: int
@@ -17083,20 +17097,6 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     }
     set FailoverDelaySeconds(value: number | null) {
         this.Set('FailoverDelaySeconds', value);
-    }
-
-    /**
-    * * Field Name: FailoverStrategy
-    * * Display Name: Failover Strategy
-    * * SQL Data Type: nvarchar(50)
-    * * Default Value: SameModelDifferentVendor
-    * * Description: Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None
-    */
-    get FailoverStrategy(): string {
-        return this.Get('FailoverStrategy');
-    }
-    set FailoverStrategy(value: string) {
-        this.Set('FailoverStrategy', value);
     }
 
     /**
@@ -34861,6 +34861,20 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     }
 
     /**
+    * * Field Name: OriginalModelID
+    * * Display Name: Original Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    * * Description: The AI Model ID that was originally attempted before any failovers
+    */
+    get OriginalModelID(): string | null {
+        return this.Get('OriginalModelID');
+    }
+    set OriginalModelID(value: string | null) {
+        this.Set('OriginalModelID', value);
+    }
+
+    /**
     * * Field Name: OriginalRequestStartTime
     * * Display Name: Original Request Start Time
     * * SQL Data Type: datetime
@@ -34884,20 +34898,6 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     }
     set TotalFailoverDuration(value: number | null) {
         this.Set('TotalFailoverDuration', value);
-    }
-
-    /**
-    * * Field Name: OriginalModelID
-    * * Display Name: Original Model ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
-    * * Description: The AI Model ID that was originally attempted before any failovers
-    */
-    get OriginalModelID(): string | null {
-        return this.Get('OriginalModelID');
-    }
-    set OriginalModelID(value: string | null) {
-        this.Set('OriginalModelID', value);
     }
 
     /**

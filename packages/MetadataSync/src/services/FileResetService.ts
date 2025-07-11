@@ -3,6 +3,7 @@ import path from 'path';
 import fastGlob from 'fast-glob';
 import { loadSyncConfig } from '../config';
 import { configManager } from '../lib/config-manager';
+import { JsonWriteHelper } from '../lib/json-write-helper';
 
 export interface FileResetOptions {
   sections?: 'both' | 'primaryKey' | 'sync';
@@ -150,7 +151,7 @@ export class FileResetService {
         }
         
         // Write cleaned content
-        await fs.writeJson(file, cleanedContent, { spaces: 2 });
+        await JsonWriteHelper.writeOrderedRecordData(file, cleanedContent);
         modifiedFiles++;
         
         if (options.verbose) {

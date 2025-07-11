@@ -44,7 +44,7 @@
           <span class="label">Duration</span>
           <span class="value">{{ calculateDuration(record.StartedAt, record.CompletedAt) }}</span>
         </div>
-        <div class="stat" *ngIf="record.Success !== null">
+        <div class="stat" *ngIf="record.Success !== null && record.CompletedAt !== null">
           <span class="label">Result</span>
           <span class="value" [class.success]="record.Success" [class.error]="!record.Success">
             {{ record.Success ? 'Success' : 'Failed' }}
@@ -157,7 +157,8 @@
                         [showUnchanged]="false"
                         [expandAll]="false"
                         [maxDepth]="8"
-                        [maxStringLength]="150">
+                        [maxStringLength]="150"
+                        [treatNullAsUndefined]="true">
                       </mj-deep-diff>
                     </div>
                   }
@@ -335,7 +336,8 @@
                   [showUnchanged]="false"
                   [expandAll]="false"
                   [maxDepth]="10"
-                  [maxStringLength]="200">
+                  [maxStringLength]="200"
+                  [treatNullAsUndefined]="true">
                 </mj-deep-diff>
               </div>
             </ng-template>
