@@ -1318,6 +1318,10 @@ export class AIAgentRun_ {
     @Field({nullable: true, description: `The initial payload provided at the start of this run. Can be populated from the FinalPayload of the LastRun.`}) 
     StartingPayload?: string;
         
+    @Field(() => Int, {description: `Total number of prompt iterations executed during this agent run. Incremented
+  each time the agent processes a prompt step.`}) 
+    TotalPromptIterations: number;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -1429,6 +1433,9 @@ export class CreateAIAgentRunInput {
 
     @Field({ nullable: true })
     StartingPayload: string | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalPromptIterations?: number;
 }
     
 
@@ -1520,6 +1527,9 @@ export class UpdateAIAgentRunInput {
 
     @Field({ nullable: true })
     StartingPayload?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalPromptIterations?: number;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -2226,6 +2236,22 @@ data flow when the agent executes its own prompt step.`})
 Retry mode. After reaching this limit, the validation will fail permanently.`}) 
     FinalPayloadValidationMaxRetries: number;
         
+    @Field(() => Float, {nullable: true, description: `Maximum cost in dollars allowed for a single agent run. Run will be terminated
+  if this limit is exceeded.`}) 
+    MaxCostPerRun?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Maximum total tokens (input + output) allowed for a single agent run. Run will
+  be terminated if this limit is exceeded.`}) 
+    MaxTokensPerRun?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Maximum number of prompt iterations allowed for a single agent run. Run will be
+   terminated if this limit is exceeded.`}) 
+    MaxIterationsPerRun?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Maximum time in seconds allowed for a single agent run. Run will be terminated
+  if this limit is exceeded.`}) 
+    MaxTimePerRun?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -2349,6 +2375,18 @@ export class CreateAIAgentInput {
 
     @Field(() => Int, { nullable: true })
     FinalPayloadValidationMaxRetries?: number;
+
+    @Field(() => Float, { nullable: true })
+    MaxCostPerRun: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxTokensPerRun: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxIterationsPerRun: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxTimePerRun: number | null;
 }
     
 
@@ -2431,6 +2469,18 @@ export class UpdateAIAgentInput {
 
     @Field(() => Int, { nullable: true })
     FinalPayloadValidationMaxRetries?: number;
+
+    @Field(() => Float, { nullable: true })
+    MaxCostPerRun?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxTokensPerRun?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxIterationsPerRun?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxTimePerRun?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

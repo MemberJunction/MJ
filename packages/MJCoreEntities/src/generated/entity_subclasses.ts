@@ -1182,6 +1182,30 @@ data flow when the agent executes its own prompt step.`),
         * * Default Value: 3
     * * Description: Maximum number of retry attempts allowed when FinalPayloadValidation fails with
 Retry mode. After reaching this limit, the validation will fail permanently.`),
+    MaxCostPerRun: z.number().nullable().describe(`
+        * * Field Name: MaxCostPerRun
+        * * Display Name: Max Cost Per Run
+        * * SQL Data Type: decimal(10, 4)
+    * * Description: Maximum cost in dollars allowed for a single agent run. Run will be terminated
+  if this limit is exceeded.`),
+    MaxTokensPerRun: z.number().nullable().describe(`
+        * * Field Name: MaxTokensPerRun
+        * * Display Name: Max Tokens Per Run
+        * * SQL Data Type: int
+    * * Description: Maximum total tokens (input + output) allowed for a single agent run. Run will
+  be terminated if this limit is exceeded.`),
+    MaxIterationsPerRun: z.number().nullable().describe(`
+        * * Field Name: MaxIterationsPerRun
+        * * Display Name: Max Iterations Per Run
+        * * SQL Data Type: int
+    * * Description: Maximum number of prompt iterations allowed for a single agent run. Run will be
+   terminated if this limit is exceeded.`),
+    MaxTimePerRun: z.number().nullable().describe(`
+        * * Field Name: MaxTimePerRun
+        * * Display Name: Max Time Per Run
+        * * SQL Data Type: int
+    * * Description: Maximum time in seconds allowed for a single agent run. Run will be terminated
+  if this limit is exceeded.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -7616,6 +7640,13 @@ export const AIAgentRunSchema = z.object({
         * * Display Name: Starting Payload
         * * SQL Data Type: nvarchar(MAX)
     * * Description: The initial payload provided at the start of this run. Can be populated from the FinalPayload of the LastRun.`),
+    TotalPromptIterations: z.number().describe(`
+        * * Field Name: TotalPromptIterations
+        * * Display Name: Total Prompt Iterations
+        * * SQL Data Type: int
+        * * Default Value: 0
+    * * Description: Total number of prompt iterations executed during this agent run. Incremented
+  each time the agent processes a prompt step.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -15555,6 +15586,62 @@ Retry mode. After reaching this limit, the validation will fail permanently.
     }
     set FinalPayloadValidationMaxRetries(value: number) {
         this.Set('FinalPayloadValidationMaxRetries', value);
+    }
+
+    /**
+    * * Field Name: MaxCostPerRun
+    * * Display Name: Max Cost Per Run
+    * * SQL Data Type: decimal(10, 4)
+    * * Description: Maximum cost in dollars allowed for a single agent run. Run will be terminated
+  if this limit is exceeded.
+    */
+    get MaxCostPerRun(): number | null {
+        return this.Get('MaxCostPerRun');
+    }
+    set MaxCostPerRun(value: number | null) {
+        this.Set('MaxCostPerRun', value);
+    }
+
+    /**
+    * * Field Name: MaxTokensPerRun
+    * * Display Name: Max Tokens Per Run
+    * * SQL Data Type: int
+    * * Description: Maximum total tokens (input + output) allowed for a single agent run. Run will
+  be terminated if this limit is exceeded.
+    */
+    get MaxTokensPerRun(): number | null {
+        return this.Get('MaxTokensPerRun');
+    }
+    set MaxTokensPerRun(value: number | null) {
+        this.Set('MaxTokensPerRun', value);
+    }
+
+    /**
+    * * Field Name: MaxIterationsPerRun
+    * * Display Name: Max Iterations Per Run
+    * * SQL Data Type: int
+    * * Description: Maximum number of prompt iterations allowed for a single agent run. Run will be
+   terminated if this limit is exceeded.
+    */
+    get MaxIterationsPerRun(): number | null {
+        return this.Get('MaxIterationsPerRun');
+    }
+    set MaxIterationsPerRun(value: number | null) {
+        this.Set('MaxIterationsPerRun', value);
+    }
+
+    /**
+    * * Field Name: MaxTimePerRun
+    * * Display Name: Max Time Per Run
+    * * SQL Data Type: int
+    * * Description: Maximum time in seconds allowed for a single agent run. Run will be terminated
+  if this limit is exceeded.
+    */
+    get MaxTimePerRun(): number | null {
+        return this.Get('MaxTimePerRun');
+    }
+    set MaxTimePerRun(value: number | null) {
+        this.Set('MaxTimePerRun', value);
     }
 
     /**
@@ -32403,6 +32490,21 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     }
     set StartingPayload(value: string | null) {
         this.Set('StartingPayload', value);
+    }
+
+    /**
+    * * Field Name: TotalPromptIterations
+    * * Display Name: Total Prompt Iterations
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Total number of prompt iterations executed during this agent run. Incremented
+  each time the agent processes a prompt step.
+    */
+    get TotalPromptIterations(): number {
+        return this.Get('TotalPromptIterations');
+    }
+    set TotalPromptIterations(value: number) {
+        this.Set('TotalPromptIterations', value);
     }
 
     /**
