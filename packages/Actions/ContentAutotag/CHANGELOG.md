@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/actions-content-autotag
 
+## 2.68.0
+
+### Patch Changes
+
+- Updated dependencies [b10b7e6]
+  - @memberjunction/core@2.68.0
+  - @memberjunction/actions@2.68.0
+  - @memberjunction/core-actions@2.68.0
+  - @memberjunction/content-autotagging@2.68.0
+  - @memberjunction/core-entities@2.68.0
+  - @memberjunction/global@2.68.0
+
 ## 2.67.0
 
 ### Patch Changes

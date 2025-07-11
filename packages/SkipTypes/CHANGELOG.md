@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/skip-types
 
+## 2.68.0
+
+### Patch Changes
+
+- a0ed038: added more granular component definitions (props/events)
+- Updated dependencies [b10b7e6]
+  - @memberjunction/core@2.68.0
+  - @memberjunction/core-entities@2.68.0
+  - @memberjunction/data-context@2.68.0
+
 ## 2.67.0
 
 ### Patch Changes

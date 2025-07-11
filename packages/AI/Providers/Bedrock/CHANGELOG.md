@@ -1,5 +1,12 @@
 # @memberjunction/ai-bedrock
 
+## 2.68.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.68.0
+- @memberjunction/global@2.68.0
+
 ## 2.67.0
 
 ### Patch Changes
