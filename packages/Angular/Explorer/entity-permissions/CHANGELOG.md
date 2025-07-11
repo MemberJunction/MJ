@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/ng-entity-permissions
 
+## 2.68.0
+
+### Patch Changes
+
+- Updated dependencies [b10b7e6]
+  - @memberjunction/core@2.68.0
+  - @memberjunction/ng-shared@2.68.0
+  - @memberjunction/ng-container-directives@2.68.0
+  - @memberjunction/core-entities@2.68.0
+  - @memberjunction/global@2.68.0
+
 ## 2.67.0
 
 ### Patch Changes

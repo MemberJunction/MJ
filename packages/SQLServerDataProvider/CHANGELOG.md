@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 2.68.0
+
+### Minor Changes
+
+- a6b43d0: major changes to spDelete handling
+
+### Patch Changes
+
+- Updated dependencies [b10b7e6]
+  - @memberjunction/core@2.68.0
+  - @memberjunction/actions@2.68.0
+  - @memberjunction/aiengine@2.68.0
+  - @memberjunction/ai-vector-dupe@2.68.0
+  - @memberjunction/core-entities@2.68.0
+  - @memberjunction/queue@2.68.0
+  - @memberjunction/ai@2.68.0
+  - @memberjunction/global@2.68.0
+
 ## 2.67.0
 
 ### Patch Changes

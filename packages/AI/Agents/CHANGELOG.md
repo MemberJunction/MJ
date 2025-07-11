@@ -1,5 +1,27 @@
 # @memberjunction/ai-agents
 
+## 2.68.0
+
+### Minor Changes
+
+- f9625d0: migration
+- 9fac8a4: validation behavior for loop agent system prompt changed - migration file drives minor release
+
+### Patch Changes
+
+- 61c6572: improved validation for BaseAgent
+- Updated dependencies [6fa0b2d]
+- Updated dependencies [b10b7e6]
+  - @memberjunction/ai-prompts@2.68.0
+  - @memberjunction/core@2.68.0
+  - @memberjunction/actions@2.68.0
+  - @memberjunction/ai-core-plus@2.68.0
+  - @memberjunction/aiengine@2.68.0
+  - @memberjunction/actions-base@2.68.0
+  - @memberjunction/core-entities@2.68.0
+  - @memberjunction/ai@2.68.0
+  - @memberjunction/global@2.68.0
+
 ## 2.67.0
 
 ### Patch Changes
