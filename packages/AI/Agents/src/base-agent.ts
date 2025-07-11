@@ -1362,6 +1362,14 @@ export class BaseAgent {
         
         this.logStatus(`📌 Next step determined: ${guardrailCheckedStep.step}${guardrailCheckedStep.terminate ? ' (terminating)' : ''}`, true, params);
 
+        // if we need to retry make sure we add the retry message to the conversation messages
+        if (guardrailCheckedStep.step === 'Retry' && (guardrailCheckedStep.message || guardrailCheckedStep.errorMessage || guardrailCheckedStep.retryInstructions)) {
+            params.conversationMessages.push({
+                role: 'user',
+                content: `Retrying due to: ${guardrailCheckedStep.retryInstructions || guardrailCheckedStep.message || guardrailCheckedStep.errorMessage}`
+            });
+        }   
+
         // Return the next step directly - execution handling is done in execute NextStep
         return guardrailCheckedStep;
     }
