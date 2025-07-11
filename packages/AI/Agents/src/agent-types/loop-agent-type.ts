@@ -10,7 +10,7 @@
  * @since 2.49.0
  */
 
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, JSONValidator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
@@ -52,6 +52,8 @@ import { LoopAgentResponse } from './loop-agent-response-type';
  */
 @RegisterClass(BaseAgentType, "LoopAgentType")
 export class LoopAgentType extends BaseAgentType {
+    private _jsonValidator: JSONValidator = new JSONValidator();
+    
     /**
      * Determines the next step based on the structured response from the AI model.
      * 
@@ -82,6 +84,16 @@ export class LoopAgentType extends BaseAgentType {
                     response = JSON.parse(promptResult.result);
                 } else {
                     response = promptResult.result as LoopAgentResponse;
+                }
+                
+                // Clean validation syntax from the response
+                // Note: AIPromptRunner will also automatically clean validation syntax when
+                // the prompt has validation enabled (strict or warn mode), but we still
+                // clean here to ensure proper parsing of the LoopAgentResponse structure
+                response = this._jsonValidator.cleanValidationSyntax<LoopAgentResponse>(response);
+                
+                if (IsVerboseLoggingEnabled()) {
+                    console.log('LoopAgentType: Cleaned response from validation syntax', response);
                 }
             } catch (parseError) {
                 return {

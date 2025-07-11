@@ -18,6 +18,7 @@ The `@memberjunction/global` library serves as the foundation for cross-componen
 - **Object Caching** - In-memory object cache for application lifetime
 - **Class Reflection Utilities** - Runtime class hierarchy inspection and analysis
 - **Deep Diff Engine** - Comprehensive object comparison and change tracking
+- **JSON Validator** - Lightweight JSON validation with flexible rules and special syntax
 - **Utility Functions** - Common string manipulation, JSON parsing (including recursive nested JSON parsing), pattern matching, and formatting utilities
 
 ## Core Components
@@ -281,6 +282,182 @@ const result = differ.diff(oldData, newData);
 // - status: Removed (not Modified, since null is treated as non-existent)
 // - oldProp: Removed
 // - newProp: Added
+```
+
+### JSON Validator
+
+Lightweight JSON validation with flexible validation rules and special field suffixes.
+
+```typescript
+import { JSONValidator } from '@memberjunction/global';
+
+// Create validator instance
+const validator = new JSONValidator();
+
+// Define validation template with rules
+const template = {
+  name: "John Doe",                    // Required field
+  email?: "user@example.com",          // Optional field
+  settings*: {},                       // Required, any content allowed
+  tags:[1+]: ["tag1"],                // Array with at least 1 item
+  age:number: 25,                     // Must be a number
+  username:string:!empty: "johndoe",   // Non-empty string
+  items:array:[2-5]?: ["A", "B"]      // Optional array with 2-5 items
+};
+
+// Validate data against template
+const data = {
+  name: "Jane Smith",
+  tags: ["work", "urgent"],
+  age: 30,
+  username: "jsmith"
+};
+
+const result = validator.validate(data, template);
+if (result.Success) {
+  console.log('Validation passed!');
+} else {
+  result.Errors.forEach(error => {
+    console.log(`${error.Source}: ${error.Message}`);
+  });
+}
+```
+
+#### Validation Syntax
+
+**Field Suffixes:**
+- `?` - Optional field (e.g., `email?`)
+- `*` - Required field with any content/structure (e.g., `payload*`)
+
+**Validation Rules (using `:` delimiter):**
+- **Array Length:**
+  - `[N+]` - At least N elements (e.g., `tags:[1+]`)
+  - `[N-M]` - Between N and M elements (e.g., `items:[2-5]`)
+  - `[=N]` - Exactly N elements (e.g., `coordinates:[=2]`)
+
+- **Type Checking:**
+  - `string` - Must be a string
+  - `number` - Must be a number (NaN fails validation)
+  - `boolean` - Must be a boolean
+  - `object` - Must be an object (not array or null)
+  - `array` - Must be an array
+
+- **Value Constraints:**
+  - `!empty` - Non-empty string, array, or object
+
+**Combining Rules:**
+Multiple validation rules can be combined with `:` delimiter:
+```typescript
+{
+  // Array of strings with 2+ items
+  "tags:array:[2+]": ["important", "urgent"],
+  
+  // Non-empty string
+  "username:string:!empty": "johndoe",
+  
+  // Optional number
+  "score:number?": 85,
+  
+  // Optional array with 1-3 items
+  "options:array:[1-3]?": ["A", "B"]
+}
+```
+
+#### Nested Object Validation
+
+The validator recursively validates nested objects:
+
+```typescript
+const template = {
+  user: {
+    id:number: 123,
+    name:string:!empty: "John",
+    roles:array:[1+]: ["admin"]
+  },
+  settings?: {
+    theme: "dark",
+    notifications:boolean: true
+  }
+};
+```
+
+#### Cleaning Validation Syntax
+
+The validator can clean validation syntax from JSON objects that may have been returned by AI systems:
+
+```typescript
+// AI might return JSON with validation syntax in keys
+const aiResponse = {
+  "name?": "John Doe",
+  "email:string": "john@example.com",
+  "tags:[2+]": ["work", "urgent"],
+  "settings*": { theme: "dark" },
+  "score:number:!empty": 85
+};
+
+// Clean the validation syntax
+const cleaned = validator.cleanValidationSyntax<any>(aiResponse);
+// Returns:
+// {
+//   "name": "John Doe",
+//   "email": "john@example.com", 
+//   "tags": ["work", "urgent"],
+//   "settings": { theme: "dark" },
+//   "score": 85
+// }
+```
+
+The `cleanValidationSyntax` method:
+- Recursively processes all object keys
+- Removes validation suffixes (`?`, `*`)
+- Removes validation rules (`:type`, `:[N+]`, `:!empty`, etc.)
+- Preserves the original values unchanged
+- Handles nested objects and arrays
+- Returns a new object with cleaned keys
+
+#### Convenience Methods
+
+```typescript
+// Validate against JSON string
+const schemaJson = '{"name": "string", "age:number": 0}';
+const result = validator.validateAgainstSchema(data, schemaJson);
+
+// Integration with MemberJunction ValidationResult
+// Returns standard ValidationResult with ValidationErrorInfo[]
+// Compatible with existing MJ validation patterns
+```
+
+#### Use Cases
+
+1. **API Response Validation:**
+```typescript
+const apiResponseTemplate = {
+  status:string: "success",
+  data*: {},  // Any data structure allowed
+  errors:array?: []
+};
+```
+
+2. **Configuration Validation:**
+```typescript
+const configTemplate = {
+  apiUrl:string:!empty: "https://api.example.com",
+  timeout:number: 5000,
+  retries:number: 3,
+  features:array:[1+]: ["logging"]
+};
+```
+
+3. **Form Data Validation:**
+```typescript
+const formTemplate = {
+  username:string:!empty: "user",
+  email:string: "user@example.com",
+  age:number?: 25,
+  preferences:object?: {
+    notifications:boolean: true
+  }
+};
 ```
 
 ## Event Types

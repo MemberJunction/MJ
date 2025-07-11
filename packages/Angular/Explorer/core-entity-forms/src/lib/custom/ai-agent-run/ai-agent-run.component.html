@@ -282,6 +282,10 @@
                   <label>Total Cost</label>
                   <span>{{ record.TotalCost != null ? ('$' + (record.TotalCost | number:'1.2-4')) : 'N/A' }}</span>
                 </div>
+                <div class="detail-item">
+                  <label>Total Prompt Iterations</label>
+                  <span>{{ record.TotalPromptIterations != null ? (record.TotalPromptIterations | number:'1.0-0') : 'N/A' }}</span>
+                </div>
               </div>
             </ng-template>
           </kendo-panelbar-item>

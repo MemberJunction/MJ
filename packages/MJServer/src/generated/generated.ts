@@ -1318,6 +1318,10 @@ export class AIAgentRun_ {
     @Field({nullable: true, description: `The initial payload provided at the start of this run. Can be populated from the FinalPayload of the LastRun.`}) 
     StartingPayload?: string;
         
+    @Field(() => Int, {description: `Total number of prompt iterations executed during this agent run. Incremented
+  each time the agent processes a prompt step.`}) 
+    TotalPromptIterations: number;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -1429,6 +1433,9 @@ export class CreateAIAgentRunInput {
 
     @Field({ nullable: true })
     StartingPayload: string | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalPromptIterations?: number;
 }
     
 
@@ -1520,6 +1527,9 @@ export class UpdateAIAgentRunInput {
 
     @Field({ nullable: true })
     StartingPayload?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalPromptIterations?: number;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -2212,6 +2222,42 @@ flow when the agent executes its own prompt step.`})
 data flow when the agent executes its own prompt step.`}) 
     PayloadSelfWritePaths?: string;
         
+    @Field({nullable: true, description: `Defines the scope/path within the parent payload that this sub-agent operates on. When set, the sub-agent receives only this portion of the payload and all change requests are relative to this scope. Format: /path/to/scope (e.g. /PropA/SubProp1)`}) 
+    PayloadScope?: string;
+        
+    @Field({nullable: true, description: `Optional JSON schema or requirements that define the expected structure and content of the agent's final payload. Used to validate the output when the agent declares success. Similar to OutputExample in AI Prompts.`}) 
+    FinalPayloadValidation?: string;
+        
+    @Field({description: `Determines how to handle validation failures when FinalPayloadValidation is specified. Options: Retry (default) - retry the agent with validation feedback, Fail - fail the agent run immediately, Warn - log a warning but allow success.`}) 
+    @MaxLength(50)
+    FinalPayloadValidationMode: string;
+        
+    @Field(() => Int, {description: `Maximum number of retry attempts allowed when FinalPayloadValidation fails with
+Retry mode. After reaching this limit, the validation will fail permanently.`}) 
+    FinalPayloadValidationMaxRetries: number;
+        
+    @Field(() => Float, {nullable: true, description: `Maximum cost in dollars allowed for a single agent run. Run will be terminated
+  if this limit is exceeded.`}) 
+    MaxCostPerRun?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Maximum total tokens (input + output) allowed for a single agent run. Run will
+  be terminated if this limit is exceeded.`}) 
+    MaxTokensPerRun?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Maximum number of prompt iterations allowed for a single agent run. Run will be
+   terminated if this limit is exceeded.`}) 
+    MaxIterationsPerRun?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Maximum time in seconds allowed for a single agent run. Run will be terminated
+  if this limit is exceeded.`}) 
+    MaxTimePerRun?: number;
+        
+    @Field(() => Int, {nullable: true, description: `When acting as a sub-agent, minimum number of times this agent must be executed per parent agent run`}) 
+    MinExecutionsPerRun?: number;
+        
+    @Field(() => Int, {nullable: true, description: `When acting as a sub-agent, maximum number of times this agent can be executed per parent agent run`}) 
+    MaxExecutionsPerRun?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -2323,6 +2369,36 @@ export class CreateAIAgentInput {
 
     @Field({ nullable: true })
     PayloadSelfWritePaths: string | null;
+
+    @Field({ nullable: true })
+    PayloadScope: string | null;
+
+    @Field({ nullable: true })
+    FinalPayloadValidation: string | null;
+
+    @Field({ nullable: true })
+    FinalPayloadValidationMode?: string;
+
+    @Field(() => Int, { nullable: true })
+    FinalPayloadValidationMaxRetries?: number;
+
+    @Field(() => Float, { nullable: true })
+    MaxCostPerRun: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxTokensPerRun: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxIterationsPerRun: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxTimePerRun: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MinExecutionsPerRun: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxExecutionsPerRun: number | null;
 }
     
 
@@ -2393,6 +2469,36 @@ export class UpdateAIAgentInput {
 
     @Field({ nullable: true })
     PayloadSelfWritePaths?: string | null;
+
+    @Field({ nullable: true })
+    PayloadScope?: string | null;
+
+    @Field({ nullable: true })
+    FinalPayloadValidation?: string | null;
+
+    @Field({ nullable: true })
+    FinalPayloadValidationMode?: string;
+
+    @Field(() => Int, { nullable: true })
+    FinalPayloadValidationMaxRetries?: number;
+
+    @Field(() => Float, { nullable: true })
+    MaxCostPerRun?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxTokensPerRun?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxIterationsPerRun?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxTimePerRun?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MinExecutionsPerRun?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxExecutionsPerRun?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -3512,6 +3618,12 @@ export class AIAgentAction_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field(() => Int, {nullable: true, description: `Minimum number of times this action must be executed per agent run`}) 
+    MinExecutionsPerRun?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Maximum number of times this action can be executed per agent run`}) 
+    MaxExecutionsPerRun?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -3538,6 +3650,12 @@ export class CreateAIAgentActionInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => Int, { nullable: true })
+    MinExecutionsPerRun: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxExecutionsPerRun: number | null;
 }
     
 
@@ -3557,6 +3675,12 @@ export class UpdateAIAgentActionInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => Int, { nullable: true })
+    MinExecutionsPerRun?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxExecutionsPerRun?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -40160,6 +40284,16 @@ export class AIAgentRunStep_ {
     @Field({nullable: true, description: `JSON serialization of the Payload state at the end of this step`}) 
     PayloadAtEnd?: string;
         
+    @Field({nullable: true, description: `Result of the final payload validation for this step. Pass indicates successful
+validation, Retry means validation failed but will retry, Fail means validation failed
+permanently, Warn means validation failed but execution continues.`}) 
+    @MaxLength(50)
+    FinalPayloadValidationResult?: string;
+        
+    @Field({nullable: true, description: `Validation error messages or warnings from final payload validation. Contains
+detailed information about what validation rules failed.`}) 
+    FinalPayloadValidationMessages?: string;
+        
 }
 
 //****************************************************************************
@@ -40214,6 +40348,12 @@ export class CreateAIAgentRunStepInput {
 
     @Field({ nullable: true })
     PayloadAtEnd: string | null;
+
+    @Field({ nullable: true })
+    FinalPayloadValidationResult: string | null;
+
+    @Field({ nullable: true })
+    FinalPayloadValidationMessages: string | null;
 }
     
 
@@ -40269,6 +40409,12 @@ export class UpdateAIAgentRunStepInput {
 
     @Field({ nullable: true })
     PayloadAtEnd?: string | null;
+
+    @Field({ nullable: true })
+    FinalPayloadValidationResult?: string | null;
+
+    @Field({ nullable: true })
+    FinalPayloadValidationMessages?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

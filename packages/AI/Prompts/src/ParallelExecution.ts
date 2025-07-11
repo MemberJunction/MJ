@@ -1,5 +1,6 @@
 import { AIPromptEntity, AIPromptModelEntity, AIModelEntityExtended, AIPromptRunEntity } from '@memberjunction/core-entities';
-import { UserInfo, ValidationResult } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/core';
+import { ValidationResult } from '@memberjunction/global';
 import { ChatResult, ChatMessage, StreamingChatCallbacks } from '@memberjunction/ai';
 
 /**

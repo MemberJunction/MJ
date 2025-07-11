@@ -905,12 +905,6 @@ export class SkipReactComponentHost {
     console.log('Data:', componentProps.data);
     console.log('User state:', componentProps.userState);
     console.log('Components:', Object.keys(componentProps.components));
-    if (componentProps.data?.data_item_0) {
-      console.log('First entity:', componentProps.data.data_item_0[0]);
-      console.log('Entity count:', componentProps.data.data_item_0.length);
-    } else {
-      console.log('WARNING: No data_item_0 found in data');
-    }
     console.log('=== End component props debug ===');
 
     if (!this.reactRoot && this.componentContainer) {
