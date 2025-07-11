@@ -1,7 +1,7 @@
 import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer } from '@memberjunction/ai';
 import { ValidationAttempt, AIPromptRunResult } from '@memberjunction/ai-core-plus';
-import { LogError, LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, ValidationResult, ValidationErrorInfo, ValidationErrorType, RunView } from '@memberjunction/core';
-import { CleanJSON, MJGlobal } from '@memberjunction/global';
+import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/core';
+import { CleanJSON, MJGlobal, JSONValidator } from '@memberjunction/global';
 import { AIModelEntityExtended, AIPromptEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateEntityExtended, TemplateRenderResult } from '@memberjunction/templates-base-types';
@@ -9,7 +9,6 @@ import { ExecutionPlanner } from './ExecutionPlanner';
 import { ParallelExecutionCoordinator } from './ParallelExecutionCoordinator';
 import { ResultSelectionConfig } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
-import Ajv, { ValidateFunction } from 'ajv';
 import { SystemPlaceholderManager } from '@memberjunction/ai-core-plus';
 import { 
     TemplateMessageRole,
@@ -120,23 +119,14 @@ export class AIPromptRunner {
   private _templateEngine: TemplateEngineServer;
   private _executionPlanner: ExecutionPlanner;
   private _parallelCoordinator: ParallelExecutionCoordinator;
-  private _ajv: Ajv;
+  private _jsonValidator: JSONValidator;
   
-  // Static/global schema cache shared across all instances
-  private static _schemaCache: Map<string, ValidateFunction> = new Map();
-  private static _ajvInstance: Ajv | null = null;
-
   constructor() {
     this._metadata = new Metadata();
     this._templateEngine = TemplateEngineServer.Instance;
     this._executionPlanner = new ExecutionPlanner();
     this._parallelCoordinator = new ParallelExecutionCoordinator();
-    
-    // Use shared AJV instance for consistency
-    if (!AIPromptRunner._ajvInstance) {
-      AIPromptRunner._ajvInstance = new Ajv({ allErrors: true, verbose: true });
-    }
-    this._ajv = AIPromptRunner._ajvInstance;
+    this._jsonValidator = new JSONValidator();
   }
 
   /**
@@ -209,23 +199,6 @@ export class AIPromptRunner {
     });
   }
 
-  /**
-   * Clears the global schema cache. Useful for testing or when prompt schemas change.
-   */
-  public static clearSchemaCache(): void {
-    AIPromptRunner._schemaCache.clear();
-    LogStatus('Cleared global JSON schema cache');
-  }
-
-  /**
-   * Gets cache statistics for monitoring purposes
-   */
-  public static getSchemaCacheStats(): { size: number; keys: string[] } {
-    return {
-      size: AIPromptRunner._schemaCache.size,
-      keys: Array.from(AIPromptRunner._schemaCache.keys())
-    };
-  }
 
   /**
    * Executes an AI prompt with full support for templates, model selection, and validation.
@@ -673,7 +646,7 @@ export class AIPromptRunner {
     for (const result of sortedResults) {
       if (result.task.taskId !== selectedResult.task.taskId) {
         // Parse and validate this result
-        const { result: parsedResultData, validationResult, validationErrors } = await this.parseAndValidateResultEnhanced(result.modelResult!, prompt, params.skipValidation);
+        const { result: parsedResultData, validationResult } = await this.parseAndValidateResultEnhanced(result.modelResult!, prompt, params.skipValidation);
         const parsedResult = { result: parsedResultData, validationResult };
 
         const resultUsage = result.modelResult?.data?.usage;
@@ -1678,8 +1651,7 @@ export class AIPromptRunner {
         if (attemptNumber < failoverConfig.maxAttempts) {
           const delay = this.calculateFailoverDelay(
             attemptNumber, 
-            failoverConfig.delaySeconds,
-            lastError
+            failoverConfig.delaySeconds
           );
           await new Promise(resolve => setTimeout(resolve, delay));
         }
@@ -2549,74 +2521,6 @@ export class AIPromptRunner {
     }
   }
 
-  /**
-   * Recursively validates an object against an example template.
-   * Keys ending with '?' are optional, all others are required.
-   * Keys ending with '*' are required but can contain any value/structure.
-   * 
-   * @param result - The actual result to validate
-   * @param example - The example template with optional fields marked with '?' and wildcard fields with '*'
-   * @param path - Current path in the object hierarchy for error reporting
-   * @returns Array of validation errors
-   */
-  private validateObjectAgainstExample(
-    result: unknown,
-    example: unknown,
-    path: string = ''
-  ): ValidationErrorInfo[] {
-    const errors: ValidationErrorInfo[] = [];
-
-    // If example is not an object, we don't validate structure
-    if (typeof example !== 'object' || example === null || Array.isArray(example)) {
-      return errors;
-    }
-
-    // Result must be an object if example is an object
-    if (typeof result !== 'object' || result === null || Array.isArray(result)) {
-      errors.push(new ValidationErrorInfo(
-        path || 'root',
-        `Expected object but got ${Array.isArray(result) ? 'array' : typeof result}`,
-        result,
-        ValidationErrorType.Failure
-      ));
-      return errors;
-    }
-
-    const resultObj = result as Record<string, unknown>;
-    const exampleObj = example as Record<string, unknown>;
-
-    // Check each field in the example
-    for (const [key, exampleValue] of Object.entries(exampleObj)) {
-      const isOptional = key.trim().endsWith('?');
-      const isWildcard = key.trim().endsWith('*');
-      const cleanKey = key.trim().replace(/[?*]$/, ''); // Remove trailing ? or *
-      const fieldPath = path ? `${path}.${cleanKey}` : cleanKey;
-
-      // Check if required field exists - optional and wildcard items are not required
-      if (!isOptional && !isWildcard && !(cleanKey in resultObj)) {
-        errors.push(new ValidationErrorInfo(
-          fieldPath,
-          `Required field '${cleanKey}' is missing`,
-          undefined,
-          ValidationErrorType.Failure
-        ));
-        continue;
-      }
-
-      // If field exists and is not a wildcard, validate nested structure
-      if (cleanKey in resultObj && !isWildcard) {
-        const nestedErrors = this.validateObjectAgainstExample(
-          resultObj[cleanKey],
-          exampleValue,
-          fieldPath
-        );
-        errors.push(...nestedErrors);
-      }
-      // If it's a wildcard field, we skip validation of its contents
-    }
-
-    return errors;
-  }
 
   /**
    * Validates parsed result against JSON schema derived from OutputExample
@@ -2639,9 +2543,9 @@ export class AIPromptRunner {
         return validationErrors;
       }
 
-      // Use the recursive validation helper
-      const errors = this.validateObjectAgainstExample(parsedResult, exampleObject);
-      validationErrors.push(...errors);
+      // Use the JSONValidator to validate against the example
+      const validationResult = this._jsonValidator.validate(parsedResult, exampleObject);
+      validationErrors.push(...validationResult.Errors);
 
       if (validationErrors.length === 0) {
         //LogStatus(`✅ Validation passed for prompt ${promptId}`);
@@ -2650,9 +2554,11 @@ export class AIPromptRunner {
         validationErrors.forEach((error, index) => {
           LogStatus(`   ${index + 1}. ${error.Source}: ${error.Message}`);
         });
-        LogStatus(`   Note: Field suffixes in OutputExample:`);
+        LogStatus(`   Note: Validation syntax in OutputExample:`);
         LogStatus(`   - '?' = optional field (e.g., "reasoning?": "...")`);
         LogStatus(`   - '*' = required but any content (e.g., "payload*": {})`);
+        LogStatus(`   - ':type' = type validation (e.g., "age:number": 25)`);
+        LogStatus(`   - ':[N+]' = array length (e.g., "items:[2+]": [])`);
       }
       
       /* FUTURE IMPLEMENTATION - Keep this commented for reference
@@ -2983,8 +2889,7 @@ export class AIPromptRunner {
    */
   protected calculateFailoverDelay(
     attemptNumber: number,
-    baseDelaySeconds: number,
-    previousError?: Error
+    baseDelaySeconds: number
   ): number {
     // Exponential backoff: delay = base * 2^(attempt-1)
     const exponentialDelay = baseDelaySeconds * Math.pow(2, attemptNumber - 1);

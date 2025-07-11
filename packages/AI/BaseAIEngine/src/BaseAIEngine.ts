@@ -225,6 +225,17 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this._agents;
     }
 
+    /**
+     * Returns the sub-agents for a given agent ID, optionally filtering by status.
+     * @param agentID - The ID of the parent agent to get sub-agents for
+     * @param status - Optional status to filter sub-agents by (e.g., 'Active', 'Inactive'). If not provided, all sub-agents are returned.
+     * @returns AIAgentEntityExtended[] - Array of sub-agent entities matching the criteria.
+     * @memberof
+     */
+    public GetSubAgents(agentID: string, status?: AIAgentEntityExtended['Status']): AIAgentEntityExtended[] {
+        return this._agents.filter(a => a.ParentID === agentID && (!status || a.Status === status));
+    }
+
     public get AgentTypes(): AIAgentTypeEntity[] {
         return this._agentTypes;
     }

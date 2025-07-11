@@ -1,0 +1,1409 @@
+-- Add PayloadScope and FinalPayloadValidation fields to AI Agents table
+ALTER TABLE ${flyway:defaultSchema}.[AIAgent]
+ADD PayloadScope NVARCHAR(MAX) NULL,
+    FinalPayloadValidation NVARCHAR(MAX) NULL,
+    FinalPayloadValidationMode NVARCHAR(25) NOT NULL DEFAULT 'Retry';
+
+GO -- needed to separate the ALTER TABLE statements
+
+-- Add check constraint for FinalPayloadValidationMode
+ALTER TABLE ${flyway:defaultSchema}.[AIAgent]
+ADD CONSTRAINT CK_AIAgent_FinalPayloadValidationMode CHECK (FinalPayloadValidationMode IN ('Retry', 'Fail', 'Warn'));
+
+-- Add description for PayloadScope
+EXEC sp_addextendedproperty 
+    @name = N'MS_Description',
+    @value = N'Defines the scope/path within the parent payload that this sub-agent operates on. When set, the sub-agent receives only this portion of the payload and all change requests are relative to this scope. Format: /path/to/scope (e.g. /PropA/SubProp1)',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = 'AIAgent',
+    @level2type = N'COLUMN', @level2name = 'PayloadScope';
+
+-- Add description for FinalPayloadValidation
+EXEC sp_addextendedproperty 
+    @name = N'MS_Description',
+    @value = N'Optional JSON schema or requirements that define the expected structure and content of the agent''s final payload. Used to validate the output when the agent declares success. Similar to OutputExample in AI Prompts.',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = 'AIAgent',
+    @level2type = N'COLUMN', @level2name = 'FinalPayloadValidation';
+
+-- Add description for FinalPayloadValidationMode
+EXEC sp_addextendedproperty 
+    @name = N'MS_Description',
+    @value = N'Determines how to handle validation failures when FinalPayloadValidation is specified. Options: Retry (default) - retry the agent with validation feedback, Fail - fail the agent run immediately, Warn - log a warning but allow success.',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = 'AIAgent',
+    @level2type = N'COLUMN', @level2name = 'FinalPayloadValidationMode';
+
+
+
+
+
+/****************** CODE GEN RUN ********************/
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '2e542986-0164-4b9e-8457-06826a4ab892'  OR 
+               (EntityID = 'CDB135CC-6D3C-480B-90AE-25B7805F82C1' AND Name = 'PayloadScope')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '2e542986-0164-4b9e-8457-06826a4ab892',
+            'CDB135CC-6D3C-480B-90AE-25B7805F82C1', -- Entity: AI Agents
+            100024,
+            'PayloadScope',
+            'Payload Scope',
+            'Defines the scope/path within the parent payload that this sub-agent operates on. When set, the sub-agent receives only this portion of the payload and all change requests are relative to this scope. Format: /path/to/scope (e.g. /PropA/SubProp1)',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to delete entity field value ID F27E433E-F36B-1410-8DB8-00021F8B792E */
+DELETE FROM [${flyway:defaultSchema}].EntityFieldValue WHERE ID='F27E433E-F36B-1410-8DB8-00021F8B792E'
+
+/* SQL text to update entity field value sequence */
+UPDATE [${flyway:defaultSchema}].EntityFieldValue SET Sequence=7 WHERE ID='7880433E-F36B-1410-8DB8-00021F8B792E'
+
+/* SQL text to delete entity field value ID 0B7F433E-F36B-1410-8DB8-00021F8B792E */
+DELETE FROM [${flyway:defaultSchema}].EntityFieldValue WHERE ID='0B7F433E-F36B-1410-8DB8-00021F8B792E'
+
+/* Index for Foreign Keys for AIAgent */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: AI Agents
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key ParentID in table AIAgent
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_ParentID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgent]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_ParentID ON [${flyway:defaultSchema}].[AIAgent] ([ParentID]);
+
+-- Index for foreign key ContextCompressionPromptID in table AIAgent
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_ContextCompressionPromptID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgent]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_ContextCompressionPromptID ON [${flyway:defaultSchema}].[AIAgent] ([ContextCompressionPromptID]);
+
+-- Index for foreign key TypeID in table AIAgent
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_TypeID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgent]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_TypeID ON [${flyway:defaultSchema}].[AIAgent] ([TypeID]);
+
+/* Base View SQL for AI Agents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: AI Agents
+-- Item: vwAIAgents
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      AI Agents
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  AIAgent
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwAIAgents]
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwAIAgents]
+AS
+SELECT
+    a.*,
+    AIAgent_ParentID.[Name] AS [Parent],
+    AIPrompt_ContextCompressionPromptID.[Name] AS [ContextCompressionPrompt],
+    AIAgentType_TypeID.[Name] AS [Type]
+FROM
+    [${flyway:defaultSchema}].[AIAgent] AS a
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[AIAgent] AS AIAgent_ParentID
+  ON
+    [a].[ParentID] = AIAgent_ParentID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[AIPrompt] AS AIPrompt_ContextCompressionPromptID
+  ON
+    [a].[ContextCompressionPromptID] = AIPrompt_ContextCompressionPromptID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[AIAgentType] AS AIAgentType_TypeID
+  ON
+    [a].[TypeID] = AIAgentType_TypeID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIAgents] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+
+/* Base View Permissions SQL for AI Agents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: AI Agents
+-- Item: Permissions for vwAIAgents
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIAgents] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+/* spCreate SQL for AI Agents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: AI Agents
+-- Item: spCreateAIAgent
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR AIAgent
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateAIAgent]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateAIAgent]
+    @ID uniqueidentifier = NULL,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @LogoURL nvarchar(255),
+    @ParentID uniqueidentifier,
+    @ExposeAsAction bit,
+    @ExecutionOrder int,
+    @ExecutionMode nvarchar(20),
+    @EnableContextCompression bit,
+    @ContextCompressionMessageThreshold int,
+    @ContextCompressionPromptID uniqueidentifier,
+    @ContextCompressionMessageRetentionCount int,
+    @TypeID uniqueidentifier,
+    @Status nvarchar(20),
+    @DriverClass nvarchar(255),
+    @IconClass nvarchar(100),
+    @ModelSelectionMode nvarchar(50),
+    @PayloadDownstreamPaths nvarchar(MAX),
+    @PayloadUpstreamPaths nvarchar(MAX),
+    @PayloadSelfReadPaths nvarchar(MAX),
+    @PayloadSelfWritePaths nvarchar(MAX),
+    @PayloadScope nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[AIAgent]
+            (
+                [ID],
+                [Name],
+                [Description],
+                [LogoURL],
+                [ParentID],
+                [ExposeAsAction],
+                [ExecutionOrder],
+                [ExecutionMode],
+                [EnableContextCompression],
+                [ContextCompressionMessageThreshold],
+                [ContextCompressionPromptID],
+                [ContextCompressionMessageRetentionCount],
+                [TypeID],
+                [Status],
+                [DriverClass],
+                [IconClass],
+                [ModelSelectionMode],
+                [PayloadDownstreamPaths],
+                [PayloadUpstreamPaths],
+                [PayloadSelfReadPaths],
+                [PayloadSelfWritePaths],
+                [PayloadScope]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @Name,
+                @Description,
+                @LogoURL,
+                @ParentID,
+                @ExposeAsAction,
+                @ExecutionOrder,
+                @ExecutionMode,
+                @EnableContextCompression,
+                @ContextCompressionMessageThreshold,
+                @ContextCompressionPromptID,
+                @ContextCompressionMessageRetentionCount,
+                @TypeID,
+                @Status,
+                @DriverClass,
+                @IconClass,
+                @ModelSelectionMode,
+                @PayloadDownstreamPaths,
+                @PayloadUpstreamPaths,
+                @PayloadSelfReadPaths,
+                @PayloadSelfWritePaths,
+                @PayloadScope
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[AIAgent]
+            (
+                [Name],
+                [Description],
+                [LogoURL],
+                [ParentID],
+                [ExposeAsAction],
+                [ExecutionOrder],
+                [ExecutionMode],
+                [EnableContextCompression],
+                [ContextCompressionMessageThreshold],
+                [ContextCompressionPromptID],
+                [ContextCompressionMessageRetentionCount],
+                [TypeID],
+                [Status],
+                [DriverClass],
+                [IconClass],
+                [ModelSelectionMode],
+                [PayloadDownstreamPaths],
+                [PayloadUpstreamPaths],
+                [PayloadSelfReadPaths],
+                [PayloadSelfWritePaths],
+                [PayloadScope]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @Name,
+                @Description,
+                @LogoURL,
+                @ParentID,
+                @ExposeAsAction,
+                @ExecutionOrder,
+                @ExecutionMode,
+                @EnableContextCompression,
+                @ContextCompressionMessageThreshold,
+                @ContextCompressionPromptID,
+                @ContextCompressionMessageRetentionCount,
+                @TypeID,
+                @Status,
+                @DriverClass,
+                @IconClass,
+                @ModelSelectionMode,
+                @PayloadDownstreamPaths,
+                @PayloadUpstreamPaths,
+                @PayloadSelfReadPaths,
+                @PayloadSelfWritePaths,
+                @PayloadScope
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwAIAgents] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIAgent] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spCreate Permissions for AI Agents */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIAgent] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spUpdate SQL for AI Agents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: AI Agents
+-- Item: spUpdateAIAgent
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR AIAgent
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateAIAgent]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateAIAgent]
+    @ID uniqueidentifier,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @LogoURL nvarchar(255),
+    @ParentID uniqueidentifier,
+    @ExposeAsAction bit,
+    @ExecutionOrder int,
+    @ExecutionMode nvarchar(20),
+    @EnableContextCompression bit,
+    @ContextCompressionMessageThreshold int,
+    @ContextCompressionPromptID uniqueidentifier,
+    @ContextCompressionMessageRetentionCount int,
+    @TypeID uniqueidentifier,
+    @Status nvarchar(20),
+    @DriverClass nvarchar(255),
+    @IconClass nvarchar(100),
+    @ModelSelectionMode nvarchar(50),
+    @PayloadDownstreamPaths nvarchar(MAX),
+    @PayloadUpstreamPaths nvarchar(MAX),
+    @PayloadSelfReadPaths nvarchar(MAX),
+    @PayloadSelfWritePaths nvarchar(MAX),
+    @PayloadScope nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[AIAgent]
+    SET
+        [Name] = @Name,
+        [Description] = @Description,
+        [LogoURL] = @LogoURL,
+        [ParentID] = @ParentID,
+        [ExposeAsAction] = @ExposeAsAction,
+        [ExecutionOrder] = @ExecutionOrder,
+        [ExecutionMode] = @ExecutionMode,
+        [EnableContextCompression] = @EnableContextCompression,
+        [ContextCompressionMessageThreshold] = @ContextCompressionMessageThreshold,
+        [ContextCompressionPromptID] = @ContextCompressionPromptID,
+        [ContextCompressionMessageRetentionCount] = @ContextCompressionMessageRetentionCount,
+        [TypeID] = @TypeID,
+        [Status] = @Status,
+        [DriverClass] = @DriverClass,
+        [IconClass] = @IconClass,
+        [ModelSelectionMode] = @ModelSelectionMode,
+        [PayloadDownstreamPaths] = @PayloadDownstreamPaths,
+        [PayloadUpstreamPaths] = @PayloadUpstreamPaths,
+        [PayloadSelfReadPaths] = @PayloadSelfReadPaths,
+        [PayloadSelfWritePaths] = @PayloadSelfWritePaths,
+        [PayloadScope] = @PayloadScope
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwAIAgents] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwAIAgents]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIAgent] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the AIAgent table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateAIAgent
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateAIAgent
+ON [${flyway:defaultSchema}].[AIAgent]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[AIAgent]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[AIAgent] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for AI Agents */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIAgent] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spDelete SQL for AI Agents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: AI Agents
+-- Item: spDeleteAIAgent
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR AIAgent
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteAIAgent]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteAIAgent]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[AIAgent]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Integration]
+    
+
+/* spDelete Permissions for AI Agents */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Integration]
+
+
+
+/* SQL text to update entity field related entity name field map for entity field ID DE79433E-F36B-1410-8DB8-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='DE79433E-F36B-1410-8DB8-00021F8B792E',
+         @RelatedEntityNameFieldMap='ResourceType'
+
+/* SQL text to update entity field related entity name field map for entity field ID 237A433E-F36B-1410-8DB8-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='237A433E-F36B-1410-8DB8-00021F8B792E',
+         @RelatedEntityNameFieldMap='User'
+
+/* SQL text to update entity field related entity name field map for entity field ID 297A433E-F36B-1410-8DB8-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='297A433E-F36B-1410-8DB8-00021F8B792E',
+         @RelatedEntityNameFieldMap='ResourceType'
+
+/* SQL text to update entity field related entity name field map for entity field ID EA79433E-F36B-1410-8DB8-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='EA79433E-F36B-1410-8DB8-00021F8B792E',
+         @RelatedEntityNameFieldMap='Role'
+
+/* SQL text to update entity field related entity name field map for entity field ID ED79433E-F36B-1410-8DB8-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='ED79433E-F36B-1410-8DB8-00021F8B792E',
+         @RelatedEntityNameFieldMap='User'
+
+/* SQL text to update entity field related entity name field map for entity field ID 2479433E-F36B-1410-8DB8-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='2479433E-F36B-1410-8DB8-00021F8B792E',
+         @RelatedEntityNameFieldMap='Source'
+
+/* SQL text to update entity field related entity name field map for entity field ID 3679433E-F36B-1410-8DB8-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='3679433E-F36B-1410-8DB8-00021F8B792E',
+         @RelatedEntityNameFieldMap='ContentType'
+
+/* SQL text to update entity field related entity name field map for entity field ID 4479433E-F36B-1410-8DB8-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='4479433E-F36B-1410-8DB8-00021F8B792E',
+         @RelatedEntityNameFieldMap='ContentSource'
+
+/* SQL text to update entity field related entity name field map for entity field ID 3879433E-F36B-1410-8DB8-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='3879433E-F36B-1410-8DB8-00021F8B792E',
+         @RelatedEntityNameFieldMap='ContentSourceType'
+
+/* SQL text to update entity field related entity name field map for entity field ID 3A79433E-F36B-1410-8DB8-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='3A79433E-F36B-1410-8DB8-00021F8B792E',
+         @RelatedEntityNameFieldMap='ContentFileType'
+
+/* SQL text to update entity field related entity name field map for entity field ID 6E79433E-F36B-1410-8DB8-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='6E79433E-F36B-1410-8DB8-00021F8B792E',
+         @RelatedEntityNameFieldMap='AIModel'
+
+/* SQL text to update entity field related entity name field map for entity field ID 9279433E-F36B-1410-8DB8-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='9279433E-F36B-1410-8DB8-00021F8B792E',
+         @RelatedEntityNameFieldMap='ContentSource'
+
+/* SQL text to update entity field related entity name field map for entity field ID AA79433E-F36B-1410-8DB8-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='AA79433E-F36B-1410-8DB8-00021F8B792E',
+         @RelatedEntityNameFieldMap='ContentItem'
+
+/* SQL text to update entity field related entity name field map for entity field ID 9879433E-F36B-1410-8DB8-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='9879433E-F36B-1410-8DB8-00021F8B792E',
+         @RelatedEntityNameFieldMap='ContentType'
+
+/* SQL text to update entity field related entity name field map for entity field ID 9A79433E-F36B-1410-8DB8-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='9A79433E-F36B-1410-8DB8-00021F8B792E',
+         @RelatedEntityNameFieldMap='ContentSourceType'
+
+/* SQL text to update entity field related entity name field map for entity field ID 9C79433E-F36B-1410-8DB8-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='9C79433E-F36B-1410-8DB8-00021F8B792E',
+         @RelatedEntityNameFieldMap='ContentFileType'
+
+/* SQL text to update entity field related entity name field map for entity field ID B679433E-F36B-1410-8DB8-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='B679433E-F36B-1410-8DB8-00021F8B792E',
+         @RelatedEntityNameFieldMap='Item'
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'fb1a360e-6b7f-4c83-a0d5-9d24e0095528'  OR 
+               (EntityID = 'D7238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'CompanyIntegration')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'fb1a360e-6b7f-4c83-a0d5-9d24e0095528',
+            'D7238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Employee Company Integrations
+            100008,
+            'CompanyIntegration',
+            'Company Integration',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '97ee7b0a-d50e-4757-9278-297f0843354b'  OR 
+               (EntityID = 'EE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'CompanyIntegration')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '97ee7b0a-d50e-4757-9278-297f0843354b',
+            'EE238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Lists
+            100014,
+            'CompanyIntegration',
+            'Company Integration',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '53bddf40-e5c3-436e-b953-4ed1f16cfc35'  OR 
+               (EntityID = '16248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'CompanyIntegration')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '53bddf40-e5c3-436e-b953-4ed1f16cfc35',
+            '16248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Company Integration Record Maps
+            100008,
+            'CompanyIntegration',
+            'Company Integration',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+
+
+
+
+
+
+
+
+
+
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '1c7959ae-f48b-4858-8383-28c3f4706314'  OR 
+               (EntityID = 'CDB135CC-6D3C-480B-90AE-25B7805F82C1' AND Name = 'FinalPayloadValidation')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '1c7959ae-f48b-4858-8383-28c3f4706314',
+            'CDB135CC-6D3C-480B-90AE-25B7805F82C1', -- Entity: AI Agents
+            100025,
+            'FinalPayloadValidation',
+            'Final Payload Validation',
+            'Optional JSON schema or requirements that define the expected structure and content of the agent''s final payload. Used to validate the output when the agent declares success. Similar to OutputExample in AI Prompts.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '8931de12-4048-4deb-a2a3-e821354cffb2'  OR 
+               (EntityID = 'CDB135CC-6D3C-480B-90AE-25B7805F82C1' AND Name = 'FinalPayloadValidationMode')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '8931de12-4048-4deb-a2a3-e821354cffb2',
+            'CDB135CC-6D3C-480B-90AE-25B7805F82C1', -- Entity: AI Agents
+            100026,
+            'FinalPayloadValidationMode',
+            'Final Payload Validation Mode',
+            'Determines how to handle validation failures when FinalPayloadValidation is specified. Options: Retry (default) - retry the agent with validation feedback, Fail - fail the agent run immediately, Warn - log a warning but allow success.',
+            'nvarchar',
+            50,
+            0,
+            0,
+            0,
+            'Retry',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('8931DE12-4048-4DEB-A2A3-E821354CFFB2', 1, 'Retry', 'Retry')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('8931DE12-4048-4DEB-A2A3-E821354CFFB2', 2, 'Fail', 'Fail')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('8931DE12-4048-4DEB-A2A3-E821354CFFB2', 3, 'Warn', 'Warn')
+
+/* SQL text to update ValueListType for entity field ID 8931DE12-4048-4DEB-A2A3-E821354CFFB2 */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='8931DE12-4048-4DEB-A2A3-E821354CFFB2'
+
+/* Index for Foreign Keys for AIAgent */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: AI Agents
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key ParentID in table AIAgent
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_ParentID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgent]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_ParentID ON [${flyway:defaultSchema}].[AIAgent] ([ParentID]);
+
+-- Index for foreign key ContextCompressionPromptID in table AIAgent
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_ContextCompressionPromptID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgent]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_ContextCompressionPromptID ON [${flyway:defaultSchema}].[AIAgent] ([ContextCompressionPromptID]);
+
+-- Index for foreign key TypeID in table AIAgent
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_TypeID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgent]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_TypeID ON [${flyway:defaultSchema}].[AIAgent] ([TypeID]);
+
+/* Base View SQL for AI Agents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: AI Agents
+-- Item: vwAIAgents
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      AI Agents
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  AIAgent
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwAIAgents]
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwAIAgents]
+AS
+SELECT
+    a.*,
+    AIAgent_ParentID.[Name] AS [Parent],
+    AIPrompt_ContextCompressionPromptID.[Name] AS [ContextCompressionPrompt],
+    AIAgentType_TypeID.[Name] AS [Type]
+FROM
+    [${flyway:defaultSchema}].[AIAgent] AS a
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[AIAgent] AS AIAgent_ParentID
+  ON
+    [a].[ParentID] = AIAgent_ParentID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[AIPrompt] AS AIPrompt_ContextCompressionPromptID
+  ON
+    [a].[ContextCompressionPromptID] = AIPrompt_ContextCompressionPromptID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[AIAgentType] AS AIAgentType_TypeID
+  ON
+    [a].[TypeID] = AIAgentType_TypeID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIAgents] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+
+/* Base View Permissions SQL for AI Agents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: AI Agents
+-- Item: Permissions for vwAIAgents
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIAgents] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+/* spCreate SQL for AI Agents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: AI Agents
+-- Item: spCreateAIAgent
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR AIAgent
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateAIAgent]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateAIAgent]
+    @ID uniqueidentifier = NULL,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @LogoURL nvarchar(255),
+    @ParentID uniqueidentifier,
+    @ExposeAsAction bit,
+    @ExecutionOrder int,
+    @ExecutionMode nvarchar(20),
+    @EnableContextCompression bit,
+    @ContextCompressionMessageThreshold int,
+    @ContextCompressionPromptID uniqueidentifier,
+    @ContextCompressionMessageRetentionCount int,
+    @TypeID uniqueidentifier,
+    @Status nvarchar(20),
+    @DriverClass nvarchar(255),
+    @IconClass nvarchar(100),
+    @ModelSelectionMode nvarchar(50),
+    @PayloadDownstreamPaths nvarchar(MAX),
+    @PayloadUpstreamPaths nvarchar(MAX),
+    @PayloadSelfReadPaths nvarchar(MAX),
+    @PayloadSelfWritePaths nvarchar(MAX),
+    @PayloadScope nvarchar(MAX),
+    @FinalPayloadValidation nvarchar(MAX),
+    @FinalPayloadValidationMode nvarchar(25)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[AIAgent]
+            (
+                [ID],
+                [Name],
+                [Description],
+                [LogoURL],
+                [ParentID],
+                [ExposeAsAction],
+                [ExecutionOrder],
+                [ExecutionMode],
+                [EnableContextCompression],
+                [ContextCompressionMessageThreshold],
+                [ContextCompressionPromptID],
+                [ContextCompressionMessageRetentionCount],
+                [TypeID],
+                [Status],
+                [DriverClass],
+                [IconClass],
+                [ModelSelectionMode],
+                [PayloadDownstreamPaths],
+                [PayloadUpstreamPaths],
+                [PayloadSelfReadPaths],
+                [PayloadSelfWritePaths],
+                [PayloadScope],
+                [FinalPayloadValidation],
+                [FinalPayloadValidationMode]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @Name,
+                @Description,
+                @LogoURL,
+                @ParentID,
+                @ExposeAsAction,
+                @ExecutionOrder,
+                @ExecutionMode,
+                @EnableContextCompression,
+                @ContextCompressionMessageThreshold,
+                @ContextCompressionPromptID,
+                @ContextCompressionMessageRetentionCount,
+                @TypeID,
+                @Status,
+                @DriverClass,
+                @IconClass,
+                @ModelSelectionMode,
+                @PayloadDownstreamPaths,
+                @PayloadUpstreamPaths,
+                @PayloadSelfReadPaths,
+                @PayloadSelfWritePaths,
+                @PayloadScope,
+                @FinalPayloadValidation,
+                @FinalPayloadValidationMode
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[AIAgent]
+            (
+                [Name],
+                [Description],
+                [LogoURL],
+                [ParentID],
+                [ExposeAsAction],
+                [ExecutionOrder],
+                [ExecutionMode],
+                [EnableContextCompression],
+                [ContextCompressionMessageThreshold],
+                [ContextCompressionPromptID],
+                [ContextCompressionMessageRetentionCount],
+                [TypeID],
+                [Status],
+                [DriverClass],
+                [IconClass],
+                [ModelSelectionMode],
+                [PayloadDownstreamPaths],
+                [PayloadUpstreamPaths],
+                [PayloadSelfReadPaths],
+                [PayloadSelfWritePaths],
+                [PayloadScope],
+                [FinalPayloadValidation],
+                [FinalPayloadValidationMode]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @Name,
+                @Description,
+                @LogoURL,
+                @ParentID,
+                @ExposeAsAction,
+                @ExecutionOrder,
+                @ExecutionMode,
+                @EnableContextCompression,
+                @ContextCompressionMessageThreshold,
+                @ContextCompressionPromptID,
+                @ContextCompressionMessageRetentionCount,
+                @TypeID,
+                @Status,
+                @DriverClass,
+                @IconClass,
+                @ModelSelectionMode,
+                @PayloadDownstreamPaths,
+                @PayloadUpstreamPaths,
+                @PayloadSelfReadPaths,
+                @PayloadSelfWritePaths,
+                @PayloadScope,
+                @FinalPayloadValidation,
+                @FinalPayloadValidationMode
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwAIAgents] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIAgent] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spCreate Permissions for AI Agents */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIAgent] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spUpdate SQL for AI Agents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: AI Agents
+-- Item: spUpdateAIAgent
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR AIAgent
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateAIAgent]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateAIAgent]
+    @ID uniqueidentifier,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @LogoURL nvarchar(255),
+    @ParentID uniqueidentifier,
+    @ExposeAsAction bit,
+    @ExecutionOrder int,
+    @ExecutionMode nvarchar(20),
+    @EnableContextCompression bit,
+    @ContextCompressionMessageThreshold int,
+    @ContextCompressionPromptID uniqueidentifier,
+    @ContextCompressionMessageRetentionCount int,
+    @TypeID uniqueidentifier,
+    @Status nvarchar(20),
+    @DriverClass nvarchar(255),
+    @IconClass nvarchar(100),
+    @ModelSelectionMode nvarchar(50),
+    @PayloadDownstreamPaths nvarchar(MAX),
+    @PayloadUpstreamPaths nvarchar(MAX),
+    @PayloadSelfReadPaths nvarchar(MAX),
+    @PayloadSelfWritePaths nvarchar(MAX),
+    @PayloadScope nvarchar(MAX),
+    @FinalPayloadValidation nvarchar(MAX),
+    @FinalPayloadValidationMode nvarchar(25)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[AIAgent]
+    SET
+        [Name] = @Name,
+        [Description] = @Description,
+        [LogoURL] = @LogoURL,
+        [ParentID] = @ParentID,
+        [ExposeAsAction] = @ExposeAsAction,
+        [ExecutionOrder] = @ExecutionOrder,
+        [ExecutionMode] = @ExecutionMode,
+        [EnableContextCompression] = @EnableContextCompression,
+        [ContextCompressionMessageThreshold] = @ContextCompressionMessageThreshold,
+        [ContextCompressionPromptID] = @ContextCompressionPromptID,
+        [ContextCompressionMessageRetentionCount] = @ContextCompressionMessageRetentionCount,
+        [TypeID] = @TypeID,
+        [Status] = @Status,
+        [DriverClass] = @DriverClass,
+        [IconClass] = @IconClass,
+        [ModelSelectionMode] = @ModelSelectionMode,
+        [PayloadDownstreamPaths] = @PayloadDownstreamPaths,
+        [PayloadUpstreamPaths] = @PayloadUpstreamPaths,
+        [PayloadSelfReadPaths] = @PayloadSelfReadPaths,
+        [PayloadSelfWritePaths] = @PayloadSelfWritePaths,
+        [PayloadScope] = @PayloadScope,
+        [FinalPayloadValidation] = @FinalPayloadValidation,
+        [FinalPayloadValidationMode] = @FinalPayloadValidationMode
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwAIAgents] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwAIAgents]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIAgent] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the AIAgent table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateAIAgent
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateAIAgent
+ON [${flyway:defaultSchema}].[AIAgent]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[AIAgent]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[AIAgent] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for AI Agents */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIAgent] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spDelete SQL for AI Agents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: AI Agents
+-- Item: spDeleteAIAgent
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR AIAgent
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteAIAgent]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteAIAgent]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[AIAgent]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Integration]
+    
+
+/* spDelete Permissions for AI Agents */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Integration]
+
+
+
