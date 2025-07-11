@@ -1,4 +1,4 @@
-import fs from 'fs-extra';
+import fs, { JsonWriteOptions } from 'fs-extra';
 import { RecordData } from './sync-engine';
 
 /**
@@ -105,8 +105,13 @@ export class JsonWriteHelper {
    * Write regular JSON data (non-RecordData) with standard formatting
    * @param filePath - Path to the JSON file to write
    * @param data - Any JSON-serializable data
+   * @param options - Optional JSON write options
    */
-  static async writeJson(filePath: string, data: any): Promise<void> {
-    await fs.writeJson(filePath, data, { spaces: 2 });
+  static async writeJson(filePath: string, data: any, options?: JsonWriteOptions): Promise<void> {
+    const defaultOptions = { spaces: 2 };
+    const writeOptions = typeof options === 'object' && options !== null 
+      ? { ...defaultOptions, ...options }
+      : defaultOptions;
+    await fs.writeJson(filePath, data, writeOptions);
   }
 }

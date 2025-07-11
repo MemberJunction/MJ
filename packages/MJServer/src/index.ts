@@ -45,11 +45,9 @@ import { LoadAnthropicLLM } from '@memberjunction/ai-anthropic';
 import { LoadGroqLLM } from '@memberjunction/ai-groq';
 import { LoadCerebrasLLM } from '@memberjunction/ai-cerebras';
 import { LoadMistralLLM } from '@memberjunction/ai-mistral';
-import { LoadBaseAIEngine } from '@memberjunction/ai-engine-base';
 // Load AI LLMs and Base AI Engine
 // These imports are necessary to ensure the LLMs are registered in the MemberJunction AI
 // system. They are not tree-shaken because they are dynamically loaded at runtime.
-LoadBaseAIEngine(); // Load base AI engine and price unit types
 LoadOpenAILLM();
 LoadAnthropicLLM();
 LoadGroqLLM();
