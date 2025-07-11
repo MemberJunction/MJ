@@ -195,9 +195,9 @@ export class LoopAgentType extends BaseAgentType {
      * @param {any} response - The response to validate
      * @returns {boolean} True if the response is valid, false otherwise
      * 
-     * @private
+     * @protected
      */
-    private isValidLoopResponse(simpleResponse: any): {success: boolean, message?: string} {
+    protected isValidLoopResponse(simpleResponse: any): {success: boolean, message?: string} {
         // Check required fields, first cast the simpleResponse to LoopAgentResponse
         // so we get the benefit of TypeScript's type checking below in this method
         const response = simpleResponse as LoopAgentResponse;
@@ -242,8 +242,18 @@ export class LoopAgentType extends BaseAgentType {
         // Validate nextStep structure if present
         if (response.nextStep) {
             const validStepTypes = ['actions', 'sub-agent', 'chat'];
-            const lcaseType = response.nextStep.type?.toLowerCase().trim();
+            let lcaseType = response.nextStep.type?.toLowerCase().trim();
             // allow the AI to mess up the case, but we need to validate it
+
+            // be smart/lenient about missing types. if type is missing but we have a nextStep.subAgent, default to sub-agent and if type is missing and we have nextStep.actions, default to actions
+            if (!lcaseType && response.nextStep.subAgent) {
+                response.nextStep.type = 'Sub-Agent'; // update the data structure to have the correct type
+                lcaseType = 'sub-agent';
+            } else if (!lcaseType && response.nextStep.actions && response.nextStep.actions.length > 0) {
+                response.nextStep.type = 'Actions'; // update the data structure to have the correct type
+                lcaseType = 'actions';
+            }
+
             if (!validStepTypes.includes(lcaseType)) {
                 const message = `LoopAgentResponse has invalid nextStep.type: ${response.nextStep.type}`;
                 LogError(message);
