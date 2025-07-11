@@ -137,6 +137,60 @@ export class MyCustomAgentType extends BaseAgentType {
 }
 ```
 
+### Handling JSON Validation Syntax in Agent Responses
+
+When AI prompts use validation syntax (like `?`, `*`, `:type`, etc.), the AI might inadvertently include these in its JSON response keys. Agent types that parse embedded JSON need to handle this cleaning:
+
+```typescript
+import { JSONValidator } from '@memberjunction/global';
+
+@RegisterClass(BaseAgentType, "StructuredResponseAgent")
+export class StructuredResponseAgent extends BaseAgentType {
+    async DetermineNextStep(promptResult: AIPromptRunResult): Promise<BaseAgentNextStep> {
+        // For responses with embedded JSON strings
+        const outerResponse = promptResult.result as any;
+        
+        // If the response contains an embedded JSON string
+        if (outerResponse.response && typeof outerResponse.response === 'string') {
+            // Parse the embedded JSON
+            const innerData = JSON.parse(outerResponse.response);
+            
+            // Clean validation syntax that AI might have included
+            const validator = new JSONValidator();
+            const cleanedData = validator.cleanValidationSyntax<any>(innerData);
+            
+            // Now work with cleaned data
+            if (cleanedData.analysisComplete) {
+                return { type: 'stop', reason: 'Analysis completed' };
+            }
+        }
+        
+        return { type: 'continue' };
+    }
+}
+```
+
+**Important Notes:**
+- The AIPromptRunner automatically cleans validation syntax for top-level JSON objects when an OutputExample is defined
+- However, agent types must handle cleaning for **embedded JSON strings** within the response
+- This is common when the prompt response structure contains a JSON string as a field value
+- The `cleanValidationSyntax` method preserves values while removing validation syntax from keys
+
+Example scenario:
+```typescript
+// AI Prompt response (top-level is cleaned automatically)
+{
+    "status": "success",
+    "response": "{\"analysisComplete?\":true,\"recommendations:[3+]\":[\"A\",\"B\",\"C\"]}"
+}
+
+// After agent type cleans the embedded JSON
+{
+    "analysisComplete": true,
+    "recommendations": ["A", "B", "C"]
+}
+```
+
 ## Execution Flow
 
 1. **Initialization**: 

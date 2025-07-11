@@ -12,7 +12,7 @@
  */
 
 import { AIAgentEntity, AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntity, ActionParamEntity, AIAgentEntityExtended } from '@memberjunction/core-entities';
-import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, ValidationErrorInfo } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
@@ -83,6 +83,12 @@ import * as _ from 'lodash';
  */
 export class BaseAgent {
     /**
+     * Maximum allowed validation retries before forcing failure.
+     * @private
+     */
+    private static readonly MAX_VALIDATION_RETRIES = 10;
+
+    /**
      * Instance of AIPromptRunner used for executing hierarchical prompts.
      * @private
      */
@@ -100,6 +106,13 @@ export class BaseAgent {
      * @private
      */
     private _executionCounts: Map<string, number> = new Map();
+
+    /**
+     * Counter for validation-induced retries (when validation changes a step to Retry).
+     * This is separate from FinalPayloadValidation retries.
+     * @private
+     */
+    private _generalValidationRetryCount: number = 0;
 
     /**
      * Current agent run entity.
@@ -310,8 +323,9 @@ export class BaseAgent {
             // Initialize execution tracking
             await this.initializeAgentRun(wrappedParams);
 
-            // Reset validation retry counter for this run
+            // Reset validation retry counters for this run
             this._validationRetryCount = 0;
+            this._generalValidationRetryCount = 0;
 
             // Initialize engines
             await this.initializeEngines(params.contextUser);
@@ -788,6 +802,10 @@ export class BaseAgent {
                 agent: params.agent,
                 category: 'SubAgentExecution'
             });
+            // Increment validation retry count since we're changing to Retry
+            if (nextStep.step !== 'Retry') {
+                this._generalValidationRetryCount++;
+            }
             return {
                 step: 'Retry',
                 terminate: false, // this will kick it back to the prompt to run again
@@ -808,6 +826,10 @@ export class BaseAgent {
                         maxExecutions: subAgent.MaxExecutionsPerRun
                     }
                 });
+                // Increment validation retry count since we're changing to Retry
+                if (nextStep.step !== 'Retry') {
+                    this._generalValidationRetryCount++;
+                }
                 return {
                     step: 'Retry',
                     terminate: false,
@@ -846,6 +868,10 @@ export class BaseAgent {
                 agent: params.agent,
                 category: 'ActionExecution'
             });
+            // Increment validation retry count since we're changing to Retry
+            if (nextStep.step !== 'Retry') {
+                this._generalValidationRetryCount++;
+            }
             return {
                 step: 'Retry',
                 terminate: false, // this will kick it back to the prompt to run again
@@ -879,6 +905,10 @@ export class BaseAgent {
                         violatedActions
                     }
                 });
+                // Increment validation retry count since we're changing to Retry
+                if (nextStep.step !== 'Retry') {
+                    this._generalValidationRetryCount++;
+                }
                 return {
                     step: 'Retry',
                     terminate: false,
@@ -914,6 +944,11 @@ export class BaseAgent {
                 agent: params.agent,
                 category: 'MinimumExecutionValidation'
             });
+            
+            // Increment validation retry count since we're changing to Retry
+            if (nextStep.step !== 'Retry') {
+                this._generalValidationRetryCount++;
+            }
             
             return {
                 step: 'Retry',
@@ -1326,6 +1361,17 @@ export class BaseAgent {
                     reason: `Maximum time limit of ${agent.MaxTimePerRun} seconds exceeded. Elapsed time: ${elapsedSeconds} seconds`
                 };
             }
+        }
+        
+        // Check validation retry limit
+        if (this._generalValidationRetryCount >= BaseAgent.MAX_VALIDATION_RETRIES) {
+            return {
+                exceeded: true,
+                type: 'iterations', // Using iterations type since validation retries are a form of iteration
+                limit: BaseAgent.MAX_VALIDATION_RETRIES,
+                current: this._generalValidationRetryCount,
+                reason: `Maximum validation retries of ${BaseAgent.MAX_VALIDATION_RETRIES} exceeded. The agent is unable to produce valid output after ${this._generalValidationRetryCount} validation failures.`
+            };
         }
         
         // No guardrails exceeded

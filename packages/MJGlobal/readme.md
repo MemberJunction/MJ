@@ -381,6 +381,40 @@ const template = {
 };
 ```
 
+#### Cleaning Validation Syntax
+
+The validator can clean validation syntax from JSON objects that may have been returned by AI systems:
+
+```typescript
+// AI might return JSON with validation syntax in keys
+const aiResponse = {
+  "name?": "John Doe",
+  "email:string": "john@example.com",
+  "tags:[2+]": ["work", "urgent"],
+  "settings*": { theme: "dark" },
+  "score:number:!empty": 85
+};
+
+// Clean the validation syntax
+const cleaned = validator.cleanValidationSyntax<any>(aiResponse);
+// Returns:
+// {
+//   "name": "John Doe",
+//   "email": "john@example.com", 
+//   "tags": ["work", "urgent"],
+//   "settings": { theme: "dark" },
+//   "score": 85
+// }
+```
+
+The `cleanValidationSyntax` method:
+- Recursively processes all object keys
+- Removes validation suffixes (`?`, `*`)
+- Removes validation rules (`:type`, `:[N+]`, `:!empty`, etc.)
+- Preserves the original values unchanged
+- Handles nested objects and arrays
+- Returns a new object with cleaned keys
+
 #### Convenience Methods
 
 ```typescript
