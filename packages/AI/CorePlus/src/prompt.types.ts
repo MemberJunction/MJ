@@ -424,6 +424,27 @@ export class AIPromptParams {
    * ```
    */
   apiKeys?: AIAPIKey[];
+
+  /**
+   * Whether to clean validation syntax from the AI result.
+   * When true, the AIPromptRunner will automatically remove validation syntax
+   * (like ?, *, :type, :[N+], :!empty) from JSON keys in the AI's response.
+   * 
+   * Note: For JSON outputs with an OutputExample defined, validation syntax
+   * is ALWAYS cleaned automatically before validation, regardless of this setting.
+   * This parameter is only needed for edge cases where you want cleaning
+   * without an OutputExample.
+   * 
+   * Default: false
+   * 
+   * @example
+   * ```typescript
+   * // If AI returns: { "name?": "John", "items:[2+]": ["a", "b"] }
+   * // With cleanValidationSyntax: true OR with OutputExample defined
+   * // Result becomes: { "name": "John", "items": ["a", "b"] }
+   * ```
+   */
+  cleanValidationSyntax?: boolean;
 }
 
 

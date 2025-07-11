@@ -1345,38 +1345,8 @@ export class EntityInfo extends BaseInfo {
     }
 }
 
-export const ValidationErrorType = {
-    Failure: 'Failure',
-    Warning: 'Warning',
-} as const;
-
-export type ValidationErrorType = typeof ValidationErrorType[keyof typeof ValidationErrorType];
-
-
-/**
- * Information about a single validation error
- */
-export class ValidationErrorInfo {
-    Source: string
-    Message: string
-    Value: any
-    Type: ValidationErrorType
-
-    constructor(Source: string, Message: string, Value: any, Type: ValidationErrorType = ValidationErrorType.Failure) {
-        this.Source = Source;
-        this.Message = Message;
-        this.Value = Value;
-        this.Type = Type;
-    }
-}
-
-/**
- * The result of a validation check 
- */
-export class ValidationResult {
-    Success: boolean
-    Errors: ValidationErrorInfo[] = []
-}
+// Re-export validation types from @memberjunction/global for backward compatibility
+export { ValidationErrorType, ValidationErrorInfo, ValidationResult } from '@memberjunction/global';
 
 /**
  * Information about the link between two entities

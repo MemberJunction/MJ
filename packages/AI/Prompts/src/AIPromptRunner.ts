@@ -646,7 +646,7 @@ export class AIPromptRunner {
     for (const result of sortedResults) {
       if (result.task.taskId !== selectedResult.task.taskId) {
         // Parse and validate this result
-        const { result: parsedResultData, validationResult } = await this.parseAndValidateResultEnhanced(result.modelResult!, prompt, params.skipValidation);
+        const { result: parsedResultData, validationResult } = await this.parseAndValidateResultEnhanced(result.modelResult!, prompt, params.skipValidation, params.cleanValidationSyntax);
         const parsedResult = { result: parsedResultData, validationResult };
 
         const resultUsage = result.modelResult?.data?.usage;
@@ -676,7 +676,7 @@ export class AIPromptRunner {
     }
 
     // Parse and validate the selected result
-    const { result: selectedResultData, validationResult: selectedValidationResult } = await this.parseAndValidateResultEnhanced(selectedResult.modelResult!, prompt, params.skipValidation);
+    const { result: selectedResultData, validationResult: selectedValidationResult } = await this.parseAndValidateResultEnhanced(selectedResult.modelResult!, prompt, params.skipValidation, params.cleanValidationSyntax);
     const selectedParsedResult = { result: selectedResultData, validationResult: selectedValidationResult };
     const selectedUsage = selectedResult.modelResult?.data?.usage;
 
@@ -2104,6 +2104,7 @@ export class AIPromptRunner {
           modelResult,
           prompt,
           params.skipValidation,
+          params.cleanValidationSyntax,
         );
 
         // Record this validation attempt
@@ -2370,6 +2371,7 @@ export class AIPromptRunner {
     modelResult: ChatResult,
     prompt: AIPromptEntity,
     skipValidation: boolean = false,
+    cleanValidationSyntax: boolean = false,
   ): Promise<{
     result: unknown;
     validationResult?: ValidationResult;
@@ -2442,6 +2444,13 @@ export class AIPromptRunner {
           case 'object':
             try {
               parsedResult = JSON.parse(CleanJSON(rawOutput));
+              
+              // ALWAYS clean validation syntax when we have an OutputExample for validation
+              // OR when explicitly requested via cleanValidationSyntax parameter
+              if (parsedResult && (cleanValidationSyntax || (!skipValidation && prompt.OutputExample))) {
+                const validator = new JSONValidator();
+                parsedResult = validator.cleanValidationSyntax<unknown>(parsedResult);
+              }
             } catch (jsonError) {
               // if we skip validation, we can allow thisk only emit this if 
               // we are NOT skipping validation

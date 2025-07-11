@@ -36,7 +36,7 @@
  * @since 3.0.0
  */
 
-import { ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/core';
+import { ValidationResult, ValidationErrorInfo, ValidationErrorType } from './ValidationTypes';
 
 /**
  * Parsed validation rule information
@@ -474,5 +474,68 @@ export class JSONValidator {
                 ]
             };
         }
+    }
+
+    /**
+     * Cleans validation syntax from JSON object keys.
+     * 
+     * This method recursively processes a JSON object and removes validation
+     * syntax markers (?, *, :rules) from all object keys. This is useful when
+     * AI models mistakenly include our validation syntax in their responses.
+     * 
+     * @example
+     * ```typescript
+     * interface MyData {
+     *   name: string;
+     *   items: string[];
+     *   config: { enabled: boolean };
+     * }
+     * 
+     * const dirtyJson = {
+     *   "name?": "John",
+     *   "items:[1+]": ["a", "b"],
+     *   "config*": { "enabled?": true }
+     * };
+     * 
+     * const cleanJson = validator.cleanValidationSyntax<MyData>(dirtyJson);
+     * // Result is typed as MyData
+     * ```
+     * 
+     * @template T - The expected type of the cleaned data
+     * @param data - The JSON data to clean
+     * @returns A new object with cleaned keys, typed as T
+     */
+    public cleanValidationSyntax<T>(data: unknown): T {
+        // Handle non-objects
+        if (data === null || data === undefined) {
+            return data as T;
+        }
+
+        if (Array.isArray(data)) {
+            // Recursively clean array elements
+            return data.map(item => this.cleanValidationSyntax(item)) as T;
+        }
+
+        if (typeof data !== 'object') {
+            // Primitive values pass through unchanged
+            return data as T;
+        }
+
+        // Process object
+        const cleaned: Record<string, unknown> = {};
+        const dataObj = data as Record<string, unknown>;
+
+        for (const [key, value] of Object.entries(dataObj)) {
+            // Parse the key to extract the clean field name
+            const parsed = this.parseFieldKey(key);
+            
+            // Recursively clean the value
+            const cleanedValue = this.cleanValidationSyntax(value);
+            
+            // Use the clean field name as the key
+            cleaned[parsed.fieldName] = cleanedValue;
+        }
+
+        return cleaned as T;
     }
 }
