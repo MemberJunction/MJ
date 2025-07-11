@@ -8,6 +8,8 @@ export { ConfigManager, configManager } from './lib/config-manager';
 export { getSyncEngine, resetSyncEngine } from './lib/singleton-manager';
 export { SQLLogger } from './lib/sql-logger';
 export { TransactionManager } from './lib/transaction-manager';
+export { JsonWriteHelper } from './lib/json-write-helper';
+export { FileWriteBatch } from './lib/file-write-batch';
 
 // Service exports
 export { InitService } from './services/InitService';

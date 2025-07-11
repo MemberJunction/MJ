@@ -17,14 +17,25 @@
     "mergeStrategy": "merge",
     "backupBeforeUpdate": true,
     "backupDirectory": ".backups",
-    "filter": "CategoryID IN (SELECT ID FROM [__mj].vwActions WHERE Name = 'System')",
+    "filter": "CategoryID IN (SELECT ID FROM [__mj].vwActionCategories WHERE Name = 'System')",
     "externalizeFields": [],
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
     "lookupFields": {
       "CategoryID": {
         "entity": "Action Categories",
         "field": "Name"
       }
     },
-    "relatedEntities": {}
+    "relatedEntities": {
+      "Action Params": {
+        "entity": "Action Params",
+        "foreignKey": "ActionID"
+      },
+      "Action Result Codes": {
+        "entity": "Action Result Codes",
+        "foreignKey": "ActionID"
+      }
+    }
   }
 }
