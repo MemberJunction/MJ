@@ -12,11 +12,11 @@
  */
 
 import { AIAgentEntity, AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntity, ActionParamEntity, AIAgentEntityExtended } from '@memberjunction/core-entities';
-import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, ValidationErrorInfo } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
-import { CopyScalarsAndArrays } from '@memberjunction/global';
+import { CopyScalarsAndArrays, JSONValidator } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import {
@@ -705,22 +705,24 @@ export class BaseAgent {
     protected async validateNextStep<P>(
         params: ExecuteAgentParams,
         nextStep: BaseAgentNextStep<P>,
-        currentPayload: P
+        currentPayload: P,
+        agentRun: AIAgentRunEntityExtended,
+        currentStep: AIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         // for next step, let's do a little quick validation here for sub-agent and actions to ensure requests are valid
         switch (nextStep.step) {
             case 'Sub-Agent':           
-                return this.validateSubAgentNextStep<P>(params, nextStep, currentPayload);
+                return this.validateSubAgentNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
             case 'Actions':
-                return this.validateActionsNextStep<P>(params, nextStep, currentPayload);
+                return this.validateActionsNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
             case 'Success':
-                return this.validateSuccessNextStep<P>(params, nextStep, currentPayload);
+                return this.validateSuccessNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
             case 'Chat':
-                return this.validateChatNextStep<P>(params, nextStep, currentPayload);
+                return this.validateChatNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
             case 'Retry':
-                return this.validateRetryNextStep<P>(params, nextStep, currentPayload);
+                return this.validateRetryNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
             case 'Failed':
-                return this.validateFailedNextStep<P>(params, nextStep, currentPayload);
+                return this.validateFailedNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
             default:
                 // if we get here, the next step is not recognized, we can return a retry step
                 this.logError(`Invalid next step '${nextStep.step}' for agent '${params.agent.Name}'`, {
@@ -745,7 +747,9 @@ export class BaseAgent {
     protected async validateSubAgentNextStep<P>(
         params: ExecuteAgentParams,
         nextStep: BaseAgentNextStep<P>,
-        currentPayload: P
+        currentPayload: P,
+        agentRun: AIAgentRunEntityExtended,
+        currentStep: AIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         // check to make sure the current agent can execute the specified sub-agent
         const name = nextStep.subAgent?.name;
@@ -776,7 +780,9 @@ export class BaseAgent {
     protected async validateActionsNextStep<P>(
         params: ExecuteAgentParams,
         nextStep: BaseAgentNextStep<P>,
-        currentPayload: P
+        currentPayload: P,
+        agentRun: AIAgentRunEntityExtended,
+        currentStep: AIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         // check to make sure the current agent can execute the specified action
         const curAgentActions = AIEngine.Instance.AgentActions.filter(aa => aa.AgentID === params.agent.ID && aa.Status === 'Active');
@@ -812,10 +818,174 @@ export class BaseAgent {
     protected async validateSuccessNextStep<P>(
         params: ExecuteAgentParams,
         nextStep: BaseAgentNextStep<P>,
-        currentPayload: P
+        currentPayload: P,
+        agentRun: AIAgentRunEntityExtended,
+        currentStep: AIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
-        // currently the base class doesn't do anything, subclasses can implement any custom logic in their override
-        return nextStep;
+        // Check if the agent has FinalPayloadValidation configured
+        const agent = params.agent;
+        if (!agent.FinalPayloadValidation || !currentPayload) {
+            // No validation configured or no payload to validate
+            return nextStep;
+        }
+
+        try {
+            // Parse the validation schema/example
+            let validationSchema: any;
+            try {
+                validationSchema = JSON.parse(agent.FinalPayloadValidation);
+            } catch (parseError) {
+                this.logError(`Invalid FinalPayloadValidation JSON for agent ${agent.Name}: ${parseError.message}`, {
+                    category: 'PayloadValidation',
+                    metadata: {
+                        agentName: agent.Name,
+                        agentId: agent.ID,
+                        validationSchema: agent.FinalPayloadValidation
+                    }
+                });
+                // Invalid schema, skip validation
+                return nextStep;
+            }
+
+            // Determine which payload to validate based on PayloadScope
+            let payloadToValidate = currentPayload;
+            if (agent.PayloadScope) {
+                // For scoped agents, validate only the scoped portion
+                payloadToValidate = this._payloadManager.applyPayloadScope(currentPayload, agent.PayloadScope) as P;
+                if (payloadToValidate === null) {
+                    // Scope doesn't exist, this is already a validation failure
+                    const errorMessage = `PayloadScope '${agent.PayloadScope}' not found in payload`;
+                    return this.handleFinalPayloadValidationFailure(
+                        params,
+                        nextStep,
+                        currentPayload,
+                        agent.FinalPayloadValidationMode || 'Retry',
+                        [errorMessage],
+                        agentRun,
+                        currentStep
+                    );
+                }
+            }
+
+            // Validate the payload against the schema using JSONValidator
+            const jsonValidator = new JSONValidator();
+            const validationResult = jsonValidator.validate(payloadToValidate, validationSchema);
+
+            if (!validationResult.Success) {
+                // Validation failed
+                const mode = agent.FinalPayloadValidationMode || 'Retry';
+                const errorMessages = validationResult.Errors.map(e => e.Message);
+                
+                this.logStatus(`⚠️ Final payload validation failed for agent ${agent.Name} (mode: ${mode}):`, true, params);
+                errorMessages.forEach((error, index) => {
+                    this.logStatus(`   ${index + 1}. ${error}`, true, params);
+                });
+
+                return this.handleFinalPayloadValidationFailure(
+                    params,
+                    nextStep,
+                    currentPayload,
+                    mode,
+                    errorMessages,
+                    agentRun,
+                    currentStep
+                );
+            }
+
+            // Validation passed
+            this.logStatus(`✅ Final payload validation passed for agent ${agent.Name}`, true, params);
+            return nextStep;
+
+        } catch (error) {
+            this.logError(`Unexpected error during final payload validation: ${error.message}`, {
+                category: 'PayloadValidation',
+                metadata: {
+                    agentName: agent.Name,
+                    agentId: agent.ID,
+                    error: error.message
+                }
+            });
+            // On unexpected errors, let the success proceed
+            return nextStep;
+        }
+    }
+
+    /**
+     * Handles final payload validation failures based on the configured mode.
+     * 
+     * @param params - Execution parameters
+     * @param nextStep - The original success next step
+     * @param currentPayload - The current payload
+     * @param mode - The validation mode (Retry, Fail, Warn)
+     * @param errorMessages - The validation error messages
+     * @returns Modified next step based on validation mode
+     */
+    protected async handleFinalPayloadValidationFailure<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        mode: string,
+        errorMessages: string[],
+        agentRun: AIAgentRunEntityExtended,
+        currentStep: AIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        const validationFeedback = `Final payload validation failed:\n${errorMessages.map((e, i) => `${i + 1}. ${e}`).join('\n')}`;
+
+        switch (mode) {
+            case 'Retry':
+                // Convert success to retry with validation feedback
+                return {
+                    ...nextStep,
+                    step: 'Retry',
+                    message: validationFeedback,
+                    terminate: false
+                };
+
+            case 'Fail':
+                // Convert success to error
+                return {
+                    ...nextStep,
+                    step: 'Failed',
+                    message: validationFeedback,
+                    terminate: true
+                };
+
+            case 'Warn':
+                // Log warning but allow success
+                this.logStatus(`⚠️ WARNING: ${validationFeedback}`, false, params);
+                
+                // Save warning to OutputData
+                try {
+                    const curOutputData = currentStep.OutputData ? JSON.parse(currentStep.OutputData) : {};
+                    currentStep.OutputData = JSON.stringify({
+                        ...curOutputData,
+                        finalPayloadValidation: {
+                            success: false,
+                            mode: 'Warn',
+                            errors: errorMessages,
+                            timestamp: new Date().toISOString()
+                        }
+                    });
+                    await currentStep.Save();
+                    this.logStatus(`📝 Saved final payload validation warning to step OutputData`, true, params);
+                } catch (error) {
+                    this.logError(`Failed to save validation warning to OutputData: ${error.message}`, {
+                        category: 'PayloadValidation',
+                        metadata: { stepId: currentStep.ID }
+                    });
+                }
+                
+                return nextStep; // Return original success
+
+            default:
+                // Default to retry
+                return {
+                    ...nextStep,
+                    step: 'Retry',
+                    message: validationFeedback,
+                    terminate: false
+                };
+        }
     }
 
     /**
@@ -828,7 +998,9 @@ export class BaseAgent {
     protected async validateFailedNextStep<P>(
         params: ExecuteAgentParams,
         nextStep: BaseAgentNextStep<P>,
-        currentPayload: P
+        currentPayload: P,
+        agentRun: AIAgentRunEntityExtended,
+        currentStep: AIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         // currently the base class doesn't do anything, subclasses can implement any custom logic in their override
         return nextStep;
@@ -845,7 +1017,9 @@ export class BaseAgent {
     protected async validateRetryNextStep<P>(
         params: ExecuteAgentParams,
         nextStep: BaseAgentNextStep<P>,
-        currentPayload: P
+        currentPayload: P,
+        agentRun: AIAgentRunEntityExtended,
+        currentStep: AIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         // currently the base class doesn't do anything, subclasses can implement any custom logic in their override
         return nextStep;
@@ -861,7 +1035,9 @@ export class BaseAgent {
     protected async validateChatNextStep<P>(
         params: ExecuteAgentParams,
         nextStep: BaseAgentNextStep<P>,
-        currentPayload: P
+        currentPayload: P,
+        agentRun: AIAgentRunEntityExtended,
+        currentStep: AIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         // currently the base class doesn't do anything, subclasses can implement any custom logic in their override
         return nextStep;
@@ -881,10 +1057,11 @@ export class BaseAgent {
         params: ExecuteAgentParams,
         agentType: AIAgentTypeEntity,
         promptResult: AIPromptRunResult,
-        currentPayload: P
+        currentPayload: P,
+        currentStep: AIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         const nextStep = await this.determineNextStep<P>(params, agentType, promptResult, currentPayload);
-        const validatedNextStep = await this.validateNextStep<P>(params, nextStep, currentPayload);
+        const validatedNextStep = await this.validateNextStep<P>(params, nextStep, currentPayload, this._agentRun, currentStep);
         this.logStatus(`📌 Next step determined: ${validatedNextStep.step}${validatedNextStep.terminate ? ' (terminating)' : ''}`, true, params);
 
         // Return the next step directly - execution handling is done in execute NextStep
@@ -1769,7 +1946,7 @@ export class BaseAgent {
             });
             
             // Determine next step using agent type
-            const nextStep = await this.processNextStep<P>(params, config.agentType!, promptResult, payload);
+            const nextStep = await this.processNextStep<P>(params, config.agentType!, promptResult, payload, stepEntity);
             
             // Apply payload changes if provided
             let finalPayload = payload; // Start with current payload
@@ -1947,28 +2124,58 @@ export class BaseAgent {
             }
             
             // Extract only allowed downstream payload
-            const downstreamPayload = this._payloadManager.extractDownstreamPayload(
+            let downstreamPayload = this._payloadManager.extractDownstreamPayload(
                 subAgentRequest.name,
                 previousDecision.newPayload,
                 downstreamPaths
             );
             
+            // Apply payload scope if defined
+            let scopedPayload = downstreamPayload;
+            if (subAgentEntity.PayloadScope) {
+                scopedPayload = this._payloadManager.applyPayloadScope(downstreamPayload, subAgentEntity.PayloadScope);
+                if (scopedPayload === null) {
+                    // Critical failure - scope path doesn't exist in payload
+                    const errorMessage = `Critical: Failed to extract payload scope '${subAgentEntity.PayloadScope}' for sub-agent '${subAgentRequest.name}'. The specified path does not exist in the payload.`;
+                    this.logError(errorMessage, {
+                        category: 'SubAgentExecution',
+                        metadata: {
+                            agentName: params.agent.Name,
+                            subAgentName: subAgentRequest.name,
+                            payloadScope: subAgentEntity.PayloadScope,
+                            availableKeys: Object.keys(downstreamPayload || {})
+                        }
+                    });
+                    throw new Error(errorMessage);
+                }
+            }
+            
             stepEntity.PayloadAtStart = JSON.stringify(previousDecision.newPayload);
 
-            // Execute sub-agent with filtered payload
+            // Execute sub-agent with scoped payload
             const subAgentResult = await this.ExecuteSubAgent(
                 params,
                 subAgentRequest,
                 subAgentEntity,
                 stepEntity,
-                downstreamPayload
+                scopedPayload
             );
+            
+            // Handle scope transformation for the result
+            let resultPayloadForMerge = subAgentResult.payload;
+            if (subAgentEntity.PayloadScope) {
+                // The sub-agent returned a scoped payload, we need to wrap it back
+                resultPayloadForMerge = this._payloadManager.reversePayloadScope(
+                    subAgentResult.payload,
+                    subAgentEntity.PayloadScope
+                );
+            }
             
             // Merge upstream changes back into parent payload
             const mergedPayload = this._payloadManager.mergeUpstreamPayload(
                 subAgentRequest.name,
                 previousDecision.newPayload,
-                subAgentResult.payload,
+                resultPayloadForMerge,
                 upstreamPaths
             );
             

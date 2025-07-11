@@ -23,7 +23,6 @@
     "@memberjunction/aiengine": "2.67.0",
     "@memberjunction/templates": "2.67.0",
     "@memberjunction/templates-base-types": "2.67.0",
-    "ajv": "^8.12.0",
     "date-fns": "^2.30.0",
     "date-fns-tz": "^2.0.0",
     "dotenv": "^16.4.1",
