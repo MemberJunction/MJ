@@ -7,7 +7,7 @@
   "reasoning?": "[STRING: Your internal explanation of why you made this decision - helps with debugging]",
   "confidence?": "[OPTIONAL NUMBER: 0.0 to 1.0 indicating confidence in this decision]",
   "nextStep?": {
-    "type": "[REQUIRED if taskComplete=false: Must be exactly one of the options specified in the type definition]",
+    "type?": "REQUIRED: Should be one of the options in the type definition. If not provided, if subAgent key provided it will default to 'subAgent' and if actions key is provided it will default to 'actions'. If type is not provided and neither actions or subAgent keys are specified, it will be an error condition!",
     "actions?": [
       {
         "name": "[STRING: The exact name from available actions list]",
