@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/global
 
+## 2.69.0
+
+### Minor Changes
+
+- 79e8509: Several changes to improve validation functionality
+
 ## 2.68.0
 
 ## 2.67.0

@@ -1,5 +1,14 @@
 # @memberjunction/communication-twilio
 
+## 2.69.0
+
+### Patch Changes
+
+- Updated dependencies [79e8509]
+  - @memberjunction/core@2.69.0
+  - @memberjunction/global@2.69.0
+  - @memberjunction/communication-types@2.69.0
+
 ## 2.68.0
 
 ### Patch Changes

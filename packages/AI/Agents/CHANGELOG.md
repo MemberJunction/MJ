@@ -1,5 +1,25 @@
 # @memberjunction/ai-agents
 
+## 2.69.0
+
+### Minor Changes
+
+- 79e8509: Several changes to improve validation functionality
+- b4a92ae: schema enhancements for AIAgent and AIAgentRun
+
+### Patch Changes
+
+- Updated dependencies [79e8509]
+  - @memberjunction/ai-prompts@2.69.0
+  - @memberjunction/core@2.69.0
+  - @memberjunction/global@2.69.0
+  - @memberjunction/actions@2.69.0
+  - @memberjunction/ai-core-plus@2.69.0
+  - @memberjunction/aiengine@2.69.0
+  - @memberjunction/actions-base@2.69.0
+  - @memberjunction/core-entities@2.69.0
+  - @memberjunction/ai@2.69.0
+
 ## 2.68.0
 
 ### Minor Changes
