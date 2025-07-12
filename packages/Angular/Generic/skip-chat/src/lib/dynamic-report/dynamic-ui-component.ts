@@ -1,6 +1,6 @@
 import { AfterViewInit, Component, ElementRef, EventEmitter, Input, OnDestroy, Output, ViewChild, ViewChildren, QueryList, SimpleChanges, ChangeDetectorRef, NgZone, HostListener } from '@angular/core';
 import { CompositeKey, KeyValuePair, LogError, Metadata, RunQuery, RunQueryParams, RunView, RunViewParams } from '@memberjunction/core';
-import { SkipReactComponentHost } from './skip-react-component-host';
+import { SkipReactComponentHost } from '../react-component-host/react-component-host';
 import { MapEntityInfoToSkipEntityInfo, SimpleMetadata, SimpleRunQuery, SimpleRunView, SkipAPIAnalysisCompleteResponse, SkipComponentStyles, SkipComponentCallbacks, SkipComponentUtilities, SkipComponentOption, BuildSkipComponentCompleteCode } from '@memberjunction/skip-types';
 import { DrillDownInfo } from '../drill-down-info';
 import { DomSanitizer } from '@angular/platform-browser';
