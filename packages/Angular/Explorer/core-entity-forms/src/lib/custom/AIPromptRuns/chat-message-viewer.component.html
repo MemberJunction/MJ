@@ -74,18 +74,6 @@
                         <!-- Message Content -->
                         @if (item.expanded) {
                             <div class="message-content">
-                                <!-- Non-text content indicators -->
-                                @if (hasNonTextContent(item.message.content)) {
-                                    <div class="content-blocks">
-                                        @for (block of getNonTextBlocks(item.message.content); track block) {
-                                            <div class="content-block-indicator">
-                                                <i [class]="'fa-solid ' + getContentBlockIcon(block.type)"></i>
-                                                <span>{{ block.type }}</span>
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                                
                                 <!-- Main content -->
                                 @if (isStringContent(item.message.content)) {
                                     <div class="text-content">

@@ -94,30 +94,9 @@ export class ChatMessageViewerComponent implements OnInit, OnChanges {
     public getContentString(content: ChatMessageContent): string {
         if (typeof content === 'string') {
             return content;
-        } else if (Array.isArray(content)) {
-            // For content blocks, concatenate text content
-            return content
-                .filter(block => block.type === 'text')
-                .map(block => block.content)
-                .join('\n\n');
-        } else if (content && typeof content === 'object' && !Array.isArray(content)) {
-            // Handle complex content objects with text and json properties
-            const contentObj = content as any;
-            if ('text' in contentObj || 'json' in contentObj) {
-                let result = '';
-                if (contentObj.text) {
-                    result = contentObj.text;
-                }
-                if (contentObj.json) {
-                    if (result) result += '\n\n';
-                    result += JSON.stringify(contentObj.json, null, 2);
-                }
-                return result;
-            }
-            // If it's an object but not in expected format, stringify it
+        } else {
             return JSON.stringify(content, null, 2);
         }
-        return '';
     }
     
     public getContentLanguage(content: ChatMessageContent): string {
@@ -135,20 +114,6 @@ export class ChatMessageViewerComponent implements OnInit, OnChanges {
         }
         
         return 'markdown'; // default to markdown for formatting
-    }
-    
-    public hasNonTextContent(content: ChatMessageContent): boolean {
-        if (typeof content === 'string') {
-            return false;
-        }
-        return content.some(block => block.type !== 'text');
-    }
-    
-    public getNonTextBlocks(content: ChatMessageContent): ChatMessageContentBlock[] {
-        if (typeof content === 'string') {
-            return [];
-        }
-        return content.filter(block => block.type !== 'text');
     }
     
     public getContentBlockIcon(type: string): string {
