@@ -8,19 +8,7 @@ async function handleMJExplorerDirectory(dir, normalizedDir, archive) {
   const configFileOutputPath = `${normalizedDir}/angular.json`;
   const configFileContent = fs.readFileSync(configFilePath, 'utf8');
   const configJson = JSON.parse(configFileContent);
-  const assets = configJson.projects?.MJExplorer?.architect?.build?.options?.assets;
-  if (assets) {
-    // in this node of the json, we need to find an object within the array that includes the string 'node_modules/@progress/kendo-theme-default' within a
-    // property called "input"
-    const kendoThemeDefault = assets.find((item) => item.input?.includes('node_modules/@progress/kendo-theme-default'));
-    if (kendoThemeDefault) {
-      // found the object, now we need to update the input property to remove anything that precedes node_modules
-      // find where node_modules is and remove everything before it
-      // this is because we are using an npm workspace and the path to node_modules is different for people who are working outside of a workspace
-      const nodeModulesIndex = kendoThemeDefault.input.indexOf('node_modules');
-      kendoThemeDefault.input = kendoThemeDefault.input.substring(nodeModulesIndex);
-    }
-  }
+  // No longer need to fix hardcoded paths - now using SCSS imports with package resolution
   archive.append(JSON.stringify(configJson, null, 2), { name: configFileOutputPath });
 
   // now handle the environment files (environment.ts, environment.development.ts, environment.staging.ts)
