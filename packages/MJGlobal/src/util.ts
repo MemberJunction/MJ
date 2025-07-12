@@ -186,21 +186,31 @@ export function CleanJSON(inputString: string | null): string | null {
     if (matches.length > 0) {
         // If there are matches, concatenate all captured groups (in case there are multiple code blocks)
         const extracted = matches.map(match => match[1].trim()).join('\n');
-        // Clean up any remaining escape sequences in the extracted content
-        const cleaned = extracted
-            .replace(/\\n/g, '\n')
-            .replace(/\\t/g, '\t')
-            .replace(/\\r/g, '\r')
-            .replace(/\\"/g, '"')
-            .replace(/\\\\/g, '\\');
-        
         try {
-            // Try to parse the cleaned JSON
-            const parsed = JSON.parse(cleaned);
+            // try to parse the extracted content as JSON
+            const parsed = JSON.parse(extracted);
             return JSON.stringify(parsed, null, 2);
-        } catch (e) {
-            // If parsing fails, return the cleaned string
-            return cleaned;
+        }
+        catch (e) {
+            // if we get here, it means the extracted content is not valid JSON so try to clean it 
+            // and return it as a string
+            try {
+                // Clean up any remaining escape sequences in the extracted content
+                const cleaned = extracted
+                    .replace(/\\n/g, '\n')
+                    .replace(/\\t/g, '\t')
+                    .replace(/\\r/g, '\r')
+                    .replace(/\\"/g, '"')
+                    .replace(/\\\\/g, '\\');
+
+                // Try to parse the cleaned JSON
+                const parsed = JSON.parse(cleaned);
+
+                return JSON.stringify(parsed, null, 2);
+            } catch (e) {
+                // If parsing fails, return the original extracted string as we couldn't parse either
+                return extracted;
+            }
         }
     } else {
         // If there are no Markdown code fences, we could have a string that contains JSON, or is JUST JSON

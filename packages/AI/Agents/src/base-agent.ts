@@ -121,6 +121,13 @@ export class BaseAgent {
     private _agentRun: AIAgentRunEntityExtended | null = null;
 
     /**
+     * Access the current run for the agent
+     */
+    public get AgentRun(): AIAgentRunEntityExtended | null {
+        return this._agentRun;
+    }
+
+    /**
      * Agent hierarchy for display purposes (e.g., ["Marketing Agent", "Copywriter Agent"]).
      * Tracked separately as it's display-only and doesn't need persistence.
      * @private
