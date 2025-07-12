@@ -1692,15 +1692,21 @@ export class BaseAgent {
      * @private
      */
     private formatSubAgentDetails(subAgents: AIAgentEntity[]): string {
-        return JSON.stringify(subAgents.map(sa => ({
-            Name: sa.Name,
-            Description: sa.Description,
-            Type: sa.TypeID ? this.getAgentTypeName(sa.TypeID) : 'Unknown',
-            TemplateParameters: this.getAgentPromptParametersJSON(sa),
-            Status: sa.Status,
-            ExecutionMode: sa.ExecutionMode,
-            ExecutionOrder: sa.ExecutionOrder
-        })), null, 2);
+        return JSON.stringify(subAgents.map(sa => {
+            const result = {
+                Name: sa.Name,
+                Description: sa.Description,
+            };
+            if (sa.ExecutionMode !== 'Sequential') {
+                // no need to include these two attributes for sub-agents
+                // that are sequential and the order is implied via the array order
+                // saves tokens
+                result['ExecutionMode'] = sa.ExecutionMode;
+                result['ExecutionOrder'] = sa.ExecutionOrder;
+            }
+
+            return result;
+        }), null, 2);
     }
 
     /**

@@ -1,11 +1,12 @@
-import { Component, ElementRef, ChangeDetectorRef } from '@angular/core';
-import { RegisterClass, ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
+import { Component, ElementRef, ChangeDetectorRef, AfterViewInit } from '@angular/core';
+import { RegisterClass, ParseJSONRecursive, ParseJSONOptions, SafeJSONParse } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { AIPromptRunEntity, AIPromptEntity, AIModelEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { AIPromptRunFormComponent } from '../../generated/Entities/AIPromptRun/aipromptrun.form.component';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Router, ActivatedRoute } from '@angular/router';
+import { ChatMessage } from '@memberjunction/ai';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Prompt Runs')
 @Component({
@@ -13,7 +14,7 @@ import { Router, ActivatedRoute } from '@angular/router';
     templateUrl: './ai-prompt-run-form.component.html',
     styleUrls: ['./ai-prompt-run-form.component.css']
 })
-export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent {
+export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent implements AfterViewInit {
     public record!: AIPromptRunEntity;
     
     // Related entities
@@ -24,7 +25,10 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent {
     
     // UI state
     public isLoadingRelatedData = false;
+    public inputExpanded = true;
     public messagesExpanded = true;
+    public dataExpanded = false; // Changed to false - often blank
+    public rawExpanded = false;
     public resultExpanded = true;
     public metricsExpanded = false;
     public hierarchyExpanded = false;
@@ -35,6 +39,11 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent {
     public formattedResult = '';
     public formattedValidationSummary = '';
     public formattedValidationAttempts = '';
+    public formattedData = '';
+    
+    // Parsed input data
+    public chatMessages: ChatMessage[] = [];
+    public inputData: any = null;
     
     // Validation data
     public validationAttempts: any[] = [];
@@ -57,6 +66,21 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent {
             this.formatJsonFields();
             this.loadValidationData();
         }
+    }
+    
+    ngAfterViewInit() {
+        // Force change detection to ensure expansion panels render correctly
+        setTimeout(() => {
+            this.cdr.detectChanges();
+        }, 0);
+    }
+    
+    onInputPanelToggle() {
+        // Force change detection when parent panel is toggled
+        // This helps ensure nested expansion panels render correctly
+        setTimeout(() => {
+            this.cdr.detectChanges();
+        }, 100);
     }
     
     private async loadRelatedData() {
@@ -123,11 +147,36 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent {
                 const parsed = JSON.parse(this.record.Messages);
                 const recursivelyParsed = ParseJSONRecursive(parsed, parseOptions);
                 this.formattedMessages = JSON.stringify(recursivelyParsed, null, 2);
+                
+                // Extract messages array and data
+                if (recursivelyParsed && typeof recursivelyParsed === 'object') {
+                    // Extract chat messages if they exist
+                    if (recursivelyParsed.messages && Array.isArray(recursivelyParsed.messages)) {
+                        this.chatMessages = recursivelyParsed.messages as ChatMessage[];
+                    } else {
+                        this.chatMessages = [];
+                    }
+                    
+                    // Extract data object if it exists
+                    if (recursivelyParsed.data) {
+                        this.inputData = recursivelyParsed.data;
+                        this.formattedData = JSON.stringify(recursivelyParsed.data, null, 2);
+                    } else {
+                        this.inputData = null;
+                        this.formattedData = '';
+                    }
+                }
             } catch {
                 this.formattedMessages = this.record.Messages;
+                this.chatMessages = [];
+                this.inputData = null;
+                this.formattedData = '';
             }
         } else {
             this.formattedMessages = '';
+            this.chatMessages = [];
+            this.inputData = null;
+            this.formattedData = '';
         }
         
         // Format result with recursive JSON parsing

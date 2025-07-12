@@ -97,12 +97,12 @@
             <div class="form-content">
                 <kendo-panelbar>
                     
-                    <!-- Input Messages Panel -->
-                    <kendo-panelbar-item [expanded]="messagesExpanded">
+                    <!-- Input Panel with nested sub-panels -->
+                    <kendo-panelbar-item [expanded]="inputExpanded" (stateChange)="onInputPanelToggle()">
                         <ng-template kendoPanelBarItemTitle>
                             <span class="panel-title">
                                 <i class="fa-solid fa-comment-dots"></i>
-                                Input Messages
+                                Input
                                 @if (record.Messages && record.Messages.trim() !== '') {
                                     <span class="panel-badge">JSON</span>
                                 }
@@ -111,24 +111,113 @@
                         <ng-template kendoPanelBarContent>
                             <div class="panel-content">
                                 @if (record.Messages && record.Messages.trim() !== '') {
-                                    <div class="json-editor-container">
-                                        <div class="json-toolbar">
-                                            <button kendoButton
-                                                fillMode="flat" 
-                                                size="small"
-                                                (click)="copyToClipboard(formattedMessages, 'Messages')"
-                                                title="Copy JSON">
-                                                <i class="fa-solid fa-copy"></i> Copy
-                                            </button>
-                                        </div>
-                                        <mj-code-editor 
-                                            [(ngModel)]="formattedMessages"
-                                            name="formattedMessages"
-                                            [readonly]="true"
-                                            [language]="'json'"
-                                            [lineWrapping]="true"
-                                            style="height: 400px; width: 100%;">
-                                        </mj-code-editor>
+                                    <!-- Nested expansion panels for sub-sections -->
+                                    <div class="nested-panels">
+                                        <!-- Messages Sub-Panel -->
+                                        <kendo-expansionpanel 
+                                            [expanded]="messagesExpanded" 
+                                            class="sub-expansion-panel"
+                                            [animation]="false">
+                                            <ng-template kendoExpansionPanelTitleDirective>
+                                                <span class="sub-panel-title">
+                                                    <i class="fa-solid fa-comments"></i>
+                                                    Messages
+                                                    @if (chatMessages.length > 0) {
+                                                        <span class="panel-count">({{ chatMessages.length }})</span>
+                                                    }
+                                                </span>
+                                            </ng-template>
+                                            <div class="sub-panel-content">
+                                                @if (chatMessages.length > 0) {
+                                                    <mj-chat-message-viewer 
+                                                        [messages]="chatMessages">
+                                                    </mj-chat-message-viewer>
+                                                } @else {
+                                                    <div class="empty-state">
+                                                        <i class="fa-solid fa-comment-slash"></i>
+                                                        <p>No chat messages found</p>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </kendo-expansionpanel>
+                                        
+                                        <!-- Data Sub-Panel -->
+                                        <kendo-expansionpanel 
+                                            [expanded]="dataExpanded" 
+                                            class="sub-expansion-panel"
+                                            [animation]="false">
+                                            <ng-template kendoExpansionPanelTitleDirective>
+                                                <span class="sub-panel-title">
+                                                    <i class="fa-solid fa-database"></i>
+                                                    Data
+                                                    @if (inputData) {
+                                                        <span class="panel-badge">Object</span>
+                                                    }
+                                                </span>
+                                            </ng-template>
+                                            <div class="sub-panel-content">
+                                                @if (inputData && formattedData) {
+                                                    <div class="json-editor-container">
+                                                        <div class="json-toolbar">
+                                                            <button kendoButton
+                                                                fillMode="flat" 
+                                                                size="small"
+                                                                (click)="copyToClipboard(formattedData, 'Data')"
+                                                                title="Copy JSON">
+                                                                <i class="fa-solid fa-copy"></i> Copy
+                                                            </button>
+                                                        </div>
+                                                        <mj-code-editor 
+                                                            [(ngModel)]="formattedData"
+                                                            name="formattedData"
+                                                            [readonly]="true"
+                                                            [language]="'json'"
+                                                            [lineWrapping]="true"
+                                                            style="height: 300px; width: 100%;">
+                                                        </mj-code-editor>
+                                                    </div>
+                                                } @else {
+                                                    <div class="empty-state">
+                                                        <i class="fa-solid fa-database"></i>
+                                                        <p>No data object found</p>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </kendo-expansionpanel>
+                                        
+                                        <!-- Raw Sub-Panel -->
+                                        <kendo-expansionpanel 
+                                            [expanded]="rawExpanded" 
+                                            class="sub-expansion-panel"
+                                            [animation]="false">
+                                            <ng-template kendoExpansionPanelTitleDirective>
+                                                <span class="sub-panel-title">
+                                                    <i class="fa-solid fa-code"></i>
+                                                    Raw
+                                                </span>
+                                            </ng-template>
+                                            <div class="sub-panel-content">
+                                                <div class="json-editor-container">
+                                                    <div class="json-toolbar">
+                                                        <button kendoButton
+                                                            fillMode="flat" 
+                                                            size="small"
+                                                            (click)="copyToClipboard(formattedMessages, 'Messages')"
+                                                            title="Copy JSON">
+                                                            <i class="fa-solid fa-copy"></i> Copy
+                                                        </button>
+                                                    </div>
+                                                    <mj-code-editor 
+                                                        [(ngModel)]="formattedMessages"
+                                                        name="formattedMessages"
+                                                        [readonly]="true"
+                                                        [language]="'json'"
+                                                        [lineWrapping]="true"
+                                                        style="height: 400px; width: 100%;">
+                                                    </mj-code-editor>
+                                                </div>
+                                            </div>
+                                        </kendo-expansionpanel>
                                     </div>
                                 } @else {
                                     <div class="empty-state">

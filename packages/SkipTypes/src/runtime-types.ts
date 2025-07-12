@@ -3,12 +3,11 @@ import { SimpleDataContext } from "./shared";
 import { SimpleMetadata, SimpleRunQuery, SimpleRunView } from "./shared";
 
 /**
- * This interface defines the available callback functions that a Skip component might call in the parent.
+ * Available callbacks a component can call.
  */
 export interface SkipComponentCallbacks {
     /**
-     * The component can invoke this method in the callbacks object, when provided, to refresh the data context 
-     * and that will in turn result in the component's init function being called again with the new data context.
+     * When data is provided by the parent, this request results in the parent restarting the component. Only relevant for static/hybrid data, not for dynamic.
      * @returns 
      */
     RefreshData: () => void;
@@ -23,17 +22,16 @@ export interface SkipComponentCallbacks {
     OpenEntityRecord: (entityName: string, key: CompositeKey) => void;
 
     /**
-     * This event should be raised by the HTML component whenever something changes within the component that should be tracked as a change in state
-     * that will persist. userState is any valid, simple JavaScript object, meaning it can have scalars, arrays, objects, etc, it must be an object that 
-     * can be serialized to JSON, but otherwise has no special requirements. The parent component will be responsible for tracking the user-specific states
-     * and passing them back to the HTML component each time it is loaded or if the user changes via the init function.
+     * This event should be raised whenever something changes within the component that should be tracked as a change in state
+     * that will persist. userState is any valid serializable JavaScript object. This state is passed to the component when it
+     * initializes. 
      * @param userState 
      * @returns 
      */
     UpdateUserState: (userState: any) => void;
 
     /**
-     * Used for any other type of event notification that a component might want to send to the parent component.
+     * Other notifications that a component might want to send to the parent.
      * @param eventName 
      * @param eventData 
      * @returns 
@@ -42,7 +40,7 @@ export interface SkipComponentCallbacks {
 }
 
 /**
- * This is the function signature for the initialization function provided by each Skip component via the SkipComponentObject so that a container can interact with it.
+ * Function signature for the initialization function of each component.
  * This function is called when the component is loaded by its container. The function receives the data context, an optional userState property, and a set of callbacks that can be used to interact with the parent component.
  * userState is an optional parameter that can be used to pass in any state information that the parent component wants to provide to the component that is specific
  * to the CURRENT user. If the component modifies the userState, it should notify the parent component via the UserStateChanged event in the callbacks object so that the parent component can handle storage.

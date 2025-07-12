@@ -9,61 +9,46 @@ export type SkipComponentRootSpec = {
     /**
      * A description of what the component should do from a functional perspective.
      * This should be in markdown format and include:
-     * - Core functionality and purpose
-     * - User interactions and behaviors
-     * - Business rules and logic
-     * - Expected outcomes and outputs
-     * - User experience considerations
-     * - Accessibility requirements
-     * 
-     * @since 2.1.0 - Made required and enhanced documentation
+     * - Core functionality
+     * - Business rules
+     * - Expected outcomes
+     * - UX considerations
      */
     functionalRequirements: string;
     
     /**
-     * Detailed data requirements specification for the component.
-     * Defines how the component accesses and uses data, supporting static, dynamic, and hybrid modes.
-     * This field is critical for determining how the component will interact with MemberJunction data.
-     * 
-     * @since 2.1.0 - Made required for better data architecture planning
+     * Detailed data requirements, including how the component accesses and uses data.
      */
     dataRequirements?: SkipComponentDataRequirements;
     
     /**
      * A technical description of how the component is designed and implemented.
      * This should be in markdown format and include:
-     * - Architecture and design patterns used
-     * - Key technical decisions and rationale
-     * - Component structure and organization
-     * - State management approach
-     * - Performance considerations
+     * - Architecture and design patterns
+     * - Key technical decisions
+     * - Component structure 
+     * - State management
      * - Integration points with parent/child components
-     * - Error handling strategies
-     * 
-     * @since 2.1.0 - Made required and enhanced documentation
      */
     technicalDesign: string;
     
     /**
-     * The actual code for the main component, typically wrapped in an IIFE that returns
-     * the component object with component, print, and refresh properties
+     * The code for the main component.
      */
     componentCode: string;
     
     /**
-     * The name of the main component
+     * Name of the component
      */
     componentName: string;
     
     /**
-     * The type of component: report, dashboard, form, chart, table, or other. Over time this list
-     * might grow to include more types as Skip evolves and new component types are needed.  
+     * The type of component: report, dashboard, form, or other.   
      */
     componentType: "report" | "dashboard" | "form" | "other",
 
     /**
      * A summary of what the component does that a user would understand.
-     * This should be a high-level, user-friendly description suitable for end users.
      */
     description: string;
     
@@ -83,7 +68,7 @@ export type SkipComponentRootSpec = {
     childComponents: SkipComponentChildSpec[];
     
     /**
-     * The title of the component
+     * User-friendly name
      */
     title: string;
     
@@ -93,8 +78,7 @@ export type SkipComponentRootSpec = {
     userExplanation: string;
     
     /**
-     * A technical explanation of how the component works
+     * Summary of technical design
      */
     techExplanation: string;
 };
- 
