@@ -8,7 +8,7 @@ import { SimpleMetadata, SimpleRunQuery, SimpleRunView } from "./shared";
 export interface SkipComponentCallbacks {
     /**
      * When data is provided by the parent, this request results in the parent restarting the component. Only relevant for static/hybrid data, not for dynamic.
-     * @returns 
+     * @deprecated
      */
     RefreshData: () => void;
 
@@ -17,7 +17,6 @@ export interface SkipComponentCallbacks {
      * record, if supported, this event can be listened to and the container UI can then open the record.
      * @param entityName - this is the Entity NAME from the Entity metadata, not the table name or base view name. Use Entity Metadata to provide the entity name here
      * @param key - this is an array of key/value pairs representing the primary key. The format of a Composite Key is an array of KeyValuePair objects and KeyValuePair objects simply have FieldName and Value properties. In most cases entities have single-valued primary keys but this structure is here for complex entity types that have composite primary keys
-     * @returns 
      */
     OpenEntityRecord: (entityName: string, key: CompositeKey) => void;
 
@@ -25,16 +24,11 @@ export interface SkipComponentCallbacks {
      * This event should be raised whenever something changes within the component that should be tracked as a change in state
      * that will persist. userState is any valid serializable JavaScript object. This state is passed to the component when it
      * initializes. 
-     * @param userState 
-     * @returns 
      */
     UpdateUserState: (userState: any) => void;
 
     /**
      * Other notifications that a component might want to send to the parent.
-     * @param eventName 
-     * @param eventData 
-     * @returns 
      */
     NotifyEvent: (eventName: string, eventData: any) => void;
 }
