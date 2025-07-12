@@ -38,7 +38,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ResourcePermissionsComponent } from '@memberjunction/ng-resource-permissions';
 import { DrillDownInfo } from '../drill-down-info';
-import { SkipReactComponentHost, GlobalComponentRegistry, registerExampleComponents, testGlobalComponentRegistry, compileAndRegisterComponent } from '../dynamic-report/skip-react-component-host';
+import { SkipReactComponentHost, GlobalComponentRegistry } from '../dynamic-report/skip-react-component-host';
 import { WindowRef, DialogService, DialogRef } from '@progress/kendo-angular-dialog';
 
 @Component({
@@ -2249,33 +2249,6 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       attempts++;
     }
     
-    // Register the pre-built example components
-    if ((window as any).React) {
-      console.log('React is available, registering pre-built components...');
-      console.log('Babel available:', !!(window as any).Babel);
-      console.log('Chart available:', !!(window as any).Chart);
-      
-      try {
-        const registered = await registerExampleComponents((window as any).React, (window as any).Chart);
-        if (registered) {
-          console.log('Pre-built components registered successfully');
-          // Mark these as pre-built so we don't try to re-register them
-          this.registeredTestComponents.set('ActionBrowser', { componentName: 'ActionBrowser', prebuilt: true });
-          this.registeredTestComponents.set('SearchBox', { componentName: 'SearchBox', prebuilt: true });
-          this.registeredTestComponents.set('CategoryChart', { componentName: 'CategoryChart', prebuilt: true });
-          
-          // Verify registration
-          const registry = GlobalComponentRegistry.Instance;
-          console.log('Registry keys after registration:', registry.getRegisteredKeys());
-        } else {
-          console.error('Failed to register pre-built components');
-        }
-      } catch (error) {
-        console.error('Error during component registration:', error);
-      }
-    } else {
-      console.error('React not available for component registration');
-    }
   }
   
   private getRequiredChildComponents(componentName: string): string[] {
@@ -2312,12 +2285,13 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     try {
       // Register root component (plain function, auto-wrapped)
       const rootComponentName = spec.componentName;
-      const success = await compileAndRegisterComponent(
+      const result = await SkipReactComponentHost.compileAndRegisterComponent(
         rootComponentName,
         spec.componentCode,
         'Global', // Use Global context for all test components
         'v1'
       );
+      const success = result.success;
       
       if (success) {
         registeredComponents.push(rootComponentName);
@@ -2361,12 +2335,13 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     try {
       if (spec.componentCode) {
         // Child components are plain functions, auto-wrapped
-        const success = await compileAndRegisterComponent(
+        const result = await SkipReactComponentHost.compileAndRegisterComponent(
           spec.componentName,
           spec.componentCode,
           'Global', // Use Global context for all test components
           'v1'
         );
+        const success = result.success;
         
         if (success) {
           registeredComponents.push(spec.componentName);
