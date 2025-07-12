@@ -95,7 +95,15 @@ export class ChatMessageViewerComponent implements OnInit, OnChanges {
         if (typeof content === 'string') {
             return content;
         } else {
-            return JSON.stringify(content, null, 2);
+            const contentAny = content as any;
+            // check to see if we have a text sub-property and if so
+            if (contentAny.text?.trim().length > 0) {
+                // we should return this 
+                return contentAny.text;
+            }
+            else {
+                return JSON.stringify(content, null, 2);
+            }
         }
     }
     
@@ -105,7 +113,7 @@ export class ChatMessageViewerComponent implements OnInit, OnChanges {
         // Try to detect language based on content
         if (text.trim().startsWith('{') || text.trim().startsWith('[')) {
             return 'json';
-        } else if (text.includes('```')) {
+        } else if (text.includes('```') || text.includes('# ') || text.includes('**')) {
             return 'markdown';
         } else if (text.includes('function') || text.includes('const') || text.includes('let')) {
             return 'javascript';
@@ -139,7 +147,16 @@ export class ChatMessageViewerComponent implements OnInit, OnChanges {
         if (typeof content === 'string') {
             return content; // Shouldn't happen but just in case
         }
-        return JSON.stringify(content, null, 2);
+        // check to see if we have a text sub-property and if so
+        // check to see if there are any other sub-properties that have non-empty values or non-empty-arrays/non-empty-object values
+        const contentAny = content as any;
+        if (contentAny.text?.trim().length > 0) {
+            // we should return this 
+            return contentAny.text;
+        }
+        else {
+            return JSON.stringify(content, null, 2);
+        }
     }
     
     public getContentStats(content: ChatMessageContent): { chars: number; words: number; approxTokens: number } {

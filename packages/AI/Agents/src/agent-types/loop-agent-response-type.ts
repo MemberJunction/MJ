@@ -79,17 +79,8 @@ export interface LoopAgentResponse<P = any> {
             
             /**
              * The message to send to the sub-agent to help it understand and complete the task.
-             * Must contain all necessary info for the sub-agent to comprehend
-             * and complete it's task correctly, because the current level conversation history is NOT provided 
-             * to the sub-agent. 
-             * 
-             * Remember, some sub-agents will also define template parameters that you fill in to provide
-             * structured context. If you think that additional structured context is helpful/needed for the
-             * sub-agent beyond its template parameters, then you should include that here in the message and
-             * include the structured info in a separate markdown block to make it easy for the sub-agent to parse.
-             * ```json
-             *    { "key": "value", "anotherKey": 123 }
-             * ```
+             * - Must contain all necessary info for the sub-agent to comprehend the task. 
+             * - Your conversation history is NOT provided to the sub-agent. 
              */
             message: string;
 

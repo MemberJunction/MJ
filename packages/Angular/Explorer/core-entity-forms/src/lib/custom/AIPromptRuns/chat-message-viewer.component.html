@@ -92,7 +92,7 @@
                                         <mj-code-editor 
                                             [ngModel]="getContentJSON(item.message.content)"
                                             [readonly]="true"
-                                            [language]="'json'"
+                                            [language]="getContentLanguage(item.message.content)"
                                             [lineWrapping]="true"
                                             [setup]="'minimal'"
                                             style="max-height: 600px; overflow-y: auto;">
