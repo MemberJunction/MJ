@@ -61,19 +61,120 @@ export function CopyScalarsAndArrays<T extends object>(input: T): Partial<T> {
     return result;
 }
 
+/**
+ * Combines CleanJSON and SafeJSONParse to clean, extract, and parse JSON in one operation.
+ * This is a convenience function that first cleans the input string using CleanJSON to handle
+ * various formats (double-escaped, markdown blocks, etc.), then safely parses the result.
+ * 
+ * @param inputString - The string to clean and parse, which may contain JSON in various formats
+ * @param logErrors - If true, parsing errors will be logged to console (default: false)
+ * @returns The parsed object of type T, or null if cleaning/parsing fails
+ * 
+ * @example
+ * // Parse double-escaped JSON
+ * const result = CleanAndParseJSON<{name: string}>('{\\"name\\": \\"test\\"}', true);
+ * // Returns: {name: "test"}
+ * 
+ * @example
+ * // Parse JSON from markdown
+ * const data = CleanAndParseJSON<{id: number}>('```json\n{"id": 123}\n```', false);
+ * // Returns: {id: 123}
+ * 
+ * @example
+ * // Parse complex AI response with type safety
+ * interface AIResponse {
+ *   status: string;
+ *   data: any;
+ * }
+ * const response = CleanAndParseJSON<AIResponse>(aiOutput, true);
+ * // Returns typed object or null
+ */
+export function CleanAndParseJSON<T = any>(inputString: string | null, logErrors: boolean = false): T {
+    if (!inputString) {
+        return null;
+    }
+    return SafeJSONParse<T>(CleanJSON(inputString), logErrors);
+}
 
 /**
- * This function takes in an input string and attempts to clean it up to return a valid JSON string. This function will attempt to extract JSON from a Markdown code block if it exists, 
- * otherwise it will attempt to extract JSON from the input string itself. If the input string is not valid JSON, this function will return null.
- * @param inputString 
- * @returns 
+ * Cleans and extracts valid JSON from various input formats including double-escaped strings, 
+ * strings with embedded JSON, and markdown code blocks.
+ * 
+ * This function handles multiple scenarios in the following priority order:
+ * 1. **Valid JSON**: If the input is already valid JSON, it returns it formatted
+ * 2. **Double-escaped JSON**: Handles strings with escaped quotes (\\") and newlines (\\n)
+ * 3. **Markdown blocks**: Extracts JSON from ```json code blocks (only as last resort)
+ * 4. **Mixed content**: Extracts JSON objects/arrays from strings with surrounding text
+ * 
+ * @param inputString - The string to process, which may contain JSON in various formats
+ * @returns A formatted JSON string if valid JSON is found, otherwise null
+ * 
+ * @example
+ * // Simple JSON
+ * CleanJSON('{"name": "test"}') 
+ * // Returns: '{\n  "name": "test"\n}'
+ * 
+ * @example
+ * // Double-escaped JSON
+ * CleanJSON('{\\"name\\": \\"test\\", \\"value\\": 123}')
+ * // Returns: '{\n  "name": "test",\n  "value": 123\n}'
+ * 
+ * @example
+ * // JSON with embedded markdown (preserves the markdown in string values)
+ * CleanJSON('{"text": "```json\\n{\\"inner\\": true}\\n```"}')
+ * // Returns: '{\n  "text": "```json\\n{\\"inner\\": true}\\n```"\n}'
+ * 
+ * @example
+ * // Markdown block extraction (only when not valid JSON)
+ * CleanJSON('Some text ```json\n{"extracted": true}\n``` more text')
+ * // Returns: '{\n  "extracted": true\n}'
  */
 export function CleanJSON(inputString: string | null): string | null {
     if (!inputString)
         return null;
 
-    // replace all \n and \t with nothing
-    const jsonString = inputString.trim().replace(/\n/g, "").replace(/\t/g, "");
+    let processedString = inputString.trim();
+    
+    // First, try to parse the string as-is
+    // This preserves any embedded JSON or markdown blocks within string values
+    try {
+        const parsed = JSON.parse(processedString);
+        // If successful, return formatted JSON
+        return JSON.stringify(parsed, null, 2);
+    } catch (e) {
+        // If direct parsing fails, continue with cleanup logic
+    }
+
+    // Handle double-escaped characters
+    // This converts \\n to actual \n, \\" to actual ", etc.
+    if (processedString.includes('\\\\') || processedString.includes('\\"')) {
+        try {
+            // Try to parse it as a JSON string to unescape it
+            // This handles cases where the entire string is a JSON-encoded string
+            processedString = JSON.parse('"' + processedString + '"');
+        } catch (e) {
+            // If that doesn't work, manually replace common double-escaped sequences
+            processedString = processedString
+                .replace(/\\\\n/g, '\n')     // \\n -> \n
+                .replace(/\\\\t/g, '\t')     // \\t -> \t
+                .replace(/\\\\r/g, '\r')     // \\r -> \r
+                .replace(/\\\\"/g, '"')      // \\" -> "
+                .replace(/\\\\\\/g, '\\');   // \\\\ -> \\
+        }
+    }
+
+    // Try to parse the processed string after unescaping
+    try {
+        const parsed = JSON.parse(processedString);
+        // If successful, return formatted JSON
+        return JSON.stringify(parsed, null, 2);
+    } catch (e) {
+        // If direct parsing still fails, continue with extraction logic
+    }
+
+    // Now proceed with the extraction logic only as a last resort
+    // replace all \n and \t with nothing for easier pattern matching
+    const jsonString = processedString.replace(/\n/g, "").replace(/\t/g, "");
 
     // Regular expression to match JavaScript code blocks within Markdown fences
     // This regex looks for ``` optionally followed by js or javascript (case-insensitive), then captures until the closing ```
@@ -84,7 +185,23 @@ export function CleanJSON(inputString: string | null): string | null {
 
     if (matches.length > 0) {
         // If there are matches, concatenate all captured groups (in case there are multiple code blocks)
-        return matches.map(match => match[1].trim()).join('\n');
+        const extracted = matches.map(match => match[1].trim()).join('\n');
+        // Clean up any remaining escape sequences in the extracted content
+        const cleaned = extracted
+            .replace(/\\n/g, '\n')
+            .replace(/\\t/g, '\t')
+            .replace(/\\r/g, '\r')
+            .replace(/\\"/g, '"')
+            .replace(/\\\\/g, '\\');
+        
+        try {
+            // Try to parse the cleaned JSON
+            const parsed = JSON.parse(cleaned);
+            return JSON.stringify(parsed, null, 2);
+        } catch (e) {
+            // If parsing fails, return the cleaned string
+            return cleaned;
+        }
     } else {
         // If there are no Markdown code fences, we could have a string that contains JSON, or is JUST JSON
         // Attempt to extract JSON from a mixed string
@@ -104,7 +221,7 @@ export function CleanJSON(inputString: string | null): string | null {
     
         if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
             console.warn("No JSON found in the input.");
-            return jsonString.trim();
+            return processedString; // Return the processed string instead of jsonString
         }
     
         const potentialJSON = jsonString.substring(startIndex, endIndex + 1);
@@ -144,11 +261,31 @@ export function CleanJavaScript(javaScriptCode: string): string {
 }
 
 /**
- * Simple wrapper method to JSON.parse that catches any errors and logs them to the console. This method is useful when you want to parse JSON but don't want to crash the application if the JSON is invalid.
- * @param jsonString 
- * @returns 
+ * Simple wrapper method to JSON.parse that catches any errors and optionally logs them to the console. 
+ * This method is useful when you want to parse JSON but don't want to crash the application if the JSON is invalid.
+ * 
+ * @param jsonString - The JSON string to parse
+ * @param logErrors - If true, parsing errors will be logged to console (default: false)
+ * @returns The parsed object of type T (default: any), or null if parsing fails or input is empty
+ * 
+ * @example
+ * // Basic usage without type
+ * const data = SafeJSONParse('{"name": "test"}');
+ * 
+ * @example
+ * // With type parameter
+ * interface User { name: string; age: number; }
+ * const user = SafeJSONParse<User>('{"name": "John", "age": 30}', true);
+ * 
+ * @example
+ * // Invalid JSON returns null
+ * const result = SafeJSONParse('invalid json', true); // logs error, returns null
  */
-export function SafeJSONParse<T>(jsonString: string, logErrors: boolean = false): T {
+export function SafeJSONParse<T = any>(jsonString: string, logErrors: boolean = false): T {
+    if (!jsonString) {
+        return null;
+    }
+
     try {
         return <T>JSON.parse(jsonString);
     } catch (e) {
