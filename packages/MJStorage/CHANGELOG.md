@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/storage
 
+## 2.69.1
+
+### Patch Changes
+
+- Updated dependencies [2aebdf5]
+  - @memberjunction/core@2.69.1
+  - @memberjunction/core-entities@2.69.1
+  - @memberjunction/global@2.69.1
+
 ## 2.69.0
 
 ### Patch Changes
