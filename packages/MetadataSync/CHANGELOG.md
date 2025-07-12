@@ -1,5 +1,29 @@
 # @memberjunction/metadata-sync
 
+## 2.69.1
+
+### Patch Changes
+
+- Updated dependencies [2aebdf5]
+  - @memberjunction/core@2.69.1
+  - @memberjunction/graphql-dataprovider@2.69.1
+  - @memberjunction/core-entities@2.69.1
+  - @memberjunction/core-entities-server@2.69.1
+  - @memberjunction/sqlserver-dataprovider@2.69.1
+  - @memberjunction/global@2.69.1
+
+## 2.69.0
+
+### Patch Changes
+
+- Updated dependencies [79e8509]
+  - @memberjunction/core@2.69.0
+  - @memberjunction/global@2.69.0
+  - @memberjunction/core-entities-server@2.69.0
+  - @memberjunction/graphql-dataprovider@2.69.0
+  - @memberjunction/core-entities@2.69.0
+  - @memberjunction/sqlserver-dataprovider@2.69.0
+
 ## 2.68.0
 
 ### Minor Changes
