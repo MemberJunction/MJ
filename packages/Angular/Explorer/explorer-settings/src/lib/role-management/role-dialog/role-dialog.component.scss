@@ -1,0 +1,255 @@
+@import '../../shared/styles/variables';
+@import '../../shared/styles/mixins';
+
+// Kendo Window Styling with MJ Classes
+:host ::ng-deep {
+  .k-window {
+    @extend .mj-modal;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  }
+  
+  .k-window-titlebar {
+    @extend .mj-modal-header;
+    border-bottom: 1px solid $border-light;
+    
+    .mj-modal-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: $text-primary;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      
+      i {
+        color: $success-green;
+      }
+    }
+  }
+  
+  .k-window-content {
+    padding: 0;
+  }
+}
+
+// Modal Content Areas
+.mj-modal-body {
+  padding: 2rem;
+  background: white;
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+.mj-modal-footer {
+  @extend .mj-modal-footer;
+  padding: 1.5rem 2rem;
+  border-top: 1px solid $border-light;
+  background: $background-lighter;
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+
+// Error Alert
+.error-alert {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: rgba($error-red, 0.1);
+  border: 1px solid rgba($error-red, 0.2);
+  border-radius: 8px;
+  color: darken($error-red, 10%);
+  margin-bottom: 1.5rem;
+  font-size: 0.95rem;
+
+  i {
+    font-size: 1.125rem;
+    flex-shrink: 0;
+  }
+}
+
+// Form Layout
+.form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.form-section {
+  .section-title {
+    margin: 0 0 1rem 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: $text-primary;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+}
+
+// Form Fields
+.form-field {
+  @include form-field;
+
+  .field-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: $text-primary;
+  }
+
+  .field-input,
+  .field-textarea {
+    @include input-base;
+    
+    &.error {
+      border-color: $error-red;
+      
+      &:focus {
+        border-color: $error-red;
+        box-shadow: 0 0 0 3px rgba($error-red, 0.1);
+      }
+    }
+  }
+
+  .field-textarea {
+    resize: vertical;
+    min-height: 100px;
+    padding: 0.75rem;
+    line-height: 1.5;
+    font-family: inherit;
+  }
+
+  .field-error {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: $error-red;
+  }
+
+  .field-hint {
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: $text-muted;
+    line-height: 1.4;
+  }
+}
+
+// Role Type Information
+.role-type-info {
+  margin-top: 0.5rem;
+}
+
+.system-role-warning,
+.custom-role-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid;
+
+  i {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+    margin-top: 0.125rem;
+  }
+
+  strong {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-weight: 600;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }
+}
+
+.system-role-warning {
+  background: rgba($warning-amber, 0.1);
+  border-color: rgba($warning-amber, 0.3);
+  color: darken($warning-amber, 30%);
+
+  i {
+    color: $warning-amber;
+  }
+}
+
+.custom-role-info {
+  background: rgba($primary-blue, 0.05);
+  border-color: rgba($primary-blue, 0.2);
+  color: $text-primary;
+
+  i {
+    color: $primary-blue;
+  }
+}
+
+// Permissions Section
+.permissions-preview {
+  margin-top: 0.5rem;
+}
+
+.permissions-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem;
+  background: rgba($primary-blue, 0.05);
+  border: 1px solid rgba($primary-blue, 0.2);
+  border-radius: 8px;
+  color: $text-primary;
+
+  i {
+    color: $primary-blue;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+    margin-top: 0.125rem;
+  }
+
+  strong {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-weight: 600;
+    color: $primary-blue;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }
+}
+
+// Loading State
+.btn-primary:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  
+  i.fa-spinner {
+    animation: spin 1s linear infinite;
+  }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+// Responsive Design
+@media (max-width: 768px) {
+  .modal-dialog {
+    margin: 0.5rem;
+    max-width: none;
+  }
+
+  .modal-header,
+  .modal-body,
+  .modal-footer {
+    padding: 1rem 1.5rem;
+  }
+}

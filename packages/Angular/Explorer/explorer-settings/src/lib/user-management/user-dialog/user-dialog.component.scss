@@ -1,0 +1,280 @@
+@import '../../shared/styles/variables';
+@import '../../shared/styles/mixins';
+
+// Kendo Window Styling with MJ Classes
+:host ::ng-deep {
+  .k-window {
+    @extend .mj-modal;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  }
+  
+  .k-window-titlebar {
+    @extend .mj-modal-header;
+    border-bottom: 1px solid $border-light;
+    
+    .mj-modal-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: $text-primary;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      
+      i {
+        color: $primary-blue;
+      }
+    }
+  }
+  
+  .k-window-content {
+    padding: 0;
+  }
+}
+
+// Modal Content Areas
+.mj-modal-body {
+  padding: 2rem;
+  background: white;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.mj-modal-footer {
+  @extend .mj-modal-footer;
+  padding: 1.5rem 2rem;
+  border-top: 1px solid $border-light;
+  background: $background-lighter;
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+
+// Form Layout with MJ Classes
+.mj-form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.mj-form-section {
+  .mj-section-title {
+    @extend .mj-section-title;
+    margin: 0 0 0.5rem 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: $text-primary;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .mj-section-description {
+    margin: 0 0 1rem 0;
+    font-size: 0.9rem;
+    color: $text-secondary;
+  }
+}
+
+.mj-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+
+  @media (max-width: 568px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+// Form Fields with MJ Classes
+.mj-form-field {
+  @include form-field;
+
+  .mj-field-label {
+    @extend .mj-field-label;
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: $text-primary;
+  }
+
+  .mj-input,
+  .mj-select {
+    @extend .mj-input;
+    @include input-base;
+    
+    &.mj-input-error {
+      border-color: $error-red;
+      
+      &:focus {
+        border-color: $error-red;
+        box-shadow: 0 0 0 3px rgba($error-red, 0.1);
+      }
+    }
+  }
+
+  .mj-select {
+    @extend .mj-select;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.5rem center;
+    background-repeat: no-repeat;
+    background-size: 1.5em 1.5em;
+    padding-right: 2.5rem;
+    appearance: none;
+  }
+
+  .mj-field-error {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: $error-red;
+  }
+}
+
+// Checkbox Fields with MJ Classes
+.mj-checkbox-field {
+  @extend .mj-checkbox-field;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  cursor: pointer;
+
+  .mj-checkbox {
+    @extend .mj-checkbox;
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+
+    &:checked + .mj-checkbox-label .mj-checkbox-custom {
+      background: $primary-blue;
+      border-color: $primary-blue;
+
+      &::after {
+        display: block;
+      }
+    }
+
+    &:focus + .mj-checkbox-label .mj-checkbox-custom {
+      box-shadow: 0 0 0 3px rgba($primary-blue, 0.1);
+    }
+  }
+
+  .mj-checkbox-label {
+    @extend .mj-checkbox-label;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    cursor: pointer;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: $text-primary;
+    margin: 0;
+  }
+
+  .mj-checkbox-custom {
+    @extend .mj-checkbox-custom;
+    width: 18px;
+    height: 18px;
+    border: 2px solid $border-medium;
+    border-radius: 4px;
+    background: white;
+    flex-shrink: 0;
+    position: relative;
+    margin-top: 1px;
+    transition: all 0.2s;
+
+    &::after {
+      content: '';
+      position: absolute;
+      display: none;
+      left: 5px;
+      top: 2px;
+      width: 4px;
+      height: 8px;
+      border: solid white;
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+    }
+  }
+}
+
+// Role Assignment with MJ Classes
+.mj-roles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.mj-role-item {
+  @extend .mj-card;
+  padding: 1rem;
+  border: 1px solid $border-light;
+  border-radius: 8px;
+  background: $background-lighter;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: $primary-blue;
+    background: white;
+    box-shadow: 0 2px 8px rgba($primary-blue, 0.1);
+  }
+
+  .mj-checkbox-field {
+    margin: 0;
+  }
+
+  .mj-role-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .mj-role-name {
+    font-weight: 500;
+    color: $text-primary;
+  }
+
+  .mj-role-description {
+    font-size: 0.85rem;
+    color: $text-secondary;
+    line-height: 1.4;
+  }
+}
+
+// Loading State
+.mj-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  
+  i.fa-spinner {
+    animation: spin 1s linear infinite;
+  }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+// Responsive Design
+@media (max-width: 768px) {
+  :host ::ng-deep .k-window {
+    margin: 0.5rem;
+    max-width: none;
+    width: calc(100vw - 1rem) !important;
+  }
+
+  .mj-modal-body,
+  .mj-modal-footer {
+    padding: 1rem 1.5rem;
+  }
+
+  .mj-roles-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mj-form-row {
+    grid-template-columns: 1fr;
+  }
+}

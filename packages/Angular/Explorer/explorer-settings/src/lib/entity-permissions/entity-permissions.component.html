@@ -1,33 +1,33 @@
 <div class="entity-permissions-container">
   <!-- Action Buttons -->
   <div class="action-buttons">
-    <div class="view-toggle">
+    <div class="mj-view-toggle">
       <button 
-        class="view-btn"
-        [class.active]="viewMode === 'list'"
+        class="mj-btn mj-btn-ghost"
+        [class.mj-btn-primary]="viewMode === 'list'"
         (click)="setViewMode('list')"
         title="List View"
       >
         <i class="fa-solid fa-list"></i>
       </button>
       <button 
-        class="view-btn"
-        [class.active]="viewMode === 'grid'"
+        class="mj-btn mj-btn-ghost"
+        [class.mj-btn-primary]="viewMode === 'grid'"
         (click)="setViewMode('grid')"
         title="Grid View"
       >
         <i class="fa-solid fa-th"></i>
       </button>
     </div>
-    <button class="btn-secondary" (click)="refreshData()" [disabled]="isLoading">
+    <button class="mj-btn mj-btn-secondary" (click)="refreshData()" [disabled]="isLoading">
       <i class="fa-solid fa-refresh" [class.fa-spin]="isLoading"></i>
       Refresh
     </button>
   </div>
 
   <!-- Stats Cards -->
-  <div class="stats-grid" style="display: flex">
-    <div class="stat-card">
+  <div class="mj-grid mj-grid-4">
+    <div class="mj-card">
       <div class="stat-icon stat-icon-total">
         <i class="fa-solid fa-database"></i>
       </div>
@@ -37,7 +37,7 @@
       </div>
     </div>
     
-    <div class="stat-card">
+    <div class="mj-card">
       <div class="stat-icon stat-icon-public">
         <i class="fa-solid fa-globe"></i>
       </div>
@@ -47,7 +47,7 @@
       </div>
     </div>
     
-    <div class="stat-card">
+    <div class="mj-card">
       <div class="stat-icon stat-icon-restricted">
         <i class="fa-solid fa-lock"></i>
       </div>
@@ -57,7 +57,7 @@
       </div>
     </div>
     
-    <div class="stat-card">
+    <div class="mj-card">
       <div class="stat-icon stat-icon-permissions">
         <i class="fa-solid fa-key"></i>
       </div>
@@ -72,11 +72,11 @@
   <div class="filters-section">
     <div class="filters-row">
       <!-- Entity Search -->
-      <div class="search-container">
-        <i class="fa-solid fa-search search-icon"></i>
+      <div class="mj-search">
+        <i class="fa-solid fa-search mj-search-icon"></i>
         <input 
           type="text" 
-          class="search-input" 
+          class="mj-search-input" 
           placeholder="Search entities by name or description..."
           (input)="onSearchChange($event)"
           [value]="filters$.value.entitySearch"
@@ -84,33 +84,33 @@
       </div>
       
       <!-- Access Level Filter -->
-      <div class="filter-group">
-        <label class="filter-label">Access Level</label>
-        <div class="filter-buttons">
+      <div class="mj-filter-group">
+        <label class="mj-filter-label">Access Level</label>
+        <div class="mj-filter-buttons">
           <button 
-            class="filter-btn"
-            [class.active]="filters$.value.accessLevel === 'all'"
+            class="mj-btn mj-btn-ghost"
+            [class.mj-btn-primary]="filters$.value.accessLevel === 'all'"
             (click)="onAccessLevelChange('all')"
           >
             All
           </button>
           <button 
-            class="filter-btn"
-            [class.active]="filters$.value.accessLevel === 'public'"
+            class="mj-btn mj-btn-ghost"
+            [class.mj-btn-primary]="filters$.value.accessLevel === 'public'"
             (click)="onAccessLevelChange('public')"
           >
             Public
           </button>
           <button 
-            class="filter-btn"
-            [class.active]="filters$.value.accessLevel === 'restricted'"
+            class="mj-btn mj-btn-ghost"
+            [class.mj-btn-primary]="filters$.value.accessLevel === 'restricted'"
             (click)="onAccessLevelChange('restricted')"
           >
             Restricted
           </button>
           <button 
-            class="filter-btn"
-            [class.active]="filters$.value.accessLevel === 'custom'"
+            class="mj-btn mj-btn-ghost"
+            [class.mj-btn-primary]="filters$.value.accessLevel === 'custom'"
             (click)="onAccessLevelChange('custom')"
           >
             Custom
@@ -119,9 +119,9 @@
       </div>
       
       <!-- Role Filter -->
-      <div class="filter-group">
-        <label class="filter-label">Filter by Role</label>
-        <select class="filter-select" (change)="onRoleFilterChange($event)">
+      <div class="mj-filter-group">
+        <label class="mj-filter-label">Filter by Role</label>
+        <select class="mj-select" (change)="onRoleFilterChange($event)">
           <option value="">All Roles</option>
           @for (role of roles; track role.ID) {
             <option [value]="role.ID">{{ role.Name }}</option>
@@ -149,7 +149,7 @@
       <div class="error-content">
         <i class="fa-solid fa-exclamation-triangle error-icon"></i>
         <p class="error-message">{{ error }}</p>
-        <button class="retry-button" (click)="loadInitialData()">
+        <button class="mj-btn mj-btn-primary" (click)="loadInitialData()">
           <i class="fa-solid fa-refresh"></i>
           Try Again
         </button>
@@ -183,7 +183,7 @@
                                'fa-solid fa-key'"></i>
                     {{ getAccessLevelLabel(ea) }}
                   </span>
-                  <button class="action-btn" (click)="editEntityPermissions(ea); $event.stopPropagation()" title="Edit Permissions">
+                  <button class="mj-btn mj-btn-ghost mj-btn-sm" (click)="editEntityPermissions(ea); $event.stopPropagation()" title="Edit Permissions">
                     <i class="fa-solid fa-edit"></i>
                   </button>
                   <button class="expand-btn">
@@ -250,7 +250,7 @@
             <div class="entity-grid-card" [class]="getAccessLevelClass(ea)">
               <div class="grid-card-header">
                 <i class="fa-solid fa-table"></i>
-                <button class="edit-btn" (click)="editEntityPermissions(ea)" title="Edit Permissions">
+                <button class="mj-btn mj-btn-ghost mj-btn-sm" (click)="editEntityPermissions(ea)" title="Edit Permissions">
                   <i class="fa-solid fa-edit"></i>
                 </button>
               </div>
@@ -311,8 +311,11 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" (click)="showPermissionDialog = false">Cancel</button>
-          <button class="btn-primary" (click)="savePermissions()">
+          <button class="mj-btn mj-btn-secondary" (click)="showPermissionDialog = false">
+            <i class="fa-solid fa-times"></i>
+            Cancel
+          </button>
+          <button class="mj-btn mj-btn-primary" (click)="savePermissions()">
             <i class="fa-solid fa-save"></i>
             Save Permissions
           </button>
