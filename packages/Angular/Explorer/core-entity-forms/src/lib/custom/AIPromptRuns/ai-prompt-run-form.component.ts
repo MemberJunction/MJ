@@ -25,6 +25,7 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
     
     // UI state
     public isLoadingRelatedData = false;
+    public isParsingMessages = true; // Add loading state for message parsing
     public inputExpanded = true;
     public messagesExpanded = true;
     public dataExpanded = false; // Changed to false - often blank
@@ -135,6 +136,8 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
     }
     
     private formatJsonFields() {
+        this.isParsingMessages = true; // Start parsing
+        
         const parseOptions: ParseJSONOptions = {
             extractInlineJson: true,
             maxDepth: 100,
@@ -178,6 +181,8 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
             this.inputData = null;
             this.formattedData = '';
         }
+        
+        this.isParsingMessages = false; // Done parsing
         
         // Format result with recursive JSON parsing
         if (this.record.Result) {

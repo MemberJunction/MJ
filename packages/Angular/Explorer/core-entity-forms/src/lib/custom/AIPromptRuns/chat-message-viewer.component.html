@@ -78,25 +78,38 @@
                                 @if (isStringContent(item.message.content)) {
                                     <div class="text-content">
                                         <mj-code-editor 
-                                            [ngModel]="getContentString(item.message.content)"
+                                            [value]="getContentString(item.message.content)"
                                             [readonly]="true"
                                             [language]="getContentLanguage(item.message.content)"
-                                            [lineWrapping]="true"
-                                            [setup]="'minimal'"
                                             style="max-height: 600px; overflow-y: auto;">
                                         </mj-code-editor>
                                     </div>
                                 } @else {
-                                    <!-- Non-string content shown as JSON -->
-                                    <div class="json-content">
-                                        <mj-code-editor 
-                                            [ngModel]="getContentJSON(item.message.content)"
-                                            [readonly]="true"
-                                            [language]="getContentLanguage(item.message.content)"
-                                            [lineWrapping]="true"
-                                            [setup]="'minimal'"
-                                            style="max-height: 600px; overflow-y: auto;">
-                                        </mj-code-editor>
+                                    <!-- Non-string content with multiple parts -->
+                                    <div class="multi-part-content">
+                                        @for (part of getContentParts(item.message.content, i); track part.id) {
+                                            <div class="content-part" [class.collapsed]="!part.expanded">
+                                                <div class="content-part-label" (click)="toggleContentPart(part.id)">
+                                                    <div class="content-part-label-content">
+                                                        <i class="fa-solid fa-tag"></i>
+                                                        {{ part.key }}
+                                                    </div>
+                                                    <button class="content-part-toggle" type="button">
+                                                        <i [class]="part.expanded ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'"></i>
+                                                    </button>
+                                                </div>
+                                                @if (part.expanded) {
+                                                    <div class="content-part-editor">
+                                                        <mj-code-editor 
+                                                            [value]="part.value"
+                                                            [readonly]="true"
+                                                            [language]="part.language"
+                                                            style="max-height: 400px; overflow-y: auto;">
+                                                        </mj-code-editor>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
                                     </div>
                                 }
                             </div>

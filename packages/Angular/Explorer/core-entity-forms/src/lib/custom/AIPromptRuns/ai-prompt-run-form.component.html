@@ -128,7 +128,12 @@
                                                 </span>
                                             </ng-template>
                                             <div class="sub-panel-content">
-                                                @if (chatMessages.length > 0) {
+                                                @if (isParsingMessages || isLoadingRelatedData) {
+                                                    <div class="loading-state">
+                                                        <i class="fa-solid fa-spinner fa-spin"></i>
+                                                        <p>Loading messages...</p>
+                                                    </div>
+                                                } @else if (chatMessages.length > 0) {
                                                     <mj-chat-message-viewer 
                                                         [messages]="chatMessages">
                                                     </mj-chat-message-viewer>

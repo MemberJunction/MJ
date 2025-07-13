@@ -328,6 +328,25 @@
     font-size: 1.1em;
 }
 
+/* Loading State */
+.loading-state {
+    text-align: center;
+    padding: 60px 40px;
+    color: #6c757d;
+}
+
+.loading-state i {
+    font-size: 3em;
+    margin-bottom: 16px;
+    opacity: 0.6;
+    color: #007bff;
+}
+
+.loading-state p {
+    margin: 0;
+    font-size: 1.1em;
+}
+
 /* Metrics Grid */
 .metrics-grid {
     display: grid;
