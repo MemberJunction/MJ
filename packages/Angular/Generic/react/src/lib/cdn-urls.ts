@@ -1,3 +1,8 @@
+/**
+ * @fileoverview CDN URLs for external React and related dependencies.
+ * These URLs are used to load React ecosystem libraries in the browser.
+ * @module @memberjunction/ng-react
+ */
 
 /**
  * CDN URLs for external dependencies

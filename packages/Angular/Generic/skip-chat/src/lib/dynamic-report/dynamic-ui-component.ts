@@ -4,7 +4,7 @@ import { MapEntityInfoToSkipEntityInfo, SimpleMetadata, SimpleRunQuery, SimpleRu
 import { DrillDownInfo } from '../drill-down-info';
 import { DomSanitizer } from '@angular/platform-browser';
 import { marked } from 'marked';
-import { ReactComponentComponent, StateChangeEvent, ReactComponentEvent } from '../react-component-host/components/react-component.component';
+import { MJReactComponent, StateChangeEvent, ReactComponentEvent } from '@memberjunction/ng-react';
 
 @Component({
   selector: 'skip-dynamic-ui-component',
@@ -725,7 +725,7 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
     @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();
     @Output() CreateReportRequested = new EventEmitter<number>();
 
-    @ViewChildren(ReactComponentComponent) reactComponents!: QueryList<ReactComponentComponent>;
+    @ViewChildren(MJReactComponent) reactComponents!: QueryList<MJReactComponent>;
 
     // Properties for handling multiple report options
     public reportOptions: SkipComponentOption[] = [];
@@ -827,6 +827,8 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
             // Create or update the component spec for this option
             if (!this.componentSpecs.has(this.selectedReportOptionIndex)) {
                 this.createComponentSpecForOption(this.selectedReportOptionIndex);
+                // Trigger change detection after modifying componentSpecs
+                this.cdr.detectChanges();
             }
         } catch (error) {
             console.error('Failed to build component code:', error);
@@ -876,7 +878,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     /**
      * Get the React component for a specific option index
      */
-    private getReactComponentForOption(optionIndex: number): ReactComponentComponent | null {
+    private getReactComponentForOption(optionIndex: number): MJReactComponent | null {
         if (!this.reactComponents || this.reactComponents.length === 0) {
             return null;
         }
@@ -1104,9 +1106,13 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         this.componentStyles = this.SetupStyles();
         
         // Create component specs for all options
+        // Use Promise.resolve to avoid ExpressionChangedAfterItHasBeenCheckedError
         if (this.reportOptions.length > 0) {
-            this.reportOptions.forEach((_, index) => {
-                this.createComponentSpecForOption(index);
+            Promise.resolve().then(() => {
+                this.reportOptions.forEach((_, index) => {
+                    this.createComponentSpecForOption(index);
+                });
+                this.cdr.detectChanges();
             });
         }
     }
@@ -1116,7 +1122,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         this.componentSpecs.clear();
         this.userStates.clear();
         
-        // The ReactComponentComponent handles its own cleanup
+        // The MJReactComponent handles its own cleanup
     }
     
     ngOnChanges(changes: SimpleChanges): void {
@@ -1131,7 +1137,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     /**
      * Get the currently active React component
      */
-    private getCurrentReactComponent(): ReactComponentComponent | null {
+    private getCurrentReactComponent(): MJReactComponent | null {
         return this.getReactComponentForOption(this.selectedReportOptionIndex);
     }
   

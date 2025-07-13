@@ -1,3 +1,9 @@
+/**
+ * @fileoverview Angular component that hosts React components with proper memory management.
+ * Provides a bridge between Angular and React ecosystems in MemberJunction applications.
+ * @module @memberjunction/ng-react
+ */
+
 import {
   Component,
   Input,
@@ -13,40 +19,99 @@ import {
 import { Subject, takeUntil } from 'rxjs';
 import { SkipComponentRootSpec, SkipComponentCallbacks, SkipComponentStyles } from '@memberjunction/skip-types';
 import { ReactBridgeService } from '../services/react-bridge.service';
-import { ComponentCompilerService } from '../services/component-compiler.service';
-import { ComponentRegistryService } from '../services/component-registry.service';
+import { AngularAdapterService } from '../services/angular-adapter.service';
+import { 
+  buildComponentProps, 
+  ComponentCallbacks,
+  ComponentError,
+  createErrorBoundary,
+  ComponentStyles
+} from '@memberjunction/react-runtime';
 import { LogError, CompositeKey } from '@memberjunction/core';
 
+/**
+ * Event emitted by React components
+ */
 export interface ReactComponentEvent {
   type: string;
   payload: any;
 }
 
+/**
+ * State change event emitted when component state updates
+ */
 export interface StateChangeEvent {
   path: string;
   value: any;
 }
 
 /**
- * Angular component that hosts React components with proper memory management
+ * Angular component that hosts React components with proper memory management.
+ * This component provides a bridge between Angular and React, allowing React components
+ * to be used seamlessly within Angular applications.
  */
 @Component({
   selector: 'mj-react-component',
-  template: '<div #container class="react-component-container"></div>',
+  template: `
+    <div class="react-component-wrapper">
+      <div #container class="react-component-container" [class.loading]="!isInitialized"></div>
+      @if (!isInitialized && !hasError) {
+        <div class="loading-overlay">
+          <div class="loading-spinner">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          </div>
+          <div class="loading-text">Loading component...</div>
+        </div>
+      }
+    </div>
+  `,
   styles: [`
     :host {
       display: block;
       width: 100%;
       height: 100%;
     }
+    .react-component-wrapper {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
     .react-component-container {
       width: 100%;
       height: 100%;
+      transition: opacity 0.3s ease;
+    }
+    .react-component-container.loading {
+      opacity: 0;
+    }
+    .loading-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background-color: rgba(255, 255, 255, 0.9);
+      z-index: 1;
+    }
+    .loading-spinner {
+      font-size: 48px;
+      color: #5B4FE9;
+      margin-bottom: 16px;
+    }
+    .loading-text {
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+      font-size: 14px;
+      color: #64748B;
+      margin-top: 8px;
     }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class ReactComponentComponent implements AfterViewInit, OnDestroy {
+export class MJReactComponent implements AfterViewInit, OnDestroy {
   @Input() component!: SkipComponentRootSpec;
   
   private _data: any = {};
@@ -94,22 +159,22 @@ export class ReactComponentComponent implements AfterViewInit, OnDestroy {
   private compiledComponent: any = null;
   private destroyed$ = new Subject<void>();
   private currentState: any = {};
-  private isInitialized = false;
+  isInitialized = false;
   private isRendering = false;
   private pendingRender = false;
+  hasError = false;
 
   constructor(
     private reactBridge: ReactBridgeService,
-    private compiler: ComponentCompilerService,
-    private registry: ComponentRegistryService,
+    private adapter: AngularAdapterService,
     private cdr: ChangeDetectorRef
   ) {}
 
   async ngAfterViewInit() {
+    // Trigger change detection to show loading state
+    this.cdr.detectChanges();
     await this.initializeComponent();
   }
-
-  // Removed ngOnChanges - using setters instead
 
   ngOnDestroy() {
     this.destroyed$.next();
@@ -117,6 +182,20 @@ export class ReactComponentComponent implements AfterViewInit, OnDestroy {
     this.cleanup();
   }
 
+  /**
+   * Convert SkipComponentStyles to ComponentStyles
+   * @param skipStyles - Skip component styles
+   * @returns Component styles for React runtime
+   */
+  private convertStyles(skipStyles?: Partial<SkipComponentStyles>): any {
+    // Pass through the full styles object as-is
+    // Skip components expect the full structure including colors, typography, etc.
+    return skipStyles;
+  }
+
+  /**
+   * Initialize the React component
+   */
   private async initializeComponent() {
     try {
       // Ensure React is loaded
@@ -129,12 +208,19 @@ export class ReactComponentComponent implements AfterViewInit, OnDestroy {
       await this.registerComponentHierarchy();
       
       // Compile main component
-      const compiled = await this.compiler.compileComponent(
-        this.component.componentName,
-        this.component.componentCode,
-        this.styles
-      );
-      this.compiledComponent = compiled.component;
+      const result = await this.adapter.compileComponent({
+        componentName: this.component.componentName,
+        componentCode: this.component.componentCode,
+        styles: this.styles
+      });
+
+      if (!result.success) {
+        throw new Error(result.error?.message || 'Component compilation failed');
+      }
+
+      // Get runtime context and execute component factory
+      const context = this.adapter.getRuntimeContext();
+      this.compiledComponent = result.component!.component(context, this.styles);
       this.currentState = { ...this._state };
       
       // Create React root
@@ -148,6 +234,7 @@ export class ReactComponentComponent implements AfterViewInit, OnDestroy {
       this.cdr.detectChanges();
       
     } catch (error) {
+      this.hasError = true;
       LogError(`Failed to initialize React component: ${error}`);
       this.componentEvent.emit({
         type: 'error',
@@ -156,26 +243,38 @@ export class ReactComponentComponent implements AfterViewInit, OnDestroy {
           source: 'initialization'
         }
       });
+      // Trigger change detection to show error state
+      this.cdr.detectChanges();
     }
   }
 
+  /**
+   * Register all components in the hierarchy
+   */
   private async registerComponentHierarchy() {
     const errors: string[] = [];
     
     // Register main component
     try {
-      const compiled = await this.compiler.compileComponent(
-        this.component.componentName,
-        this.component.componentCode,
-        this.styles
-      );
+      const result = await this.adapter.compileComponent({
+        componentName: this.component.componentName,
+        componentCode: this.component.componentCode,
+        styles: this.styles
+      });
       
-      this.registry.register(
-        this.component.componentName,
-        compiled.component,
-        'Global',
-        'v1'
-      );
+      if (result.success && result.component) {
+        const context = this.adapter.getRuntimeContext();
+        const componentFactory = result.component.component(context, this.styles);
+        
+        this.adapter.registerComponent(
+          this.component.componentName,
+          componentFactory.component,
+          'Global',
+          'v1'
+        );
+      } else {
+        errors.push(`Failed to compile ${this.component.componentName}: ${result.error?.message}`);
+      }
     } catch (error) {
       errors.push(`Failed to register ${this.component.componentName}: ${error}`);
     }
@@ -190,22 +289,32 @@ export class ReactComponentComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  /**
+   * Register child components recursively
+   */
   private async registerChildComponents(children: any[], errors: string[]) {
     for (const child of children) {
       try {
         if (child.componentCode) {
-          const compiled = await this.compiler.compileComponent(
-            child.componentName,
-            child.componentCode,
-            this.styles
-          );
+          const result = await this.adapter.compileComponent({
+            componentName: child.componentName,
+            componentCode: child.componentCode,
+            styles: this.styles
+          });
           
-          this.registry.register(
-            child.componentName,
-            compiled.component,
-            'Global',
-            'v1'
-          );
+          if (result.success && result.component) {
+            const context = this.adapter.getRuntimeContext();
+            const componentFactory = result.component.component(context, this.styles);
+            
+            this.adapter.registerComponent(
+              child.componentName,
+              componentFactory.component,
+              'Global',
+              'v1'
+            );
+          } else {
+            errors.push(`Failed to compile ${child.componentName}: ${result.error?.message}`);
+          }
         }
         
         // Register nested children
@@ -218,6 +327,9 @@ export class ReactComponentComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  /**
+   * Render the React component
+   */
   private renderComponent() {
     if (!this.compiledComponent || !this.reactRoot) {
       return;
@@ -237,22 +349,31 @@ export class ReactComponentComponent implements AfterViewInit, OnDestroy {
     this.isRendering = true;
     const { React } = context;
     
-    // Create props
-    const props = {
-      data: this._data || {},
-      userState: this.currentState,
-      utilities: this.utilities || {},
-      callbacks: this.createCallbacks(),
-      components: this.registry.getComponentsForSpec(this.component),
-      styles: this.styles || {}
-    };
+    // Get components from resolver
+    const components = this.adapter.getResolver().resolveComponents(this.component);
+    
+    // Build props - pass styles as-is for Skip components
+    const props = buildComponentProps(
+      this._data || {},
+      this.currentState,
+      this.utilities || {},
+      this.createCallbacks(),
+      components,
+      this.styles as any // Skip components expect the full SkipComponentStyles structure
+    );
 
-    // Wrap in error boundary
-    const ErrorBoundary = this.createErrorBoundary(React);
+    // Create error boundary
+    const ErrorBoundary = createErrorBoundary(React, {
+      onError: this.handleReactError.bind(this),
+      logErrors: true,
+      recovery: 'retry'
+    });
+
+    // Create element with error boundary
     const element = React.createElement(
       ErrorBoundary,
-      { onError: this.handleReactError.bind(this) },
-      React.createElement(this.compiledComponent, props)
+      null,
+      React.createElement(this.compiledComponent.component, props)
     );
 
     // Render with timeout protection
@@ -287,7 +408,10 @@ export class ReactComponentComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  private createCallbacks(): SkipComponentCallbacks {
+  /**
+   * Create callbacks for the React component
+   */
+  private createCallbacks(): ComponentCallbacks {
     return {
       RefreshData: () => {
         this.refreshData.emit();
@@ -337,34 +461,9 @@ export class ReactComponentComponent implements AfterViewInit, OnDestroy {
     };
   }
 
-  private createErrorBoundary(React: any) {
-    const component = this;
-    
-    class ErrorBoundary extends React.Component {
-      constructor(props: any) {
-        super(props);
-        this.state = { hasError: false };
-      }
-
-      static getDerivedStateFromError() {
-        return { hasError: true };
-      }
-
-      componentDidCatch(error: any, errorInfo: any) {
-        component.handleReactError(error, errorInfo);
-      }
-
-      render() {
-        if ((this.state as any).hasError) {
-          return null; // Let Angular handle error display
-        }
-        return (this.props as any).children;
-      }
-    }
-
-    return ErrorBoundary;
-  }
-
+  /**
+   * Handle React component errors
+   */
   private handleReactError(error: any, errorInfo?: any) {
     LogError(`React component error: ${error?.toString() || 'Unknown error'}`, errorInfo);
     this.componentEvent.emit({
@@ -377,6 +476,9 @@ export class ReactComponentComponent implements AfterViewInit, OnDestroy {
     });
   }
 
+  /**
+   * Clean up resources
+   */
   private cleanup() {
     // Unmount React root
     if (this.reactRoot) {
@@ -390,11 +492,12 @@ export class ReactComponentComponent implements AfterViewInit, OnDestroy {
     this.isInitialized = false;
 
     // Trigger registry cleanup
-    this.registry.cleanupUnused();
+    this.adapter.getRegistry().cleanup();
   }
 
   /**
    * Public method to refresh the component
+   * @param newData - Optional new data to merge
    */
   refresh(newData?: any) {
     if (newData) {
@@ -407,6 +510,8 @@ export class ReactComponentComponent implements AfterViewInit, OnDestroy {
 
   /**
    * Public method to update state programmatically
+   * @param path - State path to update
+   * @param value - New value
    */
   updateState(path: string, value: any) {
     this.currentState = {

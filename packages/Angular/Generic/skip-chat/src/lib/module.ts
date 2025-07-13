@@ -32,7 +32,7 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
 import { DataContextModule } from '@memberjunction/ng-data-context';
 import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
-import { ReactComponentHostModule } from './react-component-host/react-component-host.module';
+import { MJReactModule } from '@memberjunction/ng-react';
 
 // LOCAL
 import { SkipChatComponent } from './skip-chat/skip-chat.component';
@@ -81,7 +81,7 @@ import { SkipArtifactsCounterComponent } from './artifacts/skip-artifacts-counte
     ExcelExportModule,
     ResourcePermissionsModule,
     CodeEditorModule,
-    ReactComponentHostModule,
+    MJReactModule,
     MarkdownModule.forRoot(),
   ],
   exports: [

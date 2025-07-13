@@ -1,13 +1,23 @@
+/**
+ * @fileoverview Service for loading external scripts and CSS in Angular applications.
+ * Manages the lifecycle of dynamically loaded resources with proper cleanup.
+ * @module @memberjunction/ng-react
+ */
+
 import { Injectable, OnDestroy } from '@angular/core';
 import { CDN_URLS } from '../cdn-urls';
 
+/**
+ * Represents a loaded script or CSS resource
+ */
 interface LoadedScript {
   element: HTMLScriptElement | HTMLLinkElement;
   promise: Promise<any>;
 }
 
 /**
- * Service for loading external scripts and CSS with proper cleanup
+ * Service for loading external scripts and CSS with proper cleanup.
+ * Provides methods to dynamically load React and related libraries from CDN.
  */
 @Injectable({ providedIn: 'root' })
 export class ScriptLoaderService implements OnDestroy {
@@ -20,6 +30,10 @@ export class ScriptLoaderService implements OnDestroy {
 
   /**
    * Load a script from URL with automatic cleanup tracking
+   * @param url - Script URL to load
+   * @param globalName - Expected global variable name
+   * @param autoCleanup - Whether to cleanup on service destroy
+   * @returns Promise resolving to the global object
    */
   async loadScript(url: string, globalName: string, autoCleanup = false): Promise<any> {
     const existing = this.loadedResources.get(url);
@@ -42,6 +56,11 @@ export class ScriptLoaderService implements OnDestroy {
 
   /**
    * Load a script with additional validation function
+   * @param url - Script URL to load
+   * @param globalName - Expected global variable name
+   * @param validator - Function to validate the loaded object
+   * @param autoCleanup - Whether to cleanup on service destroy
+   * @returns Promise resolving to the validated global object
    */
   async loadScriptWithValidation(
     url: string, 
@@ -74,6 +93,7 @@ export class ScriptLoaderService implements OnDestroy {
 
   /**
    * Load CSS from URL
+   * @param url - CSS URL to load
    */
   loadCSS(url: string): void {
     if (this.loadedResources.has(url)) {
@@ -97,7 +117,8 @@ export class ScriptLoaderService implements OnDestroy {
   }
 
   /**
-   * Load common React libraries
+   * Load common React libraries and UI frameworks
+   * @returns Promise resolving to React ecosystem objects
    */
   async loadReactEcosystem(): Promise<{
     React: any;
@@ -144,6 +165,7 @@ export class ScriptLoaderService implements OnDestroy {
 
   /**
    * Remove a specific loaded resource
+   * @param url - URL of resource to remove
    */
   removeResource(url: string): void {
     const resource = this.loadedResources.get(url);
@@ -164,6 +186,12 @@ export class ScriptLoaderService implements OnDestroy {
     this.cleanupOnDestroy.clear();
   }
 
+  /**
+   * Create a promise that resolves when script loads
+   * @param url - Script URL
+   * @param globalName - Expected global variable
+   * @returns Promise resolving to global object
+   */
   private createScriptPromise(url: string, globalName: string): Promise<any> {
     return new Promise((resolve, reject) => {
       // Check if already loaded
@@ -202,6 +230,13 @@ export class ScriptLoaderService implements OnDestroy {
     });
   }
 
+  /**
+   * Create a promise that resolves when script loads and passes validation
+   * @param url - Script URL
+   * @param globalName - Expected global variable
+   * @param validator - Validation function
+   * @returns Promise resolving to validated global object
+   */
   private createScriptPromiseWithValidation(
     url: string, 
     globalName: string, 
@@ -246,6 +281,15 @@ export class ScriptLoaderService implements OnDestroy {
     });
   }
 
+  /**
+   * Wait for global object to be available and valid
+   * @param globalName - Global variable name
+   * @param validator - Validation function
+   * @param resolve - Promise resolve function
+   * @param reject - Promise reject function
+   * @param attempts - Current attempt number
+   * @param maxAttempts - Maximum attempts before failing
+   */
   private waitForValidation(
     globalName: string,
     validator: (obj: any) => boolean,
@@ -277,6 +321,13 @@ export class ScriptLoaderService implements OnDestroy {
     }, delay);
   }
 
+  /**
+   * Wait for existing script to load
+   * @param script - Script element
+   * @param globalName - Expected global variable
+   * @param resolve - Promise resolve function
+   * @param reject - Promise reject function
+   */
   private waitForScriptLoad(
     script: HTMLScriptElement,
     globalName: string,
@@ -316,6 +367,14 @@ export class ScriptLoaderService implements OnDestroy {
     }
   }
 
+  /**
+   * Wait for existing script to load with validation
+   * @param script - Script element
+   * @param globalName - Expected global variable
+   * @param validator - Validation function
+   * @param resolve - Promise resolve function
+   * @param reject - Promise reject function
+   */
   private waitForScriptLoadWithValidation(
     script: HTMLScriptElement,
     globalName: string,

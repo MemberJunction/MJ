@@ -1,3 +1,9 @@
+/**
+ * @fileoverview Default styles for React components in MemberJunction.
+ * These styles provide a consistent design system for React components.
+ * @module @memberjunction/ng-react
+ */
+
 import { SkipComponentStyles } from '@memberjunction/skip-types';
 
 /**

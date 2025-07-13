@@ -15,5 +15,3 @@ export * from './lib/split-panel/skip-split-panel.component';
 export * from './lib/artifacts/skip-artifact-viewer.component';
 export * from './lib/artifacts/skip-artifacts-counter.component';
 
-// React Component Host
-export * from './lib/react-component-host';
