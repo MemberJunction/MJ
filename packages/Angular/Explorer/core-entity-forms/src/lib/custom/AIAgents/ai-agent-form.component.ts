@@ -10,7 +10,7 @@ import { DialogService } from '@progress/kendo-angular-dialog';
 import { SharedService } from '@memberjunction/ng-shared';
 import { EntitySelectorDialogComponent, EntitySelectorConfig } from '../shared/entity-selector-dialog.component';
 import { NewAgentDialogService } from './new-agent-dialog.service';
-import { ActionGalleryDialogService } from '@memberjunction/ng-action-gallery';
+import { AddActionDialogService } from './add-action-dialog.service';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 
 /**
@@ -112,7 +112,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         private dialogService: DialogService,
         private viewContainerRef: ViewContainerRef,
         private newAgentDialogService: NewAgentDialogService,
-        private actionGalleryService: ActionGalleryDialogService,
+        private addActionDialogService: AddActionDialogService,
         private testHarnessService: AITestHarnessDialogService
     ) {
         super(elementRef, sharedService, router, route, cdr);
@@ -378,32 +378,33 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     }
 
     /**
-     * Opens the enhanced action gallery for selecting actions
+     * Opens the modern Add Action dialog for selecting actions
      */
     public async configureActions() {
         // Get currently linked action IDs for pre-selection
         const linkedActionIds = this.agentActions.map(aa => aa.ID);
         
-        this.actionGalleryService.openForMultiSelection({
-            preSelectedActions: linkedActionIds,
-            showCategories: true,
-            enableQuickTest: true,
-            title: 'Select Actions for Agent',
-            submitButtonText: 'Add Selected Actions'
-        }, this.viewContainerRef).subscribe(async (selectedActions) => {
+        this.addActionDialogService.openAddActionDialog({
+            agentId: this.record.ID,
+            agentName: this.record.Name || 'Agent',
+            existingActionIds: linkedActionIds,
+            viewContainerRef: this.viewContainerRef
+        }).subscribe(async (selectedActions) => {
             if (selectedActions && selectedActions.length > 0) {
-                // Find newly selected actions (not already linked)
-                const newActions = selectedActions.filter(action => 
-                    !linkedActionIds.includes(action.ID)
-                );
-                
-                // Link each new action to the agent
-                for (const action of newActions) {
+                // Link each selected action to the agent
+                for (const action of selectedActions) {
                     await this.linkActionToAgent(action);
                 }
                 
-                // Reload the actions list
+                // Reload the actions list to reflect changes
                 await this.loadRelatedCounts();
+                
+                // Show success notification
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Added ${selectedActions.length} action${selectedActions.length === 1 ? '' : 's'} successfully`,
+                    'success',
+                    3000
+                );
             }
         });
     }
