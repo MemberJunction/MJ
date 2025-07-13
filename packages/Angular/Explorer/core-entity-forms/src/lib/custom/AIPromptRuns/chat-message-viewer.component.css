@@ -2,6 +2,7 @@
     display: flex;
     flex-direction: column;
     height: 100%;
+    overflow: hidden; /* Prevent overflow from the parent */
 }
 
 
@@ -15,6 +16,7 @@
     border-radius: 8px;
     border: 1px solid #e5e7eb;
     margin-bottom: 1rem;
+    flex-shrink: 0; /* Prevent filter from shrinking */
 }
 
 .filter-checkbox {
@@ -47,7 +49,6 @@
     padding: 0.5rem;
     padding-bottom: 1rem; /* Small padding at bottom */
     max-height: 800px;
-    /* Remove max-height constraint to allow full scrolling */
 }
 
 .empty-state {
