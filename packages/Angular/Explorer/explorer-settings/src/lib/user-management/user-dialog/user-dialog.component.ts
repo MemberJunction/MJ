@@ -22,7 +22,7 @@ export interface UserDialogResult {
   imports: [CommonModule, FormsModule, ReactiveFormsModule, WindowModule],
   encapsulation: ViewEncapsulation.None,
   templateUrl: './user-dialog.component.html',
-  styleUrls: ['./user-dialog.component.scss']
+  styleUrls: ['./user-dialog.component.css']
 })
 export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
   @Input() data: UserDialogData | null = null;

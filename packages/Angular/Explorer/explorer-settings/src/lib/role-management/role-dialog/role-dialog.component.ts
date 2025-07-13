@@ -21,7 +21,7 @@ export interface RoleDialogResult {
   imports: [CommonModule, FormsModule, ReactiveFormsModule, WindowModule],
   encapsulation: ViewEncapsulation.None,
   templateUrl: './role-dialog.component.html',
-  styleUrls: ['./role-dialog.component.scss']
+  styleUrls: ['./role-dialog.component.css']
 })
 export class RoleDialogComponent implements OnInit, OnDestroy, OnChanges {
   @Input() data: RoleDialogData | null = null;

@@ -30,7 +30,7 @@ export interface ApplicationDialogResult {
   imports: [CommonModule, FormsModule, ReactiveFormsModule, WindowModule],
   encapsulation: ViewEncapsulation.None,
   templateUrl: './application-dialog.component.html',
-  styleUrls: ['./application-dialog.component.scss']
+  styleUrls: ['./application-dialog.component.css']
 })
 export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges {
   @Input() data: ApplicationDialogData | null = null;

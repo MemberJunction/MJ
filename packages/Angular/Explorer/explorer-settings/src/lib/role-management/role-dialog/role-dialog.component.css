@@ -1,0 +1,375 @@
+/* Modern Dialog Styling - Matching Dashboard Design */
+:host ::ng-deep .k-window {
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 19px 38px rgba(0, 0, 0, 0.30), 0 15px 12px rgba(0, 0, 0, 0.22);
+  background: #ffffff;
+  overflow: hidden;
+}
+
+:host ::ng-deep .k-window-titlebar {
+  background: linear-gradient(135deg, #4caf50 0%, #43a047 100%);
+  border: none;
+  padding: 24px 32px;
+  min-height: 70px;
+}
+
+:host ::ng-deep .k-window-titlebar .k-window-title {
+  display: none; /* Hide default title */
+}
+
+:host ::ng-deep .k-window-titlebar .k-window-actions {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+}
+
+:host ::ng-deep .k-window-titlebar .k-window-actions .k-button {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  min-width: auto;
+}
+
+:host ::ng-deep .k-window-titlebar .k-window-actions .k-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+:host ::ng-deep .k-window-content {
+  padding: 0;
+  background: #ffffff;
+}
+
+/* Custom Title Bar */
+.dialog-header {
+  position: relative;
+  color: #ffffff;
+}
+
+.dialog-header .dialog-title {
+  font-size: 18px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0;
+}
+
+.dialog-header .dialog-title i {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.dialog-header .dialog-subtitle {
+  margin: 4px 0 0 0;
+  font-size: 12px;
+  opacity: 0.85;
+  font-weight: 400;
+}
+
+/* Modal Content Areas */
+.dialog-content {
+  padding: 0;
+  background: #ffffff;
+}
+
+.dialog-content .content-section {
+  padding: 32px;
+}
+
+.dialog-content .content-section:not(:last-child) {
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.dialog-footer {
+  padding: 24px 32px;
+  background: #fafafa;
+  border-top: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+}
+
+/* Form Sections */
+.form-section .section-header {
+  margin-bottom: 24px;
+}
+
+.form-section .section-header .section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #212121;
+  margin: 0 0 4px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-section .section-header .section-title i {
+  color: #4caf50;
+  font-size: 14px;
+}
+
+.form-section .section-header .section-description {
+  font-size: 12px;
+  color: #666666;
+  margin: 0;
+}
+
+.form-grid {
+  display: grid;
+  gap: 24px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 640px) {
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+/* Modern Form Fields */
+.form-field {
+  margin-bottom: 24px;
+}
+
+.form-field:last-child {
+  margin-bottom: 0;
+}
+
+.form-field .field-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #212121;
+  margin-bottom: 8px;
+}
+
+.form-field .field-label.required::after {
+  content: ' *';
+  color: #f44336;
+}
+
+.form-field .field-input,
+.form-field .field-select,
+.form-field .field-textarea {
+  width: 100%;
+  padding: 0 16px;
+  border: 1px solid #bdbdbd;
+  border-radius: 6px;
+  font-size: 14px;
+  background: #ffffff;
+  transition: all 0.15s ease;
+}
+
+.form-field .field-input:focus,
+.form-field .field-select:focus,
+.form-field .field-textarea:focus {
+  outline: none;
+  border-color: #4caf50;
+  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+}
+
+.form-field .field-input.error,
+.form-field .field-select.error,
+.form-field .field-textarea.error {
+  border-color: #f44336;
+}
+
+.form-field .field-input.error:focus,
+.form-field .field-select.error:focus,
+.form-field .field-textarea.error:focus {
+  border-color: #f44336;
+  box-shadow: 0 0 0 3px rgba(244, 67, 54, 0.1);
+}
+
+.form-field .field-input::placeholder,
+.form-field .field-select::placeholder,
+.form-field .field-textarea::placeholder {
+  color: #9e9e9e;
+}
+
+.form-field .field-input,
+.form-field .field-select {
+  height: 36px;
+}
+
+.form-field .field-textarea {
+  min-height: 100px;
+  padding: 16px;
+  resize: vertical;
+  line-height: 1.4;
+}
+
+.form-field .field-select {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23666' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 16px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+  padding-right: calc(16px + 24px);
+  appearance: none;
+  cursor: pointer;
+}
+
+.form-field .field-error {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #f44336;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.form-field .field-error i {
+  font-size: 10px;
+}
+
+.form-field .field-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #666666;
+  line-height: 1.4;
+}
+
+/* Alert Messages */
+.alert {
+  padding: 16px 24px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.alert i {
+  font-size: 16px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.alert.alert-error {
+  background: rgba(244, 67, 54, 0.1);
+  border: 1px solid rgba(244, 67, 54, 0.2);
+  color: #c62828;
+}
+
+.alert.alert-error i {
+  color: #f44336;
+}
+
+.alert.alert-warning {
+  background: rgba(255, 193, 7, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.2);
+  color: #b7800d;
+}
+
+.alert.alert-warning i {
+  color: #ffc107;
+}
+
+.alert.alert-info {
+  background: rgba(0, 188, 212, 0.1);
+  border: 1px solid rgba(0, 188, 212, 0.2);
+  color: #00838f;
+}
+
+.alert.alert-info i {
+  color: #00bcd4;
+}
+
+/* Button Styles */
+.dialog-footer .btn {
+  padding: 8px 24px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+}
+
+.dialog-footer .btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.dialog-footer .btn:disabled i.fa-spinner {
+  animation: spin 1s linear infinite;
+}
+
+.dialog-footer .btn.btn-secondary {
+  background: #ffffff;
+  color: #666666;
+  border-color: #bdbdbd;
+}
+
+.dialog-footer .btn.btn-secondary:hover:not(:disabled) {
+  background: #f8f9fa;
+  border-color: #757575;
+  color: #212121;
+}
+
+.dialog-footer .btn.btn-primary {
+  background: #4caf50;
+  color: #ffffff;
+}
+
+.dialog-footer .btn.btn-primary:hover:not(:disabled) {
+  background: #43a047;
+  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.2);
+  transform: translateY(-1px);
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  :host ::ng-deep .k-window {
+    margin: 16px;
+    max-width: none;
+    width: calc(100vw - 24px) !important;
+    height: calc(100vh - 24px) !important;
+  }
+  
+  :host ::ng-deep .k-window-titlebar {
+    padding: 16px 24px;
+    min-height: 60px;
+  }
+  
+  .dialog-content .content-section {
+    padding: 24px 16px;
+  }
+  
+  .dialog-footer {
+    padding: 16px 24px;
+    flex-direction: column-reverse;
+  }
+  
+  .dialog-footer .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

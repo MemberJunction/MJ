@@ -29,7 +29,7 @@ interface RolePermissions {
   imports: [CommonModule, FormsModule, ReactiveFormsModule, WindowModule],
   encapsulation: ViewEncapsulation.None,
   templateUrl: './permission-dialog.component.html',
-  styleUrls: ['./permission-dialog.component.scss']
+  styleUrls: ['./permission-dialog.component.css']
 })
 export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
   @Input() data: PermissionDialogData | null = null;
