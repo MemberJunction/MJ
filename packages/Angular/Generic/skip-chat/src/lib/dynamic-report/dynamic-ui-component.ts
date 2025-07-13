@@ -276,7 +276,7 @@ import { ReactComponentComponent, StateChangeEvent, ReactComponentEvent } from '
                     (click)="createReportForOption(0)"
                     [disabled]="isCreatingReport">
               <i class="fa-solid fa-plus"></i>
-              <span>Create {{ reportOptions[0] ? getComponentTypeName(reportOptions[0]) : 'Component' }}</span>
+              <span>Create {{ firstOptionComponentTypeName }}</span>
             </button>
             <button class="tab-action-button print-button" 
                     *ngIf="ShowPrintReport" 
@@ -731,6 +731,9 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
     public reportOptions: SkipComponentOption[] = [];
     public selectedReportOptionIndex: number = 0;
     public currentError: { type: string; message: string; technicalDetails?: string } | null = null;
+    
+    // Cached component type name to avoid expression change errors
+    private _cachedComponentTypeName: string = 'Component';
     public isCreatingReport: boolean = false;
     
     // Toggle states for showing/hiding component details
@@ -916,6 +919,13 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     public getComponentTypeName(option: SkipComponentOption): string {
         const type = option.option.componentType || 'report';
         return type.charAt(0).toUpperCase() + type.slice(1);
+    }
+    
+    /**
+     * Get the cached component type name for the first option to avoid change detection errors
+     */
+    public get firstOptionComponentTypeName(): string {
+        return this._cachedComponentTypeName;
     }
     
     /**
@@ -1110,10 +1120,11 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     }
     
     ngOnChanges(changes: SimpleChanges): void {
-        if (changes['SkipData'] && !changes['SkipData'].firstChange) {
-            // Angular will automatically update the data binding
-            // The ReactComponentComponent will handle the update
-            this.cdr.detectChanges();
+        if (changes['SkipData']) {
+            const skipData = changes['SkipData'].currentValue;
+            if (skipData) {
+                this.setupReportOptions(skipData);
+            }
         }
     }
 
@@ -1169,6 +1180,12 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             const bestOption = this.reportOptions[0];
             this.UIComponentCode = BuildSkipComponentCompleteCode(bestOption.option);
             this.ComponentObjectName = bestOption.option.componentName;
+            
+            // Update cached component type name after current change detection cycle
+            Promise.resolve().then(() => {
+                this._cachedComponentTypeName = this.getComponentTypeName(bestOption);
+                this.cdr.detectChanges();
+            });
         } 
     }
 
