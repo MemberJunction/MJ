@@ -132,6 +132,10 @@ export function BuildSkipComponentCompleteCode(spec: SkipComponentRootSpec): str
     // Start with the base code for the root component
     let code = spec.componentCode || '// Generation Error: No root component code provided! \n\n';
     // Recursively replace placeholders for child components with their generated code
+    if (!spec.childComponents || spec.childComponents.length === 0) {
+        // If there are no child components, return the base code for this component
+        return code;
+    }
     for (const child of spec.childComponents) {
         const childCode = BuildSkipComponentChildCode(child);
         if (childCode && childCode.length > 0) {
