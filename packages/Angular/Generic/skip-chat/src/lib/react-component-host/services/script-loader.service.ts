@@ -41,6 +41,38 @@ export class ScriptLoaderService implements OnDestroy {
   }
 
   /**
+   * Load a script with additional validation function
+   */
+  async loadScriptWithValidation(
+    url: string, 
+    globalName: string, 
+    validator: (obj: any) => boolean,
+    autoCleanup = false
+  ): Promise<any> {
+    const existing = this.loadedResources.get(url);
+    if (existing) {
+      const obj = await existing.promise;
+      // Re-validate even for cached resources
+      if (!validator(obj)) {
+        throw new Error(`${globalName} loaded but failed validation`);
+      }
+      return obj;
+    }
+
+    const promise = this.createScriptPromiseWithValidation(url, globalName, validator);
+    const element = document.querySelector(`script[src="${url}"]`) as HTMLScriptElement;
+    
+    if (element) {
+      this.loadedResources.set(url, { element, promise });
+      if (autoCleanup) {
+        this.cleanupOnDestroy.add(url);
+      }
+    }
+
+    return promise;
+  }
+
+  /**
    * Load CSS from URL
    */
   loadCSS(url: string): void {
@@ -73,12 +105,20 @@ export class ScriptLoaderService implements OnDestroy {
     Babel: any;
     libraries: any;
   }> {
-    // Load React and ReactDOM
+    // Load React and ReactDOM with enhanced validation
     const [React, ReactDOM, Babel] = await Promise.all([
-      this.loadScript(CDN_URLS.REACT, 'React'),
-      this.loadScript(CDN_URLS.REACT_DOM, 'ReactDOM'),
+      this.loadScriptWithValidation(CDN_URLS.REACT, 'React', (obj) => {
+        return obj && typeof obj.createElement === 'function' && typeof obj.Component === 'function';
+      }),
+      this.loadScriptWithValidation(CDN_URLS.REACT_DOM, 'ReactDOM', (obj) => {
+        // Just check that ReactDOM exists - createRoot might not be immediately available
+        return obj != null && typeof obj === 'object';
+      }),
       this.loadScript(CDN_URLS.BABEL_STANDALONE, 'Babel')
     ]);
+
+    // Note: We don't validate createRoot here because it might not be immediately available
+    // The ReactBridgeService will handle the delayed validation
 
     // Load CSS files (non-blocking)
     this.loadCSS(CDN_URLS.ANTD_CSS);
@@ -162,6 +202,81 @@ export class ScriptLoaderService implements OnDestroy {
     });
   }
 
+  private createScriptPromiseWithValidation(
+    url: string, 
+    globalName: string, 
+    validator: (obj: any) => boolean
+  ): Promise<any> {
+    return new Promise((resolve, reject) => {
+      // Check if already loaded and valid
+      const existingGlobal = (window as any)[globalName];
+      if (existingGlobal && validator(existingGlobal)) {
+        resolve(existingGlobal);
+        return;
+      }
+
+      // Check if script tag exists
+      const existingScript = document.querySelector(`script[src="${url}"]`);
+      if (existingScript) {
+        this.waitForScriptLoadWithValidation(
+          existingScript as HTMLScriptElement, 
+          globalName, 
+          validator,
+          resolve, 
+          reject
+        );
+        return;
+      }
+
+      // Create new script
+      const script = document.createElement('script');
+      script.src = url;
+      script.async = true;
+
+      script.onload = () => {
+        this.waitForValidation(globalName, validator, resolve, reject);
+      };
+
+      script.onerror = () => {
+        reject(new Error(`Failed to load script: ${url}`));
+      };
+
+      document.head.appendChild(script);
+      this.loadedResources.set(url, { element: script, promise: Promise.resolve() });
+    });
+  }
+
+  private waitForValidation(
+    globalName: string,
+    validator: (obj: any) => boolean,
+    resolve: (value: any) => void,
+    reject: (reason: any) => void,
+    attempts = 0,
+    maxAttempts = 50 // 5 seconds total with 100ms intervals
+  ): void {
+    const global = (window as any)[globalName];
+    
+    if (global && validator(global)) {
+      resolve(global);
+      return;
+    }
+
+    if (attempts >= maxAttempts) {
+      if (global) {
+        reject(new Error(`${globalName} loaded but validation failed after ${maxAttempts} attempts`));
+      } else {
+        reject(new Error(`${globalName} not found after ${maxAttempts} attempts`));
+      }
+      return;
+    }
+
+    // Retry with exponential backoff for first few attempts, then fixed interval
+    const delay = attempts < 5 ? Math.min(100 * Math.pow(1.5, attempts), 500) : 100;
+    setTimeout(() => {
+      this.waitForValidation(globalName, validator, resolve, reject, attempts + 1, maxAttempts);
+    }, delay);
+  }
+
   private waitForScriptLoad(
     script: HTMLScriptElement,
     globalName: string,
@@ -181,6 +296,35 @@ export class ScriptLoaderService implements OnDestroy {
           reject(new Error(`${globalName} not found after script load`));
         }
       }, 100);
+    };
+
+    if ('readyState' in script) {
+      // IE support
+      (script as any).onreadystatechange = () => {
+        if ((script as any).readyState === 'loaded' || (script as any).readyState === 'complete') {
+          (script as any).onreadystatechange = null;
+          checkGlobal();
+        }
+      };
+    } else {
+      // Modern browsers
+      const loadHandler = () => {
+        script.removeEventListener('load', loadHandler);
+        checkGlobal();
+      };
+      script.addEventListener('load', loadHandler);
+    }
+  }
+
+  private waitForScriptLoadWithValidation(
+    script: HTMLScriptElement,
+    globalName: string,
+    validator: (obj: any) => boolean,
+    resolve: (value: any) => void,
+    reject: (reason: any) => void
+  ): void {
+    const checkGlobal = () => {
+      this.waitForValidation(globalName, validator, resolve, reject);
     };
 
     if ('readyState' in script) {

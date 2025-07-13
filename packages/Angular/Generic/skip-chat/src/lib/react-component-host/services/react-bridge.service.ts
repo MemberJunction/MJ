@@ -1,4 +1,6 @@
 import { Injectable, OnDestroy } from '@angular/core';
+import { BehaviorSubject, firstValueFrom } from 'rxjs';
+import { filter } from 'rxjs/operators';
 import { ScriptLoaderService } from './script-loader.service';
 
 /**
@@ -9,11 +11,84 @@ export class ReactBridgeService implements OnDestroy {
   private reactContext: { React: any; ReactDOM: any; Babel: any; libraries: any } | null = null;
   private loadingPromise: Promise<any> | null = null;
   private reactRoots = new Set<any>();
+  
+  // Track React readiness state
+  private reactReadySubject = new BehaviorSubject<boolean>(false);
+  public reactReady$ = this.reactReadySubject.asObservable();
+  
+  // Track if this is the first component trying to use React
+  private firstComponentAttempted = false;
+  private firstComponentDelay = 2000; // 2 second delay for first component
 
-  constructor(private scriptLoader: ScriptLoaderService) {}
+  constructor(private scriptLoader: ScriptLoaderService) {
+    // Bootstrap React immediately on service initialization
+    this.bootstrapReact();
+  }
 
   ngOnDestroy(): void {
     this.cleanup();
+  }
+
+  /**
+   * Bootstrap React early during service initialization
+   */
+  private async bootstrapReact(): Promise<void> {
+    try {
+      await this.getReactContext();
+      console.log('React ecosystem pre-loaded successfully');
+    } catch (error) {
+      console.error('Failed to pre-load React ecosystem:', error);
+    }
+  }
+
+  /**
+   * Wait for React to be ready, with special handling for first component
+   */
+  async waitForReactReady(): Promise<void> {
+    // If already ready, return immediately
+    if (this.reactReadySubject.value) {
+      return;
+    }
+
+    // Check if this is the first component attempting to use React
+    const isFirstComponent = !this.firstComponentAttempted;
+    this.firstComponentAttempted = true;
+
+    if (isFirstComponent) {
+      // First component adds a delay to ensure React is fully initialized
+      console.log('First React component loading - adding initialization delay');
+      await new Promise(resolve => setTimeout(resolve, this.firstComponentDelay));
+      
+      // Verify React is working by creating a test root
+      try {
+        const testDiv = document.createElement('div');
+        
+        // Make sure we have the context and createRoot is available
+        if (!this.reactContext) {
+          throw new Error('React context not loaded');
+        }
+        
+        if (!this.reactContext.ReactDOM?.createRoot) {
+          throw new Error('ReactDOM.createRoot not available after delay');
+        }
+        
+        const testRoot = this.reactContext.ReactDOM.createRoot(testDiv);
+        if (testRoot) {
+          testRoot.unmount();
+          // React is ready!
+          this.reactReadySubject.next(true);
+          console.log('React is fully ready - first component initialized successfully');
+        }
+      } catch (error) {
+        console.error('React readiness test failed:', error);
+        // Don't mark as ready, let next component retry
+        this.firstComponentAttempted = false;
+        throw error;
+      }
+    } else {
+      // Subsequent components wait for the ready signal
+      await firstValueFrom(this.reactReady$.pipe(filter(ready => ready)));
+    }
   }
 
   /**
@@ -105,6 +180,10 @@ export class ReactBridgeService implements OnDestroy {
     // Clear cached context
     this.reactContext = null;
     this.loadingPromise = null;
+    
+    // Reset readiness state
+    this.reactReadySubject.next(false);
+    this.firstComponentAttempted = false;
   }
 
   private async loadReactContext(): Promise<any> {

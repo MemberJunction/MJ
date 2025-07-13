@@ -6,8 +6,8 @@
 export const CDN_URLS = {
   // Core React dependencies
   BABEL_STANDALONE: 'https://unpkg.com/@babel/standalone@7/babel.min.js',
-  REACT: 'https://unpkg.com/react@18/umd/react.development.js',
-  REACT_DOM: 'https://unpkg.com/react-dom@18/umd/react-dom.development.js',
+  REACT: 'https://unpkg.com/react@18/umd/react.production.min.js',
+  REACT_DOM: 'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
   
   // Ant Design dependencies
   DAYJS: 'https://unpkg.com/dayjs@1.11.10/dayjs.min.js',

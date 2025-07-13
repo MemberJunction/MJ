@@ -5,7 +5,7 @@ import {
   EventEmitter,
   ViewChild,
   ElementRef,
-  OnInit,
+  AfterViewInit,
   OnDestroy,
   ChangeDetectionStrategy,
   ChangeDetectorRef
@@ -46,7 +46,7 @@ export interface StateChangeEvent {
   `],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class ReactComponentComponent implements OnInit, OnDestroy {
+export class ReactComponentComponent implements AfterViewInit, OnDestroy {
   @Input() component!: SkipComponentRootSpec;
   
   private _data: any = {};
@@ -105,7 +105,7 @@ export class ReactComponentComponent implements OnInit, OnDestroy {
     private cdr: ChangeDetectorRef
   ) {}
 
-  async ngOnInit() {
+  async ngAfterViewInit() {
     await this.initializeComponent();
   }
 
@@ -121,6 +121,9 @@ export class ReactComponentComponent implements OnInit, OnDestroy {
     try {
       // Ensure React is loaded
       await this.reactBridge.getReactContext();
+      
+      // Wait for React to be fully ready (handles first-load delay)
+      await this.reactBridge.waitForReactReady();
       
       // Register component hierarchy
       await this.registerComponentHierarchy();
