@@ -1,6 +1,4 @@
 /**
- * @fileoverview Artifact management types for Skip API
- * 
  * This file contains types related to artifacts - persistent objects created and managed
  * through Skip conversations. These types define the structure for:
  * 
@@ -17,9 +15,6 @@
  * The artifact system supports versioning, allowing users to see the evolution of
  * AI-generated content and compare different iterations. It also includes sharing
  * capabilities and user feedback mechanisms to improve future artifact generation.
- * 
- * @author MemberJunction
- * @since 2.0.0
  */
 
 /**

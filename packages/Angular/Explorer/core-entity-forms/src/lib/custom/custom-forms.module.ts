@@ -1,7 +1,7 @@
 import { NgModule } from "@angular/core";
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { InputsModule, TextBoxModule, TextAreaModule, NumericTextBoxModule, SwitchModule } from '@progress/kendo-angular-inputs';
+import { InputsModule, TextBoxModule, TextAreaModule, NumericTextBoxModule, SwitchModule, CheckBoxModule } from '@progress/kendo-angular-inputs';
 import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { ButtonsModule, ButtonModule, SplitButtonModule } from '@progress/kendo-angular-buttons';
 import { DropDownsModule, ComboBoxModule } from '@progress/kendo-angular-dropdowns';
@@ -33,6 +33,7 @@ import { DeepDiffModule } from "@memberjunction/ng-deep-diff";
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
 import { EntitySelectorDialogComponent } from "./shared/entity-selector-dialog.component";
 import { AIPromptRunFormComponentExtended } from "./AIPromptRuns/ai-prompt-run-form.component";
+import { ChatMessageViewerComponent } from "./AIPromptRuns/chat-message-viewer.component";
 import { ActionFormComponentExtended, LoadActionFormComponentExtended } from "./Actions/action-form.component";
 import { ActionTestHarnessComponent } from "./Actions/action-test-harness.component";
 import { ActionTestHarnessDialogComponent } from "./Actions/action-test-harness-dialog.component";
@@ -56,6 +57,7 @@ import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-no
         NewAgentDialogComponent,
         EntitySelectorDialogComponent,
         AIPromptRunFormComponentExtended,
+        ChatMessageViewerComponent,
         ActionFormComponentExtended,
         ActionTestHarnessComponent,
         ActionTestHarnessDialogComponent,
@@ -97,6 +99,7 @@ import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-no
         CodeEditorModule,
         DeepDiffModule,
         TreeViewModule,
+        CheckBoxModule,
         AITestHarnessModule,
         ActionGalleryModule
     ],
@@ -109,6 +112,7 @@ import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-no
         AIPromptFormComponentExtended,
         AIAgentFormComponentExtended,
         AIPromptRunFormComponentExtended,
+        ChatMessageViewerComponent,
         ActionFormComponentExtended,
         ActionTestHarnessComponent,
         ActionTestHarnessDialogComponent,

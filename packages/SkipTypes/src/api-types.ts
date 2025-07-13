@@ -1,6 +1,4 @@
 /**
- * @fileoverview Core API types for Skip API communication
- * 
  * This file contains the fundamental API request and response types used for communication
  * between client applications and the Skip API server. These types define the core data
  * structures for:
@@ -12,9 +10,6 @@
  * 
  * These types form the foundation of the Skip API communication protocol and are used
  * across all Skip API interactions regardless of the specific functionality being invoked.
- * 
- * @author MemberJunction
- * @since 2.0.0
  */
 
 import { DataContext } from '@memberjunction/data-context';
