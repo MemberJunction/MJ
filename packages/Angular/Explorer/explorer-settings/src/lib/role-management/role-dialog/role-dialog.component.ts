@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, inject, HostListener } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, HostListener, ViewEncapsulation } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Metadata } from '@memberjunction/core';
@@ -19,159 +19,11 @@ export interface RoleDialogResult {
   selector: 'mj-role-dialog',
   standalone: true,
   imports: [CommonModule, FormsModule, ReactiveFormsModule, WindowModule],
-  template: `
-    <kendo-window
-      *ngIf="visible"
-      [title]="windowTitle"
-      [width]="700"
-      [height]="500"
-      [resizable]="false"
-      [draggable]="true"
-      [keepContent]="true"
-      (close)="onCancel()"
-      kendoWindowContainer>
-      
-      <kendo-window-titlebar>
-        <div class="mj-modal-title">
-          <i class="fa-solid fa-shield-halved"></i>
-          {{ isEditMode ? 'Edit Role' : 'Create New Role' }}
-        </div>
-      </kendo-window-titlebar>
-
-        <form [formGroup]="roleForm" (ngSubmit)="onSubmit()">
-          <div class="mj-modal-body">
-            @if (error) {
-              <div class="mj-alert mj-alert-error">
-                <i class="fa-solid fa-exclamation-triangle"></i>
-                {{ error }}
-              </div>
-            }
-
-            <div class="mj-form-grid">
-              <!-- Basic Information -->
-              <div class="mj-form-section">
-                <h4 class="mj-section-title">Role Information</h4>
-                
-                <div class="mj-form-field">
-                  <label class="mj-field-label" for="name">Role Name *</label>
-                  <input 
-                    id="name"
-                    type="text" 
-                    class="mj-input" 
-                    formControlName="name"
-                    placeholder="Sales Manager"
-                    [class.mj-input-error]="roleForm.get('name')?.invalid && roleForm.get('name')?.touched"
-                  />
-                  @if (roleForm.get('name')?.invalid && roleForm.get('name')?.touched) {
-                    <div class="mj-field-error">
-                      @if (roleForm.get('name')?.errors?.['required']) {
-                        Role name is required
-                      }
-                      @if (roleForm.get('name')?.errors?.['maxlength']) {
-                        Role name cannot exceed 50 characters
-                      }
-                    </div>
-                  }
-                </div>
-
-                <div class="mj-form-field">
-                  <label class="mj-field-label" for="description">Description</label>
-                  <textarea 
-                    id="description"
-                    class="mj-textarea" 
-                    formControlName="description"
-                    placeholder="Describe the role's purpose and responsibilities..."
-                    rows="4"
-                  ></textarea>
-                  <div class="mj-field-hint">
-                    Provide a clear description of what this role is for and what permissions it should have.
-                  </div>
-                </div>
-
-                @if (isEditMode) {
-                  <div class="mj-form-field">
-                    <label class="mj-field-label" for="directoryId">Directory ID</label>
-                    <input 
-                      id="directoryId"
-                      type="text" 
-                      class="mj-input" 
-                      formControlName="directoryId"
-                      placeholder="External directory identifier"
-                    />
-                    <div class="mj-field-hint">
-                      External directory identifier for syncing with Active Directory or other systems.
-                    </div>
-                  </div>
-                }
-              </div>
-
-              <!-- Role Type Info -->
-              <div class="mj-form-section">
-                <h4 class="mj-section-title">Role Type</h4>
-                <div class="mj-role-type-info">
-                  @if (isSystemRole) {
-                    <div class="mj-alert mj-alert-warning">
-                      <i class="fa-solid fa-shield-halved"></i>
-                      <div>
-                        <strong>System Role</strong>
-                        <p>This is a system-defined role. Some properties may be limited for editing to maintain system integrity.</p>
-                      </div>
-                    </div>
-                  } @else {
-                    <div class="mj-alert mj-alert-info">
-                      <i class="fa-solid fa-user-tag"></i>
-                      <div>
-                        <strong>Custom Role</strong>
-                        <p>This is a custom role that can be fully configured and modified.</p>
-                      </div>
-                    </div>
-                  }
-                </div>
-              </div>
-
-              <!-- Permissions Preview -->
-              @if (isEditMode) {
-                <div class="mj-form-section">
-                  <h4 class="mj-section-title">Permissions</h4>
-                  <div class="mj-permissions-preview">
-                    <div class="mj-alert mj-alert-info">
-                      <i class="fa-solid fa-info-circle"></i>
-                      <div>
-                        <strong>Permission Management</strong>
-                        <p>Role permissions can be managed in the <strong>Permissions</strong> tab of the settings dashboard.</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              }
-            </div>
-          </div>
-
-          <div class="mj-modal-footer">
-            <button type="button" class="mj-btn mj-btn-secondary" (click)="onCancel()">
-              <i class="fa-solid fa-times"></i>
-              Cancel
-            </button>
-            <button 
-              type="submit" 
-              class="mj-btn mj-btn-primary" 
-              [disabled]="roleForm.invalid || isLoading"
-            >
-              @if (isLoading) {
-                <i class="fa-solid fa-spinner fa-spin"></i>
-                Saving...
-              } @else {
-                <i class="fa-solid fa-save"></i>
-                {{ isEditMode ? 'Update Role' : 'Create Role' }}
-              }
-            </button>
-          </div>
-        </form>
-    </kendo-window>
-  `,
+  encapsulation: ViewEncapsulation.None,
+  templateUrl: './role-dialog.component.html',
   styleUrls: ['./role-dialog.component.scss']
 })
-export class RoleDialogComponent implements OnInit, OnDestroy {
+export class RoleDialogComponent implements OnInit, OnDestroy, OnChanges {
   @Input() data: RoleDialogData | null = null;
   @Input() visible = false;
   @Output() result = new EventEmitter<RoleDialogResult>();
@@ -192,13 +44,31 @@ export class RoleDialogComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    if (this.data?.role && this.isEditMode) {
+    // Initial setup
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['data'] && this.data?.role && this.isEditMode) {
       this.loadRoleData();
+    }
+    
+    // Reset form if switching to create mode or dialog becomes visible
+    if (changes['visible'] && this.visible && !this.isEditMode) {
+      this.resetForm();
     }
   }
 
   ngOnDestroy(): void {
     // Cleanup if needed
+  }
+
+  private resetForm(): void {
+    this.roleForm.reset({
+      name: '',
+      description: '',
+      directoryId: ''
+    });
+    this.error = null;
   }
 
   @HostListener('document:keydown.escape', ['$event'])

@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, inject, HostListener } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, HostListener, ViewEncapsulation } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Metadata, RunView } from '@memberjunction/core';
@@ -20,207 +20,11 @@ export interface UserDialogResult {
   selector: 'mj-user-dialog',
   standalone: true,
   imports: [CommonModule, FormsModule, ReactiveFormsModule, WindowModule],
-  template: `
-    <kendo-window
-      *ngIf="visible"
-      [title]="windowTitle"
-      [width]="800"
-      [height]="600"
-      [resizable]="false"
-      [draggable]="true"
-      [keepContent]="true"
-      (close)="onCancel()"
-      kendoWindowContainer>
-      
-      <kendo-window-titlebar>
-        <div class="mj-modal-title">
-          <i class="fa-solid fa-user"></i>
-          {{ isEditMode ? 'Edit User' : 'Create New User' }}
-        </div>
-      </kendo-window-titlebar>
-
-        <form [formGroup]="userForm" (ngSubmit)="onSubmit()">
-          <div class="mj-modal-body">
-            @if (error) {
-              <div class="mj-alert mj-alert-error">
-                <i class="fa-solid fa-exclamation-triangle"></i>
-                {{ error }}
-              </div>
-            }
-
-            <div class="mj-form-grid">
-              <!-- Basic Information -->
-              <div class="mj-form-section">
-                <h4 class="mj-section-title">Basic Information</h4>
-                
-                <div class="mj-form-field">
-                  <label class="mj-field-label" for="name">Username/Email *</label>
-                  <input 
-                    id="name"
-                    type="email" 
-                    class="mj-input" 
-                    formControlName="name"
-                    placeholder="john@company.com"
-                    [class.mj-input-error]="userForm.get('name')?.invalid && userForm.get('name')?.touched"
-                  />
-                  @if (userForm.get('name')?.invalid && userForm.get('name')?.touched) {
-                    <div class="mj-field-error">
-                      @if (userForm.get('name')?.errors?.['required']) {
-                        Username/Email is required
-                      }
-                      @if (userForm.get('name')?.errors?.['email']) {
-                        Please enter a valid email address
-                      }
-                    </div>
-                  }
-                </div>
-
-                <div class="mj-form-row">
-                  <div class="mj-form-field">
-                    <label class="mj-field-label" for="firstName">First Name</label>
-                    <input 
-                      id="firstName"
-                      type="text" 
-                      class="mj-input" 
-                      formControlName="firstName"
-                      placeholder="John"
-                    />
-                  </div>
-                  
-                  <div class="mj-form-field">
-                    <label class="mj-field-label" for="lastName">Last Name</label>
-                    <input 
-                      id="lastName"
-                      type="text" 
-                      class="mj-input" 
-                      formControlName="lastName"
-                      placeholder="Doe"
-                    />
-                  </div>
-                </div>
-
-                <div class="mj-form-field">
-                  <label class="mj-field-label" for="email">Email Address *</label>
-                  <input 
-                    id="email"
-                    type="email" 
-                    class="mj-input" 
-                    formControlName="email"
-                    placeholder="john@company.com"
-                    [class.mj-input-error]="userForm.get('email')?.invalid && userForm.get('email')?.touched"
-                  />
-                  @if (userForm.get('email')?.invalid && userForm.get('email')?.touched) {
-                    <div class="mj-field-error">
-                      @if (userForm.get('email')?.errors?.['required']) {
-                        Email address is required
-                      }
-                      @if (userForm.get('email')?.errors?.['email']) {
-                        Please enter a valid email address
-                      }
-                    </div>
-                  }
-                </div>
-
-                <div class="mj-form-field">
-                  <label class="mj-field-label" for="title">Title</label>
-                  <input 
-                    id="title"
-                    type="text" 
-                    class="mj-input" 
-                    formControlName="title"
-                    placeholder="Software Engineer"
-                  />
-                </div>
-              </div>
-
-              <!-- User Type & Status -->
-              <div class="mj-form-section">
-                <h4 class="mj-section-title">User Settings</h4>
-                
-                <div class="mj-form-row">
-                  <div class="mj-form-field">
-                    <label class="mj-field-label" for="type">User Type</label>
-                    <select id="type" class="mj-select" formControlName="type">
-                      <option value="User">User</option>
-                      <option value="Owner">Owner</option>
-                    </select>
-                  </div>
-                  
-                  <div class="mj-form-field">
-                    <div class="mj-checkbox-field">
-                      <input 
-                        id="isActive"
-                        type="checkbox" 
-                        class="mj-checkbox" 
-                        formControlName="isActive"
-                      />
-                      <label class="mj-checkbox-label" for="isActive">
-                        <span class="mj-checkbox-custom"></span>
-                        Active User
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Role Assignment -->
-              <div class="mj-form-section">
-                <h4 class="mj-section-title">Role Assignment</h4>
-                <p class="mj-section-description">Select the roles to assign to this user</p>
-                
-                <div class="mj-roles-grid">
-                  @for (role of data?.availableRoles; track role.ID) {
-                    <div class="mj-role-item">
-                      <div class="mj-checkbox-field">
-                        <input 
-                          type="checkbox" 
-                          class="mj-checkbox" 
-                          [id]="'role-' + role.ID"
-                          [checked]="selectedRoleIds.has(role.ID)"
-                          (change)="onRoleToggle(role.ID, $event)"
-                        />
-                        <label class="mj-checkbox-label" [for]="'role-' + role.ID">
-                          <span class="mj-checkbox-custom"></span>
-                          <div class="mj-role-info">
-                            <span class="mj-role-name">{{ role.Name }}</span>
-                            @if (role.Description) {
-                              <span class="mj-role-description">{{ role.Description }}</span>
-                            }
-                          </div>
-                        </label>
-                      </div>
-                    </div>
-                  }
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="mj-modal-footer">
-            <button type="button" class="mj-btn mj-btn-secondary" (click)="onCancel()">
-              <i class="fa-solid fa-times"></i>
-              Cancel
-            </button>
-            <button 
-              type="submit" 
-              class="mj-btn mj-btn-primary" 
-              [disabled]="userForm.invalid || isLoading"
-            >
-              @if (isLoading) {
-                <i class="fa-solid fa-spinner fa-spin"></i>
-                Saving...
-              } @else {
-                <i class="fa-solid fa-save"></i>
-                {{ isEditMode ? 'Update User' : 'Create User' }}
-              }
-            </button>
-          </div>
-        </form>
-    </kendo-window>
-  `,
+  encapsulation: ViewEncapsulation.None,
+  templateUrl: './user-dialog.component.html',
   styleUrls: ['./user-dialog.component.scss']
 })
-export class UserDialogComponent implements OnInit, OnDestroy {
+export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
   @Input() data: UserDialogData | null = null;
   @Input() visible = false;
   @Output() result = new EventEmitter<UserDialogResult>();
@@ -247,13 +51,44 @@ export class UserDialogComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    if (this.data?.user && this.isEditMode) {
-      this.loadUserData();
+    // Initial setup
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    // Always clear state when data changes to prevent persistence bugs
+    if (changes['data']) {
+      this.selectedRoleIds.clear();
+      this.existingUserRoles = [];
+      
+      if (this.data?.user && this.isEditMode) {
+        this.loadUserData();
+      } else {
+        this.resetForm();
+      }
+    }
+    
+    // Reset form when dialog becomes visible and not in edit mode
+    if (changes['visible'] && this.visible && !this.isEditMode) {
+      this.resetForm();
     }
   }
 
   ngOnDestroy(): void {
     // Cleanup if needed
+  }
+
+  private resetForm(): void {
+    this.userForm.reset({
+      name: '',
+      firstName: '',
+      lastName: '',
+      email: '',
+      title: '',
+      type: 'User',
+      isActive: true
+    });
+    this.selectedRoleIds.clear();
+    this.error = null;
   }
 
   @HostListener('document:keydown.escape', ['$event'])
@@ -311,11 +146,20 @@ export class UserDialogComponent implements OnInit, OnDestroy {
   }
 
   public onRoleToggle(roleId: string, event: Event): void {
+    event.stopPropagation();
     const checkbox = event.target as HTMLInputElement;
     if (checkbox.checked) {
       this.selectedRoleIds.add(roleId);
     } else {
       this.selectedRoleIds.delete(roleId);
+    }
+  }
+
+  public toggleRole(roleId: string): void {
+    if (this.selectedRoleIds.has(roleId)) {
+      this.selectedRoleIds.delete(roleId);
+    } else {
+      this.selectedRoleIds.add(roleId);
     }
   }
 

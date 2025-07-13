@@ -183,7 +183,13 @@
                                'fa-solid fa-key'"></i>
                     {{ getAccessLevelLabel(ea) }}
                   </span>
-                  <button class="mj-btn mj-btn-ghost mj-btn-sm" (click)="editEntityPermissions(ea); $event.stopPropagation()" title="Edit Permissions">
+                  <button 
+                    type="button"
+                    class="btn-edit" 
+                    (click)="editEntityPermissions(ea); $event.stopPropagation()"
+                    (mousedown)="$event.stopPropagation()"
+                    title="Edit Permissions"
+                  >
                     <i class="fa-solid fa-edit"></i>
                   </button>
                   <button class="expand-btn">
@@ -250,7 +256,12 @@
             <div class="entity-grid-card" [class]="getAccessLevelClass(ea)">
               <div class="grid-card-header">
                 <i class="fa-solid fa-table"></i>
-                <button class="mj-btn mj-btn-ghost mj-btn-sm" (click)="editEntityPermissions(ea)" title="Edit Permissions">
+                <button 
+                  type="button"
+                  class="btn-edit" 
+                  (click)="editEntityPermissions(ea)"
+                  title="Edit Permissions"
+                >
                   <i class="fa-solid fa-edit"></i>
                 </button>
               </div>
@@ -285,42 +296,9 @@
   }
 
   <!-- Permission Edit Dialog -->
-  @if (showPermissionDialog && selectedEntity) {
-    <div class="modal-backdrop" (click)="showPermissionDialog = false">
-      <div class="modal-dialog modal-large" (click)="$event.stopPropagation()">
-        <div class="modal-header">
-          <h3 class="modal-title">
-            <i class="fa-solid fa-key"></i>
-            Edit Permissions - {{ selectedEntity.entity.Name }}
-          </h3>
-          <button class="modal-close" (click)="showPermissionDialog = false">
-            <i class="fa-solid fa-times"></i>
-          </button>
-        </div>
-        <div class="modal-body">
-          <p class="modal-description">
-            Configure role-based permissions for this entity. Changes will affect all users with the selected roles.
-          </p>
-          
-          <!-- Permission editing UI would go here -->
-          <div class="permission-editor">
-            <p class="coming-soon">
-              <i class="fa-solid fa-info-circle"></i>
-              Permission editing interface coming soon...
-            </p>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="mj-btn mj-btn-secondary" (click)="showPermissionDialog = false">
-            <i class="fa-solid fa-times"></i>
-            Cancel
-          </button>
-          <button class="mj-btn mj-btn-primary" (click)="savePermissions()">
-            <i class="fa-solid fa-save"></i>
-            Save Permissions
-          </button>
-        </div>
-      </div>
-    </div>
-  }
+  <mj-permission-dialog
+    [visible]="showPermissionDialog"
+    [data]="permissionDialogData"
+    (result)="onPermissionDialogResult($event)"
+  ></mj-permission-dialog>
 </div>

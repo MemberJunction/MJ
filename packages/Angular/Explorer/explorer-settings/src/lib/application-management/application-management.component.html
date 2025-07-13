@@ -222,6 +222,13 @@
     </div>
   }
 
+  <!-- Application Dialog -->
+  <mj-application-dialog
+    [visible]="showApplicationDialog"
+    [data]="applicationDialogData"
+    (result)="onApplicationDialogResult($event)"
+  ></mj-application-dialog>
+
   <!-- Delete Confirmation Dialog -->
   @if (showDeleteConfirm && selectedApp) {
     <div class="modal-backdrop" (click)="showDeleteConfirm = false">
@@ -247,9 +254,14 @@
             <i class="fa-solid fa-times"></i>
             Cancel
           </button>
-          <button class="mj-btn mj-btn-danger" (click)="deleteApplication()">
-            <i class="fa-solid fa-trash"></i>
-            Delete Application
+          <button class="mj-btn mj-btn-danger" (click)="deleteApplication()" [disabled]="isLoading">
+            @if (isLoading) {
+              <i class="fa-solid fa-spinner fa-spin"></i>
+              Deleting...
+            } @else {
+              <i class="fa-solid fa-trash"></i>
+              Delete Application
+            }
           </button>
         </div>
       </div>

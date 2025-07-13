@@ -1,108 +1,191 @@
 @import '../../shared/styles/variables';
 @import '../../shared/styles/mixins';
 
-// Kendo Window Styling with MJ Classes
+// Modern Dialog Styling - Matching Dashboard Design
 :host ::ng-deep {
   .k-window {
-    @extend .mj-modal;
-    border-radius: 12px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+    border: none;
+    border-radius: $radius-xl;
+    box-shadow: $shadow-5;
+    background: $white;
+    overflow: hidden;
   }
   
   .k-window-titlebar {
-    @extend .mj-modal-header;
-    border-bottom: 1px solid $border-light;
+    background: linear-gradient(135deg, $success-green 0%, darken($success-green, 10%) 100%);
+    border: none;
+    padding: $space-lg $space-xl;
+    min-height: 70px;
     
-    .mj-modal-title {
-      font-size: 1.25rem;
-      font-weight: 600;
-      color: $text-primary;
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
+    .k-window-title {
+      display: none; // Hide default title
+    }
+    
+    .k-window-actions {
+      position: absolute;
+      top: $space-lg;
+      right: $space-lg;
       
-      i {
-        color: $success-green;
+      .k-button {
+        background: rgba($white, 0.1);
+        border: 1px solid rgba($white, 0.2);
+        color: $white;
+        border-radius: $radius-md;
+        width: 32px;
+        height: 32px;
+        min-width: auto;
+        
+        &:hover {
+          background: rgba($white, 0.2);
+          border-color: rgba($white, 0.3);
+        }
       }
     }
   }
   
   .k-window-content {
     padding: 0;
+    background: $white;
+  }
+}
+
+// Custom Title Bar
+.dialog-header {
+  position: relative;
+  color: $white;
+  
+  .dialog-title {
+    font-size: $font-size-xl;
+    font-weight: $font-weight-semibold;
+    display: flex;
+    align-items: center;
+    gap: $space-md;
+    margin: 0;
+    
+    i {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba($white, 0.15);
+      border-radius: $radius-md;
+      font-size: 14px;
+    }
+  }
+  
+  .dialog-subtitle {
+    margin: $space-xs 0 0 0;
+    font-size: $font-size-sm;
+    opacity: 0.85;
+    font-weight: $font-weight-normal;
   }
 }
 
 // Modal Content Areas
-.mj-modal-body {
-  padding: 2rem;
-  background: white;
-  max-height: 350px;
-  overflow-y: auto;
+.dialog-content {
+  padding: 0;
+  background: $white;
+  
+  .content-section {
+    padding: $space-xl;
+    
+    &:not(:last-child) {
+      border-bottom: 1px solid $border-light;
+    }
+  }
 }
 
-.mj-modal-footer {
-  @extend .mj-modal-footer;
-  padding: 1.5rem 2rem;
-  border-top: 1px solid $border-light;
+.dialog-footer {
+  padding: $space-lg $space-xl;
   background: $background-lighter;
+  border-top: 1px solid $border-light;
   display: flex;
   justify-content: flex-end;
-  gap: 1rem;
+  gap: $space-md;
 }
 
-// Error Alert
-.error-alert {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 1rem;
-  background: rgba($error-red, 0.1);
-  border: 1px solid rgba($error-red, 0.2);
-  border-radius: 8px;
-  color: darken($error-red, 10%);
-  margin-bottom: 1.5rem;
-  font-size: 0.95rem;
-
-  i {
-    font-size: 1.125rem;
-    flex-shrink: 0;
-  }
-}
-
-// Form Layout
-.form-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-}
-
+// Form Sections
 .form-section {
-  .section-title {
-    margin: 0 0 1rem 0;
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: $text-primary;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+  .section-header {
+    margin-bottom: $space-lg;
+    
+    .section-title {
+      font-size: $font-size-lg;
+      font-weight: $font-weight-semibold;
+      color: $text-primary;
+      margin: 0 0 $space-xs 0;
+      display: flex;
+      align-items: center;
+      gap: $space-sm;
+      
+      i {
+        color: $success-green;
+        font-size: $font-size-md;
+      }
+    }
+    
+    .section-description {
+      font-size: $font-size-sm;
+      color: $text-secondary;
+      margin: 0;
+    }
   }
 }
 
-// Form Fields
-.form-field {
-  @include form-field;
+.form-grid {
+  display: grid;
+  gap: $space-lg;
+}
 
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: $space-lg;
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+    gap: $space-md;
+  }
+}
+
+// Modern Form Fields
+.form-field {
+  margin-bottom: $space-lg;
+  
+  &:last-child {
+    margin-bottom: 0;
+  }
+  
   .field-label {
     display: block;
-    margin-bottom: 0.5rem;
-    font-size: 0.9rem;
-    font-weight: 500;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
     color: $text-primary;
+    margin-bottom: $space-sm;
+    
+    &.required::after {
+      content: ' *';
+      color: $error-red;
+    }
   }
-
+  
   .field-input,
+  .field-select,
   .field-textarea {
-    @include input-base;
+    width: 100%;
+    padding: 0 $space-md;
+    border: 1px solid $border-medium;
+    border-radius: $radius-md;
+    font-size: $font-size-md;
+    background: $white;
+    transition: $transition-fast;
+    
+    &:focus {
+      outline: none;
+      border-color: $success-green;
+      box-shadow: 0 0 0 3px rgba($success-green, 0.1);
+    }
     
     &.error {
       border-color: $error-red;
@@ -112,126 +195,147 @@
         box-shadow: 0 0 0 3px rgba($error-red, 0.1);
       }
     }
+    
+    &::placeholder {
+      color: $text-muted;
+    }
   }
-
-  .field-textarea {
-    resize: vertical;
-    min-height: 100px;
-    padding: 0.75rem;
-    line-height: 1.5;
-    font-family: inherit;
-  }
-
-  .field-error {
-    margin-top: 0.5rem;
-    font-size: 0.8rem;
-    color: $error-red;
-  }
-
-  .field-hint {
-    margin-top: 0.5rem;
-    font-size: 0.85rem;
-    color: $text-muted;
-    line-height: 1.4;
-  }
-}
-
-// Role Type Information
-.role-type-info {
-  margin-top: 0.5rem;
-}
-
-.system-role-warning,
-.custom-role-info {
-  display: flex;
-  align-items: flex-start;
-  gap: 1rem;
-  padding: 1rem;
-  border-radius: 8px;
-  border: 1px solid;
-
-  i {
-    font-size: 1.5rem;
-    flex-shrink: 0;
-    margin-top: 0.125rem;
-  }
-
-  strong {
-    display: block;
-    margin-bottom: 0.25rem;
-    font-weight: 600;
-  }
-
-  p {
-    margin: 0;
-    font-size: 0.9rem;
-    line-height: 1.4;
-  }
-}
-
-.system-role-warning {
-  background: rgba($warning-amber, 0.1);
-  border-color: rgba($warning-amber, 0.3);
-  color: darken($warning-amber, 30%);
-
-  i {
-    color: $warning-amber;
-  }
-}
-
-.custom-role-info {
-  background: rgba($primary-blue, 0.05);
-  border-color: rgba($primary-blue, 0.2);
-  color: $text-primary;
-
-  i {
-    color: $primary-blue;
-  }
-}
-
-// Permissions Section
-.permissions-preview {
-  margin-top: 0.5rem;
-}
-
-.permissions-notice {
-  display: flex;
-  align-items: flex-start;
-  gap: 1rem;
-  padding: 1rem;
-  background: rgba($primary-blue, 0.05);
-  border: 1px solid rgba($primary-blue, 0.2);
-  border-radius: 8px;
-  color: $text-primary;
-
-  i {
-    color: $primary-blue;
-    font-size: 1.25rem;
-    flex-shrink: 0;
-    margin-top: 0.125rem;
-  }
-
-  strong {
-    display: block;
-    margin-bottom: 0.25rem;
-    font-weight: 600;
-    color: $primary-blue;
-  }
-
-  p {
-    margin: 0;
-    font-size: 0.9rem;
-    line-height: 1.4;
-  }
-}
-
-// Loading State
-.btn-primary:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
   
-  i.fa-spinner {
-    animation: spin 1s linear infinite;
+  .field-input,
+  .field-select {
+    height: $input-height;
+  }
+  
+  .field-textarea {
+    min-height: 100px;
+    padding: $space-md;
+    resize: vertical;
+    line-height: $line-height-normal;
+  }
+  
+  .field-select {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23666' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right $space-md center;
+    background-repeat: no-repeat;
+    background-size: 16px;
+    padding-right: calc(#{$space-md} + 24px);
+    appearance: none;
+    cursor: pointer;
+  }
+  
+  .field-error {
+    margin-top: $space-sm;
+    font-size: $font-size-xs;
+    color: $error-red;
+    display: flex;
+    align-items: center;
+    gap: $space-xs;
+    
+    i {
+      font-size: 10px;
+    }
+  }
+  
+  .field-hint {
+    margin-top: $space-sm;
+    font-size: $font-size-xs;
+    color: $text-secondary;
+    line-height: $line-height-normal;
+  }
+}
+
+// Alert Messages
+.alert {
+  padding: $space-md $space-lg;
+  border-radius: $radius-lg;
+  margin-bottom: $space-lg;
+  display: flex;
+  align-items: flex-start;
+  gap: $space-md;
+  
+  i {
+    font-size: $font-size-lg;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  
+  &.alert-error {
+    background: rgba($error-red, 0.1);
+    border: 1px solid rgba($error-red, 0.2);
+    color: darken($error-red, 15%);
+    
+    i {
+      color: $error-red;
+    }
+  }
+  
+  &.alert-warning {
+    background: rgba($warning-amber, 0.1);
+    border: 1px solid rgba($warning-amber, 0.2);
+    color: darken($warning-amber, 30%);
+    
+    i {
+      color: $warning-amber;
+    }
+  }
+  
+  &.alert-info {
+    background: rgba($info-cyan, 0.1);
+    border: 1px solid rgba($info-cyan, 0.2);
+    color: darken($info-cyan, 30%);
+    
+    i {
+      color: $info-cyan;
+    }
+  }
+}
+
+// Button Styles
+.dialog-footer {
+  .btn {
+    padding: $space-sm $space-lg;
+    border-radius: $radius-md;
+    font-size: $font-size-md;
+    font-weight: $font-weight-medium;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: $transition-fast;
+    display: inline-flex;
+    align-items: center;
+    gap: $space-sm;
+    min-height: $button-height;
+    
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      
+      i.fa-spinner {
+        animation: spin 1s linear infinite;
+      }
+    }
+    
+    &.btn-secondary {
+      background: $white;
+      color: $text-secondary;
+      border-color: $border-medium;
+      
+      &:hover:not(:disabled) {
+        background: $background-light;
+        border-color: $border-dark;
+        color: $text-primary;
+      }
+    }
+    
+    &.btn-primary {
+      background: $success-green;
+      color: $white;
+      
+      &:hover:not(:disabled) {
+        background: darken($success-green, 10%);
+        box-shadow: $shadow-hover;
+        transform: translateY(-1px);
+      }
+    }
   }
 }
 
@@ -242,14 +346,31 @@
 
 // Responsive Design
 @media (max-width: 768px) {
-  .modal-dialog {
-    margin: 0.5rem;
-    max-width: none;
+  :host ::ng-deep {
+    .k-window {
+      margin: $space-md;
+      max-width: none;
+      width: calc(100vw - #{$space-lg}) !important;
+      height: calc(100vh - #{$space-lg}) !important;
+    }
+    
+    .k-window-titlebar {
+      padding: $space-md $space-lg;
+      min-height: 60px;
+    }
   }
-
-  .modal-header,
-  .modal-body,
-  .modal-footer {
-    padding: 1rem 1.5rem;
+  
+  .dialog-content .content-section {
+    padding: $space-lg $space-md;
+  }
+  
+  .dialog-footer {
+    padding: $space-md $space-lg;
+    flex-direction: column-reverse;
+    
+    .btn {
+      width: 100%;
+      justify-content: center;
+    }
   }
 }
