@@ -2110,21 +2110,12 @@ export class BaseAgent {
      */
     private getNextStepReasoning(nextStep: BaseAgentNextStep): string {
         switch (nextStep.step) {
-            case 'Success':
-                return 'Agent completed task successfully';
             case 'Failed':
                 return nextStep.errorMessage || 'Agent execution failed';
             case 'Retry':
                 return nextStep.retryReason || 'Retrying with updated context';
-            case 'Sub-Agent':
-                return `Delegating to sub-agent: ${nextStep.subAgent?.name || 'Unknown'}`;
-            case 'Actions':
-                const actionCount = nextStep.actions?.length || 0;
-                return `Executing ${actionCount} action${actionCount !== 1 ? 's' : ''}`;
-            case 'Chat':
-                return 'Requesting user input';
             default:
-                return 'Unknown decision';
+                return nextStep.reasoning || 'Continuing to next step';
         }
     }
 
@@ -2360,9 +2351,8 @@ export class BaseAgent {
             // and payload via the specialied PayloadAtStart/End fields on the step entity.
             const outputData = {
                 nextStep: {
-                    decision: nextStep.step,
+                    ...nextStep,
                     reasoning: this.getNextStepReasoning(nextStep),
-                    payload: finalPayload
                 },
                 // Include payload change metadata if changes were made
                 ...(currentStepPayloadChangeResult && {
