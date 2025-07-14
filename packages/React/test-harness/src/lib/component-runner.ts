@@ -9,6 +9,15 @@ export interface ComponentExecutionOptions {
   timeout?: number;
   waitForSelector?: string;
   waitForLoadState?: 'load' | 'domcontentloaded' | 'networkidle';
+  childComponents?: ComponentSpec[];
+  registerChildren?: boolean;
+}
+
+export interface ComponentSpec {
+  componentName: string;
+  componentCode?: string;
+  childComponents?: ComponentSpec[];
+  components?: ComponentSpec[]; // Alternative property name for children
 }
 
 export interface ComponentExecutionResult {
@@ -90,6 +99,12 @@ export class ComponentRunner {
   private createHTMLTemplate(options: ComponentExecutionOptions): string {
     const propsJson = JSON.stringify(options.props || {});
     
+    // Generate child component registration code if needed
+    let childComponentCode = '';
+    if (options.registerChildren !== false && options.childComponents && options.childComponents.length > 0) {
+      childComponentCode = this.generateChildComponentRegistration(options.childComponents);
+    }
+    
     return `
 <!DOCTYPE html>
 <html>
@@ -109,7 +124,16 @@ export class ComponentRunner {
   <script type="text/babel">
     ${options.setupCode || ''}
     
+    // Register child components
+    const registeredComponents = {};
+    ${childComponentCode}
+    
     const props = ${propsJson};
+    
+    // Add registered components to props if main component expects them
+    if (Object.keys(registeredComponents).length > 0) {
+      props.components = registeredComponents;
+    }
     
     ${options.componentCode}
     
@@ -119,6 +143,40 @@ export class ComponentRunner {
   </script>
 </body>
 </html>`;
+  }
+
+  private generateChildComponentRegistration(specs: ComponentSpec[]): string {
+    const registrationCode: string[] = [];
+    
+    // Recursively process all components in dependency order
+    const processSpec = (spec: ComponentSpec, depth: number = 0) => {
+      // Process children first (leaf nodes)
+      const children = spec.childComponents || spec.components || [];
+      children.forEach(child => processSpec(child, depth + 1));
+      
+      // Then register this component
+      if (spec.componentCode) {
+        registrationCode.push(`
+    // Register ${spec.componentName}
+    (function() {
+      ${spec.componentCode}
+      // Wrap the component to inject nested components
+      const WrappedComponent = (props) => {
+        return React.createElement(Component, { 
+          ...props, 
+          components: registeredComponents 
+        });
+      };
+      registeredComponents['${spec.componentName}'] = WrappedComponent;
+    })();`);
+      }
+    };
+    
+    // Process all specs
+    specs.forEach(spec => processSpec(spec));
+    
+    // Return only the registration code (the object is declared in the HTML template)
+    return registrationCode.join('\n');
   }
 
   async executeComponentFromFile(

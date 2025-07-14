@@ -63,6 +63,17 @@ export {
   PropBuilderOptions
 } from './runtime';
 
+export {
+  ComponentHierarchyRegistrar,
+  registerComponentHierarchy,
+  validateComponentSpec,
+  flattenComponentHierarchy,
+  countComponentsInHierarchy,
+  HierarchyRegistrationResult,
+  ComponentRegistrationError,
+  HierarchyRegistrationOptions
+} from './runtime';
+
 // Version information
 export const VERSION = '2.69.1';
 

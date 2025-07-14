@@ -32,3 +32,14 @@ export {
   extractPropPaths,
   PropBuilderOptions
 } from './prop-builder';
+
+export {
+  ComponentHierarchyRegistrar,
+  registerComponentHierarchy,
+  validateComponentSpec,
+  flattenComponentHierarchy,
+  countComponentsInHierarchy,
+  HierarchyRegistrationResult,
+  ComponentRegistrationError,
+  HierarchyRegistrationOptions
+} from './component-hierarchy';

@@ -25,7 +25,9 @@ import {
   ComponentCallbacks,
   ComponentError,
   createErrorBoundary,
-  ComponentStyles
+  ComponentStyles,
+  ComponentHierarchyRegistrar,
+  HierarchyRegistrationResult
 } from '@memberjunction/react-runtime';
 import { LogError, CompositeKey } from '@memberjunction/core';
 
@@ -252,78 +254,29 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
    * Register all components in the hierarchy
    */
   private async registerComponentHierarchy() {
-    const errors: string[] = [];
+    // Create the hierarchy registrar with adapter's compiler and registry
+    const registrar = new ComponentHierarchyRegistrar(
+      this.adapter.getCompiler(),
+      this.adapter.getRegistry(),
+      this.adapter.getRuntimeContext()
+    );
     
-    // Register main component
-    try {
-      const result = await this.adapter.compileComponent({
-        componentName: this.component.componentName,
-        componentCode: this.component.componentCode,
-        styles: this.styles
-      });
-      
-      if (result.success && result.component) {
-        const context = this.adapter.getRuntimeContext();
-        const componentFactory = result.component.component(context, this.styles);
-        
-        this.adapter.registerComponent(
-          this.component.componentName,
-          componentFactory.component,
-          'Global',
-          'v1'
-        );
-      } else {
-        errors.push(`Failed to compile ${this.component.componentName}: ${result.error?.message}`);
+    // Register the entire hierarchy
+    const result: HierarchyRegistrationResult = await registrar.registerHierarchy(
+      this.component,
+      {
+        styles: this.styles as any, // Skip components use SkipComponentStyles which is a superset
+        namespace: 'Global',
+        version: 'v1'
       }
-    } catch (error) {
-      errors.push(`Failed to register ${this.component.componentName}: ${error}`);
-    }
+    );
     
-    // Register child components
-    if (this.component.childComponents?.length) {
-      await this.registerChildComponents(this.component.childComponents, errors);
-    }
-    
-    if (errors.length > 0) {
-      throw new Error(`Component registration failed: ${errors.join(', ')}`);
-    }
-  }
-
-  /**
-   * Register child components recursively
-   */
-  private async registerChildComponents(children: any[], errors: string[]) {
-    for (const child of children) {
-      try {
-        if (child.componentCode) {
-          const result = await this.adapter.compileComponent({
-            componentName: child.componentName,
-            componentCode: child.componentCode,
-            styles: this.styles
-          });
-          
-          if (result.success && result.component) {
-            const context = this.adapter.getRuntimeContext();
-            const componentFactory = result.component.component(context, this.styles);
-            
-            this.adapter.registerComponent(
-              child.componentName,
-              componentFactory.component,
-              'Global',
-              'v1'
-            );
-          } else {
-            errors.push(`Failed to compile ${child.componentName}: ${result.error?.message}`);
-          }
-        }
-        
-        // Register nested children
-        if (child.components?.length) {
-          await this.registerChildComponents(child.components, errors);
-        }
-      } catch (error) {
-        errors.push(`Failed to register ${child.componentName}: ${error}`);
-      }
+    // Check for errors
+    if (!result.success) {
+      const errorMessages = result.errors.map(e => 
+        `${e.componentName}: ${e.error}`
+      );
+      throw new Error(`Component registration failed: ${errorMessages.join(', ')}`);
     }
   }
 

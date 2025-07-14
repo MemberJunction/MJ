@@ -1,6 +1,9 @@
 import { BrowserManager, BrowserContextOptions } from './browser-context';
-import { ComponentRunner, ComponentExecutionOptions, ComponentExecutionResult } from './component-runner';
+import { ComponentRunner, ComponentExecutionOptions, ComponentExecutionResult, ComponentSpec } from './component-runner';
 import { AssertionHelpers } from './assertion-helpers';
+import { ComponentHierarchyRegistrar } from '@memberjunction/react-runtime';
+import * as path from 'path';
+import * as fs from 'fs';
 
 export interface TestHarnessOptions extends BrowserContextOptions {
   debug?: boolean;
@@ -65,6 +68,77 @@ export class ReactTestHarness {
     options?: Partial<ComponentExecutionOptions>
   ): Promise<ComponentExecutionResult> {
     return await this.componentRunner.executeComponentFromFile(filePath, props, options);
+  }
+
+  async testComponentHierarchy(
+    rootSpec: ComponentSpec,
+    props?: Record<string, any>,
+    options?: Partial<ComponentExecutionOptions>
+  ): Promise<ComponentExecutionResult> {
+    if (!rootSpec.componentCode) {
+      throw new Error(`Root component ${rootSpec.componentName} must have componentCode`);
+    }
+
+    // Collect all child components from the hierarchy
+    const childComponents = this.collectChildComponents(rootSpec);
+
+    // Execute the root component with all children registered
+    const result = await this.componentRunner.executeComponent({
+      componentCode: rootSpec.componentCode,
+      props,
+      childComponents,
+      registerChildren: true,
+      ...options
+    });
+
+    if (this.options.debug) {
+      console.log('=== Component Hierarchy Test Debug Info ===');
+      console.log('Root Component:', rootSpec.componentName);
+      console.log('Child Components:', childComponents.map(c => c.componentName));
+      console.log('==========================================');
+    }
+
+    return result;
+  }
+
+  async testComponentFromFileWithChildren(
+    filePath: string,
+    childComponents: ComponentSpec[],
+    props?: Record<string, any>,
+    options?: Partial<ComponentExecutionOptions>
+  ): Promise<ComponentExecutionResult> {
+    const absolutePath = path.resolve(filePath);
+    
+    if (!fs.existsSync(absolutePath)) {
+      throw new Error(`Component file not found: ${absolutePath}`);
+    }
+
+    const componentCode = fs.readFileSync(absolutePath, 'utf-8');
+    
+    return await this.componentRunner.executeComponent({
+      componentCode,
+      props,
+      childComponents,
+      registerChildren: true,
+      ...options
+    });
+  }
+
+  private collectChildComponents(spec: ComponentSpec): ComponentSpec[] {
+    const collected: ComponentSpec[] = [];
+    
+    const processSpec = (s: ComponentSpec) => {
+      const children = s.childComponents || s.components || [];
+      children.forEach(child => {
+        if (child.componentCode) {
+          collected.push(child);
+        }
+        processSpec(child);
+      });
+    };
+    
+    processSpec(spec);
+    return collected;
   }
 
   async runTest(
