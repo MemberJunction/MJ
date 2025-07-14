@@ -3,15 +3,29 @@ import { Router, ActivatedRoute } from '@angular/router';
 import { ActionEntity, AIAgentActionEntity, AIAgentEntity, AIAgentLearningCycleEntity, AIAgentNoteEntity, AIAgentPromptEntity, AIAgentRunEntity, AIPromptEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
+import { CompositeKey, Metadata, RunView, TransactionGroupBase } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIAgentFormComponent } from '../../generated/Entities/AIAgent/aiagent.form.component';
 import { DialogService } from '@progress/kendo-angular-dialog';
 import { SharedService } from '@memberjunction/ng-shared';
 import { EntitySelectorDialogComponent, EntitySelectorConfig } from '../shared/entity-selector-dialog.component';
 import { NewAgentDialogService } from './new-agent-dialog.service';
-import { AddActionDialogService } from './add-action-dialog.service';
+import { AIAgentManagementService } from './ai-agent-management.service';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
+import { firstValueFrom } from 'rxjs';
+
+// Interfaces for tracking pending changes
+interface PendingPromptChange {
+  action: 'add' | 'remove';
+  prompt: AIPromptEntity;
+  agentPromptEntity?: AIAgentPromptEntity; // For removal, stores the existing link entity
+}
+
+interface PendingActionChange {
+  action: 'add' | 'remove';
+  actionEntity: ActionEntity;
+  agentActionEntity?: AIAgentActionEntity; // For removal, stores the existing link entity
+}
 
 /**
  * Enhanced AI Agent form component that extends the auto-generated base form
@@ -97,6 +111,16 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /** Track which execution cards are expanded */
     public expandedExecutions: { [key: string]: boolean } = {};
 
+    // === Transaction-based editing support ===
+    /** Pending prompt changes to be applied on save */
+    private pendingPromptChanges: PendingPromptChange[] = [];
+    
+    /** Pending action changes to be applied on save */
+    private pendingActionChanges: PendingActionChange[] = [];
+    
+    /** Flag to indicate if there are unsaved changes */
+    public hasUnsavedChanges = false;
+
     /** Available model selection modes */
     public modelSelectionModes = [
         { text: 'Agent Type', value: 'Agent Type' },
@@ -112,7 +136,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         private dialogService: DialogService,
         private viewContainerRef: ViewContainerRef,
         private newAgentDialogService: NewAgentDialogService,
-        private addActionDialogService: AddActionDialogService,
+        private agentManagementService: AIAgentManagementService,
         private testHarnessService: AITestHarnessDialogService
     ) {
         super(elementRef, sharedService, router, route, cdr);
@@ -130,6 +154,123 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     }
 
     /**
+     * Override the base form's save method to handle transaction-based batch operations
+     */
+    protected async InternalSaveRecord(): Promise<boolean> {
+        if (!this.record) {
+            return false;
+        }
+
+        // First save the main agent record and apply pending changes
+        try {
+            const md = new Metadata();
+            const transactionGroup = await md.CreateTransactionGroup();
+
+            // Set the agent to use the transaction group
+            this.record.TransactionGroup = transactionGroup;
+            
+            // Save the main agent record
+            const agentSaveResult = await this.record.Save();
+            if (!agentSaveResult) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Failed to save agent details. Please check the form data.',
+                    'error',
+                    4000
+                );
+                return false;
+            }
+
+            // Process pending prompt changes
+            for (const change of this.pendingPromptChanges) {
+                if (change.action === 'add') {
+                    const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent Prompts');
+                    agentPrompt.AgentID = this.record.ID;
+                    agentPrompt.PromptID = change.prompt.ID;
+                    agentPrompt.Status = 'Active';
+                    agentPrompt.ExecutionOrder = 1;
+                    agentPrompt.TransactionGroup = transactionGroup;
+                    await agentPrompt.Save();
+                } else if (change.action === 'remove' && change.agentPromptEntity) {
+                    // Load the entity fresh for deletion to ensure it's properly initialized
+                    const agentPromptToDelete = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent Prompts');
+                    await agentPromptToDelete.Load(change.agentPromptEntity.ID);
+                    
+                    agentPromptToDelete.TransactionGroup = transactionGroup;
+                    await agentPromptToDelete.Delete();
+                }
+            }
+
+            // Process pending action changes
+            for (const change of this.pendingActionChanges) {
+                if (change.action === 'add') {
+                    const agentAction = await md.GetEntityObject<AIAgentActionEntity>('AI Agent Actions');
+                    agentAction.AgentID = this.record.ID;
+                    agentAction.ActionID = change.actionEntity.ID;
+                    agentAction.Status = 'Active';
+                    agentAction.TransactionGroup = transactionGroup;
+                    await agentAction.Save();
+                } else if (change.action === 'remove' && change.agentActionEntity) {
+                    // Load the entity fresh for deletion to ensure it's properly initialized
+                    const agentActionToDelete = await md.GetEntityObject<AIAgentActionEntity>('AI Agent Actions');
+                    await agentActionToDelete.Load(change.agentActionEntity.ID);
+                    
+                    agentActionToDelete.TransactionGroup = transactionGroup;
+                    await agentActionToDelete.Delete();
+                }
+            }
+
+            // Execute all operations atomically
+            const success = await transactionGroup.Submit();
+            if (success) {
+                // Clear pending changes
+                this.pendingPromptChanges = [];
+                this.pendingActionChanges = [];
+                this.hasUnsavedChanges = false;
+
+                // Reload related data to reflect changes
+                await this.loadRelatedCounts();
+
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'AI Agent saved successfully',
+                    'success',
+                    3000
+                );
+
+                // Form saved successfully
+                return true;
+            } else {
+                // Transaction failed - analyze errors
+                const errors: string[] = [];
+                
+                // Check agent save errors
+                if (this.record.LatestResult && !this.record.LatestResult.Success) {
+                    errors.push(`Agent: ${this.record.LatestResult.Message || 'Unknown error'}`);
+                }
+
+                // If no specific errors found, show generic message
+                if (errors.length === 0) {
+                    errors.push('Unknown error occurred during save operation');
+                }
+
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Save failed: ${errors.join('; ')}. Please fix the issues and try again.`,
+                    'error',
+                    6000
+                );
+                return false;
+            }
+        } catch (error) {
+            console.error('Error saving AI Agent with transaction:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Save failed: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
+                'error',
+                5000
+            );
+            return false;
+        }
+    }
+
+    /**
      * Loads counts and preview data for all related entities including sub-agents,
      * prompts, actions, learning cycles, notes, and execution history. 
      * This data populates the various expander panels in the enhanced form interface.
@@ -139,7 +280,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         if (!this.record?.ID) return;
         
         try {
-            console.log('🔍 AI Agent Form - Loading related data for Agent ID:', this.record.ID);
             const rv = new RunView();
             
             // Load sub-agents with data
@@ -167,8 +307,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             
             this.agentActions = actionResult.Results || [];
             this.actionCount = actionResult.TotalRowCount || 0;
-            
-            console.log('⚡ Final actions count:', this.actionCount, 'items');
             
             // Load learning cycles with data
             const learningResult = await rv.RunView<AIAgentLearningCycleEntity>({
@@ -346,63 +484,188 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     }
 
     /**
-     * Adds a new prompt to the agent
+     * Adds a new prompt to the agent (deferred until save)
      */
     public async addPrompt() {
-        const config: EntitySelectorConfig = {
-            entityName: 'AI Prompts',
-            title: 'Select AI Prompt',
-            displayField: 'Name',
-            descriptionField: 'Description',
-            statusField: 'Status',
-            filters: `Status='Active'`,
-            orderBy: 'Name ASC',
-            icon: 'fa-solid fa-comment-dots'
-        };
-
-        const dialogRef = this.dialogService.open({
-            content: EntitySelectorDialogComponent
-        });
-
-        const componentInstance = dialogRef.content.instance as EntitySelectorDialogComponent;
-        componentInstance.config = config;
-
-        const result = await dialogRef.result;
-        if (result && (result as any).entity) {
-            // User selected an existing prompt
-            await this.linkPromptToAgent((result as any).entity);
-        } else if (result && (result as any).createNew) {
-            // User wants to create a new prompt
-            await this.createNewPrompt();
+        // Get currently linked and pending prompt IDs for pre-selection
+        const currentPromptIds = this.agentPrompts.map(ap => ap.ID);
+        const pendingAddIds = this.pendingPromptChanges
+            .filter(change => change.action === 'add')
+            .map(change => change.prompt.ID);
+        const allLinkedIds = [...currentPromptIds, ...pendingAddIds];
+        
+        try {
+            this.agentManagementService.openPromptSelectorDialog({
+                title: 'Add Prompts to Agent',
+                multiSelect: true,
+                selectedPromptIds: [],
+                showCreateNew: true,
+                viewContainerRef: this.viewContainerRef
+            }).subscribe({
+                next: async (result) => {
+                    if (result && result.selectedPrompts.length > 0) {
+                        // Filter out already linked or pending prompts
+                        const newPrompts = result.selectedPrompts.filter(prompt => 
+                            !allLinkedIds.includes(prompt.ID)
+                        );
+                        
+                        if (newPrompts.length === 0) {
+                            MJNotificationService.Instance.CreateSimpleNotification(
+                                'All selected prompts are already linked to this agent',
+                                'info',
+                                3000
+                            );
+                            return;
+                        }
+                        
+                        // Add to pending changes (defer until save)
+                        for (const prompt of newPrompts) {
+                            this.pendingPromptChanges.push({
+                                action: 'add',
+                                prompt: prompt
+                            });
+                        }
+                        
+                        this.hasUnsavedChanges = true;
+                        
+                        // Update UI to show the new prompts (cast to extended type for display)
+                        this.agentPrompts.push(...(newPrompts as AIPromptEntityExtended[]));
+                        this.promptCount = this.agentPrompts.length;
+                        
+                        // Trigger change detection to update UI
+                        this.cdr.detectChanges();
+                        
+                        // Show success notification
+                        MJNotificationService.Instance.CreateSimpleNotification(
+                            `${newPrompts.length} prompt${newPrompts.length === 1 ? '' : 's'} will be added when you save the agent`,
+                            'info',
+                            4000
+                        );
+                    } else if (result && result.createNew) {
+                        // User wants to create a new prompt
+                        await this.createNewPrompt();
+                    }
+                },
+                error: (error) => {
+                    console.error('Error opening prompt selector:', error);
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        'Error opening prompt selector. Please try again.',
+                        'error',
+                        3000
+                    );
+                }
+            });
+        } catch (error) {
+            console.error('Error in addPrompt:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Error adding prompts. Please try again.',
+                'error',
+                3000
+            );
         }
     }
 
     /**
-     * Opens the modern Add Action dialog for selecting actions
+     * Opens the Advanced Settings dialog for configuring advanced agent options
      */
-    public async configureActions() {
-        // Get currently linked action IDs for pre-selection
-        const linkedActionIds = this.agentActions.map(aa => aa.ID);
-        
-        this.addActionDialogService.openAddActionDialog({
-            agentId: this.record.ID,
-            agentName: this.record.Name || 'Agent',
-            existingActionIds: linkedActionIds,
+    public async openAdvancedSettings() {
+        this.agentManagementService.openAdvancedSettingsDialog({
+            agent: this.record,
             viewContainerRef: this.viewContainerRef
-        }).subscribe(async (selectedActions) => {
-            if (selectedActions && selectedActions.length > 0) {
-                // Link each selected action to the agent
-                for (const action of selectedActions) {
-                    await this.linkActionToAgent(action);
-                }
-                
-                // Reload the actions list to reflect changes
-                await this.loadRelatedCounts();
-                
+        }).subscribe(async (formData) => {
+            if (formData) {
+                // Apply the advanced settings to the agent
+                this.record.LogoURL = formData.logoURL;
+                this.record.IconClass = formData.iconClass;
+                this.record.DriverClass = formData.driverClass;
+                this.record.ExposeAsAction = formData.exposeAsAction;
+                this.record.TypeID = formData.typeID;
+                this.record.Status = formData.status;
+                this.record.EnableContextCompression = formData.enableContextCompression;
+                this.record.ContextCompressionMessageThreshold = formData.contextCompressionMessageThreshold;
+                this.record.ContextCompressionPromptID = formData.contextCompressionPromptID;
+                this.record.ContextCompressionMessageRetentionCount = formData.contextCompressionMessageRetentionCount;
+                this.record.PayloadDownstreamPaths = formData.payloadDownstreamPaths;
+                this.record.PayloadUpstreamPaths = formData.payloadUpstreamPaths;
+                this.record.PayloadSelfReadPaths = formData.payloadSelfReadPaths;
+                this.record.PayloadSelfWritePaths = formData.payloadSelfWritePaths;
+
+                // Trigger change detection to update the UI
+                this.cdr.detectChanges();
+
                 // Show success notification
                 MJNotificationService.Instance.CreateSimpleNotification(
-                    `Added ${selectedActions.length} action${selectedActions.length === 1 ? '' : 's'} successfully`,
+                    'Advanced settings updated successfully',
                     'success',
+                    3000
+                );
+            }
+        });
+    }
+
+    /**
+     * Opens the modern Add Action dialog for selecting actions (deferred until save)
+     */
+    public async configureActions() {
+        // Get currently linked and pending action IDs for pre-selection
+        const currentActionIds = this.agentActions.map(aa => aa.ID);
+        const pendingAddIds = this.pendingActionChanges
+            .filter(change => change.action === 'add')
+            .map(change => change.actionEntity.ID);
+        const allLinkedIds = [...currentActionIds, ...pendingAddIds];
+        
+        this.agentManagementService.openAddActionDialog({
+            agentId: this.record.ID,
+            agentName: this.record.Name || 'Agent',
+            existingActionIds: allLinkedIds,
+            viewContainerRef: this.viewContainerRef
+        }).subscribe({
+            next: (selectedActions) => {
+                if (selectedActions && selectedActions.length > 0) {
+                    // Filter out already linked or pending actions
+                    const newActions = selectedActions.filter(action => 
+                        !allLinkedIds.includes(action.ID)
+                    );
+                    
+                    if (newActions.length === 0) {
+                        MJNotificationService.Instance.CreateSimpleNotification(
+                            'All selected actions are already linked to this agent',
+                            'info',
+                            3000
+                        );
+                        return;
+                    }
+                    
+                    // Add to pending changes (defer until save)
+                    for (const action of newActions) {
+                        this.pendingActionChanges.push({
+                            action: 'add',
+                            actionEntity: action
+                        });
+                    }
+                    
+                    this.hasUnsavedChanges = true;
+                    
+                    // Update UI to show the new actions
+                    this.agentActions.push(...newActions);
+                    this.actionCount = this.agentActions.length;
+                    
+                    // Trigger change detection to update UI
+                    this.cdr.detectChanges();
+                    
+                    // Show success notification
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        `${newActions.length} action${newActions.length === 1 ? '' : 's'} will be added when you save the agent`,
+                        'info',
+                        4000
+                    );
+                }
+            },
+            error: (error) => {
+                console.error('Error in add action dialog:', error);
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Error opening action selection dialog. Please try again.',
+                    'error',
                     3000
                 );
             }
@@ -626,40 +889,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     }
 
     /**
-     * Links an existing prompt to the agent
-     */
-    private async linkPromptToAgent(prompt: AIPromptEntity) {
-        try {
-            const md = new Metadata();
-            const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('AI Agent Prompts');
-            
-            agentPrompt.AgentID = this.record.ID;
-            agentPrompt.PromptID = prompt.ID;
-            agentPrompt.Status = 'Active'; // Default value
-            agentPrompt.ExecutionOrder = 1; // Default execution order
-            
-            const result = await agentPrompt.Save();
-            if (result) {
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    `Prompt "${prompt.Name}" added successfully`,
-                    'success',
-                    3000
-                );
-                await this.loadRelatedCounts();
-            } else {
-                throw new Error('Failed to save AI Agent Prompt');
-            }
-        } catch (error) {
-            console.error('Error linking prompt to agent:', error);
-            MJNotificationService.Instance.CreateSimpleNotification(
-                'Failed to add prompt',
-                'error',
-                3000
-            );
-        }
-    }
-
-    /**
      * Creates a new prompt and links it to the agent
      */
     private async createNewPrompt() {
@@ -675,55 +904,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     }
 
     /**
-     * Links an existing action to the agent
-     */
-    private async linkActionToAgent(action: ActionEntity) {
-        try {
-            const md = new Metadata();
-            const agentAction = await md.GetEntityObject<AIAgentActionEntity>('AI Agent Actions');
-            
-            agentAction.AgentID = this.record.ID;
-            agentAction.ActionID = action.ID;
-            agentAction.Status = 'Active'; // Default status
-            
-            const result = await agentAction.Save();
-            if (result) {
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    `Action "${action.Name}" added successfully`,
-                    'success',
-                    3000
-                );
-                await this.loadRelatedCounts();
-            } else {
-                throw new Error('Failed to save AI Agent Action');
-            }
-        } catch (error) {
-            console.error('Error linking action to agent:', error);
-            MJNotificationService.Instance.CreateSimpleNotification(
-                'Failed to add action',
-                'error',
-                3000
-            );
-        }
-    }
-
-    /**
-     * Creates a new action and links it to the agent
-     */
-    private async createNewAction() {
-        // TODO: Open new Action form
-        // await this.sharedService.CreateNewRecord('Actions', undefined, [
-        //     { FieldName: 'Status', Value: 'Active' }
-        // ]);
-        MJNotificationService.Instance.CreateSimpleNotification(
-            'Creating new action - functionality to be implemented',
-            'info',
-            3000
-        );
-    }
-
-    /**
-     * Removes a prompt from the agent
+     * Removes a prompt from the agent (deferred until save)
      */
     public async removePrompt(prompt: AIPromptEntityExtended, event: Event) {
         event.stopPropagation(); // Prevent navigation
@@ -739,41 +920,68 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             height: 200
         });
 
-        const result = await confirmDialog.result;
-        if (result && (result as any).text === 'Remove') {
-            try {
-                // Find the AI Agent Prompt link record
-                const rv = new RunView();
-                const linkResult = await rv.RunView<AIAgentPromptEntity>({
-                    EntityName: 'AI Agent Prompts',
-                    ExtraFilter: `AgentID='${this.record.ID}' AND PromptID='${prompt.ID}'` 
-                });
+        try {
+            const result = await firstValueFrom(confirmDialog.result);
+            if (result && (result as any).text === 'Remove') {
+                try {
+                    // Check if this is a pending add (not yet in database)
+                    const pendingAddIndex = this.pendingPromptChanges.findIndex(
+                        change => change.action === 'add' && change.prompt.ID === prompt.ID
+                    );
 
-                if (linkResult.Results && linkResult.Results.length > 0) {
-                    const agentPrompt = linkResult.Results[0];
-                    const deleteResult = await agentPrompt.Delete();
-                    
-                    if (deleteResult) {
-                        MJNotificationService.Instance.CreateSimpleNotification(
-                            `Prompt "${prompt.Name}" removed successfully`,
-                            'success',
-                            3000
-                        );
-                        await this.loadRelatedCounts();
+                    if (pendingAddIndex >= 0) {
+                        // Remove from pending adds
+                        this.pendingPromptChanges.splice(pendingAddIndex, 1);
                     } else {
-                        throw new Error('Failed to delete AI Agent Prompt link');
+                        // Find the existing AI Agent Prompt link record for deferred deletion
+                        const rv = new RunView();
+                        const linkResult = await rv.RunView<AIAgentPromptEntity>({
+                            EntityName: 'MJ: AI Agent Prompts',
+                            ExtraFilter: `AgentID='${this.record.ID}' AND PromptID='${prompt.ID}'` 
+                        });
+
+                        if (linkResult.Results && linkResult.Results.length > 0) {
+                            const agentPrompt = linkResult.Results[0];
+                            
+                            // Add to pending removals
+                            this.pendingPromptChanges.push({
+                                action: 'remove',
+                                prompt: prompt,
+                                agentPromptEntity: agentPrompt
+                            });
+                        } else {
+                            throw new Error('AI Agent Prompt link not found');
+                        }
                     }
-                } else {
-                    throw new Error('AI Agent Prompt link not found');
+
+                    // Remove from UI immediately
+                    const promptIndex = this.agentPrompts.findIndex(p => p.ID === prompt.ID);
+                    if (promptIndex >= 0) {
+                        this.agentPrompts.splice(promptIndex, 1);
+                        this.promptCount = this.agentPrompts.length;
+                    }
+
+                    this.hasUnsavedChanges = true;
+
+                    // Trigger change detection to update UI
+                    this.cdr.detectChanges();
+
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        `Prompt "${prompt.Name}" will be removed when you save the agent`,
+                        'info',
+                        4000
+                    );
+                } catch (error) {
+                    console.error('Error removing prompt from agent:', error);
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        'Failed to remove prompt',
+                        'error',
+                        3000
+                    );
                 }
-            } catch (error) {
-                console.error('Error removing prompt from agent:', error);
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    'Failed to remove prompt',
-                    'error',
-                    3000
-                );
             }
+        } catch (dialogError) {
+            console.error('Error with dialog:', dialogError);
         }
     }
 
@@ -790,6 +998,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
     /**
      * Removes an action from the agent
+     * Removes an action from the agent (deferred until save)
      */
     public async removeAction(action: ActionEntity, event: Event) {
         event.stopPropagation(); // Prevent navigation
@@ -805,41 +1014,68 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             height: 200
         });
 
-        const result = await confirmDialog.result;
-        if (result && (result as any).text === 'Remove') {
-            try {
-                // Find the AI Agent Action link record
-                const rv = new RunView();
-                const linkResult = await rv.RunView<AIAgentActionEntity>({
-                    EntityName: 'AI Agent Actions',
-                    ExtraFilter: `AgentID='${this.record.ID}' AND ActionID='${action.ID}'` 
-                });
-
-                if (linkResult.Results && linkResult.Results.length > 0) {
-                    const agentAction = linkResult.Results[0];
-                    const deleteResult = await agentAction.Delete();
-                    
-                    if (deleteResult) {
-                        MJNotificationService.Instance.CreateSimpleNotification(
-                            `Action "${action.Name}" removed successfully`,
-                            'success',
-                            3000
-                        );
-                        await this.loadRelatedCounts();
-                    } else {
-                        throw new Error('Failed to delete AI Agent Action link');
-                    }
-                } else {
-                    throw new Error('AI Agent Action link not found');
-                }
-            } catch (error) {
-                console.error('Error removing action from agent:', error);
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    'Failed to remove action',
-                    'error',
-                    3000
+        try {
+            const result = await firstValueFrom(confirmDialog.result);
+            if (result && (result as any).text === 'Remove') {
+                try {
+                // Check if this is a pending add (not yet in database)
+                const pendingAddIndex = this.pendingActionChanges.findIndex(
+                    change => change.action === 'add' && change.actionEntity.ID === action.ID
                 );
+
+                if (pendingAddIndex >= 0) {
+                    // Remove from pending adds
+                    this.pendingActionChanges.splice(pendingAddIndex, 1);
+                } else {
+                    // Find the existing AI Agent Action link record for deferred deletion
+                    const rv = new RunView();
+                    const linkResult = await rv.RunView<AIAgentActionEntity>({
+                        EntityName: 'AI Agent Actions',
+                        ExtraFilter: `AgentID='${this.record.ID}' AND ActionID='${action.ID}'` 
+                    });
+
+                    if (linkResult.Results && linkResult.Results.length > 0) {
+                        const agentAction = linkResult.Results[0];
+                        
+                        // Add to pending removals
+                        this.pendingActionChanges.push({
+                            action: 'remove',
+                            actionEntity: action,
+                            agentActionEntity: agentAction
+                        });
+                    } else {
+                        throw new Error('AI Agent Action link not found');
+                    }
+                }
+
+                // Remove from UI immediately
+                const actionIndex = this.agentActions.findIndex(a => a.ID === action.ID);
+                if (actionIndex >= 0) {
+                    this.agentActions.splice(actionIndex, 1);
+                    this.actionCount = this.agentActions.length;
+                }
+
+                this.hasUnsavedChanges = true;
+
+                // Trigger change detection to update UI
+                this.cdr.detectChanges();
+
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Action "${action.Name}" will be removed when you save the agent`,
+                    'info',
+                    4000
+                );
+                } catch (error) {
+                    console.error('Error removing action from agent:', error);
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        'Failed to remove action',
+                        'error',
+                        3000
+                    );
+                }
             }
+        } catch (dialogError) {
+            console.error('Error with action dialog:', dialogError);
         }
     }
     

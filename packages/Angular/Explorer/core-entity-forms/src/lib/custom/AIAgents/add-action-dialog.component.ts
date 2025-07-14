@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { FormControl } from '@angular/forms';
 import { DialogRef } from '@progress/kendo-angular-dialog';
-import { Subject, BehaviorSubject, combineLatest, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
+import { Subject, BehaviorSubject, combineLatest, debounceTime, distinctUntilChanged, takeUntil, startWith } from 'rxjs';
 import { RunView, Metadata } from '@memberjunction/core';
 import { ActionEntity, ActionCategoryEntity } from '@memberjunction/core-entities';
 
@@ -199,7 +199,8 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
       this.allActions$,
       this.searchControl.valueChanges.pipe(
         debounceTime(300),
-        distinctUntilChanged()
+        distinctUntilChanged(),
+        startWith('')  // Emit initial empty value
       ),
       this.selectedCategoryId$
     ]).pipe(
@@ -324,7 +325,7 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
     this.dialogRef.close();
   }
 
-  async addSelectedActions() {
+  addSelectedActions() {
     const selectedIds = this.selectedActions$.value;
     const allActions = this.allActions$.value;
     
@@ -332,16 +333,8 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
     const selectedDisplayItems = allActions
       .filter(action => selectedIds.has(action.ID) && !this.existingActionIds.includes(action.ID));
     
-    // Convert to proper ActionEntity instances using Metadata
-    const md = new Metadata();
-    const selectedActions: ActionEntity[] = [];
-    
-    for (const displayItem of selectedDisplayItems) {
-      const actionEntity = await md.GetEntityObject<ActionEntity>('Actions');
-      // Use LoadFromData to properly populate the entity
-      actionEntity.LoadFromData(displayItem);
-      selectedActions.push(actionEntity);
-    }
+    // Convert ActionDisplayItem to ActionEntity by casting (they have the same structure)
+    const selectedActions: ActionEntity[] = selectedDisplayItems.map(item => item as ActionEntity);
     
     this.result.next(selectedActions);
     this.dialogRef.close();

@@ -59,6 +59,14 @@
                             Run
                         </button>
                     }
+                    @if (EditMode) {
+                        <button kendoButton fillMode="outline" size="small" 
+                                (click)="openAdvancedSettings()" 
+                                title="Configure advanced agent settings">
+                            <i class="fa-solid fa-cog"></i>
+                            Advanced
+                        </button>
+                    }
                     <button kendoButton fillMode="outline" size="small" (click)="refreshRelatedData()" title="Refresh all data">
                         <i class="fa-solid fa-refresh"></i>
                     </button>

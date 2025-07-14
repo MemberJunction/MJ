@@ -26,7 +26,9 @@ import { AIAgentFormComponentExtended, LoadAIAgentFormComponentExtended } from "
 import { NewAgentDialogComponent } from "./AIAgents/new-agent-dialog.component";
 import { NewAgentDialogService } from "./AIAgents/new-agent-dialog.service";
 import { AddActionDialogComponent } from "./AIAgents/add-action-dialog.component";
-import { AddActionDialogService } from "./AIAgents/add-action-dialog.service";
+import { AgentAdvancedSettingsDialogComponent } from "./AIAgents/agent-advanced-settings-dialog.component";
+import { PromptSelectorDialogComponent } from "./AIAgents/prompt-selector-dialog.component";
+import { AIAgentManagementService } from "./AIAgents/ai-agent-management.service";
 import { AITestHarnessModule } from "@memberjunction/ng-ai-test-harness";
 import { ActionGalleryModule } from "@memberjunction/ng-action-gallery";
 import { JoinGridModule } from "@memberjunction/ng-join-grid";
@@ -58,6 +60,8 @@ import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-no
         AIAgentFormComponentExtended,
         NewAgentDialogComponent,
         AddActionDialogComponent,
+        AgentAdvancedSettingsDialogComponent,
+        PromptSelectorDialogComponent,
         EntitySelectorDialogComponent,
         AIPromptRunFormComponentExtended,
         ChatMessageViewerComponent,
@@ -126,7 +130,7 @@ import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-no
     ],
     providers: [
         NewAgentDialogService,
-        AddActionDialogService
+        AIAgentManagementService
     ]
 })
 export class MemberJunctionCoreEntityFormsModule { }
