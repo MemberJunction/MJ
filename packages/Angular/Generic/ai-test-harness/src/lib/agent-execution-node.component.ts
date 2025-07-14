@@ -289,6 +289,15 @@ import { AIAgentRunStepEntityExtended } from '@memberjunction/core-entities';
             border-bottom: 2px dotted #c0c7d0;
             z-index: 1;
         }
+
+        .depth-1::before {
+            content: '';
+            width: 2px;
+            height: 100%;
+            border-left: 2px dotted #c0c7d0;
+            position: absolute;
+            left: -18px;
+        }
         
         /* Visual indicator when details are expanded */
         .tree-node.details-expanded > .node-header {
@@ -557,6 +566,7 @@ export class ExecutionNodeComponent {
     @Input() step!: AIAgentRunStepEntityExtended;
     @Input() depth: number = 0;
     @Input() agentPath: string[] = [];
+    @Input() parentStepId?: string;
     @Input() expanded: boolean = false;
     @Input() detailsExpanded: boolean = false;
     @Input() overrideDisplayStatus?: string; // Allow parent to override the displayed status

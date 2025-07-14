@@ -579,7 +579,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         // Render the agent run steps
         if (this.agentRun.Steps && this.agentRun.Steps.length > 0) {
             console.log('🎨 Rendering', this.agentRun.Steps.length, 'steps');
-            this.renderSteps(this.agentRun.Steps, 0, []);
+            this.renderSteps(this.agentRun.Steps, 0, [], undefined);
             console.log('✅ Finished rendering, container now has', this.executionNodesContainer.length, 'components');
         } else {
             console.warn('⚠️ No steps to render');
@@ -621,11 +621,12 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     /**
      * Render steps recursively with proper hierarchy
      */
-    private renderSteps(steps: AIAgentRunStepEntityExtended[], depth: number, agentPath: string[]): void {
+    private renderSteps(steps: AIAgentRunStepEntityExtended[], depth: number, agentPath: string[], parentStepId?: string): void {
         console.log('🎨 Rendering steps:', {
             count: steps.length,
             depth,
-            agentPath
+            agentPath,
+            parentStepId
         });
         
         // Sort steps by StepNumber to ensure proper ordering
@@ -638,15 +639,15 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             }
             
             // Create component for this step
-            this.createStepComponent(step, depth, agentPath);
+            this.createStepComponent(step, depth, agentPath, parentStepId);
             
             // Mark as processed
             this.processedStepIds.add(step.ID);
             
-            // Handle sub-agent recursion
+            // Handle sub-agent recursion - pass the current step ID as parent
             if (step.StepType === 'Sub-Agent' && step.SubAgentRun?.Steps) {
                 const subAgentPath = [...agentPath, step.SubAgentRun.Agent || 'Sub-Agent'];
-                this.renderSteps(step.SubAgentRun.Steps, depth + 1, subAgentPath);
+                this.renderSteps(step.SubAgentRun.Steps, depth + 1, subAgentPath, step.ID);
             }
         }
     }
@@ -657,7 +658,8 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     private createStepComponent(
         step: AIAgentRunStepEntityExtended, 
         depth: number, 
-        agentPath: string[]
+        agentPath: string[],
+        parentStepId?: string
     ): ComponentRef<ExecutionNodeComponent> {
         // Ensure container exists
         if (!this.executionNodesContainer) {
@@ -672,6 +674,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             stepId: step.ID,
             stepName: step.StepName,
             depth,
+            parentStepId,
             containerLength: this.executionNodesContainer.length,
             hostElement: componentRef.location.nativeElement
         });
@@ -680,7 +683,8 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         instance.step = step;
         instance.depth = depth;
         instance.agentPath = agentPath;
-        instance.expanded = this.expandedStates.get(step.ID) || false;
+        instance.parentStepId = parentStepId;
+        instance.expanded = this.expandedStates.get(step.ID) !== false; // Default to true if not set
         instance.detailsExpanded = this.detailsExpandedStates.get(step.ID) || false;
         
         // Subscribe to outputs
@@ -690,6 +694,12 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         
         // Store reference
         this.nodeComponentMap.set(step.ID, componentRef);
+        
+        // Set initial visibility of children based on parent's expanded state
+        if (parentStepId) {
+            const parentExpanded = this.expandedStates.get(parentStepId) !== false;
+            componentRef.location.nativeElement.style.display = parentExpanded ? 'block' : 'none';
+        }
         
         // Log the component state after setup
         console.log('✅ Component created and configured:', {
@@ -705,18 +715,40 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      * Toggle step expansion
      */
     private toggleStepExpansion(step: AIAgentRunStepEntityExtended): void {
-        const currentState = this.expandedStates.get(step.ID) || false;
-        this.expandedStates.set(step.ID, !currentState);
+        const currentState = this.expandedStates.get(step.ID) !== false; // Default to true
+        const newState = !currentState;
+        this.expandedStates.set(step.ID, newState);
         this.userHasInteracted = true;
         
         // Update the component
         const componentRef = this.nodeComponentMap.get(step.ID);
         if (componentRef) {
-            componentRef.instance.expanded = !currentState;
+            componentRef.instance.expanded = newState;
             componentRef.changeDetectorRef.detectChanges();
         }
         
+        // Show/hide all child components
+        this.toggleChildrenVisibility(step.ID, newState);
+        
         this.cdr.markForCheck();
+    }
+    
+    /**
+     * Toggle visibility of all children of a step
+     */
+    private toggleChildrenVisibility(parentStepId: string, visible: boolean): void {
+        // Find all components that are children of this step
+        this.nodeComponentMap.forEach((componentRef, stepId) => {
+            if (componentRef.instance.parentStepId === parentStepId) {
+                // Toggle visibility
+                componentRef.location.nativeElement.style.display = visible ? 'block' : 'none';
+                
+                // If hiding children, also hide their descendants
+                if (!visible && componentRef.instance.hasChildren()) {
+                    this.toggleChildrenVisibility(stepId, false);
+                }
+            }
+        });
     }
     
     /**
@@ -1264,12 +1296,12 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             const agentPath = this.buildAgentPath(step);
             
             // Create component for new step
-            this.createStepComponent(step, depth, agentPath);
+            this.createStepComponent(step, depth, agentPath, undefined);
             
-            // Handle sub-agent steps recursively
+            // Handle sub-agent steps recursively - pass the current step ID as parent
             if (step.StepType === 'Sub-Agent' && step.SubAgentRun?.Steps) {
                 const subAgentPath = [...agentPath, step.SubAgentRun.Agent || 'Sub-Agent'];
-                this.renderSteps(step.SubAgentRun.Steps, depth + 1, subAgentPath);
+                this.renderSteps(step.SubAgentRun.Steps, depth + 1, subAgentPath, step.ID);
             }
         }
         
