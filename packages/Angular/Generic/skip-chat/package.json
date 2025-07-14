@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-skip-chat",
-  "version": "2.69.1",
+  "version": "2.70.0",
   "description": "MemberJunction: Simple Skip Chat components usable in any Angular project",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -25,18 +25,18 @@
     "@angular/platform-browser": "18.0.2"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "2.69.1",
-    "@memberjunction/core": "2.69.1",
-    "@memberjunction/global": "2.69.1",
-    "@memberjunction/graphql-dataprovider": "2.69.1",
-    "@memberjunction/skip-types": "2.69.1",
-    "@memberjunction/data-context": "2.69.1",
-    "@memberjunction/ng-container-directives": "2.69.1",
-    "@memberjunction/ng-data-context": "2.69.1",
-    "@memberjunction/ng-base-types": "2.69.1",
-    "@memberjunction/ng-notifications": "2.69.1",
-    "@memberjunction/ng-resource-permissions": "2.69.1",
-    "@memberjunction/ng-code-editor": "2.69.1",
+    "@memberjunction/core-entities": "2.70.0",
+    "@memberjunction/core": "2.70.0",
+    "@memberjunction/global": "2.70.0",
+    "@memberjunction/graphql-dataprovider": "2.70.0",
+    "@memberjunction/skip-types": "2.70.0",
+    "@memberjunction/data-context": "2.70.0",
+    "@memberjunction/ng-container-directives": "2.70.0",
+    "@memberjunction/ng-data-context": "2.70.0",
+    "@memberjunction/ng-base-types": "2.70.0",
+    "@memberjunction/ng-notifications": "2.70.0",
+    "@memberjunction/ng-resource-permissions": "2.70.0",
+    "@memberjunction/ng-code-editor": "2.70.0",
     "@progress/kendo-angular-grid": "16.2.0",
     "@progress/kendo-angular-listview": "16.2.0",
     "@progress/kendo-angular-notification": "16.2.0",
@@ -52,7 +52,7 @@
     "@angular/cdk": "18.0.2",
     "ngx-markdown": "18.0.0",
     "marked": "^9.1.6",
-    "@memberjunction/ng-react": "^2.69.1"
+    "@memberjunction/ng-react": "^2.70.0"
   },
   "sideEffects": false
 }

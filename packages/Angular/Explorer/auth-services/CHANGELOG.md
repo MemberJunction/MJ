@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/ng-auth-services
 
+## 2.70.0
+
+### Patch Changes
+
+- @memberjunction/core@2.70.0
+
 ## 2.69.1
 
 ### Patch Changes
