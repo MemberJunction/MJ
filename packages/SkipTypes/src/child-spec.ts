@@ -37,19 +37,12 @@ export interface SkipComponentChildSpec {
      * - How it integrates with the parent component
      * - User interactions within this component
      * - Business rules specific to this component
-     * 
-     * @since 2.1.0 - Enhanced documentation for clarity
      */
     functionalRequirements?: string;
     
     /**
      * Data requirements for this child component. This section defines where a child component
      * will **directly** access data as required using utilities methods like `rv.runView` and `rq.runQuery`
-     * 
-     * This is **not** the same as the dataProps array shown below which is the manifest of the possible
-     * sub-properties that can be passed into the component in its `data` property.
-     * 
-     * @since 2.1.0 - Enhanced documentation for clarity
      */
     dataRequirements?: SkipComponentDataRequirements;
 
@@ -64,7 +57,6 @@ export interface SkipComponentChildSpec {
     /**
      * An optional array of events that the component emits.
      * This allows consumers of the component to understand what events they can listen to.
-     * Each event should have a name and a description of what it does.
      */
     events?: SkipComponentEvent[];
 
@@ -73,11 +65,8 @@ export interface SkipComponentChildSpec {
      * This should be in markdown format and describe the implementation approach.
      * Includes:
      * - How the component is structured
-     * - State management within the component
-     * - Props interface and event handlers
-     * - Performance optimizations specific to this component
-     * 
-     * @since 2.1.0 - Enhanced documentation for clarity
+     * - State within the component
+     * - Properites/events 
      */
     technicalDesign?: string;
     
@@ -87,7 +76,7 @@ export interface SkipComponentChildSpec {
     statePath: string;
     
     /**
-     * An array of sub-components (recursive structure)
+     * An array of sub-components
      */
     components: SkipComponentChildSpec[];
 }

@@ -121,6 +121,13 @@ export class BaseAgent {
     private _agentRun: AIAgentRunEntityExtended | null = null;
 
     /**
+     * Access the current run for the agent
+     */
+    public get AgentRun(): AIAgentRunEntityExtended | null {
+        return this._agentRun;
+    }
+
+    /**
      * Agent hierarchy for display purposes (e.g., ["Marketing Agent", "Copywriter Agent"]).
      * Tracked separately as it's display-only and doesn't need persistence.
      * @private
@@ -1114,7 +1121,7 @@ export class BaseAgent {
                     return {
                         ...nextStep,
                         step: 'Retry',
-                        message: `${validationFeedback}\n\nRetry attempt ${this._validationRetryCount} of ${maxRetries}`,
+                        retryInstructions: `${validationFeedback}\n\nRetry attempt ${this._validationRetryCount} of ${maxRetries}`,
                         terminate: false
                     };
 
@@ -1148,7 +1155,7 @@ export class BaseAgent {
                     return {
                         ...nextStep,
                         step: 'Retry',
-                        message: validationFeedback,
+                        retryInstructions: validationFeedback,
                         terminate: false
                     };
             }
@@ -1692,15 +1699,21 @@ export class BaseAgent {
      * @private
      */
     private formatSubAgentDetails(subAgents: AIAgentEntity[]): string {
-        return JSON.stringify(subAgents.map(sa => ({
-            Name: sa.Name,
-            Description: sa.Description,
-            Type: sa.TypeID ? this.getAgentTypeName(sa.TypeID) : 'Unknown',
-            TemplateParameters: this.getAgentPromptParametersJSON(sa),
-            Status: sa.Status,
-            ExecutionMode: sa.ExecutionMode,
-            ExecutionOrder: sa.ExecutionOrder
-        })), null, 2);
+        return JSON.stringify(subAgents.map(sa => {
+            const result = {
+                Name: sa.Name,
+                Description: sa.Description,
+            };
+            if (sa.ExecutionMode !== 'Sequential') {
+                // no need to include these two attributes for sub-agents
+                // that are sequential and the order is implied via the array order
+                // saves tokens
+                result['ExecutionMode'] = sa.ExecutionMode;
+                result['ExecutionOrder'] = sa.ExecutionOrder;
+            }
+
+            return result;
+        }), null, 2);
     }
 
     /**
@@ -2097,21 +2110,12 @@ export class BaseAgent {
      */
     private getNextStepReasoning(nextStep: BaseAgentNextStep): string {
         switch (nextStep.step) {
-            case 'Success':
-                return 'Agent completed task successfully';
             case 'Failed':
                 return nextStep.errorMessage || 'Agent execution failed';
             case 'Retry':
                 return nextStep.retryReason || 'Retrying with updated context';
-            case 'Sub-Agent':
-                return `Delegating to sub-agent: ${nextStep.subAgent?.name || 'Unknown'}`;
-            case 'Actions':
-                const actionCount = nextStep.actions?.length || 0;
-                return `Executing ${actionCount} action${actionCount !== 1 ? 's' : ''}`;
-            case 'Chat':
-                return 'Requesting user input';
             default:
-                return 'Unknown decision';
+                return nextStep.reasoning || 'Continuing to next step';
         }
     }
 
@@ -2347,9 +2351,8 @@ export class BaseAgent {
             // and payload via the specialied PayloadAtStart/End fields on the step entity.
             const outputData = {
                 nextStep: {
-                    decision: nextStep.step,
+                    ...nextStep,
                     reasoning: this.getNextStepReasoning(nextStep),
-                    payload: finalPayload
                 },
                 // Include payload change metadata if changes were made
                 ...(currentStepPayloadChangeResult && {

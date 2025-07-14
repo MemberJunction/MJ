@@ -519,9 +519,6 @@ replaceAllSpaces('Hello World'); // "HelloWorld"
 ```typescript
 import { CleanJSON, SafeJSONParse, ParseJSONRecursive } from '@memberjunction/global';
 
-// Clean and extract JSON from markdown or mixed content
-const cleaned = CleanJSON('```json\n{"key": "value"}\n```');
-
 // Safe JSON parsing with error handling
 const parsed = SafeJSONParse<MyType>('{"key": "value"}', true);
 
@@ -553,6 +550,95 @@ const deeplyNested = ParseJSONRecursive(complexData, {
   debug: true          // Default: false, logs parsing steps
 });
 ```
+
+#### CleanJSON Function
+
+The `CleanJSON` function intelligently extracts and cleans JSON from various input formats, including double-escaped strings, strings with embedded JSON, and markdown code blocks. It's particularly useful when dealing with AI-generated responses or data from external systems that may have inconsistent JSON formatting.
+
+**Processing Order:**
+1. First attempts to parse the input as valid JSON (preserving embedded content)
+2. If that fails, handles double-escaped characters (`\\n`, `\\"`, etc.)
+3. Only extracts from markdown blocks or inline JSON as a last resort
+
+```typescript
+import { CleanJSON } from '@memberjunction/global';
+
+// Example 1: Already valid JSON - returns formatted
+const valid = CleanJSON('{"name": "test", "value": 123}');
+// Returns:
+// {
+//   "name": "test",
+//   "value": 123
+// }
+
+// Example 2: Double-escaped JSON string
+const escaped = CleanJSON('{\\"name\\": \\"test\\", \\"value\\": 123}');
+// Returns:
+// {
+//   "name": "test",
+//   "value": 123
+// }
+
+// Example 3: JSON with escaped newlines (common from AI responses)
+const withNewlines = CleanJSON('\\n{\\"mode\\": \\"test\\",\\n\\"data\\": [1, 2, 3]}\\n');
+// Returns:
+// {
+//   "mode": "test",
+//   "data": [1, 2, 3]
+// }
+
+// Example 4: Complex JSON with embedded markdown (preserves the markdown)
+const complexJson = CleanJSON(`{
+  "taskComplete": false,
+  "message": "Processing complete",
+  "nextAction": {
+    "type": "design",
+    "payload": {
+      "outputFormat": "\`\`\`json\\n{\\"componentName\\": \\"Example\\"}\\n\`\`\`"
+    }
+  }
+}`);
+// Returns the JSON with the markdown code block preserved in the outputFormat field
+
+// Example 5: Extract JSON from markdown (only when input isn't valid JSON)
+const markdown = CleanJSON('Some text ```json\n{"extracted": true}\n``` more text');
+// Returns:
+// {
+//   "extracted": true
+// }
+
+// Example 6: Extract inline JSON from mixed text
+const mixed = CleanJSON('Response: {"status": "success", "code": 200} - Done');
+// Returns:
+// {
+//   "status": "success",
+//   "code": 200
+// }
+
+// Example 7: Complex real-world example with nested escaped JSON
+const aiResponse = CleanJSON(`{
+  "analysis": "Complete",
+  "data": "{\\"users\\": [{\\"name\\": \\"John\\", \\"active\\": true}]}",
+  "metadata": {
+    "template": "\`\`\`json\\n{\\"format\\": \\"standard\\"}\\n\`\`\`"
+  }
+}`);
+// Returns properly formatted JSON with all nested structures intact
+```
+
+**Key Features:**
+- **Preserves embedded content**: When the input is valid JSON, markdown blocks and escaped strings within values are preserved
+- **Smart unescaping**: Handles `\\n` → `\n`, `\\"` → `"`, `\\\\` → `\` and other common escape sequences
+- **Markdown extraction**: Extracts JSON from ` ```json ` code blocks when needed
+- **Inline extraction**: Finds JSON objects/arrays within surrounding text
+- **Null safety**: Returns `null` for invalid inputs instead of throwing errors
+
+**Common Use Cases:**
+- Processing AI model responses that may contain escaped JSON
+- Cleaning data from external APIs with inconsistent formatting
+- Extracting JSON from log files or debug output
+- Handling JSON strings stored in databases that may be double-escaped
+- Processing user input that may contain JSON in various formats
 
 ### HTML Conversion
 

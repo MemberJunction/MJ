@@ -1,0 +1,122 @@
+<div class="chat-message-viewer">
+    <!-- Filter Controls -->
+    <div class="filter-controls">
+        <label class="filter-checkbox">
+            <input type="checkbox" 
+                   [(ngModel)]="showSystem" 
+                   (ngModelChange)="onFilterChange()"
+                   kendoCheckBox />
+            <span class="filter-label">
+                <i class="fa-solid fa-cog" [style.color]="getRoleColor('system')"></i>
+                System
+            </span>
+        </label>
+        
+        <label class="filter-checkbox">
+            <input type="checkbox" 
+                   [(ngModel)]="showUser" 
+                   (ngModelChange)="onFilterChange()"
+                   kendoCheckBox />
+            <span class="filter-label">
+                <i class="fa-solid fa-user" [style.color]="getRoleColor('user')"></i>
+                User
+            </span>
+        </label>
+        
+        <label class="filter-checkbox">
+            <input type="checkbox" 
+                   [(ngModel)]="showAssistant" 
+                   (ngModelChange)="onFilterChange()"
+                   kendoCheckBox />
+            <span class="filter-label">
+                <i class="fa-solid fa-robot" [style.color]="getRoleColor('assistant')"></i>
+                Assistant
+            </span>
+        </label>
+    </div>
+    
+    <!-- Messages List -->
+    <div class="messages-container">
+        @if (displayMessages.length === 0) {
+            <div class="empty-state">
+                <i class="fa-solid fa-comments"></i>
+                <p>No messages to display</p>
+            </div>
+        } @else {
+            @for (item of displayMessages; track $index; let i = $index) {
+                @if (item.visible) {
+                    <div class="message-card" [attr.data-role]="item.message.role">
+                        <!-- Message Header -->
+                        <div class="message-header" (click)="toggleMessage(i)">
+                            <div class="message-role">
+                                <span class="sequence-number">#{{ item.sequenceNumber }}</span>
+                                <i [class]="'fa-solid ' + getRoleIcon(item.message.role)" 
+                                   [style.color]="getRoleColor(item.message.role)"></i>
+                                <span class="role-label">{{ getRoleLabel(item.message.role) }}</span>
+                                <span class="content-stats">
+                                    <span class="stat-item">{{ getContentStats(item.message.content).chars.toLocaleString() }} chars</span>
+                                    <span class="stat-divider">•</span>
+                                    <span class="stat-item">~{{ getContentStats(item.message.content).approxTokens.toLocaleString() }} tokens</span>
+                                </span>
+                            </div>
+                            <div class="message-actions">
+                                <button class="action-button" type="button" 
+                                        (click)="copyMessageContent(item.message.content); $event.stopPropagation()"
+                                        title="Copy message content">
+                                    <i class="fa-solid fa-copy"></i>
+                                </button>
+                                <button class="toggle-button" type="button">
+                                    <i [class]="item.expanded ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Message Content -->
+                        @if (item.expanded) {
+                            <div class="message-content">
+                                <!-- Main content -->
+                                @if (isStringContent(item.message.content)) {
+                                    <div class="text-content">
+                                        <mj-code-editor 
+                                            [value]="getContentString(item.message.content)"
+                                            [readonly]="true"
+                                            [language]="getContentLanguage(item.message.content)"
+                                            style="max-height: 600px; overflow-y: auto;">
+                                        </mj-code-editor>
+                                    </div>
+                                } @else {
+                                    <!-- Non-string content with multiple parts -->
+                                    <div class="multi-part-content">
+                                        @for (part of getContentParts(item.message.content, i); track part.id) {
+                                            <div class="content-part" [class.collapsed]="!part.expanded">
+                                                <div class="content-part-label" (click)="toggleContentPart(part.id)">
+                                                    <div class="content-part-label-content">
+                                                        <i class="fa-solid fa-tag"></i>
+                                                        {{ part.key }}
+                                                    </div>
+                                                    <button class="content-part-toggle" type="button">
+                                                        <i [class]="part.expanded ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'"></i>
+                                                    </button>
+                                                </div>
+                                                @if (part.expanded) {
+                                                    <div class="content-part-editor">
+                                                        <mj-code-editor 
+                                                            [value]="part.value"
+                                                            [readonly]="true"
+                                                            [language]="part.language"
+                                                            style="max-height: 400px; overflow-y: auto;">
+                                                        </mj-code-editor>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        }
+    </div>
+</div>

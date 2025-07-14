@@ -13,19 +13,17 @@ export class SkipColumnInfo {
  */
 export class SkipEntityFieldValueInfo {
     /**
-     * Actual value for the possible value for the field
+     * Possible value
      */
     value: string;
     /**
-     * Optional, the display value for the field value
+     * Value to show user, if different from value
      */
     displayValue?: string;
 }
 
 /**
- * Comprehensive metadata about individual entity fields, including data types, constraints,
- * relationships, and UI display preferences. This information helps Skip understand how
- * to work with each field in queries and analysis.
+ * Describes a single field in an entity. 
  */
 export class SkipEntityFieldInfo {
     entityID: string;
@@ -61,8 +59,7 @@ export class SkipEntityFieldInfo {
 
 /**
  * Defines relationships between entities, including foreign key relationships and
- * many-to-many relationships through junction tables. This information allows Skip
- * to understand how entities are connected and generate appropriate JOIN queries.
+ * many-to-many relationships through junction tables.  
  */
 export class SkipEntityRelationshipInfo {
     entityID: string;
@@ -80,9 +77,7 @@ export class SkipEntityRelationshipInfo {
 }
 
 /**
- * Complete metadata about a database entity including its fields, relationships,
- * and optionally sample data. This is the primary structure used to communicate
- * entity schema information to Skip for analysis and query generation.
+ * Info about a single entity including fields and relationships
  */
 export class SkipEntityInfo {
     id: string;
