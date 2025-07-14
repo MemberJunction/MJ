@@ -1160,3 +1160,23 @@
 .format-selector {
     width: 100%;
 }
+
+/* Hidden state for tabs - ensures they are truly hidden */
+[hidden] {
+    display: none !important;
+}
+
+/* Special handling for execution monitor to preserve content */
+.execution-monitor-tab {
+    /* Keep content in DOM even when hidden */
+    display: block !important;
+    height: 100%;
+    position: relative;
+}
+
+.execution-monitor-tab[style*="display: none"] {
+    position: absolute;
+    left: -9999px;
+    visibility: hidden;
+    pointer-events: none;
+}

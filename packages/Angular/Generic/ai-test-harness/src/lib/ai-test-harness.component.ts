@@ -185,7 +185,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     private _isVisible: boolean = false;
     
     /**
-     * Controls the visibility of the test harness. When set to true, automatically resets the harness state.
+     * Controls the visibility of the test harness. When set to true, automatically resets the harness state
+     * only if there's no existing conversation.
      * This property is typically controlled by parent components or dialog wrappers.
      */
     @Input() 
@@ -196,7 +197,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         const wasVisible = this._isVisible;
         this._isVisible = value;
         if (value && !wasVisible) {
-            this.resetHarness();
+            // Only reset if we don't have an active conversation
+            if (this.conversationMessages.length === 0 && !this.currentAgentRun) {
+                this.resetHarness();
+            }
         }
     }
 
@@ -1046,8 +1050,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         if (tab === 'executionMonitor') {
             console.log('📊 Switching to execution monitor tab');
             
-            // Always ensure we have the latest execution data when switching to monitor
-            if (this.conversationMessages.length > 0) {
+            // Only load data if we don't already have it
+            if (!this.currentAgentRun && this.conversationMessages.length > 0) {
                 const lastAssistantMessage = this.conversationMessages
                     .filter(m => m.role === 'assistant' && m.agentRunId)
                     .pop();
@@ -1059,7 +1063,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 });
                 
                 if (lastAssistantMessage && lastAssistantMessage.agentRunId) {
-                    // Always update agent run to ensure it's fresh
+                    // Load the agent run for the first time
                     const messageRunId = lastAssistantMessage.agentRunId;
                     
                     // Load the agent run
@@ -1071,17 +1075,16 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                         mode: this.executionMonitorMode,
                         runId: this.lastProcessedRunId
                     });
-                    
-                    // Trigger change detection to ensure the execution monitor updates
-                    setTimeout(() => {
-                        this.cdr.detectChanges();
-                    }, 50);
-                } else {
-                    console.log('❌ No agent run ID found in messages');
                 }
-            } else {
-                console.log('❌ No conversation messages found');
+            } else if (this.currentAgentRun) {
+                console.log('✅ Agent run data already loaded, preserving it');
             }
+            
+            // Always trigger change detection when switching to execution monitor
+            // This ensures the component re-renders properly if it was hidden
+            setTimeout(() => {
+                this.cdr.detectChanges();
+            }, 50);
         } else {
             console.log('📄 Switching away from execution monitor, preserving data:', {
                 currentAgentRunExists: !!this.currentAgentRun

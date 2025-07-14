@@ -52,7 +52,6 @@ export interface ExecutionStats {
  */
 @Component({
     selector: 'mj-agent-execution-monitor',
-    changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
         <div class="execution-monitor" [class.live-mode]="mode === 'live'">
             <!-- Header -->
