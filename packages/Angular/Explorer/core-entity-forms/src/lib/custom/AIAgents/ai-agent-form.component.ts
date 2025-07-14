@@ -27,6 +27,12 @@ interface PendingActionChange {
   agentActionEntity?: AIAgentActionEntity; // For removal, stores the existing link entity
 }
 
+interface PendingSubAgentChange {
+  action: 'add' | 'remove';
+  agent: AIAgentEntity;
+  originalParentId?: string | null; // For removal, stores the original parent ID to restore
+}
+
 /**
  * Enhanced AI Agent form component that extends the auto-generated base form
  * with comprehensive agent management capabilities including test harness integration,
@@ -117,6 +123,9 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     
     /** Pending action changes to be applied on save */
     private pendingActionChanges: PendingActionChange[] = [];
+    
+    /** Pending sub-agent changes to be applied on save */
+    private pendingSubAgentChanges: PendingSubAgentChange[] = [];
     
     /** Flag to indicate if there are unsaved changes */
     public hasUnsavedChanges = false;
@@ -213,12 +222,34 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 }
             }
 
+            // Process pending sub-agent changes
+            for (const change of this.pendingSubAgentChanges) {
+                if (change.action === 'add') {
+                    // Load the agent to update its ParentID
+                    const subAgentToUpdate = await md.GetEntityObject<AIAgentEntity>('AI Agents');
+                    await subAgentToUpdate.Load(change.agent.ID);
+                    subAgentToUpdate.ParentID = this.record.ID;
+                    // Database constraint requires ExposeAsAction = false for sub-agents
+                    subAgentToUpdate.ExposeAsAction = false;
+                    subAgentToUpdate.TransactionGroup = transactionGroup;
+                    await subAgentToUpdate.Save();
+                } else if (change.action === 'remove') {
+                    // Load the agent to remove its ParentID
+                    const subAgentToUpdate = await md.GetEntityObject<AIAgentEntity>('AI Agents');
+                    await subAgentToUpdate.Load(change.agent.ID);
+                    subAgentToUpdate.ParentID = change.originalParentId || null;
+                    subAgentToUpdate.TransactionGroup = transactionGroup;
+                    await subAgentToUpdate.Save();
+                }
+            }
+
             // Execute all operations atomically
             const success = await transactionGroup.Submit();
             if (success) {
                 // Clear pending changes
                 this.pendingPromptChanges = [];
                 this.pendingActionChanges = [];
+                this.pendingSubAgentChanges = [];
                 this.hasUnsavedChanges = false;
 
                 // Reload related data to reflect changes
@@ -990,8 +1021,158 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         }
     }
 
+    /**    
+     * Opens the sub-agent selector dialog for adding sub-agents (deferred until save)
+     */
+    public async addSubAgents() {
+        try {
+            // Get list of already pending sub-agent IDs to filter duplicates
+            const pendingSubAgentIds = this.pendingSubAgentChanges
+                .filter(change => change.action === 'add')
+                .map(change => change.agent.ID);
+            const existingSubAgentIds = this.subAgents.map(agent => agent.ID);
+            const allLinkedIds = [...pendingSubAgentIds, ...existingSubAgentIds];
+
+            this.agentManagementService.openSubAgentSelectorDialog({
+                title: 'Add Sub-Agents',
+                multiSelect: true,
+                parentAgentId: this.record.ID,
+                showCreateNew: true,
+                viewContainerRef: this.viewContainerRef
+            }).subscribe({
+                next: async (result) => {
+                    if (result && result.selectedAgents && result.selectedAgents.length > 0) {
+                        // Filter out already linked or pending agents
+                        const newAgents = result.selectedAgents.filter(agent => 
+                            !allLinkedIds.includes(agent.ID)
+                        );
+                        
+                        if (newAgents.length === 0) {
+                            MJNotificationService.Instance.CreateSimpleNotification(
+                                'All selected agents are already linked to this agent',
+                                'info',
+                                3000
+                            );
+                            return;
+                        }
+                        
+                        // Add to pending changes (defer until save)
+                        for (const agent of newAgents) {
+                            this.pendingSubAgentChanges.push({
+                                action: 'add',
+                                agent: agent
+                            });
+                        }
+                        
+                        this.hasUnsavedChanges = true;
+                        
+                        // Update UI to show the new sub-agents
+                        this.subAgents.push(...newAgents);
+                        this.subAgentCount = this.subAgents.length;
+                        
+                        // Trigger change detection to update UI
+                        this.cdr.detectChanges();
+                        
+                        // Show success notification
+                        MJNotificationService.Instance.CreateSimpleNotification(
+                            `${newAgents.length} agent${newAgents.length === 1 ? '' : 's'} will be converted to sub-agent${newAgents.length === 1 ? '' : 's'} when you save`,
+                            'info',
+                            4000
+                        );
+                    } else if (result && result.createNew) {
+                        // User wants to create a new sub-agent
+                        await this.createSubAgent();
+                    }
+                },
+                error: (error) => {
+                    console.error('Error opening sub-agent selector:', error);
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        'Error opening sub-agent selector. Please try again.',
+                        'error',
+                        3000
+                    );
+                }
+            });
+        } catch (error) {
+            console.error('Error in addSubAgents:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Error adding sub-agents. Please try again.',
+                'error',
+                3000
+            );
+        }
+    }
+
     /**
-     * Removes an action from the agent
+     * Removes a sub-agent from this agent (deferred until save)
+     */
+    public async removeSubAgent(subAgent: AIAgentEntity, event: Event) {
+        event.stopPropagation(); // Prevent navigation
+        
+        const confirmDialog = this.dialogService.open({
+            title: 'Remove Sub-Agent',
+            content: `Are you sure you want to remove "${subAgent.Name}" as a sub-agent? This will make it an independent root agent.`,
+            actions: [
+                { text: 'Cancel' },
+                { text: 'Remove', themeColor: 'error' }
+            ],
+            width: 450,
+            height: 200
+        });
+
+        try {
+            const result = await firstValueFrom(confirmDialog.result);
+            if (result && (result as any).text === 'Remove') {
+                try {
+                    // Check if this is a pending add (not yet in database)
+                    const pendingAddIndex = this.pendingSubAgentChanges.findIndex(
+                        change => change.action === 'add' && change.agent.ID === subAgent.ID
+                    );
+
+                    if (pendingAddIndex >= 0) {
+                        // Remove from pending adds
+                        this.pendingSubAgentChanges.splice(pendingAddIndex, 1);
+                    } else {
+                        // Add to pending removals (will restore to root agent)
+                        this.pendingSubAgentChanges.push({
+                            action: 'remove',
+                            agent: subAgent,
+                            originalParentId: null // Will become a root agent
+                        });
+                    }
+
+                    // Remove from UI immediately
+                    const subAgentIndex = this.subAgents.findIndex(sa => sa.ID === subAgent.ID);
+                    if (subAgentIndex >= 0) {
+                        this.subAgents.splice(subAgentIndex, 1);
+                        this.subAgentCount = this.subAgents.length;
+                    }
+
+                    this.hasUnsavedChanges = true;
+
+                    // Trigger change detection to update UI
+                    this.cdr.detectChanges();
+
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        `"${subAgent.Name}" will be removed as a sub-agent when you save`,
+                        'info',
+                        4000
+                    );
+                } catch (error) {
+                    console.error('Error removing sub-agent:', error);
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        'Failed to remove sub-agent',
+                        'error',
+                        3000
+                    );
+                }
+            }
+        } catch (dialogError) {
+            console.error('Error with dialog:', dialogError);
+        }
+    }
+
+    /**
      * Removes an action from the agent (deferred until save)
      */
     public async removeAction(action: ActionEntity, event: Event) {

@@ -30,6 +30,7 @@ import { AgentAdvancedSettingsDialogComponent } from "./AIAgents/agent-advanced-
 import { PromptSelectorDialogComponent } from "./AIAgents/prompt-selector-dialog.component";
 import { AgentPromptAdvancedSettingsDialogComponent } from "./AIAgents/agent-prompt-advanced-settings-dialog.component";
 import { SubAgentAdvancedSettingsDialogComponent } from "./AIAgents/sub-agent-advanced-settings-dialog.component";
+import { SubAgentSelectorDialogComponent } from "./AIAgents/sub-agent-selector-dialog.component";
 import { AIAgentManagementService } from "./AIAgents/ai-agent-management.service";
 import { AITestHarnessModule } from "@memberjunction/ng-ai-test-harness";
 import { ActionGalleryModule } from "@memberjunction/ng-action-gallery";
@@ -66,6 +67,7 @@ import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-no
         PromptSelectorDialogComponent,
         AgentPromptAdvancedSettingsDialogComponent,
         SubAgentAdvancedSettingsDialogComponent,
+        SubAgentSelectorDialogComponent,
         EntitySelectorDialogComponent,
         AIPromptRunFormComponentExtended,
         ChatMessageViewerComponent,

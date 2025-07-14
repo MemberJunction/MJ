@@ -170,8 +170,8 @@
                                     </div>
                                     <div class="header-actions">
                                         @if (EditMode) {
-                                            <button kendoButton themeColor="primary" size="small" (click)="createSubAgent()">
-                                                <i class="fa-solid fa-plus"></i> Add Sub-Agent
+                                            <button kendoButton themeColor="primary" size="small" (click)="addSubAgents()">
+                                                <i class="fa-solid fa-plus"></i> Add Sub-Agents
                                             </button>
                                         }
                                     </div>
@@ -224,6 +224,14 @@
                                                             (click)="openSubAgentAdvancedSettings(subAgent, $event)"
                                                             title="Advanced settings">
                                                             <i class="fa-solid fa-cog"></i>
+                                                        </button>
+                                                        <button kendoButton
+                                                            fillMode="flat" 
+                                                            themeColor="error" 
+                                                            size="small"
+                                                            (click)="removeSubAgent(subAgent, $event)"
+                                                            title="Remove sub-agent">
+                                                            <i class="fa-solid fa-trash"></i>
                                                         </button>
                                                     }
                                                     <i class="fa-solid fa-external-link"></i>

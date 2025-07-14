@@ -7,6 +7,7 @@ import { AgentAdvancedSettingsDialogComponent, AdvancedSettingsFormData } from '
 import { PromptSelectorDialogComponent, PromptSelectorConfig, PromptSelectorResult } from './prompt-selector-dialog.component';
 import { AgentPromptAdvancedSettingsDialogComponent, AgentPromptAdvancedSettingsFormData } from './agent-prompt-advanced-settings-dialog.component';
 import { SubAgentAdvancedSettingsDialogComponent, SubAgentAdvancedSettingsFormData } from './sub-agent-advanced-settings-dialog.component';
+import { SubAgentSelectorDialogComponent, SubAgentSelectorConfig, SubAgentSelectorResult } from './sub-agent-selector-dialog.component';
 
 /**
  * Consolidated service for managing AI Agent operations including:
@@ -158,6 +159,48 @@ export class AIAgentManagementService {
         observer.complete();
       });
     });
+  }
+
+  // === Sub-Agent Management ===
+
+  /**
+   * Opens the sub-agent selector dialog for selecting agents to convert to sub-agents
+   * 
+   * @param config Configuration for the sub-agent selection dialog
+   * @returns Observable that emits the selected agents when dialog is closed
+   */
+  openSubAgentSelectorDialog(config: {
+    title?: string;
+    multiSelect?: boolean;
+    selectedAgentIds?: string[];
+    showCreateNew?: boolean;
+    parentAgentId: string;
+    viewContainerRef?: ViewContainerRef;
+  }): Observable<SubAgentSelectorResult | null> {
+    const selectorConfig: SubAgentSelectorConfig = {
+      title: config.title || 'Add Sub-Agents',
+      multiSelect: config.multiSelect ?? true,
+      selectedAgentIds: config.selectedAgentIds || [],
+      showCreateNew: config.showCreateNew ?? true,
+      parentAgentId: config.parentAgentId
+    };
+
+    const dialogRef: DialogRef = this.dialogService.open({
+      title: selectorConfig.title,
+      content: SubAgentSelectorDialogComponent,
+      actions: [], // Component handles actions
+      width: 1000,
+      height: 700,
+      minWidth: 800,
+      minHeight: 600,
+      preventAction: () => false
+    });
+
+    // Pass configuration to the dialog component
+    const componentInstance = dialogRef.content.instance as SubAgentSelectorDialogComponent;
+    componentInstance.config = selectorConfig;
+
+    return componentInstance.result.asObservable();
   }
 
   // === Advanced Settings for Related Entities ===
