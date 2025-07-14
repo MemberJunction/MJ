@@ -2,6 +2,20 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "type": "extensionHost",
+      "request": "launch",
+      "name": "Launch MJ MetadataSync Extension",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/VSCodeExtensions/MetadataSync",
+        "${workspaceFolder}"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/VSCodeExtensions/MetadataSync/dist/**/*.js"
+      ],
+      "preLaunchTask": "Build MetadataSync Extension"
+    },
+    {
       "type": "node",
       "request": "launch",
       "name": "MCPServer",

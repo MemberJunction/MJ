@@ -18,7 +18,8 @@
     "packages/Angular/Explorer/*",
     "packages/Angular/Generic/*",
     "packages/AngularElements/*",
-    "packages/React/*"
+    "packages/React/*",
+    "packages/VSCodeExtensions/*"
   ],
   "scripts": {
     "build": "npm run build:stream",
