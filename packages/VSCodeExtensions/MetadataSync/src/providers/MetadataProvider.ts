@@ -91,6 +91,10 @@ export class MetadataProvider {
         }
     }
 
+    getMetadata(): Metadata | undefined {
+        return this.metadata;
+    }
+
     getPossibleValues(entity: EntityInfo, field: EntityFieldInfo): string[] | undefined {
         // Check for value list
         if (field.ValueListType === 'List' && field.EntityFieldValues && field.EntityFieldValues.length > 0) {
