@@ -121,12 +121,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /** Flag to indicate if there are unsaved changes */
     public hasUnsavedChanges = false;
 
-    /** Available model selection modes */
-    public modelSelectionModes = [
-        { text: 'Agent Type', value: 'Agent Type' },
-        { text: 'Agent', value: 'Agent' }
-    ];
-
     constructor(
         elementRef: ElementRef,
         protected override sharedService: SharedService,
@@ -1076,6 +1070,200 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             }
         } catch (dialogError) {
             console.error('Error with action dialog:', dialogError);
+        }
+    }
+
+    /**
+     * Opens the advanced settings dialog for a prompt
+     */
+    public async openPromptAdvancedSettings(prompt: AIPromptEntityExtended, event: Event) {
+        event.stopPropagation(); // Prevent navigation
+        
+        try {
+            // Find the corresponding AIAgentPromptEntity for this prompt
+            const rv = new RunView();
+            const agentPromptResult = await rv.RunView<AIAgentPromptEntity>({
+                EntityName: 'MJ: AI Agent Prompts',
+                ExtraFilter: `AgentID='${this.record.ID}' AND PromptID='${prompt.ID}'`,
+                ResultType: 'entity_object'
+            });
+
+            if (!agentPromptResult.Success || !agentPromptResult.Results?.length) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Unable to find prompt configuration for advanced settings',
+                    'error',
+                    3000
+                );
+                return;
+            }
+
+            const agentPrompt = agentPromptResult.Results[0];
+
+            // Get all agent prompts for validation
+            const allAgentPromptsResult = await rv.RunView<AIAgentPromptEntity>({
+                EntityName: 'MJ: AI Agent Prompts',
+                ExtraFilter: `AgentID='${this.record.ID}'`,
+                ResultType: 'entity_object'
+            });
+
+            const allAgentPrompts = allAgentPromptsResult.Success ? (allAgentPromptsResult.Results || []) : [];
+
+            this.agentManagementService.openAgentPromptAdvancedSettingsDialog({
+                agentPrompt: agentPrompt,
+                allAgentPrompts: allAgentPrompts,
+                viewContainerRef: this.viewContainerRef
+            }).subscribe({
+                next: async (formData) => {
+                    if (formData) {
+                        try {
+                            // Update the agent prompt entity with new values
+                            agentPrompt.ExecutionOrder = formData.executionOrder;
+                            agentPrompt.Purpose = formData.purpose;
+                            agentPrompt.ConfigurationID = formData.configurationID;
+                            agentPrompt.ContextBehavior = formData.contextBehavior;
+                            agentPrompt.ContextMessageCount = formData.contextMessageCount;
+                            agentPrompt.Status = formData.status;
+
+                            // Save immediately to database
+                            const saveResult = await agentPrompt.Save();
+                            if (saveResult) {
+                                MJNotificationService.Instance.CreateSimpleNotification(
+                                    'Prompt settings updated successfully',
+                                    'success',
+                                    3000
+                                );
+
+                                // Refresh the related data to reflect changes
+                                await this.loadRelatedCounts();
+                            } else {
+                                MJNotificationService.Instance.CreateSimpleNotification(
+                                    'Failed to save prompt settings. Please try again.',
+                                    'error',
+                                    3000
+                                );
+                            }
+                        } catch (error) {
+                            console.error('Error saving prompt advanced settings:', error);
+                            MJNotificationService.Instance.CreateSimpleNotification(
+                                'Error saving prompt settings. Please try again.',
+                                'error',
+                                3000
+                            );
+                        }
+                    }
+                },
+                error: (error) => {
+                    console.error('Error opening prompt advanced settings dialog:', error);
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        'Error opening advanced settings. Please try again.',
+                        'error',
+                        3000
+                    );
+                }
+            });
+
+        } catch (error) {
+            console.error('Error in openPromptAdvancedSettings:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Error opening prompt advanced settings. Please try again.',
+                'error',
+                3000
+            );
+        }
+    }
+
+    /**
+     * Opens the advanced settings dialog for a sub-agent
+     */
+    public async openSubAgentAdvancedSettings(subAgent: AIAgentEntity, event: Event) {
+        event.stopPropagation(); // Prevent navigation
+        
+        try {
+            // Load the full sub-agent entity for editing
+            const md = new Metadata();
+            const subAgentEntity = await md.GetEntityObject<AIAgentEntity>('AI Agents');
+            await subAgentEntity.Load(subAgent.ID);
+
+            // Get all sub-agents under the same parent for validation
+            const rv = new RunView();
+            const allSubAgentsResult = await rv.RunView<AIAgentEntity>({
+                EntityName: 'AI Agents',
+                ExtraFilter: `ParentID='${this.record.ID}'`,
+                ResultType: 'entity_object'
+            });
+
+            const allSubAgents = allSubAgentsResult.Success ? (allSubAgentsResult.Results || []) : [];
+
+            this.agentManagementService.openSubAgentAdvancedSettingsDialog({
+                subAgent: subAgentEntity,
+                allSubAgents: allSubAgents,
+                viewContainerRef: this.viewContainerRef
+            }).subscribe({
+                next: async (formData) => {
+                    if (formData) {
+                        try {
+                            // Update the sub-agent entity with new values
+                            subAgentEntity.ExecutionOrder = formData.executionOrder;
+                            subAgentEntity.ExecutionMode = formData.executionMode;
+                            subAgentEntity.Status = formData.status;
+                            subAgentEntity.TypeID = formData.typeID;
+                            subAgentEntity.ExposeAsAction = formData.exposeAsAction;
+
+                            // Save immediately to database
+                            const saveResult = await subAgentEntity.Save();
+                            if (saveResult) {
+                                MJNotificationService.Instance.CreateSimpleNotification(
+                                    'Sub-agent settings updated successfully',
+                                    'success',
+                                    3000
+                                );
+
+                                // Update the local sub-agent data to reflect changes
+                                const localSubAgent = this.subAgents.find(sa => sa.ID === subAgent.ID);
+                                if (localSubAgent) {
+                                    localSubAgent.ExecutionOrder = formData.executionOrder;
+                                    localSubAgent.ExecutionMode = formData.executionMode;
+                                    localSubAgent.Status = formData.status;
+                                    localSubAgent.TypeID = formData.typeID;
+                                    localSubAgent.ExposeAsAction = formData.exposeAsAction;
+                                }
+
+                                // Trigger change detection to update UI
+                                this.cdr.detectChanges();
+                            } else {
+                                MJNotificationService.Instance.CreateSimpleNotification(
+                                    'Failed to save sub-agent settings. Please try again.',
+                                    'error',
+                                    3000
+                                );
+                            }
+                        } catch (error) {
+                            console.error('Error saving sub-agent advanced settings:', error);
+                            MJNotificationService.Instance.CreateSimpleNotification(
+                                'Error saving sub-agent settings. Please try again.',
+                                'error',
+                                3000
+                            );
+                        }
+                    }
+                },
+                error: (error) => {
+                    console.error('Error opening sub-agent advanced settings dialog:', error);
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        'Error opening advanced settings. Please try again.',
+                        'error',
+                        3000
+                    );
+                }
+            });
+
+        } catch (error) {
+            console.error('Error in openSubAgentAdvancedSettings:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Error opening sub-agent advanced settings. Please try again.',
+                'error',
+                3000
+            );
         }
     }
     

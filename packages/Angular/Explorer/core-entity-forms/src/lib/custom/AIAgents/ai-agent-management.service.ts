@@ -1,10 +1,12 @@
 import { Injectable, ViewContainerRef } from '@angular/core';
 import { DialogService, DialogRef } from '@progress/kendo-angular-dialog';
 import { Observable } from 'rxjs';
-import { ActionEntity, AIAgentEntity, AIPromptEntity } from '@memberjunction/core-entities';
+import { ActionEntity, AIAgentEntity, AIAgentPromptEntity, AIPromptEntity } from '@memberjunction/core-entities';
 import { AddActionDialogComponent } from './add-action-dialog.component';
 import { AgentAdvancedSettingsDialogComponent, AdvancedSettingsFormData } from './agent-advanced-settings-dialog.component';
 import { PromptSelectorDialogComponent, PromptSelectorConfig, PromptSelectorResult } from './prompt-selector-dialog.component';
+import { AgentPromptAdvancedSettingsDialogComponent, AgentPromptAdvancedSettingsFormData } from './agent-prompt-advanced-settings-dialog.component';
+import { SubAgentAdvancedSettingsDialogComponent, SubAgentAdvancedSettingsFormData } from './sub-agent-advanced-settings-dialog.component';
 
 /**
  * Consolidated service for managing AI Agent operations including:
@@ -156,6 +158,68 @@ export class AIAgentManagementService {
         observer.complete();
       });
     });
+  }
+
+  // === Advanced Settings for Related Entities ===
+
+  /**
+   * Opens the advanced settings dialog for an AI Agent Prompt
+   * 
+   * @param config Configuration for the agent prompt advanced settings dialog
+   * @returns Observable that emits the form data when dialog is closed, or null if cancelled
+   */
+  openAgentPromptAdvancedSettingsDialog(config: {
+    agentPrompt: AIAgentPromptEntity;
+    allAgentPrompts: AIAgentPromptEntity[];
+    viewContainerRef?: ViewContainerRef;
+  }): Observable<AgentPromptAdvancedSettingsFormData | null> {
+    const dialogRef: DialogRef = this.dialogService.open({
+      title: `Advanced Settings - Prompt Configuration`,
+      content: AgentPromptAdvancedSettingsDialogComponent,
+      actions: [], // Component handles actions
+      width: 700,
+      height: 600,
+      minWidth: 500,
+      minHeight: 400,
+      preventAction: () => false
+    });
+
+    // Pass configuration to the dialog component
+    const componentInstance = dialogRef.content.instance as AgentPromptAdvancedSettingsDialogComponent;
+    componentInstance.agentPrompt = config.agentPrompt;
+    componentInstance.allAgentPrompts = config.allAgentPrompts;
+
+    return componentInstance.result.asObservable();
+  }
+
+  /**
+   * Opens the advanced settings dialog for a Sub-Agent
+   * 
+   * @param config Configuration for the sub-agent advanced settings dialog
+   * @returns Observable that emits the form data when dialog is closed, or null if cancelled
+   */
+  openSubAgentAdvancedSettingsDialog(config: {
+    subAgent: AIAgentEntity;
+    allSubAgents: AIAgentEntity[];
+    viewContainerRef?: ViewContainerRef;
+  }): Observable<SubAgentAdvancedSettingsFormData | null> {
+    const dialogRef: DialogRef = this.dialogService.open({
+      title: `Advanced Settings - ${config.subAgent.Name || 'Sub-Agent'}`,
+      content: SubAgentAdvancedSettingsDialogComponent,
+      actions: [], // Component handles actions
+      width: 700,
+      height: 600,
+      minWidth: 500,
+      minHeight: 400,
+      preventAction: () => false
+    });
+
+    // Pass configuration to the dialog component
+    const componentInstance = dialogRef.content.instance as SubAgentAdvancedSettingsDialogComponent;
+    componentInstance.subAgent = config.subAgent;
+    componentInstance.allSubAgents = config.allSubAgents;
+
+    return componentInstance.result.asObservable();
   }
 
   // === Future: Agent Creation ===
