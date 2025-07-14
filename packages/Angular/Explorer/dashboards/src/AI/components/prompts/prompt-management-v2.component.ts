@@ -1,10 +1,12 @@
 import { Component, OnInit, OnDestroy, Output, EventEmitter, Input } from '@angular/core';
+import { Router } from '@angular/router';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { AIPromptEntity, AIPromptTypeEntity, AIPromptCategoryEntity, TemplateEntity, TemplateContentEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 interface PromptWithTemplate extends Omit<AIPromptEntity, 'Template'> {
   Template: string; // From AIPromptEntity (view field)
@@ -59,7 +61,8 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
 
   constructor(
     private sharedService: SharedService,
-    private testHarnessService: AITestHarnessDialogService
+    private testHarnessService: AITestHarnessDialogService,
+    private router: Router
   ) {}
 
   ngOnInit(): void {
@@ -164,7 +167,7 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
       this.emitStateChange();
     } catch (error) {
       console.error('Error loading prompt data:', error);
-      this.sharedService.CreateSimpleNotification('Error loading prompts', 'error', 3000);
+      MJNotificationService.Instance.CreateSimpleNotification('Error loading prompts', 'error', 3000);
     } finally {
       this.isLoading = false;
       if (this.loadingMessageInterval) {
@@ -279,28 +282,22 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
     this.selectedPromptForTest = null;
   }
 
-  public async createNewPrompt(): Promise<void> {
+  public createNewPrompt(): void {
     try {
-      const md = new Metadata();
-      const newPrompt = await md.GetEntityObject<AIPromptEntity>('AI Prompts');
-      
-      if (newPrompt) {
-        newPrompt.Name = 'New Prompt';
-        newPrompt.Status = 'Active';
-        
-        if (await newPrompt.Save()) {
-          this.openEntityRecord.emit({
-            entityName: 'AI Prompts',
-            recordId: newPrompt.ID
-          });
-          
-          // Reload the data
-          await this.loadInitialData();
+      // Navigate to new record form using the MemberJunction pattern
+      // Empty third parameter means new record
+      this.router.navigate(
+        ['resource', 'record', ''], // Empty record ID = new record
+        { 
+          queryParams: { 
+            Entity: 'AI Prompts'
+            // Could add NewRecordValues here for pre-populated defaults if needed
+          } 
         }
-      }
+      );
     } catch (error) {
-      console.error('Error creating new prompt:', error);
-      this.sharedService.CreateSimpleNotification('Error creating prompt', 'error', 3000);
+      console.error('Error navigating to new prompt form:', error);
+      MJNotificationService.Instance.CreateSimpleNotification('Error opening new prompt form', 'error', 3000);
     }
   }
 
