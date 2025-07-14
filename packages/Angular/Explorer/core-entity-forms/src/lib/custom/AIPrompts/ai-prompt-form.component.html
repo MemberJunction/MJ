@@ -198,6 +198,26 @@
                         } @else {
                             <!-- Active Template Editor -->
                             <div class="template-editor-container" style="flex: 1; display: flex; flex-direction: column; min-height: 350px;">
+                                <!-- Template Actions Bar -->
+                                @if (template && EditMode) {
+                                    <div class="template-actions" style="display: flex; gap: 8px; padding: 8px; border-bottom: 1px solid #e9ecef; background: #f8f9fa;">
+                                        <button kendoButton 
+                                                [fillMode]="'outline'" 
+                                                [size]="'small'"
+                                                (click)="linkExistingTemplate()"
+                                                title="Change to a different template">
+                                            <i class="fa-solid fa-exchange-alt"></i> Change Template
+                                        </button>
+                                        <button kendoButton 
+                                                [fillMode]="'outline'" 
+                                                [size]="'small'"
+                                                (click)="openTemplateInNewWindow()"
+                                                title="Open template in new window">
+                                            <i class="fa-solid fa-external-link-alt"></i> Open in New Window
+                                        </button>
+                                    </div>
+                                }
+                                
                                 <!-- Template Editor -->
                                 <div style="flex: 1; background: white; border-radius: 6px; border: 1px solid #e9ecef;">
                                     <mj-template-editor 
