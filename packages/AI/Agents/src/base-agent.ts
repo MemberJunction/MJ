@@ -1121,7 +1121,7 @@ export class BaseAgent {
                     return {
                         ...nextStep,
                         step: 'Retry',
-                        message: `${validationFeedback}\n\nRetry attempt ${this._validationRetryCount} of ${maxRetries}`,
+                        retryInstructions: `${validationFeedback}\n\nRetry attempt ${this._validationRetryCount} of ${maxRetries}`,
                         terminate: false
                     };
 
@@ -1155,7 +1155,7 @@ export class BaseAgent {
                     return {
                         ...nextStep,
                         step: 'Retry',
-                        message: validationFeedback,
+                        retryInstructions: validationFeedback,
                         terminate: false
                     };
             }

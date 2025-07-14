@@ -14307,20 +14307,32 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
 
     /**
     * Validate() method override for AI Agent Actions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * MinExecutionsPerRun: This rule ensures that if a value for 'Minimum Executions Per Run' is provided, it must be zero or greater. If the value is not provided (left blank), that's also allowed.
     * * MaxExecutionsPerRun: This rule ensures that if a value for the maximum number of executions per run is provided, it must be greater than zero. If no value is provided, that's acceptable.
-    * * Table-Level: This rule ensures that the minimum number of executions per run cannot be greater than the maximum number of executions per run. If either value is not specified, the rule is considered satisfied.
-    * * MinExecutionsPerRun: This rule ensures that if a value for 'Minimum Executions Per Run' is provided, it must be zero or greater. If the value is not provided (left blank), that's also allowed.  
+    * * Table-Level: This rule ensures that the minimum number of executions per run cannot be greater than the maximum number of executions per run. If either value is not specified, the rule is considered satisfied.  
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
+        this.ValidateMinExecutionsPerRunIsNonNegative(result);
         this.ValidateMaxExecutionsPerRunGreaterThanZero(result);
         this.ValidateMinExecutionsPerRunLessThanOrEqualToMax(result);
-        this.ValidateMinExecutionsPerRunIsNonNegative(result);
 
         return result;
+    }
+
+    /**
+    * This rule ensures that if a value for 'Minimum Executions Per Run' is provided, it must be zero or greater. If the value is not provided (left blank), that's also allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMinExecutionsPerRunIsNonNegative(result: ValidationResult) {
+    	if (this.MinExecutionsPerRun !== null && this.MinExecutionsPerRun < 0) {
+    		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "Minimum executions per run must be zero or greater.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -14348,18 +14360,6 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     		this.MinExecutionsPerRun > this.MaxExecutionsPerRun
     	) {
     		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "The minimum executions per run cannot be greater than the maximum executions per run.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if a value for 'Minimum Executions Per Run' is provided, it must be zero or greater. If the value is not provided (left blank), that's also allowed.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateMinExecutionsPerRunIsNonNegative(result: ValidationResult) {
-    	if (this.MinExecutionsPerRun !== null && this.MinExecutionsPerRun < 0) {
-    		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "Minimum executions per run must be zero or greater.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
     	}
     }
 
@@ -15273,24 +15273,60 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
 
     /**
     * Validate() method override for AI Agents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Table-Level: This rule makes sure that if the ParentID is set (not empty), then the ExposeAsAction option must be disabled. If ExposeAsAction is enabled, ParentID must be empty.
-    * * Table-Level: This rule ensures that if context compression is enabled, all related settings (message threshold, prompt ID, and message retention count) must be specified. If context compression is not enabled, these settings may be left unspecified.
     * * MinExecutionsPerRun: This rule ensures that if the minimum executions per run value is provided, it must be zero or greater.
+    * * MaxExecutionsPerRun: This rule ensures that the maximum number of executions per run can either be left blank (unspecified) or, if provided, it must be a positive number greater than zero.
     * * Table-Level: This rule ensures that if both 'Minimum Executions Per Run' and 'Maximum Executions Per Run' are specified, the minimum must not be greater than the maximum. If either field is not specified, this rule does not apply.
-    * * MaxExecutionsPerRun: This rule ensures that the maximum number of executions per run can either be left blank (unspecified) or, if provided, it must be a positive number greater than zero.  
+    * * Table-Level: This rule makes sure that if the ParentID is set (not empty), then the ExposeAsAction option must be disabled. If ExposeAsAction is enabled, ParentID must be empty.
+    * * Table-Level: This rule ensures that if context compression is enabled, all related settings (message threshold, prompt ID, and message retention count) must be specified. If context compression is not enabled, these settings may be left unspecified.  
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
+        this.ValidateMinExecutionsPerRunIsNonNegative(result);
+        this.ValidateMaxExecutionsPerRunIsNullOrPositive(result);
+        this.ValidateMinExecutionsPerRunLessThanOrEqualToMaxExecutionsPerRun(result);
         this.ValidateParentIDMustBeNullIfExposeAsActionTrue(result);
         this.ValidateEnableContextCompressionRequiresContextFields(result);
-        this.ValidateMinExecutionsPerRunIsNonNegative(result);
-        this.ValidateMinExecutionsPerRunLessThanOrEqualToMaxExecutionsPerRun(result);
-        this.ValidateMaxExecutionsPerRunIsNullOrPositive(result);
 
         return result;
+    }
+
+    /**
+    * This rule ensures that if the minimum executions per run value is provided, it must be zero or greater.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMinExecutionsPerRunIsNonNegative(result: ValidationResult) {
+    	if (this.MinExecutionsPerRun !== null && this.MinExecutionsPerRun < 0) {
+    		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "If specified, the minimum executions per run must be zero or greater.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the maximum number of executions per run can either be left blank (unspecified) or, if provided, it must be a positive number greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxExecutionsPerRunIsNullOrPositive(result: ValidationResult) {
+    	if (this.MaxExecutionsPerRun !== null && this.MaxExecutionsPerRun <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("MaxExecutionsPerRun", "MaxExecutionsPerRun must be left blank or must be greater than zero.", this.MaxExecutionsPerRun, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if both 'Minimum Executions Per Run' and 'Maximum Executions Per Run' are specified, the minimum must not be greater than the maximum. If either field is not specified, this rule does not apply.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMinExecutionsPerRunLessThanOrEqualToMaxExecutionsPerRun(result: ValidationResult) {
+    	if (this.MinExecutionsPerRun !== null && this.MaxExecutionsPerRun !== null && this.MinExecutionsPerRun > this.MaxExecutionsPerRun) {
+    		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "Minimum executions per run cannot be greater than maximum executions per run.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -15322,42 +15358,6 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     		if (this.ContextCompressionMessageRetentionCount === null) {
     			result.Errors.push(new ValidationErrorInfo("ContextCompressionMessageRetentionCount", "Context compression is enabled, so the context compression message retention count is required.", this.ContextCompressionMessageRetentionCount, ValidationErrorType.Failure));
     		}
-    	}
-    }
-
-    /**
-    * This rule ensures that if the minimum executions per run value is provided, it must be zero or greater.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateMinExecutionsPerRunIsNonNegative(result: ValidationResult) {
-    	if (this.MinExecutionsPerRun !== null && this.MinExecutionsPerRun < 0) {
-    		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "If specified, the minimum executions per run must be zero or greater.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if both 'Minimum Executions Per Run' and 'Maximum Executions Per Run' are specified, the minimum must not be greater than the maximum. If either field is not specified, this rule does not apply.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateMinExecutionsPerRunLessThanOrEqualToMaxExecutionsPerRun(result: ValidationResult) {
-    	if (this.MinExecutionsPerRun !== null && this.MaxExecutionsPerRun !== null && this.MinExecutionsPerRun > this.MaxExecutionsPerRun) {
-    		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "Minimum executions per run cannot be greater than maximum executions per run.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the maximum number of executions per run can either be left blank (unspecified) or, if provided, it must be a positive number greater than zero.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateMaxExecutionsPerRunIsNullOrPositive(result: ValidationResult) {
-    	if (this.MaxExecutionsPerRun !== null && this.MaxExecutionsPerRun <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("MaxExecutionsPerRun", "MaxExecutionsPerRun must be left blank or must be greater than zero.", this.MaxExecutionsPerRun, ValidationErrorType.Failure));
     	}
     }
 

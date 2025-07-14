@@ -4,7 +4,7 @@ import { MapEntityInfoToSkipEntityInfo, SimpleMetadata, SimpleRunQuery, SimpleRu
 import { DrillDownInfo } from '../drill-down-info';
 import { DomSanitizer } from '@angular/platform-browser';
 import { marked } from 'marked';
-import { ReactComponentComponent, StateChangeEvent, ReactComponentEvent } from '../react-component-host/components/react-component.component';
+import { MJReactComponent, StateChangeEvent, ReactComponentEvent } from '@memberjunction/ng-react';
 
 @Component({
   selector: 'skip-dynamic-ui-component',
@@ -276,7 +276,7 @@ import { ReactComponentComponent, StateChangeEvent, ReactComponentEvent } from '
                     (click)="createReportForOption(0)"
                     [disabled]="isCreatingReport">
               <i class="fa-solid fa-plus"></i>
-              <span>Create {{ reportOptions[0] ? getComponentTypeName(reportOptions[0]) : 'Component' }}</span>
+              <span>Create {{ firstOptionComponentTypeName }}</span>
             </button>
             <button class="tab-action-button print-button" 
                     *ngIf="ShowPrintReport" 
@@ -725,12 +725,15 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
     @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();
     @Output() CreateReportRequested = new EventEmitter<number>();
 
-    @ViewChildren(ReactComponentComponent) reactComponents!: QueryList<ReactComponentComponent>;
+    @ViewChildren(MJReactComponent) reactComponents!: QueryList<MJReactComponent>;
 
     // Properties for handling multiple report options
     public reportOptions: SkipComponentOption[] = [];
     public selectedReportOptionIndex: number = 0;
     public currentError: { type: string; message: string; technicalDetails?: string } | null = null;
+    
+    // Cached component type name to avoid expression change errors
+    private _cachedComponentTypeName: string = 'Component';
     public isCreatingReport: boolean = false;
     
     // Toggle states for showing/hiding component details
@@ -824,6 +827,8 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
             // Create or update the component spec for this option
             if (!this.componentSpecs.has(this.selectedReportOptionIndex)) {
                 this.createComponentSpecForOption(this.selectedReportOptionIndex);
+                // Trigger change detection after modifying componentSpecs
+                this.cdr.detectChanges();
             }
         } catch (error) {
             console.error('Failed to build component code:', error);
@@ -873,7 +878,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     /**
      * Get the React component for a specific option index
      */
-    private getReactComponentForOption(optionIndex: number): ReactComponentComponent | null {
+    private getReactComponentForOption(optionIndex: number): MJReactComponent | null {
         if (!this.reactComponents || this.reactComponents.length === 0) {
             return null;
         }
@@ -916,6 +921,13 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     public getComponentTypeName(option: SkipComponentOption): string {
         const type = option.option.componentType || 'report';
         return type.charAt(0).toUpperCase() + type.slice(1);
+    }
+    
+    /**
+     * Get the cached component type name for the first option to avoid change detection errors
+     */
+    public get firstOptionComponentTypeName(): string {
+        return this._cachedComponentTypeName;
     }
     
     /**
@@ -1094,9 +1106,13 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         this.componentStyles = this.SetupStyles();
         
         // Create component specs for all options
+        // Use Promise.resolve to avoid ExpressionChangedAfterItHasBeenCheckedError
         if (this.reportOptions.length > 0) {
-            this.reportOptions.forEach((_, index) => {
-                this.createComponentSpecForOption(index);
+            Promise.resolve().then(() => {
+                this.reportOptions.forEach((_, index) => {
+                    this.createComponentSpecForOption(index);
+                });
+                this.cdr.detectChanges();
             });
         }
     }
@@ -1106,21 +1122,22 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         this.componentSpecs.clear();
         this.userStates.clear();
         
-        // The ReactComponentComponent handles its own cleanup
+        // The MJReactComponent handles its own cleanup
     }
     
     ngOnChanges(changes: SimpleChanges): void {
-        if (changes['SkipData'] && !changes['SkipData'].firstChange) {
-            // Angular will automatically update the data binding
-            // The ReactComponentComponent will handle the update
-            this.cdr.detectChanges();
+        if (changes['SkipData']) {
+            const skipData = changes['SkipData'].currentValue;
+            if (skipData) {
+                this.setupReportOptions(skipData);
+            }
         }
     }
 
     /**
      * Get the currently active React component
      */
-    private getCurrentReactComponent(): ReactComponentComponent | null {
+    private getCurrentReactComponent(): MJReactComponent | null {
         return this.getReactComponentForOption(this.selectedReportOptionIndex);
     }
   
@@ -1169,6 +1186,12 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             const bestOption = this.reportOptions[0];
             this.UIComponentCode = BuildSkipComponentCompleteCode(bestOption.option);
             this.ComponentObjectName = bestOption.option.componentName;
+            
+            // Update cached component type name after current change detection cycle
+            Promise.resolve().then(() => {
+                this._cachedComponentTypeName = this.getComponentTypeName(bestOption);
+                this.cdr.detectChanges();
+            });
         } 
     }
 
