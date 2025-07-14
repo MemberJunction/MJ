@@ -1,0 +1,165 @@
+<!-- Template Selector Dialog -->
+<div class="template-selector-dialog">
+  <!-- Header -->
+  <div class="dialog-header">
+    <h3>{{ config.title }}</h3>
+    <div class="header-actions">
+      <button
+        kendoButton
+        size="small"
+        (click)="toggleViewMode()"
+      >
+        <i [class]="viewMode === 'list' ? 'fa-solid fa-th' : 'fa-solid fa-list'"></i>
+        {{ viewMode === 'list' ? 'Grid' : 'List' }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Search and Filter Section -->
+  <div class="search-filter-section">
+    <!-- Search Input -->
+    <div class="search-container">
+      <input
+        class="k-input k-textbox"
+        [formControl]="searchControl"
+        placeholder="Search templates..."
+      />
+      <i class="fa-solid fa-search search-icon"></i>
+    </div>
+
+    <!-- Category Filter -->
+    <div class="category-filter">
+      <select
+        class="k-input k-dropdown"
+        [value]="selectedCategory || ''"
+        (change)="onCategoryChange($any($event.target).value || null)"
+      >
+        <option value="">All Categories</option>
+        @for (category of categories$ | async; track category.ID) {
+          <option [value]="category.ID">{{ category.Name }}</option>
+        }
+      </select>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  @if (isLoading$ | async) {
+    <div class="loading-container">
+      <i class="fa-solid fa-spinner fa-spin"></i>
+      <span>Loading templates...</span>
+    </div>
+  }
+
+  <!-- Template List/Grid -->
+  @if (!(isLoading$ | async)) {
+    <div class="templates-container" [class.grid-mode]="viewMode === 'grid'">
+      @for (template of filteredTemplates$ | async; track template.ID) {
+        <div 
+          class="template-item"
+          [class.selected]="isTemplateSelected(template)"
+          (click)="toggleTemplateSelection(template)"
+        >
+          <!-- Selection Checkbox -->
+          <div class="selection-indicator">
+            @if (config.multiSelect) {
+              <input
+                type="checkbox"
+                [checked]="isTemplateSelected(template)"
+                (change)="toggleTemplateSelection(template)"
+              />
+            } @else {
+              <input
+                type="radio"
+                [checked]="isTemplateSelected(template)"
+                (change)="toggleTemplateSelection(template)"
+              />
+            }
+          </div>
+
+          <!-- Template Info -->
+          <div class="template-info">
+            <div class="template-header">
+              <h4 class="template-name">{{ template.Name }}</h4>
+              <div class="template-status">
+                <span 
+                  class="status-badge"
+                  [style.background-color]="getTemplateStatusColor(template)"
+                >
+                  {{ getTemplateStatusText(template) }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Template Description -->
+            @if (template.Description) {
+              <div class="template-description">
+                {{ getTemplatePreview(template) }}
+              </div>
+            }
+
+            <!-- Template Metadata -->
+            <div class="template-metadata">
+              <div class="metadata-item">
+                <i class="fa-solid fa-user"></i>
+                <span>{{ template.User || 'Unknown User' }}</span>
+              </div>
+              
+              @if (template.Category) {
+                <div class="metadata-item">
+                  <i class="fa-solid fa-folder"></i>
+                  <span>{{ template.Category }}</span>
+                </div>
+              }
+              
+              @if (template.__mj_CreatedAt) {
+                <div class="metadata-item">
+                  <i class="fa-solid fa-calendar"></i>
+                  <span>{{ formatDate(template.__mj_CreatedAt) }}</span>
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      } @empty {
+        <div class="no-templates">
+          <i class="fa-solid fa-file-alt fa-3x"></i>
+          <h4>No templates found</h4>
+          <p>No templates match your current search criteria.</p>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Dialog Actions -->
+  <div class="dialog-actions">
+    <div class="action-buttons">
+      @if (config.showCreateNew) {
+        <button
+          kendoButton
+          themeColor="secondary"
+          (click)="createNew()"
+        >
+          <i class="fa-solid fa-plus"></i>
+          Create New
+        </button>
+      }
+      
+      <button
+        kendoButton
+        (click)="cancel()"
+      >
+        Cancel
+      </button>
+      
+      <button
+        kendoButton
+        themeColor="primary"
+        (click)="selectTemplates()"
+        [disabled]="selectedTemplates.size === 0"
+      >
+        <i class="fa-solid fa-check"></i>
+        Select {{ selectedTemplates.size > 0 ? '(' + selectedTemplates.size + ')' : '' }}
+      </button>
+    </div>
+  </div>
+</div>

@@ -4,12 +4,13 @@ import { AIPromptEntity, TemplateEntity, TemplateContentEntity, TemplateParamEnt
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
-import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
+import { Metadata, RunView, CompositeKey, TransactionGroupBase } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { TemplateEditorConfig, TemplateEditorComponent } from '../../shared/components/template-editor.component';
 import { AIPromptFormComponent } from '../../generated/Entities/AIPrompt/aiprompt.form.component';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
+import { AIPromptManagementService } from './ai-prompt-management.service';
 
 @RegisterClass(BaseFormComponent, 'AI Prompts')
 @Component({
@@ -53,6 +54,13 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     public historySortField: 'runAt' | 'executionTime' | 'cost' | 'tokens' = 'runAt';
     public historySortDirection: 'asc' | 'desc' = 'desc';
     
+    // Transaction-based changes tracking
+    public pendingModelChanges: { models: AIPromptModelEntity[], deleted: AIPromptModelEntity[] } = {
+        models: [],
+        deleted: []
+    };
+    public hasUnsavedChanges = false;
+    
     // Template editor configuration
     public get templateEditorConfig(): TemplateEditorConfig {
         return {
@@ -74,7 +82,8 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         route: ActivatedRoute,
         public cdr: ChangeDetectorRef,
         private testHarnessService: AITestHarnessDialogService,
-        private viewContainerRef: ViewContainerRef
+        private viewContainerRef: ViewContainerRef,
+        private promptManagementService: AIPromptManagementService
     ) {
         super(elementRef, sharedService, router, route, cdr);
     }
@@ -192,12 +201,56 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
      * Opens a dialog to link an existing template
      */
     public async linkExistingTemplate() {
-        // TODO: Implement template selection dialog
-        MJNotificationService.Instance.CreateSimpleNotification(
-            'Template linking functionality coming soon',
-            'info',
-            3000
-        );
+        try {
+            this.promptManagementService.openTemplateSelectorDialog({
+                title: 'Link Existing Template',
+                multiSelect: false,
+                showCreateNew: true,
+                showActiveOnly: true,
+                selectedTemplateIds: this.record.TemplateID ? [this.record.TemplateID] : [],
+                viewContainerRef: this.viewContainerRef
+            }).subscribe({
+                next: async (result) => {
+                    if (result && result.selectedTemplates.length > 0) {
+                        const selectedTemplate = result.selectedTemplates[0];
+                        
+                        // Update the AI prompt to reference the selected template
+                        this.record.TemplateID = selectedTemplate.ID;
+                        this.hasUnsavedChanges = true;
+                        
+                        // Load the selected template
+                        await this.loadTemplate();
+                        
+                        // Trigger change detection to update UI
+                        this.cdr.detectChanges();
+                        
+                        MJNotificationService.Instance.CreateSimpleNotification(
+                            `Template "${selectedTemplate.Name}" linked successfully`,
+                            'success',
+                            3000
+                        );
+                    } else if (result && result.createNew) {
+                        // User wants to create a new template
+                        await this.createNewTemplate();
+                    }
+                },
+                error: (error) => {
+                    console.error('Error opening template selector:', error);
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        'Error opening template selector. Please try again.',
+                        'error',
+                        3000
+                    );
+                }
+            });
+        } catch (error) {
+            console.error('Error in linkExistingTemplate:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Error linking template. Please try again.',
+                'error',
+                3000
+            );
+        }
     }
 
     /**
@@ -594,6 +647,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
 
         // Clear the vendor selection when model changes
         promptModel.VendorID = null;
+        this.hasUnsavedChanges = true;
 
         // Load vendors for the new model
         if (modelId) {
@@ -604,6 +658,9 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
                 promptModel.VendorID = vendorData.vendors[0].ID;
             }
         }
+        
+        // Trigger change detection
+        this.cdr.detectChanges();
     }
 
     /**
@@ -657,7 +714,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     }
 
     /**
-     * Adds a new model to the prompt
+     * Adds a new model to the prompt (deferred until save)
      */
     public async addNewModel() {
         if (!this.record?.ID) return;
@@ -677,6 +734,19 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             // ModelID will be set by user
             
             this.promptModels.push(newModel);
+            this.hasUnsavedChanges = true;
+            
+            // Update priorities after adding
+            this.updateModelPriorities();
+            
+            // Trigger change detection
+            this.cdr.detectChanges();
+            
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'New model added. Select a model and save to persist changes.',
+                'info',
+                3000
+            );
         } catch (error) {
             console.error('Error creating new model:', error);
             MJNotificationService.Instance.CreateSimpleNotification(
@@ -688,7 +758,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     }
 
     /**
-     * Removes a model from the prompt
+     * Removes a model from the prompt (deferred until save)
      */
     public async removePromptModel(index: number) {
         if (index < 0 || index >= this.promptModels.length) return;
@@ -696,20 +766,24 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         const model = this.promptModels[index];
         
         try {
-            // If it's a saved model, delete it from the database
+            // If it's a saved model, add it to the pending deletions
             if (model.IsSaved) {
-                const deleteResult = await model.Delete();
-                if (!deleteResult) {
-                    throw new Error('Failed to delete model from database');
-                }
+                this.pendingModelChanges.deleted.push(model);
             }
 
             // Remove from local array
             this.promptModels.splice(index, 1);
+            this.hasUnsavedChanges = true;
+
+            // Update priorities after removal
+            this.updateModelPriorities();
+
+            // Trigger change detection
+            this.cdr.detectChanges();
 
             MJNotificationService.Instance.CreateSimpleNotification(
-                'Model removed successfully',
-                'success',
+                'Model will be removed when you save the prompt',
+                'info',
                 3000
             );
 
@@ -752,16 +826,27 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     }
 
     /**
-     * Override SaveRecord to auto-save template contents and prompt models
+     * Override SaveRecord to implement atomic transaction-based save
      */
     async SaveRecord(StopEditModeAfterSave: boolean = true): Promise<boolean> {
+        if (!this.record) {
+            return false;
+        }
+
         try {
-            // If this is a new prompt with a new template, we need to save the template first
+            const md = new Metadata();
+            const transactionGroup = await md.CreateTransactionGroup();
+
+            // Set the AI prompt to use the transaction group
+            this.record.TransactionGroup = transactionGroup;
+
+            // If this is a new prompt with a new template, save the template first
             if (!this.record.IsSaved && this.template && !this.template.IsSaved) {
+                this.template.TransactionGroup = transactionGroup;
                 const templateSaved = await this.template.Save();
                 if (!templateSaved) {
                     MJNotificationService.Instance.CreateSimpleNotification(
-                        'Failed to save template',
+                        'Failed to save template within transaction',
                         'error',
                         5000
                     );
@@ -772,30 +857,81 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             }
 
             // Save the AI prompt itself
-            const promptSaved = await super.SaveRecord(StopEditModeAfterSave);
-            
-            if (promptSaved) {
-                // Save template contents if we have a template
-                if (this.template && this.templateEditor) {
-                    const templateContentsSaved = await this.templateEditor.saveTemplateContents();
-                    if (!templateContentsSaved) {
-                        MJNotificationService.Instance.CreateSimpleNotification(
-                            'AI prompt saved, but template contents failed to save',
-                            'warning',
-                            5000
-                        );
-                    }
-                }
-                
-                // Then save all prompt models
-                return await this.savePromptModels();
+            const promptSaved = await this.record.Save();
+            if (!promptSaved) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Failed to save AI prompt. Please check the form data.',
+                    'error',
+                    4000
+                );
+                return false;
             }
-            
-            return false;
+
+            // Save template contents if we have a template
+            if (this.template && this.templateEditor) {
+                // Template content saving is handled by the template editor
+                // We assume it can participate in the transaction
+                const templateContentsSaved = await this.templateEditor.saveTemplateContents();
+                if (!templateContentsSaved) {
+                    console.warn('Template contents failed to save');
+                }
+            }
+
+            // Process all prompt model changes atomically
+            await this.processPromptModelChanges(transactionGroup);
+
+            // Execute all operations atomically
+            const success = await transactionGroup.Submit();
+            if (success) {
+                // Clear pending changes
+                this.pendingModelChanges = { models: [], deleted: [] };
+                this.hasUnsavedChanges = false;
+
+                // Reload prompt models to reflect database state
+                await this.loadPromptModels();
+
+                // If we should stop edit mode after save, do it now
+                if (StopEditModeAfterSave) {
+                    this.EditMode = false;
+                }
+
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'AI prompt saved successfully',
+                    'success',
+                    3000
+                );
+
+                return true;
+            } else {
+                // Transaction failed - analyze errors
+                const errors: string[] = [];
+                
+                // Check prompt save errors
+                if (this.record.LatestResult && !this.record.LatestResult.Success) {
+                    errors.push(`Prompt: ${this.record.LatestResult.Message || 'Unknown error'}`);
+                }
+
+                // Check template save errors
+                if (this.template && this.template.LatestResult && !this.template.LatestResult.Success) {
+                    errors.push(`Template: ${this.template.LatestResult.Message || 'Unknown error'}`);
+                }
+
+                // If no specific errors found, show generic message
+                if (errors.length === 0) {
+                    errors.push('Unknown error occurred during save operation');
+                }
+
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Save failed: ${errors.join('; ')}. Please fix the issues and try again.`,
+                    'error',
+                    6000
+                );
+                return false;
+            }
         } catch (error) {
-            console.error('Error in SaveRecord:', error);
+            console.error('Error saving AI prompt with transaction:', error);
             MJNotificationService.Instance.CreateSimpleNotification(
-                'Error saving AI prompt',
+                `Save failed: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
                 'error',
                 5000
             );
@@ -804,13 +940,22 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     }
 
     /**
-     * Saves all prompt models (creates, updates, deletes)
+     * Processes all prompt model changes within a transaction
      */
-    private async savePromptModels(): Promise<boolean> {
+    private async processPromptModelChanges(transactionGroup: TransactionGroupBase): Promise<void> {
         try {
-            let allSuccessful = true;
+            // Handle deleted models first
+            for (const deletedModel of this.pendingModelChanges.deleted) {
+                if (deletedModel.IsSaved) {
+                    // Load the model fresh for deletion
+                    const modelToDelete = await this._metadata.GetEntityObject<AIPromptModelEntity>('MJ: AI Prompt Models');
+                    await modelToDelete.Load(deletedModel.ID);
+                    modelToDelete.TransactionGroup = transactionGroup;
+                    await modelToDelete.Delete();
+                }
+            }
 
-            // Save each prompt model
+            // Handle new/updated models
             for (const model of this.promptModels) {
                 if (model.ModelID) { // Only save if a model is selected
                     // Set the PromptID if it's not already set
@@ -818,40 +963,16 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
                         model.PromptID = this.record.ID;
                     }
 
+                    model.TransactionGroup = transactionGroup;
                     const saved = await model.Save();
                     if (!saved) {
-                        console.error('Failed to save prompt model:', model);
-                        allSuccessful = false;
+                        throw new Error(`Failed to save prompt model: ${model.ModelID}`);
                     }
                 }
             }
-
-            if (allSuccessful) {
-                // Reload the prompt models to get the updated state
-                await this.loadPromptModels();
-                
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    'AI prompt and models saved successfully',
-                    'success',
-                    4000
-                );
-            } else {
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    'AI prompt saved, but some models failed to save',
-                    'warning',
-                    5000
-                );
-            }
-
-            return allSuccessful;
         } catch (error) {
-            console.error('Error saving prompt models:', error);
-            MJNotificationService.Instance.CreateSimpleNotification(
-                'Error saving prompt models',
-                'error',
-                5000
-            );
-            return false;
+            console.error('Error processing prompt model changes:', error);
+            throw error;
         }
     }
 
@@ -1011,6 +1132,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             
             // Replace the array and force full re-render
             this.promptModels = [...newModels];
+            this.hasUnsavedChanges = true;
             
             this.updateModelPriorities();
             
@@ -1038,6 +1160,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             
             // Replace the array and force full re-render
             this.promptModels = [...newModels];
+            this.hasUnsavedChanges = true;
             
             this.updateModelPriorities();
             
@@ -1104,6 +1227,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             
             // Replace the array and force full re-render
             this.promptModels = [...newModels];
+            this.hasUnsavedChanges = true;
             
             // Update priorities
             this.updateModelPriorities();
