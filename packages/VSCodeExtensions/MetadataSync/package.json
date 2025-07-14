@@ -2,7 +2,7 @@
   "name": "mj-metadata-intellisense",
   "displayName": "MemberJunction MetadataSync IntelliSense",
   "description": "IntelliSense support for MemberJunction MetadataSync JSON files",
-  "version": "0.1.0",
+  "version": "2.69.1",
   "engines": {
     "vscode": "^1.85.0"
   },
