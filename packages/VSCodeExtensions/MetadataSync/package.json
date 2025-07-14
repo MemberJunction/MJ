@@ -64,6 +64,11 @@
           "type": "number",
           "default": 300,
           "description": "Metadata cache timeout in seconds"
+        },
+        "mjMetadataSync.autoShowEntityPanel": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically show entity info panel when opening JSON files in MJ metadata directories"
         }
       }
     }

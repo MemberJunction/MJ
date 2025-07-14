@@ -132,13 +132,32 @@ export function activate(context: vscode.ExtensionContext) {
     const onDidChangeActiveEditor = vscode.window.onDidChangeActiveTextEditor(async (editor) => {
         if (editor && editor.document.languageId === 'json') {
             const entityName = await getEntityFromDocument(editor.document);
-            if (entityName && EntityInfoPanel.currentPanel) {
-                // Update existing panel with new entity
-                await EntityInfoPanel.currentPanel.updateEntity(entityName);
+            if (entityName) {
+                if (EntityInfoPanel.currentPanel) {
+                    // Update existing panel with new entity
+                    await EntityInfoPanel.currentPanel.updateEntity(entityName);
+                } else if (metadataProvider && vscode.workspace.getConfiguration('mjMetadataSync').get('autoShowEntityPanel', true)) {
+                    // Auto-show panel if we have a valid entity and metadata provider (and setting is enabled)
+                    await EntityInfoPanel.createOrShow(metadataProvider, entityName);
+                }
             }
         }
     });
     context.subscriptions.push(onDidChangeActiveEditor);
+    
+    // Check if current editor is already a JSON file in MJ directory
+    const activeEditor = vscode.window.activeTextEditor;
+    if (activeEditor && activeEditor.document.languageId === 'json' && 
+        vscode.workspace.getConfiguration('mjMetadataSync').get('autoShowEntityPanel', true)) {
+        // Use setTimeout to handle async operation outside of the activation function
+        setTimeout(async () => {
+            const entityName = await getEntityFromDocument(activeEditor.document);
+            if (entityName && metadataProvider) {
+                // Show panel for already open JSON file
+                await EntityInfoPanel.createOrShow(metadataProvider, entityName);
+            }
+        }, 100);
+    }
 }
 
 async function initializeMetadataProvider(context: vscode.ExtensionContext) {
