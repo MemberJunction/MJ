@@ -17,6 +17,8 @@ export interface PromptSelectorConfig {
   multiSelect?: boolean;
   /** Pre-selected prompt IDs */
   selectedPromptIds?: string[];
+  /** Already linked prompt IDs (will be grayed out and not selectable) */
+  linkedPromptIds?: string[];
 }
 
 export interface PromptSelectorResult {
@@ -54,6 +56,7 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
   // Search and selection
   searchControl = new FormControl('');
   selectedPrompts: Set<string> = new Set();
+  linkedPrompts: Set<string> = new Set();
   
   // View mode
   viewMode: 'grid' | 'list' = 'list';
@@ -70,6 +73,11 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
     // Initialize selected prompts if provided
     if (this.config.selectedPromptIds) {
       this.selectedPrompts = new Set(this.config.selectedPromptIds);
+    }
+    
+    // Initialize linked prompts if provided
+    if (this.config.linkedPromptIds) {
+      this.linkedPrompts = new Set(this.config.linkedPromptIds);
     }
   }
 
@@ -150,6 +158,16 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
   // === Selection Management ===
 
   togglePromptSelection(prompt: AIPromptEntity) {
+    // Prevent selection of already linked prompts
+    if (this.isPromptLinked(prompt)) {
+      MJNotificationService.Instance.CreateSimpleNotification(
+        `"${prompt.Name}" is already linked to this agent`,
+        'info',
+        2000
+      );
+      return;
+    }
+    
     if (this.config.multiSelect) {
       if (this.selectedPrompts.has(prompt.ID)) {
         this.selectedPrompts.delete(prompt.ID);
@@ -165,6 +183,10 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
 
   isPromptSelected(prompt: AIPromptEntity): boolean {
     return this.selectedPrompts.has(prompt.ID);
+  }
+
+  isPromptLinked(prompt: AIPromptEntity): boolean {
+    return this.linkedPrompts.has(prompt.ID);
   }
 
   getSelectedPromptObjects(): AIPromptEntity[] {

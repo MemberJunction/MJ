@@ -127,6 +127,18 @@
   box-shadow: 0 2px 8px rgba(0, 123, 255, 0.25);
 }
 
+.prompt-card.linked {
+  border-color: #6c757d;
+  background: #f8f9fa;
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.prompt-card.linked:hover {
+  border-color: #6c757d;
+  box-shadow: none;
+}
+
 /* === Selection Indicator === */
 .selection-indicator {
   display: flex;
@@ -141,6 +153,11 @@
 
 .unselected-icon {
   color: #ccc;
+  font-size: 18px;
+}
+
+.linked-icon {
+  color: #6c757d;
   font-size: 18px;
 }
 
@@ -180,6 +197,19 @@
   font-weight: 500;
   color: white;
   white-space: nowrap;
+}
+
+.linked-badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  background: #6c757d;
+  color: white;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .prompt-description {

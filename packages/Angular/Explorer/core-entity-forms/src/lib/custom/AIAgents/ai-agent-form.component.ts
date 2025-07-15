@@ -363,6 +363,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 multiSelect: true,
                 selectedPromptIds: [],
                 showCreateNew: true,
+                linkedPromptIds: allLinkedIds,
                 viewContainerRef: this.viewContainerRef
             }).subscribe({
                 next: async (result) => {

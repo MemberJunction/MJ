@@ -4,7 +4,7 @@
   <!-- Dialog Header -->
   <div class="dialog-header">
     <div class="header-info">
-      <h3>{{ config?.title || 'Select Sub-Agents' }}</h3>
+      <h3>{{ config.title || 'Select Sub-Agents' }}</h3>
       <p class="header-description">
         Choose existing root agents to convert into sub-agents. Only active agents without parents and not exposed as actions can be selected.
       </p>
@@ -136,7 +136,7 @@
   <!-- Dialog Footer -->
   <div class="dialog-footer">
     <div class="footer-left">
-      @if (config?.showCreateNew) {
+      @if (config.showCreateNew) {
         <button kendoButton 
                 look="outline"
                 themeColor="primary"
@@ -158,7 +158,7 @@
               themeColor="primary" 
               (click)="addSelectedAgents()"
               [disabled]="selectedCount === 0">
-        @if (config?.multiSelect) {
+        @if (config.multiSelect) {
           Add {{ selectedCount > 0 ? selectedCount + ' ' : '' }}Sub-Agent{{ selectedCount !== 1 ? 's' : '' }}
         } @else {
           Add Sub-Agent

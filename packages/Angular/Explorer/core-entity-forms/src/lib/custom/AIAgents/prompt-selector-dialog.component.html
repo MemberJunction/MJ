@@ -62,11 +62,14 @@
         @for (prompt of filteredPrompts$ | async; track prompt.ID) {
           <div class="prompt-card" 
                [class.selected]="isPromptSelected(prompt)"
+               [class.linked]="isPromptLinked(prompt)"
                (click)="togglePromptSelection(prompt)">
             
             <!-- Selection indicator -->
             <div class="selection-indicator">
-              @if (isPromptSelected(prompt)) {
+              @if (isPromptLinked(prompt)) {
+                <i class="fa-solid fa-link linked-icon" title="Already linked to this agent"></i>
+              } @else if (isPromptSelected(prompt)) {
                 <i class="fa-solid fa-check-circle selected-icon"></i>
               } @else {
                 <i class="fa-regular fa-circle unselected-icon"></i>
@@ -78,6 +81,12 @@
               <div class="prompt-header">
                 <h4 class="prompt-name">{{ prompt.Name }}</h4>
                 <div class="prompt-badges">
+                  @if (isPromptLinked(prompt)) {
+                    <span class="linked-badge">
+                      <i class="fa-solid fa-link"></i>
+                      Linked
+                    </span>
+                  }
                   <span class="status-badge" 
                         [style.background-color]="getPromptStatusColor(prompt)">
                     {{ getPromptStatusText(prompt) }}

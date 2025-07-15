@@ -104,6 +104,7 @@ export class AIAgentManagementService {
     selectedPromptIds?: string[];
     showCreateNew?: boolean;
     extraFilter?: string;
+    linkedPromptIds?: string[];
     viewContainerRef?: ViewContainerRef;
   }): Observable<PromptSelectorResult | null> {
     const selectorConfig: PromptSelectorConfig = {
@@ -111,7 +112,8 @@ export class AIAgentManagementService {
       multiSelect: config.multiSelect ?? true,
       selectedPromptIds: config.selectedPromptIds || [],
       showCreateNew: config.showCreateNew ?? true,
-      extraFilter: config.extraFilter
+      extraFilter: config.extraFilter,
+      linkedPromptIds: config.linkedPromptIds || []
     };
 
     const dialogRef: DialogRef = this.dialogService.open({
