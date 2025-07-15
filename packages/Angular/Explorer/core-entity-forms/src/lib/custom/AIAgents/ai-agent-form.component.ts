@@ -8,7 +8,6 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIAgentFormComponent } from '../../generated/Entities/AIAgent/aiagent.form.component';
 import { DialogService } from '@progress/kendo-angular-dialog';
 import { SharedService } from '@memberjunction/ng-shared';
-import { NewAgentDialogService } from './new-agent-dialog.service';
 import { AIAgentManagementService } from './ai-agent-management.service';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { firstValueFrom } from 'rxjs';
@@ -99,11 +98,32 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /** Track which execution cards are expanded */
     public expandedExecutions: { [key: string]: boolean } = {};
 
+    // === Dropdown Data ===
+    /** Model selection mode options for the dropdown */
+    public modelSelectionModes = [
+        { text: 'Agent Type', value: 'Agent Type' },
+        { text: 'Agent', value: 'Agent' }
+    ];
+
     // === Transaction-based editing support ===
     /** Now using BaseFormComponent's PendingRecords system exclusively */
     
     /** Flag to indicate if there are unsaved changes */
     public hasUnsavedChanges = false;
+
+    // === Original State for Cancel/Revert ===
+    /** Snapshots of original data for reverting UI changes */
+    private originalSnapshots: {
+        agentPrompts: AIPromptEntityExtended[];
+        agentActions: ActionEntity[];
+        subAgents: AIAgentEntity[];
+        promptCount: number;
+        actionCount: number;
+        subAgentCount: number;
+        learningCycleCount: number;
+        noteCount: number;
+        executionHistoryCount: number;
+    } | null = null;
 
     constructor(
         elementRef: ElementRef,
@@ -113,7 +133,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         cdr: ChangeDetectorRef,
         private dialogService: DialogService,
         private viewContainerRef: ViewContainerRef,
-        private newAgentDialogService: NewAgentDialogService,
         private agentManagementService: AIAgentManagementService,
         private testHarnessService: AITestHarnessDialogService
     ) {
@@ -197,6 +216,9 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             });
             this.recentExecutions = historyResult.Results || [];
             this.executionHistoryCount = historyResult.TotalRowCount || 0;
+
+            // Create snapshot for cancel/revert functionality
+            this.createOriginalSnapshot();
         } catch (error) {
             console.error('Error loading related data:', error);
             // Set all counts to 0 on error to ensure UI shows proper empty states
@@ -206,6 +228,89 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             this.learningCycleCount = 0;
             this.noteCount = 0;
             this.executionHistoryCount = 0;
+        }
+    }
+
+    /**
+     * Creates a snapshot of the current UI state for cancel/revert functionality
+     * @private
+     */
+    private createOriginalSnapshot() {
+        this.originalSnapshots = {
+            agentPrompts: [...this.agentPrompts], // Deep copy of arrays
+            agentActions: [...this.agentActions],
+            subAgents: [...this.subAgents],
+            promptCount: this.promptCount,
+            actionCount: this.actionCount,
+            subAgentCount: this.subAgentCount,
+            learningCycleCount: this.learningCycleCount,
+            noteCount: this.noteCount,
+            executionHistoryCount: this.executionHistoryCount
+        };
+    }
+
+    /**
+     * Restores the UI to its original state using saved snapshots
+     * @private
+     */
+    private restoreFromSnapshots() {
+        if (this.originalSnapshots) {
+            console.log('Restoring UI from snapshots...');
+            
+            // Restore arrays (create new copies to ensure reactivity)
+            this.agentPrompts = [...this.originalSnapshots.agentPrompts];
+            this.agentActions = [...this.originalSnapshots.agentActions];
+            this.subAgents = [...this.originalSnapshots.subAgents];
+            
+            // Restore counts
+            this.promptCount = this.originalSnapshots.promptCount;
+            this.actionCount = this.originalSnapshots.actionCount;
+            this.subAgentCount = this.originalSnapshots.subAgentCount;
+            this.learningCycleCount = this.originalSnapshots.learningCycleCount;
+            this.noteCount = this.originalSnapshots.noteCount;
+            this.executionHistoryCount = this.originalSnapshots.executionHistoryCount;
+            
+            // Reset other UI state
+            this.hasUnsavedChanges = false;
+            
+            console.log('UI restored - Prompts:', this.promptCount, 'Actions:', this.actionCount, 'SubAgents:', this.subAgentCount);
+            
+            // Force change detection to update the UI
+            this.cdr.detectChanges();
+        } else {
+            console.warn('No snapshots available to restore from');
+        }
+    }
+
+    /**
+     * Override CancelEdit to restore UI state when user cancels changes
+     */
+    public override CancelEdit(): void {
+        console.log('=== AI Agent CancelEdit called ===');
+        console.log('Pending records before clear:', this.PendingRecords.length);
+        
+        // Set flag to indicate we're performing a cancel operation
+        this.isPerformingCancel = true;
+        
+        try {
+            // CRITICAL: Clear our pending records BEFORE calling parent
+            // This ensures that any prompt/action/sub-agent changes we added don't persist
+            this.PendingRecords.length = 0;
+            console.log('Pending records after clear:', this.PendingRecords.length);
+            
+            // Call the parent CancelEdit first (this handles main record revert and pending records)
+            super.CancelEdit();
+            
+            // Restore our UI state after parent cancel
+            this.restoreFromSnapshots();
+            
+            // Reset the unsaved changes flag
+            this.hasUnsavedChanges = false;
+            
+            console.log('Cancel completed successfully');
+        } finally {
+            // Always reset the flag
+            this.isPerformingCancel = false;
         }
     }
 
@@ -740,7 +845,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     }
 
     /**
-     * Refreshes the related data
+     * Refreshes the related data and updates snapshots
      */
     public async refreshRelatedData() {
         if (this.record?.ID) {
@@ -751,6 +856,37 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 2000
             );
         }
+    }
+
+    /**
+     * Manually refreshes the snapshot for cancel/revert functionality
+     * Useful when you want to reset the "original state" to the current state
+     */
+    public refreshSnapshot() {
+        this.createOriginalSnapshot();
+        MJNotificationService.Instance.CreateSimpleNotification(
+            'Current state saved as new baseline',
+            'info',
+            2000
+        );
+    }
+
+    /**
+     * Debug method to check current pending records state
+     * Useful for troubleshooting cancel/revert issues
+     */
+    public debugPendingRecords() {
+        console.log('=== Pending Records Debug ===');
+        console.log('Pending Records Count:', this.PendingRecords.length);
+        console.log('Has Unsaved Changes:', this.hasUnsavedChanges);
+        console.log('Is Performing Cancel:', this.isPerformingCancel);
+        console.log('Pending Records:', this.PendingRecords.map(p => ({
+            entityName: p.entityObject.EntityInfo.Name,
+            id: p.entityObject.Get('ID'),
+            action: p.action,
+            isDirty: p.entityObject.Dirty
+        })));
+        console.log('=============================');
     }
 
 
@@ -1412,20 +1548,31 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
     /**
      * Override PopulatePendingRecords to preserve our pending records before parent clears them
+     * However, during cancel operations, we want to clear all pending records completely
      */
     protected PopulatePendingRecords() {
+        // If we're in the middle of a cancel operation, don't preserve pending records
+        // The base class CancelEdit will handle reverting pending records appropriately
+        if (this.isPerformingCancel) {
+            super.PopulatePendingRecords();
+            return;
+        }
+
         // IMPORTANT: The parent method clears the pending records array, so we need to preserve
-        // any records we've added before calling the parent method
+        // any records we've added before calling the parent method during normal operations
         const currentPendingRecords = [...this.PendingRecords]; // Make a copy
         
         // Call parent first to get child component pending records (this clears the array)
         super.PopulatePendingRecords();
         
-        // Re-add our preserved records
+        // Re-add our preserved records (only during normal save operations)
         for (const record of currentPendingRecords) {
             this.PendingRecords.push(record);
         }
     }
+
+    /** Flag to track if we're currently performing a cancel operation */
+    private isPerformingCancel = false;
 
     /**
      * Override InternalSaveRecord to handle agent-specific transaction logic
