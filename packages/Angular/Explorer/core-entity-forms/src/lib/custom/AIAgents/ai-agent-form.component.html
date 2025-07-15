@@ -162,7 +162,10 @@
                                     </div>
                                     <div class="header-actions">
                                         @if (EditMode && UserCanCreateSubAgents) {
-                                            <button kendoButton themeColor="primary" size="small" (click)="createSubAgent()">
+                                            <button kendoButton themeColor="primary" size="small" (click)="addSubAgents()">
+                                                <i class="fa-solid fa-plus"></i> Add Subagent
+                                            </button>
+                                            <button kendoButton themeColor="secondary" size="small" (click)="createSubAgent()">
                                                 <i class="fa-solid fa-plus"></i> Create Sub-Agent
                                             </button>
                                         }
@@ -175,7 +178,10 @@
                                         <h4>No Sub-Agents</h4>
                                         <p>Create sub-agents to build a hierarchical structure for complex workflows.</p>
                                         @if (EditMode && UserCanCreateSubAgents) {
-                                            <button kendoButton themeColor="primary" (click)="createSubAgent()">
+                                            <button kendoButton themeColor="primary" (click)="addSubAgents()">
+                                                <i class="fa-solid fa-plus"></i> Add Subagent
+                                            </button>
+                                            <button kendoButton themeColor="secondary" (click)="createSubAgent()">
                                                 <i class="fa-solid fa-plus"></i> Create First Sub-Agent
                                             </button>
                                         }
