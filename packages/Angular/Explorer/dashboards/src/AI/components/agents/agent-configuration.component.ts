@@ -1,5 +1,5 @@
 import { Component, Output, EventEmitter, OnInit, OnDestroy, Input, ViewContainerRef, AfterViewInit, ChangeDetectorRef } from '@angular/core';
-import { RunView } from '@memberjunction/core';
+import { RunView, Metadata } from '@memberjunction/core';
 import { AIAgentEntity } from '@memberjunction/core-entities';
 import { NewAgentDialogService } from '@memberjunction/ng-core-entity-forms';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
@@ -41,6 +41,87 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
   };
 
   public selectedAgentForTest: AIAgentEntity | null = null;
+
+  // === Permission Checks ===
+  /** Cache for permission checks to avoid repeated calculations */
+  private _permissionCache = new Map<string, boolean>();
+  private _metadata = new Metadata();
+
+  /** Check if user can create AI Agents */
+  public get UserCanCreateAgents(): boolean {
+    return this.checkEntityPermission('AI Agents', 'Create');
+  }
+
+  /** Check if user can read AI Agents */
+  public get UserCanReadAgents(): boolean {
+    return this.checkEntityPermission('AI Agents', 'Read');
+  }
+
+  /** Check if user can update AI Agents */
+  public get UserCanUpdateAgents(): boolean {
+    return this.checkEntityPermission('AI Agents', 'Update');
+  }
+
+  /** Check if user can delete AI Agents */
+  public get UserCanDeleteAgents(): boolean {
+    return this.checkEntityPermission('AI Agents', 'Delete');
+  }
+
+  /**
+   * Helper method to check entity permissions with caching
+   * @param entityName - The name of the entity to check permissions for
+   * @param permissionType - The type of permission to check (Create, Read, Update, Delete)
+   * @returns boolean indicating if user has the permission
+   */
+  private checkEntityPermission(entityName: string, permissionType: 'Create' | 'Read' | 'Update' | 'Delete'): boolean {
+    const cacheKey = `${entityName}_${permissionType}`;
+    
+    if (this._permissionCache.has(cacheKey)) {
+      return this._permissionCache.get(cacheKey)!;
+    }
+
+    try {
+      const entityInfo = this._metadata.Entities.find(e => e.Name === entityName);
+      
+      if (!entityInfo) {
+        console.warn(`Entity '${entityName}' not found for permission check`);
+        this._permissionCache.set(cacheKey, false);
+        return false;
+      }
+
+      const userPermissions = entityInfo.GetUserPermisions(this._metadata.CurrentUser);
+      let hasPermission = false;
+
+      switch (permissionType) {
+        case 'Create':
+          hasPermission = userPermissions.CanCreate;
+          break;
+        case 'Read':
+          hasPermission = userPermissions.CanRead;
+          break;
+        case 'Update':
+          hasPermission = userPermissions.CanUpdate;
+          break;
+        case 'Delete':
+          hasPermission = userPermissions.CanDelete;
+          break;
+      }
+
+      this._permissionCache.set(cacheKey, hasPermission);
+      return hasPermission;
+    } catch (error) {
+      console.error(`Error checking ${permissionType} permission for ${entityName}:`, error);
+      this._permissionCache.set(cacheKey, false);
+      return false;
+    }
+  }
+
+  /**
+   * Clears the permission cache. Call this when user context changes or permissions are updated.
+   */
+  public clearPermissionCache(): void {
+    this._permissionCache.clear();
+  }
 
   constructor(
     private newAgentDialogService: NewAgentDialogService,

@@ -105,6 +105,143 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         { text: 'Agent', value: 'Agent' }
     ];
 
+    // === Permission Checks for Related Entities ===
+    /** Cache for permission checks to avoid repeated calculations */
+    private _permissionCache = new Map<string, boolean>();
+
+    // Main AI Agent permissions inherited from BaseFormComponent:
+    // - UserCanEdit (Update permission)
+    // - UserCanRead (Read permission) 
+    // - UserCanCreate (Create permission)
+    // - UserCanDelete (Delete permission)
+
+    /** Check if user can create AI Agent Actions */
+    public get UserCanCreateActions(): boolean {
+        return this.checkEntityPermission('AI Agent Actions', 'Create');
+    }
+
+    /** Check if user can update AI Agent Actions */
+    public get UserCanUpdateActions(): boolean {
+        return this.checkEntityPermission('AI Agent Actions', 'Update');
+    }
+
+    /** Check if user can delete AI Agent Actions */
+    public get UserCanDeleteActions(): boolean {
+        return this.checkEntityPermission('AI Agent Actions', 'Delete');
+    }
+
+    /** Check if user can create AI Agent Prompts */
+    public get UserCanCreatePrompts(): boolean {
+        return this.checkEntityPermission('AI Agent Prompts', 'Create');
+    }
+
+    /** Check if user can update AI Agent Prompts */
+    public get UserCanUpdatePrompts(): boolean {
+        return this.checkEntityPermission('AI Agent Prompts', 'Update');
+    }
+
+    /** Check if user can delete AI Agent Prompts */
+    public get UserCanDeletePrompts(): boolean {
+        return this.checkEntityPermission('AI Agent Prompts', 'Delete');
+    }
+
+    /** Check if user can create AI Agents (for sub-agents) */
+    public get UserCanCreateSubAgents(): boolean {
+        return this.checkEntityPermission('AI Agents', 'Create');
+    }
+
+    /** Check if user can update AI Agents (for sub-agents) */
+    public get UserCanUpdateSubAgents(): boolean {
+        return this.checkEntityPermission('AI Agents', 'Update');
+    }
+
+    /** Check if user can delete AI Agents (for sub-agents) */
+    public get UserCanDeleteSubAgents(): boolean {
+        return this.checkEntityPermission('AI Agents', 'Delete');
+    }
+
+    /** Check if user can create AI Agent Notes */
+    public get UserCanCreateNotes(): boolean {
+        return this.checkEntityPermission('AI Agent Notes', 'Create');
+    }
+
+    /** Check if user can update AI Agent Notes */
+    public get UserCanUpdateNotes(): boolean {
+        return this.checkEntityPermission('AI Agent Notes', 'Update');
+    }
+
+    /** Check if user can delete AI Agent Notes */
+    public get UserCanDeleteNotes(): boolean {
+        return this.checkEntityPermission('AI Agent Notes', 'Delete');
+    }
+
+    /** Check if user can view AI Agent Learning Cycles */
+    public get UserCanViewLearningCycles(): boolean {
+        return this.checkEntityPermission('AI Agent Learning Cycles', 'Read');
+    }
+
+    /** Check if user can view AI Agent Runs (execution history) */
+    public get UserCanViewExecutionHistory(): boolean {
+        return this.checkEntityPermission('AI Agent Runs', 'Read');
+    }
+
+    /**
+     * Helper method to check entity permissions with caching
+     * @param entityName - The name of the entity to check permissions for
+     * @param permissionType - The type of permission to check (Create, Read, Update, Delete)
+     * @returns boolean indicating if user has the permission
+     */
+    private checkEntityPermission(entityName: string, permissionType: 'Create' | 'Read' | 'Update' | 'Delete'): boolean {
+        const cacheKey = `${entityName}_${permissionType}`;
+        
+        if (this._permissionCache.has(cacheKey)) {
+            return this._permissionCache.get(cacheKey)!;
+        }
+
+        try {
+            const md = new Metadata();
+            const entityInfo = md.Entities.find(e => e.Name === entityName);
+            
+            if (!entityInfo) {
+                console.warn(`Entity '${entityName}' not found for permission check`);
+                this._permissionCache.set(cacheKey, false);
+                return false;
+            }
+
+            const userPermissions = entityInfo.GetUserPermisions(md.CurrentUser);
+            let hasPermission = false;
+
+            switch (permissionType) {
+                case 'Create':
+                    hasPermission = userPermissions.CanCreate;
+                    break;
+                case 'Read':
+                    hasPermission = userPermissions.CanRead;
+                    break;
+                case 'Update':
+                    hasPermission = userPermissions.CanUpdate;
+                    break;
+                case 'Delete':
+                    hasPermission = userPermissions.CanDelete;
+                    break;
+            }
+
+            this._permissionCache.set(cacheKey, hasPermission);
+            return hasPermission;
+        } catch (error) {
+            console.error(`Error checking ${permissionType} permission for ${entityName}:`, error);
+            this._permissionCache.set(cacheKey, false);
+            return false;
+        }
+    }
+
+    /**
+     * Clears the permission cache. Call this when user context changes or permissions are updated.
+     */
+    public clearPermissionCache(): void {
+        this._permissionCache.clear();
+    }
+
     // === Transaction-based editing support ===
     /** Now using BaseFormComponent's PendingRecords system exclusively */
     

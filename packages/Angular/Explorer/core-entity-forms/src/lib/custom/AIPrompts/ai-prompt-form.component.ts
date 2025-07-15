@@ -60,10 +60,121 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     // Store original state for cancel/revert functionality
     private originalTemplateID: string | null = null;
     
+    // === Permission Checks for Related Entities ===
+    /** Cache for permission checks to avoid repeated calculations */
+    private _permissionCache = new Map<string, boolean>();
+
+    // Main AI Prompt permissions inherited from BaseFormComponent:
+    // - UserCanEdit (Update permission)
+    // - UserCanRead (Read permission) 
+    // - UserCanCreate (Create permission)
+    // - UserCanDelete (Delete permission)
+
+    /** Check if user can create Templates */
+    public get UserCanCreateTemplates(): boolean {
+        return this.checkEntityPermission('Templates', 'Create');
+    }
+
+    /** Check if user can update Templates */
+    public get UserCanUpdateTemplates(): boolean {
+        return this.checkEntityPermission('Templates', 'Update');
+    }
+
+    /** Check if user can delete Templates */
+    public get UserCanDeleteTemplates(): boolean {
+        return this.checkEntityPermission('Templates', 'Delete');
+    }
+
+    /** Check if user can read Templates */
+    public get UserCanReadTemplates(): boolean {
+        return this.checkEntityPermission('Templates', 'Read');
+    }
+
+    /** Check if user can create Template Contents */
+    public get UserCanCreateTemplateContents(): boolean {
+        return this.checkEntityPermission('Template Contents', 'Create');
+    }
+
+    /** Check if user can update Template Contents */
+    public get UserCanUpdateTemplateContents(): boolean {
+        return this.checkEntityPermission('Template Contents', 'Update');
+    }
+
+    /** Check if user can create AI Prompt Models */
+    public get UserCanCreatePromptModels(): boolean {
+        return this.checkEntityPermission('AI Prompt Models', 'Create');
+    }
+
+    /** Check if user can update AI Prompt Models */
+    public get UserCanUpdatePromptModels(): boolean {
+        return this.checkEntityPermission('AI Prompt Models', 'Update');
+    }
+
+    /** Check if user can delete AI Prompt Models */
+    public get UserCanDeletePromptModels(): boolean {
+        return this.checkEntityPermission('AI Prompt Models', 'Delete');
+    }
+
+    /**
+     * Helper method to check entity permissions with caching
+     * @param entityName - The name of the entity to check permissions for
+     * @param permissionType - The type of permission to check (Create, Read, Update, Delete)
+     * @returns boolean indicating if user has the permission
+     */
+    private checkEntityPermission(entityName: string, permissionType: 'Create' | 'Read' | 'Update' | 'Delete'): boolean {
+        const cacheKey = `${entityName}_${permissionType}`;
+        
+        if (this._permissionCache.has(cacheKey)) {
+            return this._permissionCache.get(cacheKey)!;
+        }
+
+        try {
+            const entityInfo = this._metadata.Entities.find(e => e.Name === entityName);
+            
+            if (!entityInfo) {
+                console.warn(`Entity '${entityName}' not found for permission check`);
+                this._permissionCache.set(cacheKey, false);
+                return false;
+            }
+
+            const userPermissions = entityInfo.GetUserPermisions(this._metadata.CurrentUser);
+            let hasPermission = false;
+
+            switch (permissionType) {
+                case 'Create':
+                    hasPermission = userPermissions.CanCreate;
+                    break;
+                case 'Read':
+                    hasPermission = userPermissions.CanRead;
+                    break;
+                case 'Update':
+                    hasPermission = userPermissions.CanUpdate;
+                    break;
+                case 'Delete':
+                    hasPermission = userPermissions.CanDelete;
+                    break;
+            }
+
+            this._permissionCache.set(cacheKey, hasPermission);
+            return hasPermission;
+        } catch (error) {
+            console.error(`Error checking ${permissionType} permission for ${entityName}:`, error);
+            this._permissionCache.set(cacheKey, false);
+            return false;
+        }
+    }
+
+    /**
+     * Clears the permission cache. Call this when user context changes or permissions are updated.
+     */
+    public clearPermissionCache(): void {
+        this._permissionCache.clear();
+    }
+    
     // Template editor configuration
     public get templateEditorConfig(): TemplateEditorConfig {
         return {
-            allowEdit: this.EditMode,
+            allowEdit: this.EditMode && this.UserCanUpdateTemplateContents,
             showRunButton: false,
             compactMode: false
         };

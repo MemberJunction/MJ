@@ -171,12 +171,16 @@
                                     Create a new template or link to an existing one.
                                 </p>
                                 <div style="display: flex; gap: 12px;">
-                                    <button kendoButton [themeColor]="'primary'" (click)="createNewTemplate()">
-                                        <i class="fa-solid fa-plus"></i> Create New Template
-                                    </button>
-                                    <button kendoButton [fillMode]="'outline'" (click)="linkExistingTemplate()">
-                                        <i class="fa-solid fa-link"></i> Link Existing Template
-                                    </button>
+                                    @if (UserCanCreateTemplates) {
+                                        <button kendoButton [themeColor]="'primary'" (click)="createNewTemplate()">
+                                            <i class="fa-solid fa-plus"></i> Create New Template
+                                        </button>
+                                    }
+                                    @if (UserCanReadTemplates) {
+                                        <button kendoButton [fillMode]="'outline'" (click)="linkExistingTemplate()">
+                                            <i class="fa-solid fa-link"></i> Link Existing Template
+                                        </button>
+                                    }
                                 </div>
                             </div>
                         } @else if (templateNotFoundInDatabase) {
@@ -190,9 +194,11 @@
                                     <button kendoButton [fillMode]="'outline'" (click)="loadTemplate()">
                                         <i class="fa-solid fa-refresh"></i> Retry Loading
                                     </button>
-                                    <button kendoButton [themeColor]="'primary'" (click)="createNewTemplate()">
-                                        <i class="fa-solid fa-plus"></i> Create New Template
-                                    </button>
+                                    @if (UserCanCreateTemplates) {
+                                        <button kendoButton [themeColor]="'primary'" (click)="createNewTemplate()">
+                                            <i class="fa-solid fa-plus"></i> Create New Template
+                                        </button>
+                                    }
                                 </div>
                             </div>
                         } @else {
@@ -201,20 +207,24 @@
                                 <!-- Template Actions Bar -->
                                 @if (template && EditMode) {
                                     <div class="template-actions" style="display: flex; gap: 8px; padding: 8px; border-bottom: 1px solid #e9ecef; background: #f8f9fa;">
-                                        <button kendoButton 
-                                                [fillMode]="'outline'" 
-                                                [size]="'small'"
-                                                (click)="linkExistingTemplate()"
-                                                title="Change to a different template">
-                                            <i class="fa-solid fa-exchange-alt"></i> Change Template
-                                        </button>
-                                        <button kendoButton 
-                                                [fillMode]="'outline'" 
-                                                [size]="'small'"
-                                                (click)="openTemplateInNewWindow()"
-                                                title="Open template in new window">
-                                            <i class="fa-solid fa-external-link-alt"></i> Open in New Window
-                                        </button>
+                                        @if (UserCanUpdateTemplates) {
+                                            <button kendoButton 
+                                                    [fillMode]="'outline'" 
+                                                    [size]="'small'"
+                                                    (click)="linkExistingTemplate()"
+                                                    title="Change to a different template">
+                                                <i class="fa-solid fa-exchange-alt"></i> Change Template
+                                            </button>
+                                        }
+                                        @if (UserCanReadTemplates) {
+                                            <button kendoButton 
+                                                    [fillMode]="'outline'" 
+                                                    [size]="'small'"
+                                                    (click)="openTemplateInNewWindow()"
+                                                    title="Open template in new window">
+                                                <i class="fa-solid fa-external-link-alt"></i> Open in New Window
+                                            </button>
+                                        }
                                     </div>
                                 }
                                 
@@ -408,7 +418,7 @@
                                     @if (promptModels.length === 0) {
                                         <div class="empty-state" style="padding: 20px; text-align: center; color: #6c757d;">
                                             <i class="fa-solid fa-info-circle"></i> No models configured
-                                            @if (EditMode) {
+                                            @if (EditMode && UserCanCreatePromptModels) {
                                                 <div style="margin-top: 10px;">
                                                     <button kendoButton fillMode="outline" themeColor="primary" size="small"
                                                                 (click)="addNewModel()">
@@ -544,24 +554,28 @@
                                                 <div class="model-actions" style="display: flex; gap: 2px; flex-direction: column;">
                                                     @if (EditMode) {
                                                         <div style="display: flex; gap: 2px; margin-bottom: 4px;">
-                                                            <button kendoButton fillMode="flat" size="small"
-                                                                        (click)="moveModelUp(i)"
-                                                                        [disabled]="i === 0"
-                                                                        title="Move up">
-                                                                <i class="fa-solid fa-chevron-up"></i>
-                                                            </button>
-                                                            <button kendoButton fillMode="flat" size="small"
-                                                                        (click)="moveModelDown(i)"
-                                                                        [disabled]="i === promptModels.length - 1"
-                                                                        title="Move down">
-                                                                <i class="fa-solid fa-chevron-down"></i>
-                                                            </button>
+                                                            @if (UserCanUpdatePromptModels) {
+                                                                <button kendoButton fillMode="flat" size="small"
+                                                                            (click)="moveModelUp(i)"
+                                                                            [disabled]="i === 0"
+                                                                            title="Move up">
+                                                                    <i class="fa-solid fa-chevron-up"></i>
+                                                                </button>
+                                                                <button kendoButton fillMode="flat" size="small"
+                                                                            (click)="moveModelDown(i)"
+                                                                            [disabled]="i === promptModels.length - 1"
+                                                                            title="Move down">
+                                                                    <i class="fa-solid fa-chevron-down"></i>
+                                                                </button>
+                                                            }
                                                         </div>
-                                                        <button kendoButton fillMode="flat" themeColor="error" size="small"
-                                                                    (click)="removePromptModel(i)"
-                                                                    title="Remove model">
-                                                            <i class="fa-solid fa-times"></i>
-                                                        </button>
+                                                        @if (UserCanDeletePromptModels) {
+                                                            <button kendoButton fillMode="flat" themeColor="error" size="small"
+                                                                        (click)="removePromptModel(i)"
+                                                                        title="Remove model">
+                                                                <i class="fa-solid fa-times"></i>
+                                                            </button>
+                                                        }
                                                     }
                                                 </div>
                                             </div>
@@ -650,7 +664,7 @@
                                             </div>
                                         }
                                         
-                                        @if (EditMode) {
+                                        @if (EditMode && UserCanCreatePromptModels) {
                                             <div class="add-model-row" style="padding: 12px 16px; text-align: center; background: #f8f9fa; border-top: 1px solid #dee2e6;">
                                                 <button kendoButton fillMode="outline" themeColor="success" size="small"
                                                             (click)="addNewModel()">
