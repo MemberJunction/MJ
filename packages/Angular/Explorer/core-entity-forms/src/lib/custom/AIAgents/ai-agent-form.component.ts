@@ -3,35 +3,16 @@ import { Router, ActivatedRoute } from '@angular/router';
 import { ActionEntity, AIAgentActionEntity, AIAgentEntity, AIAgentLearningCycleEntity, AIAgentNoteEntity, AIAgentPromptEntity, AIAgentRunEntity, AIPromptEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { CompositeKey, Metadata, RunView, TransactionGroupBase } from '@memberjunction/core';
+import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIAgentFormComponent } from '../../generated/Entities/AIAgent/aiagent.form.component';
 import { DialogService } from '@progress/kendo-angular-dialog';
 import { SharedService } from '@memberjunction/ng-shared';
-import { EntitySelectorDialogComponent, EntitySelectorConfig } from '../shared/entity-selector-dialog.component';
 import { NewAgentDialogService } from './new-agent-dialog.service';
 import { AIAgentManagementService } from './ai-agent-management.service';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { firstValueFrom } from 'rxjs';
 
-// Interfaces for tracking pending changes
-interface PendingPromptChange {
-  action: 'add' | 'remove';
-  prompt: AIPromptEntity;
-  agentPromptEntity?: AIAgentPromptEntity; // For removal, stores the existing link entity
-}
-
-interface PendingActionChange {
-  action: 'add' | 'remove';
-  actionEntity: ActionEntity;
-  agentActionEntity?: AIAgentActionEntity; // For removal, stores the existing link entity
-}
-
-interface PendingSubAgentChange {
-  action: 'add' | 'remove';
-  agent: AIAgentEntity;
-  originalParentId?: string | null; // For removal, stores the original parent ID to restore
-}
 
 /**
  * Enhanced AI Agent form component that extends the auto-generated base form
@@ -118,14 +99,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     public expandedExecutions: { [key: string]: boolean } = {};
 
     // === Transaction-based editing support ===
-    /** Pending prompt changes to be applied on save */
-    private pendingPromptChanges: PendingPromptChange[] = [];
-    
-    /** Pending action changes to be applied on save */
-    private pendingActionChanges: PendingActionChange[] = [];
-    
-    /** Pending sub-agent changes to be applied on save */
-    private pendingSubAgentChanges: PendingSubAgentChange[] = [];
+    /** Now using BaseFormComponent's PendingRecords system exclusively */
     
     /** Flag to indicate if there are unsaved changes */
     public hasUnsavedChanges = false;
@@ -156,144 +130,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         }
     }
 
-    /**
-     * Override the base form's save method to handle transaction-based batch operations
-     */
-    protected async InternalSaveRecord(): Promise<boolean> {
-        if (!this.record) {
-            return false;
-        }
 
-        // First save the main agent record and apply pending changes
-        try {
-            const md = new Metadata();
-            const transactionGroup = await md.CreateTransactionGroup();
 
-            // Set the agent to use the transaction group
-            this.record.TransactionGroup = transactionGroup;
-            
-            // Save the main agent record
-            const agentSaveResult = await this.record.Save();
-            if (!agentSaveResult) {
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    'Failed to save agent details. Please check the form data.',
-                    'error',
-                    4000
-                );
-                return false;
-            }
-
-            // Process pending prompt changes
-            for (const change of this.pendingPromptChanges) {
-                if (change.action === 'add') {
-                    const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent Prompts');
-                    agentPrompt.AgentID = this.record.ID;
-                    agentPrompt.PromptID = change.prompt.ID;
-                    agentPrompt.Status = 'Active';
-                    agentPrompt.ExecutionOrder = 1;
-                    agentPrompt.TransactionGroup = transactionGroup;
-                    await agentPrompt.Save();
-                } else if (change.action === 'remove' && change.agentPromptEntity) {
-                    // Load the entity fresh for deletion to ensure it's properly initialized
-                    const agentPromptToDelete = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent Prompts');
-                    await agentPromptToDelete.Load(change.agentPromptEntity.ID);
-                    
-                    agentPromptToDelete.TransactionGroup = transactionGroup;
-                    await agentPromptToDelete.Delete();
-                }
-            }
-
-            // Process pending action changes
-            for (const change of this.pendingActionChanges) {
-                if (change.action === 'add') {
-                    const agentAction = await md.GetEntityObject<AIAgentActionEntity>('AI Agent Actions');
-                    agentAction.AgentID = this.record.ID;
-                    agentAction.ActionID = change.actionEntity.ID;
-                    agentAction.Status = 'Active';
-                    agentAction.TransactionGroup = transactionGroup;
-                    await agentAction.Save();
-                } else if (change.action === 'remove' && change.agentActionEntity) {
-                    // Load the entity fresh for deletion to ensure it's properly initialized
-                    const agentActionToDelete = await md.GetEntityObject<AIAgentActionEntity>('AI Agent Actions');
-                    await agentActionToDelete.Load(change.agentActionEntity.ID);
-                    
-                    agentActionToDelete.TransactionGroup = transactionGroup;
-                    await agentActionToDelete.Delete();
-                }
-            }
-
-            // Process pending sub-agent changes
-            for (const change of this.pendingSubAgentChanges) {
-                if (change.action === 'add') {
-                    // Load the agent to update its ParentID
-                    const subAgentToUpdate = await md.GetEntityObject<AIAgentEntity>('AI Agents');
-                    await subAgentToUpdate.Load(change.agent.ID);
-                    subAgentToUpdate.ParentID = this.record.ID;
-                    // Database constraint requires ExposeAsAction = false for sub-agents
-                    subAgentToUpdate.ExposeAsAction = false;
-                    subAgentToUpdate.TransactionGroup = transactionGroup;
-                    await subAgentToUpdate.Save();
-                } else if (change.action === 'remove') {
-                    // Load the agent to remove its ParentID
-                    const subAgentToUpdate = await md.GetEntityObject<AIAgentEntity>('AI Agents');
-                    await subAgentToUpdate.Load(change.agent.ID);
-                    subAgentToUpdate.ParentID = change.originalParentId || null;
-                    subAgentToUpdate.TransactionGroup = transactionGroup;
-                    await subAgentToUpdate.Save();
-                }
-            }
-
-            // Execute all operations atomically
-            const success = await transactionGroup.Submit();
-            if (success) {
-                // Clear pending changes
-                this.pendingPromptChanges = [];
-                this.pendingActionChanges = [];
-                this.pendingSubAgentChanges = [];
-                this.hasUnsavedChanges = false;
-
-                // Reload related data to reflect changes
-                await this.loadRelatedCounts();
-
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    'AI Agent saved successfully',
-                    'success',
-                    3000
-                );
-
-                // Form saved successfully
-                return true;
-            } else {
-                // Transaction failed - analyze errors
-                const errors: string[] = [];
-                
-                // Check agent save errors
-                if (this.record.LatestResult && !this.record.LatestResult.Success) {
-                    errors.push(`Agent: ${this.record.LatestResult.Message || 'Unknown error'}`);
-                }
-
-                // If no specific errors found, show generic message
-                if (errors.length === 0) {
-                    errors.push('Unknown error occurred during save operation');
-                }
-
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    `Save failed: ${errors.join('; ')}. Please fix the issues and try again.`,
-                    'error',
-                    6000
-                );
-                return false;
-            }
-        } catch (error) {
-            console.error('Error saving AI Agent with transaction:', error);
-            MJNotificationService.Instance.CreateSimpleNotification(
-                `Save failed: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
-                'error',
-                5000
-            );
-            return false;
-        }
-    }
 
     /**
      * Loads counts and preview data for all related entities including sub-agents,
@@ -514,9 +352,9 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     public async addPrompt() {
         // Get currently linked and pending prompt IDs for pre-selection
         const currentPromptIds = this.agentPrompts.map(ap => ap.ID);
-        const pendingAddIds = this.pendingPromptChanges
-            .filter(change => change.action === 'add')
-            .map(change => change.prompt.ID);
+        const pendingAddIds = this.PendingRecords
+            .filter(p => p.entityObject.EntityInfo.Name === 'MJ: AI Agent Prompts' && p.action === 'save')
+            .map(p => p.entityObject.Get('PromptID'));
         const allLinkedIds = [...currentPromptIds, ...pendingAddIds];
         
         try {
@@ -544,10 +382,18 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                         }
                         
                         // Add to pending changes (defer until save)
+                        const md = new Metadata();
                         for (const prompt of newPrompts) {
-                            this.pendingPromptChanges.push({
-                                action: 'add',
-                                prompt: prompt
+                            const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent Prompts');
+                            agentPrompt.NewRecord();
+                            agentPrompt.AgentID = this.record.ID;
+                            agentPrompt.PromptID = prompt.ID;
+                            agentPrompt.Status = 'Active';
+                            agentPrompt.ExecutionOrder = 1;
+                            
+                            this.PendingRecords.push({
+                                entityObject: agentPrompt,
+                                action: 'save'
                             });
                         }
                         
@@ -634,9 +480,9 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     public async configureActions() {
         // Get currently linked and pending action IDs for pre-selection
         const currentActionIds = this.agentActions.map(aa => aa.ID);
-        const pendingAddIds = this.pendingActionChanges
-            .filter(change => change.action === 'add')
-            .map(change => change.actionEntity.ID);
+        const pendingAddIds = this.PendingRecords
+            .filter(p => p.entityObject.EntityInfo.Name === 'AI Agent Actions' && p.action === 'save')
+            .map(p => p.entityObject.Get('ActionID'));
         const allLinkedIds = [...currentActionIds, ...pendingAddIds];
         
         this.agentManagementService.openAddActionDialog({
@@ -645,7 +491,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             existingActionIds: allLinkedIds,
             viewContainerRef: this.viewContainerRef
         }).subscribe({
-            next: (selectedActions) => {
+            next: async (selectedActions) => {
                 if (selectedActions && selectedActions.length > 0) {
                     // Filter out already linked or pending actions
                     const newActions = selectedActions.filter(action => 
@@ -662,10 +508,17 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     }
                     
                     // Add to pending changes (defer until save)
+                    const md = new Metadata();
                     for (const action of newActions) {
-                        this.pendingActionChanges.push({
-                            action: 'add',
-                            actionEntity: action
+                        const agentAction = await md.GetEntityObject<AIAgentActionEntity>('AI Agent Actions');
+                        agentAction.NewRecord();
+                        agentAction.AgentID = this.record.ID;
+                        agentAction.ActionID = action.ID;
+                        agentAction.Status = 'Active';
+                        
+                        this.PendingRecords.push({
+                            entityObject: agentAction,
+                            action: 'save'
                         });
                     }
                     
@@ -950,29 +803,31 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             if (result && (result as any).text === 'Remove') {
                 try {
                     // Check if this is a pending add (not yet in database)
-                    const pendingAddIndex = this.pendingPromptChanges.findIndex(
-                        change => change.action === 'add' && change.prompt.ID === prompt.ID
+                    const pendingAddIndex = this.PendingRecords.findIndex(
+                        p => p.entityObject.EntityInfo.Name === 'MJ: AI Agent Prompts' && 
+                             p.action === 'save' && 
+                             p.entityObject.Get('PromptID') === prompt.ID
                     );
 
                     if (pendingAddIndex >= 0) {
                         // Remove from pending adds
-                        this.pendingPromptChanges.splice(pendingAddIndex, 1);
+                        this.PendingRecords.splice(pendingAddIndex, 1);
                     } else {
                         // Find the existing AI Agent Prompt link record for deferred deletion
                         const rv = new RunView();
                         const linkResult = await rv.RunView<AIAgentPromptEntity>({
                             EntityName: 'MJ: AI Agent Prompts',
-                            ExtraFilter: `AgentID='${this.record.ID}' AND PromptID='${prompt.ID}'` 
+                            ExtraFilter: `AgentID='${this.record.ID}' AND PromptID='${prompt.ID}'`,
+                            ResultType: 'entity_object'
                         });
 
-                        if (linkResult.Results && linkResult.Results.length > 0) {
-                            const agentPrompt = linkResult.Results[0];
+                        if (linkResult.Success && linkResult.Results && linkResult.Results.length > 0) {
+                            const agentPromptToDelete = linkResult.Results[0];
                             
-                            // Add to pending removals
-                            this.pendingPromptChanges.push({
-                                action: 'remove',
-                                prompt: prompt,
-                                agentPromptEntity: agentPrompt
+                            // Add to pending deletions
+                            this.PendingRecords.push({
+                                entityObject: agentPromptToDelete,
+                                action: 'delete'
                             });
                         } else {
                             throw new Error('AI Agent Prompt link not found');
@@ -1027,9 +882,11 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     public async addSubAgents() {
         try {
             // Get list of already pending sub-agent IDs to filter duplicates
-            const pendingSubAgentIds = this.pendingSubAgentChanges
-                .filter(change => change.action === 'add')
-                .map(change => change.agent.ID);
+            const pendingSubAgentIds = this.PendingRecords
+                .filter(p => p.entityObject.EntityInfo.Name === 'AI Agents' && 
+                            p.action === 'save' && 
+                            p.entityObject.Get('ParentID') === this.record.ID)
+                .map(p => p.entityObject.Get('ID'));
             const existingSubAgentIds = this.subAgents.map(agent => agent.ID);
             const allLinkedIds = [...pendingSubAgentIds, ...existingSubAgentIds];
 
@@ -1057,10 +914,17 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                         }
                         
                         // Add to pending changes (defer until save)
+                        const md = new Metadata();
                         for (const agent of newAgents) {
-                            this.pendingSubAgentChanges.push({
-                                action: 'add',
-                                agent: agent
+                            const subAgentToUpdate = await md.GetEntityObject<AIAgentEntity>('AI Agents');
+                            await subAgentToUpdate.Load(agent.ID);
+                            subAgentToUpdate.ParentID = this.record.ID;
+                            // Database constraint requires ExposeAsAction = false for sub-agents
+                            subAgentToUpdate.ExposeAsAction = false;
+                            
+                            this.PendingRecords.push({
+                                entityObject: subAgentToUpdate,
+                                action: 'save'
                             });
                         }
                         
@@ -1125,19 +989,26 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             if (result && (result as any).text === 'Remove') {
                 try {
                     // Check if this is a pending add (not yet in database)
-                    const pendingAddIndex = this.pendingSubAgentChanges.findIndex(
-                        change => change.action === 'add' && change.agent.ID === subAgent.ID
+                    const pendingAddIndex = this.PendingRecords.findIndex(
+                        p => p.entityObject.EntityInfo.Name === 'AI Agents' && 
+                             p.action === 'save' && 
+                             p.entityObject.Get('ID') === subAgent.ID &&
+                             p.entityObject.Get('ParentID') === this.record.ID
                     );
 
                     if (pendingAddIndex >= 0) {
                         // Remove from pending adds
-                        this.pendingSubAgentChanges.splice(pendingAddIndex, 1);
+                        this.PendingRecords.splice(pendingAddIndex, 1);
                     } else {
                         // Add to pending removals (will restore to root agent)
-                        this.pendingSubAgentChanges.push({
-                            action: 'remove',
-                            agent: subAgent,
-                            originalParentId: null // Will become a root agent
+                        const md = new Metadata();
+                        const subAgentToUpdate = await md.GetEntityObject<AIAgentEntity>('AI Agents');
+                        await subAgentToUpdate.Load(subAgent.ID);
+                        subAgentToUpdate.ParentID = null; // Will become a root agent
+                        
+                        this.PendingRecords.push({
+                            entityObject: subAgentToUpdate,
+                            action: 'save'
                         });
                     }
 
@@ -1194,29 +1065,31 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             if (result && (result as any).text === 'Remove') {
                 try {
                 // Check if this is a pending add (not yet in database)
-                const pendingAddIndex = this.pendingActionChanges.findIndex(
-                    change => change.action === 'add' && change.actionEntity.ID === action.ID
+                const pendingAddIndex = this.PendingRecords.findIndex(
+                    p => p.entityObject.EntityInfo.Name === 'AI Agent Actions' && 
+                         p.action === 'save' && 
+                         p.entityObject.Get('ActionID') === action.ID
                 );
 
                 if (pendingAddIndex >= 0) {
                     // Remove from pending adds
-                    this.pendingActionChanges.splice(pendingAddIndex, 1);
+                    this.PendingRecords.splice(pendingAddIndex, 1);
                 } else {
                     // Find the existing AI Agent Action link record for deferred deletion
                     const rv = new RunView();
                     const linkResult = await rv.RunView<AIAgentActionEntity>({
                         EntityName: 'AI Agent Actions',
-                        ExtraFilter: `AgentID='${this.record.ID}' AND ActionID='${action.ID}'` 
+                        ExtraFilter: `AgentID='${this.record.ID}' AND ActionID='${action.ID}'`,
+                        ResultType: 'entity_object'
                     });
 
-                    if (linkResult.Results && linkResult.Results.length > 0) {
-                        const agentAction = linkResult.Results[0];
+                    if (linkResult.Success && linkResult.Results && linkResult.Results.length > 0) {
+                        const agentActionToDelete = linkResult.Results[0];
                         
-                        // Add to pending removals
-                        this.pendingActionChanges.push({
-                            action: 'remove',
-                            actionEntity: action,
-                            agentActionEntity: agentAction
+                        // Add to pending deletions
+                        this.PendingRecords.push({
+                            entityObject: agentActionToDelete,
+                            action: 'delete'
                         });
                     } else {
                         throw new Error('AI Agent Action link not found');
@@ -1445,6 +1318,102 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 'error',
                 3000
             );
+        }
+    }
+
+    /**
+     * Override PopulatePendingRecords to preserve our pending records before parent clears them
+     */
+    protected PopulatePendingRecords() {
+        // IMPORTANT: The parent method clears the pending records array, so we need to preserve
+        // any records we've added before calling the parent method
+        const currentPendingRecords = [...this.PendingRecords]; // Make a copy
+        
+        // Call parent first to get child component pending records (this clears the array)
+        super.PopulatePendingRecords();
+        
+        // Re-add our preserved records
+        for (const record of currentPendingRecords) {
+            this.PendingRecords.push(record);
+        }
+    }
+
+    /**
+     * Override InternalSaveRecord to handle agent-specific transaction logic
+     * AI Agent must be saved first since related entities depend on it
+     */
+    protected async InternalSaveRecord(): Promise<boolean> {
+        if (!this.record) {
+            return false;
+        }
+
+        try {
+            const md = new Metadata();
+            const transactionGroup = await md.CreateTransactionGroup();
+
+            // First, save the main AI Agent record (other entities depend on it)
+            this.record.TransactionGroup = transactionGroup;
+            const agentSaveResult = await this.record.Save();
+            if (!agentSaveResult) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Failed to save AI agent details. Please check the form data.',
+                    'error',
+                    4000
+                );
+                return false;
+            }
+
+            // Then save all pending records
+            for (const record of this.PendingRecords) {
+                record.entityObject.TransactionGroup = transactionGroup;
+                if (record.action === 'save') {
+                    const saveResult = await record.entityObject.Save();
+                    if (!saveResult) {
+                        console.error(`Failed to save ${record.entityObject.EntityInfo.Name} record:`, record.entityObject);
+                        MJNotificationService.Instance.CreateSimpleNotification(
+                            `Failed to save ${record.entityObject.EntityInfo.Name}. Transaction will be rolled back.`,
+                            'error',
+                            4000
+                        );
+                        return false;
+                    }
+                } else {
+                    await record.entityObject.Delete();
+                }
+            }
+
+            // Execute all operations atomically
+            const success = await transactionGroup.Submit();
+            if (success) {
+                // Clear our local state since save was successful
+                this.hasUnsavedChanges = false;
+                
+                // Reload related data to reflect database state
+                await this.loadRelatedCounts();
+
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'AI Agent and all related changes saved successfully',
+                    'success',
+                    3000
+                );
+                
+                return true;
+            } else {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Save failed. Please try again.',
+                    'error',
+                    4000
+                );
+                return false;
+            }
+        } catch (error) {
+            console.error('Error in AI agent save:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Save failed: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
+                'error',
+                5000
+            );
+            return false;
         }
     }
     
