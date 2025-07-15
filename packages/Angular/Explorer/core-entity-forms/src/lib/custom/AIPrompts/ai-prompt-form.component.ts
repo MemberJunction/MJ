@@ -102,17 +102,17 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
 
     /** Check if user can create AI Prompt Models */
     public get UserCanCreatePromptModels(): boolean {
-        return this.checkEntityPermission('AI Prompt Models', 'Create');
+        return this.checkEntityPermission('MJ: AI Prompt Models', 'Create');
     }
 
     /** Check if user can update AI Prompt Models */
     public get UserCanUpdatePromptModels(): boolean {
-        return this.checkEntityPermission('AI Prompt Models', 'Update');
+        return this.checkEntityPermission('MJ: AI Prompt Models', 'Update');
     }
 
     /** Check if user can delete AI Prompt Models */
     public get UserCanDeletePromptModels(): boolean {
-        return this.checkEntityPermission('AI Prompt Models', 'Delete');
+        return this.checkEntityPermission('MJ: AI Prompt Models', 'Delete');
     }
 
     /**

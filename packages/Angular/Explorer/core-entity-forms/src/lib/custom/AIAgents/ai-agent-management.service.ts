@@ -3,12 +3,12 @@ import { DialogService, DialogRef } from '@progress/kendo-angular-dialog';
 import { Observable } from 'rxjs';
 import { ActionEntity, AIAgentEntity, AIAgentPromptEntity, AIPromptEntity } from '@memberjunction/core-entities';
 import { AddActionDialogComponent } from './add-action-dialog.component';
-import { AgentAdvancedSettingsDialogComponent, AdvancedSettingsFormData } from './agent-advanced-settings-dialog.component';
 import { PromptSelectorDialogComponent, PromptSelectorConfig, PromptSelectorResult } from './prompt-selector-dialog.component';
 import { AgentPromptAdvancedSettingsDialogComponent, AgentPromptAdvancedSettingsFormData } from './agent-prompt-advanced-settings-dialog.component';
 import { SubAgentAdvancedSettingsDialogComponent, SubAgentAdvancedSettingsFormData } from './sub-agent-advanced-settings-dialog.component';
 import { SubAgentSelectorDialogComponent, SubAgentSelectorConfig, SubAgentSelectorResult } from './sub-agent-selector-dialog.component';
 import { CreatePromptDialogComponent, CreatePromptConfig, CreatePromptResult } from './create-prompt-dialog.component';
+import { CreateSubAgentDialogComponent, CreateSubAgentConfig, CreateSubAgentResult } from './create-sub-agent-dialog.component';
 
 /**
  * Consolidated service for managing AI Agent operations including:
@@ -61,35 +61,6 @@ export class AIAgentManagementService {
     return componentInstance.result.asObservable();
   }
 
-  // === Advanced Settings Management ===
-
-  /**
-   * Opens the Advanced Settings dialog for an AI Agent
-   * 
-   * @param config Configuration for the advanced settings dialog
-   * @returns Observable that emits the form data when dialog is closed, or null if cancelled
-   */
-  openAdvancedSettingsDialog(config: {
-    agent: AIAgentEntity;
-    viewContainerRef?: ViewContainerRef;
-  }): Observable<AdvancedSettingsFormData | null> {
-    const dialogRef: DialogRef = this.dialogService.open({
-      title: `Advanced Settings - ${config.agent.Name || 'AI Agent'}`,
-      content: AgentAdvancedSettingsDialogComponent,
-      actions: [], // Component handles actions
-      width: 900,
-      height: 700,
-      minWidth: 600,
-      minHeight: 500,
-      preventAction: () => false
-    });
-
-    // Pass configuration to the dialog component
-    const componentInstance = dialogRef.content.instance as AgentAdvancedSettingsDialogComponent;
-    componentInstance.agent = config.agent;
-
-    return componentInstance.result.asObservable();
-  }
 
   // === Prompt Management ===
 
@@ -306,6 +277,53 @@ export class AIAgentManagementService {
 
     // Pass configuration to the dialog component
     const componentInstance = dialogRef.content.instance as CreatePromptDialogComponent;
+    componentInstance.config = createConfig;
+
+    return componentInstance.result.asObservable();
+  }
+
+  // === Sub-Agent Creation ===
+
+  /**
+   * Opens the create sub-agent dialog for creating new sub-agents from within the AI Agent form
+   * Returns the created entities (not saved to database) for parent to add to PendingRecords
+   * 
+   * @param config Configuration for sub-agent creation
+   * @returns Observable that emits the created sub-agent and related entities when dialog is closed
+   */
+  openCreateSubAgentDialog(config: {
+    title?: string;
+    initialName?: string;
+    initialTypeID?: string;
+    parentAgentId: string;
+    parentAgentName?: string;
+    viewContainerRef?: ViewContainerRef;
+  }): Observable<CreateSubAgentResult | null> {
+    const createConfig: CreateSubAgentConfig = {
+      title: config.title || 'Create New Sub-Agent',
+      initialName: config.initialName,
+      initialTypeID: config.initialTypeID,
+      parentAgentId: config.parentAgentId,
+      parentAgentName: config.parentAgentName
+    };
+
+    const dialogRef: DialogRef = this.dialogService.open({
+      title: createConfig.title,
+      content: CreateSubAgentDialogComponent,
+      actions: [], // Component handles actions
+      width: 1000,
+      height: 800,
+      minWidth: 800,
+      minHeight: 600,
+      autoFocusedElement: undefined, // Allows ESC key to work
+      preventAction: (action) => {
+        // Allow ESC key to close the dialog
+        return action === 'close' ? false : false;
+      }
+    });
+
+    // Pass configuration to the dialog component
+    const componentInstance = dialogRef.content.instance as CreateSubAgentDialogComponent;
     componentInstance.config = createConfig;
 
     return componentInstance.result.asObservable();

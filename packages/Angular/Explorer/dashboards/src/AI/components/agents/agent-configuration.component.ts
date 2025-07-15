@@ -1,7 +1,6 @@
-import { Component, Output, EventEmitter, OnInit, OnDestroy, Input, ViewContainerRef, AfterViewInit, ChangeDetectorRef } from '@angular/core';
+import { Component, Output, EventEmitter, OnInit, OnDestroy, Input, AfterViewInit, ChangeDetectorRef } from '@angular/core';
 import { RunView, Metadata } from '@memberjunction/core';
 import { AIAgentEntity } from '@memberjunction/core-entities';
-import { NewAgentDialogService } from '@memberjunction/ng-core-entity-forms';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 
 interface AgentFilter {
@@ -124,8 +123,6 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
   }
 
   constructor(
-    private newAgentDialogService: NewAgentDialogService,
-    private viewContainerRef: ViewContainerRef,
     private testHarnessService: AITestHarnessDialogService,
     private cdr: ChangeDetectorRef
   ) {}
@@ -183,7 +180,7 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
     this.emitStateChange();
   }
 
-  public onMainSplitterChange(event: any): void {
+  public onMainSplitterChange(_event: any): void {
     this.emitStateChange();
   }
 
@@ -283,12 +280,9 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
   }
 
   public createNewAgent(): void {
-    this.newAgentDialogService.openForNewAgent(this.viewContainerRef).subscribe(result => {
-      if (result.action === 'created' && result.agent) {
-        // Reload the agents list to show the new agent
-        this.loadAgents();
-      }
-    });
+    // Use the standard MemberJunction pattern to open a new AI Agent form
+    // null for recordId indicates creating a new record
+    this.openEntityRecord.emit({ entityName: 'AI Agents', recordId: null as any });
   }
 
   public runAgent(agent: AIAgentEntity): void {

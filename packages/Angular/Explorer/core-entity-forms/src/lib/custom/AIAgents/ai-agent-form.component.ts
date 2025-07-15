@@ -132,17 +132,17 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
     /** Check if user can create AI Agent Prompts */
     public get UserCanCreatePrompts(): boolean {
-        return this.checkEntityPermission('AI Agent Prompts', 'Create');
+        return this.checkEntityPermission('MJ: AI Agent Prompts', 'Create');
     }
 
     /** Check if user can update AI Agent Prompts */
     public get UserCanUpdatePrompts(): boolean {
-        return this.checkEntityPermission('AI Agent Prompts', 'Update');
+        return this.checkEntityPermission('MJ: AI Agent Prompts', 'Update');
     }
 
     /** Check if user can delete AI Agent Prompts */
     public get UserCanDeletePrompts(): boolean {
-        return this.checkEntityPermission('AI Agent Prompts', 'Delete');
+        return this.checkEntityPermission('MJ: AI Agent Prompts', 'Delete');
     }
 
     /** Check if user can create AI Agents (for sub-agents) */
@@ -182,7 +182,17 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
     /** Check if user can view AI Agent Runs (execution history) */
     public get UserCanViewExecutionHistory(): boolean {
-        return this.checkEntityPermission('AI Agent Runs', 'Read');
+        return this.checkEntityPermission('MJ: AI Agent Runs', 'Read');
+    }
+
+    /** Check if user can create AI Prompts (needed for creating new prompts) */
+    public get UserCanCreateAIPrompts(): boolean {
+        return this.checkEntityPermission('AI Prompts', 'Create');
+    }
+
+    /** Check if user can create both AI Prompts and AI Agent Prompts (for createNewPrompt functionality) */
+    public get UserCanCreateNewPrompts(): boolean {
+        return this.UserCanCreateAIPrompts && this.UserCanCreatePrompts;
     }
 
     /**
@@ -574,19 +584,122 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     }
 
     /**
-     * Creates a new sub-agent
+     * Creates a new sub-agent using the create sub-agent dialog
      */
     public async createSubAgent() {
-        // Open a new AI Agent form with ParentID pre-populated
-        MJNotificationService.Instance.CreateSimpleNotification(
-            'Opening new sub-agent form...',
-            'info',
-            2000
-        );
-        
-        // For now, we'll just show a notification
-        // In a full implementation, this would emit an event to open a new form
-        // with ParentID pre-populated to this.record.ID
+        try {
+            this.agentManagementService.openCreateSubAgentDialog({
+                title: `Create Sub-Agent for ${this.record.Name || 'Agent'}`,
+                initialName: '',
+                parentAgentId: this.record.ID,
+                parentAgentName: this.record.Name || 'Agent',
+                viewContainerRef: this.viewContainerRef
+            }).subscribe({
+                next: async (result) => {
+                    if (result && result.subAgent) {
+                        try {
+                            // Handle deferred sub-agent creation if parent is not saved
+                            if (!this.record.IsSaved) {
+                                // Store a temporary reference to the parent - will be resolved during save
+                                result.subAgent.Set('_tempParentId', this.record.ID);
+                            }
+
+                            // Add the sub-agent to pending records
+                            this.PendingRecords.push({
+                                entityObject: result.subAgent,
+                                action: 'save'
+                            });
+
+                            // Add any newly created prompts to pending records
+                            if (result.newPrompts) {
+                                for (const prompt of result.newPrompts) {
+                                    this.PendingRecords.push({
+                                        entityObject: prompt,
+                                        action: 'save'
+                                    });
+                                }
+                            }
+
+                            // Add any newly created prompt templates to pending records
+                            if (result.newPromptTemplates) {
+                                for (const template of result.newPromptTemplates) {
+                                    this.PendingRecords.push({
+                                        entityObject: template,
+                                        action: 'save'
+                                    });
+                                }
+                            }
+
+                            // Add any newly created template contents to pending records
+                            if (result.newTemplateContents) {
+                                for (const content of result.newTemplateContents) {
+                                    this.PendingRecords.push({
+                                        entityObject: content,
+                                        action: 'save'
+                                    });
+                                }
+                            }
+
+                            // Add agent prompt links to pending records
+                            if (result.agentPrompts) {
+                                for (const agentPrompt of result.agentPrompts) {
+                                    this.PendingRecords.push({
+                                        entityObject: agentPrompt,
+                                        action: 'save'
+                                    });
+                                }
+                            }
+
+                            // Add agent action links to pending records
+                            if (result.agentActions) {
+                                for (const agentAction of result.agentActions) {
+                                    this.PendingRecords.push({
+                                        entityObject: agentAction,
+                                        action: 'save'
+                                    });
+                                }
+                            }
+
+                            // Update UI to show the new sub-agent
+                            this.subAgents.push(result.subAgent);
+                            this.subAgentCount = this.subAgents.length;
+                            this.hasUnsavedChanges = true;
+
+                            // Trigger change detection
+                            this.cdr.detectChanges();
+
+                            MJNotificationService.Instance.CreateSimpleNotification(
+                                `Sub-agent "${result.subAgent.Name}" created and will be saved when you save the parent agent`,
+                                'success',
+                                4000
+                            );
+                        } catch (error) {
+                            console.error('Error processing created sub-agent:', error);
+                            MJNotificationService.Instance.CreateSimpleNotification(
+                                'Error processing created sub-agent. Please try again.',
+                                'error',
+                                3000
+                            );
+                        }
+                    }
+                },
+                error: (error) => {
+                    console.error('Error in create sub-agent dialog:', error);
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        'Error opening sub-agent creation dialog. Please try again.',
+                        'error',
+                        3000
+                    );
+                }
+            });
+        } catch (error) {
+            console.error('Error in createSubAgent:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Error creating sub-agent. Please try again.',
+                'error',
+                3000
+            );
+        }
     }
 
     /**
@@ -681,41 +794,19 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     }
 
     /**
-     * Opens the Advanced Settings dialog for configuring advanced agent options
+     * Handle context compression toggle and reset related fields when disabled
      */
-    public async openAdvancedSettings() {
-        this.agentManagementService.openAdvancedSettingsDialog({
-            agent: this.record,
-            viewContainerRef: this.viewContainerRef
-        }).subscribe(async (formData) => {
-            if (formData) {
-                // Apply the advanced settings to the agent
-                this.record.LogoURL = formData.logoURL;
-                this.record.IconClass = formData.iconClass;
-                this.record.DriverClass = formData.driverClass;
-                this.record.ExposeAsAction = formData.exposeAsAction;
-                this.record.TypeID = formData.typeID;
-                this.record.Status = formData.status;
-                this.record.EnableContextCompression = formData.enableContextCompression;
-                this.record.ContextCompressionMessageThreshold = formData.contextCompressionMessageThreshold;
-                this.record.ContextCompressionPromptID = formData.contextCompressionPromptID;
-                this.record.ContextCompressionMessageRetentionCount = formData.contextCompressionMessageRetentionCount;
-                this.record.PayloadDownstreamPaths = formData.payloadDownstreamPaths;
-                this.record.PayloadUpstreamPaths = formData.payloadUpstreamPaths;
-                this.record.PayloadSelfReadPaths = formData.payloadSelfReadPaths;
-                this.record.PayloadSelfWritePaths = formData.payloadSelfWritePaths;
-
-                // Trigger change detection to update the UI
-                this.cdr.detectChanges();
-
-                // Show success notification
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    'Advanced settings updated successfully',
-                    'success',
-                    3000
-                );
-            }
-        });
+    public onContextCompressionToggle(value: any) {
+        const enabled = value === true || value === 'true';
+        if (!enabled) {
+            // Reset context compression related fields to null when disabled
+            this.record.ContextCompressionMessageThreshold = null;
+            this.record.ContextCompressionPromptID = null;
+            this.record.ContextCompressionMessageRetentionCount = null;
+            
+            // Trigger change detection to update the UI
+            this.cdr.detectChanges();
+        }
     }
 
     /**
@@ -1809,6 +1900,22 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     4000
                 );
                 return false;
+            }
+
+            // 4.1. Handle deferred sub-agent creation - set ParentID on any sub-agents created before parent was saved
+            const subAgentRecords = this.PendingRecords.filter(p => 
+                p.entityObject.EntityInfo.Name === 'AI Agents' && 
+                p.action === 'save' && 
+                p.entityObject.Get('_tempParentId') === this.record.ID
+            );
+            
+            for (const subAgentRecord of subAgentRecords) {
+                // Cast to AIAgentEntity to access ParentID property
+                const subAgent = subAgentRecord.entityObject as AIAgentEntity;
+                // Set the proper ParentID now that parent is saved
+                subAgent.ParentID = this.record.ID;
+                // Clear the temporary reference
+                subAgent.Set('_tempParentId', null);
             }
 
             // 5. Save all other pending records (AI Agent Actions, AI Agent Prompts, etc.)
