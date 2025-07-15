@@ -55,6 +55,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     public record!: AIAgentEntity;
     
     
+    
     // === Related Entity Counts ===
     /** Number of sub-agents under this agent */
     public subAgentCount = 0;
@@ -771,15 +772,102 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * Creates a new prompt and links it to the agent
      */
     private async createNewPrompt() {
-        // TODO: Open new AI Prompt form
-        // await this.sharedService.CreateNewRecord('AI Prompts', undefined, [
-        //     { FieldName: 'Status', Value: 'Active' }
-        // ]);
-        MJNotificationService.Instance.CreateSimpleNotification(
-            'Creating new prompt - functionality to be implemented',
-            'info',
-            3000
-        );
+        try {
+            this.agentManagementService.openCreatePromptDialog({
+                title: `Create New Prompt for ${this.record.Name || 'Agent'}`,
+                initialName: '',
+                viewContainerRef: this.viewContainerRef
+            }).subscribe({
+                next: async (result) => {
+                    if (result && result.prompt) {
+                        try {
+                            // Get current user using proper MJ pattern
+                            const md = new Metadata();
+                            const currentUserId = md.CurrentUser.ID;
+
+                            // Add the prompt to PendingRecords (will be saved with agent)
+                            this.PendingRecords.push({
+                                entityObject: result.prompt,
+                                action: 'save'
+                            });
+
+                            // Add template to PendingRecords if created
+                            if (result.template) {
+                                // Set UserID on template (required field)
+                                result.template.UserID = currentUserId;
+                                this.PendingRecords.push({
+                                    entityObject: result.template,
+                                    action: 'save'
+                                });
+                            }
+
+                            // Add template contents to PendingRecords if created
+                            if (result.templateContents && result.templateContents.length > 0) {
+                                for (const content of result.templateContents) {
+                                    // Template content does not have UserID field, no manual user assignment needed
+                                    this.PendingRecords.push({
+                                        entityObject: content,
+                                        action: 'save'
+                                    });
+                                }
+                            }
+
+                            // Create the AI Agent Prompt link
+                            const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent Prompts');
+                            agentPrompt.NewRecord();
+                            agentPrompt.AgentID = this.record.ID;
+                            agentPrompt.PromptID = result.prompt.ID;
+                            agentPrompt.Status = 'Active';
+                            agentPrompt.ExecutionOrder = 1;
+                            
+                            // AI Agent Prompt does not have UserID field, no manual user assignment needed
+                            
+                            this.PendingRecords.push({
+                                entityObject: agentPrompt,
+                                action: 'save'
+                            });
+
+                            this.hasUnsavedChanges = true;
+
+                            // Update UI to show the new prompt
+                            this.agentPrompts.push(result.prompt as AIPromptEntityExtended);
+                            this.promptCount = this.agentPrompts.length;
+
+                            // Trigger change detection to update UI
+                            this.cdr.detectChanges();
+
+                            MJNotificationService.Instance.CreateSimpleNotification(
+                                `New prompt "${result.prompt.Name}" will be created and linked when you save the agent`,
+                                'success',
+                                4000
+                            );
+                        } catch (error) {
+                            console.error('Error processing created prompt:', error);
+                            MJNotificationService.Instance.CreateSimpleNotification(
+                                'Error processing created prompt. Please try again.',
+                                'error',
+                                3000
+                            );
+                        }
+                    }
+                },
+                error: (error) => {
+                    console.error('Error in create prompt dialog:', error);
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        'Error opening prompt creation dialog. Please try again.',
+                        'error',
+                        3000
+                    );
+                }
+            });
+        } catch (error) {
+            console.error('Error in createNewPrompt:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Error creating new prompt. Please try again.',
+                'error',
+                3000
+            );
+        }
     }
 
     /**
@@ -1343,6 +1431,11 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * Override InternalSaveRecord to handle agent-specific transaction logic
      * AI Agent must be saved first since related entities depend on it
      */
+    /**
+     * The base SaveRecord() method will call this InternalSaveRecord() method
+     * after handling validation and pending record population
+     */
+
     protected async InternalSaveRecord(): Promise<boolean> {
         if (!this.record) {
             return false;
@@ -1352,25 +1445,99 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             const md = new Metadata();
             const transactionGroup = await md.CreateTransactionGroup();
 
-            // First, save the main AI Agent record (other entities depend on it)
+            // Set transaction group on main record first
             this.record.TransactionGroup = transactionGroup;
+
+            // Save entities in dependency order to avoid foreign key constraint errors
+            // We need to save Templates and Template Contents BEFORE the main AI Agent
+            // since AI Prompts depend on Templates, and AI Agent Prompts depend on AI Agents
+            
+            // 1. First save Templates (they have no dependencies)
+            const templateRecords = this.PendingRecords.filter(p => 
+                p.entityObject.EntityInfo.Name === 'Templates'
+            );
+            for (const templateRecord of templateRecords) {
+                templateRecord.entityObject.TransactionGroup = transactionGroup;
+                if (templateRecord.action === 'save') {
+                    const saveResult = await templateRecord.entityObject.Save();
+                    if (!saveResult) {
+                        MJNotificationService.Instance.CreateSimpleNotification(
+                            `Failed to save Template "${templateRecord.entityObject.Get('Name')}". Please check the data and try again.`,
+                            'error',
+                            4000
+                        );
+                        return false;
+                    }
+                } else {
+                    await templateRecord.entityObject.Delete();
+                }
+            }
+
+            // 2. Save Template Contents (depend on Templates)
+            const templateContentRecords = this.PendingRecords.filter(p => 
+                p.entityObject.EntityInfo.Name === 'Template Contents'
+            );
+            for (const contentRecord of templateContentRecords) {
+                contentRecord.entityObject.TransactionGroup = transactionGroup;
+                if (contentRecord.action === 'save') {
+                    const saveResult = await contentRecord.entityObject.Save();
+                    if (!saveResult) {
+                        MJNotificationService.Instance.CreateSimpleNotification(
+                            `Failed to save Template Content. Please check the data and try again.`,
+                            'error',
+                            4000
+                        );
+                        return false;
+                    }
+                } else {
+                    await contentRecord.entityObject.Delete();
+                }
+            }
+
+            // 3. Save AI Prompts (depend on Templates)
+            const promptRecords = this.PendingRecords.filter(p => 
+                p.entityObject.EntityInfo.Name === 'AI Prompts'
+            );
+            for (const promptRecord of promptRecords) {
+                promptRecord.entityObject.TransactionGroup = transactionGroup;
+                if (promptRecord.action === 'save') {
+                    const saveResult = await promptRecord.entityObject.Save();
+                    if (!saveResult) {
+                        MJNotificationService.Instance.CreateSimpleNotification(
+                            `Failed to save AI Prompt "${promptRecord.entityObject.Get('Name')}". Please check the data and try again.`,
+                            'error',
+                            4000
+                        );
+                        return false;
+                    }
+                } else {
+                    await promptRecord.entityObject.Delete();
+                }
+            }
+
+            // 4. Save the main AI Agent record (other entity links depend on it)
+            // The record transaction group was already set above
             const agentSaveResult = await this.record.Save();
             if (!agentSaveResult) {
                 MJNotificationService.Instance.CreateSimpleNotification(
-                    'Failed to save AI agent details. Please check the form data.',
+                    `Failed to save AI agent "${this.record.Name}". Please check the data and try again.`,
                     'error',
                     4000
                 );
                 return false;
             }
 
-            // Then save all pending records
-            for (const record of this.PendingRecords) {
+            // 5. Save all other pending records (AI Agent Actions, AI Agent Prompts, etc.)
+            const otherRecords = this.PendingRecords.filter(p => 
+                p.entityObject.EntityInfo.Name !== 'Templates' &&
+                p.entityObject.EntityInfo.Name !== 'Template Contents' &&
+                p.entityObject.EntityInfo.Name !== 'AI Prompts'
+            );
+            for (const record of otherRecords) {
                 record.entityObject.TransactionGroup = transactionGroup;
                 if (record.action === 'save') {
                     const saveResult = await record.entityObject.Save();
                     if (!saveResult) {
-                        console.error(`Failed to save ${record.entityObject.EntityInfo.Name} record:`, record.entityObject);
                         MJNotificationService.Instance.CreateSimpleNotification(
                             `Failed to save ${record.entityObject.EntityInfo.Name}. Transaction will be rolled back.`,
                             'error',
@@ -1388,6 +1555,9 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             if (success) {
                 // Clear our local state since save was successful
                 this.hasUnsavedChanges = false;
+                
+                // Clear pending records since they've been saved
+                this.PendingRecords.length = 0;
                 
                 // Reload related data to reflect database state
                 await this.loadRelatedCounts();
@@ -1408,7 +1578,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 return false;
             }
         } catch (error) {
-            console.error('Error in AI agent save:', error);
             MJNotificationService.Instance.CreateSimpleNotification(
                 `Save failed: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
                 'error',

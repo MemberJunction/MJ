@@ -8,6 +8,7 @@ import { PromptSelectorDialogComponent, PromptSelectorConfig, PromptSelectorResu
 import { AgentPromptAdvancedSettingsDialogComponent, AgentPromptAdvancedSettingsFormData } from './agent-prompt-advanced-settings-dialog.component';
 import { SubAgentAdvancedSettingsDialogComponent, SubAgentAdvancedSettingsFormData } from './sub-agent-advanced-settings-dialog.component';
 import { SubAgentSelectorDialogComponent, SubAgentSelectorConfig, SubAgentSelectorResult } from './sub-agent-selector-dialog.component';
+import { CreatePromptDialogComponent, CreatePromptConfig, CreatePromptResult } from './create-prompt-dialog.component';
 
 /**
  * Consolidated service for managing AI Agent operations including:
@@ -263,6 +264,49 @@ export class AIAgentManagementService {
     const componentInstance = dialogRef.content.instance as SubAgentAdvancedSettingsDialogComponent;
     componentInstance.subAgent = config.subAgent;
     componentInstance.allSubAgents = config.allSubAgents;
+
+    return componentInstance.result.asObservable();
+  }
+
+  // === Prompt Creation ===
+
+  /**
+   * Opens the create prompt dialog for creating new prompts from within the AI Agent form
+   * Returns the created entities (not saved to database) for parent to add to PendingRecords
+   * 
+   * @param config Configuration for prompt creation
+   * @returns Observable that emits the created prompt and related entities when dialog is closed
+   */
+  openCreatePromptDialog(config: {
+    title?: string;
+    initialName?: string;
+    initialTypeID?: string;
+    viewContainerRef?: ViewContainerRef;
+  }): Observable<CreatePromptResult | null> {
+    const createConfig: CreatePromptConfig = {
+      title: config.title || 'Create New Prompt',
+      initialName: config.initialName,
+      initialTypeID: config.initialTypeID
+    };
+
+    const dialogRef: DialogRef = this.dialogService.open({
+      title: createConfig.title,
+      content: CreatePromptDialogComponent,
+      actions: [], // Component handles actions
+      width: 900,
+      height: 700,
+      minWidth: 700,
+      minHeight: 500,
+      autoFocusedElement: undefined, // Allows ESC key to work
+      preventAction: (action) => {
+        // Allow ESC key to close the dialog
+        return action === 'close' ? false : false;
+      }
+    });
+
+    // Pass configuration to the dialog component
+    const componentInstance = dialogRef.content.instance as CreatePromptDialogComponent;
+    componentInstance.config = createConfig;
 
     return componentInstance.result.asObservable();
   }
