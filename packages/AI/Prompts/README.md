@@ -1724,7 +1724,7 @@ interface AIPromptParams {
     data?: any;                                // Template and context data
     modelId?: string;                          // Override model selection
     vendorId?: string;                         // Override vendor selection
-    configurationId?: string;                  // Environment-specific config
+    configurationId?: string;                  // AI Configuration ID for environment-specific model selection (e.g., Prod vs Dev)
     contextUser?: UserInfo;                    // User context
     skipValidation?: boolean;                  // Skip output validation
     templateData?: any;                        // Additional template data that augments the main data context
@@ -2697,5 +2697,120 @@ const prodConfig = {
 5. **Monitor API key usage** to detect unauthorized access
 6. **Use the principle of least privilege** - give each user/app only the keys they need
 7. **Audit configuration changes** through MemberJunction's change tracking
+
+## AI Configuration System
+
+The AI Prompts system supports sophisticated environment-specific model selection through AI Configurations. This allows you to use different sets of models for the same prompts based on the active configuration (e.g., Production vs Development).
+
+### Configuration Concepts
+
+#### AI Configurations
+- Named configuration sets (e.g., "Production", "Development", "Europe-Region")
+- Filter which models are available for prompt execution
+- Support configuration parameters for dynamic behavior
+- One configuration can be marked as default (`IsDefault = true`)
+
+#### AI Configuration Parameters
+- Name-value pairs stored per configuration
+- Support different data types (string, number, boolean, date, object)
+- Can control dynamic parallelization and other runtime behavior
+- Example: `ParallelExecutions = 5` for development testing
+
+### Model Selection with Configurations
+
+When executing a prompt with a specific `configurationId`, the system follows this model selection logic:
+
+#### 1. Configuration Filtering
+```typescript
+// AIPromptModel records are filtered by configuration
+const eligiblePromptModels = promptModels.filter(pm => 
+    (!configurationId || !pm.ConfigurationID || pm.ConfigurationID === configurationId)
+);
+```
+
+This means:
+- **No configuration specified**: All prompt models are considered
+- **Prompt model has no ConfigurationID**: It acts as a "default" available to all configurations
+- **Both have values**: They must match exactly
+
+#### 2. Fallback Behavior
+
+If NO AIPromptModel records match the configuration, the system gracefully falls back to general model selection based on the prompt's criteria:
+
+```typescript
+// Fallback uses the prompt's model selection settings
+if (eligiblePromptModels.length === 0) {
+    // Use ModelSelectionMode: Default, Specific, or ByPower
+    // Apply PowerPreference: Highest, Lowest, or Balanced
+    // Filter by MinPowerRank and AIModelTypeID
+}
+```
+
+### Configuration Setup Example
+
+```sql
+-- Create configurations
+INSERT INTO AIConfiguration (Name, Description, IsDefault, Status)
+VALUES 
+    ('Production', 'Stable models for production use', 1, 'Active'),
+    ('Development', 'Experimental models for testing', 0, 'Active');
+
+-- Assign models to configurations
+-- Production uses GPT-4
+UPDATE AIPromptModel 
+SET ConfigurationID = (SELECT ID FROM AIConfiguration WHERE Name = 'Production')
+WHERE PromptID = @PromptID AND ModelID = @GPT4ModelID;
+
+-- Development uses GPT-4-Turbo and Claude-3-Opus
+UPDATE AIPromptModel 
+SET ConfigurationID = (SELECT ID FROM AIConfiguration WHERE Name = 'Development')
+WHERE PromptID = @PromptID AND ModelID IN (@GPT4TurboID, @Claude3OpusID);
+
+-- Models with NULL ConfigurationID work with any configuration
+UPDATE AIPromptModel 
+SET ConfigurationID = NULL
+WHERE PromptID = @PromptID AND ModelID = @FallbackModelID;
+```
+
+### Using Configurations
+
+#### In Code
+```typescript
+const result = await promptRunner.ExecutePrompt({
+    prompt: myPrompt,
+    configurationId: 'dev-config-id', // Optional
+    data: { query: 'Analyze this data' },
+    contextUser: currentUser
+});
+```
+
+#### Configuration Precedence
+1. **Explicit models with matching configuration** (highest priority)
+2. **Models with NULL configuration** (work with any configuration)
+3. **Fallback to prompt's general model selection** (if no models match)
+
+### Dynamic Parallelization with Configurations
+
+Configurations can control parallel execution through parameters:
+
+```typescript
+// Set up configuration parameter
+INSERT INTO AIConfigurationParam (ConfigurationID, Name, Type, Value)
+VALUES (@DevConfigID, 'ParallelExecutions', 'number', '5');
+
+// Use in prompt setup
+UPDATE AIPrompt 
+SET ParallelizationMode = 'ConfigParam',
+    ParallelConfigParam = 'ParallelExecutions'
+WHERE ID = @PromptID;
+```
+
+### Best Practices
+
+1. **Use NULL ConfigurationID for default models** that should work everywhere
+2. **Create environment-specific configurations** for different deployment scenarios
+3. **Document configuration purposes** in the Description field
+4. **Test fallback behavior** to ensure prompts work even without specific models
+5. **Use configuration parameters** for environment-specific settings beyond just model selection
 
 For more details on API key management, see the [AI Core API Keys documentation](../Core/README.md#api-key-management).

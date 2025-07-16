@@ -694,6 +694,34 @@ export class ConfigAwareAgent extends BaseAgent {
 
 For detailed information about API key configuration and management, see the [AI Prompts API Keys documentation](../Prompts/README.md#api-keys).
 
+## AI Configuration for Agents
+
+Agents fully support the AI Configuration system for environment-specific model selection. When you execute an agent with a `configurationId`, that configuration is automatically propagated to:
+
+- All prompts executed by the agent
+- All sub-agents spawned by the agent
+- All sub-sub-agents in the hierarchy
+
+### Using Configurations with Agents
+
+```typescript
+const result = await runner.RunAgent({
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: user,
+    configurationId: 'dev-config-id', // Optional - propagates to all prompts
+});
+```
+
+### Configuration Benefits for Agents
+
+- **Environment Isolation**: Test agents with development models without affecting production
+- **Consistent Model Selection**: All prompts in the agent hierarchy use the same configuration
+- **Easy Switching**: Change configurations without modifying agent code
+- **Fallback Support**: Agents continue to work even if specific models aren't configured
+
+For comprehensive details about how AI Configurations work, including model selection logic and fallback behavior, see the [AI Configuration System documentation](../Prompts/README.md#ai-configuration-system).
+
 ## License
 
 This package is part of the MemberJunction project. See the [LICENSE](../../../LICENSE) file for details.
