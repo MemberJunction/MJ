@@ -10,6 +10,7 @@ import { TemplateEditorConfig, TemplateEditorComponent } from '../../shared/comp
 import { AIPromptFormComponent } from '../../generated/Entities/AIPrompt/aiprompt.form.component';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
+import { AIPromptManagementService } from './ai-prompt-management.service';
 
 @RegisterClass(BaseFormComponent, 'AI Prompts')
 @Component({
@@ -53,10 +54,127 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     public historySortField: 'runAt' | 'executionTime' | 'cost' | 'tokens' = 'runAt';
     public historySortDirection: 'asc' | 'desc' = 'desc';
     
+    // Removed custom transaction tracking - we'll use base form's _pendingRecords instead
+    public hasUnsavedChanges = false;
+    
+    // Store original state for cancel/revert functionality
+    private originalTemplateID: string | null = null;
+    
+    // === Permission Checks for Related Entities ===
+    /** Cache for permission checks to avoid repeated calculations */
+    private _permissionCache = new Map<string, boolean>();
+
+    // Main AI Prompt permissions inherited from BaseFormComponent:
+    // - UserCanEdit (Update permission)
+    // - UserCanRead (Read permission) 
+    // - UserCanCreate (Create permission)
+    // - UserCanDelete (Delete permission)
+
+    /** Check if user can create Templates */
+    public get UserCanCreateTemplates(): boolean {
+        return this.checkEntityPermission('Templates', 'Create');
+    }
+
+    /** Check if user can update Templates */
+    public get UserCanUpdateTemplates(): boolean {
+        return this.checkEntityPermission('Templates', 'Update');
+    }
+
+    /** Check if user can delete Templates */
+    public get UserCanDeleteTemplates(): boolean {
+        return this.checkEntityPermission('Templates', 'Delete');
+    }
+
+    /** Check if user can read Templates */
+    public get UserCanReadTemplates(): boolean {
+        return this.checkEntityPermission('Templates', 'Read');
+    }
+
+    /** Check if user can create Template Contents */
+    public get UserCanCreateTemplateContents(): boolean {
+        return this.checkEntityPermission('Template Contents', 'Create');
+    }
+
+    /** Check if user can update Template Contents */
+    public get UserCanUpdateTemplateContents(): boolean {
+        return this.checkEntityPermission('Template Contents', 'Update');
+    }
+
+    /** Check if user can create AI Prompt Models */
+    public get UserCanCreatePromptModels(): boolean {
+        return this.checkEntityPermission('MJ: AI Prompt Models', 'Create');
+    }
+
+    /** Check if user can update AI Prompt Models */
+    public get UserCanUpdatePromptModels(): boolean {
+        return this.checkEntityPermission('MJ: AI Prompt Models', 'Update');
+    }
+
+    /** Check if user can delete AI Prompt Models */
+    public get UserCanDeletePromptModels(): boolean {
+        return this.checkEntityPermission('MJ: AI Prompt Models', 'Delete');
+    }
+
+    /**
+     * Helper method to check entity permissions with caching
+     * @param entityName - The name of the entity to check permissions for
+     * @param permissionType - The type of permission to check (Create, Read, Update, Delete)
+     * @returns boolean indicating if user has the permission
+     */
+    private checkEntityPermission(entityName: string, permissionType: 'Create' | 'Read' | 'Update' | 'Delete'): boolean {
+        const cacheKey = `${entityName}_${permissionType}`;
+        
+        if (this._permissionCache.has(cacheKey)) {
+            return this._permissionCache.get(cacheKey)!;
+        }
+
+        try {
+            const entityInfo = this._metadata.Entities.find(e => e.Name === entityName);
+            
+            if (!entityInfo) {
+                console.warn(`Entity '${entityName}' not found for permission check`);
+                this._permissionCache.set(cacheKey, false);
+                return false;
+            }
+
+            const userPermissions = entityInfo.GetUserPermisions(this._metadata.CurrentUser);
+            let hasPermission = false;
+
+            switch (permissionType) {
+                case 'Create':
+                    hasPermission = userPermissions.CanCreate;
+                    break;
+                case 'Read':
+                    hasPermission = userPermissions.CanRead;
+                    break;
+                case 'Update':
+                    hasPermission = userPermissions.CanUpdate;
+                    break;
+                case 'Delete':
+                    hasPermission = userPermissions.CanDelete;
+                    break;
+            }
+
+            this._permissionCache.set(cacheKey, hasPermission);
+            return hasPermission;
+        } catch (error) {
+            console.error(`Error checking ${permissionType} permission for ${entityName}:`, error);
+            this._permissionCache.set(cacheKey, false);
+            return false;
+        }
+    }
+
+    /**
+     * Clears the permission cache. Call this when user context changes or permissions are updated.
+     */
+    public clearPermissionCache(): void {
+        this._permissionCache.clear();
+    }
+    
     // Template editor configuration
     public get templateEditorConfig(): TemplateEditorConfig {
         return {
-            allowEdit: this.EditMode,
+            allowEdit: this.EditMode && this.UserCanUpdateTemplateContents,
             showRunButton: false,
             compactMode: false
         };
@@ -74,7 +192,8 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         route: ActivatedRoute,
         public cdr: ChangeDetectorRef,
         private testHarnessService: AITestHarnessDialogService,
-        private viewContainerRef: ViewContainerRef
+        private viewContainerRef: ViewContainerRef,
+        private promptManagementService: AIPromptManagementService
     ) {
         super(elementRef, sharedService, router, route, cdr);
     }
@@ -144,6 +263,24 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             return;
         }
 
+        // First check if we already have this template in pending records (newly created)
+        const pendingTemplate = this.PendingRecords.find(p => 
+            p.entityObject.EntityInfo.Name === 'Templates' && 
+            p.entityObject.Get('ID') === this.record.TemplateID
+        );
+        
+        if (pendingTemplate) {
+            // Use the pending template
+            this.template = pendingTemplate.entityObject as TemplateEntity;
+            this.templateNotFoundInDatabase = false;
+            this.isLoadingTemplate = false;
+            
+            // Clear template content and params since this is a new template
+            this.templateContent = null;
+            this.templateParams = [];
+            return;
+        }
+
         this.isLoadingTemplate = true;
         this.templateNotFoundInDatabase = false; // Reset the flag
         try {
@@ -186,18 +323,67 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             this.template = null;
             this.templateParams = [];
         }
+        this.hasUnsavedChanges = true;
     }
+    
 
     /**
      * Opens a dialog to link an existing template
      */
     public async linkExistingTemplate() {
-        // TODO: Implement template selection dialog
-        MJNotificationService.Instance.CreateSimpleNotification(
-            'Template linking functionality coming soon',
-            'info',
-            3000
-        );
+        try {
+            this.promptManagementService.openTemplateSelectorDialog({
+                title: 'Link Existing Template',
+                multiSelect: false,
+                showCreateNew: true,
+                showActiveOnly: true,
+                selectedTemplateIds: this.record.TemplateID ? [this.record.TemplateID] : [],
+                viewContainerRef: this.viewContainerRef
+            }).subscribe({
+                next: async (result) => {
+                    if (result && result.selectedTemplates.length > 0) {
+                        const selectedTemplate = result.selectedTemplates[0];
+                        
+                        // First, clean up any pending changes related to the old template
+                        this.cleanupOldTemplateRecords();
+                        
+                        // Update the AI prompt to reference the selected template
+                        this.record.TemplateID = selectedTemplate.ID;
+                        this.hasUnsavedChanges = true;
+                        
+                        // Load the selected template
+                        await this.loadTemplate();
+                        
+                        // Trigger change detection to update UI
+                        this.cdr.detectChanges();
+                        
+                        MJNotificationService.Instance.CreateSimpleNotification(
+                            `Template "${selectedTemplate.Name}" linked successfully`,
+                            'success',
+                            3000
+                        );
+                    } else if (result && result.createNew) {
+                        // User wants to create a new template
+                        await this.createNewTemplate();
+                    }
+                },
+                error: (error) => {
+                    console.error('Error opening template selector:', error);
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        'Error opening template selector. Please try again.',
+                        'error',
+                        3000
+                    );
+                }
+            });
+        } catch (error) {
+            console.error('Error in linkExistingTemplate:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Error linking template. Please try again.',
+                'error',
+                3000
+            );
+        }
     }
 
     /**
@@ -212,32 +398,47 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     }
 
     /**
-     * Creates a new template for this AI prompt
+     * Creates a new template for this AI prompt (deferred until save)
      */
     public async createNewTemplate() {
         try {
+            // First, clean up any pending changes related to the old template
+            this.cleanupOldTemplateRecords();
+            
             const newTemplate = await this._metadata.GetEntityObject<TemplateEntity>('Templates');
+            console.log("Record Name:", this.record.Name);
             newTemplate.NewRecord();
             newTemplate.Name = `${this.record.Name || 'AI Prompt'} Template`;
             newTemplate.Description = `Template for AI Prompt: ${this.record.Name}`;
             newTemplate.UserID = this._metadata.CurrentUser.ID;
             
-            const saveResult = await newTemplate.Save();
-            if (!saveResult) {
-                const errorMessage = newTemplate.LatestResult?.Message || newTemplate.LatestResult?.Errors || 'Unknown error';
-                console.error('Template save failed:', errorMessage);
-                throw new Error(`Failed to save new template: ${errorMessage}`);
-            }
-
+            // Add to pending records instead of saving immediately
+            this.PendingRecords.push({
+                entityObject: newTemplate,
+                action: 'save'
+            });
+            
             // Update the AI prompt to reference the new template
             this.record.TemplateID = newTemplate.ID;
+            this.hasUnsavedChanges = true;
             
-            // Load the new template
-            await this.loadTemplate();
+            // Set the template for UI purposes
+            this.template = newTemplate;
+            
+            // Clear existing template content and params since we have a new template
+            this.templateContent = null;
+            this.templateParams = [];
+            this.isLoadingTemplate = false;
+            this.templateNotFoundInDatabase = false;
+            
+            // Force UI update in next microtask to ensure template editor refreshes
+            Promise.resolve().then(() => {
+                this.cdr.detectChanges();
+            });
 
             MJNotificationService.Instance.CreateSimpleNotification(
-                'New template created and linked successfully',
-                'success',
+                'New template created and will be saved when you save the AI prompt',
+                'info',
                 4000
             );
 
@@ -249,6 +450,23 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
                 'error',
                 6000
             );
+        }
+    }
+
+    /**
+     * Cleans up any pending records related to the old template when changing templates
+     */
+    private cleanupOldTemplateRecords() {
+        // Get current pending records and filter out template content/params from old template
+        const currentPendingRecords = this.PendingRecords;
+        
+        // Remove template content and template param records
+        for (let i = currentPendingRecords.length - 1; i >= 0; i--) {
+            const record = currentPendingRecords[i];
+            const entityName = record.entityObject.EntityInfo.Name;
+            if (entityName === 'Template Contents' || entityName === 'Template Params') {
+                currentPendingRecords.splice(i, 1);
+            }
         }
     }
 
@@ -277,6 +495,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             this.templateContent = null;
         }
     }
+
 
     /**
      * Loads template parameters for the current template
@@ -377,6 +596,76 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     public onTemplateContentChange(content: TemplateContentEntity[]) {
         // Handle template content changes if needed
         console.log('Template content changed:', content);
+        
+        // Mark as having unsaved changes
+        this.hasUnsavedChanges = true;
+        
+        // If we have content changes, we need to ensure they're added to pending records
+        // This is typically handled by the template editor component itself
+    }
+    
+    /**
+     * Handles template content record deletion
+     * This method should be called by the template editor to properly manage deletions
+     */
+    public handleTemplateContentDelete(templateContent: TemplateContentEntity) {
+        if (templateContent.IsSaved) {
+            // If it's saved, add to pending deletions
+            this.PendingRecords.push({
+                entityObject: templateContent,
+                action: 'delete'
+            });
+        } else {
+            // If it's not saved, remove it from pending records if it exists there
+            const currentPendingRecords = this.PendingRecords;
+            for (let i = currentPendingRecords.length - 1; i >= 0; i--) {
+                const record = currentPendingRecords[i];
+                if (record.entityObject === templateContent || 
+                    (record.entityObject.EntityInfo.Name === 'Template Contents' && 
+                     record.entityObject.Get('ID') === templateContent.Get('ID'))) {
+                    currentPendingRecords.splice(i, 1);
+                    break;
+                }
+            }
+        }
+        this.hasUnsavedChanges = true;
+    }
+    
+    /**
+     * Handles template content record creation/modification
+     * This method should be called by the template editor to properly manage saves
+     */
+    public handleTemplateContentSave(templateContent: TemplateContentEntity) {
+        if (templateContent.Dirty || !templateContent.IsSaved) {
+            // Add to pending saves
+            this.PendingRecords.push({
+                entityObject: templateContent,
+                action: 'save'
+            });
+        }
+        this.hasUnsavedChanges = true;
+    }
+    
+    /**
+     * Adds template content changes to pending records
+     */
+    private addTemplateContentsToPendingRecords() {
+        // This method would typically get pending changes from the template editor
+        // The template editor should expose its pending changes through events or direct calls
+        // For now, we'll rely on the template editor to manage its own pending records
+        // and communicate them through the MJ event system
+        
+        // If the template editor has a method to get pending changes, we would call it here
+        if (this.templateEditor && typeof (this.templateEditor as any).getPendingChanges === 'function') {
+            try {
+                const pendingChanges = (this.templateEditor as any).getPendingChanges();
+                if (pendingChanges && pendingChanges.length > 0) {
+                    this.PendingRecords.push(...pendingChanges);
+                }
+            } catch (error) {
+                console.warn('Template editor does not support getPendingChanges method:', error);
+            }
+        }
     }
 
     /**
@@ -594,6 +883,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
 
         // Clear the vendor selection when model changes
         promptModel.VendorID = null;
+        this.hasUnsavedChanges = true;
 
         // Load vendors for the new model
         if (modelId) {
@@ -604,6 +894,9 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
                 promptModel.VendorID = vendorData.vendors[0].ID;
             }
         }
+        
+        // Trigger change detection
+        this.cdr.detectChanges();
     }
 
     /**
@@ -657,7 +950,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     }
 
     /**
-     * Adds a new model to the prompt
+     * Adds a new model to the prompt (deferred until save)
      */
     public async addNewModel() {
         if (!this.record?.ID) return;
@@ -671,12 +964,25 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             
             // Generate a temporary ID for tracking if the model doesn't have one
             if (!newModel.ID) {
-                (newModel as any)._tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                (newModel as any)._tempId = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
             }
             
             // ModelID will be set by user
             
             this.promptModels.push(newModel);
+            this.hasUnsavedChanges = true;
+            
+            // Update priorities after adding
+            this.updateModelPriorities();
+            
+            // Trigger change detection
+            this.cdr.detectChanges();
+            
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'New model added. Select a model and save to persist changes.',
+                'info',
+                3000
+            );
         } catch (error) {
             console.error('Error creating new model:', error);
             MJNotificationService.Instance.CreateSimpleNotification(
@@ -688,7 +994,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     }
 
     /**
-     * Removes a model from the prompt
+     * Removes a model from the prompt (deferred until save)
      */
     public async removePromptModel(index: number) {
         if (index < 0 || index >= this.promptModels.length) return;
@@ -696,20 +1002,27 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         const model = this.promptModels[index];
         
         try {
-            // If it's a saved model, delete it from the database
+            // If it's a saved model, add it to pending deletions
             if (model.IsSaved) {
-                const deleteResult = await model.Delete();
-                if (!deleteResult) {
-                    throw new Error('Failed to delete model from database');
-                }
+                this.PendingRecords.push({
+                    entityObject: model,
+                    action: 'delete'
+                });
             }
 
             // Remove from local array
             this.promptModels.splice(index, 1);
+            this.hasUnsavedChanges = true;
+
+            // Update priorities after removal
+            this.updateModelPriorities();
+
+            // Trigger change detection
+            this.cdr.detectChanges();
 
             MJNotificationService.Instance.CreateSimpleNotification(
-                'Model removed successfully',
-                'success',
+                'Model will be removed when you save the prompt',
+                'info',
                 3000
             );
 
@@ -752,108 +1065,185 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     }
 
     /**
-     * Override SaveRecord to auto-save template contents and prompt models
+     * Override PopulatePendingRecords to add AI prompt model changes
      */
-    async SaveRecord(StopEditModeAfterSave: boolean = true): Promise<boolean> {
-        try {
-            // If this is a new prompt with a new template, we need to save the template first
-            if (!this.record.IsSaved && this.template && !this.template.IsSaved) {
-                const templateSaved = await this.template.Save();
-                if (!templateSaved) {
-                    MJNotificationService.Instance.CreateSimpleNotification(
-                        'Failed to save template',
-                        'error',
-                        5000
-                    );
-                    return false;
-                }
-                // Set the template ID on the AI prompt before saving
-                this.record.TemplateID = this.template.ID;
-            }
+    protected PopulatePendingRecords() {
+        // IMPORTANT: The parent method clears the pending records array, so we need to preserve
+        // any records we've added (like templates) before calling the parent method
+        const currentPendingRecords = [...this.PendingRecords]; // Make a copy
+        
+        // Call parent first to get child component pending records (this clears the array)
+        super.PopulatePendingRecords();
+        
+        // Re-add our preserved records
+        for (const record of currentPendingRecords) {
+            this.PendingRecords.push(record);
+        }
+        
+        // Add prompt model changes to pending records
+        this.addPromptModelsToPendingRecords();
+        
+        // Handle template content changes through the template editor
+        this.addTemplateContentsToPendingRecords();
+    }
 
-            // Save the AI prompt itself
-            const promptSaved = await super.SaveRecord(StopEditModeAfterSave);
+    /**
+     * Override StartEditMode to capture original state for cancel functionality
+     */
+    public StartEditMode(): void {
+        // Store original template ID for cancel functionality
+        this.originalTemplateID = this.record.TemplateID;
+        
+        // Call parent implementation
+        super.StartEditMode();
+    }
+
+    /**
+     * Override CancelEdit to restore original state
+     */
+    public CancelEdit() {
+        // Call parent implementation first
+        super.CancelEdit();
+        
+        // Restore original template state
+        if (this.originalTemplateID !== this.record.TemplateID) {
+            this.record.TemplateID = this.originalTemplateID || '';
             
-            if (promptSaved) {
-                // Save template contents if we have a template
-                if (this.template && this.templateEditor) {
-                    const templateContentsSaved = await this.templateEditor.saveTemplateContents();
-                    if (!templateContentsSaved) {
-                        MJNotificationService.Instance.CreateSimpleNotification(
-                            'AI prompt saved, but template contents failed to save',
-                            'warning',
-                            5000
-                        );
-                    }
+            // Reload the template to reflect the reverted state
+            this.loadTemplate().then(() => {
+                this.cdr.detectChanges();
+            });
+        } else if (this.templateEditor) {
+            // Even if template didn't change, refresh the template editor to discard any unsaved content changes
+            this.templateEditor.refreshAndDiscardChanges();
+        }
+        
+        // Clear the stored original state
+        this.originalTemplateID = null;
+        this.hasUnsavedChanges = false;
+    }
+
+    /**
+     * Adds prompt model changes to the pending records
+     */
+    private addPromptModelsToPendingRecords() {
+        // Add all prompt models that have been modified or are new
+        for (const model of this.promptModels) {
+            if (model.ModelID && (model.Dirty || !model.IsSaved)) {
+                // Set the PromptID if it's not already set
+                if (!model.PromptID) {
+                    model.PromptID = this.record.ID;
                 }
                 
-                // Then save all prompt models
-                return await this.savePromptModels();
+                this.PendingRecords.push({
+                    entityObject: model,
+                    action: 'save'
+                });
             }
-            
-            return false;
-        } catch (error) {
-            console.error('Error in SaveRecord:', error);
-            MJNotificationService.Instance.CreateSimpleNotification(
-                'Error saving AI prompt',
-                'error',
-                5000
-            );
-            return false;
         }
     }
 
     /**
-     * Saves all prompt models (creates, updates, deletes)
+     * Override InternalSaveRecord to handle template dependencies and related entity changes
+     * Templates must be saved before AI Prompts to avoid foreign key constraint errors
      */
-    private async savePromptModels(): Promise<boolean> {
+    protected async InternalSaveRecord(): Promise<boolean> {
+        if (!this.record) {
+            return false;
+        }
+
         try {
-            let allSuccessful = true;
+            const md = new Metadata();
+            const transactionGroup = await md.CreateTransactionGroup();
 
-            // Save each prompt model
-            for (const model of this.promptModels) {
-                if (model.ModelID) { // Only save if a model is selected
-                    // Set the PromptID if it's not already set
-                    if (!model.PromptID) {
-                        model.PromptID = this.record.ID;
+            // First, save any templates that need to be saved (they must be saved before AI Prompts)
+            const templateRecords = this.PendingRecords.filter(p => 
+                p.entityObject.EntityInfo.Name === 'Templates'
+            );
+            
+            for (const templateRecord of templateRecords) {
+                templateRecord.entityObject.TransactionGroup = transactionGroup;
+                if (templateRecord.action === 'save') {
+                    const saveResult = await templateRecord.entityObject.Save();
+                    if (!saveResult) {
+                        MJNotificationService.Instance.CreateSimpleNotification(
+                            'Failed to save template. Please check the template data.',
+                            'error',
+                            4000
+                        );
+                        return false;
                     }
-
-                    const saved = await model.Save();
-                    if (!saved) {
-                        console.error('Failed to save prompt model:', model);
-                        allSuccessful = false;
-                    }
+                } else {
+                    await templateRecord.entityObject.Delete();
                 }
             }
 
-            if (allSuccessful) {
-                // Reload the prompt models to get the updated state
-                await this.loadPromptModels();
-                
+            // Now save the main AI Prompt record
+            this.record.TransactionGroup = transactionGroup;
+            const agentSaveResult = await this.record.Save();
+            if (!agentSaveResult) {
                 MJNotificationService.Instance.CreateSimpleNotification(
-                    'AI prompt and models saved successfully',
-                    'success',
+                    'Failed to save AI prompt details. Please check the form data.',
+                    'error',
                     4000
                 );
-            } else {
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    'AI prompt saved, but some models failed to save',
-                    'warning',
-                    5000
-                );
+                return false;
             }
 
-            return allSuccessful;
+            // Then save all other pending records (excluding templates which we already saved)
+            const otherRecords = this.PendingRecords.filter(p => 
+                p.entityObject.EntityInfo.Name !== 'Templates'
+            );
+            
+            for (const record of otherRecords) {
+                record.entityObject.TransactionGroup = transactionGroup;
+                if (record.action === 'save') {
+                    await record.entityObject.Save();
+                } else {
+                    await record.entityObject.Delete();
+                }
+            }
+
+            // Execute all operations atomically
+            const success = await transactionGroup.Submit();
+            if (success) {
+                // Clear our local state since save was successful
+                this.hasUnsavedChanges = false;
+                
+                // Reload prompt models to reflect database state
+                await this.loadPromptModels();
+                
+                // Reload template to reflect any changes
+                if (this.record.TemplateID) {
+                    await this.loadTemplate();
+                }
+
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'AI Prompt saved successfully',
+                    'success',
+                    3000
+                );
+                
+                return true;
+            } else {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Save failed. Please try again.',
+                    'error',
+                    4000
+                );
+                return false;
+            }
         } catch (error) {
-            console.error('Error saving prompt models:', error);
+            console.error('Error in AI prompt save:', error);
             MJNotificationService.Instance.CreateSimpleNotification(
-                'Error saving prompt models',
+                `Save failed: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
                 'error',
                 5000
             );
             return false;
         }
     }
+
 
     /**
      * Loads the result selector tree data (categories and prompts)
@@ -1011,6 +1401,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             
             // Replace the array and force full re-render
             this.promptModels = [...newModels];
+            this.hasUnsavedChanges = true;
             
             this.updateModelPriorities();
             
@@ -1038,6 +1429,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             
             // Replace the array and force full re-render
             this.promptModels = [...newModels];
+            this.hasUnsavedChanges = true;
             
             this.updateModelPriorities();
             
@@ -1104,6 +1496,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             
             // Replace the array and force full re-render
             this.promptModels = [...newModels];
+            this.hasUnsavedChanges = true;
             
             // Update priorities
             this.updateModelPriorities();
@@ -1123,7 +1516,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     /**
      * Handles drag end event
      */
-    public onDragEnd(event: DragEvent) {
+    public onDragEnd(_event: DragEvent) {
         this.draggedIndex = -1;
     }
     
