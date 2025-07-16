@@ -209,7 +209,7 @@ export class LoopAgentType extends BaseAgentType {
      * 
      * @protected
      */
-    protected isValidLoopResponse(simpleResponse: any): {success: boolean, message?: string} {
+    protected isValidLoopResponse(simpleResponse: unknown): {success: boolean, message?: string} {
         // Check required fields, first cast the simpleResponse to LoopAgentResponse
         // so we get the benefit of TypeScript's type checking below in this method
         const response = simpleResponse as LoopAgentResponse;
