@@ -4,12 +4,12 @@
  * @module @memberjunction/ng-react
  */
 
-import { SkipComponentStyles } from '@memberjunction/skip-types';
+import { ComponentStyles } from '@memberjunction/interactive-component-types';
 
 /**
  * Default styles that match the Skip design system
  */
-export const DEFAULT_STYLES: SkipComponentStyles = {
+export const DEFAULT_STYLES: ComponentStyles = {
   colors: {
     // Primary colors - modern purple/blue gradient feel
     primary: '#5B4FE9',

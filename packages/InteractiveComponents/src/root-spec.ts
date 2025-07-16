@@ -1,11 +1,11 @@
-import { SkipComponentChildSpec } from "./child-spec";
-import { SkipComponentDataRequirements } from "./data-requirements";
+import { ComponentChildSpec } from "./child-spec";
+import { ComponentDataRequirements } from "./data-requirements";
 
 /**
  * Represents a complete specification for a generated Skip component, including its structure,
  * requirements, code, and nested component hierarchy
  */
-export type SkipComponentRootSpec = {
+export type ComponentRootSpec = {
     /**
      * A description of what the component should do from a functional perspective.
      * This should be in markdown format and include:
@@ -19,7 +19,7 @@ export type SkipComponentRootSpec = {
     /**
      * Detailed data requirements, including how the component accesses and uses data.
      */
-    dataRequirements?: SkipComponentDataRequirements;
+    dataRequirements?: ComponentDataRequirements;
     
     /**
      * A technical description of how the component is designed and implemented.
@@ -65,7 +65,7 @@ export type SkipComponentRootSpec = {
     /**
      * An array of child component specifications
      */
-    childComponents: SkipComponentChildSpec[];
+    childComponents: ComponentChildSpec[];
     
     /**
      * User-friendly name

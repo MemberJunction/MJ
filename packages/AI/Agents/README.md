@@ -575,7 +575,22 @@ Contributions are welcome! Please see the main MemberJunction [contributing guid
 
 ## API Keys
 
-The AI Agents framework supports flexible API key management through integration with the AI Prompts system. For detailed information about API key configuration, see the [AI Prompts API Keys documentation](../Prompts/README.md#api-keys).
+The AI Agents framework supports flexible API key management through integration with the AI Prompts system, including the new environment-based configuration features.
+
+### Environment-Based Configuration for Agents
+
+AI Agents benefit from MemberJunction's environment-based configuration system, allowing different API keys and settings per environment:
+
+```typescript
+// Agents automatically use the correct configuration based on NODE_ENV
+// Development -> AIConfigSet(Name='development') -> Different API keys
+// Production -> AIConfigSet(Name='production') -> Production API keys
+
+// This is especially useful for:
+// - Agent testing with development API keys
+// - Production agents with higher rate limits
+// - Environment-specific agent behaviors
+```
 
 ### Using Runtime API Keys with Agents
 
@@ -604,13 +619,108 @@ const result = await runner.RunAgent({
 // - Context compression operations
 ```
 
+### API Key Resolution for Agents
+
+When agents execute, API keys are resolved in this priority order:
+1. **Runtime API keys** passed to RunAgent (highest priority)
+2. **Configuration sets** from database based on environment
+3. **Environment variables** (traditional approach)
+4. **Custom implementations** via AIAPIKeys subclassing
+
+### Multi-Environment Agent Setup
+
+```typescript
+// Example: Different agent configurations per environment
+
+// Development environment
+const devAgentConfig = {
+    ConfigSet: { Name: 'development', Priority: 100 },
+    Configurations: [
+        { ConfigKey: 'OPENAI_LLM_APIKEY', ConfigValue: 'sk-dev-...', Encrypted: true },
+        { ConfigKey: 'MAX_AGENT_ITERATIONS', ConfigValue: '10', Encrypted: false },
+        { ConfigKey: 'AGENT_DEBUG_MODE', ConfigValue: 'true', Encrypted: false }
+    ]
+};
+
+// Production environment
+const prodAgentConfig = {
+    ConfigSet: { Name: 'production', Priority: 100 },
+    Configurations: [
+        { ConfigKey: 'OPENAI_LLM_APIKEY', ConfigValue: 'sk-prod-...', Encrypted: true },
+        { ConfigKey: 'MAX_AGENT_ITERATIONS', ConfigValue: '50', Encrypted: false },
+        { ConfigKey: 'AGENT_DEBUG_MODE', ConfigValue: 'false', Encrypted: false }
+    ]
+};
+
+// Agents can access these configurations through the AI engine
+```
+
 ### Benefits for Agent Systems
 
-Runtime API keys are particularly useful for agent architectures:
+Runtime API keys and environment-based configuration are particularly useful for agent architectures:
 - **Multi-tenant isolation**: Different customers use their own API keys
 - **Cost attribution**: Track API usage per department or project
 - **Security**: Limit exposure of production API keys
 - **Testing**: Use test API keys for development agents
+- **Environment-specific behavior**: Different limits and debugging per environment
+- **Centralized management**: Update configurations without code changes
+
+### Agent-Specific Configuration Example
+
+```typescript
+// Custom agent that uses environment-based configuration
+@RegisterClass(BaseAgent, "ConfigAwareAgent")
+export class ConfigAwareAgent extends BaseAgent {
+    protected async getConfiguration(key: string): Promise<string | null> {
+        // The framework automatically loads configurations based on NODE_ENV
+        const envName = process.env.NODE_ENV || 'production';
+        
+        // Query AIConfiguration for the current environment
+        const config = await this.loadConfigValue(envName, key);
+        return config;
+    }
+    
+    protected async setupExecution(): Promise<void> {
+        // Load agent-specific configurations
+        const maxIterations = await this.getConfiguration('MAX_AGENT_ITERATIONS');
+        const debugMode = await this.getConfiguration('AGENT_DEBUG_MODE');
+        
+        // Apply configurations to agent behavior
+        this.maxIterations = parseInt(maxIterations || '50');
+        this.debugMode = debugMode === 'true';
+    }
+}
+```
+
+For detailed information about API key configuration and management, see the [AI Prompts API Keys documentation](../Prompts/README.md#api-keys).
+
+## AI Configuration for Agents
+
+Agents fully support the AI Configuration system for environment-specific model selection. When you execute an agent with a `configurationId`, that configuration is automatically propagated to:
+
+- All prompts executed by the agent
+- All sub-agents spawned by the agent
+- All sub-sub-agents in the hierarchy
+
+### Using Configurations with Agents
+
+```typescript
+const result = await runner.RunAgent({
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: user,
+    configurationId: 'dev-config-id', // Optional - propagates to all prompts
+});
+```
+
+### Configuration Benefits for Agents
+
+- **Environment Isolation**: Test agents with development models without affecting production
+- **Consistent Model Selection**: All prompts in the agent hierarchy use the same configuration
+- **Easy Switching**: Change configurations without modifying agent code
+- **Fallback Support**: Agents continue to work even if specific models aren't configured
+
+For comprehensive details about how AI Configurations work, including model selection logic and fallback behavior, see the [AI Configuration System documentation](../Prompts/README.md#ai-configuration-system).
 
 ## License
 

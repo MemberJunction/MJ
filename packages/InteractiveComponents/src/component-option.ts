@@ -1,18 +1,18 @@
-import { SkipComponentRootSpec } from "./root-spec";
+import { ComponentRootSpec } from "./root-spec";
 
 /**
  * Defines a given option for a generated component that the user can choose. The code/componentObjectName properties are used to render the component in the UI.
  */
-export type SkipComponentOption = {
+export type ComponentOption = {
     /**
      * Full details of the generated component option including functional, technical, code, and child componentry.
      */
-    option: SkipComponentRootSpec;
+    option: ComponentRootSpec;
 
     /**
-     * If multiple component options are provided for a given @interface SkipAPIAnalysisCompleteResponse, a "judge" AI will evaluate all the functional
+     * If multiple component options are provided a "judge" AI will evaluate all the functional
      * responses and will rank order them with an explanation of why they were each ranked that way. Rankings are not absolute, they are relative to the
-     * # of components contained within an array of SkipComponentOption types.  
+     * # of components contained within an array of ComponentOption types.  
      */
     AIRank: number | undefined;
     /**

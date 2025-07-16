@@ -1,6 +1,6 @@
 import { Component, OnInit, ViewChild, ChangeDetectorRef, ElementRef, ViewContainerRef } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
-import { AIPromptEntity, TemplateEntity, TemplateContentEntity, TemplateParamEntity, AIPromptModelEntity, AIModelEntity, AIVendorEntity, AIPromptCategoryEntity, AIModelVendorEntity, AIPromptTypeEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
+import { AIPromptEntity, TemplateEntity, TemplateContentEntity, TemplateParamEntity, AIPromptModelEntity, AIModelEntity, AIVendorEntity, AIPromptCategoryEntity, AIModelVendorEntity, AIPromptTypeEntity, AIPromptRunEntity, AIConfigurationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -40,6 +40,10 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     // AI Prompt Types
     public availablePromptTypes: AIPromptTypeEntity[] = [];
     public isLoadingPromptTypes = false;
+    
+    // AI Configurations
+    public availableConfigurations: AIConfigurationEntity[] = [];
+    public isLoadingConfigurations = false;
     
     // Result Selector Tree Data
     public resultSelectorTreeData: any[] = [];
@@ -225,11 +229,12 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             this.isLoadingTemplate = false;
         }
         
-        // Load available models, vendors, prompt types, prompt models, and result selector data
+        // Load available models, vendors, prompt types, configurations, prompt models, and result selector data
         await Promise.all([
             this.loadAvailableModels(),
             this.loadAvailableVendors(),
             this.loadAvailablePromptTypes(),
+            this.loadAvailableConfigurations(),
             this.loadPromptModels(),
             this.loadResultSelectorTreeData()
         ]);
@@ -811,6 +816,24 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     }
 
     /**
+     * Loads available AI configurations for selection
+     */
+    public async loadAvailableConfigurations() {
+        this.isLoadingConfigurations = true;
+        try {
+            const engine = AIEngineBase.Instance;
+            await engine.Config(false);
+            const configurations = engine.Configurations;
+            configurations.sort((a, b) => a.Name.localeCompare(b.Name));
+            this.availableConfigurations = configurations;
+        } catch (error) {
+            console.error('Error loading available configurations:', error);
+        } finally {
+            this.isLoadingConfigurations = false;
+        }
+    }
+
+    /**
      * Loads vendors available for a specific model
      */
     public async loadVendorsForModel(modelId: string): Promise<{ vendors: AIVendorEntity[], modelVendors: AIModelVendorEntity[] }> {
@@ -894,6 +917,20 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
                 promptModel.VendorID = vendorData.vendors[0].ID;
             }
         }
+        
+        // Trigger change detection
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Handles configuration change for a prompt model
+     */
+    public onConfigurationChange(configurationId: string | null, promptModelIndex: number) {
+        const promptModel = this.promptModels[promptModelIndex];
+        if (!promptModel) return;
+
+        promptModel.ConfigurationID = configurationId;
+        this.hasUnsavedChanges = true;
         
         // Trigger change detection
         this.cdr.detectChanges();
@@ -1062,6 +1099,15 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         if (!typeId) return '';
         const type = this.availablePromptTypes.find(t => t.ID === typeId);
         return type ? type.Name : typeId;
+    }
+
+    /**
+     * Gets the display name for a configuration ID
+     */
+    public getConfigurationDisplayName(configurationId: string | null): string {
+        if (!configurationId) return 'Default';
+        const config = this.availableConfigurations.find(c => c.ID === configurationId);
+        return config ? config.Name : configurationId;
     }
 
     /**
