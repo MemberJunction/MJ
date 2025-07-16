@@ -74,6 +74,26 @@ export {
   HierarchyRegistrationOptions
 } from './runtime';
 
+// Export utilities
+export { 
+  RuntimeUtilities, 
+  createRuntimeUtilities 
+} from './utilities/runtime-utilities';
+
+export { 
+  SetupStyles,
+  createDefaultComponentStyles 
+} from './utilities/component-styles';
+
+export {
+  STANDARD_LIBRARY_URLS,
+  StandardLibraries,
+  getCoreLibraryUrls,
+  getUILibraryUrls,
+  getCSSUrls,
+  createStandardLibraries
+} from './utilities/standard-libraries';
+
 // Version information
 export const VERSION = '2.69.1';
 
