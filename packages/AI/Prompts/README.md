@@ -2523,6 +2523,26 @@ UPDATE AIAgentType SET SystemPromptID = @SystemPromptID WHERE Name = 'DataGather
 
 The AI Prompts system provides flexible API key management for runtime configuration without modifying environment variables or global settings.
 
+### Environment-Based API Configuration
+
+MemberJunction now supports sophisticated environment-based API key resolution through AIConfigSet entities, allowing different configurations for different environments:
+
+```typescript
+// Configurations are loaded based on the environment name
+// Default fallback order: process.env.NODE_ENV -> 'production'
+
+// Example: Different API keys per environment
+// Development -> AIConfigSet(Name='development') -> Config Key OPENAI_LLM_APIKEY
+// Production -> AIConfigSet(Name='production') -> Config Key OPENAI_LLM_APIKEY
+```
+
+#### Configuration Set Priority
+
+When multiple configuration sets exist, they are evaluated in this order:
+1. **Exact environment match** (e.g., 'development' matches 'development')
+2. **Priority field** (higher priority values are preferred)
+3. **Custom resolver logic** (if implemented via subclassing)
+
 ### Using Runtime API Keys
 
 You can provide API keys at prompt execution time, which is useful for:
@@ -2553,9 +2573,41 @@ const result = await runner.ExecutePrompt({
 
 When executing prompts, API keys are resolved in this order:
 1. **Local API keys** provided in `AIPromptParams.apiKeys` (highest priority)
-2. **Global API keys** from environment variables or custom `AIAPIKeys` implementation
+2. **Configuration sets** from database based on environment
+3. **Environment variables** (traditional dotenv approach)
+4. **Custom implementations** via AIAPIKeys subclassing
 
-If a driver class is not found in the local apiKeys array, the system falls back to the global API key management.
+### Configuration Set Structure
+
+Configuration sets are managed through these entities:
+
+#### AIConfigSet
+- **Name**: Environment name (e.g., 'development', 'production', 'staging')
+- **Description**: Human-readable description
+- **Priority**: Higher values take precedence when multiple sets match
+- **Status**: 'Active' or 'Inactive'
+
+#### AIConfiguration
+- **ConfigSetID**: Links to parent configuration set
+- **ConfigKey**: The configuration key (e.g., 'OPENAI_LLM_APIKEY')
+- **ConfigValue**: The actual value (encrypted for sensitive data)
+- **EncryptedValue**: Whether the value is encrypted
+- **Description**: Documentation for the configuration
+
+### Environment Variables vs Configuration Sets
+
+```typescript
+// Traditional environment variable approach (still supported)
+process.env.OPENAI_LLM_APIKEY = 'sk-...';
+
+// New configuration set approach (recommended)
+// Stored in database:
+// ConfigSet: { Name: 'production', Priority: 100 }
+// Config: { ConfigKey: 'OPENAI_LLM_APIKEY', ConfigValue: 'sk-...', Encrypted: true }
+
+// The system automatically uses the configuration set if available
+// Falls back to environment variables if not found in database
+```
 
 ### Hierarchical API Key Propagation
 
@@ -2587,21 +2639,63 @@ import { AIAPIKeys, RegisterClass } from '@memberjunction/ai';
 @RegisterClass(AIAPIKeys, 'CustomAPIKeys', 2) // Priority 2 overrides default
 export class CustomAPIKeys extends AIAPIKeys {
     public GetAPIKey(AIDriverName: string): string {
-        // Custom logic: database lookup, vault access, etc.
+        // First check configuration sets
+        const configValue = this.getFromConfigSet(AIDriverName);
+        if (configValue) return configValue;
+        
+        // Then check custom logic: database lookup, vault access, etc.
         if (AIDriverName === 'OpenAILLM') {
             return this.getFromVault('openai-key');
         }
-        return super.GetAPIKey(AIDriverName); // Fallback to default
+        
+        // Finally fall back to environment variables
+        return super.GetAPIKey(AIDriverName);
+    }
+    
+    private getFromConfigSet(driverName: string): string | null {
+        // Implementation would query AIConfiguration entities
+        // based on current environment
+        const envName = process.env.NODE_ENV || 'production';
+        // ... query logic here
+        return null;
     }
 }
+```
+
+### Multi-Environment Setup Example
+
+```typescript
+// Development environment setup
+const devConfig = {
+    ConfigSet: { Name: 'development', Priority: 100 },
+    Configurations: [
+        { ConfigKey: 'OPENAI_LLM_APIKEY', ConfigValue: 'sk-dev-...', Encrypted: true },
+        { ConfigKey: 'ANTHROPIC_LLM_APIKEY', ConfigValue: 'sk-ant-dev-...', Encrypted: true },
+        { ConfigKey: 'LOG_LEVEL', ConfigValue: 'debug', Encrypted: false }
+    ]
+};
+
+// Production environment setup
+const prodConfig = {
+    ConfigSet: { Name: 'production', Priority: 100 },
+    Configurations: [
+        { ConfigKey: 'OPENAI_LLM_APIKEY', ConfigValue: 'sk-prod-...', Encrypted: true },
+        { ConfigKey: 'ANTHROPIC_LLM_APIKEY', ConfigValue: 'sk-ant-prod-...', Encrypted: true },
+        { ConfigKey: 'LOG_LEVEL', ConfigValue: 'error', Encrypted: false }
+    ]
+};
+
+// The system automatically loads the correct configuration based on NODE_ENV
 ```
 
 ### Security Best Practices
 
 1. **Never hardcode API keys** in your source code
-2. **Use environment-specific keys** for different environments (dev, staging, prod)
-3. **Rotate keys regularly** and have a process for key rotation
-4. **Monitor API key usage** to detect unauthorized access
-5. **Use the principle of least privilege** - give each user/app only the keys they need
+2. **Use encrypted storage** for sensitive configuration values
+3. **Separate configurations** by environment (dev, staging, prod)
+4. **Rotate keys regularly** and update configuration sets
+5. **Monitor API key usage** to detect unauthorized access
+6. **Use the principle of least privilege** - give each user/app only the keys they need
+7. **Audit configuration changes** through MemberJunction's change tracking
 
 For more details on API key management, see the [AI Core API Keys documentation](../Core/README.md#api-key-management).

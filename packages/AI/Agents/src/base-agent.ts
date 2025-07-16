@@ -673,6 +673,12 @@ export class BaseAgent {
             childPromptParams.apiKeys = params.apiKeys;
         }
         
+        // Pass through configurationId to both parent and child prompts if provided
+        if (params.configurationId) {
+            promptParams.configurationId = params.configurationId;
+            childPromptParams.configurationId = params.configurationId;
+        }
+        
         promptParams.childPrompts = [
             new ChildPromptParam(
                 childPromptParams,
@@ -1660,6 +1666,7 @@ export class BaseAgent {
                 parentDepth: this._depth,
                 parentRun: this._agentRun,
                 payload: payload, // pass the payload if provided
+                configurationId: params.configurationId, // propagate configuration ID to sub-agent
                 data: {
                         ...subAgentRequest.templateParameters,
                         ...params.data, 

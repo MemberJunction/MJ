@@ -346,6 +346,16 @@ export type ExecuteAgentParams<TContext = any, P = any> = {
      * bandwidth by avoiding passing large payloads back and forth.
      */
     autoPopulateLastRunPayload?: boolean;
+    /**
+     * Optional AI Configuration ID to use for this agent execution.
+     * When provided, this configuration will be passed to all prompts executed
+     * by this agent and its sub-agents, enabling environment-specific model
+     * selection (e.g., Prod vs Dev configurations).
+     * 
+     * The configuration ID filters which AI models are available for prompt
+     * execution and can provide configuration parameters for dynamic behavior.
+     */
+    configurationId?: string;
 }
 
 /**
