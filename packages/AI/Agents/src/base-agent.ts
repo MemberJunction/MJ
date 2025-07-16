@@ -1672,7 +1672,12 @@ export class BaseAgent {
                         ...params.data, 
                       }, // merge any template parameters, but override with explicitly provided data so that hallucinated input params don't override data provided by caller
                 context: params.context, // pass along our context to sub-agents so they can keep passing it down and pass to actions as well
-                verbose: params.verbose // pass verbose flag to sub-agent
+                verbose: params.verbose, // pass verbose flag to sub-agent
+                // Add callback to link AgentRun ID immediately when created
+                onAgentRunCreated: async (agentRunId: string) => {
+                    stepEntity.TargetLogID = agentRunId;
+                    await stepEntity.Save();
+                }
             });
             
             // Check if execution was successful
@@ -1911,6 +1916,16 @@ export class BaseAgent {
         if (!await this._agentRun.Save()) {
             const errorMessage = JSON.stringify(CopyScalarsAndArrays(this._agentRun.LatestResult));
             throw new Error(`Failed to create agent run record: Details: ${errorMessage}`);
+        }
+        
+        // Invoke callback if provided
+        if (modifiedParams.onAgentRunCreated) {
+            try {
+                await modifiedParams.onAgentRunCreated(this._agentRun.ID);
+            } catch (callbackError) {
+                LogStatus(`Error in onAgentRunCreated callback: ${callbackError.message}`);
+                // Don't fail the execution if callback fails
+            }
         }
 
         // Initialize hierarchy tracking
@@ -2276,6 +2291,12 @@ export class BaseAgent {
                     stepEntityId: stepEntity.ID
                 });
             } : undefined;
+            
+            // Add callback to link PromptRun ID immediately when created
+            promptParams.onPromptRunCreated = async (promptRunId: string) => {
+                stepEntity.TargetLogID = promptRunId;
+                await stepEntity.Save();
+            };
             
             // Execute the prompt
             const promptResult = await this.executePrompt(promptParams);
