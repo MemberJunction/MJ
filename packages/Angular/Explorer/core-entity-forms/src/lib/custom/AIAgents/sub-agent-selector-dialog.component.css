@@ -6,6 +6,16 @@
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
+/* Ensure dialog appears above banner and other elements */
+:host ::ng-deep .k-dialog,
+:host ::ng-deep .k-window {
+  z-index: 10000 !important;
+}
+
+:host ::ng-deep .k-overlay {
+  z-index: 9999 !important;
+}
+
 /* === Dialog Header === */
 .dialog-header {
   padding: 1.5rem;
@@ -252,6 +262,7 @@
   margin-bottom: 0.75rem;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -272,9 +283,7 @@
   color: white;
 }
 
-.status-badge {
-  /* Color set dynamically via style binding */
-}
+/* Status badge color set dynamically via style binding */
 
 .type-badge {
   background: #6f42c1;

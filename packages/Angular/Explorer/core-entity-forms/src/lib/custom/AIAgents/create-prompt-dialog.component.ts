@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
-import { DialogRef } from '@progress/kendo-angular-dialog';
+import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
 import { AIPromptEntity, TemplateEntity, AIPromptTypeEntity, TemplateContentEntity } from '@memberjunction/core-entities';
@@ -72,7 +72,7 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
   templateMode: 'new' | 'existing' = 'new';
 
   constructor(
-    private dialogRef: DialogRef,
+    private dialogRef: WindowRef,
     private cdr: ChangeDetectorRef,
     private aiPromptManagementService: AIPromptManagementService
   ) {

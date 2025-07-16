@@ -1,6 +1,6 @@
 .sub-agent-dialog {
-  padding: 20px;
-  max-width: 800px;
+  padding: 16px;
+  max-width: 100%;
   max-height: 90vh;
   overflow-y: auto;
 }
@@ -334,4 +334,14 @@
 
 .sub-agent-dialog::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
+}
+
+/* Ensure dialog appears above banner and other elements */
+:host ::ng-deep .k-dialog,
+:host ::ng-deep .k-window {
+  z-index: 10000 !important;
+}
+
+:host ::ng-deep .k-overlay {
+  z-index: 9999 !important;
 }

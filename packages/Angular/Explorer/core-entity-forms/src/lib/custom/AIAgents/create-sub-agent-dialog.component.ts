@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
-import { DialogRef } from '@progress/kendo-angular-dialog';
+import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
 import { AIAgentEntity, AIAgentTypeEntity, AIAgentPromptEntity, AIAgentActionEntity, AIPromptEntity, ActionEntity } from '@memberjunction/core-entities';
@@ -79,7 +79,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
   newlyCreatedTemplateContents: any[] = [];
 
   constructor(
-    private dialogRef: DialogRef,
+    private dialogRef: WindowRef,
     private cdr: ChangeDetectorRef,
     private agentManagementService: AIAgentManagementService
   ) {
