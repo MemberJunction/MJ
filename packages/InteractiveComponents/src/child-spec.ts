@@ -1,10 +1,10 @@
-import { SkipComponentEvent, SkipComponentProperty } from "./component-props-events";
-import { SkipComponentDataRequirements } from "./data-requirements";
+import { ComponentEvent, ComponentProperty } from "./component-props-events";
+import { ComponentDataRequirements } from "./data-requirements";
 
 /**
  * Represents a child component within a component hierarchy
  */
-export interface SkipComponentChildSpec {
+export interface ComponentChildSpec {
     /**
      * The programmatic name of the component
      */
@@ -44,7 +44,7 @@ export interface SkipComponentChildSpec {
      * Data requirements for this child component. This section defines where a child component
      * will **directly** access data as required using utilities methods like `rv.runView` and `rq.runQuery`
      */
-    dataRequirements?: SkipComponentDataRequirements;
+    dataRequirements?: ComponentDataRequirements;
 
     /**
      * An optional array of properties that the component uses. The names and descriptions 
@@ -52,13 +52,13 @@ export interface SkipComponentChildSpec {
      * component. This can be used for shared data shared between components or for configuration
      * settings.
      */
-    properties?: SkipComponentProperty[];
+    properties?: ComponentProperty[];
 
     /**
      * An optional array of events that the component emits.
      * This allows consumers of the component to understand what events they can listen to.
      */
-    events?: SkipComponentEvent[];
+    events?: ComponentEvent[];
 
     /**
      * Technical design details for this child component.
@@ -78,5 +78,5 @@ export interface SkipComponentChildSpec {
     /**
      * An array of sub-components
      */
-    components: SkipComponentChildSpec[];
+    components: ComponentChildSpec[];
 }

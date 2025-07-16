@@ -1,7 +1,6 @@
 import { EntityFieldInfo, EntityFieldValueInfo, EntityInfo, EntityRelationshipInfo } from "@memberjunction/core";
 import { SkipEntityFieldInfo, SkipEntityFieldValueInfo, SkipEntityInfo, SkipEntityRelationshipInfo } from "./entity-metadata-types";
-import { SkipComponentRootSpec } from "./root-spec";
-import { SkipComponentChildSpec } from "./child-spec";
+import { ComponentChildSpec, ComponentRootSpec } from "@memberjunction/interactive-component-types";
 
 /**
  * Maps a MemberJunction EntityInfo object to a SkipEntityInfo object for use in the Skip query system.
@@ -116,58 +115,3 @@ export function MapEntityRelationshipInfoToSkipEntityRelationshipInfo(re: Entity
     }
     return sre;    
 }
-
-/**
- * Builds the complete code for a Skip component based on the provided spec.
- * 
- * This function generates the full code representation of a Skip component, including
- * the root component code and recursively pulling in child components and also replacing
- * the placeholders for those child components in the parent component's code with the 
- * actual code for those child components (which were generated after the parent component was generated).
- * 
- * @param spec - The SkipComponentRootSpec defining the component structure and behavior
- * @returns A string containing the complete executable JavaScript code for the Skip component
- */
-export function BuildSkipComponentCompleteCode(spec: SkipComponentRootSpec): string {
-    // Start with the base code for the root component
-    let code = spec.componentCode || '// Generation Error: No root component code provided! \n\n';
-    // Recursively replace placeholders for child components with their generated code
-    if (!spec.childComponents || spec.childComponents.length === 0) {
-        // If there are no child components, return the base code for this component
-        return code;
-    }
-    for (const child of spec.childComponents) {
-        const childCode = BuildSkipComponentChildCode(child);
-        if (childCode && childCode.length > 0) {
-            // Append the generated code for this child component to the root component code
-            code += '\n\n' + childCode;
-        }
-    }
-    // Return the complete code for this component
-    return code;
-}
-
-/**
- * Builds the code for a Skip component child based on the provided spec including recursive child components.
- * @param spec - The SkipComponentChildSpec defining the child component structure and behavior
- * @returns A string containing the executable JavaScript code for the Skip component child
- */
-export function BuildSkipComponentChildCode(child: SkipComponentChildSpec): string {
-    // Start with the base code for the child component
-    let code = child.componentCode;
-    // Recursively replace placeholders for child components with their generated code
-    if (!child.components || child.components.length === 0) {
-        // If there are no child components, return the base code for this child
-        return code;
-    }
-
-    for (const sub of child.components) {
-        const subCode = BuildSkipComponentChildCode(sub);
-        if (subCode && subCode.length > 0) {
-            code += '\n\n' + subCode;
-        }
-    }
-    // Return the complete code for this child component
-    return code;
-}
- 
