@@ -2,7 +2,7 @@ import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPI
 import { ValidationAttempt, AIPromptRunResult } from '@memberjunction/ai-core-plus';
 import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
 import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
-import { AIModelEntityExtended, AIPromptEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
+import { AIModelEntityExtended, AIPromptEntity, AIPromptRunEntity, AIPromptModelEntity } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateEntityExtended, TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
@@ -1126,11 +1126,36 @@ export class AIPromptRunner {
     }
 
     // 2. Get prompt-specific models from AIPromptModels
-    const promptModels = AIEngine.Instance.PromptModels.filter(
-      pm => pm.PromptID === prompt.ID &&
-            (pm.Status === 'Active' || pm.Status === 'Preview') &&
-            (!configurationId || !pm.ConfigurationID || pm.ConfigurationID === configurationId)
-    );
+    // When a configuration is specified, prioritize matching configurations over NULL configs
+    let promptModels: AIPromptModelEntity[] = [];
+    
+    if (configurationId) {
+      // First, try to find models with matching configuration
+      promptModels = AIEngine.Instance.PromptModels.filter(
+        pm => pm.PromptID === prompt.ID &&
+              (pm.Status === 'Active' || pm.Status === 'Preview') &&
+              pm.ConfigurationID === configurationId
+      );
+      
+      // If no matching configuration models found, fall back to NULL configuration models
+      if (promptModels.length === 0) {
+        LogStatus(`No models found for configuration "${configurationId}", falling back to default models`);
+        promptModels = AIEngine.Instance.PromptModels.filter(
+          pm => pm.PromptID === prompt.ID &&
+                (pm.Status === 'Active' || pm.Status === 'Preview') &&
+                !pm.ConfigurationID
+        );
+      } else {
+        LogStatus(`Found ${promptModels.length} models for configuration "${configurationId}"`);
+      }
+    } else {
+      // No configuration specified, only use NULL configuration models
+      promptModels = AIEngine.Instance.PromptModels.filter(
+        pm => pm.PromptID === prompt.ID &&
+              (pm.Status === 'Active' || pm.Status === 'Preview') &&
+              !pm.ConfigurationID
+      );
+    }
 
     if (promptModels.length > 0) {
       // Use prompt-specific models with their configured priorities

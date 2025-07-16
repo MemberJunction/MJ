@@ -58,7 +58,8 @@ export class ReactTestHarness {
     if (!result.success && this.options.screenshotOnError && result.screenshot) {
       const screenshotPath = this.options.screenshotPath || './error-screenshot.png';
       const fs = await import('fs');
-      fs.writeFileSync(screenshotPath, result.screenshot);
+      // Ensure the screenshot Buffer is properly typed for writeFileSync
+      fs.writeFileSync(screenshotPath, Buffer.from(result.screenshot));
       console.log(`Screenshot saved to: ${screenshotPath}`);
     }
 

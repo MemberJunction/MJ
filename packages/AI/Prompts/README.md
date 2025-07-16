@@ -2718,33 +2718,37 @@ The AI Prompts system supports sophisticated environment-specific model selectio
 
 ### Model Selection with Configurations
 
-When executing a prompt with a specific `configurationId`, the system follows this model selection logic:
+When executing a prompt with a specific `configurationId`, the system follows a two-phase model selection process that ensures configuration-specific models ALWAYS take precedence:
 
-#### 1. Configuration Filtering
+#### Phase 1: Configuration-Specific Models (Highest Priority)
 ```typescript
-// AIPromptModel records are filtered by configuration
-const eligiblePromptModels = promptModels.filter(pm => 
-    (!configurationId || !pm.ConfigurationID || pm.ConfigurationID === configurationId)
+// First, try to find models with matching configuration
+const configModels = promptModels.filter(pm => 
+    pm.ConfigurationID === configurationId &&
+    (pm.Status === 'Active' || pm.Status === 'Preview')
 );
 ```
 
-This means:
-- **No configuration specified**: All prompt models are considered
-- **Prompt model has no ConfigurationID**: It acts as a "default" available to all configurations
-- **Both have values**: They must match exactly
+If configuration-specific models are found, they are used exclusively. The system will NOT consider models with NULL or mismatched configurations.
 
-#### 2. Fallback Behavior
+#### Phase 2: Default Models (Fallback)
 
-If NO AIPromptModel records match the configuration, the system gracefully falls back to general model selection based on the prompt's criteria:
+Only if NO models match the specific configuration, the system falls back to models with NULL configuration:
 
 ```typescript
-// Fallback uses the prompt's model selection settings
-if (eligiblePromptModels.length === 0) {
-    // Use ModelSelectionMode: Default, Specific, or ByPower
-    // Apply PowerPreference: Highest, Lowest, or Balanced
-    // Filter by MinPowerRank and AIModelTypeID
+// Fall back to NULL configuration models only if no matches found
+if (configModels.length === 0) {
+    const defaultModels = promptModels.filter(pm => 
+        pm.ConfigurationID === null &&
+        (pm.Status === 'Active' || pm.Status === 'Preview')
+    );
 }
 ```
+
+This ensures:
+- **Configuration-specific models always win**: When you specify a configuration, only models explicitly assigned to that configuration are considered first
+- **Clear environment separation**: Production models never mix with Development models when configurations are used
+- **Explicit fallback behavior**: NULL configuration models serve as defaults only when no configuration-specific models exist
 
 ### Configuration Setup Example
 
@@ -2766,7 +2770,7 @@ UPDATE AIPromptModel
 SET ConfigurationID = (SELECT ID FROM AIConfiguration WHERE Name = 'Development')
 WHERE PromptID = @PromptID AND ModelID IN (@GPT4TurboID, @Claude3OpusID);
 
--- Models with NULL ConfigurationID work with any configuration
+-- Models with NULL ConfigurationID serve as defaults when no configuration matches
 UPDATE AIPromptModel 
 SET ConfigurationID = NULL
 WHERE PromptID = @PromptID AND ModelID = @FallbackModelID;
@@ -2785,9 +2789,9 @@ const result = await promptRunner.ExecutePrompt({
 ```
 
 #### Configuration Precedence
-1. **Explicit models with matching configuration** (highest priority)
-2. **Models with NULL configuration** (work with any configuration)
-3. **Fallback to prompt's general model selection** (if no models match)
+1. **Configuration-specific models** (highest priority) - When a configurationId is provided, ONLY models with matching ConfigurationID are considered initially
+2. **NULL configuration models** (fallback only) - Used only when NO models match the specified configuration
+3. **Priority within each phase** - Models are ranked by their Priority field (higher number = higher priority)
 
 ### Dynamic Parallelization with Configurations
 
@@ -2807,10 +2811,11 @@ WHERE ID = @PromptID;
 
 ### Best Practices
 
-1. **Use NULL ConfigurationID for default models** that should work everywhere
-2. **Create environment-specific configurations** for different deployment scenarios
-3. **Document configuration purposes** in the Description field
-4. **Test fallback behavior** to ensure prompts work even without specific models
+1. **Use NULL ConfigurationID for fallback models** that provide a safety net when no configuration-specific models exist
+2. **Create environment-specific configurations** for different deployment scenarios (Production, Development, Testing)
+3. **Document configuration purposes** in the Description field to clarify their intended use
+4. **Test configuration precedence** to ensure configuration-specific models always take priority over defaults
 5. **Use configuration parameters** for environment-specific settings beyond just model selection
+6. **Assign models explicitly to configurations** to ensure clear separation between environments
 
 For more details on API key management, see the [AI Core API Keys documentation](../Core/README.md#api-key-management).
