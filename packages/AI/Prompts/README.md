@@ -867,6 +867,43 @@ const result = await runner.ExecutePrompt({
 // Result.result will be validated against the expected structure
 ```
 
+### Validation Syntax Cleaning
+
+When using output validation with JSON responses, the AI Prompt Runner automatically handles validation syntax that AI models might inadvertently include in their JSON keys:
+
+```typescript
+// Validation syntax in prompts:
+// - name?: optional field
+// - items:[2+]: array with minimum 2 items
+// - status:!empty: non-empty required field
+// - count:number: field with type hint
+
+// If the AI returns JSON with validation syntax in keys:
+{
+  "name?": "John Doe",
+  "items:[2+]": ["apple", "banana", "orange"],
+  "status:!empty": "active",
+  "count:number": 42
+}
+
+// The system automatically cleans it to:
+{
+  "name": "John Doe",
+  "items": ["apple", "banana", "orange"],
+  "status": "active",
+  "count": 42
+}
+```
+
+**Automatic Cleaning Behavior:**
+- **Always enabled** when prompt has `ValidationBehavior` set to `"Strict"` or `"Warn"`
+- **Always enabled** when prompt has an `OutputExample` defined
+- **Optional** for prompts with `ValidationBehavior` set to `"None"` (via `cleanValidationSyntax` parameter)
+
+This ensures that validation patterns used in prompt templates don't interfere with the actual JSON structure returned by the AI model.
+
+```
+
 ### Template Integration
 
 Advanced template features with the MemberJunction template system:
@@ -1697,6 +1734,7 @@ interface AIPromptParams {
     onProgress?: ExecutionProgressCallback;    // Progress update callback
     onStreaming?: ExecutionStreamingCallback;  // Streaming content callback
     agentRunId?: string;                       // Optional agent run ID to link prompt executions to parent agent run
+    cleanValidationSyntax?: boolean;           // Clean validation syntax from JSON responses (auto-enabled for validated prompts)
 }
 
 /**

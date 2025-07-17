@@ -18,6 +18,7 @@ The `@memberjunction/global` library serves as the foundation for cross-componen
 - **Object Caching** - In-memory object cache for application lifetime
 - **Class Reflection Utilities** - Runtime class hierarchy inspection and analysis
 - **Deep Diff Engine** - Comprehensive object comparison and change tracking
+- **JSON Validator** - Lightweight JSON validation with flexible rules and special syntax
 - **Utility Functions** - Common string manipulation, JSON parsing (including recursive nested JSON parsing), pattern matching, and formatting utilities
 
 ## Core Components
@@ -283,6 +284,182 @@ const result = differ.diff(oldData, newData);
 // - newProp: Added
 ```
 
+### JSON Validator
+
+Lightweight JSON validation with flexible validation rules and special field suffixes.
+
+```typescript
+import { JSONValidator } from '@memberjunction/global';
+
+// Create validator instance
+const validator = new JSONValidator();
+
+// Define validation template with rules
+const template = {
+  name: "John Doe",                    // Required field
+  email?: "user@example.com",          // Optional field
+  settings*: {},                       // Required, any content allowed
+  tags:[1+]: ["tag1"],                // Array with at least 1 item
+  age:number: 25,                     // Must be a number
+  username:string:!empty: "johndoe",   // Non-empty string
+  items:array:[2-5]?: ["A", "B"]      // Optional array with 2-5 items
+};
+
+// Validate data against template
+const data = {
+  name: "Jane Smith",
+  tags: ["work", "urgent"],
+  age: 30,
+  username: "jsmith"
+};
+
+const result = validator.validate(data, template);
+if (result.Success) {
+  console.log('Validation passed!');
+} else {
+  result.Errors.forEach(error => {
+    console.log(`${error.Source}: ${error.Message}`);
+  });
+}
+```
+
+#### Validation Syntax
+
+**Field Suffixes:**
+- `?` - Optional field (e.g., `email?`)
+- `*` - Required field with any content/structure (e.g., `payload*`)
+
+**Validation Rules (using `:` delimiter):**
+- **Array Length:**
+  - `[N+]` - At least N elements (e.g., `tags:[1+]`)
+  - `[N-M]` - Between N and M elements (e.g., `items:[2-5]`)
+  - `[=N]` - Exactly N elements (e.g., `coordinates:[=2]`)
+
+- **Type Checking:**
+  - `string` - Must be a string
+  - `number` - Must be a number (NaN fails validation)
+  - `boolean` - Must be a boolean
+  - `object` - Must be an object (not array or null)
+  - `array` - Must be an array
+
+- **Value Constraints:**
+  - `!empty` - Non-empty string, array, or object
+
+**Combining Rules:**
+Multiple validation rules can be combined with `:` delimiter:
+```typescript
+{
+  // Array of strings with 2+ items
+  "tags:array:[2+]": ["important", "urgent"],
+  
+  // Non-empty string
+  "username:string:!empty": "johndoe",
+  
+  // Optional number
+  "score:number?": 85,
+  
+  // Optional array with 1-3 items
+  "options:array:[1-3]?": ["A", "B"]
+}
+```
+
+#### Nested Object Validation
+
+The validator recursively validates nested objects:
+
+```typescript
+const template = {
+  user: {
+    id:number: 123,
+    name:string:!empty: "John",
+    roles:array:[1+]: ["admin"]
+  },
+  settings?: {
+    theme: "dark",
+    notifications:boolean: true
+  }
+};
+```
+
+#### Cleaning Validation Syntax
+
+The validator can clean validation syntax from JSON objects that may have been returned by AI systems:
+
+```typescript
+// AI might return JSON with validation syntax in keys
+const aiResponse = {
+  "name?": "John Doe",
+  "email:string": "john@example.com",
+  "tags:[2+]": ["work", "urgent"],
+  "settings*": { theme: "dark" },
+  "score:number:!empty": 85
+};
+
+// Clean the validation syntax
+const cleaned = validator.cleanValidationSyntax<any>(aiResponse);
+// Returns:
+// {
+//   "name": "John Doe",
+//   "email": "john@example.com", 
+//   "tags": ["work", "urgent"],
+//   "settings": { theme: "dark" },
+//   "score": 85
+// }
+```
+
+The `cleanValidationSyntax` method:
+- Recursively processes all object keys
+- Removes validation suffixes (`?`, `*`)
+- Removes validation rules (`:type`, `:[N+]`, `:!empty`, etc.)
+- Preserves the original values unchanged
+- Handles nested objects and arrays
+- Returns a new object with cleaned keys
+
+#### Convenience Methods
+
+```typescript
+// Validate against JSON string
+const schemaJson = '{"name": "string", "age:number": 0}';
+const result = validator.validateAgainstSchema(data, schemaJson);
+
+// Integration with MemberJunction ValidationResult
+// Returns standard ValidationResult with ValidationErrorInfo[]
+// Compatible with existing MJ validation patterns
+```
+
+#### Use Cases
+
+1. **API Response Validation:**
+```typescript
+const apiResponseTemplate = {
+  status:string: "success",
+  data*: {},  // Any data structure allowed
+  errors:array?: []
+};
+```
+
+2. **Configuration Validation:**
+```typescript
+const configTemplate = {
+  apiUrl:string:!empty: "https://api.example.com",
+  timeout:number: 5000,
+  retries:number: 3,
+  features:array:[1+]: ["logging"]
+};
+```
+
+3. **Form Data Validation:**
+```typescript
+const formTemplate = {
+  username:string:!empty: "user",
+  email:string: "user@example.com",
+  age:number?: 25,
+  preferences:object?: {
+    notifications:boolean: true
+  }
+};
+```
+
 ## Event Types
 
 The library provides predefined event types for common scenarios:
@@ -342,9 +519,6 @@ replaceAllSpaces('Hello World'); // "HelloWorld"
 ```typescript
 import { CleanJSON, SafeJSONParse, ParseJSONRecursive } from '@memberjunction/global';
 
-// Clean and extract JSON from markdown or mixed content
-const cleaned = CleanJSON('```json\n{"key": "value"}\n```');
-
 // Safe JSON parsing with error handling
 const parsed = SafeJSONParse<MyType>('{"key": "value"}', true);
 
@@ -376,6 +550,95 @@ const deeplyNested = ParseJSONRecursive(complexData, {
   debug: true          // Default: false, logs parsing steps
 });
 ```
+
+#### CleanJSON Function
+
+The `CleanJSON` function intelligently extracts and cleans JSON from various input formats, including double-escaped strings, strings with embedded JSON, and markdown code blocks. It's particularly useful when dealing with AI-generated responses or data from external systems that may have inconsistent JSON formatting.
+
+**Processing Order:**
+1. First attempts to parse the input as valid JSON (preserving embedded content)
+2. If that fails, handles double-escaped characters (`\\n`, `\\"`, etc.)
+3. Only extracts from markdown blocks or inline JSON as a last resort
+
+```typescript
+import { CleanJSON } from '@memberjunction/global';
+
+// Example 1: Already valid JSON - returns formatted
+const valid = CleanJSON('{"name": "test", "value": 123}');
+// Returns:
+// {
+//   "name": "test",
+//   "value": 123
+// }
+
+// Example 2: Double-escaped JSON string
+const escaped = CleanJSON('{\\"name\\": \\"test\\", \\"value\\": 123}');
+// Returns:
+// {
+//   "name": "test",
+//   "value": 123
+// }
+
+// Example 3: JSON with escaped newlines (common from AI responses)
+const withNewlines = CleanJSON('\\n{\\"mode\\": \\"test\\",\\n\\"data\\": [1, 2, 3]}\\n');
+// Returns:
+// {
+//   "mode": "test",
+//   "data": [1, 2, 3]
+// }
+
+// Example 4: Complex JSON with embedded markdown (preserves the markdown)
+const complexJson = CleanJSON(`{
+  "taskComplete": false,
+  "message": "Processing complete",
+  "nextAction": {
+    "type": "design",
+    "payload": {
+      "outputFormat": "\`\`\`json\\n{\\"componentName\\": \\"Example\\"}\\n\`\`\`"
+    }
+  }
+}`);
+// Returns the JSON with the markdown code block preserved in the outputFormat field
+
+// Example 5: Extract JSON from markdown (only when input isn't valid JSON)
+const markdown = CleanJSON('Some text ```json\n{"extracted": true}\n``` more text');
+// Returns:
+// {
+//   "extracted": true
+// }
+
+// Example 6: Extract inline JSON from mixed text
+const mixed = CleanJSON('Response: {"status": "success", "code": 200} - Done');
+// Returns:
+// {
+//   "status": "success",
+//   "code": 200
+// }
+
+// Example 7: Complex real-world example with nested escaped JSON
+const aiResponse = CleanJSON(`{
+  "analysis": "Complete",
+  "data": "{\\"users\\": [{\\"name\\": \\"John\\", \\"active\\": true}]}",
+  "metadata": {
+    "template": "\`\`\`json\\n{\\"format\\": \\"standard\\"}\\n\`\`\`"
+  }
+}`);
+// Returns properly formatted JSON with all nested structures intact
+```
+
+**Key Features:**
+- **Preserves embedded content**: When the input is valid JSON, markdown blocks and escaped strings within values are preserved
+- **Smart unescaping**: Handles `\\n` → `\n`, `\\"` → `"`, `\\\\` → `\` and other common escape sequences
+- **Markdown extraction**: Extracts JSON from ` ```json ` code blocks when needed
+- **Inline extraction**: Finds JSON objects/arrays within surrounding text
+- **Null safety**: Returns `null` for invalid inputs instead of throwing errors
+
+**Common Use Cases:**
+- Processing AI model responses that may contain escaped JSON
+- Cleaning data from external APIs with inconsistent formatting
+- Extracting JSON from log files or debug output
+- Handling JSON strings stored in databases that may be double-escaped
+- Processing user input that may contain JSON in various formats
 
 ### HTML Conversion
 

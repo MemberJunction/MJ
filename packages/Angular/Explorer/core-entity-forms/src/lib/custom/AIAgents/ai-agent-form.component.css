@@ -762,6 +762,94 @@
     color: #2196f3;
 }
 
+/* Payload Section Styles */
+.payload-config-section,
+.payload-paths-section,
+.payload-validation-section {
+    margin-bottom: 32px;
+}
+
+.subsection-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #2c3e50;
+    margin: 0 0 16px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.subsection-title i {
+    color: #2196f3;
+}
+
+.subsection-divider {
+    margin-top: 32px;
+    margin-bottom: 16px;
+    padding-top: 24px;
+    border-top: 1px solid #e0e6ed;
+}
+
+.payload-config-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.payload-field-group {
+    margin-bottom: 20px;
+}
+
+.payload-field-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 8px;
+}
+
+.payload-field-label i {
+    color: #6c757d;
+    font-size: 16px;
+}
+
+.field-description {
+    font-size: 12px;
+    font-weight: normal;
+    color: #6c757d;
+    margin-left: auto;
+}
+
+/* Code editor styling */
+.payload-field-group mj-code-editor {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.payload-field-group mj-code-editor:hover {
+    border-color: #2196f3;
+}
+
+/* Payload textarea styling */
+.payload-field-group mj-form-field ::ng-deep textarea {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    min-height: 120px;
+    resize: vertical;
+}
+
+/* Execution History Panel */
+.execution-history-panel {
+    max-height: 500px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
 /* Timeline List for Execution History */
 .timeline-list {
     display: flex;
@@ -1512,3 +1600,30 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* Execution History Panel - Max Height and Scroll */
+.execution-history-panel {
+    max-height: 500px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Custom scrollbar for execution history */
+.execution-history-panel::-webkit-scrollbar {
+    width: 8px;
+}
+
+.execution-history-panel::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.execution-history-panel::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.execution-history-panel::-webkit-scrollbar-thumb:hover {
+    background: #a0a0a0;
+}
+

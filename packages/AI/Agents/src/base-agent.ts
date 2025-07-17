@@ -16,7 +16,7 @@ import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogError
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
-import { CopyScalarsAndArrays, MJGlobal } from '@memberjunction/global';
+import { CopyScalarsAndArrays, JSONValidator } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import {
@@ -83,6 +83,12 @@ import * as _ from 'lodash';
  */
 export class BaseAgent {
     /**
+     * Maximum allowed validation retries before forcing failure.
+     * @private
+     */
+    private static readonly MAX_VALIDATION_RETRIES = 10;
+
+    /**
      * Instance of AIPromptRunner used for executing hierarchical prompts.
      * @private
      */
@@ -95,10 +101,31 @@ export class BaseAgent {
     private _metadata: Metadata = new Metadata();
 
     /**
+     * Map to track execution counts for actions and sub-agents.
+     * Key is the item ID (action ID or sub-agent ID), value is the count.
+     * @private
+     */
+    private _executionCounts: Map<string, number> = new Map();
+
+    /**
+     * Counter for validation-induced retries (when validation changes a step to Retry).
+     * This is separate from FinalPayloadValidation retries.
+     * @private
+     */
+    private _generalValidationRetryCount: number = 0;
+
+    /**
      * Current agent run entity.
      * @private
      */
     private _agentRun: AIAgentRunEntityExtended | null = null;
+
+    /**
+     * Access the current run for the agent
+     */
+    public get AgentRun(): AIAgentRunEntityExtended | null {
+        return this._agentRun;
+    }
 
     /**
      * Agent hierarchy for display purposes (e.g., ["Marketing Agent", "Copywriter Agent"]).
@@ -131,6 +158,23 @@ export class BaseAgent {
      * @private
      */
     private _payloadManager: PayloadManager = new PayloadManager();
+
+    /**
+     * Counter for tracking validation retry attempts during FinalPayloadValidation.
+     * Reset at the start of each agent run.
+     * @private
+     */
+    private _validationRetryCount: number = 0;
+
+    /**
+     * Gets the current validation retry count for the agent run.
+     * This count tracks how many times the agent has retried validation
+     * during the FinalPayloadValidation step.
+     * @readonly
+     */
+    public get ValidationRetryCount(): number {
+        return this._validationRetryCount;
+    }
 
     /**
      * Helper method for status logging with verbose control
@@ -285,6 +329,10 @@ export class BaseAgent {
 
             // Initialize execution tracking
             await this.initializeAgentRun(wrappedParams);
+
+            // Reset validation retry counters for this run
+            this._validationRetryCount = 0;
+            this._generalValidationRetryCount = 0;
 
             // Initialize engines
             await this.initializeEngines(params.contextUser);
@@ -667,6 +715,677 @@ export class BaseAgent {
     }
 
     /**
+     * Base class method that determines the next step by contacting the agent type class for the specified agent type and delegating
+     * that decision. Sub-classes can override this method to implement custom next step logic if needed.
+     * @param params 
+     * @param agentType 
+     * @param promptResult 
+     * @returns 
+     */
+    protected async determineNextStep<P>(
+        params: ExecuteAgentParams,
+        agentType: AIAgentTypeEntity,
+        promptResult: AIPromptRunResult,
+        currentPayload: P
+    ): Promise<BaseAgentNextStep<P>> {
+        this.logStatus(`🤔 Processing next step for agent '${params.agent.Name}' with agent type '${agentType.Name}'`, true, params);
+        const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(agentType);
+
+        // Let the agent type determine the next step
+        this.logStatus(`🎯 Agent type '${agentType.Name}' determining next step`, true, params);
+        const nextStep = await agentTypeInstance.DetermineNextStep<P>(promptResult, currentPayload);
+        return nextStep;
+    }
+
+
+    /**
+     * Validates if the next step is valid, or not. If the next step is invalid, it returns a retry step with an error message
+     * that can be processed by the agent via a retry prompt to attempt to correct the issue. Alternatively, subclasses can
+     * handle this scenario differently as desired. 
+     * 
+     * The BaseAgent class implements checking for sub-agents and actions to ensure that the next step is valid in the 
+     * context of the current agent. If the next step is a sub-agent, it checks if the sub-agent is active and available for execution.
+     * If the next step is actions, it checks if the actions are valid and available for execution.
+     * @param params 
+     * @param nextStep 
+     * @returns 
+     */
+    protected async validateNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        agentRun: AIAgentRunEntityExtended,
+        currentStep: AIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        // for next step, let's do a little quick validation here for sub-agent and actions to ensure requests are valid
+        switch (nextStep.step) {
+            case 'Sub-Agent':           
+                return this.validateSubAgentNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
+            case 'Actions':
+                return this.validateActionsNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
+            case 'Success':
+                return this.validateSuccessNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
+            case 'Chat':
+                return this.validateChatNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
+            case 'Retry':
+                return this.validateRetryNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
+            case 'Failed':
+                return this.validateFailedNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
+            default:
+                // if we get here, the next step is not recognized, we can return a retry step
+                this.logError(`Invalid next step '${nextStep.step}' for agent '${params.agent.Name}'`, {
+                    agent: params.agent,
+                    category: 'NextStepValidation'
+                });
+                return {
+                    step: 'Failed',
+                    terminate: true, // final condition
+                    errorMessage: `Invalid next step '${nextStep.step}'`
+                };
+        }
+    }
+
+    /**
+     * Validates that the sub-agent next step is valid and can be executed by the current agent. Subclasses can override 
+     * this method to implement custom validation logic if needed.
+     * @param params 
+     * @param nextStep 
+     * @returns 
+     */
+    protected async validateSubAgentNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        agentRun: AIAgentRunEntityExtended,
+        currentStep: AIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        // check to make sure the current agent can execute the specified sub-agent
+        const name = nextStep.subAgent?.name;
+        const curAgentSubAgents = AIEngine.Instance.GetSubAgents(params.agent.ID, 'Active');
+        const subAgent = curAgentSubAgents.find(a => a.Name.trim().toLowerCase() === name?.trim().toLowerCase());
+        
+        if (!name || !subAgent) {
+            this.logError(`Sub-agent '${name}' not found or not active for agent '${params.agent.Name}'`, {
+                agent: params.agent,
+                category: 'SubAgentExecution'
+            });
+            // Increment validation retry count since we're changing to Retry
+            if (nextStep.step !== 'Retry') {
+                this._generalValidationRetryCount++;
+            }
+            return {
+                step: 'Retry',
+                terminate: false, // this will kick it back to the prompt to run again
+                errorMessage: `Sub-agent '${name}' not found or not active`
+            };
+        }
+
+        // Check MaxExecutionsPerRun limit
+        if (subAgent.MaxExecutionsPerRun != null) {
+            const executionCount = await this.getSubAgentExecutionCount(agentRun.ID, subAgent.ID);
+            if (executionCount >= subAgent.MaxExecutionsPerRun) {
+                this.logError(`Sub-agent '${name}' has reached its maximum execution limit of ${subAgent.MaxExecutionsPerRun}`, {
+                    agent: params.agent,
+                    category: 'SubAgentExecution',
+                    metadata: {
+                        subAgentName: name,
+                        executionCount,
+                        maxExecutions: subAgent.MaxExecutionsPerRun
+                    }
+                });
+                // Increment validation retry count since we're changing to Retry
+                if (nextStep.step !== 'Retry') {
+                    this._generalValidationRetryCount++;
+                }
+                return {
+                    step: 'Retry',
+                    terminate: false,
+                    errorMessage: `Sub-agent '${name}' has reached its maximum execution limit of ${subAgent.MaxExecutionsPerRun}`
+                };
+            }
+        }
+
+        // if we get here, the next step is valid and we can return it
+        return nextStep;
+    }
+
+    /**
+     * Validates that the actions next step is valid and can be executed by the current agent. Subclasses can override
+     * this method to implement custom validation logic if needed.
+     * @param params 
+     * @param nextStep 
+     * @returns 
+     */
+    protected async validateActionsNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        agentRun: AIAgentRunEntityExtended,
+        currentStep: AIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        // check to make sure the current agent can execute the specified action
+        const curAgentActions = AIEngine.Instance.AgentActions.filter(aa => aa.AgentID === params.agent.ID && aa.Status === 'Active');
+        const missingActions = nextStep.actions?.filter(action => 
+            !curAgentActions.some(aa => aa.Action.trim().toLowerCase() === action.name.trim().toLowerCase())
+        );
+        // we should have zero missing actions, if we do, we need to log an error and return a retry step
+        if (missingActions && missingActions.length > 0) {
+            const missingActionNames = missingActions.map(a => a.name).join(', ');
+            this.logError(`Actions '${missingActionNames}' not found or not active for agent '${params.agent.Name}'`, {
+                agent: params.agent,
+                category: 'ActionExecution'
+            });
+            // Increment validation retry count since we're changing to Retry
+            if (nextStep.step !== 'Retry') {
+                this._generalValidationRetryCount++;
+            }
+            return {
+                step: 'Retry',
+                terminate: false, // this will kick it back to the prompt to run again
+                errorMessage: `Actions '${missingActionNames}' not found or not active`
+            };
+        }
+
+        // Check MaxExecutionsPerRun limits for each action
+        if (nextStep.actions) {
+            const violatedActions: string[] = [];
+            
+            for (const action of nextStep.actions) {
+                const agentAction = curAgentActions.find(aa => 
+                    aa.Action.trim().toLowerCase() === action.name.trim().toLowerCase()
+                );
+                
+                if (agentAction && agentAction.MaxExecutionsPerRun != null) {
+                    const executionCount = await this.getActionExecutionCount(agentRun.ID, agentAction.ActionID);
+                    if (executionCount >= agentAction.MaxExecutionsPerRun) {
+                        violatedActions.push(`${action.name} (limit: ${agentAction.MaxExecutionsPerRun}, current: ${executionCount})`);
+                    }
+                }
+            }
+            
+            if (violatedActions.length > 0) {
+                const violationMessage = `Actions have reached execution limits: ${violatedActions.join(', ')}`;
+                this.logError(violationMessage, {
+                    agent: params.agent,
+                    category: 'ActionExecution',
+                    metadata: {
+                        violatedActions
+                    }
+                });
+                // Increment validation retry count since we're changing to Retry
+                if (nextStep.step !== 'Retry') {
+                    this._generalValidationRetryCount++;
+                }
+                return {
+                    step: 'Retry',
+                    terminate: false,
+                    errorMessage: violationMessage
+                };
+            }
+        }
+
+        // if we get here, the next step is valid and we can return it
+        return nextStep;
+    }
+
+
+    /**
+     * Validates that the Success next step is valid and can be executed by the current agent. Subclasses can override
+     * this method to implement custom validation logic if needed.
+     * @param params 
+     * @param nextStep 
+     * @returns 
+     */
+    protected async validateSuccessNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        agentRun: AIAgentRunEntityExtended,
+        currentStep: AIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        // First check minimum execution requirements
+        const minViolations = await this.checkMinimumExecutionRequirements(params.agent, agentRun);
+        if (minViolations.length > 0) {
+            const violationMessage = `Minimum execution requirements not met:\n${minViolations.join('\n')}`;
+            this.logError(violationMessage, {
+                agent: params.agent,
+                category: 'MinimumExecutionValidation'
+            });
+            
+            // Increment validation retry count since we're changing to Retry
+            if (nextStep.step !== 'Retry') {
+                this._generalValidationRetryCount++;
+            }
+            
+            return {
+                step: 'Retry',
+                terminate: false,
+                errorMessage: violationMessage
+            };
+        }
+
+        // Check if the agent has FinalPayloadValidation configured
+        const agent = params.agent;
+        if (!agent.FinalPayloadValidation || !currentPayload) {
+            // No validation configured or no payload to validate
+            return nextStep;
+        }
+
+        try {
+            // Parse the validation schema/example
+            let validationSchema: any;
+            try {
+                validationSchema = JSON.parse(agent.FinalPayloadValidation);
+            } catch (parseError) {
+                this.logError(`Invalid FinalPayloadValidation JSON for agent ${agent.Name}: ${parseError.message}`, {
+                    category: 'PayloadValidation',
+                    metadata: {
+                        agentName: agent.Name,
+                        agentId: agent.ID,
+                        validationSchema: agent.FinalPayloadValidation
+                    }
+                });
+                // Invalid schema, skip validation
+                return nextStep;
+            }
+
+            // Determine which payload to validate based on PayloadScope
+            let payloadToValidate = currentPayload;
+            if (agent.PayloadScope) {
+                // For scoped agents, validate only the scoped portion
+                payloadToValidate = this._payloadManager.applyPayloadScope(currentPayload, agent.PayloadScope) as P;
+                if (payloadToValidate === null) {
+                    // Scope doesn't exist, this is already a validation failure
+                    const errorMessage = `PayloadScope '${agent.PayloadScope}' not found in payload`;
+                    return this.handleFinalPayloadValidationFailure(
+                        params,
+                        nextStep,
+                        currentPayload,
+                        agent.FinalPayloadValidationMode || 'Retry',
+                        [errorMessage],
+                        agentRun,
+                        currentStep
+                    );
+                }
+            }
+
+            // Validate the payload against the schema using JSONValidator
+            const jsonValidator = new JSONValidator();
+            const validationResult = jsonValidator.validate(payloadToValidate, validationSchema);
+
+            if (!validationResult.Success) {
+                // Validation failed
+                const mode = agent.FinalPayloadValidationMode || 'Retry';
+                const errorMessages = validationResult.Errors.map(e => e.Message);
+                
+                this.logStatus(`⚠️ Final payload validation failed for agent ${agent.Name} (mode: ${mode}):`, true, params);
+                errorMessages.forEach((error, index) => {
+                    this.logStatus(`   ${index + 1}. ${error}`, true, params);
+                });
+
+                return this.handleFinalPayloadValidationFailure(
+                    params,
+                    nextStep,
+                    currentPayload,
+                    mode,
+                    errorMessages,
+                    agentRun,
+                    currentStep
+                );
+            }
+
+            // Validation passed
+            this.logStatus(`✅ Final payload validation passed for agent ${agent.Name}`, true, params);
+            
+            // Save success result to step
+            try {
+                currentStep.FinalPayloadValidationResult = 'Pass';
+                currentStep.FinalPayloadValidationMessages = null; // Clear any previous messages
+                await currentStep.Save();
+            } catch (error) {
+                this.logError(`Failed to save validation success result: ${error.message}`, {
+                    category: 'PayloadValidation', 
+                    metadata: { stepId: currentStep.ID }
+                });
+            }
+            
+            return nextStep;
+
+        } catch (error) {
+            this.logError(`Unexpected error during final payload validation: ${error.message}`, {
+                category: 'PayloadValidation',
+                metadata: {
+                    agentName: agent.Name,
+                    agentId: agent.ID,
+                    error: error.message
+                }
+            });
+            // On unexpected errors, let the success proceed
+            return nextStep;
+        }
+    }
+
+    /**
+     * Handles final payload validation failures based on the configured mode.
+     * 
+     * @param params - Execution parameters
+     * @param nextStep - The original success next step
+     * @param currentPayload - The current payload
+     * @param mode - The validation mode (Retry, Fail, Warn)
+     * @param errorMessages - The validation error messages
+     * @returns Modified next step based on validation mode
+     */
+    protected async handleFinalPayloadValidationFailure<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        mode: string,
+        errorMessages: string[],
+        agentRun: AIAgentRunEntityExtended,
+        currentStep: AIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        const validationFeedback = `Final payload validation failed:\n${errorMessages.map((e, i) => `${i + 1}. ${e}`).join('\n')}`;
+
+        // Always save validation results to the new fields
+        try {
+            currentStep.FinalPayloadValidationMessages = errorMessages.join('; ');
+            
+            switch (mode) {
+                case 'Retry':
+                    // Increment retry counter
+                    this._validationRetryCount++;
+                    
+                    // Check if max retries exceeded
+                    const maxRetries = params.agent.FinalPayloadValidationMaxRetries || 3;
+                    if (this._validationRetryCount >= maxRetries) {
+                        // Max retries exceeded, force to Fail
+                        this.logStatus(`❌ Max validation retries (${maxRetries}) exceeded, forcing failure`, false, params);
+                        
+                        currentStep.FinalPayloadValidationResult = 'Fail';
+                        await currentStep.Save();
+                        
+                        return {
+                            ...nextStep,
+                            step: 'Failed',
+                            message: `${validationFeedback}\n\nMax validation retries (${maxRetries}) exceeded.`,
+                            terminate: true
+                        };
+                    }
+                    
+                    // Still have retries left
+                    currentStep.FinalPayloadValidationResult = 'Retry';
+                    await currentStep.Save();
+                    
+                    this.logStatus(`🔄 Validation retry ${this._validationRetryCount}/${maxRetries}`, true, params);
+                    
+                    return {
+                        ...nextStep,
+                        step: 'Retry',
+                        retryInstructions: `${validationFeedback}\n\nRetry attempt ${this._validationRetryCount} of ${maxRetries}`,
+                        terminate: false
+                    };
+
+                case 'Fail':
+                    // Convert success to error
+                    currentStep.FinalPayloadValidationResult = 'Fail';
+                    await currentStep.Save();
+                    
+                    return {
+                        ...nextStep,
+                        step: 'Failed',
+                        message: validationFeedback,
+                        terminate: true
+                    };
+
+                case 'Warn':
+                    // Log warning but allow success
+                    this.logStatus(`⚠️ WARNING: ${validationFeedback}`, false, params);
+                    
+                    currentStep.FinalPayloadValidationResult = 'Warn';
+                    await currentStep.Save();
+                    
+                    return nextStep; // Return original success
+
+                default:
+                    // Default to retry
+                    this._validationRetryCount++;
+                    currentStep.FinalPayloadValidationResult = 'Retry';
+                    await currentStep.Save();
+                    
+                    return {
+                        ...nextStep,
+                        step: 'Retry',
+                        retryInstructions: validationFeedback,
+                        terminate: false
+                    };
+            }
+        } catch (error) {
+            this.logError(`Failed to save validation results: ${error.message}`, {
+                category: 'PayloadValidation',
+                metadata: { stepId: currentStep.ID }
+            });
+            // Still return the appropriate result even if save failed
+            return mode === 'Warn' ? nextStep : {
+                ...nextStep,
+                step: mode === 'Fail' ? 'Failed' : 'Retry',
+                message: validationFeedback,
+                terminate: mode === 'Fail'
+            };
+        }
+    }
+
+    /**
+     * Validates that the Failed next step is valid and can be executed by the current agent. Subclasses can override
+     * this method to implement custom validation logic if needed.
+     * @param params 
+     * @param nextStep 
+     * @returns 
+     */
+    protected async validateFailedNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        agentRun: AIAgentRunEntityExtended,
+        currentStep: AIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        // currently the base class doesn't do anything, subclasses can implement any custom logic in their override
+        return nextStep;
+    }
+
+    /**
+     * Validates that the Retry next step is valid and can be executed by the current agent. Subclasses can override
+     * this method to implement custom validation logic if needed. The retry step is typically used to
+     * handle cases where the agent needs to re-attempt a step due to an error or invalid state.
+     * @param params 
+     * @param nextStep 
+     * @returns 
+     */
+    protected async validateRetryNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        agentRun: AIAgentRunEntityExtended,
+        currentStep: AIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        // currently the base class doesn't do anything, subclasses can implement any custom logic in their override
+        return nextStep;
+    }
+
+    /**
+     * Validates that the Chat next step is valid and can be executed by the current agent. Subclasses can override
+     * this method to implement custom validation logic if needed.
+     * @param params 
+     * @param nextStep 
+     * @returns 
+     */
+    protected async validateChatNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        agentRun: AIAgentRunEntityExtended,
+        currentStep: AIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        // currently the base class doesn't do anything, subclasses can implement any custom logic in their override
+        return nextStep;
+    }
+
+
+    /**
+     * Checks execution guardrails and modifies next step if limits are exceeded.
+     * This method is called after validation but before execution of non-terminal steps.
+     * 
+     * @param params - Execution parameters
+     * @param nextStep - The validated next step
+     * @param currentPayload - Current payload
+     * @param agentRun - Current agent run
+     * @param currentStep - Current execution step
+     * @returns Modified next step if guardrails exceeded, or original next step
+     * @protected
+     */
+    protected async checkExecutionGuardrails<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        agentRun: AIAgentRunEntityExtended,
+        currentStep: AIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        // Skip guardrail checks for terminal steps
+        if (nextStep.step === 'Success' || nextStep.step === 'Failed' || nextStep.step === 'Chat') {
+            return nextStep;
+        }
+
+        // Check if any guardrails are exceeded
+        const guardrailResult = await this.hasExceededAgentRunGuardrails(params, agentRun);
+        
+        if (guardrailResult.exceeded) {
+            // Log the guardrail violation
+            this.logStatus(`⛔ Execution guardrail exceeded: ${guardrailResult.reason}`, false, params);
+            
+            // Update the current step with guardrail information
+            try {
+                const outputData = currentStep.OutputData ? JSON.parse(currentStep.OutputData) : {};
+                currentStep.OutputData = JSON.stringify({
+                    ...outputData,
+                    guardrailExceeded: {
+                        type: guardrailResult.type,
+                        limit: guardrailResult.limit,
+                        current: guardrailResult.current,
+                        reason: guardrailResult.reason,
+                        timestamp: new Date().toISOString()
+                    }
+                });
+                await currentStep.Save();
+            } catch (error) {
+                this.logError(`Failed to save guardrail violation to step: ${error.message}`, {
+                    category: 'Guardrails',
+                    metadata: { stepId: currentStep.ID }
+                });
+            }
+            
+            // Convert next step to Failed with guardrail reason
+            return {
+                ...nextStep,
+                step: 'Failed',
+                terminate: true,
+                message: guardrailResult.reason,
+                errorMessage: guardrailResult.reason
+            };
+        }
+        
+        // No guardrails exceeded, return original next step
+        return nextStep;
+    }
+
+    /**
+     * Checks if any agent run guardrails have been exceeded.
+     * Override this method to implement custom guardrail logic.
+     * 
+     * @param params - Execution parameters
+     * @param agentRun - Current agent run
+     * @returns Object indicating if guardrails exceeded and details
+     * @protected
+     */
+    protected async hasExceededAgentRunGuardrails(
+        params: ExecuteAgentParams,
+        agentRun: AIAgentRunEntityExtended
+    ): Promise<{
+        exceeded: boolean;
+        type?: 'cost' | 'tokens' | 'iterations' | 'time';
+        limit?: number;
+        current?: number;
+        reason?: string;
+    }> {
+        const agent = params.agent;
+        
+        // Check cost limit
+        if (agent.MaxCostPerRun && agentRun.TotalCost) {
+            if (agentRun.TotalCost >= agent.MaxCostPerRun) {
+                return {
+                    exceeded: true,
+                    type: 'cost',
+                    limit: agent.MaxCostPerRun,
+                    current: agentRun.TotalCost,
+                    reason: `Maximum cost limit of $${agent.MaxCostPerRun} exceeded. Current cost: $${agentRun.TotalCost.toFixed(4)}`
+                };
+            }
+        }
+        
+        // Check token limit
+        if (agent.MaxTokensPerRun && agentRun.TotalTokensUsed) {
+            if (agentRun.TotalTokensUsed >= agent.MaxTokensPerRun) {
+                return {
+                    exceeded: true,
+                    type: 'tokens',
+                    limit: agent.MaxTokensPerRun,
+                    current: agentRun.TotalTokensUsed,
+                    reason: `Maximum token limit of ${agent.MaxTokensPerRun} exceeded. Current tokens: ${agentRun.TotalTokensUsed}`
+                };
+            }
+        }
+        
+        // Check iteration limit
+        if (agent.MaxIterationsPerRun && agentRun.TotalPromptIterations) {
+            if (agentRun.TotalPromptIterations >= agent.MaxIterationsPerRun) {
+                return {
+                    exceeded: true,
+                    type: 'iterations',
+                    limit: agent.MaxIterationsPerRun,
+                    current: agentRun.TotalPromptIterations,
+                    reason: `Maximum iteration limit of ${agent.MaxIterationsPerRun} exceeded. Current iterations: ${agentRun.TotalPromptIterations}`
+                };
+            }
+        }
+        
+        // Check time limit
+        if (agent.MaxTimePerRun && agentRun.StartedAt) {
+            const elapsedSeconds = Math.floor((Date.now() - new Date(agentRun.StartedAt).getTime()) / 1000);
+            if (elapsedSeconds >= agent.MaxTimePerRun) {
+                return {
+                    exceeded: true,
+                    type: 'time',
+                    limit: agent.MaxTimePerRun,
+                    current: elapsedSeconds,
+                    reason: `Maximum time limit of ${agent.MaxTimePerRun} seconds exceeded. Elapsed time: ${elapsedSeconds} seconds`
+                };
+            }
+        }
+        
+        // Check validation retry limit
+        if (this._generalValidationRetryCount >= BaseAgent.MAX_VALIDATION_RETRIES) {
+            return {
+                exceeded: true,
+                type: 'iterations', // Using iterations type since validation retries are a form of iteration
+                limit: BaseAgent.MAX_VALIDATION_RETRIES,
+                current: this._generalValidationRetryCount,
+                reason: `Maximum validation retries of ${BaseAgent.MAX_VALIDATION_RETRIES} exceeded. The agent is unable to produce valid output after ${this._generalValidationRetryCount} validation failures.`
+            };
+        }
+        
+        // No guardrails exceeded
+        return { exceeded: false };
+    }
+
+    /**
      * Processes the next step based on agent type determination.
      * 
      * @param {ExecuteAgentParams} params - Original execution parameters
@@ -678,58 +1397,34 @@ export class BaseAgent {
     protected async processNextStep<P>(
         params: ExecuteAgentParams,
         agentType: AIAgentTypeEntity,
-        promptResult: AIPromptRunResult
+        promptResult: AIPromptRunResult,
+        currentPayload: P,
+        currentStep: AIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
-        this.logStatus(`🤔 Processing next step for agent '${params.agent.Name}' with agent type '${agentType.Name}'`, true, params);
-
-        const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(agentType);
-
-        // Let the agent type determine the next step
-        this.logStatus(`🎯 Agent type '${agentType.Name}' determining next step`, true, params);
-        const nextStep = await agentTypeInstance.DetermineNextStep<P>(promptResult);
+        const nextStep = await this.determineNextStep<P>(params, agentType, promptResult, currentPayload);
+        const validatedNextStep = await this.validateNextStep<P>(params, nextStep, currentPayload, this._agentRun, currentStep);
         
-        // for next step, let's do a little quick validation here for sub-agent and actions to ensure requests are valid
-        if (nextStep.step === 'Sub-Agent') {
-            // check to make sure the current agent can execute the specified sub-agent
-            const name = nextStep.subAgent?.name;
-            const curAgentSubAgents = AIEngine.Instance.Agents.filter(a => a.ParentID === params.agent.ID && a.Status === 'Active');
-            if (!name || !curAgentSubAgents.some(a => a.Name.trim().toLowerCase() === name?.trim().toLowerCase())) {
-                this.logError(`Sub-agent '${name}' not found or not active for agent '${params.agent.Name}'`, {
-                    agent: params.agent,
-                    category: 'SubAgentExecution'
-                });
-                return {
-                    step: 'Retry',
-                    terminate: false, // this will kick it back to the prompt to run again
-                    errorMessage: `Sub-agent '${name}' not found or not active`
-                };
-            }
-        }
-        else if (nextStep.step === 'Actions') {
-            // check to make sure the current agent can execute the specified action
-            const curAgentActions = AIEngine.Instance.AgentActions.filter(aa => aa.AgentID === params.agent.ID && aa.Status === 'Active');
-            const missingActions = nextStep.actions?.filter(action => 
-                !curAgentActions.some(aa => aa.Action.trim().toLowerCase() === action.name.trim().toLowerCase())
-            );
-            // we should have zero missing actions, if we do, we need to log an error and return a retry step
-            if (missingActions && missingActions.length > 0) {
-                const missingActionNames = missingActions.map(a => a.name).join(', ');
-                this.logError(`Actions '${missingActionNames}' not found or not active for agent '${params.agent.Name}'`, {
-                    agent: params.agent,
-                    category: 'ActionExecution'
-                });
-                return {
-                    step: 'Retry',
-                    terminate: false, // this will kick it back to the prompt to run again
-                    errorMessage: `Actions '${missingActionNames}' not found or not active`
-                };
-            }
-        }
+        // Check guardrails if next step would continue execution
+        const guardrailCheckedStep = await this.checkExecutionGuardrails<P>(
+            params, 
+            validatedNextStep, 
+            currentPayload, 
+            this._agentRun!, 
+            currentStep
+        );
+        
+        this.logStatus(`📌 Next step determined: ${guardrailCheckedStep.step}${guardrailCheckedStep.terminate ? ' (terminating)' : ''}`, true, params);
 
-        this.logStatus(`📌 Next step determined: ${nextStep.step}${nextStep.terminate ? ' (terminating)' : ''}`, true, params);
+        // if we need to retry make sure we add the retry message to the conversation messages
+        if (guardrailCheckedStep.step === 'Retry' && (guardrailCheckedStep.message || guardrailCheckedStep.errorMessage || guardrailCheckedStep.retryInstructions)) {
+            params.conversationMessages.push({
+                role: 'user',
+                content: `Retrying due to: ${guardrailCheckedStep.retryInstructions || guardrailCheckedStep.message || guardrailCheckedStep.errorMessage}`
+            });
+        }   
 
         // Return the next step directly - execution handling is done in execute NextStep
-        return nextStep;
+        return guardrailCheckedStep;
     }
  
     /**
@@ -1004,15 +1699,21 @@ export class BaseAgent {
      * @private
      */
     private formatSubAgentDetails(subAgents: AIAgentEntity[]): string {
-        return JSON.stringify(subAgents.map(sa => ({
-            Name: sa.Name,
-            Description: sa.Description,
-            Type: sa.TypeID ? this.getAgentTypeName(sa.TypeID) : 'Unknown',
-            TemplateParameters: this.getAgentPromptParametersJSON(sa),
-            Status: sa.Status,
-            ExecutionMode: sa.ExecutionMode,
-            ExecutionOrder: sa.ExecutionOrder
-        })), null, 2);
+        return JSON.stringify(subAgents.map(sa => {
+            const result = {
+                Name: sa.Name,
+                Description: sa.Description,
+            };
+            if (sa.ExecutionMode !== 'Sequential') {
+                // no need to include these two attributes for sub-agents
+                // that are sequential and the order is implied via the array order
+                // saves tokens
+                result['ExecutionMode'] = sa.ExecutionMode;
+                result['ExecutionOrder'] = sa.ExecutionOrder;
+            }
+
+            return result;
+        }), null, 2);
     }
 
     /**
@@ -1409,21 +2110,12 @@ export class BaseAgent {
      */
     private getNextStepReasoning(nextStep: BaseAgentNextStep): string {
         switch (nextStep.step) {
-            case 'Success':
-                return 'Agent completed task successfully';
             case 'Failed':
                 return nextStep.errorMessage || 'Agent execution failed';
             case 'Retry':
                 return nextStep.retryReason || 'Retrying with updated context';
-            case 'Sub-Agent':
-                return `Delegating to sub-agent: ${nextStep.subAgent?.name || 'Unknown'}`;
-            case 'Actions':
-                const actionCount = nextStep.actions?.length || 0;
-                return `Executing ${actionCount} action${actionCount !== 1 ? 's' : ''}`;
-            case 'Chat':
-                return 'Requesting user input';
             default:
-                return 'Unknown decision';
+                return nextStep.reasoning || 'Continuing to next step';
         }
     }
 
@@ -1588,6 +2280,12 @@ export class BaseAgent {
                 // don't save here, we save when we call finalizeStepEntity()
             }
             
+            // Increment prompt iterations counter
+            if (this._agentRun) {
+                this._agentRun.TotalPromptIterations = (this._agentRun.TotalPromptIterations || 0) + 1;
+                // We don't save here as the run will be saved later with all accumulated data
+            }
+            
             // Check for cancellation after prompt execution
             if (params.cancellationToken?.aborted) {
                 await this.finalizeStepEntity(stepEntity, false, 'Cancelled during prompt execution');
@@ -1610,7 +2308,7 @@ export class BaseAgent {
             });
             
             // Determine next step using agent type
-            const nextStep = await this.processNextStep<P>(params, config.agentType!, promptResult);
+            const nextStep = await this.processNextStep<P>(params, config.agentType!, promptResult, payload, stepEntity);
             
             // Apply payload changes if provided
             let finalPayload = payload; // Start with current payload
@@ -1653,9 +2351,8 @@ export class BaseAgent {
             // and payload via the specialied PayloadAtStart/End fields on the step entity.
             const outputData = {
                 nextStep: {
-                    decision: nextStep.step,
+                    ...nextStep,
                     reasoning: this.getNextStepReasoning(nextStep),
-                    payload: finalPayload
                 },
                 // Include payload change metadata if changes were made
                 ...(currentStepPayloadChangeResult && {
@@ -1760,6 +2457,9 @@ export class BaseAgent {
         }
         const stepEntity = await this.createStepEntity('Sub-Agent', `Execute Sub-Agent: ${subAgentRequest.name}`, params.contextUser, subAgentEntity.ID, inputData);
         
+        // Increment execution count for this sub-agent
+        this.incrementExecutionCount(subAgentEntity.ID);
+        
         try {
             // Parse payload access paths
             let downstreamPaths: string[] = ['*'];
@@ -1788,28 +2488,58 @@ export class BaseAgent {
             }
             
             // Extract only allowed downstream payload
-            const downstreamPayload = this._payloadManager.extractDownstreamPayload(
+            let downstreamPayload = this._payloadManager.extractDownstreamPayload(
                 subAgentRequest.name,
                 previousDecision.newPayload,
                 downstreamPaths
             );
             
+            // Apply payload scope if defined
+            let scopedPayload = downstreamPayload;
+            if (subAgentEntity.PayloadScope) {
+                scopedPayload = this._payloadManager.applyPayloadScope(downstreamPayload, subAgentEntity.PayloadScope);
+                if (scopedPayload === null) {
+                    // Critical failure - scope path doesn't exist in payload
+                    const errorMessage = `Critical: Failed to extract payload scope '${subAgentEntity.PayloadScope}' for sub-agent '${subAgentRequest.name}'. The specified path does not exist in the payload.`;
+                    this.logError(errorMessage, {
+                        category: 'SubAgentExecution',
+                        metadata: {
+                            agentName: params.agent.Name,
+                            subAgentName: subAgentRequest.name,
+                            payloadScope: subAgentEntity.PayloadScope,
+                            availableKeys: Object.keys(downstreamPayload || {})
+                        }
+                    });
+                    throw new Error(errorMessage);
+                }
+            }
+            
             stepEntity.PayloadAtStart = JSON.stringify(previousDecision.newPayload);
 
-            // Execute sub-agent with filtered payload
+            // Execute sub-agent with scoped payload
             const subAgentResult = await this.ExecuteSubAgent(
                 params,
                 subAgentRequest,
                 subAgentEntity,
                 stepEntity,
-                downstreamPayload
+                scopedPayload
             );
+            
+            // Handle scope transformation for the result
+            let resultPayloadForMerge = subAgentResult.payload;
+            if (subAgentEntity.PayloadScope) {
+                // The sub-agent returned a scoped payload, we need to wrap it back
+                resultPayloadForMerge = this._payloadManager.reversePayloadScope(
+                    subAgentResult.payload,
+                    subAgentEntity.PayloadScope
+                );
+            }
             
             // Merge upstream changes back into parent payload
             const mergedPayload = this._payloadManager.mergeUpstreamPayload(
                 subAgentRequest.name,
                 previousDecision.newPayload,
-                subAgentResult.payload,
+                resultPayloadForMerge,
                 upstreamPaths
             );
             
@@ -2060,6 +2790,9 @@ export class BaseAgent {
                 // Override step number to ensure unique values for parallel actions
                 stepEntity.StepNumber = baseStepNumber + numActionsProcessed++;
                 
+                // Increment execution count for this action
+                this.incrementExecutionCount(actionEntity.ID);
+                
                 let actionResult: ActionResult;
                 try {
                     // Execute the action
@@ -2303,6 +3036,91 @@ export class BaseAgent {
         }
 
         return { totalTokens, promptTokens, completionTokens, totalCost };
+    }
+
+    /**
+     * Gets the count of how many times a specific action has been executed in this agent run.
+     * 
+     * @param agentRunId - The agent run ID (not used anymore, kept for signature compatibility)
+     * @param actionId - The action ID to count
+     * @returns The number of times the action has been executed
+     */
+    protected async getActionExecutionCount(agentRunId: string, actionId: string): Promise<number> {
+        return this.getExecutionCount(actionId);
+    }
+
+    /**
+     * Gets the count of how many times a specific sub-agent has been executed in this agent run.
+     * 
+     * @param agentRunId - The agent run ID (not used anymore, kept for signature compatibility)
+     * @param subAgentId - The sub-agent ID to count
+     * @returns The number of times the sub-agent has been executed
+     */
+    protected async getSubAgentExecutionCount(agentRunId: string, subAgentId: string): Promise<number> {
+        return this.getExecutionCount(subAgentId);
+    }
+
+    /**
+     * Increments the execution count for an item (action or sub-agent).
+     * 
+     * @param itemId - The item ID to increment (action ID or sub-agent ID)
+     * @private
+     */
+    private incrementExecutionCount(itemId: string): void {
+        const currentCount = this._executionCounts.get(itemId) || 0;
+        this._executionCounts.set(itemId, currentCount + 1);
+    }
+
+    /**
+     * Gets the execution count for an item (action or sub-agent).
+     * 
+     * @param itemId - The item ID to get count for
+     * @returns The execution count (0 if never executed)
+     * @private
+     */
+    private getExecutionCount(itemId: string): number {
+        return this._executionCounts.get(itemId) || 0;
+    }
+
+    /**
+     * Checks if all minimum execution requirements are met for actions and sub-agents.
+     * 
+     * @param agent - The agent to check
+     * @param agentRun - The current agent run
+     * @returns Array of violation messages (empty if all requirements are met)
+     */
+    protected async checkMinimumExecutionRequirements(agent: AIAgentEntity, agentRun: AIAgentRunEntityExtended): Promise<string[]> {
+        const violations: string[] = [];
+        
+        // Check action minimum requirements
+        const agentActions = AIEngine.Instance.AgentActions.filter(aa => 
+            aa.AgentID === agent.ID && 
+            aa.Status === 'Active' && 
+            aa.MinExecutionsPerRun != null && 
+            aa.MinExecutionsPerRun > 0
+        );
+        
+        for (const agentAction of agentActions) {
+            const executionCount = await this.getActionExecutionCount(agentRun.ID, agentAction.ActionID);
+            if (executionCount < agentAction.MinExecutionsPerRun) {
+                violations.push(`Action '${agentAction.Action}' requires ${agentAction.MinExecutionsPerRun} execution(s) but was executed ${executionCount} time(s)`);
+            }
+        }
+        
+        // Check sub-agent minimum requirements
+        const subAgents = AIEngine.Instance.GetSubAgents(agent.ID, "Active").filter(a => 
+            a.MinExecutionsPerRun != null && 
+            a.MinExecutionsPerRun > 0
+        );
+
+        for (const subAgent of subAgents) {
+            const executionCount = await this.getSubAgentExecutionCount(agentRun.ID, subAgent.ID);
+            if (executionCount < subAgent.MinExecutionsPerRun) {
+                violations.push(`Sub-agent '${subAgent.Name}' requires ${subAgent.MinExecutionsPerRun} execution(s) but was executed ${executionCount} time(s)`);
+            }
+        }
+        
+        return violations;
     }
 }
 

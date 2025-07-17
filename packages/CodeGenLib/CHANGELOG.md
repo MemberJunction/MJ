@@ -1,5 +1,65 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.69.1
+
+### Patch Changes
+
+- Updated dependencies [2aebdf5]
+  - @memberjunction/core@2.69.1
+  - @memberjunction/aiengine@2.69.1
+  - @memberjunction/actions@2.69.1
+  - @memberjunction/core-entities@2.69.1
+  - @memberjunction/core-entities-server@2.69.1
+  - @memberjunction/sqlserver-dataprovider@2.69.1
+  - @memberjunction/ai@2.69.1
+  - @memberjunction/ai-anthropic@2.69.1
+  - @memberjunction/ai-groq@2.69.1
+  - @memberjunction/ai-mistral@2.69.1
+  - @memberjunction/ai-openai@2.69.1
+  - @memberjunction/global@2.69.1
+
+## 2.69.0
+
+### Patch Changes
+
+- Updated dependencies [79e8509]
+  - @memberjunction/core@2.69.0
+  - @memberjunction/global@2.69.0
+  - @memberjunction/actions@2.69.0
+  - @memberjunction/core-entities-server@2.69.0
+  - @memberjunction/aiengine@2.69.0
+  - @memberjunction/core-entities@2.69.0
+  - @memberjunction/sqlserver-dataprovider@2.69.0
+  - @memberjunction/ai@2.69.0
+  - @memberjunction/ai-anthropic@2.69.0
+  - @memberjunction/ai-groq@2.69.0
+  - @memberjunction/ai-mistral@2.69.0
+  - @memberjunction/ai-openai@2.69.0
+
+## 2.68.0
+
+### Minor Changes
+
+- 23250f1: Refactored and Changed logic for spDelete proc generation - this PR will include regenerating all \_\_mj Entity spDelete procs too (as of this writing, doesn't have that yet)
+
+### Patch Changes
+
+- Updated dependencies [a6b43d0]
+- Updated dependencies [b10b7e6]
+- Updated dependencies [0f38a61]
+  - @memberjunction/sqlserver-dataprovider@2.68.0
+  - @memberjunction/core@2.68.0
+  - @memberjunction/core-entities-server@2.68.0
+  - @memberjunction/actions@2.68.0
+  - @memberjunction/aiengine@2.68.0
+  - @memberjunction/core-entities@2.68.0
+  - @memberjunction/ai@2.68.0
+  - @memberjunction/ai-anthropic@2.68.0
+  - @memberjunction/ai-groq@2.68.0
+  - @memberjunction/ai-mistral@2.68.0
+  - @memberjunction/ai-openai@2.68.0
+  - @memberjunction/global@2.68.0
+
 ## 2.67.0
 
 ### Patch Changes

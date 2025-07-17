@@ -1,5 +1,138 @@
 # Change Log - @memberjunction/server
 
+## 2.69.1
+
+### Patch Changes
+
+- Updated dependencies [2aebdf5]
+  - @memberjunction/core@2.69.1
+  - @memberjunction/ai-agent-manager-actions@2.69.1
+  - @memberjunction/ai-agents@2.69.1
+  - @memberjunction/ai-core-plus@2.69.1
+  - @memberjunction/aiengine@2.69.1
+  - @memberjunction/ai-prompts@2.69.1
+  - @memberjunction/ai-vectors-pinecone@2.69.1
+  - @memberjunction/actions-bizapps-accounting@2.69.1
+  - @memberjunction/actions-bizapps-crm@2.69.1
+  - @memberjunction/actions-bizapps-lms@2.69.1
+  - @memberjunction/actions-bizapps-social@2.69.1
+  - @memberjunction/core-actions@2.69.1
+  - @memberjunction/actions@2.69.1
+  - @memberjunction/entity-communications-server@2.69.1
+  - @memberjunction/doc-utils@2.69.1
+  - @memberjunction/external-change-detection@2.69.1
+  - @memberjunction/graphql-dataprovider@2.69.1
+  - @memberjunction/core-entities@2.69.1
+  - @memberjunction/core-entities-server@2.69.1
+  - @memberjunction/data-context@2.69.1
+  - @memberjunction/queue@2.69.1
+  - @memberjunction/storage@2.69.1
+  - @memberjunction/sqlserver-dataprovider@2.69.1
+  - @memberjunction/skip-types@2.69.1
+  - @memberjunction/templates@2.69.1
+  - @memberjunction/data-context-server@2.69.1
+  - @memberjunction/ai@2.69.1
+  - @memberjunction/ai-anthropic@2.69.1
+  - @memberjunction/ai-cerebras@2.69.1
+  - @memberjunction/ai-groq@2.69.1
+  - @memberjunction/ai-mistral@2.69.1
+  - @memberjunction/ai-openai@2.69.1
+  - @memberjunction/global@2.69.1
+
+## 2.69.0
+
+### Patch Changes
+
+- Updated dependencies [79e8509]
+- Updated dependencies [b4a92ae]
+  - @memberjunction/ai-agents@2.69.0
+  - @memberjunction/ai-prompts@2.69.0
+  - @memberjunction/core@2.69.0
+  - @memberjunction/global@2.69.0
+  - @memberjunction/actions@2.69.0
+  - @memberjunction/core-entities-server@2.69.0
+  - @memberjunction/ai-agent-manager-actions@2.69.0
+  - @memberjunction/ai-core-plus@2.69.0
+  - @memberjunction/aiengine@2.69.0
+  - @memberjunction/ai-vectors-pinecone@2.69.0
+  - @memberjunction/actions-bizapps-accounting@2.69.0
+  - @memberjunction/actions-bizapps-crm@2.69.0
+  - @memberjunction/actions-bizapps-lms@2.69.0
+  - @memberjunction/actions-bizapps-social@2.69.0
+  - @memberjunction/core-actions@2.69.0
+  - @memberjunction/entity-communications-server@2.69.0
+  - @memberjunction/doc-utils@2.69.0
+  - @memberjunction/external-change-detection@2.69.0
+  - @memberjunction/graphql-dataprovider@2.69.0
+  - @memberjunction/core-entities@2.69.0
+  - @memberjunction/data-context@2.69.0
+  - @memberjunction/queue@2.69.0
+  - @memberjunction/storage@2.69.0
+  - @memberjunction/sqlserver-dataprovider@2.69.0
+  - @memberjunction/skip-types@2.69.0
+  - @memberjunction/templates@2.69.0
+  - @memberjunction/ai@2.69.0
+  - @memberjunction/ai-anthropic@2.69.0
+  - @memberjunction/ai-cerebras@2.69.0
+  - @memberjunction/ai-groq@2.69.0
+  - @memberjunction/ai-mistral@2.69.0
+  - @memberjunction/ai-openai@2.69.0
+  - @memberjunction/data-context-server@2.69.0
+
+## 2.68.0
+
+### Patch Changes
+
+- 799982f: Fix AI prompt cost calculations by loading BaseAIEngine during server
+  initialization.
+
+  AI prompt runs were not calculating costs because price unit type
+  calculators weren't being registered in the ClassFactory system. This
+  fix ensures the BaseAIEngine module loads properly, enabling automatic
+  cost calculation based on token usage and model pricing configurations.
+
+- Updated dependencies [a6b43d0]
+- Updated dependencies [6fa0b2d]
+- Updated dependencies [f9625d0]
+- Updated dependencies [9fac8a4]
+- Updated dependencies [b10b7e6]
+- Updated dependencies [a0ed038]
+- Updated dependencies [0f38a61]
+- Updated dependencies [61c6572]
+  - @memberjunction/sqlserver-dataprovider@2.68.0
+  - @memberjunction/ai-prompts@2.68.0
+  - @memberjunction/ai-agents@2.68.0
+  - @memberjunction/core@2.68.0
+  - @memberjunction/skip-types@2.68.0
+  - @memberjunction/core-entities-server@2.68.0
+  - @memberjunction/external-change-detection@2.68.0
+  - @memberjunction/actions@2.68.0
+  - @memberjunction/ai-agent-manager-actions@2.68.0
+  - @memberjunction/ai-core-plus@2.68.0
+  - @memberjunction/aiengine@2.68.0
+  - @memberjunction/ai-vectors-pinecone@2.68.0
+  - @memberjunction/actions-bizapps-accounting@2.68.0
+  - @memberjunction/actions-bizapps-crm@2.68.0
+  - @memberjunction/actions-bizapps-lms@2.68.0
+  - @memberjunction/actions-bizapps-social@2.68.0
+  - @memberjunction/core-actions@2.68.0
+  - @memberjunction/entity-communications-server@2.68.0
+  - @memberjunction/doc-utils@2.68.0
+  - @memberjunction/graphql-dataprovider@2.68.0
+  - @memberjunction/core-entities@2.68.0
+  - @memberjunction/data-context@2.68.0
+  - @memberjunction/queue@2.68.0
+  - @memberjunction/storage@2.68.0
+  - @memberjunction/templates@2.68.0
+  - @memberjunction/data-context-server@2.68.0
+  - @memberjunction/ai@2.68.0
+  - @memberjunction/ai-anthropic@2.68.0
+  - @memberjunction/ai-cerebras@2.68.0
+  - @memberjunction/ai-groq@2.68.0
+  - @memberjunction/ai-mistral@2.68.0
+  - @memberjunction/ai-openai@2.68.0
+  - @memberjunction/global@2.68.0
+
 ## 2.67.0
 
 ### Patch Changes

@@ -777,6 +777,17 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     }
 
     /**
+     * Updates payload field values from code editor
+     */
+    public updatePayloadField(fieldName: string, value: any) {
+        if (this.record) {
+            // Handle the value - it might be a string or an event
+            const newValue = typeof value === 'string' ? value : value?.target?.value || value;
+            (this.record as any)[fieldName] = newValue;
+        }
+    }
+
+    /**
      * Removes an action from the agent
      */
     public async removeAction(action: ActionEntity, event: Event) {

@@ -48,6 +48,8 @@ Advanced payload access control for hierarchical agent execution:
 - Supports JSON path patterns with wildcards
 - Detects suspicious changes with configurable rules
 - Generates human-readable diffs for audit trails
+- **NEW**: PayloadScope support for narrowing sub-agent data access
+- **NEW**: Path transformation for scoped payload merging
 
 ## Installation
 
@@ -135,6 +137,60 @@ export class MyCustomAgentType extends BaseAgentType {
 }
 ```
 
+### Handling JSON Validation Syntax in Agent Responses
+
+When AI prompts use validation syntax (like `?`, `*`, `:type`, etc.), the AI might inadvertently include these in its JSON response keys. Agent types that parse embedded JSON need to handle this cleaning:
+
+```typescript
+import { JSONValidator } from '@memberjunction/global';
+
+@RegisterClass(BaseAgentType, "StructuredResponseAgent")
+export class StructuredResponseAgent extends BaseAgentType {
+    async DetermineNextStep(promptResult: AIPromptRunResult): Promise<BaseAgentNextStep> {
+        // For responses with embedded JSON strings
+        const outerResponse = promptResult.result as any;
+        
+        // If the response contains an embedded JSON string
+        if (outerResponse.response && typeof outerResponse.response === 'string') {
+            // Parse the embedded JSON
+            const innerData = JSON.parse(outerResponse.response);
+            
+            // Clean validation syntax that AI might have included
+            const validator = new JSONValidator();
+            const cleanedData = validator.cleanValidationSyntax<any>(innerData);
+            
+            // Now work with cleaned data
+            if (cleanedData.analysisComplete) {
+                return { type: 'stop', reason: 'Analysis completed' };
+            }
+        }
+        
+        return { type: 'continue' };
+    }
+}
+```
+
+**Important Notes:**
+- The AIPromptRunner automatically cleans validation syntax for top-level JSON objects when an OutputExample is defined
+- However, agent types must handle cleaning for **embedded JSON strings** within the response
+- This is common when the prompt response structure contains a JSON string as a field value
+- The `cleanValidationSyntax` method preserves values while removing validation syntax from keys
+
+Example scenario:
+```typescript
+// AI Prompt response (top-level is cleaned automatically)
+{
+    "status": "success",
+    "response": "{\"analysisComplete?\":true,\"recommendations:[3+]\":[\"A\",\"B\",\"C\"]}"
+}
+
+// After agent type cleans the embedded JSON
+{
+    "analysisComplete": true,
+    "recommendations": ["A", "B", "C"]
+}
+```
+
 ## Execution Flow
 
 1. **Initialization**: 
@@ -160,6 +216,99 @@ export class MyCustomAgentType extends BaseAgentType {
    - Errors and outputs captured
 
 ## Advanced Features
+
+### Payload Scoping for Sub-Agents
+
+The framework now supports narrowing the payload that sub-agents work with through the `PayloadScope` field:
+
+```typescript
+// Configure an agent to work with a specific part of the payload
+const subAgent = {
+    Name: 'RequirementsAnalyzer',
+    PayloadScope: '/functionalRequirements',  // Only sees this part of parent payload
+    PayloadSelfWritePaths: ['analysis', 'recommendations']  // Paths within the scope
+};
+
+// When parent payload is:
+{
+    "functionalRequirements": {
+        "features": ["A", "B", "C"],
+        "constraints": {...}
+    },
+    "technicalSpecs": {...},
+    "timeline": {...}
+}
+
+// Sub-agent only sees:
+{
+    "features": ["A", "B", "C"],
+    "constraints": {...}
+}
+
+// Sub-agent changes are merged back under the scope path
+```
+
+Benefits:
+- **Reduced token usage**: Sub-agents only see relevant data
+- **Improved focus**: Agents work with their specific domain
+- **Automatic merging**: Changes are properly placed back in parent payload
+- **Error handling**: Critical failures if scope path doesn't exist
+
+### Final Payload Validation
+
+Agents can now validate their final output before marking execution as successful:
+
+```typescript
+// Configure validation in AIAgent entity
+{
+    FinalPayloadValidation: JSON.stringify({
+        "analysis": {
+            "summary": "string:!empty",
+            "score": "number:[0-100]",
+            "recommendations": "array:[3+]"
+        },
+        "metadata": {
+            "processedAt": "string",
+            "version": "string?"  // Optional field
+        }
+    }),
+    FinalPayloadValidationMode: "Retry",  // or "Fail" or "Warn"
+    FinalPayloadValidationMaxRetries: 3
+}
+```
+
+Validation features:
+- **JSON schema validation**: Using JSONValidator from @memberjunction/global
+- **Multiple modes**: 
+  - `Retry`: Re-execute with validation feedback (up to max retries)
+  - `Fail`: Immediately fail the run
+  - `Warn`: Log warning but allow success
+- **Retry tracking**: Prevents infinite validation loops
+- **Step-level logging**: Validation results stored in AIAgentRunStep
+
+### Execution Guardrails
+
+New fields provide comprehensive limits to prevent runaway agent execution:
+
+```typescript
+// Configure guardrails in AIAgent entity
+{
+    MaxCostPerRun: 10.00,        // $10 maximum
+    MaxTokensPerRun: 100000,     // 100k tokens total
+    MaxIterationsPerRun: 50,     // 50 prompt iterations
+    MaxTimePerRun: 300           // 5 minutes
+}
+
+// The framework monitors these in real-time and terminates if exceeded
+// Termination reason is logged in AIAgentRun.ErrorMessage
+```
+
+Guardrail features:
+- **Cost tracking**: Monitors cumulative API costs
+- **Token counting**: Tracks input + output tokens
+- **Iteration limits**: Counts each prompt execution
+- **Time limits**: Enforces maximum execution duration
+- **Graceful termination**: Saves state before stopping
 
 ### Run Chaining
 
@@ -306,15 +455,26 @@ Key entities used by the agent framework:
 - **AIAgent**: Configured agent instances
   - `PayloadDownstreamPaths`: JSON array of paths sub-agents can read
   - `PayloadUpstreamPaths`: JSON array of paths sub-agents can write
+  - **NEW** `PayloadScope`: Path to narrow payload for sub-agents (e.g., "/functionalRequirements")
+  - **NEW** `FinalPayloadValidation`: JSON validation schema for success validation
+  - **NEW** `FinalPayloadValidationMode`: How to handle validation failures (Retry/Fail/Warn)
+  - **NEW** `FinalPayloadValidationMaxRetries`: Maximum retry attempts for validation (default: 3)
+  - **NEW** `MaxCostPerRun`: Cost limit per agent run
+  - **NEW** `MaxTokensPerRun`: Token limit per agent run
+  - **NEW** `MaxIterationsPerRun`: Iteration limit per agent run
+  - **NEW** `MaxTimePerRun`: Time limit in seconds per agent run
 - **AIPrompt**: Reusable prompt templates with placeholders
 - **AIAgentPrompt**: Links agents to prompts with execution order
 - **AIAgentRun**: Tracks complete agent executions
   - `LastRunID`: Links to previous run in a chain (for run chaining)
   - `StartingPayload`: Initial payload for the run
+  - **NEW** `TotalPromptIterations`: Count of prompt executions in the run
 - **AIAgentRunStep**: Records individual steps within runs
   - `PayloadAtStart`: JSON snapshot of payload before step
   - `PayloadAtEnd`: JSON snapshot of payload after step
   - `OutputData`: Includes `payloadChangeResult` with analysis
+  - **NEW** `FinalPayloadValidationResult`: Validation outcome (Pass/Retry/Fail/Warn)
+  - **NEW** `FinalPayloadValidationMessages`: Validation error messages
 - **AIAgentRunStepAction**: Details of actions executed
 - **AIAgentRunStepPrompt**: Prompt execution details
 
@@ -329,6 +489,10 @@ Key entities used by the agent framework:
 7. **Error Handling**: Implement robust error handling in custom agent types
 8. **Payload Security**: Use path-based access control for sub-agents
 9. **Change Monitoring**: Review payload change warnings in OutputData
+10. **Payload Scoping**: Use PayloadScope to reduce token usage for sub-agents
+11. **Validation Schemas**: Define FinalPayloadValidation for output quality control
+12. **Set Guardrails**: Configure cost/token/time limits to prevent runaway execution
+13. **Monitor Retries**: Track validation retry counts to avoid infinite loops
 
 ## Examples
 

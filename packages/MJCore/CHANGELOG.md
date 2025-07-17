@@ -1,5 +1,30 @@
 # Change Log - @memberjunction/core
 
+## 2.69.1
+
+### Patch Changes
+
+- 2aebdf5: Patch to repackage failed deployment run
+  - @memberjunction/global@2.69.1
+
+## 2.69.0
+
+### Minor Changes
+
+- 79e8509: Several changes to improve validation functionality
+
+### Patch Changes
+
+- Updated dependencies [79e8509]
+  - @memberjunction/global@2.69.0
+
+## 2.68.0
+
+### Patch Changes
+
+- b10b7e6: tweaks to EntityField active status assertion - enabled supression per field instance
+  - @memberjunction/global@2.68.0
+
 ## 2.67.0
 
 ### Patch Changes

@@ -10,7 +10,7 @@
  * @since 2.49.0
  */
 
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, JSONValidator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
@@ -52,6 +52,8 @@ import { LoopAgentResponse } from './loop-agent-response-type';
  */
 @RegisterClass(BaseAgentType, "LoopAgentType")
 export class LoopAgentType extends BaseAgentType {
+    private _jsonValidator: JSONValidator = new JSONValidator();
+    
     /**
      * Determines the next step based on the structured response from the AI model.
      * 
@@ -82,6 +84,16 @@ export class LoopAgentType extends BaseAgentType {
                     response = JSON.parse(promptResult.result);
                 } else {
                     response = promptResult.result as LoopAgentResponse;
+                }
+                
+                // Clean validation syntax from the response
+                // Note: AIPromptRunner will also automatically clean validation syntax when
+                // the prompt has validation enabled (strict or warn mode), but we still
+                // clean here to ensure proper parsing of the LoopAgentResponse structure
+                response = this._jsonValidator.cleanValidationSyntax<LoopAgentResponse>(response);
+                
+                if (IsVerboseLoggingEnabled()) {
+                    console.log('LoopAgentType: Cleaned response from validation syntax', response);
                 }
             } catch (parseError) {
                 return {
@@ -195,9 +207,9 @@ export class LoopAgentType extends BaseAgentType {
      * @param {any} response - The response to validate
      * @returns {boolean} True if the response is valid, false otherwise
      * 
-     * @private
+     * @protected
      */
-    private isValidLoopResponse(simpleResponse: any): {success: boolean, message?: string} {
+    protected isValidLoopResponse(simpleResponse: any): {success: boolean, message?: string} {
         // Check required fields, first cast the simpleResponse to LoopAgentResponse
         // so we get the benefit of TypeScript's type checking below in this method
         const response = simpleResponse as LoopAgentResponse;
@@ -242,8 +254,18 @@ export class LoopAgentType extends BaseAgentType {
         // Validate nextStep structure if present
         if (response.nextStep) {
             const validStepTypes = ['actions', 'sub-agent', 'chat'];
-            const lcaseType = response.nextStep.type?.toLowerCase().trim();
+            let lcaseType = response.nextStep.type?.toLowerCase().trim();
             // allow the AI to mess up the case, but we need to validate it
+
+            // be smart/lenient about missing types. if type is missing but we have a nextStep.subAgent, default to sub-agent and if type is missing and we have nextStep.actions, default to actions
+            if (!lcaseType && response.nextStep.subAgent) {
+                response.nextStep.type = 'Sub-Agent'; // update the data structure to have the correct type
+                lcaseType = 'sub-agent';
+            } else if (!lcaseType && response.nextStep.actions && response.nextStep.actions.length > 0) {
+                response.nextStep.type = 'Actions'; // update the data structure to have the correct type
+                lcaseType = 'actions';
+            }
+
             if (!validStepTypes.includes(lcaseType)) {
                 const message = `LoopAgentResponse has invalid nextStep.type: ${response.nextStep.type}`;
                 LogError(message);

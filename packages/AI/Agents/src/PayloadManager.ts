@@ -1051,4 +1051,150 @@ export class PayloadManager {
         const actualStr = JSON.stringify(actual);
         return intendedStr === actualStr ? 0 : 1;
     }
+
+    /**
+     * Applies a payload scope transformation to extract only the scoped portion.
+     * 
+     * @param payload The full payload to scope
+     * @param scopePath The scope path (e.g., "/functionalRequirements" or "/PropA/SubProp1")
+     * @returns The scoped portion of the payload
+     * 
+     * @example
+     * ```typescript
+     * const payload = { functionalRequirements: { feature1: "..." }, technicalDesign: { ... } };
+     * const scoped = applyPayloadScope(payload, "/functionalRequirements");
+     * // Returns: { feature1: "..." }
+     * ```
+     */
+    public applyPayloadScope(payload: any, scopePath: string): any {
+        if (!payload || !scopePath) return payload;
+        
+        // Remove leading slash and split path
+        const pathParts = scopePath.startsWith('/') 
+            ? scopePath.slice(1).split('/') 
+            : scopePath.split('/');
+        
+        // Navigate to the scoped portion
+        let current = payload;
+        for (const part of pathParts) {
+            if (current && typeof current === 'object' && part in current) {
+                current = current[part];
+            } else {
+                // Path doesn't exist, return null
+                return null;
+            }
+        }
+        
+        // Return a deep clone of the scoped portion
+        return _.cloneDeep(current);
+    }
+
+    /**
+     * Reverses a payload scope transformation by wrapping the scoped content back into the full structure.
+     * 
+     * @param scopedPayload The scoped payload to wrap
+     * @param scopePath The scope path used for extraction
+     * @returns A full payload structure with the scoped content at the correct path
+     * 
+     * @example
+     * ```typescript
+     * const scoped = { feature1: "updated" };
+     * const full = reversePayloadScope(scoped, "/functionalRequirements");
+     * // Returns: { functionalRequirements: { feature1: "updated" } }
+     * ```
+     */
+    public reversePayloadScope(scopedPayload: any, scopePath: string): any {
+        if (!scopePath) return scopedPayload;
+        
+        // Remove leading slash and split path
+        const pathParts = scopePath.startsWith('/') 
+            ? scopePath.slice(1).split('/') 
+            : scopePath.split('/');
+        
+        // Build the structure from the inside out
+        let result = _.cloneDeep(scopedPayload);
+        for (let i = pathParts.length - 1; i >= 0; i--) {
+            result = { [pathParts[i]]: result };
+        }
+        
+        return result;
+    }
+
+    /**
+     * Transforms paths in a change request to account for payload scoping.
+     * Prepends the scope path to all paths in the change request.
+     * 
+     * @param changeRequest The change request with paths relative to the scoped view
+     * @param scopePath The scope path to prepend
+     * @returns A new change request with transformed paths
+     * 
+     * @example
+     * ```typescript
+     * const request = { updateElements: { "field1": "value" } };
+     * const transformed = transformChangeRequestPaths(request, "/functionalRequirements");
+     * // Returns: { updateElements: { "functionalRequirements.field1": "value" } }
+     * ```
+     */
+    public transformChangeRequestPaths<P = any>(
+        changeRequest: AgentPayloadChangeRequest<P>,
+        scopePath: string
+    ): AgentPayloadChangeRequest<P> {
+        if (!scopePath) return changeRequest;
+        
+        // Remove leading slash and convert to dot notation
+        const pathPrefix = scopePath.startsWith('/') 
+            ? scopePath.slice(1).replace(/\//g, '.') 
+            : scopePath.replace(/\//g, '.');
+        
+        const transformObject = (obj: any, prefix: string): any => {
+            if (!obj || typeof obj !== 'object') return obj;
+            
+            const result: any = {};
+            for (const [key, value] of Object.entries(obj)) {
+                const newKey = prefix ? `${prefix}.${key}` : key;
+                if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                    // For nested objects, check if it's a leaf value
+                    if (this.isLeafValue(value)) {
+                        result[newKey] = value;
+                    } else {
+                        // It's a nested path structure, recurse without adding to prefix
+                        Object.assign(result, transformObject(value, newKey));
+                    }
+                } else {
+                    result[newKey] = value;
+                }
+            }
+            return result;
+        };
+        
+        return {
+            newElements: transformObject(changeRequest.newElements, pathPrefix),
+            updateElements: transformObject(changeRequest.updateElements, pathPrefix),
+            removeElements: transformObject(changeRequest.removeElements, pathPrefix),
+            reasoning: changeRequest.reasoning
+        };
+    }
+
+    /**
+     * Helper to determine if a value is a leaf value (not a path structure)
+     */
+    private isLeafValue(value: any): boolean {
+        if (!value || typeof value !== 'object') return true;
+        
+        // Check if it looks like a data value rather than a path structure
+        // This is a heuristic - may need refinement based on actual use cases
+        const keys = Object.keys(value);
+        
+        // If it has common data properties, it's likely a value
+        if (keys.some(k => ['id', 'name', 'value', 'data', 'type'].includes(k.toLowerCase()))) {
+            return true;
+        }
+        
+        // If all values are primitives, it's likely a value object
+        return Object.values(value).every(v => 
+            v === null || 
+            v === undefined || 
+            typeof v !== 'object'
+        );
+    }
 }

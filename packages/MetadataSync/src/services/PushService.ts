@@ -8,6 +8,7 @@ import { FileBackupManager } from '../lib/file-backup-manager';
 import { configManager } from '../lib/config-manager';
 import { SQLLogger } from '../lib/sql-logger';
 import { TransactionManager } from '../lib/transaction-manager';
+import { JsonWriteHelper } from '../lib/json-write-helper';
 import type { SqlLoggingSession, SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
 export interface PushOptions {
@@ -387,7 +388,7 @@ export class PushService {
         
         // Write back the entire file if it's an array (after processing all records)
         if (isArray && !options.dryRun) {
-          await fs.writeJson(filePath, records, { spaces: 2 });
+          await JsonWriteHelper.writeOrderedRecordData(filePath, records);
         }
       } catch (fileError) {
         const errorMsg = `Error reading file ${filePath}: ${fileError}`;
@@ -585,7 +586,7 @@ export class PushService {
     
     // Write back to file only if it's a single record (not part of an array)
     if (filePath && arrayIndex === undefined && !options.dryRun) {
-      await fs.writeJson(filePath, recordData, { spaces: 2 });
+      await JsonWriteHelper.writeOrderedRecordData(filePath, recordData);
     }
     
     // Process related entities after parent save

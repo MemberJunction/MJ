@@ -66,6 +66,18 @@
         "reveal": "silent",
         "panel": "shared"
       }
+    },
+    {
+      "label": "Build MetadataSync Extension",
+      "type": "npm",
+      "script": "build",
+      "path": "packages/VSCodeExtensions/MetadataSync",
+      "group": "build",
+      "problemMatcher": ["$tsc"],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
     }
   ]
 }

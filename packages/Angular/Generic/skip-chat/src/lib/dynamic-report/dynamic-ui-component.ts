@@ -1,10 +1,10 @@
 import { AfterViewInit, Component, ElementRef, EventEmitter, Input, OnDestroy, Output, ViewChild, ViewChildren, QueryList, SimpleChanges, ChangeDetectorRef, NgZone, HostListener } from '@angular/core';
 import { CompositeKey, KeyValuePair, LogError, Metadata, RunQuery, RunQueryParams, RunView, RunViewParams } from '@memberjunction/core';
-import { SkipReactComponentHost } from './skip-react-component-host';
 import { MapEntityInfoToSkipEntityInfo, SimpleMetadata, SimpleRunQuery, SimpleRunView, SkipAPIAnalysisCompleteResponse, SkipComponentStyles, SkipComponentCallbacks, SkipComponentUtilities, SkipComponentOption, BuildSkipComponentCompleteCode } from '@memberjunction/skip-types';
 import { DrillDownInfo } from '../drill-down-info';
 import { DomSanitizer } from '@angular/platform-browser';
 import { marked } from 'marked';
+import { MJReactComponent, StateChangeEvent, ReactComponentEvent } from '@memberjunction/ng-react';
 
 @Component({
   selector: 'skip-dynamic-ui-component',
@@ -148,9 +148,21 @@ import { marked } from 'marked';
                   }
                   
                   <!-- React component container -->
-                  <div #htmlContainer [attr.data-tab-index]="i" 
+                  <div [attr.data-tab-index]="i" 
                        style="flex: 1; position: relative; min-height: 0; overflow: auto;">
-                    <!-- Content will be rendered here by React host -->
+                    <mj-react-component
+                      *ngIf="!currentError && componentSpecs.has(i)"
+                      [component]="componentSpecs.get(i)!"
+                      [data]="getFlattenedDataContext()"
+                      [state]="userStates.get(i) || {}"
+                      [utilities]="utilities"
+                      [styles]="componentStyles || undefined"
+                      (stateChange)="onStateChange(i, $event)"
+                      (componentEvent)="onComponentEvent(i, $event)"
+                      (refreshData)="handleRefreshData()"
+                      (openEntityRecord)="onOpenEntityRecord($event)"
+                      style="width: 100%; height: 100%;">
+                    </mj-react-component>
                     
                     <!-- Error overlay for this tab (shown on top of content when needed) -->
                   @if (currentError && selectedReportOptionIndex === i) {
@@ -264,7 +276,7 @@ import { marked } from 'marked';
                     (click)="createReportForOption(0)"
                     [disabled]="isCreatingReport">
               <i class="fa-solid fa-plus"></i>
-              <span>Create {{ reportOptions[0] ? getComponentTypeName(reportOptions[0]) : 'Component' }}</span>
+              <span>Create {{ firstOptionComponentTypeName }}</span>
             </button>
             <button class="tab-action-button print-button" 
                     *ngIf="ShowPrintReport" 
@@ -403,8 +415,20 @@ import { marked } from 'marked';
             </div>
           } @else {
             <!-- React component container (only shown when no error) -->
-            <div #htmlContainer style="flex: 1; position: relative; min-height: 0; overflow: auto;">
-              <!-- Content will be rendered here by React host -->
+            <div style="flex: 1; position: relative; min-height: 0; overflow: auto;">
+              <mj-react-component
+                *ngIf="componentSpecs.has(0)"
+                [component]="componentSpecs.get(0)!"
+                [data]="getFlattenedDataContext()"
+                [state]="userStates.get(0) || {}"
+                [utilities]="utilities"
+                [styles]="componentStyles || undefined"
+                (stateChange)="onStateChange(0, $event)"
+                (componentEvent)="onComponentEvent(0, $event)"
+                (refreshData)="handleRefreshData()"
+                (openEntityRecord)="onOpenEntityRecord($event)"
+                style="width: 100%; height: 100%;">
+              </mj-react-component>
             </div>
           }
         </div>
@@ -701,12 +725,15 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
     @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();
     @Output() CreateReportRequested = new EventEmitter<number>();
 
-    @ViewChildren('htmlContainer') htmlContainers!: QueryList<ElementRef>;
+    @ViewChildren(MJReactComponent) reactComponents!: QueryList<MJReactComponent>;
 
     // Properties for handling multiple report options
     public reportOptions: SkipComponentOption[] = [];
     public selectedReportOptionIndex: number = 0;
     public currentError: { type: string; message: string; technicalDetails?: string } | null = null;
+    
+    // Cached component type name to avoid expression change errors
+    private _cachedComponentTypeName: string = 'Component';
     public isCreatingReport: boolean = false;
     
     // Toggle states for showing/hiding component details
@@ -721,16 +748,13 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
     private startY: number = 0;
     private startHeight: number = 0;
     
-    // Cache for React component hosts - lazy loaded per option
-    private reactHostCache: Map<number, SkipReactComponentHost> = new Map();
-    private currentHostIndex: number | null = null;
+    // Cache for component specs and user states
+    public componentSpecs = new Map<number, any>();
+    public userStates = new Map<number, any>();
+    public utilities: SkipComponentUtilities | null = null;
+    public componentStyles: SkipComponentStyles | null = null;
     
-    private callbacks: SkipComponentCallbacks = {
-        RefreshData: () => this.handleRefreshData(),
-        OpenEntityRecord: (entityName: string, key: CompositeKey) => this.handleOpenEntityRecord(entityName, key),
-        UpdateUserState: (userState: any) => this.handleUpdateUserState(userState),
-        NotifyEvent: (eventName: string, eventData: any) => this.handleNotifyEvent(eventName, eventData)
-    };
+    // Event handlers from React components
 
     constructor(
         private sanitizer: DomSanitizer,
@@ -800,14 +824,12 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
             this.UIComponentCode = BuildSkipComponentCompleteCode(selectedOption.option);
             this.ComponentObjectName = selectedOption.option.componentName;
             
-            // Simply create or reuse the React host for this option
-            // The tab component handles visibility automatically
-            if (!this.reactHostCache.has(this.selectedReportOptionIndex)) {
-                // Create a new host for this option
-                this.createReactHostForOption(this.selectedReportOptionIndex);
+            // Create or update the component spec for this option
+            if (!this.componentSpecs.has(this.selectedReportOptionIndex)) {
+                this.createComponentSpecForOption(this.selectedReportOptionIndex);
+                // Trigger change detection after modifying componentSpecs
+                this.cdr.detectChanges();
             }
-            
-            this.currentHostIndex = this.selectedReportOptionIndex;
         } catch (error) {
             console.error('Failed to build component code:', error);
             this.currentError = {
@@ -823,9 +845,10 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
     }
   
     public async PrintReport() {
-        const currentHost = this.getCurrentReactHost();
-        if (currentHost) {
-            currentHost.print();
+        const currentComponent = this.getCurrentReactComponent();
+        if (currentComponent) {
+            // React component handles printing internally
+            window.print();
         } else {
             window.print();
         }
@@ -853,22 +876,19 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     }
 
     /**
-     * Get the container element for a specific option index
+     * Get the React component for a specific option index
      */
-    private getContainerForOption(optionIndex: number): HTMLElement | null {
-        if (!this.htmlContainers || this.htmlContainers.length === 0) {
+    private getReactComponentForOption(optionIndex: number): MJReactComponent | null {
+        if (!this.reactComponents || this.reactComponents.length === 0) {
             return null;
         }
         
         if (this.reportOptions.length === 1) {
-            // Single option - use the only container
-            return this.htmlContainers.first?.nativeElement || null;
+            // Single option - use the only component
+            return this.reactComponents.first || null;
         } else {
-            // Multiple options - find container by data-tab-index
-            const container = this.htmlContainers.find(ref => 
-                ref.nativeElement.getAttribute('data-tab-index') === optionIndex.toString()
-            );
-            return container?.nativeElement || null;
+            // Multiple options - find by index
+            return this.reactComponents.toArray()[optionIndex] || null;
         }
     }
 
@@ -879,17 +899,11 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         // Clear the error
         this.currentError = null;
         
-        // Remove the cached host for this option to force recreation
-        if (this.reactHostCache.has(this.selectedReportOptionIndex)) {
-            const host = this.reactHostCache.get(this.selectedReportOptionIndex);
-            if (host) {
-                host.destroy();
-            }
-            this.reactHostCache.delete(this.selectedReportOptionIndex);
-        }
+        // Re-create the component spec
+        this.createComponentSpecForOption(this.selectedReportOptionIndex);
         
-        // Try creating it again
-        this.createReactHostForOption(this.selectedReportOptionIndex);
+        // Trigger change detection
+        this.cdr.detectChanges();
     }
 
     /**
@@ -907,6 +921,13 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     public getComponentTypeName(option: SkipComponentOption): string {
         const type = option.option.componentType || 'report';
         return type.charAt(0).toUpperCase() + type.slice(1);
+    }
+    
+    /**
+     * Get the cached component type name for the first option to avoid change detection errors
+     */
+    public get firstOptionComponentTypeName(): string {
+        return this._cachedComponentTypeName;
     }
     
     /**
@@ -1079,53 +1100,45 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             this.setupReportOptions(this.SkipData);
         }
         
-        // Wait for ViewChildren to be available
-        setTimeout(() => {
-            if (this.UIComponentCode && this.ComponentObjectName && this.SkipData) {
-                // Create the initial React host for the first option
-                this.createReactHostForOption(this.selectedReportOptionIndex);
-            }
-        });
+        // Initialize utilities and styles once
+        const md = new Metadata();
+        this.utilities = this.SetupUtilities(md);
+        this.componentStyles = this.SetupStyles();
+        
+        // Create component specs for all options
+        // Use Promise.resolve to avoid ExpressionChangedAfterItHasBeenCheckedError
+        if (this.reportOptions.length > 0) {
+            Promise.resolve().then(() => {
+                this.reportOptions.forEach((_, index) => {
+                    this.createComponentSpecForOption(index);
+                });
+                this.cdr.detectChanges();
+            });
+        }
     }
     
     ngOnDestroy(): void {
-        // Clean up all cached React hosts
-        this.reactHostCache.forEach(host => {
-            try {
-                host.destroy();
-            } catch (e) {
-                console.error('Error destroying React host:', e);
-            }
-        });
-        this.reactHostCache.clear();
+        // Clean up component specs and states
+        this.componentSpecs.clear();
+        this.userStates.clear();
         
-        // Clean up registered components from the GlobalComponentRegistry
-        // Note: We don't remove them as they might be used by other instances
-        // The registry is designed to be a singleton that persists across component instances
+        // The MJReactComponent handles its own cleanup
     }
     
     ngOnChanges(changes: SimpleChanges): void {
-        if (changes['SkipData'] && !changes['SkipData'].firstChange) {
-            // Update all cached React components with new data
-            const newData = this.getFlattenedDataContext();
-            this.reactHostCache.forEach(host => {
-                try {
-                    host.updateState('data', newData);
-                } catch (e) {
-                    console.error('Error updating React host data:', e);
-                }
-            });
+        if (changes['SkipData']) {
+            const skipData = changes['SkipData'].currentValue;
+            if (skipData) {
+                this.setupReportOptions(skipData);
+            }
         }
     }
 
     /**
-     * Get the currently active React host
+     * Get the currently active React component
      */
-    private getCurrentReactHost(): SkipReactComponentHost | null {
-        if (this.currentHostIndex !== null && this.reactHostCache.has(this.currentHostIndex)) {
-            return this.reactHostCache.get(this.currentHostIndex) || null;
-        }
-        return null;
+    private getCurrentReactComponent(): MJReactComponent | null {
+        return this.getReactComponentForOption(this.selectedReportOptionIndex);
     }
   
     private _skipData: SkipAPIAnalysisCompleteResponse | undefined;
@@ -1173,70 +1186,41 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             const bestOption = this.reportOptions[0];
             this.UIComponentCode = BuildSkipComponentCompleteCode(bestOption.option);
             this.ComponentObjectName = bestOption.option.componentName;
+            
+            // Update cached component type name after current change detection cycle
+            Promise.resolve().then(() => {
+                this._cachedComponentTypeName = this.getComponentTypeName(bestOption);
+                this.cdr.detectChanges();
+            });
         } 
     }
 
 
     /**
-     * Create a React host for a specific option index
+     * Create a component spec for a specific option index
      */
-    private async createReactHostForOption(optionIndex: number): Promise<void> {
+    private createComponentSpecForOption(optionIndex: number): void {
         const option = this.reportOptions[optionIndex];
         if (!option) return;
 
-        const container = this.getContainerForOption(optionIndex);
-        if (!container) return;
-
         try {
             const component = option.option;
-            const md = new Metadata();
-            const data = this.getFlattenedDataContext();
             
-            // Create the React component host directly in the tab container
-            // The host will handle registration automatically
-            const reactHost = new SkipReactComponentHost({
-                component,
-                container: container,
-                callbacks: this.callbacks,
-                data: data,
-                utilities: this.SetupUtilities(md),
-                styles: this.SetupStyles()
-                // metadata will be auto-populated from component.childComponents
-            });
+            // Store the component spec
+            this.componentSpecs.set(optionIndex, component);
             
-            // Initialize and render the React component
-            await reactHost.initialize();
-            
-            // Cache the host
-            this.reactHostCache.set(optionIndex, reactHost);
-            
-            // Update current index if this is the selected option
-            if (optionIndex === this.selectedReportOptionIndex) {
-                this.currentHostIndex = optionIndex;
+            // Initialize user state if not exists
+            if (!this.userStates.has(optionIndex)) {
+                this.userStates.set(optionIndex, {});
             }
         }
         catch (e: any) {
-            console.error('Error creating React host:', e);
+            console.error('Error creating component spec:', e);
             
             // Determine the type of error and create a user-friendly message
-            let errorType = 'Component Initialization Error';
-            let errorMessage = 'Failed to initialize the React component.';
+            let errorType = 'Component Specification Error';
+            let errorMessage = 'Failed to create component specification.';
             let technicalDetails = e.toString();
-            
-            if (e.message?.includes('JSX transpilation failed')) {
-                errorType = 'Code Compilation Error';
-                errorMessage = 'The component code could not be compiled. This usually indicates a syntax error in the generated code.';
-                technicalDetails = e.message;
-            } else if (e.message?.includes('is not defined')) {
-                errorType = 'Missing Dependency';
-                errorMessage = 'The component is trying to use a feature or library that is not available.';
-            } else if (e.message?.includes('Missing required child components')) {
-                errorType = 'Incomplete Component Specification';
-                errorMessage = e.message;
-            } else if (e.message?.includes('Cannot read properties')) {
-                errorType = 'Property Access Error';
-                errorMessage = 'The component is trying to access data that doesn\'t exist. This often happens when property names don\'t match the data structure.';
-            }
             
             this.currentError = {
                 type: errorType,
@@ -1247,9 +1231,46 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             LogError(e);
         }
     }
+    
+    /**
+     * Handle state change events from React components
+     */
+    public onStateChange(optionIndex: number, event: StateChangeEvent): void {
+        const currentState = this.userStates.get(optionIndex) || {};
+        this.userStates.set(optionIndex, {
+            ...currentState,
+            [event.path]: event.value
+        });
+        
+        // Handle any additional state change logic
+        this.handleUpdateUserState({ [event.path]: event.value });
+    }
+    
+    /**
+     * Handle component events from React components
+     */
+    public onComponentEvent(optionIndex: number, event: ReactComponentEvent): void {
+        if (event.type === 'error') {
+            this.currentError = {
+                type: event.payload.source || 'React Component Error',
+                message: event.payload.error || 'An unknown error occurred',
+                technicalDetails: event.payload.errorInfo || ''
+            };
+        } else {
+            this.handleNotifyEvent(event.type, event.payload);
+        }
+    }
+    
+    /**
+     * Handle open entity record events
+     */
+    public onOpenEntityRecord(event: { entityName: string; recordId: string }): void {
+        const key = new CompositeKey([{ FieldName: 'ID', Value: event.recordId }]);
+        this.handleOpenEntityRecord(event.entityName, key);
+    }
 
     
-    private getFlattenedDataContext(): Record<string, any> {
+    public getFlattenedDataContext(): Record<string, any> {
         const flattenedDataContext: Record<string, any> = {};
         
         if (this.SkipData?.dataContext) {
@@ -1263,7 +1284,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     }
 
     // Event handler implementations
-    private handleRefreshData(): void {
+    public handleRefreshData(): void {
         console.log('Component requested data refresh');
         // Emit an event or call parent component method to refresh data
     }
@@ -1307,7 +1328,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         // TODO: Handle other custom events as needed
     }
 
-    protected SetupUtilities(md: Metadata): SkipComponentUtilities {
+    private SetupUtilities(md: Metadata): SkipComponentUtilities {
         const rv = new RunView();
         const rq = new RunQuery();
         const u: SkipComponentUtilities = {
@@ -1318,13 +1339,13 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         return u;
     }
 
-    protected CreateSimpleMetadata(md: Metadata): SimpleMetadata {
+    private CreateSimpleMetadata(md: Metadata): SimpleMetadata {
         return {
             entities: md.Entities.map(e => MapEntityInfoToSkipEntityInfo(e))
         }
     }
 
-    protected SetupStyles(): SkipComponentStyles{
+    private SetupStyles(): SkipComponentStyles {
         // Return modern, contemporary styles for generated components
         return {
             colors: {
@@ -1431,7 +1452,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         }
     }
     
-    protected CreateSimpleRunQuery(rq: RunQuery): SimpleRunQuery {
+    private CreateSimpleRunQuery(rq: RunQuery): SimpleRunQuery {
         return {
             runQuery: async (params: RunQueryParams) => {
                 // Run a single query and return the results
@@ -1445,7 +1466,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             }
         }
     }
-    protected CreateSimpleRunView(rv: RunView): SimpleRunView {
+    private CreateSimpleRunView(rv: RunView): SimpleRunView {
         return {
             runView: async (params: RunViewParams) => {
                 // Run a single view and return the results
@@ -1470,7 +1491,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         }
     }
 
-    protected SetupCallbacks(): SkipComponentCallbacks {
+    private SetupCallbacks(): SkipComponentCallbacks {
         const cb: SkipComponentCallbacks = {
             RefreshData: () => {
                 // this is a callback function that can be called from the component to refresh data
@@ -1511,12 +1532,9 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     }
 
     public async refreshReport(data?: any): Promise<void> {
-        const currentHost = this.getCurrentReactHost();
-        if (currentHost) {
-            currentHost.refresh(data);
-        } else {
-            // If no React host is available, create one for the current option
-            this.createReactHostForOption(this.selectedReportOptionIndex);
+        const currentComponent = this.getCurrentReactComponent();
+        if (currentComponent) {
+            currentComponent.refresh(data);
         }
     }
 }

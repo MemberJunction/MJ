@@ -1,6 +1,4 @@
 /**
- * @fileoverview Authentication and API key types for Skip API
- * 
  * This file contains types related to authentication and API key management
  * within the Skip API system. These types define the structure for:
  * 
@@ -14,9 +12,6 @@
  * The vendor driver names correspond to registered classes in the MemberJunction
  * AI namespace that provide standardized interfaces to different AI providers
  * such as OpenAI, Anthropic, Google, and others.
- * 
- * @author MemberJunction
- * @since 2.0.0
  */
 
 /**

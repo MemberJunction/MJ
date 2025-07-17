@@ -1,6 +1,4 @@
 /**
- * @fileoverview Specific API response types for Skip API
- * 
  * This file contains specialized response types that extend the base SkipAPIResponse for different
  * response phases and scenarios. These types define the structure for:
  * 
@@ -16,9 +14,6 @@
  * 
  * The analysis complete response is particularly comprehensive, containing component data,
  * explanations, column metadata, drill-down information, and component options.
- * 
- * @author MemberJunction
- * @since 2.0.0
  */
 
 import { SkipAPIResponse } from './api-types';

@@ -2,6 +2,20 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "type": "extensionHost",
+      "request": "launch",
+      "name": "Launch MJ MetadataSync Extension",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/VSCodeExtensions/MetadataSync",
+        "${workspaceFolder}"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/VSCodeExtensions/MetadataSync/dist/**/*.js"
+      ],
+      "preLaunchTask": "Build MetadataSync Extension"
+    },
+    {
       "type": "node",
       "request": "launch",
       "name": "MCPServer",
@@ -101,11 +115,12 @@
       "type": "node",
       "request": "launch",
       "name": "MetadataSync CLI - Pull",
-      "program": "${workspaceFolder}/packages/MJCLI/bin/dev",
+      "program": "${workspaceFolder}/packages/MJCLI/bin/dev.js",
       "args": [
         "sync",
         "pull",
-        "--entity", "AI Prompts"
+        "--entity", "${input:entityToPull}",
+        "--verbose"
       ],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
@@ -120,8 +135,40 @@
       ],
       "skipFiles": ["<node_internals>/**", "**/zone/**"],
       "env": {
-        "NODE_ENV": "development",
-        "METADATA_SYNC_TARGET_DIR": "${input:metadataSyncPullDirectory}"
+        "NODE_ENV": "development"
+      },
+      "preLaunchTask": "Build MetadataSync",
+      "runtimeArgs": ["--enable-source-maps"],
+      "sourceMapPathOverrides": {
+        "${workspaceFolder}/packages/*": "${workspaceFolder}/packages/*"
+      }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "MetadataSync CLI - Pull with Options",
+      "program": "${workspaceFolder}/packages/MJCLI/bin/dev.js",
+      "args": [
+        "sync",
+        "pull",
+        "--entity", "${input:entityToPull}",
+        "--verbose",
+        "${input:additionalPullFlags}"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/packages/**",
+        "!**/node_modules/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/**/dist/**/*.js",
+        "${workspaceFolder}/packages/**/lib/**/*.js"
+      ],
+      "skipFiles": ["<node_internals>/**", "**/zone/**"],
+      "env": {
+        "NODE_ENV": "development"
       },
       "preLaunchTask": "Build MetadataSync",
       "runtimeArgs": ["--enable-source-maps"],
@@ -198,6 +245,86 @@
       "type": "promptString",
       "description": "Directory path to pull to (absolute or relative)",
       "default": "${workspaceFolder}/packages/MetadataSync/demo/ai-prompts"
+    },
+    {
+      "id": "entityToPull",
+      "type": "pickString",
+      "description": "Select entity to pull",
+      "options": [
+        {
+          "label": "AI Prompts",
+          "value": "AI Prompts"
+        },
+        {
+          "label": "AI Agents",
+          "value": "AI Agents"
+        },
+        {
+          "label": "AI Agent Types",
+          "value": "MJ: AI Agent Types"
+        },
+        {
+          "label": "AI Models",
+          "value": "AI Models"
+        },
+        {
+          "label": "Actions",
+          "value": "Actions"
+        },
+        {
+          "label": "Action Categories",
+          "value": "Action Categories"
+        },
+        {
+          "label": "Templates",
+          "value": "Templates"
+        },
+        {
+          "label": "Custom Entity",
+          "value": "${input:customEntityName}"
+        }
+      ],
+      "default": "MJ: AI Agent Types"
+    },
+    {
+      "id": "customEntityName",
+      "type": "promptString",
+      "description": "Enter custom entity name",
+      "default": "AI Prompts"
+    },
+    {
+      "id": "additionalPullFlags",
+      "type": "pickString",
+      "description": "Additional pull options",
+      "options": [
+        {
+          "label": "None",
+          "value": ""
+        },
+        {
+          "label": "Dry Run",
+          "value": "--dry-run"
+        },
+        {
+          "label": "No Validate",
+          "value": "--no-validate"
+        },
+        {
+          "label": "Dry Run + No Validate",
+          "value": "--dry-run --no-validate"
+        },
+        {
+          "label": "Custom Filter",
+          "value": "--filter=\"${input:customFilter}\""
+        }
+      ],
+      "default": ""
+    },
+    {
+      "id": "customFilter",
+      "type": "promptString",
+      "description": "Enter SQL filter condition",
+      "default": "IsActive = 1"
     }
   ]
 }
