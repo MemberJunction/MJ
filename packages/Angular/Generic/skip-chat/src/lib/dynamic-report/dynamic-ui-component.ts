@@ -1,10 +1,12 @@
-import { AfterViewInit, Component, ElementRef, EventEmitter, Input, OnDestroy, Output, ViewChild, ViewChildren, QueryList, SimpleChanges, ChangeDetectorRef, NgZone, HostListener } from '@angular/core';
-import { CompositeKey, KeyValuePair, LogError, Metadata, RunQuery, RunQueryParams, RunView, RunViewParams } from '@memberjunction/core';
-import { MapEntityInfoToSkipEntityInfo, SimpleMetadata, SimpleRunQuery, SimpleRunView, SkipAPIAnalysisCompleteResponse, SkipComponentStyles, SkipComponentCallbacks, SkipComponentUtilities, SkipComponentOption, BuildSkipComponentCompleteCode } from '@memberjunction/skip-types';
+import { AfterViewInit, Component, EventEmitter, Input, OnDestroy, Output, ViewChildren, QueryList, SimpleChanges, ChangeDetectorRef, NgZone, HostListener } from '@angular/core';
+import { CompositeKey, KeyValuePair, LogError, Metadata } from '@memberjunction/core';
+import { SkipAPIAnalysisCompleteResponse} from '@memberjunction/skip-types';
+import { ComponentStyles, ComponentCallbacks, ComponentUtilities, ComponentOption, BuildComponentCompleteCode } from '@memberjunction/interactive-component-types';
 import { DrillDownInfo } from '../drill-down-info';
 import { DomSanitizer } from '@angular/platform-browser';
 import { marked } from 'marked';
 import { MJReactComponent, StateChangeEvent, ReactComponentEvent } from '@memberjunction/ng-react';
+import { createRuntimeUtilities, SetupStyles } from '@memberjunction/react-runtime';
 
 @Component({
   selector: 'skip-dynamic-ui-component',
@@ -728,7 +730,7 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
     @ViewChildren(MJReactComponent) reactComponents!: QueryList<MJReactComponent>;
 
     // Properties for handling multiple report options
-    public reportOptions: SkipComponentOption[] = [];
+    public reportOptions: ComponentOption[] = [];
     public selectedReportOptionIndex: number = 0;
     public currentError: { type: string; message: string; technicalDetails?: string } | null = null;
     
@@ -751,8 +753,8 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
     // Cache for component specs and user states
     public componentSpecs = new Map<number, any>();
     public userStates = new Map<number, any>();
-    public utilities: SkipComponentUtilities | null = null;
-    public componentStyles: SkipComponentStyles | null = null;
+    public utilities: ComponentUtilities | null = null;
+    public componentStyles: ComponentStyles | null = null;
     
     // Event handlers from React components
 
@@ -765,7 +767,7 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
     /**
      * Gets the currently selected report option
      */
-    public get selectedReportOption(): SkipComponentOption | null {
+    public get selectedReportOption(): ComponentOption | null {
         return this.reportOptions.length > this.selectedReportOptionIndex 
             ? this.reportOptions[this.selectedReportOptionIndex] 
             : null;
@@ -821,7 +823,7 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
 
         try {
             // Update the component info - this can fail if placeholders are missing
-            this.UIComponentCode = BuildSkipComponentCompleteCode(selectedOption.option);
+            this.UIComponentCode = BuildComponentCompleteCode(selectedOption.option);
             this.ComponentObjectName = selectedOption.option.componentName;
             
             // Create or update the component spec for this option
@@ -855,12 +857,12 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
     }
 
     /**
-     * Copy error details to clipboard for user to send back to Skip
+     * Copy error details to clipboard for user to send back to
      */
     public copyErrorToClipboard(): void {
         if (!this.currentError) return;
         
-        const errorText = `Skip Component Error:
+        const errorText = `Component Error:
 Type: ${this.currentError.type}
 Message: ${this.currentError.message}
 ${this.currentError.technicalDetails ? `\nTechnical Details:\n${this.currentError.technicalDetails}` : ''}
@@ -869,7 +871,7 @@ Component Option: ${this.selectedReportOptionIndex + 1}
 Component Name: ${this.ComponentObjectName || 'Unknown'}`;
 
         navigator.clipboard.writeText(errorText).then(() => {
-            alert('Error details copied to clipboard. You can paste this in the Skip chat to get help.');
+            alert('Error details copied to clipboard. You can paste this in the chat to get help.');
         }).catch(err => {
             console.error('Failed to copy to clipboard:', err);
         });
@@ -918,7 +920,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     /**
      * Get the component type name for display
      */
-    public getComponentTypeName(option: SkipComponentOption): string {
+    public getComponentTypeName(option: ComponentOption): string {
         const type = option.option.componentType || 'report';
         return type.charAt(0).toUpperCase() + type.slice(1);
     }
@@ -970,7 +972,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     /**
      * Format functional requirements as HTML
      */
-    public getFormattedFunctionalRequirements(option: SkipComponentOption): any {
+    public getFormattedFunctionalRequirements(option: ComponentOption): any {
         const requirements = option.option.functionalRequirements || 'No functional requirements specified.';
         const html = marked.parse(requirements);
         return this.sanitizer.sanitize(1, html); // 1 = SecurityContext.HTML
@@ -979,7 +981,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     /**
      * Format data requirements as HTML
      */
-    public getFormattedDataRequirements(option: SkipComponentOption): any {
+    public getFormattedDataRequirements(option: ComponentOption): any {
         const dataReq = option.option.dataRequirements;
         if (!dataReq) {
             return this.sanitizer.sanitize(1, '<p>No data requirements specified.</p>');
@@ -1022,7 +1024,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     /**
      * Format technical design as HTML
      */
-    public getFormattedTechnicalDesign(option: SkipComponentOption): any {
+    public getFormattedTechnicalDesign(option: ComponentOption): any {
         const design = option.option.technicalDesign || 'No technical design specified.';
         const html = marked.parse(design);
         return this.sanitizer.sanitize(1, html);
@@ -1031,9 +1033,9 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     /**
      * Get the component code
      */
-    public getComponentCode(option: SkipComponentOption): string {
+    public getComponentCode(option: ComponentOption): string {
         try {
-            return BuildSkipComponentCompleteCode(option.option);
+            return BuildComponentCompleteCode(option.option);
         } catch (e) {
             return `// Error building complete component code:\n// ${e}`;
         }
@@ -1100,10 +1102,10 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             this.setupReportOptions(this.SkipData);
         }
         
-        // Initialize utilities and styles once
-        const md = new Metadata();
-        this.utilities = this.SetupUtilities(md);
-        this.componentStyles = this.SetupStyles();
+        // Initialize utilities and styles once using React runtime
+        const runtimeUtils = createRuntimeUtilities();
+        this.utilities = runtimeUtils.buildUtilities();
+        this.componentStyles = SetupStyles();
         
         // Create component specs for all options
         // Use Promise.resolve to avoid ExpressionChangedAfterItHasBeenCheckedError
@@ -1153,7 +1155,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             if (d.componentOptions && d.componentOptions.length > 0) {
                 // Use the first component option (or the highest ranked one)
                 const component = d.componentOptions[0];
-                this.UIComponentCode = BuildSkipComponentCompleteCode(component.option);
+                this.UIComponentCode = BuildComponentCompleteCode(component.option);
                 this.ComponentObjectName = component.option.componentName;
             } else {
                 // Fallback for old format
@@ -1184,7 +1186,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             // Select the best option (first in sorted array)
             this.selectedReportOptionIndex = 0;
             const bestOption = this.reportOptions[0];
-            this.UIComponentCode = BuildSkipComponentCompleteCode(bestOption.option);
+            this.UIComponentCode = BuildComponentCompleteCode(bestOption.option);
             this.ComponentObjectName = bestOption.option.componentName;
             
             // Update cached component type name after current change detection cycle
@@ -1328,171 +1330,17 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         // TODO: Handle other custom events as needed
     }
 
-    private SetupUtilities(md: Metadata): SkipComponentUtilities {
-        const rv = new RunView();
-        const rq = new RunQuery();
-        const u: SkipComponentUtilities = {
-            md: this.CreateSimpleMetadata(md),
-            rv: this.CreateSimpleRunView(rv),
-            rq: this.CreateSimpleRunQuery(rq)
-        };            
-        return u;
-    }
+    // SetupUtilities method removed - now using React runtime's RuntimeUtilities
 
-    private CreateSimpleMetadata(md: Metadata): SimpleMetadata {
-        return {
-            entities: md.Entities.map(e => MapEntityInfoToSkipEntityInfo(e))
-        }
-    }
+    // CreateSimpleMetadata method removed - now using React runtime's RuntimeUtilities
 
-    private SetupStyles(): SkipComponentStyles {
-        // Return modern, contemporary styles for generated components
-        return {
-            colors: {
-                // Primary colors - modern purple/blue gradient feel
-                primary: '#5B4FE9',
-                primaryHover: '#4940D4',
-                primaryLight: '#E8E6FF',
-                
-                // Secondary colors - sophisticated gray
-                secondary: '#64748B',
-                secondaryHover: '#475569',
-                
-                // Status colors
-                success: '#10B981',
-                successLight: '#D1FAE5',
-                warning: '#F59E0B',
-                warningLight: '#FEF3C7',
-                error: '#EF4444',
-                errorLight: '#FEE2E2',
-                info: '#3B82F6',
-                infoLight: '#DBEAFE',
-                
-                // Base colors
-                background: '#FFFFFF',
-                surface: '#F8FAFC',
-                surfaceHover: '#F1F5F9',
-                
-                // Text colors with better contrast
-                text: '#1E293B',
-                textSecondary: '#64748B',
-                textTertiary: '#94A3B8',
-                textInverse: '#FFFFFF',
-                
-                // Border colors
-                border: '#E2E8F0',
-                borderLight: '#F1F5F9',
-                borderFocus: '#5B4FE9',
-                
-                // Shadows (as color strings for easy use)
-                shadow: 'rgba(0, 0, 0, 0.05)',
-                shadowMedium: 'rgba(0, 0, 0, 0.1)',
-                shadowLarge: 'rgba(0, 0, 0, 0.15)',
-            },
-            spacing: {
-                xs: '4px',
-                sm: '8px',
-                md: '16px',
-                lg: '24px',
-                xl: '32px',
-                xxl: '48px',
-                xxxl: '64px',
-            },
-            typography: {
-                fontFamily: '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif',
-                fontSize: {
-                    xs: '11px',
-                    sm: '12px',
-                    md: '14px',
-                    lg: '16px',
-                    xl: '20px',
-                    xxl: '24px',
-                    xxxl: '32px',
-                },
-                fontWeight: {
-                    light: '300',
-                    regular: '400',
-                    medium: '500',
-                    semibold: '600',
-                    bold: '700',
-                },
-                lineHeight: {
-                    tight: '1.25',
-                    normal: '1.5',
-                    relaxed: '1.75',
-                },
-            },
-            borders: {
-                radius: {
-                    sm: '6px',
-                    md: '8px',
-                    lg: '12px',
-                    xl: '16px',
-                    full: '9999px',
-                },
-                width: {
-                    thin: '1px',
-                    medium: '2px',
-                    thick: '3px',
-                },
-            },
-            shadows: {
-                sm: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-                md: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-                lg: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-                xl: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-                inner: 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)',
-            },
-            transitions: {
-                fast: '150ms ease-in-out',
-                normal: '250ms ease-in-out',
-                slow: '350ms ease-in-out',
-            },
-            overflow: 'auto' // Default overflow style        
-        }
-    }
+    // SetupStyles method removed - now using React runtime's SetupStyles function
     
-    private CreateSimpleRunQuery(rq: RunQuery): SimpleRunQuery {
-        return {
-            runQuery: async (params: RunQueryParams) => {
-                // Run a single query and return the results
-                try {
-                    const result = await rq.RunQuery(params);
-                    return result;
-                } catch (error) {
-                    LogError(error);
-                    throw error; // Re-throw to handle it in the caller
-                }
-            }
-        }
-    }
-    private CreateSimpleRunView(rv: RunView): SimpleRunView {
-        return {
-            runView: async (params: RunViewParams) => {
-                // Run a single view and return the results
-                try {
-                    const result = await rv.RunView(params);
-                    return result;
-                } catch (error) {
-                    LogError(error);
-                    throw error; // Re-throw to handle it in the caller
-                }
-            },
-            runViews: async (params: RunViewParams[]) => {
-                // Runs multiple views and returns the results
-                try {
-                    const results = await rv.RunViews(params);
-                    return results;
-                } catch (error) {
-                    LogError(error);
-                    throw error; // Re-throw to handle it in the caller
-                }
-            }
-        }
-    }
+    // CreateSimpleRunQuery method removed - now using React runtime's RuntimeUtilities
+    // CreateSimpleRunView method removed - now using React runtime's RuntimeUtilities
 
-    private SetupCallbacks(): SkipComponentCallbacks {
-        const cb: SkipComponentCallbacks = {
+    private SetupCallbacks(): ComponentCallbacks {
+        const cb: ComponentCallbacks = {
             RefreshData: () => {
                 // this is a callback function that can be called from the component to refresh data
                 console.log('Component requested data refresh');

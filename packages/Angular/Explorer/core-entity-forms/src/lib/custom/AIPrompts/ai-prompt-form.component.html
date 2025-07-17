@@ -171,12 +171,16 @@
                                     Create a new template or link to an existing one.
                                 </p>
                                 <div style="display: flex; gap: 12px;">
-                                    <button kendoButton [themeColor]="'primary'" (click)="createNewTemplate()">
-                                        <i class="fa-solid fa-plus"></i> Create New Template
-                                    </button>
-                                    <button kendoButton [fillMode]="'outline'" (click)="linkExistingTemplate()">
-                                        <i class="fa-solid fa-link"></i> Link Existing Template
-                                    </button>
+                                    @if (UserCanCreateTemplates) {
+                                        <button kendoButton [themeColor]="'primary'" (click)="createNewTemplate()">
+                                            <i class="fa-solid fa-plus"></i> Create New Template
+                                        </button>
+                                    }
+                                    @if (UserCanReadTemplates) {
+                                        <button kendoButton [fillMode]="'outline'" (click)="linkExistingTemplate()">
+                                            <i class="fa-solid fa-link"></i> Link Existing Template
+                                        </button>
+                                    }
                                 </div>
                             </div>
                         } @else if (templateNotFoundInDatabase) {
@@ -190,14 +194,40 @@
                                     <button kendoButton [fillMode]="'outline'" (click)="loadTemplate()">
                                         <i class="fa-solid fa-refresh"></i> Retry Loading
                                     </button>
-                                    <button kendoButton [themeColor]="'primary'" (click)="createNewTemplate()">
-                                        <i class="fa-solid fa-plus"></i> Create New Template
-                                    </button>
+                                    @if (UserCanCreateTemplates) {
+                                        <button kendoButton [themeColor]="'primary'" (click)="createNewTemplate()">
+                                            <i class="fa-solid fa-plus"></i> Create New Template
+                                        </button>
+                                    }
                                 </div>
                             </div>
                         } @else {
                             <!-- Active Template Editor -->
                             <div class="template-editor-container" style="flex: 1; display: flex; flex-direction: column; min-height: 350px;">
+                                <!-- Template Actions Bar -->
+                                @if (template && EditMode) {
+                                    <div class="template-actions" style="display: flex; gap: 8px; padding: 8px; border-bottom: 1px solid #e9ecef; background: #f8f9fa;">
+                                        @if (UserCanUpdateTemplates) {
+                                            <button kendoButton 
+                                                    [fillMode]="'outline'" 
+                                                    [size]="'small'"
+                                                    (click)="linkExistingTemplate()"
+                                                    title="Change to a different template">
+                                                <i class="fa-solid fa-exchange-alt"></i> Change Template
+                                            </button>
+                                        }
+                                        @if (UserCanReadTemplates) {
+                                            <button kendoButton 
+                                                    [fillMode]="'outline'" 
+                                                    [size]="'small'"
+                                                    (click)="openTemplateInNewWindow()"
+                                                    title="Open template in new window">
+                                                <i class="fa-solid fa-external-link-alt"></i> Open in New Window
+                                            </button>
+                                        }
+                                    </div>
+                                }
+                                
                                 <!-- Template Editor -->
                                 <div style="flex: 1; background: white; border-radius: 6px; border: 1px solid #e9ecef;">
                                     <mj-template-editor 
@@ -214,10 +244,437 @@
                     </div>
                 </kendo-expansionpanel>                
 
+                <!-- Model Configuration Expansion Panel -->
+                @if (record.IsSaved) {
+                    <kendo-expansionpanel 
+                        [expanded]="true"
+                        style="margin-bottom: 12px;">
+                        <ng-template kendoExpansionPanelTitleDirective>
+                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                <i class="fa-solid fa-microchip" style="color: #6c757d;"></i>
+                                Models
+                                @if (promptModels.length > 0) {
+                                    <span class="badge" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                                        {{ promptModels.length }}
+                                    </span>
+                                }
+                                <span style="color: #6c757d; font-size: 0.8em; font-weight: normal; margin-left: 8px;">
+                                    <i class="fa-solid fa-info-circle" title="Models are tried in order from top to bottom. The first available model will be used."></i>
+                                    Priority order (first available model will be used)
+                                </span>
+                            </span>
+                        </ng-template>
+                        
+                        <!-- Direct Content Projection -->
+                        <div style="padding: 16px 0;">
+                            <!-- Model Management Interface -->
+                            <div class="model-management" style="border: 1px solid #dee2e6; border-radius: 6px; background: #f8f9fa;">
+                                @if (isLoadingModels) {
+                                    <div class="loading-state" style="padding: 20px; text-align: center; color: #6c757d;">
+                                        <i class="fa-solid fa-spinner fa-spin"></i> Loading models...
+                                    </div>
+                                } @else {
+                                    @if (promptModels.length === 0) {
+                                        <div class="empty-state" style="padding: 20px; text-align: center; color: #6c757d;">
+                                            <i class="fa-solid fa-info-circle"></i> No models configured
+                                            @if (EditMode && UserCanCreatePromptModels) {
+                                                <div style="margin-top: 10px;">
+                                                    <button kendoButton fillMode="outline" themeColor="primary" size="small"
+                                                                (click)="addNewModel()">
+                                                        <i class="fa-solid fa-plus"></i> Add Model
+                                                    </button>
+                                                </div>
+                                            }
+                                        </div>
+                                    } @else {
+                                        <!-- Priority explanation for multiple models -->
+                                        @if (promptModels.length > 1) {
+                                            <div style="padding: 12px 16px; background: #e3f2fd; border-bottom: 1px solid #bbdefb; color: #1565c0; font-size: 0.85em;">
+                                                <i class="fa-solid fa-info-circle" style="margin-right: 6px;"></i>
+                                                Models are tried in priority order (highest priority first). The first available model that meets requirements will be used for execution.
+                                            </div>
+                                        }
+                                        <!-- Column Headers -->
+                                        <div class="model-header" style="display: grid; grid-template-columns: 40px 2fr 1fr 1fr 1fr 60px; gap: 12px; padding: 12px 16px; background: #e9ecef; font-weight: 600; font-size: 0.85em; color: #495057; border-bottom: 1px solid #dee2e6;">
+                                            <div title="Priority order - models are tried from top to bottom">
+                                                <i class="fa-solid fa-sort" style="color: #6c757d;"></i>
+                                            </div>
+                                            <div>AI Model <span style="color: #dc3545;">*</span></div>
+                                            <div>Vendor</div>
+                                            <div>Configuration</div>
+                                            <div>Created</div>
+                                            <div>Actions</div>
+                                        </div>
+                                        
+                                        @for (model of promptModels; track getModelTrackId(model) || $index; let i = $index) {
+                                            <div class="model-row" 
+                                                 [draggable]="EditMode"
+                                                 (dragstart)="onDragStart($event, i)"
+                                                 (dragover)="onDragOver($event)"
+                                                 (drop)="onDrop($event, i)"
+                                                 (dragend)="onDragEnd($event)"
+                                                 [style.background]="!model.ModelID ? '#fff3cd' : (draggedIndex === i ? '#e3f2fd' : 'white')"
+                                                 [style.border-left]="!model.ModelID ? '3px solid #ffc107' : 'none'"
+                                                 [style.opacity]="draggedIndex === i ? '0.5' : '1'"
+                                                 style="display: grid; grid-template-columns: 40px 2fr 1fr 1fr 1fr 60px; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #e9ecef; align-items: start; transition: background 0.2s, opacity 0.2s;">
+                                                
+                                                <!-- Drag Handle / Priority -->
+                                                <div class="drag-handle" style="display: flex; flex-direction: column; align-items: center; justify-content: center; color: #6c757d;">
+                                                    @if (EditMode) {
+                                                        <i class="fa-solid fa-grip-vertical" title="Drag to reorder priority" style="cursor: move;"></i>
+                                                        <span style="font-size: 0.7em; margin-top: 2px;">#{{ i + 1 }}</span>
+                                                    } @else {
+                                                        <span style="font-size: 0.9em; font-weight: 600;" title="Priority {{ model.Priority }} - Higher priority numbers are tried first">#{{ i + 1 }}</span>
+                                                    }
+                                                </div>
+                                                
+                                                <!-- Model Selection -->
+                                                <div class="model-select">
+                                                    @if (EditMode) {
+                                                        <kendo-dropdownlist [(ngModel)]="model.ModelID"
+                                                                           [name]="'modelId_' + getModelTrackId(model)"
+                                                                           [data]="availableModels"
+                                                                           textField="Name"
+                                                                           valueField="ID"
+                                                                           [valuePrimitive]="true"
+                                                                           [filterable]="true"
+                                                                           placeholder="Select a model..."
+                                                                           (valueChange)="onModelChange($event, i)"
+                                                                           style="width: 100%;">
+                                                        </kendo-dropdownlist>
+                                                    } @else {
+                                                        <span style="font-weight: 500;">{{ getModelDisplayName(model.ModelID) }}</span>
+                                                    }
+                                                </div>
+                                                
+                                                <!-- Vendor -->
+                                                <div class="model-vendor">
+                                                    @if (EditMode) {
+                                                        @if (model.ModelID) {
+                                                            @if (shouldShowVendorDropdown(model.ModelID)) {
+                                                                <kendo-dropdownlist [(ngModel)]="model.VendorID"
+                                                                                   [name]="'vendorId_' + getModelTrackId(model)"
+                                                                                   [data]="getVendorsForModelSync(model.ModelID)"
+                                                                                   textField="Name"
+                                                                                   valueField="ID"
+                                                                                   [valuePrimitive]="true"
+                                                                                   [filterable]="true"
+                                                                                   placeholder="Select vendor..."
+                                                                                   style="width: 100%;">
+                                                                    <ng-template kendoDropDownListItemTemplate let-dataItem>
+                                                                        <span [style.color]="getVendorStatusColor(model.ModelID, dataItem.ID)">
+                                                                            {{ dataItem.Name }}
+                                                                            @if (getModelVendorStatus(model.ModelID, dataItem.ID) !== 'Active') {
+                                                                                <span style="font-size: 0.8em; margin-left: 4px;">({{ getModelVendorStatus(model.ModelID, dataItem.ID) }})</span>
+                                                                            }
+                                                                        </span>
+                                                                    </ng-template>
+                                                                </kendo-dropdownlist>
+                                                            } @else {
+                                                                <!-- Single vendor - just show the name -->
+                                                                @if (getVendorsForModelSync(model.ModelID).length === 1) {
+                                                                    <span [style.color]="getVendorStatusColor(model.ModelID, getVendorsForModelSync(model.ModelID)[0].ID)" style="font-size: 0.9em; font-weight: 500;">
+                                                                        {{ getVendorsForModelSync(model.ModelID)[0].Name }}
+                                                                        @if (getModelVendorStatus(model.ModelID, getVendorsForModelSync(model.ModelID)[0].ID) !== 'Active') {
+                                                                            <span style="font-size: 0.8em; margin-left: 4px;">({{ getModelVendorStatus(model.ModelID, getVendorsForModelSync(model.ModelID)[0].ID) }})</span>
+                                                                        }
+                                                                    </span>
+                                                                } @else {
+                                                                    <span style="color: #6c757d; font-style: italic; font-size: 0.9em;">No vendors available</span>
+                                                                }
+                                                            }
+                                                        } @else {
+                                                            <span style="color: #6c757d; font-style: italic; font-size: 0.9em;">Select model first</span>
+                                                        }
+                                                    } @else {
+                                                        @if (model.VendorID && model.ModelID) {
+                                                            <span [style.color]="getVendorStatusColor(model.ModelID, model.VendorID)" style="font-size: 0.9em;">
+                                                                {{ getVendorDisplayName(model.VendorID) }}
+                                                                @if (getModelVendorStatus(model.ModelID, model.VendorID) !== 'Active') {
+                                                                    <span style="font-size: 0.8em; margin-left: 4px;">({{ getModelVendorStatus(model.ModelID, model.VendorID) }})</span>
+                                                                }
+                                                            </span>
+                                                        } @else {
+                                                            <span style="color: #6c757d; font-size: 0.9em;">-</span>
+                                                        }
+                                                    }
+                                                </div>
+                                                
+                                                <!-- Configuration -->
+                                                <div class="model-configuration">
+                                                    @if (EditMode) {
+                                                        @if (isLoadingConfigurations) {
+                                                            <div style="padding: 4px; color: #6c757d; font-style: italic; font-size: 0.85em;">
+                                                                <i class="fa-solid fa-spinner fa-spin"></i> Loading...
+                                                            </div>
+                                                        } @else {
+                                                            <kendo-dropdownlist [(ngModel)]="model.ConfigurationID"
+                                                                               [name]="'configurationId_' + getModelTrackId(model)"
+                                                                               [data]="availableConfigurations"
+                                                                               textField="Name"
+                                                                               valueField="ID"
+                                                                               [valuePrimitive]="true"
+                                                                               [filterable]="true"
+                                                                               placeholder="Default"
+                                                                               (valueChange)="onConfigurationChange($event, i)"
+                                                                               style="width: 100%;">
+                                                                <ng-template kendoDropDownListNoDataTemplate>
+                                                                    <div style="padding: 8px; text-align: center; color: #6c757d;">
+                                                                        No configurations available
+                                                                    </div>
+                                                                </ng-template>
+                                                            </kendo-dropdownlist>
+                                                        }
+                                                    } @else {
+                                                        <span style="font-size: 0.9em;">{{ getConfigurationDisplayName(model.ConfigurationID) }}</span>
+                                                    }
+                                                </div>
+                                                
+                                                <!-- Created Date -->
+                                                <div class="model-created">
+                                                    @if (model.ID) {
+                                                        <span style="color: #6c757d; font-size: 0.8em;">{{ model.__mj_CreatedAt | date:'short' }}</span>
+                                                    } @else {
+                                                        <span style="color: #28a745; font-size: 0.8em; font-style: italic;">New</span>
+                                                    }
+                                                </div>
+                                                
+                                                <!-- Actions -->
+                                                <div class="model-actions" style="display: flex; gap: 2px; flex-direction: column;">
+                                                    @if (EditMode) {
+                                                        <div style="display: flex; gap: 2px; margin-bottom: 4px;">
+                                                            @if (UserCanUpdatePromptModels) {
+                                                                <button kendoButton fillMode="flat" size="small"
+                                                                            (click)="moveModelUp(i)"
+                                                                            [disabled]="i === 0"
+                                                                            title="Move up">
+                                                                    <i class="fa-solid fa-chevron-up"></i>
+                                                                </button>
+                                                                <button kendoButton fillMode="flat" size="small"
+                                                                            (click)="moveModelDown(i)"
+                                                                            [disabled]="i === promptModels.length - 1"
+                                                                            title="Move down">
+                                                                    <i class="fa-solid fa-chevron-down"></i>
+                                                                </button>
+                                                            }
+                                                        </div>
+                                                        @if (UserCanDeletePromptModels) {
+                                                            <button kendoButton fillMode="flat" themeColor="error" size="small"
+                                                                        (click)="removePromptModel(i)"
+                                                                        title="Remove model">
+                                                                <i class="fa-solid fa-times"></i>
+                                                            </button>
+                                                        }
+                                                    }
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Second row with additional details -->
+                                            <div style="display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 8px 16px; border-bottom: 1px solid #e9ecef; background: #f8f9fa; font-size: 0.85em; color: #6c757d;">
+                                                <div></div>
+                                                <div>
+                                                    <!-- Basic model details -->
+                                                    <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin-bottom: 8px;">
+                                                        @if (model.Status) {
+                                                            <span><strong>Status:</strong> {{ model.Status }}</span>
+                                                        }
+                                                    </div>
+                                                    
+                                                    <!-- Parallel execution fields when prompt is ModelSpecific -->
+                                                    @if (record.ParallelizationMode === 'ModelSpecific') {
+                                                        <div style="padding: 8px; background: #fff; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 8px;">
+                                                            <div style="margin-bottom: 6px; font-weight: 600; color: #495057; font-size: 0.9em;">
+                                                                <i class="fa-solid fa-layer-group"></i> Model-Specific Parallel Execution
+                                                            </div>
+                                                            
+                                                            @if (EditMode) {
+                                                                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; align-items: center;">
+                                                                    <!-- Parallel Mode -->
+                                                                    <div>
+                                                                        <label style="display: block; margin-bottom: 2px; font-size: 0.8em; font-weight: 600; color: #495057;">Parallel Mode</label>
+                                                                        <kendo-dropdownlist [(ngModel)]="model.ParallelizationMode"
+                                                                                           [name]="'parallelMode_' + i"
+                                                                                           [data]="[{text: 'None', value: 'None'}, {text: 'Static Count', value: 'StaticCount'}, {text: 'Config Param', value: 'ConfigParam'}]"
+                                                                                           textField="text"
+                                                                                           valueField="value"
+                                                                                           [valuePrimitive]="true"
+                                                                                           placeholder="Select mode..."
+                                                                                           style="width: 100%; font-size: 0.85em;">
+                                                                        </kendo-dropdownlist>
+                                                                    </div>
+                                                                    
+                                                                    <!-- Parallel Count (when StaticCount) -->
+                                                                    @if (model.ParallelizationMode === 'StaticCount') {
+                                                                        <div>
+                                                                            <label style="display: block; margin-bottom: 2px; font-size: 0.8em; font-weight: 600; color: #495057;">Parallel Count</label>
+                                                                            <kendo-numerictextbox [(ngModel)]="model.ParallelCount"
+                                                                                                 [name]="'parallelCount_' + i"
+                                                                                                 [min]="1"
+                                                                                                 [step]="1"
+                                                                                                 [format]="'n0'"
+                                                                                                 placeholder="Count..."
+                                                                                                 style="width: 100%; font-size: 0.85em;">
+                                                                            </kendo-numerictextbox>
+                                                                        </div>
+                                                                    }
+                                                                    
+                                                                    <!-- Config Param (when ConfigParam) -->
+                                                                    @if (model.ParallelizationMode === 'ConfigParam') {
+                                                                        <div>
+                                                                            <label style="display: block; margin-bottom: 2px; font-size: 0.8em; font-weight: 600; color: #495057;">Config Parameter</label>
+                                                                            <kendo-textbox [(ngModel)]="model.ParallelConfigParam"
+                                                                                          [name]="'parallelConfigParam_' + i"
+                                                                                          placeholder="Parameter name..."
+                                                                                          style="width: 100%; font-size: 0.85em;">
+                                                                            </kendo-textbox>
+                                                                        </div>
+                                                                    }
+                                                                </div>
+                                                            } @else {
+                                                                <!-- Read-only display -->
+                                                                <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
+                                                                    @if (model.ParallelizationMode) {
+                                                                        <span><strong>Parallel Mode:</strong> {{ model.ParallelizationMode }}</span>
+                                                                    }
+                                                                    @if (model.ParallelCount) {
+                                                                        <span><strong>Parallel Count:</strong> {{ model.ParallelCount }}</span>
+                                                                    }
+                                                                    @if (model.ParallelConfigParam) {
+                                                                        <span><strong>Config Param:</strong> {{ model.ParallelConfigParam }}</span>
+                                                                    }
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                        
+                                        @if (EditMode && UserCanCreatePromptModels) {
+                                            <div class="add-model-row" style="padding: 12px 16px; text-align: center; background: #f8f9fa; border-top: 1px solid #dee2e6;">
+                                                <button kendoButton fillMode="outline" themeColor="success" size="small"
+                                                            (click)="addNewModel()">
+                                                    <i class="fa-solid fa-plus"></i> Add Model
+                                                </button>
+                                            </div>
+                                        }
+                                    }
+                                }
+                            </div>
+                        </div>
+                    </kendo-expansionpanel>
+                }
+
+                <!-- Advanced Configuration Expansion Panel -->
+                <kendo-expansionpanel 
+                    [expanded]="false"
+                    style="margin-bottom: 12px;">
+                    <ng-template kendoExpansionPanelTitleDirective>
+                        <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                            <i class="fa-solid fa-cogs" style="color: #6c757d;"></i>
+                            Advanced Configuration
+                        </span>
+                    </ng-template>
+                    
+                    <!-- Direct Content Projection -->
+                    <div style="padding: 16px 0;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            
+                            <!-- Left Column -->
+                            <div>
+                                <mj-form-field 
+                                    [record]="record"
+                                    [ShowLabel]="true"
+                                    FieldName="ParallelizationMode"
+                                    Type="dropdownlist"
+                                    [EditMode]="EditMode">
+                                </mj-form-field>
+                                
+                                @if (showParallelCount) {
+                                    <mj-form-field 
+                                        [record]="record"
+                                        [ShowLabel]="true"
+                                        FieldName="ParallelCount"
+                                        Type="numerictextbox"
+                                        [EditMode]="EditMode">
+                                    </mj-form-field>
+                                }
+                                
+                                @if (showParallelConfigParam) {
+                                    <mj-form-field 
+                                        [record]="record"
+                                        [ShowLabel]="true"
+                                        FieldName="ParallelConfigParam"
+                                        Type="textbox"
+                                        [EditMode]="EditMode">
+                                    </mj-form-field>
+                                }
+                                
+                                <mj-form-field 
+                                    [record]="record"
+                                    [ShowLabel]="true"
+                                    FieldName="OutputType"
+                                    Type="dropdownlist"
+                                    [EditMode]="EditMode">
+                                </mj-form-field>
+                                
+                            </div>
+                            
+                            <!-- Right Column -->
+                            <div>
+                                <mj-form-field 
+                                    [record]="record"
+                                    [ShowLabel]="true"
+                                    FieldName="ValidationBehavior"
+                                    Type="dropdownlist"
+                                    [EditMode]="EditMode">
+                                </mj-form-field>
+                                
+                                <mj-form-field 
+                                    [record]="record"
+                                    [ShowLabel]="true"
+                                    FieldName="EnableCaching"
+                                    Type="checkbox"
+                                    [EditMode]="EditMode">
+                                </mj-form-field>
+                                
+                                <!-- Result Selector Prompt with Tree Selector -->
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #495057; font-size: 0.9em;">
+                                        Result Selector Prompt
+                                    </label>
+                                    @if (EditMode) {
+                                        @if (isLoadingResultSelectorData) {
+                                            <div style="padding: 8px; color: #6c757d; font-style: italic;">
+                                                <i class="fa-solid fa-spinner fa-spin"></i> Loading prompts...
+                                            </div>
+                                        } @else {
+                                            <kendo-dropdowntree 
+                                                [(ngModel)]="record.ResultSelectorPromptID"
+                                                name="resultSelectorPromptID"
+                                                [data]="resultSelectorTreeData"
+                                                textField="text"
+                                                valueField="value"
+                                                [valuePrimitive]="true"
+                                                [filterable]="true"
+                                                placeholder="Select a result selector prompt..."
+                                                style="width: 100%;"
+                                                (valueChange)="onResultSelectorChange($event)">
+                                            </kendo-dropdowntree>
+                                        }
+                                    } @else {
+                                        <span style="color: #495057;">{{ getPromptDisplayName(record.ResultSelectorPromptID || '') || 'None selected' }}</span>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </kendo-expansionpanel>
+
                 <!-- Template Parameters Expansion Panel -->
                 @if (template && templateParams.length > 0) {
                     <kendo-expansionpanel 
-                        [expanded]="true"
+                        [expanded]="false"
                         style="margin-bottom: 12px;">
                         <ng-template kendoExpansionPanelTitleDirective>
                             <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
@@ -354,402 +811,6 @@
                         </div>
                     </kendo-expansionpanel>
                 }
-
-                <!-- Model Configuration Expansion Panel -->
-                @if (record.IsSaved) {
-                    <kendo-expansionpanel 
-                        [expanded]="false"
-                        style="margin-bottom: 12px;">
-                        <ng-template kendoExpansionPanelTitleDirective>
-                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                                <i class="fa-solid fa-microchip" style="color: #6c757d;"></i>
-                                Models
-                                @if (promptModels.length > 0) {
-                                    <span class="badge" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
-                                        {{ promptModels.length }}
-                                    </span>
-                                }
-                                <span style="color: #6c757d; font-size: 0.8em; font-weight: normal; margin-left: 8px;">
-                                    <i class="fa-solid fa-info-circle" title="Models are tried in order from top to bottom. The first available model will be used."></i>
-                                    Priority order (first available model will be used)
-                                </span>
-                            </span>
-                        </ng-template>
-                        
-                        <!-- Direct Content Projection -->
-                        <div style="padding: 16px 0;">
-                            <!-- Model Management Interface -->
-                            <div class="model-management" style="border: 1px solid #dee2e6; border-radius: 6px; background: #f8f9fa;">
-                                @if (isLoadingModels) {
-                                    <div class="loading-state" style="padding: 20px; text-align: center; color: #6c757d;">
-                                        <i class="fa-solid fa-spinner fa-spin"></i> Loading models...
-                                    </div>
-                                } @else {
-                                    @if (promptModels.length === 0) {
-                                        <div class="empty-state" style="padding: 20px; text-align: center; color: #6c757d;">
-                                            <i class="fa-solid fa-info-circle"></i> No models configured
-                                            @if (EditMode) {
-                                                <div style="margin-top: 10px;">
-                                                    <button kendoButton fillMode="outline" themeColor="primary" size="small"
-                                                                (click)="addNewModel()">
-                                                        <i class="fa-solid fa-plus"></i> Add Model
-                                                    </button>
-                                                </div>
-                                            }
-                                        </div>
-                                    } @else {
-                                        <!-- Priority explanation for multiple models -->
-                                        @if (promptModels.length > 1) {
-                                            <div style="padding: 12px 16px; background: #e3f2fd; border-bottom: 1px solid #bbdefb; color: #1565c0; font-size: 0.85em;">
-                                                <i class="fa-solid fa-info-circle" style="margin-right: 6px;"></i>
-                                                Models are tried in priority order (highest priority first). The first available model that meets requirements will be used for execution.
-                                            </div>
-                                        }
-                                        <!-- Column Headers -->
-                                        <div class="model-header" style="display: grid; grid-template-columns: 40px 2fr 1fr 1fr 60px; gap: 12px; padding: 12px 16px; background: #e9ecef; font-weight: 600; font-size: 0.85em; color: #495057; border-bottom: 1px solid #dee2e6;">
-                                            <div title="Priority order - models are tried from top to bottom">
-                                                <i class="fa-solid fa-sort" style="color: #6c757d;"></i>
-                                            </div>
-                                            <div>AI Model <span style="color: #dc3545;">*</span></div>
-                                            <div>Vendor</div>
-                                            <div>Created</div>
-                                            <div>Actions</div>
-                                        </div>
-                                        
-                                        @for (model of promptModels; track getModelTrackId(model) || $index; let i = $index) {
-                                            <div class="model-row" 
-                                                 [draggable]="EditMode"
-                                                 (dragstart)="onDragStart($event, i)"
-                                                 (dragover)="onDragOver($event)"
-                                                 (drop)="onDrop($event, i)"
-                                                 (dragend)="onDragEnd($event)"
-                                                 [style.background]="!model.ModelID ? '#fff3cd' : (draggedIndex === i ? '#e3f2fd' : 'white')"
-                                                 [style.border-left]="!model.ModelID ? '3px solid #ffc107' : 'none'"
-                                                 [style.opacity]="draggedIndex === i ? '0.5' : '1'"
-                                                 style="display: grid; grid-template-columns: 40px 2fr 1fr 1fr 60px; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #e9ecef; align-items: start; transition: background 0.2s, opacity 0.2s;">
-                                                
-                                                <!-- Drag Handle / Priority -->
-                                                <div class="drag-handle" style="display: flex; flex-direction: column; align-items: center; justify-content: center; color: #6c757d;">
-                                                    @if (EditMode) {
-                                                        <i class="fa-solid fa-grip-vertical" title="Drag to reorder priority" style="cursor: move;"></i>
-                                                        <span style="font-size: 0.7em; margin-top: 2px;">#{{ i + 1 }}</span>
-                                                    } @else {
-                                                        <span style="font-size: 0.9em; font-weight: 600;" title="Priority {{ model.Priority }} - Higher priority numbers are tried first">#{{ i + 1 }}</span>
-                                                    }
-                                                </div>
-                                                
-                                                <!-- Model Selection -->
-                                                <div class="model-select">
-                                                    @if (EditMode) {
-                                                        <kendo-dropdownlist [(ngModel)]="model.ModelID"
-                                                                           [name]="'modelId_' + getModelTrackId(model)"
-                                                                           [data]="availableModels"
-                                                                           textField="Name"
-                                                                           valueField="ID"
-                                                                           [valuePrimitive]="true"
-                                                                           [filterable]="true"
-                                                                           placeholder="Select a model..."
-                                                                           (valueChange)="onModelChange($event, i)"
-                                                                           style="width: 100%;">
-                                                        </kendo-dropdownlist>
-                                                    } @else {
-                                                        <span style="font-weight: 500;">{{ getModelDisplayName(model.ModelID) }}</span>
-                                                    }
-                                                </div>
-                                                
-                                                <!-- Vendor -->
-                                                <div class="model-vendor">
-                                                    @if (EditMode) {
-                                                        @if (model.ModelID) {
-                                                            @if (shouldShowVendorDropdown(model.ModelID)) {
-                                                                <kendo-dropdownlist [(ngModel)]="model.VendorID"
-                                                                                   [name]="'vendorId_' + getModelTrackId(model)"
-                                                                                   [data]="getVendorsForModelSync(model.ModelID)"
-                                                                                   textField="Name"
-                                                                                   valueField="ID"
-                                                                                   [valuePrimitive]="true"
-                                                                                   [filterable]="true"
-                                                                                   placeholder="Select vendor..."
-                                                                                   style="width: 100%;">
-                                                                    <ng-template kendoDropDownListItemTemplate let-dataItem>
-                                                                        <span [style.color]="getVendorStatusColor(model.ModelID, dataItem.ID)">
-                                                                            {{ dataItem.Name }}
-                                                                            @if (getModelVendorStatus(model.ModelID, dataItem.ID) !== 'Active') {
-                                                                                <span style="font-size: 0.8em; margin-left: 4px;">({{ getModelVendorStatus(model.ModelID, dataItem.ID) }})</span>
-                                                                            }
-                                                                        </span>
-                                                                    </ng-template>
-                                                                </kendo-dropdownlist>
-                                                            } @else {
-                                                                <!-- Single vendor - just show the name -->
-                                                                @if (getVendorsForModelSync(model.ModelID).length === 1) {
-                                                                    <span [style.color]="getVendorStatusColor(model.ModelID, getVendorsForModelSync(model.ModelID)[0].ID)" style="font-size: 0.9em; font-weight: 500;">
-                                                                        {{ getVendorsForModelSync(model.ModelID)[0].Name }}
-                                                                        @if (getModelVendorStatus(model.ModelID, getVendorsForModelSync(model.ModelID)[0].ID) !== 'Active') {
-                                                                            <span style="font-size: 0.8em; margin-left: 4px;">({{ getModelVendorStatus(model.ModelID, getVendorsForModelSync(model.ModelID)[0].ID) }})</span>
-                                                                        }
-                                                                    </span>
-                                                                } @else {
-                                                                    <span style="color: #6c757d; font-style: italic; font-size: 0.9em;">No vendors available</span>
-                                                                }
-                                                            }
-                                                        } @else {
-                                                            <span style="color: #6c757d; font-style: italic; font-size: 0.9em;">Select model first</span>
-                                                        }
-                                                    } @else {
-                                                        @if (model.VendorID && model.ModelID) {
-                                                            <span [style.color]="getVendorStatusColor(model.ModelID, model.VendorID)" style="font-size: 0.9em;">
-                                                                {{ getVendorDisplayName(model.VendorID) }}
-                                                                @if (getModelVendorStatus(model.ModelID, model.VendorID) !== 'Active') {
-                                                                    <span style="font-size: 0.8em; margin-left: 4px;">({{ getModelVendorStatus(model.ModelID, model.VendorID) }})</span>
-                                                                }
-                                                            </span>
-                                                        } @else {
-                                                            <span style="color: #6c757d; font-size: 0.9em;">-</span>
-                                                        }
-                                                    }
-                                                </div>
-                                                
-                                                
-                                                <!-- Created Date -->
-                                                <div class="model-created">
-                                                    @if (model.ID) {
-                                                        <span style="color: #6c757d; font-size: 0.8em;">{{ model.__mj_CreatedAt | date:'short' }}</span>
-                                                    } @else {
-                                                        <span style="color: #28a745; font-size: 0.8em; font-style: italic;">New</span>
-                                                    }
-                                                </div>
-                                                
-                                                <!-- Actions -->
-                                                <div class="model-actions" style="display: flex; gap: 2px; flex-direction: column;">
-                                                    @if (EditMode) {
-                                                        <div style="display: flex; gap: 2px; margin-bottom: 4px;">
-                                                            <button kendoButton fillMode="flat" size="small"
-                                                                        (click)="moveModelUp(i)"
-                                                                        [disabled]="i === 0"
-                                                                        title="Move up">
-                                                                <i class="fa-solid fa-chevron-up"></i>
-                                                            </button>
-                                                            <button kendoButton fillMode="flat" size="small"
-                                                                        (click)="moveModelDown(i)"
-                                                                        [disabled]="i === promptModels.length - 1"
-                                                                        title="Move down">
-                                                                <i class="fa-solid fa-chevron-down"></i>
-                                                            </button>
-                                                        </div>
-                                                        <button kendoButton fillMode="flat" themeColor="error" size="small"
-                                                                    (click)="removePromptModel(i)"
-                                                                    title="Remove model">
-                                                            <i class="fa-solid fa-times"></i>
-                                                        </button>
-                                                    }
-                                                </div>
-                                            </div>
-                                            
-                                            <!-- Second row with additional details -->
-                                            <div style="display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 8px 16px; border-bottom: 1px solid #e9ecef; background: #f8f9fa; font-size: 0.85em; color: #6c757d;">
-                                                <div></div>
-                                                <div>
-                                                    <!-- Basic model details -->
-                                                    <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin-bottom: 8px;">
-                                                        @if (model.Status) {
-                                                            <span><strong>Status:</strong> {{ model.Status }}</span>
-                                                        }
-                                                        @if (model.ConfigurationID) {
-                                                            <span><strong>Configuration:</strong> {{ model.ConfigurationID }}</span>
-                                                        }
-                                                    </div>
-                                                    
-                                                    <!-- Parallel execution fields when prompt is ModelSpecific -->
-                                                    @if (record.ParallelizationMode === 'ModelSpecific') {
-                                                        <div style="padding: 8px; background: #fff; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 8px;">
-                                                            <div style="margin-bottom: 6px; font-weight: 600; color: #495057; font-size: 0.9em;">
-                                                                <i class="fa-solid fa-layer-group"></i> Model-Specific Parallel Execution
-                                                            </div>
-                                                            
-                                                            @if (EditMode) {
-                                                                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; align-items: center;">
-                                                                    <!-- Parallel Mode -->
-                                                                    <div>
-                                                                        <label style="display: block; margin-bottom: 2px; font-size: 0.8em; font-weight: 600; color: #495057;">Parallel Mode</label>
-                                                                        <kendo-dropdownlist [(ngModel)]="model.ParallelizationMode"
-                                                                                           [name]="'parallelMode_' + i"
-                                                                                           [data]="[{text: 'None', value: 'None'}, {text: 'Static Count', value: 'StaticCount'}, {text: 'Config Param', value: 'ConfigParam'}]"
-                                                                                           textField="text"
-                                                                                           valueField="value"
-                                                                                           [valuePrimitive]="true"
-                                                                                           placeholder="Select mode..."
-                                                                                           style="width: 100%; font-size: 0.85em;">
-                                                                        </kendo-dropdownlist>
-                                                                    </div>
-                                                                    
-                                                                    <!-- Parallel Count (when StaticCount) -->
-                                                                    @if (model.ParallelizationMode === 'StaticCount') {
-                                                                        <div>
-                                                                            <label style="display: block; margin-bottom: 2px; font-size: 0.8em; font-weight: 600; color: #495057;">Parallel Count</label>
-                                                                            <kendo-numerictextbox [(ngModel)]="model.ParallelCount"
-                                                                                                 [name]="'parallelCount_' + i"
-                                                                                                 [min]="1"
-                                                                                                 [step]="1"
-                                                                                                 [format]="'n0'"
-                                                                                                 placeholder="Count..."
-                                                                                                 style="width: 100%; font-size: 0.85em;">
-                                                                            </kendo-numerictextbox>
-                                                                        </div>
-                                                                    }
-                                                                    
-                                                                    <!-- Config Param (when ConfigParam) -->
-                                                                    @if (model.ParallelizationMode === 'ConfigParam') {
-                                                                        <div>
-                                                                            <label style="display: block; margin-bottom: 2px; font-size: 0.8em; font-weight: 600; color: #495057;">Config Parameter</label>
-                                                                            <kendo-textbox [(ngModel)]="model.ParallelConfigParam"
-                                                                                          [name]="'parallelConfigParam_' + i"
-                                                                                          placeholder="Parameter name..."
-                                                                                          style="width: 100%; font-size: 0.85em;">
-                                                                            </kendo-textbox>
-                                                                        </div>
-                                                                    }
-                                                                </div>
-                                                            } @else {
-                                                                <!-- Read-only display -->
-                                                                <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
-                                                                    @if (model.ParallelizationMode) {
-                                                                        <span><strong>Parallel Mode:</strong> {{ model.ParallelizationMode }}</span>
-                                                                    }
-                                                                    @if (model.ParallelCount) {
-                                                                        <span><strong>Parallel Count:</strong> {{ model.ParallelCount }}</span>
-                                                                    }
-                                                                    @if (model.ParallelConfigParam) {
-                                                                        <span><strong>Config Param:</strong> {{ model.ParallelConfigParam }}</span>
-                                                                    }
-                                                                </div>
-                                                            }
-                                                        </div>
-                                                    }
-                                                </div>
-                                            </div>
-                                        }
-                                        
-                                        @if (EditMode) {
-                                            <div class="add-model-row" style="padding: 12px 16px; text-align: center; background: #f8f9fa; border-top: 1px solid #dee2e6;">
-                                                <button kendoButton fillMode="outline" themeColor="success" size="small"
-                                                            (click)="addNewModel()">
-                                                    <i class="fa-solid fa-plus"></i> Add Model
-                                                </button>
-                                            </div>
-                                        }
-                                    }
-                                }
-                            </div>
-                        </div>
-                    </kendo-expansionpanel>
-                }
-
-                <!-- Advanced Configuration Expansion Panel -->
-                <kendo-expansionpanel 
-                    [expanded]="false"
-                    style="margin-bottom: 12px;">
-                    <ng-template kendoExpansionPanelTitleDirective>
-                        <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                            <i class="fa-solid fa-cogs" style="color: #6c757d;"></i>
-                            Advanced Configuration
-                        </span>
-                    </ng-template>
-                    
-                    <!-- Direct Content Projection -->
-                    <div style="padding: 16px 0;">
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                            
-                            <!-- Left Column -->
-                            <div>
-                                <mj-form-field 
-                                    [record]="record"
-                                    [ShowLabel]="true"
-                                    FieldName="ParallelizationMode"
-                                    Type="dropdownlist"
-                                    [EditMode]="EditMode">
-                                </mj-form-field>
-                                
-                                @if (showParallelCount) {
-                                    <mj-form-field 
-                                        [record]="record"
-                                        [ShowLabel]="true"
-                                        FieldName="ParallelCount"
-                                        Type="numerictextbox"
-                                        [EditMode]="EditMode">
-                                    </mj-form-field>
-                                }
-                                
-                                @if (showParallelConfigParam) {
-                                    <mj-form-field 
-                                        [record]="record"
-                                        [ShowLabel]="true"
-                                        FieldName="ParallelConfigParam"
-                                        Type="textbox"
-                                        [EditMode]="EditMode">
-                                    </mj-form-field>
-                                }
-                                
-                                <mj-form-field 
-                                    [record]="record"
-                                    [ShowLabel]="true"
-                                    FieldName="OutputType"
-                                    Type="dropdownlist"
-                                    [EditMode]="EditMode">
-                                </mj-form-field>
-                                
-                            </div>
-                            
-                            <!-- Right Column -->
-                            <div>
-                                <mj-form-field 
-                                    [record]="record"
-                                    [ShowLabel]="true"
-                                    FieldName="ValidationBehavior"
-                                    Type="dropdownlist"
-                                    [EditMode]="EditMode">
-                                </mj-form-field>
-                                
-                                <mj-form-field 
-                                    [record]="record"
-                                    [ShowLabel]="true"
-                                    FieldName="EnableCaching"
-                                    Type="checkbox"
-                                    [EditMode]="EditMode">
-                                </mj-form-field>
-                                
-                                <!-- Result Selector Prompt with Tree Selector -->
-                                <div style="margin-bottom: 16px;">
-                                    <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #495057; font-size: 0.9em;">
-                                        Result Selector Prompt
-                                    </label>
-                                    @if (EditMode) {
-                                        @if (isLoadingResultSelectorData) {
-                                            <div style="padding: 8px; color: #6c757d; font-style: italic;">
-                                                <i class="fa-solid fa-spinner fa-spin"></i> Loading prompts...
-                                            </div>
-                                        } @else {
-                                            <kendo-dropdowntree 
-                                                [(ngModel)]="record.ResultSelectorPromptID"
-                                                name="resultSelectorPromptID"
-                                                [data]="resultSelectorTreeData"
-                                                textField="text"
-                                                valueField="value"
-                                                [valuePrimitive]="true"
-                                                [filterable]="true"
-                                                placeholder="Select a result selector prompt..."
-                                                style="width: 100%;"
-                                                (valueChange)="onResultSelectorChange($event)">
-                                            </kendo-dropdowntree>
-                                        }
-                                    } @else {
-                                        <span style="color: #495057;">{{ getPromptDisplayName(record.ResultSelectorPromptID || '') || 'None selected' }}</span>
-                                    }
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </kendo-expansionpanel>
 
                 <!-- Output Example Expansion Panel (when OutputType = object) -->
                 @if (showOutputExample) {

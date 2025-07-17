@@ -1,5 +1,36 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 2.70.0
+
+### Patch Changes
+
+- Updated dependencies [6f74409]
+- Updated dependencies [c9d86cd]
+  - @memberjunction/global@2.70.0
+  - @memberjunction/ng-skip-chat@2.70.0
+  - @memberjunction/ng-ask-skip@2.70.0
+  - @memberjunction/ng-base-forms@2.70.0
+  - @memberjunction/ng-entity-form-dialog@2.70.0
+  - @memberjunction/ng-explorer-settings@2.70.0
+  - @memberjunction/ng-record-changes@2.70.0
+  - @memberjunction/ng-user-view-grid@2.70.0
+  - @memberjunction/ng-user-view-properties@2.70.0
+  - @memberjunction/ng-container-directives@2.70.0
+  - @memberjunction/ng-file-storage@2.70.0
+  - @memberjunction/ng-query-grid@2.70.0
+  - @memberjunction/ng-record-selector@2.70.0
+  - @memberjunction/ng-resource-permissions@2.70.0
+  - @memberjunction/communication-types@2.70.0
+  - @memberjunction/entity-communications-client@2.70.0
+  - @memberjunction/core@2.70.0
+  - @memberjunction/core-entities@2.70.0
+  - @memberjunction/templates-base-types@2.70.0
+  - @memberjunction/ng-dashboards@2.70.0
+  - @memberjunction/ng-shared@2.70.0
+  - @memberjunction/ng-tabstrip@2.70.0
+  - @memberjunction/ng-auth-services@2.70.0
+  - @memberjunction/ng-compare-records@2.70.0
+
 ## 2.69.1
 
 ### Patch Changes

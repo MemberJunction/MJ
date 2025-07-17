@@ -215,6 +215,14 @@
                                 <i class="fa-solid fa-diagram-project"></i>
                                 Execution Monitor
                             </button>
+                            <button 
+                                class="tab-button"
+                                [class.active]="activeTab === 'agentSettings'"
+                                [disabled]="executionMonitorMode === 'live' && activeTab !== 'agentSettings'"
+                                (click)="selectTab('agentSettings')">
+                                <i class="fa-solid fa-sliders"></i>
+                                Settings
+                            </button>
                         } @else {
                             <button 
                                 class="tab-button"
@@ -323,6 +331,42 @@
                             </mj-agent-execution-monitor>
                         </div>
 
+                        <!-- Agent Settings Tab -->
+                        @if (activeTab === 'agentSettings') {
+                            <div class="tab-content">
+                                <div class="tab-header">
+                                    <h4>Agent Settings</h4>
+                                    <p>Configure agent execution parameters</p>
+                                </div>
+                                
+                                <div class="model-settings">
+                                    <div class="setting-group">
+                                        <label>AI Configuration</label>
+                                        <kendo-dropdownlist 
+                                            [(ngModel)]="agentConfigurationId"
+                                            [data]="availableConfigurations"
+                                            textField="Name"
+                                            valueField="ID"
+                                            [valuePrimitive]="true"
+                                            placeholder="Select a configuration..."
+                                            class="configuration-selector">
+                                        </kendo-dropdownlist>
+                                        <div class="setting-help">
+                                            @if (agentConfigurationId) {
+                                                @for (config of availableConfigurations; track config.ID) {
+                                                    @if (config.ID === agentConfigurationId && config.Description) {
+                                                        {{ config.Description }}
+                                                    }
+                                                }
+                                            } @else {
+                                                Using default configuration
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
                         <!-- Template Variables Tab (Prompt Mode) -->
                         @if (activeTab === 'templateVariables') {
                             <div class="tab-content">
@@ -427,6 +471,30 @@
                                                 Only one vendor available for this model
                                             } @else {
                                                 Select the inference provider for this model
+                                            }
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="setting-group">
+                                        <label>AI Configuration</label>
+                                        <kendo-dropdownlist 
+                                            [(ngModel)]="selectedConfigurationId"
+                                            [data]="availableConfigurations"
+                                            textField="Name"
+                                            valueField="ID"
+                                            [valuePrimitive]="true"
+                                            placeholder="Select a configuration..."
+                                            class="configuration-selector">
+                                        </kendo-dropdownlist>
+                                        <div class="setting-help">
+                                            @if (selectedConfigurationId) {
+                                                @for (config of availableConfigurations; track config.ID) {
+                                                    @if (config.ID === selectedConfigurationId && config.Description) {
+                                                        {{ config.Description }}
+                                                    }
+                                                }
+                                            } @else {
+                                                Using default configuration
                                             }
                                         </div>
                                     </div>

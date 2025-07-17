@@ -1,0 +1,173 @@
+<!-- Prompt Advanced Settings Dialog -->
+<div class="prompt-advanced-settings-dialog">
+  
+  <!-- Loading State -->
+  @if (isLoading$ | async) {
+    <div class="loading-state">
+      <div class="loading-spinner">
+        <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+      </div>
+      <p>Loading prompt settings...</p>
+    </div>
+  } @else {
+    
+    <!-- Form Content -->
+    <form [formGroup]="advancedForm" class="advanced-form">
+      
+      <!-- Execution Configuration Section -->
+      <div class="form-section">
+        <h3 class="section-title">
+          <i class="fa-solid fa-list-ol"></i>
+          Execution Configuration
+        </h3>
+        
+        <div class="form-grid">
+          <!-- Execution Order -->
+          <div class="form-field">
+            <label for="executionOrder">Execution Order *</label>
+            <kendo-numerictextbox 
+              formControlName="executionOrder"
+              [min]="0"
+              [format]="'0'"
+              [class.error-border]="hasExecutionOrderError()"
+              class="form-control">
+            </kendo-numerictextbox>
+            @if (isFieldInvalid('executionOrder')) {
+              <div class="field-error">{{ getFieldError('executionOrder') }}</div>
+            }
+            @if (hasExecutionOrderError()) {
+              <div class="field-error">{{ executionOrderError }}</div>
+            }
+            <small class="field-hint">Order in which this prompt executes (0 = first). Must be unique among agent prompts.</small>
+          </div>
+          
+          <!-- Purpose -->
+          <div class="form-field">
+            <label for="purpose">Purpose</label>
+            <kendo-textbox 
+              formControlName="purpose"
+              placeholder="e.g., Initialize, ProcessData, Summarize"
+              class="form-control">
+            </kendo-textbox>
+            <small class="field-hint">Functional purpose of this prompt within the agent workflow</small>
+          </div>
+          
+          <!-- Status -->
+          <div class="form-field">
+            <label for="status">Status *</label>
+            <kendo-dropdownlist 
+              formControlName="status"
+              [data]="statusOptions"
+              textField="text"
+              valueField="value"
+              [valuePrimitive]="true"
+              class="form-control">
+            </kendo-dropdownlist>
+            @if (isFieldInvalid('status')) {
+              <div class="field-error">{{ getFieldError('status') }}</div>
+            }
+            <small class="field-hint">Current status of this prompt mapping</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Context Behavior Section -->
+      <div class="form-section">
+        <h3 class="section-title">
+          <i class="fa-solid fa-comments"></i>
+          Context Behavior
+        </h3>
+        
+        <div class="form-grid">
+          <!-- Context Behavior -->
+          <div class="form-field full-width">
+            <label for="contextBehavior">Context Behavior *</label>
+            <kendo-dropdownlist 
+              formControlName="contextBehavior"
+              [data]="contextBehaviorOptions"
+              textField="text"
+              valueField="value"
+              [valuePrimitive]="true"
+              class="form-control">
+              <ng-template kendoDropDownListItemTemplate let-dataItem>
+                <div class="context-behavior-option">
+                  <div class="option-title">{{ dataItem.text }}</div>
+                  <div class="option-description">{{ dataItem.description }}</div>
+                </div>
+              </ng-template>
+            </kendo-dropdownlist>
+            @if (isFieldInvalid('contextBehavior')) {
+              <div class="field-error">{{ getFieldError('contextBehavior') }}</div>
+            }
+            <small class="field-hint">{{ getContextBehaviorDescription(advancedForm.get('contextBehavior')?.value) }}</small>
+          </div>
+          
+          <!-- Context Message Count (conditional) -->
+          @if (requiresMessageCount()) {
+            <div class="form-field">
+              <label for="contextMessageCount">Message Count *</label>
+              <kendo-numerictextbox 
+                formControlName="contextMessageCount"
+                [min]="1"
+                [format]="'0'"
+                class="form-control">
+              </kendo-numerictextbox>
+              @if (isFieldInvalid('contextMessageCount')) {
+                <div class="field-error">{{ getFieldError('contextMessageCount') }}</div>
+              }
+              <small class="field-hint">Number of messages to include for {{ advancedForm.get('contextBehavior')?.value }}</small>
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- AI Configuration Section -->
+      <div class="form-section">
+        <h3 class="section-title">
+          <i class="fa-solid fa-cog"></i>
+          AI Configuration Override
+        </h3>
+        
+        <div class="form-grid">
+          <!-- Configuration Override -->
+          <div class="form-field full-width">
+            <label for="configurationID">AI Configuration</label>
+            <kendo-dropdownlist 
+              formControlName="configurationID"
+              [data]="configurations$ | async"
+              textField="Name"
+              valueField="ID"
+              [valuePrimitive]="true"
+              [defaultItem]="{ Name: 'Use Agent Default', ID: null }"
+              class="form-control">
+            </kendo-dropdownlist>
+            <small class="field-hint">Override the agent's default AI configuration for this specific prompt</small>
+          </div>
+        </div>
+      </div>
+    </form>
+  }
+
+  <!-- Dialog Footer -->
+  <div class="dialog-footer">
+    <button kendoButton 
+            look="flat" 
+            (click)="cancel()"
+            [disabled]="(isSaving$ | async) || false">
+      Cancel
+    </button>
+    
+    <button kendoButton 
+            themeColor="primary" 
+            (click)="save()"
+            [disabled]="((isSaving$ | async) || false) || ((isLoading$ | async) || false) || hasExecutionOrderError()">
+      @if (isSaving$ | async) {
+        <i class="fa-solid fa-spinner fa-spin"></i>
+        Saving...
+      } @else {
+        <i class="fa-solid fa-save"></i>
+        Save Settings
+      }
+    </button>
+  </div>
+</div>

@@ -3,9 +3,11 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged, switchMap, map } from 'rxjs/operators';
-import { RunView } from '@memberjunction/core';
-import { UserEntity, RoleEntity } from '@memberjunction/core-entities';
+import { RunView, Metadata } from '@memberjunction/core';
+import { UserEntity, RoleEntity, UserRoleEntity } from '@memberjunction/core-entities';
 import { SharedSettingsModule } from '../shared/shared-settings.module';
+import { UserDialogComponent, UserDialogData, UserDialogResult } from './user-dialog/user-dialog.component';
+import { WindowModule } from '@progress/kendo-angular-dialog';
 
 interface UserStats {
   totalUsers: number;
@@ -26,7 +28,9 @@ interface FilterOptions {
   imports: [
     CommonModule,
     FormsModule,
-    SharedSettingsModule
+    SharedSettingsModule,
+    UserDialogComponent,
+    WindowModule
   ],
   templateUrl: './user-management.component.html',
   styleUrls: ['./user-management.component.scss']
@@ -40,6 +44,10 @@ export class UserManagementComponent implements OnInit, OnDestroy {
   public selectedUser: UserEntity | null = null;
   public isLoading = false;
   public error: string | null = null;
+  
+  // Dialog state
+  public showUserDialog = false;
+  public userDialogData: UserDialogData | null = null;
   
   // Stats
   public stats: UserStats = {
@@ -62,6 +70,9 @@ export class UserManagementComponent implements OnInit, OnDestroy {
   public showDeleteConfirm = false;
   public viewMode: 'grid' | 'cards' = 'grid';
   
+  // User-Role mapping
+  private userRoleMap = new Map<string, string[]>(); // userId -> roleIds[]
+  
   // Grid configuration
   public gridConfig = {
     pageSize: 20,
@@ -70,6 +81,7 @@ export class UserManagementComponent implements OnInit, OnDestroy {
   };
   
   private destroy$ = new Subject<void>();
+  private metadata = new Metadata();
   
   constructor() {}
   
@@ -88,14 +100,19 @@ export class UserManagementComponent implements OnInit, OnDestroy {
       this.isLoading = true;
       this.error = null;
       
-      // Load users and roles in parallel
-      const [users, roles] = await Promise.all([
+      // Load users, roles, and user-role relationships in parallel
+      const [users, roles, userRoles] = await Promise.all([
         this.loadUsers(),
-        this.loadRoles()
+        this.loadRoles(),
+        this.loadUserRoles()
       ]);
       
       this.users = users;
       this.roles = roles;
+      
+      // Build user-role mapping
+      this.buildUserRoleMapping(userRoles);
+      
       this.calculateStats();
       this.applyFilters();
       
@@ -127,6 +144,31 @@ export class UserManagementComponent implements OnInit, OnDestroy {
     
     return result.Success ? result.Results : [];
   }
+
+  private async loadUserRoles(): Promise<UserRoleEntity[]> {
+    const rv = new RunView();
+    const result = await rv.RunView<UserRoleEntity>({
+      EntityName: 'User Roles',
+      ResultType: 'entity_object'
+    });
+    
+    return result.Success ? result.Results : [];
+  }
+
+  private buildUserRoleMapping(userRoles: UserRoleEntity[]): void {
+    this.userRoleMap.clear();
+    
+    userRoles.forEach(userRole => {
+      const userId = userRole.UserID;
+      const roleId = userRole.RoleID;
+      
+      if (!this.userRoleMap.has(userId)) {
+        this.userRoleMap.set(userId, []);
+      }
+      
+      this.userRoleMap.get(userId)!.push(roleId);
+    });
+  }
   
   private setupFilterSubscription(): void {
     this.filters$
@@ -153,8 +195,10 @@ export class UserManagementComponent implements OnInit, OnDestroy {
     
     // Apply role filter
     if (filters.role) {
-      // This would need to be implemented based on your user-role relationship
-      // For now, we'll skip this filter
+      filtered = filtered.filter(user => {
+        const userRoles = this.userRoleMap.get(user.ID) || [];
+        return userRoles.includes(filters.role);
+      });
     }
     
     // Apply search filter
@@ -207,13 +251,20 @@ export class UserManagementComponent implements OnInit, OnDestroy {
   }
   
   public createNewUser(): void {
-    this.selectedUser = null;
-    this.showCreateDialog = true;
+    this.userDialogData = {
+      mode: 'create',
+      availableRoles: this.roles
+    };
+    this.showUserDialog = true;
   }
   
   public editUser(user: UserEntity): void {
-    this.selectedUser = user;
-    this.showEditDialog = true;
+    this.userDialogData = {
+      user: user,
+      mode: 'edit',
+      availableRoles: this.roles
+    };
+    this.showUserDialog = true;
   }
   
   public confirmDeleteUser(user: UserEntity): void {
@@ -225,12 +276,25 @@ export class UserManagementComponent implements OnInit, OnDestroy {
     if (!this.selectedUser) return;
     
     try {
-      // Implement user deletion logic
-      this.showDeleteConfirm = false;
-      await this.loadInitialData();
-    } catch (error) {
+      // Load user entity to delete
+      const user = await this.metadata.GetEntityObject<UserEntity>('Users');
+      const loadResult = await user.Load(this.selectedUser.ID);
+      
+      if (loadResult) {
+        const deleteResult = await user.Delete();
+        if (deleteResult) {
+          this.showDeleteConfirm = false;
+          this.selectedUser = null;
+          await this.loadInitialData();
+        } else {
+          throw new Error(user.LatestResult?.Message || 'Failed to delete user');
+        }
+      } else {
+        throw new Error('User not found or permission denied');
+      }
+    } catch (error: any) {
       console.error('Error deleting user:', error);
-      this.error = 'Failed to delete user';
+      this.error = error.message || 'Failed to delete user';
     }
   }
   
@@ -250,8 +314,56 @@ export class UserManagementComponent implements OnInit, OnDestroy {
   }
   
   public exportUsers(): void {
-    // Implement export functionality
-    console.log('Export users');
+    if (this.filteredUsers.length === 0) {
+      this.error = 'No users to export';
+      return;
+    }
+
+    try {
+      // Create CSV content
+      const headers = ['Name', 'First Name', 'Last Name', 'Email', 'Type', 'Status', 'Created', 'Updated'];
+      const csvRows = [headers.join(',')];
+
+      // Add user data
+      this.filteredUsers.forEach(user => {
+        const row = [
+          this.escapeCSV(user.Name || ''),
+          this.escapeCSV(user.FirstName || ''),
+          this.escapeCSV(user.LastName || ''),
+          this.escapeCSV(user.Email || ''),
+          this.escapeCSV(user.Type || ''),
+          user.IsActive ? 'Active' : 'Inactive',
+          user.__mj_CreatedAt ? new Date(user.__mj_CreatedAt).toLocaleDateString() : '',
+          user.__mj_UpdatedAt ? new Date(user.__mj_UpdatedAt).toLocaleDateString() : ''
+        ];
+        csvRows.push(row.join(','));
+      });
+
+      // Create and download file
+      const csvContent = csvRows.join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      
+      if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `users_export_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } catch (error) {
+      console.error('Error exporting users:', error);
+      this.error = 'Failed to export users';
+    }
+  }
+
+  private escapeCSV(value: string): string {
+    if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+      return `"${value.replace(/"/g, '""')}"`;
+    }
+    return value;
   }
   
   public refreshData(): void {
@@ -281,5 +393,15 @@ export class UserManagementComponent implements OnInit, OnDestroy {
     const first = user.FirstName?.charAt(0) || '';
     const last = user.LastName?.charAt(0) || '';
     return (first + last).toUpperCase() || user.Name?.charAt(0).toUpperCase() || 'U';
+  }
+
+  public onUserDialogResult(result: UserDialogResult): void {
+    this.showUserDialog = false;
+    this.userDialogData = null;
+    
+    if (result.action === 'save') {
+      // Refresh the user list to show changes
+      this.loadInitialData();
+    }
   }
 }

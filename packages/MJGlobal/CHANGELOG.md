@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/global
 
+## 2.70.0
+
+### Minor Changes
+
+- c9d86cd: migration
+
+### Patch Changes
+
+- 6f74409: Minor bump
+
 ## 2.69.1
 
 ## 2.69.0

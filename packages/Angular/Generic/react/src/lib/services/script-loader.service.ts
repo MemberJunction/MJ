@@ -5,7 +5,12 @@
  */
 
 import { Injectable, OnDestroy } from '@angular/core';
-import { CDN_URLS } from '../cdn-urls';
+import { 
+  STANDARD_LIBRARY_URLS,
+  getCoreLibraryUrls,
+  getUILibraryUrls,
+  getCSSUrls
+} from '@memberjunction/react-runtime';
 
 /**
  * Represents a loaded script or CSS resource
@@ -128,32 +133,44 @@ export class ScriptLoaderService implements OnDestroy {
   }> {
     // Load React and ReactDOM with enhanced validation
     const [React, ReactDOM, Babel] = await Promise.all([
-      this.loadScriptWithValidation(CDN_URLS.REACT, 'React', (obj) => {
+      this.loadScriptWithValidation(STANDARD_LIBRARY_URLS.REACT, 'React', (obj) => {
         return obj && typeof obj.createElement === 'function' && typeof obj.Component === 'function';
       }),
-      this.loadScriptWithValidation(CDN_URLS.REACT_DOM, 'ReactDOM', (obj) => {
+      this.loadScriptWithValidation(STANDARD_LIBRARY_URLS.REACT_DOM, 'ReactDOM', (obj) => {
         // Just check that ReactDOM exists - createRoot might not be immediately available
         return obj != null && typeof obj === 'object';
       }),
-      this.loadScript(CDN_URLS.BABEL_STANDALONE, 'Babel')
+      this.loadScript(STANDARD_LIBRARY_URLS.BABEL, 'Babel')
     ]);
 
     // Note: We don't validate createRoot here because it might not be immediately available
     // The ReactBridgeService will handle the delayed validation
 
     // Load CSS files (non-blocking)
-    this.loadCSS(CDN_URLS.ANTD_CSS);
-    this.loadCSS(CDN_URLS.BOOTSTRAP_CSS);
+    const cssUrls = getCSSUrls();
+    cssUrls.forEach(url => this.loadCSS(url));
 
-    // Load UI libraries
-    const [antd, ReactBootstrap, d3, Chart, _, dayjs] = await Promise.all([
-      this.loadScript(CDN_URLS.ANTD_JS, 'antd'),
-      this.loadScript(CDN_URLS.REACT_BOOTSTRAP_JS, 'ReactBootstrap'),
-      this.loadScript(CDN_URLS.D3_JS, 'd3'),
-      this.loadScript(CDN_URLS.CHART_JS, 'Chart'),
-      this.loadScript(CDN_URLS.LODASH_JS, '_'),
-      this.loadScript(CDN_URLS.DAYJS, 'dayjs')
+    // Load core libraries (lodash, d3, Chart.js, dayjs)
+    const coreLibraryPromises = getCoreLibraryUrls().map(url => {
+      const libName = this.getLibraryNameFromUrl(url);
+      return this.loadScript(url, libName);
+    });
+
+    // Load UI libraries (antd, ReactBootstrap)
+    const uiLibraryPromises = getUILibraryUrls().map(url => {
+      const libName = this.getLibraryNameFromUrl(url);
+      return this.loadScript(url, libName);
+    });
+
+    // Wait for all libraries to load
+    const [coreLibs, uiLibs] = await Promise.all([
+      Promise.all(coreLibraryPromises),
+      Promise.all(uiLibraryPromises)
     ]);
+
+    // Map loaded libraries to their expected names
+    const [_, d3, Chart, dayjs] = coreLibs;
+    const [antd, ReactBootstrap] = uiLibs;
 
     return {
       React,
@@ -161,6 +178,28 @@ export class ScriptLoaderService implements OnDestroy {
       Babel,
       libraries: { antd, ReactBootstrap, d3, Chart, _, dayjs }
     };
+  }
+
+  /**
+   * Get library name from URL for global variable mapping
+   * @param url - Library URL
+   * @returns Global variable name
+   */
+  private getLibraryNameFromUrl(url: string): string {
+    // Map known URLs to their global variable names
+    if (url.includes('lodash')) return '_';
+    if (url.includes('d3')) return 'd3';
+    if (url.includes('Chart.js') || url.includes('chart')) return 'Chart';
+    if (url.includes('dayjs')) return 'dayjs';
+    if (url.includes('antd')) return 'antd';
+    if (url.includes('react-bootstrap')) return 'ReactBootstrap';
+    if (url.includes('react-dom')) return 'ReactDOM';
+    if (url.includes('react')) return 'React';
+    if (url.includes('babel')) return 'Babel';
+    
+    // Default: extract library name from filename
+    const match = url.match(/\/([^/]+?)(?:\.min)?\.js$/i);
+    return match ? match[1] : 'UnknownLibrary';
   }
 
   /**

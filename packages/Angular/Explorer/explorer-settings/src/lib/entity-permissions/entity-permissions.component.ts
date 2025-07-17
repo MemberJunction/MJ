@@ -11,6 +11,7 @@ import {
   UserEntity 
 } from '@memberjunction/core-entities';
 import { SharedSettingsModule } from '../shared/shared-settings.module';
+import { PermissionDialogComponent, PermissionDialogData, PermissionDialogResult } from './permission-dialog/permission-dialog.component';
 
 interface PermissionsStats {
   totalEntities: number;
@@ -45,7 +46,8 @@ interface PermissionLevel {
   imports: [
     CommonModule,
     FormsModule,
-    SharedSettingsModule
+    SharedSettingsModule,
+    PermissionDialogComponent
   ],
   templateUrl: './entity-permissions.component.html',
   styleUrls: ['./entity-permissions.component.scss']
@@ -58,9 +60,9 @@ export class EntityPermissionsComponent implements OnInit, OnDestroy {
   public isLoading = false;
   public error: string | null = null;
   
-  // Selected entity for permission editing
-  public selectedEntity: EntityAccess | null = null;
+  // Permission dialog state
   public showPermissionDialog = false;
+  public permissionDialogData: PermissionDialogData | null = null;
   
   // Stats
   public stats: PermissionsStats = {
@@ -285,23 +287,35 @@ export class EntityPermissionsComponent implements OnInit, OnDestroy {
   }
   
   public editEntityPermissions(entityAccess: EntityAccess): void {
-    this.selectedEntity = entityAccess;
+    console.log('Opening permission dialog for entity:', entityAccess.entity.Name);
+    console.log('Entity permissions:', entityAccess.permissions);
+    console.log('Available roles:', this.roles);
+    
+    this.permissionDialogData = {
+      entity: entityAccess.entity,
+      roles: this.roles,
+      existingPermissions: entityAccess.permissions
+    };
     this.showPermissionDialog = true;
+    
+    console.log('Dialog data set:', this.permissionDialogData);
+    console.log('Dialog visible:', this.showPermissionDialog);
+  }
+  
+  public onPermissionDialogResult(result: PermissionDialogResult): void {
+    this.showPermissionDialog = false;
+    this.permissionDialogData = null;
+
+    if (result.action === 'save') {
+      // Refresh the data after save
+      this.loadInitialData();
+    }
   }
   
   public async savePermissions(): Promise<void> {
-    if (!this.selectedEntity) return;
-    
-    try {
-      // Implementation for saving permissions
-      // This would involve updating EntityPermission records
-      this.showPermissionDialog = false;
-      this.selectedEntity = null;
-      await this.loadInitialData();
-    } catch (error) {
-      console.error('Error saving permissions:', error);
-      this.error = 'Failed to save permissions';
-    }
+    // This method is now handled by the dialog component
+    // Keeping for backwards compatibility but not used
+    console.warn('savePermissions method is deprecated - use PermissionDialogComponent instead');
   }
   
   public getAccessLevelClass(entityAccess: EntityAccess): string {

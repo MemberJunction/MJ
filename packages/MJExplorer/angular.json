@@ -21,15 +21,9 @@
             "assets": [
               "src/favicon.ico",
               "src/assets",
-              "src/staticwebapp.config.json",
-              {
-                "glob": "**/*",
-                "input": "../../node_modules/@progress/kendo-theme-default/dist",
-                "output": "/assets/kendo-theme-default/dist"
-              }
+              "src/staticwebapp.config.json"
             ],
             "styles": [
-              "../../node_modules/@progress/kendo-theme-default/dist/all.css",
               {
                 "input": "src/styles/main.scss"
               }
@@ -101,12 +95,7 @@
               "assets": [
                 "src/favicon.ico",
                 "src/assets",
-                "src/staticwebapp.config.json",
-                {
-                  "glob": "**/*",
-                  "input": "node_modules/@progress/kendo-theme-default/dist",
-                  "output": "/assets/kendo-theme-default/dist"
-                }
+                "src/staticwebapp.config.json"
               ]
             }
           },
@@ -143,10 +132,7 @@
             "tsConfig": "tsconfig.spec.json",
             "assets": ["src/favicon.ico", "src/assets"],
             "styles": [
-              {
-                "input": "../../node_modules/@progress/kendo-theme-default/dist/all.css"
-              },
-              "src/styles.css"
+              "src/styles/main.scss"
             ],
             "scripts": []
           }

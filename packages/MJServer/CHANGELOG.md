@@ -1,5 +1,45 @@
 # Change Log - @memberjunction/server
 
+## 2.70.0
+
+### Patch Changes
+
+- Updated dependencies [6f74409]
+- Updated dependencies [c9d86cd]
+  - @memberjunction/global@2.70.0
+  - @memberjunction/ai-agents@2.70.0
+  - @memberjunction/ai-core-plus@2.70.0
+  - @memberjunction/ai-prompts@2.70.0
+  - @memberjunction/skip-types@2.70.0
+  - @memberjunction/ai-agent-manager-actions@2.70.0
+  - @memberjunction/ai@2.70.0
+  - @memberjunction/aiengine@2.70.0
+  - @memberjunction/ai-anthropic@2.70.0
+  - @memberjunction/ai-cerebras@2.70.0
+  - @memberjunction/ai-groq@2.70.0
+  - @memberjunction/ai-mistral@2.70.0
+  - @memberjunction/ai-openai@2.70.0
+  - @memberjunction/ai-vectors-pinecone@2.70.0
+  - @memberjunction/actions-bizapps-accounting@2.70.0
+  - @memberjunction/actions-bizapps-crm@2.70.0
+  - @memberjunction/actions-bizapps-lms@2.70.0
+  - @memberjunction/actions-bizapps-social@2.70.0
+  - @memberjunction/core-actions@2.70.0
+  - @memberjunction/actions@2.70.0
+  - @memberjunction/entity-communications-server@2.70.0
+  - @memberjunction/doc-utils@2.70.0
+  - @memberjunction/external-change-detection@2.70.0
+  - @memberjunction/graphql-dataprovider@2.70.0
+  - @memberjunction/core@2.70.0
+  - @memberjunction/core-entities@2.70.0
+  - @memberjunction/core-entities-server@2.70.0
+  - @memberjunction/data-context@2.70.0
+  - @memberjunction/data-context-server@2.70.0
+  - @memberjunction/queue@2.70.0
+  - @memberjunction/storage@2.70.0
+  - @memberjunction/sqlserver-dataprovider@2.70.0
+  - @memberjunction/templates@2.70.0
+
 ## 2.69.1
 
 ### Patch Changes

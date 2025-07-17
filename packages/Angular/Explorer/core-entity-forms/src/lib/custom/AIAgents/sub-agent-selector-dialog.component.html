@@ -1,0 +1,169 @@
+<!-- Sub-Agent Selector Dialog -->
+<div class="sub-agent-selector-dialog">
+  
+  <!-- Dialog Header -->
+  <div class="dialog-header">
+    <div class="header-info">
+      <h3>{{ config.title || 'Select Sub-Agents' }}</h3>
+      <p class="header-description">
+        Choose existing root agents to convert into sub-agents. Only active agents without parents and not exposed as actions can be selected.
+      </p>
+    </div>
+    <div class="header-stats">
+      @if (selectedCount > 0) {
+        <span class="selection-count">{{ selectedCount }} selected</span>
+      }
+      <span class="total-count">{{ filteredCount }} of {{ totalAgentCount }} agents</span>
+    </div>
+  </div>
+
+  <!-- Search and Filter Controls -->
+  <div class="controls-section">
+    <div class="search-controls">
+      <div class="search-input">
+        <i class="fa-solid fa-search search-icon"></i>
+        <kendo-textbox 
+          [formControl]="searchControl"
+          placeholder="Search agents by name, description, or type..."
+          class="search-field">
+        </kendo-textbox>
+        @if (searchControl.value) {
+          <button kendoButton 
+                  fillMode="flat" 
+                  size="small"
+                  (click)="clearSearch()"
+                  class="clear-search">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        }
+      </div>
+    </div>
+
+    <div class="filter-controls">
+      <div class="type-filter">
+        <label>Agent Type:</label>
+        <kendo-dropdownlist 
+          [value]="selectedTypeId$ | async"
+          (valueChange)="selectType($event)"
+          textField="Name"
+          valueField="ID"
+          [valuePrimitive]="true"
+          [defaultItem]="{ Name: 'All Types', ID: 'all' }"
+          [data]="agentTypes$ | async"
+          class="type-dropdown">
+        </kendo-dropdownlist>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  @if (isLoading$ | async) {
+    <div class="loading-state">
+      <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+      <p>Loading available agents...</p>
+    </div>
+  } @else {
+    
+    <!-- Content Area -->
+    <div class="content-area">
+      @if (filteredCount === 0) {
+        <div class="empty-state">
+          <i class="fa-solid fa-robot"></i>
+          <h4>No agents found</h4>
+          @if (totalAgentCount === 0) {
+            <p>No eligible root agents are available to become sub-agents.</p>
+          } @else {
+            <p>Try adjusting your search criteria or selecting a different agent type.</p>
+            <button kendoButton (click)="clearSearch()" themeColor="primary">
+              Clear Search
+            </button>
+          }
+        </div>
+      } @else {
+        
+        <!-- Agents Grid -->
+        <div class="agents-grid">
+          @for (agent of (filteredAgents$ | async); track agent.ID) {
+            <div class="agent-card" 
+                 [class.selected]="agent.selected"
+                 (click)="toggleAgentSelection(agent)">
+              
+              <!-- Selection Indicator -->
+              <div class="selection-indicator">
+                @if (agent.selected) {
+                  <i class="fa-solid fa-check-circle"></i>
+                } @else {
+                  <i class="fa-regular fa-circle"></i>
+                }
+              </div>
+              
+              <!-- Agent Icon/Logo -->
+              <div class="agent-icon">
+                @if (agent.LogoURL) {
+                  <img [src]="agent.LogoURL" [alt]="agent.Name + ' logo'" class="agent-logo">
+                } @else {
+                  <i [class]="getAgentIcon(agent)"></i>
+                }
+              </div>
+              
+              <!-- Agent Info -->
+              <div class="agent-info">
+                <div class="agent-name">{{ agent.Name }}</div>
+                @if (agent.Description) {
+                  <div class="agent-description">{{ agent.Description }}</div>
+                }
+                <div class="agent-meta">
+                  @if (agent.Status) {
+                    <span class="status-badge" [style.background-color]="getAgentStatusColor(agent)">
+                      {{ agent.Status }}
+                    </span>
+                  }
+                  @if (agent.typeName) {
+                    <span class="type-badge">{{ agent.typeName }}</span>
+                  }
+                  @if (agent.ExecutionMode) {
+                    <span class="execution-badge">{{ agent.ExecutionMode }}</span>
+                  }
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Dialog Footer -->
+  <div class="dialog-footer">
+    <div class="footer-left">
+      @if (config.showCreateNew) {
+        <button kendoButton 
+                look="outline"
+                themeColor="primary"
+                (click)="createNew()">
+          <i class="fa-solid fa-plus"></i>
+          Create Sub-Agent
+        </button>
+      }
+    </div>
+    
+    <div class="footer-right">
+      <button kendoButton 
+              look="flat" 
+              (click)="cancel()">
+        Cancel
+      </button>
+      
+      <button kendoButton 
+              themeColor="primary" 
+              (click)="addSelectedAgents()"
+              [disabled]="selectedCount === 0">
+        @if (config.multiSelect) {
+          Add {{ selectedCount > 0 ? selectedCount + ' ' : '' }}Sub-Agent{{ selectedCount !== 1 ? 's' : '' }}
+        } @else {
+          Add Sub-Agent
+        }
+      </button>
+    </div>
+  </div>
+</div>

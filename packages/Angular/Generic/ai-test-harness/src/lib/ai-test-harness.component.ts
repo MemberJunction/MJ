@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 import { WindowService, WindowRef, WindowCloseResult } from '@progress/kendo-angular-dialog';
-import { AIAgentEntity, AIPromptEntity, TemplateParamEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentEntity, AIPromptEntity, TemplateParamEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIConfigurationEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -101,8 +101,12 @@ export interface SavedConversation {
     selectedModelId?: string;
     /** Selected vendor ID (prompt mode) */
     selectedVendorId?: string;
+    /** Selected configuration ID (prompt mode) */
+    selectedConfigurationId?: string;
     /** Skip validation setting (prompt mode) */
     skipValidation?: boolean;
+    /** Selected configuration ID (agent mode) */
+    agentConfigurationId?: string;
     /** When the conversation was first created */
     createdAt: Date;
     /** When the conversation was last modified */
@@ -256,6 +260,12 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /** Available AI vendors for the selected model */
     public availableVendors: any[] = [];
     
+    /** Selected AI configuration for prompt execution */
+    public selectedConfigurationId: string = '';
+    
+    /** Available AI configurations */
+    public availableConfigurations: AIConfigurationEntity[] = [];
+    
     /** Default model for the prompt (cached for display) */
     private defaultModelName: string = '';
     
@@ -264,6 +274,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     
     /** Whether to skip validation when running prompts */
     public skipValidation: boolean = false;
+    
+    /** Selected AI configuration for agent execution */
+    public agentConfigurationId: string = '';
     
     /** Advanced LLM Parameters */
     public advancedParams = {
@@ -305,7 +318,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     public showSidebar = true;
     
     /** Currently active tab in the sidebar */
-    public activeTab: 'agentVariables' | 'executionMonitor' | 'templateVariables' | 'modelSettings' | 'savedConversations' = 'agentVariables';
+    public activeTab: 'agentVariables' | 'executionMonitor' | 'agentSettings' | 'templateVariables' | 'modelSettings' | 'savedConversations' = 'agentVariables';
     
     /** Array of saved conversation sessions loaded from localStorage */
     public savedConversations: SavedConversation[] = [];
@@ -401,6 +414,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         this.loadSavedConversations();
         this.subscribeToEvents();
         this.resetHarness();
+        
+        // Load configurations for both modes
+        this.loadAvailableConfigurations();
         
         // Load models if in prompt mode
         if (this.mode === 'prompt') {
@@ -738,6 +754,38 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     }
     
     /**
+     * Loads available AI configurations from the database
+     * Only configurations with 'Active' or 'Preview' status are shown
+     */
+    private async loadAvailableConfigurations() {
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<AIConfigurationEntity>({
+                EntityName: 'MJ: AI Configurations',
+                ExtraFilter: `Status IN ('Active', 'Preview')`,
+                OrderBy: 'IsDefault DESC, Name',
+                ResultType: 'entity_object'
+            });
+            
+            if (result.Success && result.Results) {
+                this.availableConfigurations = result.Results;
+                
+                // Auto-select the default configuration if one exists
+                const defaultConfig = this.availableConfigurations.find(c => c.IsDefault);
+                if (defaultConfig) {
+                    this.selectedConfigurationId = defaultConfig.ID;
+                }
+            } else {
+                console.error('Failed to load AI configurations:', result.ErrorMessage);
+                this.availableConfigurations = [];
+            }
+        } catch (error) {
+            console.error('Error loading AI configurations:', error);
+            this.availableConfigurations = [];
+        }
+    }
+    
+    /**
      * Handles model selection change and loads available vendors for the selected model
      */
     public onModelSelectionChange() {
@@ -924,6 +972,14 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             // Reset skip validation
             this.skipValidation = false;
             
+            // Reset configuration to default
+            const defaultConfig = this.availableConfigurations.find(c => c.IsDefault);
+            if (defaultConfig) {
+                this.selectedConfigurationId = defaultConfig.ID;
+            } else {
+                this.selectedConfigurationId = '';
+            }
+            
             // Reset advanced parameters
             this.advancedParams = {
                 temperature: null,
@@ -988,6 +1044,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         this.stopSequencesText = '';
         this.advancedParamsExpanded = false;
         this.skipValidation = false;
+        // Reset agent configuration to default
+        if (this.mode === 'agent') {
+            const defaultConfig = this.availableConfigurations.find(c => c.IsDefault);
+            this.agentConfigurationId = defaultConfig?.ID || '';
+        }
     }
     
     /**
@@ -1036,7 +1097,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      * Switches to the specified tab in the configuration sidebar.
      * @param tab - The tab to activate
      */
-    public selectTab(tab: 'agentVariables' | 'executionMonitor' | 'templateVariables' | 'modelSettings' | 'savedConversations') {
+    public selectTab(tab: 'agentVariables' | 'executionMonitor' | 'agentSettings' | 'templateVariables' | 'modelSettings' | 'savedConversations') {
         console.log('🔄 Switching to tab:', tab, {
             currentAgentRun: !!this.currentAgentRun,
             agentRunStatus: this.currentAgentRun?.Status || 'none',
@@ -1275,8 +1336,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             
             // Execute the agent
             const query = `
-                mutation RunAIAgent($agentId: String!, $messages: String!, $sessionId: String!, $data: String, $templateData: String, $lastRunId: String, $autoPopulateLastRunPayload: Boolean) {
-                    RunAIAgent(agentId: $agentId, messages: $messages, sessionId: $sessionId, data: $data, templateData: $templateData, lastRunId: $lastRunId, autoPopulateLastRunPayload: $autoPopulateLastRunPayload) {
+                mutation RunAIAgent($agentId: String!, $messages: String!, $sessionId: String!, $data: String, $templateData: String, $lastRunId: String, $autoPopulateLastRunPayload: Boolean, $configurationId: String) {
+                    RunAIAgent(agentId: $agentId, messages: $messages, sessionId: $sessionId, data: $data, templateData: $templateData, lastRunId: $lastRunId, autoPopulateLastRunPayload: $autoPopulateLastRunPayload, configurationId: $configurationId) {
                         success
                         errorMessage
                         executionTimeMs
@@ -1292,7 +1353,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 data: Object.keys(dataContext).length > 0 ? JSON.stringify(dataContext) : null,
                 templateData: Object.keys(templateData).length > 0 ? JSON.stringify(templateData) : null,
                 lastRunId: this.lastAgentRunId,
-                autoPopulateLastRunPayload: this.lastAgentRunId ? true : false
+                autoPopulateLastRunPayload: this.lastAgentRunId ? true : false,
+                configurationId: this.agentConfigurationId || undefined
             };
 
             
@@ -1541,7 +1603,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 data: JSON.stringify(dataContext),
                 overrideModelId: this.selectedModelId || undefined,
                 overrideVendorId: this.selectedVendorId || undefined,
-                configurationId: undefined, // Use default configuration
+                configurationId: this.selectedConfigurationId || undefined,
                 skipValidation: this.skipValidation,
                 templateData: null, // Additional template context if needed
                 responseFormat: this.selectedResponseFormat?.value,
@@ -1914,7 +1976,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             advancedParams: this.mode === 'prompt' ? this.advancedParams : undefined,
             selectedModelId: this.mode === 'prompt' ? this.selectedModelId : undefined,
             selectedVendorId: this.mode === 'prompt' ? this.selectedVendorId : undefined,
+            selectedConfigurationId: this.mode === 'prompt' ? this.selectedConfigurationId : undefined,
             skipValidation: this.mode === 'prompt' ? this.skipValidation : undefined,
+            agentConfigurationId: this.mode === 'agent' ? this.agentConfigurationId : undefined,
             createdAt: new Date(),
             updatedAt: new Date()
         };
@@ -1989,11 +2053,13 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 this.savedConversations[index].dataContext = this.buildDataContext();
                 if (this.mode === 'agent') {
                     this.savedConversations[index].templateData = this.buildTemplateData();
+                    this.savedConversations[index].agentConfigurationId = this.agentConfigurationId;
                 } else {
                     this.savedConversations[index].templateVariables = this.buildTemplateVariables();
                     this.savedConversations[index].advancedParams = this.advancedParams;
                     this.savedConversations[index].selectedModelId = this.selectedModelId;
                     this.savedConversations[index].selectedVendorId = this.selectedVendorId;
+                    this.savedConversations[index].selectedConfigurationId = this.selectedConfigurationId;
                     this.savedConversations[index].skipValidation = this.skipValidation;
                 }
                 this.savedConversations[index].updatedAt = new Date();
@@ -2057,6 +2123,13 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             });
         }
         
+        // Restore configuration for agent mode
+        if (this.mode === 'agent') {
+            if (conversation.agentConfigurationId !== undefined) {
+                this.agentConfigurationId = conversation.agentConfigurationId;
+            }
+        }
+        
         // Restore template variables for prompt mode
         if (this.mode === 'prompt') {
             this.templateVariables = [];
@@ -2093,6 +2166,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             }
             if (conversation.selectedVendorId !== undefined && !this.selectedModelId) {
                 this.selectedVendorId = conversation.selectedVendorId;
+            }
+            
+            // Restore configuration selection
+            if (conversation.selectedConfigurationId !== undefined) {
+                this.selectedConfigurationId = conversation.selectedConfigurationId;
             }
             
             // Restore skip validation setting
@@ -2176,11 +2254,15 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         // Add mode-specific data
         if (this.mode === 'agent') {
             exportData.templateData = this.buildTemplateData();
+            exportData.agentSettings = {
+                configurationId: this.agentConfigurationId
+            };
         } else {
             exportData.templateVariables = this.buildTemplateVariables();
             exportData.modelSettings = {
                 modelId: this.selectedModelId,
                 vendorId: this.selectedVendorId,
+                configurationId: this.selectedConfigurationId,
                 maxTokens: this.maxTokens,
                 skipValidation: this.skipValidation
             };
@@ -2243,6 +2325,42 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                         if (this.mode === 'prompt' && data.advancedParams) {
                             this.advancedParams = { ...this.advancedParams, ...data.advancedParams };
                             this.stopSequencesText = this.advancedParams.stopSequences?.join(', ') || '';
+                        }
+                        
+                        // Import agent settings if in agent mode
+                        if (this.mode === 'agent' && data.agentSettings) {
+                            if (data.agentSettings.configurationId !== undefined) {
+                                this.agentConfigurationId = data.agentSettings.configurationId;
+                            }
+                        }
+                        
+                        // Import model settings if in prompt mode
+                        if (this.mode === 'prompt' && data.modelSettings) {
+                            if (data.modelSettings.modelId !== undefined) {
+                                this.selectedModelId = data.modelSettings.modelId;
+                                // Trigger vendor loading if model is selected
+                                if (this.selectedModelId) {
+                                    this.onModelSelectionChange();
+                                    // After vendors load, restore vendor selection
+                                    setTimeout(() => {
+                                        if (data.modelSettings.vendorId !== undefined) {
+                                            this.selectedVendorId = data.modelSettings.vendorId;
+                                        }
+                                    }, 100);
+                                }
+                            }
+                            if (data.modelSettings.vendorId !== undefined && !this.selectedModelId) {
+                                this.selectedVendorId = data.modelSettings.vendorId;
+                            }
+                            if (data.modelSettings.configurationId !== undefined) {
+                                this.selectedConfigurationId = data.modelSettings.configurationId;
+                            }
+                            if (data.modelSettings.maxTokens !== undefined) {
+                                this.maxTokens = data.modelSettings.maxTokens;
+                            }
+                            if (data.modelSettings.skipValidation !== undefined) {
+                                this.skipValidation = data.modelSettings.skipValidation;
+                            }
                         }
                         
                         this.currentConversationId = null;

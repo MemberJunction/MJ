@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-react",
-  "version": "2.69.1",
+  "version": "2.70.0",
   "description": "Angular components for hosting React components in MemberJunction applications",
   "scripts": {
     "build": "ngc -p tsconfig.json",
@@ -40,24 +40,22 @@
     "styles"
   ],
   "dependencies": {
-    "@memberjunction/react-runtime": "^2.69.1",
-    "@memberjunction/skip-types": "^2.46.0"
-  },
-  "devDependencies": {
-    "@angular/compiler": "18.0.2",
-    "@angular/compiler-cli": "18.0.2",
-    "typescript": "5.3.3"
-  },
-  "peerDependencies": {
+    "@memberjunction/core": "2.70.0",
+    "@memberjunction/react-runtime": "2.70.0",
+    "@memberjunction/interactive-component-types": "^2.70.0",
     "@angular/common": ">=18.0.0",
     "@angular/core": ">=18.0.0",
     "@angular/platform-browser": ">=18.0.0",
     "@babel/standalone": "^7.23.5",
-    "@memberjunction/core": "^2.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "rxjs": "^7.8.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@angular/compiler": "18.0.2",
+    "@angular/compiler-cli": "18.0.2",
+    "typescript": "5.3.3"
   }
 }

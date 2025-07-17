@@ -66,7 +66,7 @@ program
         
         if (options.debug) {
           console.log('\n' + chalk.bold('Console Output:'));
-          result.console.forEach(log => {
+          result.console.forEach((log: { type: string; text: string }) => {
             const color = log.type === 'error' ? chalk.red : 
                          log.type === 'warning' ? chalk.yellow : 
                          chalk.gray;
@@ -81,7 +81,7 @@ program
       } else {
         console.log(chalk.red('✗ Component rendering failed'));
         console.log(chalk.red('\nErrors:'));
-        result.errors.forEach(error => {
+        result.errors.forEach((error: string) => {
           console.log(chalk.red(`  - ${error}`));
         });
         process.exit(1);
