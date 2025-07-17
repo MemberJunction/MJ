@@ -133,23 +133,51 @@ import { AIAgentRunStepEntityExtended } from '@memberjunction/core-entities';
                             <div class="detail-label">
                                 <i class="fa-solid fa-exclamation-triangle"></i> Error
                             </div>
-                            <div class="detail-content">{{ step.ErrorMessage }}</div>
+                            <div class="detail-content error-text">{{ step.ErrorMessage }}</div>
                         </div>
                     }
                     @if (getInputPreview()) {
                         <div class="detail-section">
                             <div class="detail-label">
                                 <i class="fa-solid fa-sign-in-alt"></i> Input
+                                @if (getInputSizeDisplay()) {
+                                    <span class="size-info">({{ getInputSizeDisplay() }})</span>
+                                }
+                                <button class="copy-button" (click)="copyToClipboard(getInputPreview()!)" title="Copy to clipboard">
+                                    <i class="fa-solid fa-copy"></i>
+                                </button>
                             </div>
-                            <div class="detail-content">{{ getInputPreview() }}</div>
+                            <div class="detail-content code-editor-container">
+                                <mj-code-editor 
+                                    [ngModel]="getInputPreview()"
+                                    [readonly]="true"
+                                    [language]="'json'"
+                                    [lineWrapping]="true"
+                                    style="height: 200px; width: 100%;">
+                                </mj-code-editor>
+                            </div>
                         </div>
                     }
                     @if (getOutputPreview()) {
                         <div class="detail-section">
                             <div class="detail-label">
                                 <i class="fa-solid fa-sign-out-alt"></i> Output
+                                @if (getOutputSizeDisplay()) {
+                                    <span class="size-info">({{ getOutputSizeDisplay() }})</span>
+                                }
+                                <button class="copy-button" (click)="copyToClipboard(getOutputPreview()!)" title="Copy to clipboard">
+                                    <i class="fa-solid fa-copy"></i>
+                                </button>
                             </div>
-                            <div class="detail-content">{{ getOutputPreview() }}</div>
+                            <div class="detail-content code-editor-container">
+                                <mj-code-editor 
+                                    [ngModel]="getOutputPreview()"
+                                    [readonly]="true"
+                                    [language]="'json'"
+                                    [lineWrapping]="true"
+                                    style="height: 200px; width: 100%;">
+                                </mj-code-editor>
+                            </div>
                         </div>
                     }
                     @if (!step.ErrorMessage && !getInputPreview() && !getOutputPreview() && !getDetailsMarkdown() && !isNameTruncated()) {
@@ -483,6 +511,7 @@ import { AIAgentRunStepEntityExtended } from '@memberjunction/core-entities';
             font-weight: 600;
             margin-bottom: 4px;
             color: #555;
+            position: relative;
         }
         
         .detail-content {
@@ -490,6 +519,58 @@ import { AIAgentRunStepEntityExtended } from '@memberjunction/core-entities';
             word-break: break-word;
             color: #333;
             line-height: 1.4;
+        }
+        
+        .detail-content.code-editor-container {
+            padding: 0;
+            background: #1e1e1e;
+            border-radius: 4px;
+            overflow: hidden;
+            white-space: normal;
+            color: #d4d4d4;
+        }
+        
+        .detail-content.code-editor-container ::ng-deep .cm-content {
+            color: #d4d4d4;
+        }
+        
+        .copy-button {
+            margin-left: auto;
+            padding: 4px 8px;
+            background: #2196f3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: background-color 0.2s;
+        }
+        
+        .copy-button:hover {
+            background: #1976d2;
+        }
+        
+        .copy-button:active {
+            background: #1565c0;
+        }
+        
+        .size-info {
+            font-size: 0.85em;
+            color: #666;
+            font-weight: normal;
+            margin-left: 8px;
+        }
+        
+        .detail-content.error-text {
+            color: #ff6b6b;
+            white-space: pre-wrap;
+            background: rgba(255, 107, 107, 0.1);
+            padding: 12px;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 107, 107, 0.2);
         }
         
         .markdown-details {
@@ -715,19 +796,10 @@ export class ExecutionNodeComponent {
         
         try {
             const parsed = JSON.parse(this.step.InputData);
-            
-            // Extract meaningful preview
-            if (parsed.promptName) return `Prompt: ${parsed.promptName}`;
-            if (parsed.actionName) return `Action: ${parsed.actionName}`;
-            if (parsed.subAgentName) return `Sub-agent: ${parsed.subAgentName}`;
-            if (parsed.message) return parsed.message;
-            if (parsed.userMessage) return parsed.userMessage;
-            
-            // Fallback to stringified preview
-            const str = JSON.stringify(parsed, null, 2);
-            return str.length > 500 ? str.substring(0, 500) + '...' : str;
+            return JSON.stringify(parsed, null, 2);
         } catch {
-            return typeof this.step.InputData === 'string' ? this.step.InputData : JSON.stringify(this.step.InputData);
+            // If it's not valid JSON, wrap it in an object
+            return JSON.stringify({ rawData: this.step.InputData }, null, 2);
         }
     }
     
@@ -736,44 +808,10 @@ export class ExecutionNodeComponent {
         
         try {
             const parsed = JSON.parse(this.step.OutputData);
-            
-            // Show action results clearly
-            if (parsed.actionResult) {
-                const result = parsed.actionResult;
-                let preview = '';
-                if (result.success !== undefined) {
-                    preview += `Success: ${result.success}\n`;
-                }
-                if (result.resultCode) {
-                    preview += `Result Code: ${result.resultCode}\n`;
-                }
-                if (result.message) {
-                    preview += `Message: ${result.message}\n`;
-                }
-                if (result.result) {
-                    preview += `Result: ${typeof result.result === 'object' ? JSON.stringify(result.result, null, 2) : result.result}`;
-                }
-                return preview.trim();
-            }
-            
-            // Show prompt results
-            if (parsed.promptResult) {
-                const result = parsed.promptResult;
-                let preview = '';
-                if (result.success !== undefined) {
-                    preview += `Success: ${result.success}\n`;
-                }
-                if (result.content) {
-                    preview += `Content: ${result.content}`;
-                }
-                return preview;
-            }
-            
-            // Fallback
-            const str = JSON.stringify(parsed, null, 2);
-            return str.length > 500 ? str.substring(0, 500) + '...' : str;
+            return JSON.stringify(parsed, null, 2);
         } catch {
-            return typeof this.step.OutputData === 'string' ? this.step.OutputData : JSON.stringify(this.step.OutputData);
+            // If it's not valid JSON, wrap it in an object
+            return JSON.stringify({ rawData: this.step.OutputData }, null, 2);
         }
     }
     
@@ -802,6 +840,35 @@ export class ExecutionNodeComponent {
     
     getActionIconClass(): string | undefined {
         return this.parseMetadata('actionIconClass');
+    }
+    
+    getInputSizeDisplay(): string | undefined {
+        if (!this.step.InputData) return undefined;
+        const bytes = new Blob([this.step.InputData]).size;
+        return this.formatFileSize(bytes);
+    }
+    
+    getOutputSizeDisplay(): string | undefined {
+        if (!this.step.OutputData) return undefined;
+        const bytes = new Blob([this.step.OutputData]).size;
+        return this.formatFileSize(bytes);
+    }
+    
+    private formatFileSize(bytes: number): string {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+    
+    copyToClipboard(text: string): void {
+        navigator.clipboard.writeText(text).then(() => {
+            // Optional: You could add a toast notification here
+            console.log('Content copied to clipboard');
+        }).catch(err => {
+            console.error('Failed to copy text: ', err);
+        });
     }
     
     private parseMetadata(key: string): string | undefined {
