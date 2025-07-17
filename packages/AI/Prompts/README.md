@@ -1026,6 +1026,35 @@ if (result.promptRun) {
 }
 ```
 
+### Early Run ID Callback
+
+Get the PromptRun ID immediately after creation for real-time monitoring:
+
+```typescript
+const params = new AIPromptParams();
+params.prompt = myPrompt;
+params.data = { query: 'Analyze this data' };
+
+// Callback fired immediately after PromptRun record is saved
+params.onPromptRunCreated = async (promptRunId) => {
+    console.log(`Prompt run started: ${promptRunId}`);
+    
+    // Use cases:
+    // - Link to parent records (e.g., AIAgentRunStep.TargetLogID)
+    // - Send to monitoring systems
+    // - Update UI with tracking info
+    // - Start real-time log streaming
+};
+
+const result = await runner.ExecutePrompt(params);
+```
+
+The callback is invoked:
+- **When**: Right after the AIPromptRun record is created and saved
+- **Before**: The actual AI model execution begins
+- **Error Handling**: Callback errors are logged but don't fail the execution
+- **Async Support**: Can be synchronous or asynchronous
+
 ## AI Prompt Run Logging
 
 The AI Prompt Runner implements a sophisticated hierarchical logging system that tracks all execution activities in the database through the `AIPromptRun` entity. This system provides complete traceability and analytics for both simple and complex parallel executions.
@@ -1724,7 +1753,7 @@ interface AIPromptParams {
     data?: any;                                // Template and context data
     modelId?: string;                          // Override model selection
     vendorId?: string;                         // Override vendor selection
-    configurationId?: string;                  // Environment-specific config
+    configurationId?: string;                  // AI Configuration ID for environment-specific model selection (e.g., Prod vs Dev)
     contextUser?: UserInfo;                    // User context
     skipValidation?: boolean;                  // Skip output validation
     templateData?: any;                        // Additional template data that augments the main data context
@@ -2523,6 +2552,26 @@ UPDATE AIAgentType SET SystemPromptID = @SystemPromptID WHERE Name = 'DataGather
 
 The AI Prompts system provides flexible API key management for runtime configuration without modifying environment variables or global settings.
 
+### Environment-Based API Configuration
+
+MemberJunction now supports sophisticated environment-based API key resolution through AIConfigSet entities, allowing different configurations for different environments:
+
+```typescript
+// Configurations are loaded based on the environment name
+// Default fallback order: process.env.NODE_ENV -> 'production'
+
+// Example: Different API keys per environment
+// Development -> AIConfigSet(Name='development') -> Config Key OPENAI_LLM_APIKEY
+// Production -> AIConfigSet(Name='production') -> Config Key OPENAI_LLM_APIKEY
+```
+
+#### Configuration Set Priority
+
+When multiple configuration sets exist, they are evaluated in this order:
+1. **Exact environment match** (e.g., 'development' matches 'development')
+2. **Priority field** (higher priority values are preferred)
+3. **Custom resolver logic** (if implemented via subclassing)
+
 ### Using Runtime API Keys
 
 You can provide API keys at prompt execution time, which is useful for:
@@ -2553,9 +2602,41 @@ const result = await runner.ExecutePrompt({
 
 When executing prompts, API keys are resolved in this order:
 1. **Local API keys** provided in `AIPromptParams.apiKeys` (highest priority)
-2. **Global API keys** from environment variables or custom `AIAPIKeys` implementation
+2. **Configuration sets** from database based on environment
+3. **Environment variables** (traditional dotenv approach)
+4. **Custom implementations** via AIAPIKeys subclassing
 
-If a driver class is not found in the local apiKeys array, the system falls back to the global API key management.
+### Configuration Set Structure
+
+Configuration sets are managed through these entities:
+
+#### AIConfigSet
+- **Name**: Environment name (e.g., 'development', 'production', 'staging')
+- **Description**: Human-readable description
+- **Priority**: Higher values take precedence when multiple sets match
+- **Status**: 'Active' or 'Inactive'
+
+#### AIConfiguration
+- **ConfigSetID**: Links to parent configuration set
+- **ConfigKey**: The configuration key (e.g., 'OPENAI_LLM_APIKEY')
+- **ConfigValue**: The actual value (encrypted for sensitive data)
+- **EncryptedValue**: Whether the value is encrypted
+- **Description**: Documentation for the configuration
+
+### Environment Variables vs Configuration Sets
+
+```typescript
+// Traditional environment variable approach (still supported)
+process.env.OPENAI_LLM_APIKEY = 'sk-...';
+
+// New configuration set approach (recommended)
+// Stored in database:
+// ConfigSet: { Name: 'production', Priority: 100 }
+// Config: { ConfigKey: 'OPENAI_LLM_APIKEY', ConfigValue: 'sk-...', Encrypted: true }
+
+// The system automatically uses the configuration set if available
+// Falls back to environment variables if not found in database
+```
 
 ### Hierarchical API Key Propagation
 
@@ -2587,21 +2668,183 @@ import { AIAPIKeys, RegisterClass } from '@memberjunction/ai';
 @RegisterClass(AIAPIKeys, 'CustomAPIKeys', 2) // Priority 2 overrides default
 export class CustomAPIKeys extends AIAPIKeys {
     public GetAPIKey(AIDriverName: string): string {
-        // Custom logic: database lookup, vault access, etc.
+        // First check configuration sets
+        const configValue = this.getFromConfigSet(AIDriverName);
+        if (configValue) return configValue;
+        
+        // Then check custom logic: database lookup, vault access, etc.
         if (AIDriverName === 'OpenAILLM') {
             return this.getFromVault('openai-key');
         }
-        return super.GetAPIKey(AIDriverName); // Fallback to default
+        
+        // Finally fall back to environment variables
+        return super.GetAPIKey(AIDriverName);
+    }
+    
+    private getFromConfigSet(driverName: string): string | null {
+        // Implementation would query AIConfiguration entities
+        // based on current environment
+        const envName = process.env.NODE_ENV || 'production';
+        // ... query logic here
+        return null;
     }
 }
+```
+
+### Multi-Environment Setup Example
+
+```typescript
+// Development environment setup
+const devConfig = {
+    ConfigSet: { Name: 'development', Priority: 100 },
+    Configurations: [
+        { ConfigKey: 'OPENAI_LLM_APIKEY', ConfigValue: 'sk-dev-...', Encrypted: true },
+        { ConfigKey: 'ANTHROPIC_LLM_APIKEY', ConfigValue: 'sk-ant-dev-...', Encrypted: true },
+        { ConfigKey: 'LOG_LEVEL', ConfigValue: 'debug', Encrypted: false }
+    ]
+};
+
+// Production environment setup
+const prodConfig = {
+    ConfigSet: { Name: 'production', Priority: 100 },
+    Configurations: [
+        { ConfigKey: 'OPENAI_LLM_APIKEY', ConfigValue: 'sk-prod-...', Encrypted: true },
+        { ConfigKey: 'ANTHROPIC_LLM_APIKEY', ConfigValue: 'sk-ant-prod-...', Encrypted: true },
+        { ConfigKey: 'LOG_LEVEL', ConfigValue: 'error', Encrypted: false }
+    ]
+};
+
+// The system automatically loads the correct configuration based on NODE_ENV
 ```
 
 ### Security Best Practices
 
 1. **Never hardcode API keys** in your source code
-2. **Use environment-specific keys** for different environments (dev, staging, prod)
-3. **Rotate keys regularly** and have a process for key rotation
-4. **Monitor API key usage** to detect unauthorized access
-5. **Use the principle of least privilege** - give each user/app only the keys they need
+2. **Use encrypted storage** for sensitive configuration values
+3. **Separate configurations** by environment (dev, staging, prod)
+4. **Rotate keys regularly** and update configuration sets
+5. **Monitor API key usage** to detect unauthorized access
+6. **Use the principle of least privilege** - give each user/app only the keys they need
+7. **Audit configuration changes** through MemberJunction's change tracking
+
+## AI Configuration System
+
+The AI Prompts system supports sophisticated environment-specific model selection through AI Configurations. This allows you to use different sets of models for the same prompts based on the active configuration (e.g., Production vs Development).
+
+### Configuration Concepts
+
+#### AI Configurations
+- Named configuration sets (e.g., "Production", "Development", "Europe-Region")
+- Filter which models are available for prompt execution
+- Support configuration parameters for dynamic behavior
+- One configuration can be marked as default (`IsDefault = true`)
+
+#### AI Configuration Parameters
+- Name-value pairs stored per configuration
+- Support different data types (string, number, boolean, date, object)
+- Can control dynamic parallelization and other runtime behavior
+- Example: `ParallelExecutions = 5` for development testing
+
+### Model Selection with Configurations
+
+When executing a prompt with a specific `configurationId`, the system follows a two-phase model selection process that ensures configuration-specific models ALWAYS take precedence:
+
+#### Phase 1: Configuration-Specific Models (Highest Priority)
+```typescript
+// First, try to find models with matching configuration
+const configModels = promptModels.filter(pm => 
+    pm.ConfigurationID === configurationId &&
+    (pm.Status === 'Active' || pm.Status === 'Preview')
+);
+```
+
+If configuration-specific models are found, they are used exclusively. The system will NOT consider models with NULL or mismatched configurations.
+
+#### Phase 2: Default Models (Fallback)
+
+Only if NO models match the specific configuration, the system falls back to models with NULL configuration:
+
+```typescript
+// Fall back to NULL configuration models only if no matches found
+if (configModels.length === 0) {
+    const defaultModels = promptModels.filter(pm => 
+        pm.ConfigurationID === null &&
+        (pm.Status === 'Active' || pm.Status === 'Preview')
+    );
+}
+```
+
+This ensures:
+- **Configuration-specific models always win**: When you specify a configuration, only models explicitly assigned to that configuration are considered first
+- **Clear environment separation**: Production models never mix with Development models when configurations are used
+- **Explicit fallback behavior**: NULL configuration models serve as defaults only when no configuration-specific models exist
+
+### Configuration Setup Example
+
+```sql
+-- Create configurations
+INSERT INTO AIConfiguration (Name, Description, IsDefault, Status)
+VALUES 
+    ('Production', 'Stable models for production use', 1, 'Active'),
+    ('Development', 'Experimental models for testing', 0, 'Active');
+
+-- Assign models to configurations
+-- Production uses GPT-4
+UPDATE AIPromptModel 
+SET ConfigurationID = (SELECT ID FROM AIConfiguration WHERE Name = 'Production')
+WHERE PromptID = @PromptID AND ModelID = @GPT4ModelID;
+
+-- Development uses GPT-4-Turbo and Claude-3-Opus
+UPDATE AIPromptModel 
+SET ConfigurationID = (SELECT ID FROM AIConfiguration WHERE Name = 'Development')
+WHERE PromptID = @PromptID AND ModelID IN (@GPT4TurboID, @Claude3OpusID);
+
+-- Models with NULL ConfigurationID serve as defaults when no configuration matches
+UPDATE AIPromptModel 
+SET ConfigurationID = NULL
+WHERE PromptID = @PromptID AND ModelID = @FallbackModelID;
+```
+
+### Using Configurations
+
+#### In Code
+```typescript
+const result = await promptRunner.ExecutePrompt({
+    prompt: myPrompt,
+    configurationId: 'dev-config-id', // Optional
+    data: { query: 'Analyze this data' },
+    contextUser: currentUser
+});
+```
+
+#### Configuration Precedence
+1. **Configuration-specific models** (highest priority) - When a configurationId is provided, ONLY models with matching ConfigurationID are considered initially
+2. **NULL configuration models** (fallback only) - Used only when NO models match the specified configuration
+3. **Priority within each phase** - Models are ranked by their Priority field (higher number = higher priority)
+
+### Dynamic Parallelization with Configurations
+
+Configurations can control parallel execution through parameters:
+
+```typescript
+// Set up configuration parameter
+INSERT INTO AIConfigurationParam (ConfigurationID, Name, Type, Value)
+VALUES (@DevConfigID, 'ParallelExecutions', 'number', '5');
+
+// Use in prompt setup
+UPDATE AIPrompt 
+SET ParallelizationMode = 'ConfigParam',
+    ParallelConfigParam = 'ParallelExecutions'
+WHERE ID = @PromptID;
+```
+
+### Best Practices
+
+1. **Use NULL ConfigurationID for fallback models** that provide a safety net when no configuration-specific models exist
+2. **Create environment-specific configurations** for different deployment scenarios (Production, Development, Testing)
+3. **Document configuration purposes** in the Description field to clarify their intended use
+4. **Test configuration precedence** to ensure configuration-specific models always take priority over defaults
+5. **Use configuration parameters** for environment-specific settings beyond just model selection
+6. **Assign models explicitly to configurations** to ensure clear separation between environments
 
 For more details on API key management, see the [AI Core API Keys documentation](../Core/README.md#api-key-management).

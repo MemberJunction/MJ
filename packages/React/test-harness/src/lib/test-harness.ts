@@ -1,9 +1,7 @@
 import { BrowserManager, BrowserContextOptions } from './browser-context';
 import { ComponentRunner, ComponentExecutionOptions, ComponentExecutionResult, ComponentSpec } from './component-runner';
 import { AssertionHelpers } from './assertion-helpers';
-import { ComponentHierarchyRegistrar } from '@memberjunction/react-runtime';
-import * as path from 'path';
-import * as fs from 'fs';
+import { ComponentRootSpec, ComponentChildSpec } from '@memberjunction/interactive-component-types';
 
 export interface TestHarnessOptions extends BrowserContextOptions {
   debug?: boolean;
@@ -32,19 +30,24 @@ export class ReactTestHarness {
     await this.browserManager.initialize();
   }
 
-  async testComponent(
-    componentCode: string,
+  /**
+   * Test a component specification (root component with optional children)
+   * This is the main method that leverages the runtime's ComponentHierarchyRegistrar
+   */
+  async testComponentSpec(
+    spec: ComponentSpec,
     props?: Record<string, any>,
     options?: Partial<ComponentExecutionOptions>
   ): Promise<ComponentExecutionResult> {
     const result = await this.componentRunner.executeComponent({
-      componentCode,
+      componentSpec: spec,
       props,
       ...options
     });
 
     if (this.options.debug) {
       console.log('=== Test Execution Debug Info ===');
+      console.log('Component:', spec.componentName);
       console.log('Success:', result.success);
       console.log('Execution Time:', result.executionTime, 'ms');
       console.log('Errors:', result.errors);
@@ -55,90 +58,81 @@ export class ReactTestHarness {
     if (!result.success && this.options.screenshotOnError && result.screenshot) {
       const screenshotPath = this.options.screenshotPath || './error-screenshot.png';
       const fs = await import('fs');
-      fs.writeFileSync(screenshotPath, result.screenshot);
+      // Ensure the screenshot Buffer is properly typed for writeFileSync
+      fs.writeFileSync(screenshotPath, Buffer.from(result.screenshot));
       console.log(`Screenshot saved to: ${screenshotPath}`);
     }
 
     return result;
   }
 
+  /**
+   * Convenience method to test a single component without children
+   */
+  async testSingleComponent(
+    componentName: string,
+    componentCode: string,
+    props?: Record<string, any>,
+    options?: Partial<ComponentExecutionOptions>
+  ): Promise<ComponentExecutionResult> {
+    const spec: ComponentSpec = {
+      componentName,
+      componentCode
+    };
+
+    return this.testComponentSpec(spec, props, options);
+  }
+
+  /**
+   * Test a component from the Skip spec format
+   */
+  async testSkipComponent(
+    skipSpec: ComponentRootSpec,
+    props?: Record<string, any>,
+    options?: Partial<ComponentExecutionOptions>
+  ): Promise<ComponentExecutionResult> {
+    // Convert SkipComponentRootSpec to ComponentSpec format
+    const spec: ComponentSpec = {
+      componentName: skipSpec.componentName,
+      componentCode: skipSpec.componentCode,
+      childComponents: this.convertSkipChildSpecs(skipSpec.childComponents)
+    };
+
+    return this.testComponentSpec(spec, props, options);
+  }
+
+  /**
+   * Convert Skip child specs to test harness ComponentSpec format
+   */
+  private convertSkipChildSpecs(children: ComponentChildSpec[]): ComponentSpec[] {
+    return children.map(child => ({
+      componentName: child.componentName,
+      componentCode: child.componentCode,
+      childComponents: child.components ? this.convertSkipChildSpecs(child.components) : []
+    }));
+  }
+
+  /**
+   * Test a component from a file path
+   * This is a convenience method for the CLI
+   */
   async testComponentFromFile(
     filePath: string,
     props?: Record<string, any>,
     options?: Partial<ComponentExecutionOptions>
   ): Promise<ComponentExecutionResult> {
-    return await this.componentRunner.executeComponentFromFile(filePath, props, options);
-  }
-
-  async testComponentHierarchy(
-    rootSpec: ComponentSpec,
-    props?: Record<string, any>,
-    options?: Partial<ComponentExecutionOptions>
-  ): Promise<ComponentExecutionResult> {
-    if (!rootSpec.componentCode) {
-      throw new Error(`Root component ${rootSpec.componentName} must have componentCode`);
-    }
-
-    // Collect all child components from the hierarchy
-    const childComponents = this.collectChildComponents(rootSpec);
-
-    // Execute the root component with all children registered
-    const result = await this.componentRunner.executeComponent({
-      componentCode: rootSpec.componentCode,
-      props,
-      childComponents,
-      registerChildren: true,
-      ...options
-    });
-
-    if (this.options.debug) {
-      console.log('=== Component Hierarchy Test Debug Info ===');
-      console.log('Root Component:', rootSpec.componentName);
-      console.log('Child Components:', childComponents.map(c => c.componentName));
-      console.log('==========================================');
-    }
-
-    return result;
-  }
-
-  async testComponentFromFileWithChildren(
-    filePath: string,
-    childComponents: ComponentSpec[],
-    props?: Record<string, any>,
-    options?: Partial<ComponentExecutionOptions>
-  ): Promise<ComponentExecutionResult> {
-    const absolutePath = path.resolve(filePath);
+    const fs = await import('fs');
+    const path = await import('path');
     
+    const absolutePath = path.resolve(filePath);
     if (!fs.existsSync(absolutePath)) {
       throw new Error(`Component file not found: ${absolutePath}`);
     }
-
+    
     const componentCode = fs.readFileSync(absolutePath, 'utf-8');
+    const componentName = path.basename(absolutePath, path.extname(absolutePath));
     
-    return await this.componentRunner.executeComponent({
-      componentCode,
-      props,
-      childComponents,
-      registerChildren: true,
-      ...options
-    });
-  }
-
-  private collectChildComponents(spec: ComponentSpec): ComponentSpec[] {
-    const collected: ComponentSpec[] = [];
-    
-    const processSpec = (s: ComponentSpec) => {
-      const children = s.childComponents || s.components || [];
-      children.forEach(child => {
-        if (child.componentCode) {
-          collected.push(child);
-        }
-        processSpec(child);
-      });
-    };
-    
-    processSpec(spec);
-    return collected;
+    return this.testSingleComponent(componentName, componentCode, props, options);
   }
 
   async runTest(

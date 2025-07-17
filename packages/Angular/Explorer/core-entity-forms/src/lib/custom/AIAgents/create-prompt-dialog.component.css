@@ -1,0 +1,295 @@
+/* Create Prompt Dialog Styles */
+.create-prompt-dialog {
+  padding: 0;
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Loading State */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.loading-spinner {
+  margin-bottom: 16px;
+  color: var(--kendo-color-primary, #0078d4);
+}
+
+/* Dialog Content */
+.dialog-content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  max-height: 70vh;
+}
+
+/* Form Sections */
+.form-section {
+  margin-bottom: 24px;
+  border: 1px solid var(--kendo-color-border, #e0e0e0);
+  border-radius: 6px;
+  padding: 16px;
+  background: var(--kendo-color-surface-alt, #fafafa);
+}
+
+.section-title {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--kendo-color-on-app-surface, #323130);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-title i {
+  color: var(--kendo-color-primary, #0078d4);
+}
+
+/* Form Grid Layout */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-field.full-width {
+  grid-column: 1 / -1;
+}
+
+/* Field Labels */
+.field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--kendo-color-on-app-surface, #323130);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.field-label.required::after {
+  content: '*';
+  color: var(--kendo-color-error, #d13438);
+  margin-left: 2px;
+}
+
+.field-label i {
+  font-size: 11px;
+  color: var(--kendo-color-subtle, #605e5c);
+}
+
+/* Form Controls */
+.full-width {
+  width: 100%;
+}
+
+/* Field Errors */
+.field-error {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--kendo-color-error, #d13438);
+  margin-top: 4px;
+}
+
+.field-error i {
+  font-size: 11px;
+}
+
+/* Template Mode Section */
+.template-mode-section {
+  margin-bottom: 16px;
+}
+
+.template-mode-options {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.radio-input {
+  margin: 0;
+}
+
+.radio-label {
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.radio-label:hover {
+  background-color: var(--kendo-color-base-hover, #f3f2f1);
+}
+
+.radio-label i {
+  font-size: 12px;
+  color: var(--kendo-color-subtle, #605e5c);
+}
+
+/* Template Editor Section */
+.template-editor-section {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--kendo-color-border, #e0e0e0);
+  border-radius: 4px;
+  background: var(--kendo-color-app-surface, #ffffff);
+}
+
+.template-info {
+  margin-bottom: 12px;
+}
+
+.template-name {
+  margin: 0 0 4px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--kendo-color-on-app-surface, #323130);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.template-description {
+  margin: 0;
+  font-size: 12px;
+  color: var(--kendo-color-subtle, #605e5c);
+}
+
+.template-editor-container {
+  border: 1px solid var(--kendo-color-border, #e0e0e0);
+  border-radius: 4px;
+  overflow: hidden;
+  min-height: 200px;
+}
+
+/* Existing Template Section */
+.existing-template-section {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--kendo-color-border, #e0e0e0);
+  border-radius: 4px;
+  background: var(--kendo-color-app-surface, #ffffff);
+}
+
+.existing-template-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.template-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.template-type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background-color: var(--kendo-color-primary, #0078d4);
+  color: white;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.template-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Dialog Footer */
+.dialog-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-top: 1px solid var(--kendo-color-border, #e0e0e0);
+  background: var(--kendo-color-surface-alt, #fafafa);
+  gap: 16px;
+}
+
+.footer-left {
+  flex: 1;
+}
+
+.footer-right {
+  display: flex;
+  gap: 8px;
+}
+
+.form-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--kendo-color-subtle, #605e5c);
+}
+
+.form-hint i {
+  color: var(--kendo-color-primary, #0078d4);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .template-mode-options {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .dialog-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  
+  .footer-right {
+    justify-content: stretch;
+  }
+  
+  .footer-right button {
+    flex: 1;
+  }
+}
+
+/* Compact Template Editor Styles */
+:host ::ng-deep .template-editor-container mj-template-editor {
+  --template-editor-min-height: 200px;
+}
+
+:host ::ng-deep .template-editor-container .template-editor-help {
+  display: none; /* Hide help section in compact mode */
+}

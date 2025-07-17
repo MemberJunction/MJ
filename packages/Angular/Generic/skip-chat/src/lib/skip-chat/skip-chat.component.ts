@@ -15,7 +15,7 @@ import {
 } from '@angular/core';
 import { Location } from '@angular/common';
 import { ActivatedRoute, ActivationEnd, Router } from '@angular/router';
-import { LogError, UserInfo, CompositeKey, LogStatus, RunView, RunViewParams, RunViewResult } from '@memberjunction/core';
+import { LogError, UserInfo, CompositeKey, LogStatus, RunView } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
 import { Container } from '@memberjunction/ng-container-directives';
@@ -27,9 +27,7 @@ import {
   MJAPISkipResult,
   SkipAPIAnalysisCompleteResponse,
   SkipAPIResponse,
-  SimpleRunView,
   SkipResponsePhase,
-  SkipComponentRootSpec,
 } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
 import { CopyScalarsAndArrays, InvokeManualResize, MJEvent, MJEventType, MJGlobal, SafeJSONParse } from '@memberjunction/global';

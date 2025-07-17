@@ -1,0 +1,163 @@
+<!-- Sub-Agent Advanced Settings Dialog -->
+<div class="sub-agent-advanced-settings-dialog">
+  
+  <!-- Loading State -->
+  @if (isLoading$ | async) {
+    <div class="loading-state">
+      <div class="loading-spinner">
+        <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+      </div>
+      <p>Loading sub-agent settings...</p>
+    </div>
+  } @else {
+    
+    <!-- Form Content -->
+    <form [formGroup]="advancedForm" class="advanced-form">
+      
+      <!-- Execution Configuration Section -->
+      <div class="form-section">
+        <h3 class="section-title">
+          <i class="fa-solid fa-play"></i>
+          Execution Configuration
+        </h3>
+        
+        <div class="form-grid">
+          <!-- Execution Order -->
+          <div class="form-field">
+            <label for="executionOrder">Execution Order *</label>
+            <kendo-numerictextbox 
+              formControlName="executionOrder"
+              [min]="0"
+              [format]="'0'"
+              [class.error-border]="hasExecutionOrderError()"
+              class="form-control">
+            </kendo-numerictextbox>
+            @if (isFieldInvalid('executionOrder')) {
+              <div class="field-error">{{ getFieldError('executionOrder') }}</div>
+            }
+            @if (hasExecutionOrderError()) {
+              <div class="field-error">{{ executionOrderError }}</div>
+            }
+            <small class="field-hint">Order in which this sub-agent executes among siblings (0 = first). Must be unique among sibling agents.</small>
+          </div>
+          
+          <!-- Execution Mode -->
+          <div class="form-field">
+            <label for="executionMode">Execution Mode *</label>
+            <kendo-dropdownlist 
+              formControlName="executionMode"
+              [data]="executionModeOptions"
+              textField="text"
+              valueField="value"
+              [valuePrimitive]="true"
+              class="form-control">
+              <ng-template kendoDropDownListItemTemplate let-dataItem>
+                <div class="execution-mode-option">
+                  <div class="option-header">
+                    <i class="fa-solid {{ dataItem.icon }}"></i>
+                    <span class="option-title">{{ dataItem.text }}</span>
+                  </div>
+                  <div class="option-description">{{ dataItem.description }}</div>
+                </div>
+              </ng-template>
+            </kendo-dropdownlist>
+            @if (isFieldInvalid('executionMode')) {
+              <div class="field-error">{{ getFieldError('executionMode') }}</div>
+            }
+            <small class="field-hint">{{ getExecutionModeDescription(advancedForm.get('executionMode')?.value) }}</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Agent Configuration Section -->
+      <div class="form-section">
+        <h3 class="section-title">
+          <i class="fa-solid fa-robot"></i>
+          Agent Configuration
+        </h3>
+        
+        <div class="form-grid">
+          <!-- Agent Type -->
+          <div class="form-field">
+            <label for="typeID">Agent Type</label>
+            <kendo-dropdownlist 
+              formControlName="typeID"
+              [data]="agentTypes$ | async"
+              textField="Name"
+              valueField="ID"
+              [valuePrimitive]="true"
+              [defaultItem]="{ Name: 'Default Type', ID: null }"
+              class="form-control">
+            </kendo-dropdownlist>
+            <small class="field-hint">Specialized agent type that defines behavior and capabilities</small>
+          </div>
+          
+          <!-- Status -->
+          <div class="form-field">
+            <label for="status">Status *</label>
+            <kendo-dropdownlist 
+              formControlName="status"
+              [data]="statusOptions"
+              textField="text"
+              valueField="value"
+              [valuePrimitive]="true"
+              class="form-control">
+            </kendo-dropdownlist>
+            @if (isFieldInvalid('status')) {
+              <div class="field-error">{{ getFieldError('status') }}</div>
+            }
+            <small class="field-hint">Current operational status of this sub-agent</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Capability Restrictions Section -->
+      <div class="form-section">
+        <h3 class="section-title">
+          <i class="fa-solid fa-shield-alt"></i>
+          Capability Restrictions
+        </h3>
+        
+        <div class="form-grid">
+          <!-- Expose As Action (Disabled for Sub-Agents) -->
+          <div class="form-field full-width">
+            <label class="checkbox-label disabled">
+              <kendo-checkbox 
+                formControlName="exposeAsAction"
+                [disabled]="true">
+              </kendo-checkbox>
+              Expose As Action
+            </label>
+            <small class="field-hint disabled-hint">
+              <i class="fa-solid fa-info-circle"></i>
+              Sub-agents cannot be exposed as actions. Only root agents (without parents) can be exposed as actions for use by other agents.
+            </small>
+          </div>
+        </div>
+      </div>
+    </form>
+  }
+
+  <!-- Dialog Footer -->
+  <div class="dialog-footer">
+    <button kendoButton 
+            look="flat" 
+            (click)="cancel()"
+            [disabled]="(isSaving$ | async) || false">
+      Cancel
+    </button>
+    
+    <button kendoButton 
+            themeColor="primary" 
+            (click)="save()"
+            [disabled]="((isSaving$ | async) || false) || ((isLoading$ | async) || false) || hasExecutionOrderError()">
+      @if (isSaving$ | async) {
+        <i class="fa-solid fa-spinner fa-spin"></i>
+        Saving...
+      } @else {
+        <i class="fa-solid fa-save"></i>
+        Save Settings
+      }
+    </button>
+  </div>
+</div>

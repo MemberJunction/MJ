@@ -1,0 +1,223 @@
+<!-- Add Action Dialog -->
+<div class="add-action-dialog">
+  
+  <!-- Dialog Header -->
+  <div class="dialog-header">
+    <div class="search-section">
+      <kendo-textbox 
+        [formControl]="searchControl" 
+        placeholder="Search actions by name, description, or category..."
+        class="search-input"
+        [clearButton]="true">
+        <ng-template kendoTextBoxPrefixTemplate>
+          <i class="fa-solid fa-search"></i>
+        </ng-template>
+      </kendo-textbox>
+    </div>
+    
+    <div class="header-actions">
+      <!-- View Toggle -->
+      <button kendoButton 
+              [toggleable]="true" 
+              [selected]="(viewMode$ | async) === 'grid'"
+              (click)="toggleViewMode()"
+              size="small"
+              kendoTooltip
+              [title]="(viewMode$ | async) === 'grid' ? 'Switch to list view' : 'Switch to grid view'">
+        <i class="fa-solid" 
+           [class.fa-th]="(viewMode$ | async) === 'grid'" 
+           [class.fa-list]="(viewMode$ | async) === 'list'"></i>
+      </button>
+      
+      <!-- Stats -->
+      <div class="stats">
+        <span class="stat-item">
+          <i class="fa-solid fa-bolt"></i>
+          {{ filteredCount }} of {{ totalActionCount }} actions
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="dialog-content">
+    
+    <!-- Category Sidebar -->
+    <div class="category-sidebar">
+      <div class="sidebar-header">
+        <h4><i class="fa-solid fa-folder-tree"></i> Categories</h4>
+      </div>
+      
+      <div class="category-list">
+        @for (category of categoryTree$ | async; track category.id) {
+          <div class="category-item" 
+               [class.selected]="(selectedCategoryId$ | async) === category.id"
+               (click)="selectCategory(category.id)">
+            <i class="fa-solid {{ category.icon }} category-icon"></i>
+            <span class="category-name">{{ category.name }}</span>
+            <span class="category-count">{{ category.count }}</span>
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Actions Display -->
+    <div class="actions-container">
+      
+      <!-- Loading State -->
+      @if (isLoading$ | async) {
+        <div class="loading-state">
+          <div class="loading-spinner">
+            <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+          </div>
+          <p>Loading actions...</p>
+        </div>
+      }
+
+      <!-- Empty State -->
+      @if (!(isLoading$ | async) && filteredCount === 0) {
+        <div class="empty-state">
+          <i class="fa-solid fa-search-minus"></i>
+          <h3>No actions found</h3>
+          <p>Try adjusting your search criteria or selecting a different category</p>
+          <button kendoButton (click)="clearSearch()">Clear Search</button>
+        </div>
+      }
+
+      <!-- Grid View -->
+      @if (!(isLoading$ | async) && (viewMode$ | async) === 'grid' && filteredCount > 0) {
+        <div class="actions-grid">
+          @for (action of filteredActions$ | async; track action.ID) {
+            <div class="action-card" 
+                 [class.selected]="action.selected"
+                 [class.existing]="existingActionIds.includes(action.ID)"
+                 (click)="toggleActionSelection(action)">
+              
+              <!-- Selection Indicator -->
+              <div class="selection-indicator">
+                <i class="fa-solid" 
+                   [class.fa-check-circle]="action.selected" 
+                   [class.fa-circle]="!action.selected"></i>
+              </div>
+              
+              <!-- Card Content -->
+              <div class="card-header">
+                <div class="action-icon">
+                  <i class="fa-solid {{ getActionIcon(action) }}"></i>
+                </div>
+                <h3 class="action-name">{{ action.Name }}</h3>
+              </div>
+              
+              <div class="card-body">
+                <p class="action-description">{{ action.Description || 'No description available' }}</p>
+                
+                @if (action.categoryName) {
+                  <div class="category-badge">
+                    <i class="fa-solid fa-folder"></i>
+                    {{ action.categoryName }}
+                  </div>
+                }
+                
+                @if (action.Type) {
+                  <div class="type-badge">
+                    <i class="fa-solid fa-tag"></i>
+                    {{ action.Type }}
+                  </div>
+                }
+              </div>
+              
+              <!-- Existing Action Overlay -->
+              @if (existingActionIds.includes(action.ID)) {
+                <div class="existing-overlay">
+                  <i class="fa-solid fa-check"></i>
+                  <span>Already Added</span>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+
+      <!-- List View -->
+      @if (!(isLoading$ | async) && (viewMode$ | async) === 'list' && filteredCount > 0) {
+        <div class="actions-list">
+          
+          <!-- List Header -->
+          <div class="list-header">
+            <span class="col-select"></span>
+            <span class="col-name">Name</span>
+            <span class="col-category">Category</span>
+            <span class="col-type">Type</span>
+            <span class="col-description">Description</span>
+            <span class="col-status">Status</span>
+          </div>
+          
+          <!-- List Items -->
+          @for (action of filteredActions$ | async; track action.ID) {
+            <div class="list-item" 
+                 [class.selected]="action.selected"
+                 [class.existing]="existingActionIds.includes(action.ID)"
+                 (click)="toggleActionSelection(action)">
+              
+              <span class="col-select">
+                <i class="fa-solid" 
+                   [class.fa-check-circle]="action.selected" 
+                   [class.fa-circle]="!action.selected"></i>
+              </span>
+              
+              <span class="col-name">
+                <i class="fa-solid {{ getActionIcon(action) }} action-icon"></i>
+                {{ action.Name }}
+              </span>
+              
+              <span class="col-category">{{ action.categoryName || '-' }}</span>
+              <span class="col-type">{{ action.Type || '-' }}</span>
+              <span class="col-description">{{ action.Description || '-' }}</span>
+              
+              <span class="col-status">
+                @if (existingActionIds.includes(action.ID)) {
+                  <span class="status-badge existing">
+                    <i class="fa-solid fa-check"></i>
+                    Added
+                  </span>
+                } @else {
+                  <span class="status-badge available">
+                    <i class="fa-solid fa-plus"></i>
+                    Available
+                  </span>
+                }
+              </span>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Selected Actions Summary -->
+  @if (selectedCount > 0) {
+    <div class="selection-summary">
+      <div class="summary-content">
+        <i class="fa-solid fa-check-circle"></i>
+        <span>{{ selectedCount }} action{{ selectedCount === 1 ? '' : 's' }} selected</span>
+      </div>
+    </div>
+  }
+
+  <!-- Dialog Footer -->
+  <div class="dialog-footer">
+    <button kendoButton 
+            look="flat" 
+            (click)="cancel()">
+      Cancel
+    </button>
+    
+    <button kendoButton 
+            themeColor="primary" 
+            [disabled]="selectedCount === 0"
+            (click)="addSelectedActions()">
+      <i class="fa-solid fa-plus"></i>
+      Add Selected ({{ selectedCount }})
+    </button>
+  </div>
+</div>

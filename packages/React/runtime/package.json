@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/react-runtime",
-  "version": "2.69.1",
+  "version": "2.70.0",
   "description": "Platform-agnostic React component runtime for MemberJunction. Provides core compilation, registry, and execution capabilities for React components in any JavaScript environment.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

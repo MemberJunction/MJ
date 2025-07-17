@@ -1,0 +1,260 @@
+<kendo-window
+  *ngIf="visible"
+  [width]="900"
+  [height]="700"
+  [resizable]="false"
+  [draggable]="true"
+  [keepContent]="true"
+  (close)="onCancel()"
+  kendoWindowContainer>
+  
+  <kendo-window-titlebar>
+    <div class="dialog-header">
+      <h2 class="dialog-title">
+        <i class="fa-solid fa-grid-2"></i>
+        {{ isEditMode ? 'Edit Application' : 'Create New Application' }}
+      </h2>
+      <p class="dialog-subtitle">
+        {{ isEditMode ? 'Update application information and settings' : 'Add a new application to the system' }}
+      </p>
+    </div>
+  </kendo-window-titlebar>
+
+  <div class="dialog-content">
+    <form [formGroup]="applicationForm" (ngSubmit)="onSubmit()">
+      
+      @if (error) {
+        <div class="content-section">
+          <div class="alert alert-error">
+            <i class="fa-solid fa-exclamation-triangle"></i>
+            <div>{{ error }}</div>
+          </div>
+        </div>
+      }
+
+      <!-- Basic Information Section -->
+      <div class="content-section">
+        <div class="form-section">
+          <div class="section-header">
+            <h3 class="section-title">
+              <i class="fa-solid fa-info-circle"></i>
+              Application Information
+            </h3>
+            <p class="section-description">Define the application's basic properties</p>
+          </div>
+          
+          <div class="form-grid">
+            <div class="form-field">
+              <label class="field-label required" for="name">Application Name</label>
+              <input 
+                id="name"
+                type="text" 
+                class="field-input" 
+                formControlName="name"
+                placeholder="My Application"
+                [class.error]="applicationForm.get('name')?.invalid && applicationForm.get('name')?.touched"
+              />
+              @if (applicationForm.get('name')?.invalid && applicationForm.get('name')?.touched) {
+                <div class="field-error">
+                  <i class="fa-solid fa-exclamation-circle"></i>
+                  @if (applicationForm.get('name')?.errors?.['required']) {
+                    Application name is required
+                  }
+                  @if (applicationForm.get('name')?.errors?.['maxlength']) {
+                    Application name cannot exceed 100 characters
+                  }
+                </div>
+              }
+            </div>
+
+            <div class="form-field">
+              <label class="field-label" for="description">Description</label>
+              <textarea 
+                id="description"
+                class="field-textarea" 
+                formControlName="description"
+                placeholder="Describe the application's purpose and functionality..."
+                rows="6"
+              ></textarea>
+              <div class="field-hint">
+                Provide a clear description of what this application does and its main features.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Entity Management Section -->
+      <div class="content-section">
+        <div class="form-section">
+          <div class="section-header">
+            <h3 class="section-title">
+              <i class="fa-solid fa-database"></i>
+              Application Entities
+            </h3>
+            <p class="section-description">Manage which entities are included in this application</p>
+          </div>
+          
+          <div class="form-grid">
+            <!-- Assigned Entities -->
+            @if (applicationEntities.length > 0) {
+              <div class="assigned-entities">
+                <h4 class="subsection-title">Assigned Entities ({{ applicationEntities.length }})</h4>
+                <div class="entities-list">
+                  @for (config of applicationEntities; track config.entity.ID; let i = $index) {
+                    <div class="entity-item" [class.is-new]="config.isNew" [class.has-changes]="config.hasChanges">
+                      <div class="entity-info">
+                        <div class="entity-icon">
+                          <i class="fa-solid fa-table"></i>
+                        </div>
+                        <div class="entity-details">
+                          <div class="entity-name">
+                            {{ config.entity.Name }}
+                            @if (config.entity.Description) {
+                              <i class="fa-solid fa-info-circle entity-info-icon" 
+                                 [title]="config.entity.Description"
+                                 [attr.data-tooltip]="config.entity.Description"></i>
+                            }
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div class="entity-config">
+                        <div class="config-item">
+                          <label class="config-label">
+                            <input 
+                              type="checkbox" 
+                              [(ngModel)]="config.defaultForNewUser"
+                              [ngModelOptions]="{standalone: true}"
+                              (change)="onDefaultForNewUserChange(config)"
+                              class="config-checkbox"
+                            />
+                            <span class="checkbox-text">Default for new users</span>
+                          </label>
+                        </div>
+                        <div class="sequence-badge">{{ config.sequence }}</div>
+                      </div>
+                      
+                      <div class="entity-actions">
+                        <button 
+                          type="button" 
+                          class="btn-icon btn-neutral"
+                          (click)="moveEntityUp(i)"
+                          [disabled]="i === 0"
+                          title="Move up"
+                        >
+                          <i class="fa-solid fa-chevron-up"></i>
+                        </button>
+                        <button 
+                          type="button" 
+                          class="btn-icon btn-neutral"
+                          (click)="moveEntityDown(i)"
+                          [disabled]="i === applicationEntities.length - 1"
+                          title="Move down"
+                        >
+                          <i class="fa-solid fa-chevron-down"></i>
+                        </button>
+                        <button 
+                          type="button" 
+                          class="btn-icon btn-danger"
+                          (click)="removeEntity(config)"
+                          title="Remove entity"
+                        >
+                          <i class="fa-solid fa-times"></i>
+                        </button>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            } @else {
+              <div class="no-entities">
+                <i class="fa-solid fa-database"></i>
+                <p>No entities assigned to this application</p>
+                <p class="empty-subtext">Add entities from the available list below</p>
+              </div>
+            }
+            
+            <!-- Available Entities -->
+            @if (availableEntities.length > 0) {
+              <div class="available-entities">
+                <h4 class="subsection-title">Available Entities ({{ availableEntities.length }})</h4>
+                <div class="entities-grid">
+                  @for (entity of availableEntities; track entity.ID) {
+                    <div class="entity-chip" (click)="addEntity(entity)">
+                      <div class="chip-content">
+                        <i class="fa-solid fa-plus"></i>
+                        <span class="chip-name">{{ entity.Name }}</span>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            } @else {
+              <div class="all-assigned">
+                <i class="fa-solid fa-check-circle"></i>
+                <p>All entities have been assigned to this application</p>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- Application Info Section -->
+      @if (isEditMode) {
+        <div class="content-section">
+          <div class="form-section">
+            <div class="section-header">
+              <h3 class="section-title">
+                <i class="fa-solid fa-info-circle"></i>
+                System Information
+              </h3>
+              <p class="section-description">Application metadata and audit information</p>
+            </div>
+            
+            <div class="form-grid">
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="info-label">Created:</span>
+                  <span class="info-value">{{ data?.application?.__mj_CreatedAt | date:'medium' }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Last Updated:</span>
+                  <span class="info-value">{{ data?.application?.__mj_UpdatedAt | date:'medium' }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Application ID:</span>
+                  <span class="info-value">{{ data?.application?.ID }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Total Entities:</span>
+                  <span class="info-value">{{ applicationEntities.length }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+
+      <div class="dialog-footer">
+        <button type="button" class="btn btn-secondary" (click)="onCancel()">
+          <i class="fa-solid fa-times"></i>
+          Cancel
+        </button>
+        <button 
+          type="submit" 
+          class="btn btn-primary" 
+          [disabled]="applicationForm.invalid || isLoading"
+        >
+          @if (isLoading) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            Saving...
+          } @else {
+            <i class="fa-solid fa-save"></i>
+            {{ isEditMode ? 'Update Application' : 'Create Application' }}
+          }
+        </button>
+      </div>
+    </form>
+  </div>
+</kendo-window>

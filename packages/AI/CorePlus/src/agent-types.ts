@@ -346,6 +346,45 @@ export type ExecuteAgentParams<TContext = any, P = any> = {
      * bandwidth by avoiding passing large payloads back and forth.
      */
     autoPopulateLastRunPayload?: boolean;
+    /**
+     * Optional AI Configuration ID to use for this agent execution.
+     * When provided, this configuration will be passed to all prompts executed
+     * by this agent and its sub-agents, enabling environment-specific model
+     * selection (e.g., Prod vs Dev configurations).
+     * 
+     * The configuration ID filters which AI models are available for prompt
+     * execution and can provide configuration parameters for dynamic behavior.
+     */
+    configurationId?: string;
+    
+    /**
+     * Optional callback fired immediately after the AgentRun record is created and saved.
+     * Provides the AgentRun ID for immediate tracking/monitoring purposes.
+     * 
+     * This callback is useful for:
+     * - Linking the AgentRun to parent records (e.g., AIAgentRunStep.TargetLogID for sub-agents)
+     * - Real-time monitoring and tracking
+     * - Early logging and debugging
+     * 
+     * The callback is invoked after the AgentRun is successfully saved but before
+     * the actual agent execution begins. If the callback throws an error, it will
+     * be logged but won't fail the agent execution.
+     * 
+     * @param agentRunId - The ID of the newly created AIAgentRun record
+     * 
+     * @example
+     * ```typescript
+     * const params: ExecuteAgentParams = {
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   onAgentRunCreated: async (agentRunId) => {
+     *     console.log(`Agent run started: ${agentRunId}`);
+     *     // Update parent records, send monitoring events, etc.
+     *   }
+     * };
+     * ```
+     */
+    onAgentRunCreated?: (agentRunId: string) => void | Promise<void>;
 }
 
 /**

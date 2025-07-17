@@ -1,0 +1,207 @@
+.new-agent-dialog {
+  padding: 1.5rem;
+  min-width: 500px;
+  position: relative;
+}
+
+.new-agent-dialog .parent-info {
+  background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.new-agent-dialog .parent-info i {
+  color: #3b82f6;
+  font-size: 1.1rem;
+}
+
+.new-agent-dialog .parent-info strong {
+  color: #3b82f6;
+}
+
+.new-agent-dialog .loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  border-radius: 8px;
+}
+
+.new-agent-dialog .form-fields .form-group {
+  margin-bottom: 1.5rem;
+}
+
+.new-agent-dialog .form-fields .form-group label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  color: #475569;
+}
+
+.new-agent-dialog .form-fields .form-group label.required::after {
+  content: ' *';
+  color: #ef4444;
+}
+
+.new-agent-dialog .form-fields .form-group .full-width {
+  width: 100%;
+}
+
+.new-agent-dialog .form-fields .form-group .error-message {
+  color: #ef4444;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.new-agent-dialog .form-fields .form-group .error-message i {
+  font-size: 0.75rem;
+}
+
+.new-agent-dialog .form-fields .form-group .field-hint {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin-top: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.new-agent-dialog .form-fields .form-group .field-hint i {
+  font-size: 0.75rem;
+}
+
+.new-agent-dialog .form-fields .model-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+}
+
+.new-agent-dialog .form-fields .model-item .model-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.new-agent-dialog .form-fields .model-item .model-icon i {
+  font-size: 1rem;
+}
+
+.new-agent-dialog .form-fields .model-item .model-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.new-agent-dialog .form-fields .model-item .model-details .model-name {
+  font-weight: 500;
+}
+
+.new-agent-dialog .form-fields .model-item .model-details .model-vendor {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.new-agent-dialog .form-fields .k-textbox,
+.new-agent-dialog .form-fields .k-textarea,
+.new-agent-dialog .form-fields .k-dropdown,
+.new-agent-dialog .form-fields .k-numerictextbox {
+  border-radius: 6px;
+}
+
+.new-agent-dialog .advanced-settings {
+  margin-top: 1.5rem;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.new-agent-dialog .advanced-settings .k-expander-header {
+  background: #f8fafc;
+  padding: 1rem;
+}
+
+.new-agent-dialog .advanced-settings .k-expander-header i {
+  margin-right: 0.5rem;
+  color: #3b82f6;
+}
+
+.new-agent-dialog .advanced-settings .advanced-grid {
+  padding: 1rem;
+  display: grid;
+  gap: 1.5rem;
+}
+
+.new-agent-dialog .advanced-settings .advanced-grid .setting-group label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  color: #475569;
+}
+
+.new-agent-dialog .advanced-settings .advanced-grid .setting-group .slider-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.new-agent-dialog .advanced-settings .advanced-grid .setting-group .slider-container .temperature-slider {
+  flex: 1;
+}
+
+.new-agent-dialog .advanced-settings .advanced-grid .setting-group .slider-container .slider-value {
+  min-width: 3rem;
+  text-align: right;
+  font-weight: 600;
+  color: #3b82f6;
+}
+
+.new-agent-dialog .advanced-settings .advanced-grid .setting-group.checkbox-group label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-weight: normal;
+}
+
+.new-agent-dialog .advanced-settings .advanced-grid .setting-group.checkbox-group label input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.new-agent-dialog .dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.new-agent-dialog .dialog-actions button {
+  min-width: 120px;
+}
+
+.new-agent-dialog .dialog-actions button kendo-loader {
+  margin-right: 0.5rem;
+}
+
+.new-agent-dialog .dialog-actions button i {
+  margin-right: 0.5rem;
+}
