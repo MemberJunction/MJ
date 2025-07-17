@@ -523,17 +523,12 @@ import { AIAgentRunStepEntityExtended } from '@memberjunction/core-entities';
         
         .detail-content.code-editor-container {
             padding: 0;
-            background: #1e1e1e;
+            background: #f8f9fa;
             border-radius: 4px;
             overflow: hidden;
             white-space: normal;
-            color: #d4d4d4;
         }
-        
-        .detail-content.code-editor-container ::ng-deep .cm-content {
-            color: #d4d4d4;
-        }
-        
+                
         .copy-button {
             margin-left: auto;
             padding: 4px 8px;
