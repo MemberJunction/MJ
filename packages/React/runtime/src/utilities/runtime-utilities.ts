@@ -11,9 +11,7 @@ import {
   RunQueryParams,
   LogError
 } from '@memberjunction/core';
-import { 
-  MapEntityInfoToSkipEntityInfo
-} from '@memberjunction/skip-types';
+
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { ComponentUtilities, SimpleMetadata, SimpleRunQuery, SimpleRunView } from '@memberjunction/interactive-component-types';
 
