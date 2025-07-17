@@ -86,18 +86,15 @@ export class AgentRunner {
             }
             
             // Execute the agent and return the result directly
-            return await agentInstance.Execute(params);
+            return await agentInstance.Execute(params as ExecuteAgentParams<any>) as ExecuteAgentResult<R>;
             
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             LogError(`AgentRunner execution failed: ${errorMessage}`, undefined, error);
             
-            // Return error result in the same format as BaseAgent
-            // Create a minimal failure result when we can't get a proper agent run
-            return {
-                success: false,
-                agentRun: null as any, // This is an edge case where we couldn't create the run
-            };
+            // Re-throw the error since we can't create a proper ExecuteAgentResult without an agent run
+            // BaseAgent.Execute will handle creating a proper error result with an agent run
+            throw error;
         }
     }
 }

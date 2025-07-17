@@ -1,7 +1,7 @@
 /**
  * Definition of a single property of a component.
  */
-export interface SkipComponentProperty {
+export interface ComponentProperty {
     /**
      * The name of the property
      */
@@ -35,7 +35,7 @@ export interface SkipComponentProperty {
 /**
  * Definition of a single event of a component.
  */
-export interface SkipComponentEvent {
+export interface ComponentEvent {
     /**
      * The name of the event
      */
@@ -47,10 +47,10 @@ export interface SkipComponentEvent {
     /**
      * An array of parameters that this event can emit.
      */
-    parameters?: SkipComponentEventParameter[];
+    parameters?: ComponentEventParameter[];
 }
 
-export interface SkipComponentEventParameter {
+export interface ComponentEventParameter {
     /**
      * The name of the parameter
      */

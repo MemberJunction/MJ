@@ -3,7 +3,7 @@ import { DataContext } from "@memberjunction/data-context";
 /**
  * This interface is critical for understanding how components interact with MemberJunction data
  */
-export interface SkipComponentDataRequirements {
+export interface ComponentDataRequirements {
     /**
      * The primary data access mode for this component.
      * - 'dynamic': Component fetches data at runtime using MJ utilities
@@ -38,7 +38,7 @@ export interface SkipComponentDataRequirements {
          * Describes the entities and fields the component will
          * need to fulfill user requirements.
          */
-        requiredEntities: SkipComponentEntityDataRequirement[];
+        requiredEntities: ComponentEntityDataRequirement[];
         
         /**
          * Description of data access patterns
@@ -55,7 +55,7 @@ export interface SkipComponentDataRequirements {
 /**
  * Describes use of a single entity 
  */
-export type SkipComponentEntityDataRequirement = {
+export type ComponentEntityDataRequirement = {
     /**
      * Name of the entity (unique system-wide)
      */

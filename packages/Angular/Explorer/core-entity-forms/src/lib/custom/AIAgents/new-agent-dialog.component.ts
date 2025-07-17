@@ -17,7 +17,7 @@ export interface NewAgentConfig {
 @Component({
   selector: 'mj-new-agent-dialog',
   templateUrl: './new-agent-dialog.component.html',
-  styleUrls: ['./new-agent-dialog.component.scss']
+  styleUrls: ['./new-agent-dialog.component.css']
 })
 export class NewAgentDialogComponent implements OnInit {
   @Input() config: NewAgentConfig = {

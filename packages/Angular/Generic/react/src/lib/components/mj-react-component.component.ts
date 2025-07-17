@@ -17,15 +17,13 @@ import {
   ChangeDetectorRef
 } from '@angular/core';
 import { Subject, takeUntil } from 'rxjs';
-import { SkipComponentRootSpec, SkipComponentCallbacks, SkipComponentStyles } from '@memberjunction/skip-types';
+import { ComponentRootSpec, ComponentCallbacks, ComponentStyles } from '@memberjunction/interactive-component-types';
 import { ReactBridgeService } from '../services/react-bridge.service';
 import { AngularAdapterService } from '../services/angular-adapter.service';
 import { 
   buildComponentProps, 
-  ComponentCallbacks,
   ComponentError,
   createErrorBoundary,
-  ComponentStyles,
   ComponentHierarchyRegistrar,
   HierarchyRegistrationResult
 } from '@memberjunction/react-runtime';
@@ -114,7 +112,7 @@ export interface StateChangeEvent {
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class MJReactComponent implements AfterViewInit, OnDestroy {
-  @Input() component!: SkipComponentRootSpec;
+  @Input() component!: ComponentRootSpec;
   
   private _data: any = {};
   @Input() 
@@ -148,7 +146,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   }
   
   @Input() utilities: any = {};
-  @Input() styles?: Partial<SkipComponentStyles>;
+  @Input() styles?: Partial<ComponentStyles>;
   
   @Output() stateChange = new EventEmitter<StateChangeEvent>();
   @Output() componentEvent = new EventEmitter<ReactComponentEvent>();
@@ -184,16 +182,6 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     this.cleanup();
   }
 
-  /**
-   * Convert SkipComponentStyles to ComponentStyles
-   * @param skipStyles - Skip component styles
-   * @returns Component styles for React runtime
-   */
-  private convertStyles(skipStyles?: Partial<SkipComponentStyles>): any {
-    // Pass through the full styles object as-is
-    // Skip components expect the full structure including colors, typography, etc.
-    return skipStyles;
-  }
 
   /**
    * Initialize the React component

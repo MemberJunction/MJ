@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@memberjunction/react-runtime": "^2.70.0",
+    "@memberjunction/interactive-component-types": "^2.70.0",
     "@playwright/test": "^1.40.0",
     "playwright": "^1.40.0",
     "commander": "^11.1.0",

@@ -158,7 +158,7 @@ ASK_SKIP_ORGANIZATION_ID = 1
       CLIENT_ID: this.userConfig.msalWebClientId,
       TENANT_ID: this.userConfig.msalTenantId,
       CLIENT_AUTHORITY: this.userConfig.msalTenantId ? `https://login.microsoftonline.com/${this.userConfig.msalTenantId}` : '',
-      AUTH_TYPE: this.userConfig.authType,
+      AUTH_TYPE: this.userConfig.authType === 'AUTH0' ? 'auth0' : this.userConfig.authType.toLowerCase(),
       AUTH0_DOMAIN: this.userConfig.auth0Domain,
       AUTH0_CLIENTID: this.userConfig.auth0ClientId,
     };

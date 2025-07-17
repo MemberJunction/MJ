@@ -25,6 +25,14 @@ import { AIPromptFormComponentExtended, LoadAIPromptFormComponentExtended } from
 import { AIAgentFormComponentExtended, LoadAIAgentFormComponentExtended } from "./AIAgents/ai-agent-form.component";
 import { NewAgentDialogComponent } from "./AIAgents/new-agent-dialog.component";
 import { NewAgentDialogService } from "./AIAgents/new-agent-dialog.service";
+import { AddActionDialogComponent } from "./AIAgents/add-action-dialog.component";
+import { PromptSelectorDialogComponent } from "./AIAgents/prompt-selector-dialog.component";
+import { AgentPromptAdvancedSettingsDialogComponent } from "./AIAgents/agent-prompt-advanced-settings-dialog.component";
+import { SubAgentAdvancedSettingsDialogComponent } from "./AIAgents/sub-agent-advanced-settings-dialog.component";
+import { SubAgentSelectorDialogComponent } from "./AIAgents/sub-agent-selector-dialog.component";
+import { CreatePromptDialogComponent } from "./AIAgents/create-prompt-dialog.component";
+import { CreateSubAgentDialogComponent } from "./AIAgents/create-sub-agent-dialog.component";
+import { AIAgentManagementService } from "./AIAgents/ai-agent-management.service";
 import { AITestHarnessModule } from "@memberjunction/ng-ai-test-harness";
 import { ActionGalleryModule } from "@memberjunction/ng-action-gallery";
 import { JoinGridModule } from "@memberjunction/ng-join-grid";
@@ -55,6 +63,13 @@ import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-no
         AIPromptFormComponentExtended,
         AIAgentFormComponentExtended,
         NewAgentDialogComponent,
+        AddActionDialogComponent,
+        PromptSelectorDialogComponent,
+        AgentPromptAdvancedSettingsDialogComponent,
+        SubAgentAdvancedSettingsDialogComponent,
+        SubAgentSelectorDialogComponent,
+        CreatePromptDialogComponent,
+        CreateSubAgentDialogComponent,
         EntitySelectorDialogComponent,
         AIPromptRunFormComponentExtended,
         ChatMessageViewerComponent,
@@ -122,7 +137,8 @@ import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-no
         AIAgentRunStepNodeComponent,
     ],
     providers: [
-        NewAgentDialogService
+        NewAgentDialogService,
+        AIAgentManagementService
     ]
 })
 export class MemberJunctionCoreEntityFormsModule { }

@@ -96,15 +96,18 @@ export class PayloadFeedbackManager {
         
         switch (warning.type) {
             case 'content_truncation':
-                question = `Did you intend to reduce the content at "${warning.path}" from ${warning.details.originalLength} to ${warning.details.newLength} characters (${warning.details.reductionPercentage.toFixed(1)}% reduction)?`;
+                const truncDetails = warning.details as { originalLength: number; newLength: number; reductionPercentage: number };
+                question = `Did you intend to reduce the content at "${warning.path}" from ${truncDetails.originalLength} to ${truncDetails.newLength} characters (${truncDetails.reductionPercentage.toFixed(1)}% reduction)?`;
                 break;
                 
             case 'key_removal':
-                question = `Did you intend to remove the non-empty key(s) at "${warning.path}": ${warning.details.removedKeys.join(', ')}?`;
+                const removalDetails = warning.details as { removedKeys: string[] };
+                question = `Did you intend to remove the non-empty key(s) at "${warning.path}": ${removalDetails.removedKeys.join(', ')}?`;
                 break;
                 
             case 'type_change':
-                question = `Did you intend to change the type at "${warning.path}" from ${warning.details.originalType} to ${warning.details.newType}?`;
+                const typeDetails = warning.details as { originalType: string; newType: string };
+                question = `Did you intend to change the type at "${warning.path}" from ${typeDetails.originalType} to ${typeDetails.newType}?`;
                 break;
                 
             case 'pattern_anomaly':

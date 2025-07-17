@@ -44,9 +44,74 @@ import {
     isOperationAllowed 
 } from './types/payload-operations';
 
+
 /**
  * Result of applying a payload change request with enhanced tracking
  */
+/**
+ * Summary of payload change operations for audit trail storage
+ */
+export interface PayloadChangeResultSummary {
+    /** Operation counts */
+    applied: {
+        additions: number;
+        updates: number;
+        deletions: number;
+    };
+    /** Warning messages */
+    warnings: string[];
+    /** Whether feedback is required */
+    requiresFeedback: boolean;
+    /** Timestamp of the operation */
+    timestamp: Date | string;
+    /** Payload validation tracking */
+    payloadValidation?: {
+        selfWriteViolations?: {
+            deniedOperations: Array<{
+                path: string;
+                operation: 'add' | 'update' | 'delete';
+                from?: unknown;
+                to?: unknown;
+                reason: string;
+                timestamp: string;
+            }>;
+            timestamp: string;
+        };
+        upstreamMergeViolations?: {
+            subAgentName: string;
+            attemptedOperations: Array<{
+                path: string;
+                operation: 'add' | 'update' | 'delete';
+                from?: unknown;
+                to?: unknown;
+                reason: string;
+                timestamp: string;
+            }>;
+            authorizedPaths: string[];
+            timestamp: string;
+        };
+    };
+    /** Analysis summary */
+    analysis?: {
+        totalWarnings: number;
+        warningsByType: Record<string, number>;
+        suspiciousChanges: number;
+        criticalWarnings: Array<{
+            type: string;
+            severity: string;
+            path: string;
+            message: string;
+        }>;
+    };
+    /** Diff summary */
+    diffSummary?: {
+        added: number;
+        removed: number;
+        modified: number;
+        totalChanges: number;
+    };
+}
+
 export interface PayloadManagerResult<P = any> {
     /** The resulting payload after changes */
     result: P;
@@ -66,6 +131,15 @@ export interface PayloadManagerResult<P = any> {
     requiresFeedback?: boolean;
     /** Timestamp of the operation */
     timestamp: Date;
+    /** Blocked operations with detailed tracking */
+    blockedOperations?: Array<{
+        path: string;
+        operation: 'add' | 'update' | 'delete';
+        from?: unknown;
+        to?: unknown;
+        reason: string;
+        timestamp: string;
+    }>;
 }
 
 /**
@@ -98,7 +172,7 @@ export class PayloadManager {
      * // Returns: { customer: { id: 1, name: 'John' }, order: { id: 2 } }
      * ```
      */
-    public extractDownstreamPayload(subAgentName: string, fullPayload: any, downstreamPaths: string[]): any {
+    public extractDownstreamPayload<P = any>(subAgentName: string, fullPayload: P | null | undefined, downstreamPaths: string[]): Partial<P> | null {
         if (!fullPayload) return null;
         if (!downstreamPaths || downstreamPaths.length === 0) return {};
         
@@ -137,31 +211,83 @@ export class PayloadManager {
      * // Returns: { customer: { id: 1 }, analysis: { sentiment: 'positive', score: 0.9 } }
      * ```
      */
-    public mergeUpstreamPayload(
+    public mergeUpstreamPayload<P = any>(
         subAgentName: string,
-        parentPayload: any, 
-        subAgentPayload: any, 
-        upstreamPaths: string[]
-    ): any {
-        if (!parentPayload && !subAgentPayload) return null;
-        if (!subAgentPayload) return parentPayload;
+        parentPayload: P | null | undefined, 
+        subAgentPayload: Partial<P> | null | undefined, 
+        upstreamPaths: string[],
+        verbose?: boolean
+    ): PayloadManagerResult<P> {
+        const blockedOperations: Array<{
+            path: string;
+            operation: 'add' | 'update' | 'delete';
+            from?: unknown;
+            to?: unknown;
+            reason: string;
+            timestamp: string;
+        }> = [];
+
+        if (!parentPayload && !subAgentPayload) {
+            return {
+                result: null,
+                applied: { additions: 0, updates: 0, deletions: 0 },
+                warnings: [],
+                timestamp: new Date(),
+                blockedOperations
+            };
+        }
+        
+        if (!subAgentPayload) {
+            return {
+                result: parentPayload,
+                applied: { additions: 0, updates: 0, deletions: 0 },
+                warnings: [],
+                timestamp: new Date(),
+                blockedOperations
+            };
+        }
+        
         if (!upstreamPaths || upstreamPaths.length === 0) {
-            LogStatus('Warning: No upstream paths specified - sub-agent changes will be ignored');
-            return parentPayload;
+            if (verbose) {
+                LogStatus('Warning: No upstream paths specified - sub-agent changes will be ignored');
+            }
+            return {
+                result: parentPayload,
+                applied: { additions: 0, updates: 0, deletions: 0 },
+                warnings: ['No upstream paths specified - sub-agent changes ignored'],
+                timestamp: new Date(),
+                blockedOperations
+            };
         }
         
         // Start with a deep clone of the parent payload
         const result = _.cloneDeep(parentPayload || {});
+        const counts = { additions: 0, updates: 0, deletions: 0 };
         
         // Handle wildcard - merge everything
         if (upstreamPaths.includes('*')) {
-            return this.deepMerge(result, subAgentPayload);
+            const merged = this.deepMerge(result, subAgentPayload);
+            // Count changes
+            this.countChanges(parentPayload, merged, counts);
+            return {
+                result: merged as P,
+                applied: counts,
+                warnings: [],
+                timestamp: new Date(),
+                blockedOperations
+            };
         }
         
         // Check each path in the sub-agent payload
-        this.mergeAllowedPaths(result, subAgentPayload, upstreamPaths, subAgentName);
+        const mergeResult = this.mergeAllowedPaths(result, subAgentPayload, upstreamPaths, subAgentName, verbose);
         
-        return result;
+        return {
+            result: result as P,
+            applied: mergeResult.counts,
+            warnings: mergeResult.warnings,
+            timestamp: new Date(),
+            blockedOperations: mergeResult.blockedOperations
+        };
     }
 
     /**
@@ -324,12 +450,24 @@ export class PayloadManager {
      * 
      * @private
      */
-    private mergeAllowedPaths(
-        result: any,
-        subAgentPayload: any,
+    private mergeAllowedPaths<P = any>(
+        result: P,
+        subAgentPayload: Partial<P>,
         upstreamPaths: string[],
-        subAgentName: string
-    ): void {
+        subAgentName: string,
+        verbose?: boolean
+    ): {
+        counts: { additions: number; updates: number; deletions: number };
+        warnings: string[];
+        blockedOperations: Array<{
+            path: string;
+            operation: 'add' | 'update' | 'delete';
+            from?: any;
+            to?: any;
+            reason: string;
+            timestamp: string;
+        }>;
+    } {
         // Get all paths from sub-agent payload
         const subAgentPaths = this.getAllPaths(subAgentPayload);
         
@@ -354,7 +492,7 @@ export class PayloadManager {
             const isOperationAllowed = this.isOperationAllowedForPath(actualPath, operation, upstreamPaths);
             
             if (isOperationAllowed) {
-                _.set(result, actualPath, _.cloneDeep(subAgentValue));
+                _.set(result as any, actualPath, _.cloneDeep(subAgentValue));
             } else {
                 // Only track if the sub-agent is trying to change the value
                 if (!_.isEqual(subAgentValue, originalValue)) {
@@ -399,22 +537,99 @@ export class PayloadManager {
             }
         }
         
-        // Output consolidated warning if there were unauthorized changes
-        if (unauthorizedChanges.length > 0) {
-            const groupedChanges = this.groupUnauthorizedChanges(unauthorizedChanges);
-            let warningMessage = `\n⚠️  Sub-agent "${subAgentName}" attempted ${unauthorizedChanges.length} unauthorized operation${unauthorizedChanges.length > 1 ? 's' : ''}:\n`;
-            
-            for (const [category, changes] of Object.entries(groupedChanges)) {
-                warningMessage += `\n  📁 ${category}:\n`;
-                for (const change of changes) {
-                    const fromStr = this.formatValue(change.from);
-                    const toStr = this.formatValue(change.to);
-                    warningMessage += `     • ${change.path} [${change.operation}]: ${fromStr} → ${toStr} (${change.reason})\n`;
+        // Initialize counts
+        const counts = { additions: 0, updates: 0, deletions: 0 };
+        const warnings: string[] = [];
+        const blockedOperations: Array<{
+            path: string;
+            operation: 'add' | 'update' | 'delete';
+            from?: any;
+            to?: any;
+            reason: string;
+            timestamp: string;
+        }> = [];
+
+        // Count successful operations
+        const parentPayload = arguments[2]; // The original parent payload parameter
+        for (const path of subAgentPaths) {
+            const mergedValue = _.get(result, path);
+            const subAgentValue = _.get(subAgentPayload, path);
+            if (_.isEqual(mergedValue, subAgentValue)) {
+                // This change was allowed and applied
+                const originalParentValue = _.get(parentPayload || {}, path);
+                if (originalParentValue === undefined) {
+                    counts.additions++;
+                } else if (!_.isEqual(originalParentValue, subAgentValue)) {
+                    counts.updates++;
                 }
             }
+        }
+
+        // Output consolidated warning if there were unauthorized changes
+        if (unauthorizedChanges.length > 0) {
+            // Convert to blocked operations format
+            const now = new Date().toISOString();
+            for (const change of unauthorizedChanges) {
+                blockedOperations.push({
+                    path: change.path,
+                    operation: change.operation as 'add' | 'update' | 'delete',
+                    from: change.from,
+                    to: change.to,
+                    reason: change.reason,
+                    timestamp: now
+                });
+            }
+
+            warnings.push(`Sub-agent "${subAgentName}" attempted ${unauthorizedChanges.length} unauthorized operation(s)`);
+
+            // Only log to console in verbose mode
+            if (verbose) {
+                const groupedChanges = this.groupUnauthorizedChanges(unauthorizedChanges);
+                let warningMessage = `\n⚠️  Sub-agent "${subAgentName}" attempted ${unauthorizedChanges.length} unauthorized operation${unauthorizedChanges.length > 1 ? 's' : ''}:\n`;
+                
+                for (const [category, changes] of Object.entries(groupedChanges)) {
+                    warningMessage += `\n  📁 ${category}:\n`;
+                    for (const change of changes) {
+                        const fromStr = this.formatValue(change.from);
+                        const toStr = this.formatValue(change.to);
+                        warningMessage += `     • ${change.path} [${change.operation}]: ${fromStr} → ${toStr} (${change.reason})\n`;
+                    }
+                }
+                
+                warningMessage += `\n  ℹ️  Authorized paths: ${upstreamPaths.join(', ')}\n`;
+                LogStatus(warningMessage);
+            }
+        }
+
+        return { counts, warnings, blockedOperations };
+    }
+    
+    /**
+     * Count changes between two payloads for tracking operations
+     * 
+     * @private
+     */
+    private countChanges(original: any, modified: any, counts: { additions: number; updates: number; deletions: number }): void {
+        const originalPaths = this.getAllPaths(original || {});
+        const modifiedPaths = this.getAllPaths(modified || {});
+        
+        // Check for additions and updates
+        for (const path of modifiedPaths) {
+            const originalValue = _.get(original, path);
+            const modifiedValue = _.get(modified, path);
             
-            warningMessage += `\n  ℹ️  Authorized paths: ${upstreamPaths.join(', ')}\n`;
-            LogStatus(warningMessage);
+            if (originalValue === undefined) {
+                counts.additions++;
+            } else if (!_.isEqual(originalValue, modifiedValue)) {
+                counts.updates++;
+            }
+        }
+        
+        // Check for deletions
+        for (const path of originalPaths) {
+            if (!modifiedPaths.includes(path)) {
+                counts.deletions++;
+            }
         }
     }
     
@@ -636,9 +851,9 @@ export class PayloadManager {
      * 
      * @private
      */
-    private deepMerge(destination: any, source: any): any {
-        if (!source) return destination;
-        if (!destination) return _.cloneDeep(source);
+    private deepMerge<T = any>(destination: T | null | undefined, source: Partial<T> | null | undefined): T {
+        if (!source) return destination as T;
+        if (!destination) return _.cloneDeep(source) as T;
         
         const result = _.cloneDeep(destination);
         
@@ -646,10 +861,10 @@ export class PayloadManager {
             if (source.hasOwnProperty(key)) {
                 if (_.isObject(source[key]) && !_.isArray(source[key]) && _.isObject(result[key]) && !_.isArray(result[key])) {
                     // Both are objects - recursive merge
-                    result[key] = this.deepMerge(result[key], source[key]);
+                    result[key] = this.deepMerge(result[key], source[key]) as T[Extract<keyof T, string>];
                 } else {
                     // Otherwise, source overwrites destination
-                    result[key] = _.cloneDeep(source[key]);
+                    result[key] = _.cloneDeep(source[key]) as T[Extract<keyof T, string>];
                 }
             }
         }
@@ -667,7 +882,7 @@ export class PayloadManager {
      */
     public applyAgentChangeRequest<P = any>(
         originalPayload: P,
-        changeRequest: AgentPayloadChangeRequest<P>,
+        changeRequest: AgentPayloadChangeRequest<any>,
         options?: {
             validateChanges?: boolean;
             logChanges?: boolean;
@@ -675,9 +890,18 @@ export class PayloadManager {
             analyzeChanges?: boolean;
             generateDiff?: boolean;
             allowedPaths?: string[];
+            verbose?: boolean;
         }
     ): PayloadManagerResult<P> {
         const warnings: string[] = [];
+        const blockedOperations: Array<{
+            path: string;
+            operation: 'add' | 'update' | 'delete';
+            from?: any;
+            to?: any;
+            reason: string;
+            timestamp: string;
+        }> = [];
         const result = _.cloneDeep(originalPayload) || {} as P;
         const counts = { additions: 0, updates: 0, deletions: 0 };
         
@@ -689,11 +913,12 @@ export class PayloadManager {
             [],
             counts,
             warnings,
-            options?.allowedPaths
+            options?.allowedPaths,
+            blockedOperations
         );
         
-        // Log if requested
-        if (options?.logChanges) {
+        // Log if requested and in verbose mode
+        if (options?.logChanges && options?.verbose) {
             this.logChangesSummary(counts, changeRequest.reasoning, options.agentName);
         }
         
@@ -723,7 +948,8 @@ export class PayloadManager {
             analysis,
             diff,
             requiresFeedback: analysis?.requiresFeedback || false,
-            timestamp: new Date()
+            timestamp: new Date(),
+            blockedOperations
         };
     }
 
@@ -737,12 +963,20 @@ export class PayloadManager {
         path: string[],
         counts: { additions: number; updates: number; deletions: number; },
         warnings: string[],
-        allowedPaths?: string[]
+        allowedPaths?: string[],
+        blockedOperations?: Array<{
+            path: string;
+            operation: 'add' | 'update' | 'delete';
+            from?: any;
+            to?: any;
+            reason: string;
+            timestamp: string;
+        }>
     ): void {
         if (Array.isArray(target)) {
-            this.processArrayChanges(target, original, changeRequest, path, counts, warnings, allowedPaths);
+            this.processArrayChanges(target, original, changeRequest, path, counts, warnings, allowedPaths, blockedOperations);
         } else if (typeof target === 'object' && target !== null) {
-            this.processObjectChanges(target, original, changeRequest, path, counts, warnings, allowedPaths);
+            this.processObjectChanges(target, original, changeRequest, path, counts, warnings, allowedPaths, blockedOperations);
         }
     }
 
@@ -756,7 +990,15 @@ export class PayloadManager {
         path: string[],
         counts: { additions: number; updates: number; deletions: number; },
         warnings: string[],
-        allowedPaths?: string[]
+        allowedPaths?: string[],
+        blockedOperations?: Array<{
+            path: string;
+            operation: 'add' | 'update' | 'delete';
+            from?: unknown;
+            to?: unknown;
+            reason: string;
+            timestamp: string;
+        }>
     ): void {
         const pathStr = path.join('.');
         
@@ -766,7 +1008,7 @@ export class PayloadManager {
         const newArray = pathStr ? _.get(changeRequest.newElements, pathStr) : changeRequest.newElements;
         
         // Build a new array with all changes applied
-        const newTargetArray: any[] = [];
+        const newTargetArray: unknown[] = [];
         
         // Process existing elements
         for (let i = 0; i < target.length; i++) {
@@ -791,7 +1033,8 @@ export class PayloadManager {
                     [...path, i.toString()],
                     counts,
                     warnings,
-                    allowedPaths
+                    allowedPaths,
+                    blockedOperations
                 );
             }
             
@@ -824,7 +1067,15 @@ export class PayloadManager {
         path: string[],
         counts: { additions: number; updates: number; deletions: number; },
         warnings: string[],
-        allowedPaths?: string[]
+        allowedPaths?: string[],
+        blockedOperations?: Array<{
+            path: string;
+            operation: 'add' | 'update' | 'delete';
+            from?: unknown;
+            to?: unknown;
+            reason: string;
+            timestamp: string;
+        }>
     ): void {
         // Get all unique keys from change request
         const changeKeys = this.getChangeKeys(changeRequest, path);
@@ -839,7 +1090,8 @@ export class PayloadManager {
                 key,
                 counts,
                 warnings,
-                allowedPaths
+                allowedPaths,
+                blockedOperations
             );
         }
         
@@ -853,7 +1105,8 @@ export class PayloadManager {
                     [...path, key],
                     counts,
                     warnings,
-                    allowedPaths
+                    allowedPaths,
+                    blockedOperations
                 );
             }
         }
@@ -862,7 +1115,7 @@ export class PayloadManager {
     /**
      * Process a single key change (add, update, or delete)
      */
-    private processKeyChange(
+    private processKeyChange<P = any>(
         target: any,
         original: any,
         changeRequest: AgentPayloadChangeRequest<any>,
@@ -870,7 +1123,15 @@ export class PayloadManager {
         key: string,
         counts: { additions: number; updates: number; deletions: number; },
         warnings: string[],
-        allowedPaths?: string[]
+        allowedPaths?: string[],
+        blockedOperations?: Array<{
+            path: string;
+            operation: 'add' | 'update' | 'delete';
+            from?: unknown;
+            to?: unknown;
+            reason: string;
+            timestamp: string;
+        }>
     ): void {
         const pathStr = keyPath.join('.');
         
@@ -879,7 +1140,18 @@ export class PayloadManager {
         if (removeValue === '_DELETE_') {
             // Check if delete operation is allowed
             if (allowedPaths && !this.isOperationAllowedForPath(pathStr, 'delete', allowedPaths)) {
-                warnings.push(`Operation denied: Cannot delete '${pathStr}' - operation 'delete' not allowed`);
+                const warning = `Operation denied: Cannot delete '${pathStr}' - operation 'delete' not allowed`;
+                warnings.push(warning);
+                if (blockedOperations) {
+                    blockedOperations.push({
+                        path: pathStr,
+                        operation: 'delete',
+                        from: target[key],
+                        to: undefined,
+                        reason: "operation 'delete' not allowed",
+                        timestamp: new Date().toISOString()
+                    });
+                }
                 return;
             }
             delete target[key];
@@ -892,7 +1164,18 @@ export class PayloadManager {
         if (newValue !== undefined && !(key in target)) {
             // Check if add operation is allowed
             if (allowedPaths && !this.isOperationAllowedForPath(pathStr, 'add', allowedPaths)) {
-                warnings.push(`Operation denied: Cannot add '${pathStr}' - operation 'add' not allowed`);
+                const warning = `Operation denied: Cannot add '${pathStr}' - operation 'add' not allowed`;
+                warnings.push(warning);
+                if (blockedOperations) {
+                    blockedOperations.push({
+                        path: pathStr,
+                        operation: 'add',
+                        from: undefined,
+                        to: newValue,
+                        reason: "operation 'add' not allowed",
+                        timestamp: new Date().toISOString()
+                    });
+                }
                 return;
             }
             target[key] = newValue;
@@ -911,7 +1194,18 @@ export class PayloadManager {
         if (effectiveUpdateValue !== undefined && key in target) {
             // Check if update operation is allowed
             if (allowedPaths && !this.isOperationAllowedForPath(pathStr, 'update', allowedPaths)) {
-                warnings.push(`Operation denied: Cannot update '${pathStr}' - operation 'update' not allowed`);
+                const warning = `Operation denied: Cannot update '${pathStr}' - operation 'update' not allowed`;
+                warnings.push(warning);
+                if (blockedOperations) {
+                    blockedOperations.push({
+                        path: pathStr,
+                        operation: 'update',
+                        from: target[key],
+                        to: effectiveUpdateValue,
+                        reason: "operation 'update' not allowed",
+                        timestamp: new Date().toISOString()
+                    });
+                }
                 return;
             }
             
@@ -927,7 +1221,8 @@ export class PayloadManager {
                     keyPath,
                     counts,
                     warnings,
-                    allowedPaths
+                    allowedPaths,
+                    blockedOperations
                 );
             } else {
                 // For non-objects or arrays, replace the value
@@ -943,7 +1238,18 @@ export class PayloadManager {
             // Be forgiving: if AI put an addition in updateElements by mistake, treat it as an addition
             // Check if add operation is allowed
             if (allowedPaths && !this.isOperationAllowedForPath(pathStr, 'add', allowedPaths)) {
-                warnings.push(`Operation denied: Cannot add '${pathStr}' - operation 'add' not allowed`);
+                const warning = `Operation denied: Cannot add '${pathStr}' - operation 'add' not allowed`;
+                warnings.push(warning);
+                if (blockedOperations) {
+                    blockedOperations.push({
+                        path: pathStr,
+                        operation: 'add',
+                        from: undefined,
+                        to: updateValue,
+                        reason: "operation 'add' not allowed",
+                        timestamp: new Date().toISOString()
+                    });
+                }
                 return;
             }
             target[key] = updateValue;
@@ -955,11 +1261,11 @@ export class PayloadManager {
     /**
      * Get all unique keys from change request for a given path
      */
-    private getChangeKeys(changeRequest: AgentPayloadChangeRequest<any>, path: string[]): Set<string> {
+    private getChangeKeys<P = any>(changeRequest: AgentPayloadChangeRequest<P>, path: string[]): Set<string> {
         const keys = new Set<string>();
         const pathStr = path.join('.');
         
-        const addKeysFromObject = (obj: any) => {
+        const addKeysFromObject = (obj: unknown) => {
             if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
                 Object.keys(obj).forEach(k => keys.add(k));
             }
@@ -979,7 +1285,7 @@ export class PayloadManager {
     /**
      * Check if a value is significant (not empty object or undefined)
      */
-    private isSignificantValue(value: any): boolean {
+    private isSignificantValue(value: unknown): boolean {
         if (value === undefined) return false;
         if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
             return Object.keys(value).length > 0;
@@ -1024,7 +1330,7 @@ export class PayloadManager {
         );
         
         // Then apply upstream guardrails
-        const guardedPayload = this.mergeUpstreamPayload(
+        const guardedResult = this.mergeUpstreamPayload(
             subAgentName,
             parentPayload,
             changeResult.result,
@@ -1032,19 +1338,20 @@ export class PayloadManager {
         );
         
         // Count blocked changes (this is a simplified count)
-        const blocked = this.countBlockedChanges(parentPayload, changeResult.result, guardedPayload);
+        const blocked = this.countBlockedChanges(parentPayload, changeResult.result, guardedResult.result);
         
         return {
             ...changeResult,
-            result: guardedPayload,
-            blocked
+            result: guardedResult.result,
+            blocked,
+            blockedOperations: guardedResult.blockedOperations
         };
     }
 
     /**
      * Count how many changes were blocked by guardrails
      */
-    private countBlockedChanges(_original: any, intended: any, actual: any): number {
+    private countBlockedChanges<P = any>(_original: P, intended: P, actual: P): number {
         // This is a simplified implementation
         // A full implementation would do deep comparison
         const intendedStr = JSON.stringify(intended);
@@ -1066,7 +1373,7 @@ export class PayloadManager {
      * // Returns: { feature1: "..." }
      * ```
      */
-    public applyPayloadScope(payload: any, scopePath: string): any {
+    public applyPayloadScope<P = any>(payload: P, scopePath: string): any | null {
         if (!payload || !scopePath) return payload;
         
         // Remove leading slash and split path
@@ -1075,10 +1382,10 @@ export class PayloadManager {
             : scopePath.split('/');
         
         // Navigate to the scoped portion
-        let current = payload;
+        let current: unknown = payload;
         for (const part of pathParts) {
-            if (current && typeof current === 'object' && part in current) {
-                current = current[part];
+            if (current && typeof current === 'object' && current !== null && part in current) {
+                current = (current)[part];
             } else {
                 // Path doesn't exist, return null
                 return null;
@@ -1103,8 +1410,8 @@ export class PayloadManager {
      * // Returns: { functionalRequirements: { feature1: "updated" } }
      * ```
      */
-    public reversePayloadScope(scopedPayload: any, scopePath: string): any {
-        if (!scopePath) return scopedPayload;
+    public reversePayloadScope<P = any>(scopedPayload: unknown, scopePath: string): P {
+        if (!scopePath) return scopedPayload as P;
         
         // Remove leading slash and split path
         const pathParts = scopePath.startsWith('/') 
@@ -1117,7 +1424,7 @@ export class PayloadManager {
             result = { [pathParts[i]]: result };
         }
         
-        return result;
+        return result as P;
     }
 
     /**
@@ -1168,11 +1475,11 @@ export class PayloadManager {
         };
         
         return {
-            newElements: transformObject(changeRequest.newElements, pathPrefix),
-            updateElements: transformObject(changeRequest.updateElements, pathPrefix),
-            removeElements: transformObject(changeRequest.removeElements, pathPrefix),
+            newElements: transformObject(changeRequest.newElements, pathPrefix) as Partial<P>,
+            updateElements: transformObject(changeRequest.updateElements, pathPrefix) as Partial<P>,
+            removeElements: transformObject(changeRequest.removeElements, pathPrefix) as Partial<P>,
             reasoning: changeRequest.reasoning
-        };
+        } as AgentPayloadChangeRequest<P>;
     }
 
     /**
