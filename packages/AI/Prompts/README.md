@@ -1026,6 +1026,35 @@ if (result.promptRun) {
 }
 ```
 
+### Early Run ID Callback
+
+Get the PromptRun ID immediately after creation for real-time monitoring:
+
+```typescript
+const params = new AIPromptParams();
+params.prompt = myPrompt;
+params.data = { query: 'Analyze this data' };
+
+// Callback fired immediately after PromptRun record is saved
+params.onPromptRunCreated = async (promptRunId) => {
+    console.log(`Prompt run started: ${promptRunId}`);
+    
+    // Use cases:
+    // - Link to parent records (e.g., AIAgentRunStep.TargetLogID)
+    // - Send to monitoring systems
+    // - Update UI with tracking info
+    // - Start real-time log streaming
+};
+
+const result = await runner.ExecutePrompt(params);
+```
+
+The callback is invoked:
+- **When**: Right after the AIPromptRun record is created and saved
+- **Before**: The actual AI model execution begins
+- **Error Handling**: Callback errors are logged but don't fail the execution
+- **Async Support**: Can be synchronous or asynchronous
+
 ## AI Prompt Run Logging
 
 The AI Prompt Runner implements a sophisticated hierarchical logging system that tracks all execution activities in the database through the `AIPromptRun` entity. This system provides complete traceability and analytics for both simple and complex parallel executions.

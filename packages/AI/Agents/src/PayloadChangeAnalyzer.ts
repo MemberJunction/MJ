@@ -27,19 +27,27 @@ export enum PayloadWarningType {
 /**
  * Base interface for all payload warnings
  */
-export interface PayloadWarning {
+export interface PayloadWarning<T = any> {
     type: PayloadWarningType;
     severity: 'low' | 'medium' | 'high' | 'critical';
     path: string;
     message: string;
     requiresFeedback?: boolean;
-    details: any;
+    details: T;
 }
 
 /**
  * Content truncation warning details
  */
-export interface ContentTruncationWarning extends PayloadWarning {
+export interface ContentTruncationWarning extends PayloadWarning<{
+    originalLength: number;
+    newLength: number;
+    reductionPercentage: number;
+    contentPreview: {
+        before: string;
+        after: string;
+    };
+}> {
     type: PayloadWarningType.ContentTruncation;
     details: {
         originalLength: number;
@@ -55,7 +63,12 @@ export interface ContentTruncationWarning extends PayloadWarning {
 /**
  * Key removal warning details
  */
-export interface KeyRemovalWarning extends PayloadWarning {
+export interface KeyRemovalWarning extends PayloadWarning<{
+    removedKeys: string[];
+    hadContent: boolean;
+    contentSize: number;
+    childKeysRemoved?: string[];
+}> {
     type: PayloadWarningType.KeyRemoval;
     details: {
         removedKeys: string[];
@@ -550,7 +563,7 @@ export class PayloadChangeAnalyzer {
                 case PayloadWarningType.TypeChange:
                     for (const warning of typeWarnings) {
                         questions.push(
-                            `Did you intend to change the type at "${warning.path}" from ${warning.details.originalType} to ${warning.details.newType}?`
+                            `Did you intend to change the type at "${warning.path}" from ${(warning.details as {originalType: string; newType: string}).originalType} to ${(warning.details as {originalType: string; newType: string}).newType}?`
                         );
                     }
                     break;

@@ -445,6 +445,32 @@ export class AIPromptParams {
    * ```
    */
   cleanValidationSyntax?: boolean;
+
+  /**
+   * Optional callback fired immediately after the PromptRun record is created and saved.
+   * Provides the PromptRun ID for immediate tracking/monitoring purposes.
+   * 
+   * This callback is useful for:
+   * - Linking the PromptRun to parent records (e.g., AIAgentRunStep.TargetLogID)
+   * - Real-time monitoring and tracking
+   * - Early logging and debugging
+   * 
+   * The callback is invoked after the PromptRun is successfully saved but before
+   * the actual AI model execution begins. If the callback throws an error, it will
+   * be logged but won't fail the prompt execution.
+   * 
+   * @param promptRunId - The ID of the newly created AIPromptRun record
+   * 
+   * @example
+   * ```typescript
+   * const params = new AIPromptParams();
+   * params.onPromptRunCreated = async (promptRunId) => {
+   *   console.log(`Prompt run started: ${promptRunId}`);
+   *   // Update parent records, send monitoring events, etc.
+   * };
+   * ```
+   */
+  onPromptRunCreated?: (promptRunId: string) => void | Promise<void>;
 }
 
 

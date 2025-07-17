@@ -215,6 +215,38 @@ Example scenario:
    - Execution tree available for analysis
    - Errors and outputs captured
 
+### Early Run ID Callback
+
+Get the AgentRun ID immediately after creation for real-time monitoring:
+
+```typescript
+const params: ExecuteAgentParams = {
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: currentUser,
+    
+    // Callback fired immediately after AgentRun record is saved
+    onAgentRunCreated: async (agentRunId) => {
+        console.log(`Agent run started: ${agentRunId}`);
+        
+        // Use cases:
+        // - Link to parent records (e.g., AIAgentRunStep.TargetLogID for sub-agents)
+        // - Send to monitoring systems
+        // - Update UI with tracking info
+        // - Start real-time log streaming
+    }
+};
+
+const result = await runner.RunAgent(params);
+```
+
+The callback is invoked:
+- **When**: Right after the AIAgentRun record is created and saved
+- **Before**: The actual agent execution begins
+- **Error Handling**: Callback errors are logged but don't fail the execution
+- **Async Support**: Can be synchronous or asynchronous
+- **Sub-Agent Tracking**: BaseAgent automatically uses this callback to link sub-agent runs to their parent step's TargetLogID
+
 ## Advanced Features
 
 ### Payload Scoping for Sub-Agents

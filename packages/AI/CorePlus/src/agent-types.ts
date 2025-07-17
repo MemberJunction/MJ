@@ -356,6 +356,35 @@ export type ExecuteAgentParams<TContext = any, P = any> = {
      * execution and can provide configuration parameters for dynamic behavior.
      */
     configurationId?: string;
+    
+    /**
+     * Optional callback fired immediately after the AgentRun record is created and saved.
+     * Provides the AgentRun ID for immediate tracking/monitoring purposes.
+     * 
+     * This callback is useful for:
+     * - Linking the AgentRun to parent records (e.g., AIAgentRunStep.TargetLogID for sub-agents)
+     * - Real-time monitoring and tracking
+     * - Early logging and debugging
+     * 
+     * The callback is invoked after the AgentRun is successfully saved but before
+     * the actual agent execution begins. If the callback throws an error, it will
+     * be logged but won't fail the agent execution.
+     * 
+     * @param agentRunId - The ID of the newly created AIAgentRun record
+     * 
+     * @example
+     * ```typescript
+     * const params: ExecuteAgentParams = {
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   onAgentRunCreated: async (agentRunId) => {
+     *     console.log(`Agent run started: ${agentRunId}`);
+     *     // Update parent records, send monitoring events, etc.
+     *   }
+     * };
+     * ```
+     */
+    onAgentRunCreated?: (agentRunId: string) => void | Promise<void>;
 }
 
 /**

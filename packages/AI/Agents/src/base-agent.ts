@@ -34,9 +34,21 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { ActionEntityExtended, ActionResult } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
-import { PayloadManager, PayloadManagerResult } from './PayloadManager';
+import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 import * as _ from 'lodash';
+
+/**
+ * Extended progress step that includes additional metadata for execution tracking
+ */
+type ExtendedProgressStep = Parameters<AgentExecutionProgressCallback>[0] & {
+    /** Timestamp when this progress step was recorded */
+    timestamp: Date;
+    /** Hierarchy of agent names from root to current agent */
+    agentHierarchy: string[];
+    /** Depth of the current agent in the execution hierarchy */
+    depth: number;
+};
 
 /**
  * Base implementation for AI Agents in the MemberJunction framework.
@@ -145,7 +157,7 @@ export class BaseAgent {
      * All progress steps including intermediate ones for complete execution tracking.
      * @private
      */
-    private _allProgressSteps: any[] = [];
+    private _allProgressSteps: ExtendedProgressStep[] = [];
 
     /**
      * Sub-agent execution results.
@@ -1655,7 +1667,7 @@ export class BaseAgent {
             }
             
             // Execute the sub-agent with cancellation and streaming support
-            const result = await runner.RunAgent({
+            const result = await runner.RunAgent<SC, SR>({
                 agent: subAgent,
                 conversationMessages: subAgentMessages,
                 contextUser: params.contextUser,
@@ -1672,7 +1684,12 @@ export class BaseAgent {
                         ...params.data, 
                       }, // merge any template parameters, but override with explicitly provided data so that hallucinated input params don't override data provided by caller
                 context: params.context, // pass along our context to sub-agents so they can keep passing it down and pass to actions as well
-                verbose: params.verbose // pass verbose flag to sub-agent
+                verbose: params.verbose, // pass verbose flag to sub-agent
+                // Add callback to link AgentRun ID immediately when created
+                onAgentRunCreated: async (agentRunId: string) => {
+                    stepEntity.TargetLogID = agentRunId;
+                    await stepEntity.Save();
+                }
             });
             
             // Check if execution was successful
@@ -1912,6 +1929,16 @@ export class BaseAgent {
             const errorMessage = JSON.stringify(CopyScalarsAndArrays(this._agentRun.LatestResult));
             throw new Error(`Failed to create agent run record: Details: ${errorMessage}`);
         }
+        
+        // Invoke callback if provided
+        if (modifiedParams.onAgentRunCreated) {
+            try {
+                await modifiedParams.onAgentRunCreated(this._agentRun.ID);
+            } catch (callbackError) {
+                LogStatus(`Error in onAgentRunCreated callback: ${callbackError.message}`);
+                // Don't fail the execution if callback fails
+            }
+        }
 
         // Initialize hierarchy tracking
         this._agentHierarchy = params.parentAgentHierarchy 
@@ -2036,12 +2063,20 @@ export class BaseAgent {
      * @param changeResult The result from PayloadManager operations
      * @returns A serializable summary object
      */
-    private buildPayloadChangeResultSummary(changeResult: PayloadManagerResult<any>): any {
+    private buildPayloadChangeResultSummary(changeResult: PayloadManagerResult<any>): PayloadChangeResultSummary {
         return {
             applied: changeResult.applied,
             warnings: changeResult.warnings,
             requiresFeedback: changeResult.requiresFeedback,
             timestamp: changeResult.timestamp,
+            
+            // Include blocked operations for payload validation tracking
+            payloadValidation: changeResult.blockedOperations && changeResult.blockedOperations.length > 0 ? {
+                selfWriteViolations: {
+                    deniedOperations: changeResult.blockedOperations,
+                    timestamp: changeResult.timestamp.toISOString()
+                }
+            } : undefined,
             
             // Include analysis summary if available
             analysis: changeResult.analysis ? {
@@ -2156,13 +2191,13 @@ export class BaseAgent {
             case 'Retry':
                 return await this.executePromptStep(params, config, previousDecision);
             case 'Sub-Agent':
-                return await this.executeSubAgentStep(params, previousDecision!);
+                return await this.executeSubAgentStep<P, P>(params, previousDecision!);
             case 'Actions':
                 return await this.executeActionsStep(params, previousDecision);
             case 'Chat':
                 return await this.executeChatStep(params, previousDecision);
             case 'Success':
-                const pd = previousDecision as any;
+                const pd = previousDecision as BaseAgentNextStep<P> & { previousPayload?: { taskComplete?: boolean } };
                 if (pd.previousPayload?.taskComplete === true && previousDecision.terminate) {
                     // If task is complete and the parent agent previously requested to auto-terminate, after a successful
                     // sub-agent run, we can finalize the agent run                    
@@ -2202,7 +2237,7 @@ export class BaseAgent {
      * 
      * @private
      */
-    private async executePromptStep<P>(
+    private async executePromptStep<P = any>(
         params: ExecuteAgentParams, 
         config: AgentConfiguration,
         previousDecision?: BaseAgentNextStep
@@ -2277,6 +2312,12 @@ export class BaseAgent {
                 });
             } : undefined;
             
+            // Add callback to link PromptRun ID immediately when created
+            promptParams.onPromptRunCreated = async (promptRunId: string) => {
+                stepEntity.TargetLogID = promptRunId;
+                await stepEntity.Save();
+            };
+            
             // Execute the prompt
             const promptResult = await this.executePrompt(promptParams);
 
@@ -2336,11 +2377,12 @@ export class BaseAgent {
                         agentName: params.agent.Name,
                         analyzeChanges: true,
                         generateDiff: true,
-                        allowedPaths: allowedPaths
+                        allowedPaths: allowedPaths,
+                        verbose: params.verbose === true || IsVerboseLoggingEnabled()
                     }
                 );
                 
-                if (changeResult.warnings.length > 0) {
+                if (changeResult.warnings.length > 0 && (params.verbose === true || IsVerboseLoggingEnabled())) {
                     LogStatus(`Payload warnings: ${changeResult.warnings.join('; ')}`);
                 }
                 
@@ -2504,7 +2546,7 @@ export class BaseAgent {
             // Apply payload scope if defined
             let scopedPayload = downstreamPayload;
             if (subAgentEntity.PayloadScope) {
-                scopedPayload = this._payloadManager.applyPayloadScope(downstreamPayload, subAgentEntity.PayloadScope);
+                scopedPayload = this._payloadManager.applyPayloadScope(downstreamPayload, subAgentEntity.PayloadScope) as Partial<SR>;
                 if (scopedPayload === null) {
                     // Critical failure - scope path doesn't exist in payload
                     const errorMessage = `Critical: Failed to extract payload scope '${subAgentEntity.PayloadScope}' for sub-agent '${subAgentRequest.name}'. The specified path does not exist in the payload.`;
@@ -2524,12 +2566,12 @@ export class BaseAgent {
             stepEntity.PayloadAtStart = JSON.stringify(previousDecision.newPayload);
 
             // Execute sub-agent with scoped payload
-            const subAgentResult = await this.ExecuteSubAgent(
+            const subAgentResult = await this.ExecuteSubAgent<SC, SR>(
                 params,
                 subAgentRequest,
                 subAgentEntity,
                 stepEntity,
-                scopedPayload
+                scopedPayload as SR
             );
             
             // Handle scope transformation for the result
@@ -2543,12 +2585,15 @@ export class BaseAgent {
             }
             
             // Merge upstream changes back into parent payload
-            const mergedPayload = this._payloadManager.mergeUpstreamPayload(
+            const mergeResult = this._payloadManager.mergeUpstreamPayload(
                 subAgentRequest.name,
                 previousDecision.newPayload,
                 resultPayloadForMerge,
-                upstreamPaths
+                upstreamPaths,
+                params.verbose === true || IsVerboseLoggingEnabled()
             );
+            
+            const mergedPayload = mergeResult.result;
             
             // Track the merge operation to detect what changed
             // We create a synthetic change request that represents the merge
@@ -2578,29 +2623,43 @@ export class BaseAgent {
                 }
             }
             
-            let currentStepPayloadChangeResult: any = undefined;
+            let currentStepPayloadChangeResult: PayloadChangeResultSummary | undefined = undefined;
 
             // Analyze the merge if there were any changes
             if (Object.keys(mergeChangeRequest.newElements!).length > 0 || 
                 Object.keys(mergeChangeRequest.updateElements!).length > 0 || 
                 Object.keys(mergeChangeRequest.removeElements!).length > 0) {
                 
-                const mergeAnalysis = this._payloadManager.applyAgentChangeRequest(
+                const mergeAnalysis = this._payloadManager.applyAgentChangeRequest<SR>(
                     previousDecision.previousPayload,
-                    mergeChangeRequest,
+                    mergeChangeRequest as AgentPayloadChangeRequest<SR>,
                     {
                         validateChanges: false,
                         logChanges: true,
                         analyzeChanges: true,
                         generateDiff: true,
-                        agentName: `${subAgentRequest.name} (upstream merge)`
+                        agentName: `${subAgentRequest.name} (upstream merge)`,
+                        verbose: params.verbose === true || IsVerboseLoggingEnabled()
                     }
                 );
                 
-                // Store merge analysis
+                // Store merge analysis with upstream violations
                 currentStepPayloadChangeResult = this.buildPayloadChangeResultSummary(mergeAnalysis);
                 
-                if (mergeAnalysis.warnings.length > 0) {
+                // Add upstream merge violations if any occurred
+                if (mergeResult.blockedOperations && mergeResult.blockedOperations.length > 0) {
+                    if (!currentStepPayloadChangeResult.payloadValidation) {
+                        currentStepPayloadChangeResult.payloadValidation = {};
+                    }
+                    currentStepPayloadChangeResult.payloadValidation.upstreamMergeViolations = {
+                        subAgentName: subAgentRequest.name,
+                        attemptedOperations: mergeResult.blockedOperations,
+                        authorizedPaths: upstreamPaths,
+                        timestamp: new Date().toISOString()
+                    };
+                }
+                
+                if (mergeAnalysis.warnings.length > 0 && (params.verbose === true || IsVerboseLoggingEnabled())) {
                     LogStatus(`Sub-agent merge warnings: ${mergeAnalysis.warnings.join('; ')}`);
                 }
             }

@@ -1482,6 +1482,17 @@ export class AIPromptRunner {
         });
         throw new Error(error);
       }
+      
+      // Invoke callback if provided
+      if (params.onPromptRunCreated) {
+        try {
+          await params.onPromptRunCreated(promptRun.ID);
+        } catch (callbackError) {
+          LogStatus(`Error in onPromptRunCreated callback: ${callbackError.message}`);
+          // Don't fail the execution if callback fails
+        }
+      }
+      
       return promptRun;
     } catch (error) {
       const msg = `Error creating prompt run record: ${error.message} - ${promptRun?.LatestResult?.Message} - ${promptRun?.LatestResult?.Errors[0]?.Message}`;
