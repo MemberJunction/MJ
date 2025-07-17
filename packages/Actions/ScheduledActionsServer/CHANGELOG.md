@@ -1,5 +1,22 @@
 # Change Log - @memberjunction/scheduled-actions-server
 
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [5a127bb]
+  - @memberjunction/ai@2.71.0
+  - @memberjunction/ai-mistral@2.71.0
+  - @memberjunction/ai-openai@2.71.0
+  - @memberjunction/ai-vectors-pinecone@2.71.0
+  - @memberjunction/ai-vector-sync@2.71.0
+  - @memberjunction/actions-content-autotag@2.71.0
+  - @memberjunction/actions@2.71.0
+  - @memberjunction/scheduled-actions@2.71.0
+  - @memberjunction/core@2.71.0
+  - @memberjunction/core-entities@2.71.0
+
 ## 2.70.0
 
 ### Patch Changes

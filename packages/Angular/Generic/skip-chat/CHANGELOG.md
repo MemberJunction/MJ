@@ -1,5 +1,32 @@
 # Change Log - @memberjunction/ng-skip-chat
 
+## 2.71.0
+
+### Minor Changes
+
+- 91188ab: migration file + various improvements and reorganization
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [c5a409c]
+- Updated dependencies [5a127bb]
+- Updated dependencies [91188ab]
+  - @memberjunction/global@2.71.0
+  - @memberjunction/ng-base-types@2.71.0
+  - @memberjunction/ng-code-editor@2.71.0
+  - @memberjunction/ng-container-directives@2.71.0
+  - @memberjunction/ng-data-context@2.71.0
+  - @memberjunction/ng-notifications@2.71.0
+  - @memberjunction/ng-resource-permissions@2.71.0
+  - @memberjunction/graphql-dataprovider@2.71.0
+  - @memberjunction/core@2.71.0
+  - @memberjunction/core-entities@2.71.0
+  - @memberjunction/data-context@2.71.0
+  - @memberjunction/skip-types@2.71.0
+  - @memberjunction/ng-react@2.71.0
+  - @memberjunction/interactive-component-types@2.71.0
+
 ## 2.70.0
 
 ### Minor Changes

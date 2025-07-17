@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ng-link-directives
 
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [5a127bb]
+  - @memberjunction/core@2.71.0
+
 ## 2.70.0
 
 ### Patch Changes

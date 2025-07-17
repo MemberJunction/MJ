@@ -1,5 +1,19 @@
 # @memberjunction/ng-ai-test-harness
 
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [5a127bb]
+  - @memberjunction/ng-shared@2.71.0
+  - @memberjunction/ng-code-editor@2.71.0
+  - @memberjunction/ng-container-directives@2.71.0
+  - @memberjunction/ng-notifications@2.71.0
+  - @memberjunction/graphql-dataprovider@2.71.0
+  - @memberjunction/core@2.71.0
+  - @memberjunction/core-entities@2.71.0
+
 ## 2.70.0
 
 ### Patch Changes

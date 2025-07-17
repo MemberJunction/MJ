@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/ng-compare-records
 
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [5a127bb]
+  - @memberjunction/core@2.71.0
+  - @memberjunction/core-entities@2.71.0
+
 ## 2.70.0
 
 ### Patch Changes

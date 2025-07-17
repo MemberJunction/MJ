@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/core-actions
 
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [c5a409c]
+- Updated dependencies [5a127bb]
+  - @memberjunction/global@2.71.0
+  - @memberjunction/ai-core-plus@2.71.0
+  - @memberjunction/ai-vector-sync@2.71.0
+  - @memberjunction/actions@2.71.0
+  - @memberjunction/communication-engine@2.71.0
+  - @memberjunction/content-autotagging@2.71.0
+  - @memberjunction/external-change-detection@2.71.0
+  - @memberjunction/core@2.71.0
+  - @memberjunction/core-entities@2.71.0
+  - @memberjunction/core-entities-server@2.71.0
+
 ## 2.70.0
 
 ### Patch Changes

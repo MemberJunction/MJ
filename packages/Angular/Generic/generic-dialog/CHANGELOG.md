@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/ng-generic-dialog
 
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+
 ## 2.70.0
 
 ## 2.69.1

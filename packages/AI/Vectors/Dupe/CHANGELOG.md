@@ -1,5 +1,22 @@
 # Change Log - @memberjunction/ai-vector-dupe
 
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [c5a409c]
+- Updated dependencies [5a127bb]
+  - @memberjunction/global@2.71.0
+  - @memberjunction/ai@2.71.0
+  - @memberjunction/aiengine@2.71.0
+  - @memberjunction/ai-vectors-pinecone@2.71.0
+  - @memberjunction/ai-vectors@2.71.0
+  - @memberjunction/ai-vectordb@2.71.0
+  - @memberjunction/ai-vector-sync@2.71.0
+  - @memberjunction/core@2.71.0
+  - @memberjunction/core-entities@2.71.0
+
 ## 2.70.0
 
 ### Patch Changes

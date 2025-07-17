@@ -1,5 +1,20 @@
 # @memberjunction/ai-mcp-server
 
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [c5a409c]
+- Updated dependencies [11e9d0b]
+- Updated dependencies [5a127bb]
+- Updated dependencies [91188ab]
+  - @memberjunction/global@2.71.0
+  - @memberjunction/ai-agents@2.71.0
+  - @memberjunction/core@2.71.0
+  - @memberjunction/core-entities@2.71.0
+  - @memberjunction/sqlserver-dataprovider@2.71.0
+
 ## 2.70.0
 
 ### Patch Changes

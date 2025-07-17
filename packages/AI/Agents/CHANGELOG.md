@@ -1,5 +1,28 @@
 # @memberjunction/ai-agents
 
+## 2.71.0
+
+### Minor Changes
+
+- 91188ab: migration file + various improvements and reorganization
+
+### Patch Changes
+
+- 11e9d0b: tighten up agent params
+- 5a127bb: Remove status badge dots
+- Updated dependencies [c5a409c]
+- Updated dependencies [5a127bb]
+- Updated dependencies [91188ab]
+  - @memberjunction/global@2.71.0
+  - @memberjunction/ai@2.71.0
+  - @memberjunction/ai-core-plus@2.71.0
+  - @memberjunction/aiengine@2.71.0
+  - @memberjunction/ai-prompts@2.71.0
+  - @memberjunction/actions-base@2.71.0
+  - @memberjunction/actions@2.71.0
+  - @memberjunction/core@2.71.0
+  - @memberjunction/core-entities@2.71.0
+
 ## 2.70.0
 
 ### Minor Changes

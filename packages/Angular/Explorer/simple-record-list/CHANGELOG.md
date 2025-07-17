@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/ng-simple-record-list
 
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [c5a409c]
+- Updated dependencies [5a127bb]
+  - @memberjunction/global@2.71.0
+  - @memberjunction/ng-entity-form-dialog@2.71.0
+  - @memberjunction/ng-container-directives@2.71.0
+  - @memberjunction/ng-notifications@2.71.0
+  - @memberjunction/core@2.71.0
+  - @memberjunction/core-entities@2.71.0
+
 ## 2.70.0
 
 ### Patch Changes
