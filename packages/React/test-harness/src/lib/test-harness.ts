@@ -31,14 +31,20 @@ export class ReactTestHarness {
   }
 
   /**
-   * Test a component specification (root component with optional children)
-   * This is the main method that leverages the runtime's ComponentHierarchyRegistrar
+   * Test a root component with its full hierarchy of child components
    */
-  async testComponentSpec(
-    spec: ComponentSpec,
+  async testRootComponent(
+    rootSpec: ComponentRootSpec,
     props?: Record<string, any>,
     options?: Partial<ComponentExecutionOptions>
   ): Promise<ComponentExecutionResult> {
+    // Convert ComponentRootSpec to ComponentSpec format
+    const spec: ComponentSpec = {
+      componentName: rootSpec.componentName,
+      componentCode: rootSpec.componentCode,
+      childComponents: this.convertSkipChildSpecs(rootSpec.childComponents)
+    };
+
     const result = await this.componentRunner.executeComponent({
       componentSpec: spec,
       props,
@@ -59,7 +65,7 @@ export class ReactTestHarness {
       const screenshotPath = this.options.screenshotPath || './error-screenshot.png';
       const fs = await import('fs');
       // Ensure the screenshot Buffer is properly typed for writeFileSync
-      fs.writeFileSync(screenshotPath, Buffer.from(result.screenshot));
+      fs.writeFileSync(screenshotPath, result.screenshot as any);
       console.log(`Screenshot saved to: ${screenshotPath}`);
     }
 
@@ -67,38 +73,24 @@ export class ReactTestHarness {
   }
 
   /**
-   * Convenience method to test a single component without children
+   * Test a single child component
    */
-  async testSingleComponent(
-    componentName: string,
-    componentCode: string,
+  async testChildComponent(
+    childSpec: ComponentChildSpec,
     props?: Record<string, any>,
     options?: Partial<ComponentExecutionOptions>
   ): Promise<ComponentExecutionResult> {
     const spec: ComponentSpec = {
-      componentName,
-      componentCode
+      componentName: childSpec.componentName,
+      componentCode: childSpec.componentCode || '',
+      childComponents: childSpec.components ? this.convertSkipChildSpecs(childSpec.components) : []
     };
 
-    return this.testComponentSpec(spec, props, options);
-  }
-
-  /**
-   * Test a component from the Skip spec format
-   */
-  async testSkipComponent(
-    skipSpec: ComponentRootSpec,
-    props?: Record<string, any>,
-    options?: Partial<ComponentExecutionOptions>
-  ): Promise<ComponentExecutionResult> {
-    // Convert SkipComponentRootSpec to ComponentSpec format
-    const spec: ComponentSpec = {
-      componentName: skipSpec.componentName,
-      componentCode: skipSpec.componentCode,
-      childComponents: this.convertSkipChildSpecs(skipSpec.childComponents)
-    };
-
-    return this.testComponentSpec(spec, props, options);
+    return this.componentRunner.executeComponent({
+      componentSpec: spec,
+      props,
+      ...options
+    });
   }
 
   /**
@@ -132,7 +124,17 @@ export class ReactTestHarness {
     const componentCode = fs.readFileSync(absolutePath, 'utf-8');
     const componentName = path.basename(absolutePath, path.extname(absolutePath));
     
-    return this.testSingleComponent(componentName, componentCode, props, options);
+    // Create a minimal ComponentChildSpec for the file
+    const childSpec: ComponentChildSpec = {
+      componentName,
+      componentCode,
+      description: `Component loaded from ${filePath}`,
+      exampleUsage: `<${componentName} />`,
+      statePath: componentName.toLowerCase(),
+      components: []
+    };
+    
+    return this.testChildComponent(childSpec, props, options);
   }
 
   async runTest(
