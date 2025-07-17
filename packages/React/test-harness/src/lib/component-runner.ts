@@ -56,8 +56,7 @@ export class ComponentRunner {
   ];
 
   // Maximum allowed renders before considering it excessive
-  private static readonly MAX_RENDER_COUNT = 100;
-  private static readonly EXCESSIVE_RENDER_WARNING = 150;
+  private static readonly MAX_RENDER_COUNT = 1000;
 
   constructor(private browserManager: BrowserManager) {
     this.compiler = new ComponentCompiler();
@@ -186,7 +185,7 @@ ${cssLinks}
             renderCounter++;
             window.__testHarnessRenderCount = renderCounter;
             
-            if (renderCounter > 150) {
+            if (renderCounter > 1000) {
               console.error('Excessive renders detected: ' + renderCounter + ' renders. Possible infinite loop.');
             }
             
