@@ -1413,13 +1413,13 @@ export class BaseAgent {
      * @protected
      */
     protected async processNextStep<P>(
+        nextStep: BaseAgentNextStep<P>,
         params: ExecuteAgentParams,
         agentType: AIAgentTypeEntity,
         promptResult: AIPromptRunResult,
         currentPayload: P,
         currentStep: AIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
-        const nextStep = await this.determineNextStep<P>(params, agentType, promptResult, currentPayload);
         const validatedNextStep = await this.validateNextStep<P>(params, nextStep, currentPayload, this._agentRun, currentStep);
         
         // Check guardrails if next step would continue execution
@@ -2355,13 +2355,13 @@ export class BaseAgent {
                 displayMode: 'both' // Show in both live and historical modes
             });
             
-            // Determine next step using agent type
-            const nextStep = await this.processNextStep<P>(params, config.agentType!, promptResult, payload, stepEntity);
+            // Determine next step using agent type, this doesn't validate, just gets the LLM response and then we can process payload changes
+            const initialNextStep = await this.determineNextStep<P>(params, config.agentType, promptResult, payload);
             
             // Apply payload changes if provided
             let finalPayload = payload; // Start with current payload
             let currentStepPayloadChangeResult = undefined;
-            if (nextStep.payloadChangeRequest) {
+            if (initialNextStep.payloadChangeRequest) {
                 // Parse the allowed paths if configured
                 const allowedPaths = params.agent.PayloadSelfWritePaths 
                     ? JSON.parse(params.agent.PayloadSelfWritePaths) 
@@ -2370,7 +2370,7 @@ export class BaseAgent {
                 // Apply the changes to the payload with operation control
                 const changeResult = this._payloadManager.applyAgentChangeRequest(
                     payload,
-                    nextStep.payloadChangeRequest,
+                    initialNextStep.payloadChangeRequest,
                     {
                         validateChanges: true,
                         logChanges: true,
@@ -2393,15 +2393,19 @@ export class BaseAgent {
                 // Set the final payload - the changeResult already respects the allowed paths
                 finalPayload = changeResult.result;
             }
-             
+
+            // now that we have processed the payload, we can process the next step which does validation and changes the next step if
+            // validation fails
+            const updatedNextStep = await this.processNextStep<P>(initialNextStep, params, config.agentType!, promptResult, finalPayload, stepEntity);
+
             // Prepare output data, these are simple elements of the state that are not typically
             // included in payload but are helpful. We do not include the prompt result here
             // or the payload as those are stored already(prompt result via TargetLogID -> AIPromptRunEntity)
             // and payload via the specialied PayloadAtStart/End fields on the step entity.
             const outputData = {
                 nextStep: {
-                    ...nextStep,
-                    reasoning: this.getNextStepReasoning(nextStep),
+                    ...updatedNextStep,
+                    reasoning: this.getNextStepReasoning(updatedNextStep),
                 },
                 // Include payload change metadata if changes were made
                 ...(currentStepPayloadChangeResult && {
@@ -2420,21 +2424,21 @@ export class BaseAgent {
             }
             
             // Update nextStep to include the final payload
-            nextStep.newPayload = finalPayload;
-            nextStep.previousPayload = payload;
+            updatedNextStep.newPayload = finalPayload;
+            updatedNextStep.previousPayload = payload;
             
             // Finalize step entity
             await this.finalizeStepEntity(stepEntity, promptResult.success, 
                 promptResult.success ? undefined : promptResult.errorMessage, outputData);
             
             // Return based on next step
-            if (nextStep.step === 'Chat') {
-                return { ...nextStep, terminate: true };
+            if (updatedNextStep.step === 'Chat') {
+                return { ...updatedNextStep, terminate: true };
             }
-            else if (nextStep.step === 'Success' || nextStep.step === 'Failed') {
-                return { ...nextStep, terminate: true };
+            else if (updatedNextStep.step === 'Success' || updatedNextStep.step === 'Failed') {
+                return { ...updatedNextStep, terminate: true };
             } else {
-                return { ...nextStep, terminate: false };
+                return { ...updatedNextStep, terminate: false };
             }
             
         } catch (error) {
