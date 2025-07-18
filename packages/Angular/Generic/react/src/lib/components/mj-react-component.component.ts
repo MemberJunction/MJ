@@ -300,7 +300,8 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       this.utilities || {},
       this.createCallbacks(),
       components,
-      this.styles as any // Skip components expect the full SkipComponentStyles structure
+      this.styles as any, // Skip components expect the full SkipComponentStyles structure
+      { debounceUpdateUserState: 3000 } // 3 second debounce by default
     );
 
     // Create error boundary

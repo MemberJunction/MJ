@@ -5,6 +5,7 @@
  */
 
 import { ComponentProps, ComponentCallbacks, ComponentStyles } from '../types';
+import { Subject, debounceTime } from 'rxjs';
 
 /**
  * Options for building component props
@@ -18,6 +19,8 @@ export interface PropBuilderOptions {
   transformData?: (data: any) => any;
   /** Transform state before passing to component */
   transformState?: (state: any) => any;
+  /** Debounce time for UpdateUserState callback in milliseconds */
+  debounceUpdateUserState?: number;
 }
 
 /**
@@ -43,7 +46,8 @@ export function buildComponentProps(
   const {
     validate = true,
     transformData,
-    transformState
+    transformState,
+    debounceUpdateUserState = 3000 // Default 3 seconds
   } = options;
 
   // Transform data if transformer provided
@@ -55,7 +59,7 @@ export function buildComponentProps(
     data: transformedData,
     userState: transformedState,
     utilities,
-    callbacks: normalizeCallbacks(callbacks),
+    callbacks: normalizeCallbacks(callbacks, debounceUpdateUserState),
     components,
     styles: normalizeStyles(styles)
   };
@@ -68,12 +72,16 @@ export function buildComponentProps(
   return props;
 }
 
+// Store subjects for debouncing per component instance
+const updateUserStateSubjects = new WeakMap<Function, Subject<any>>();
+
 /**
  * Normalizes component callbacks
  * @param callbacks - Raw callbacks object
+ * @param debounceMs - Debounce time for UpdateUserState in milliseconds
  * @returns Normalized callbacks
  */
-export function normalizeCallbacks(callbacks: any): ComponentCallbacks {
+export function normalizeCallbacks(callbacks: any, debounceMs: number = 3000): ComponentCallbacks {
   const normalized: ComponentCallbacks = {};
 
   // Ensure all callbacks are functions
@@ -86,7 +94,29 @@ export function normalizeCallbacks(callbacks: any): ComponentCallbacks {
   }
 
   if (callbacks.UpdateUserState && typeof callbacks.UpdateUserState === 'function') {
-    normalized.UpdateUserState = callbacks.UpdateUserState;
+    // Create a debounced version of UpdateUserState
+    const originalCallback = callbacks.UpdateUserState;
+    
+    // Get or create a subject for this callback
+    let subject = updateUserStateSubjects.get(originalCallback);
+    if (!subject) {
+      subject = new Subject<any>();
+      updateUserStateSubjects.set(originalCallback, subject);
+      
+      // Subscribe to the subject with debounce
+      subject.pipe(
+        debounceTime(debounceMs)
+      ).subscribe(state => {
+        console.log(`[Skip Component] UpdateUserState called after ${debounceMs}ms debounce`);
+        originalCallback(state);
+      });
+    }
+    
+    // Return a function that pushes to the subject
+    normalized.UpdateUserState = (state: any) => {
+      console.log('[Skip Component] UpdateUserState triggered (will debounce)');
+      subject!.next(state);
+    };
   }
 
   if (callbacks.NotifyEvent && typeof callbacks.NotifyEvent === 'function') {
