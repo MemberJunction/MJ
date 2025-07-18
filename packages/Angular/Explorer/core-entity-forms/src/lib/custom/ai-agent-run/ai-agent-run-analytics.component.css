@@ -108,7 +108,7 @@
 
 /* Analytics Panels */
 .analytics-panel {
-  padding: 20px;
+  padding: 15px;
 }
 
 /* Kendo PanelBar Styling - Copied from AI Agent Form */
@@ -188,9 +188,9 @@
 /* Charts */
 .charts-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 30px;
-  margin-bottom: 30px;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
 }
 
 .chart-container {
@@ -198,14 +198,14 @@
 }
 
 .chart-container h3 {
-  margin: 0 0 15px 0;
-  font-size: 16px;
+  margin: 0 0 10px 0;
+  font-size: 15px;
   font-weight: 500;
   color: #495057;
 }
 
 .chart-container > div {
-  min-height: 340px;
+  min-height: 220px;
   width: 100%;
   display: flex;
   justify-content: center;
@@ -219,10 +219,11 @@
 }
 
 .chart-legend {
-  margin-top: 15px;
+  margin-top: 10px;
   display: flex;
   flex-wrap: wrap;
-  gap: 15px;
+  gap: 10px;
+  font-size: 12px;
 }
 
 .legend-item {

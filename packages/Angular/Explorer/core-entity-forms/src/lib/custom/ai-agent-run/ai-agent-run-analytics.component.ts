@@ -592,9 +592,9 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
     // Clear previous chart
     d3.select(element).selectAll('*').remove();
     
-    const width = 400;
-    const height = 340;
-    const radius = Math.min(width, height) / 2 - 60;
+    const width = 300;
+    const height = 220;
+    const radius = Math.min(width, height) / 2 - 40;
     
     const svg = d3.select(element)
       .append('svg')
@@ -635,7 +635,7 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
     // Add title
     svg.append('text')
       .attr('x', 0)
-      .attr('y', -radius - 40)
+      .attr('y', -radius - 25)
       .attr('text-anchor', 'middle')
       .style('font-size', '16px')
       .style('font-weight', 'bold')
@@ -655,8 +655,8 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
     d3.select(element).selectAll('*').remove();
     
     const margin = { top: 40, right: 20, bottom: 70, left: 60 };
-    const width = 400 - margin.left - margin.right;
-    const height = 300 - margin.top - margin.bottom;
+    const width = 320 - margin.left - margin.right;
+    const height = 200 - margin.top - margin.bottom;
     
     const svg = d3.select(element)
       .append('svg')
@@ -719,9 +719,9 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
     // Clear previous chart
     d3.select(element).selectAll('*').remove();
     
-    const width = 400;
-    const height = 340;
-    const radius = Math.min(width, height) / 2 - 60;
+    const width = 300;
+    const height = 220;
+    const radius = Math.min(width, height) / 2 - 40;
     
     const svg = d3.select(element)
       .append('svg')
@@ -754,7 +754,7 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
     // Add title
     svg.append('text')
       .attr('x', 0)
-      .attr('y', -radius - 40)
+      .attr('y', -radius - 25)
       .attr('text-anchor', 'middle')
       .style('font-size', '16px')
       .style('font-weight', 'bold')
@@ -782,8 +782,8 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
     d3.select(element).selectAll('*').remove();
     
     const margin = { top: 40, right: 100, bottom: 70, left: 60 };
-    const width = 400 - margin.left - margin.right;
-    const height = 300 - margin.top - margin.bottom;
+    const width = 320 - margin.left - margin.right;
+    const height = 200 - margin.top - margin.bottom;
     
     const svg = d3.select(element)
       .append('svg')
@@ -883,8 +883,8 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
     d3.select(element).selectAll('*').remove();
     
     const margin = { top: 40, right: 20, bottom: 100, left: 60 };
-    const width = 400 - margin.left - margin.right;
-    const height = 300 - margin.top - margin.bottom;
+    const width = 320 - margin.left - margin.right;
+    const height = 200 - margin.top - margin.bottom;
     
     const svg = d3.select(element)
       .append('svg')
@@ -947,9 +947,9 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
     // Clear previous chart
     d3.select(element).selectAll('*').remove();
     
-    const width = 400;
-    const height = 340;
-    const radius = Math.min(width, height) / 2 - 60;
+    const width = 300;
+    const height = 220;
+    const radius = Math.min(width, height) / 2 - 40;
     
     const svg = d3.select(element)
       .append('svg')
@@ -993,7 +993,7 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
     // Add title
     svg.append('text')
       .attr('x', 0)
-      .attr('y', -radius - 40)
+      .attr('y', -radius - 25)
       .attr('text-anchor', 'middle')
       .style('font-size', '16px')
       .style('font-weight', 'bold')
@@ -1126,8 +1126,8 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
     d3.select(element).selectAll('*').remove();
     
     const margin = { top: 40, right: 20, bottom: 120, left: 80 };
-    const width = 400 - margin.left - margin.right;
-    const height = 300 - margin.top - margin.bottom;
+    const width = 320 - margin.left - margin.right;
+    const height = 200 - margin.top - margin.bottom;
     
     const svg = d3.select(element)
       .append('svg')
@@ -1217,8 +1217,8 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
     d3.select(element).selectAll('*').remove();
     
     const margin = { top: 40, right: 100, bottom: 100, left: 80 };
-    const width = 400 - margin.left - margin.right;
-    const height = 300 - margin.top - margin.bottom;
+    const width = 320 - margin.left - margin.right;
+    const height = 200 - margin.top - margin.bottom;
     
     const svg = d3.select(element)
       .append('svg')
@@ -1331,9 +1331,9 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
     // Clear previous chart
     d3.select(element).selectAll('*').remove();
     
-    const width = 400;
-    const height = 340;
-    const radius = Math.min(width, height) / 2 - 60;
+    const width = 300;
+    const height = 220;
+    const radius = Math.min(width, height) / 2 - 40;
     
     const svg = d3.select(element)
       .append('svg')
@@ -1366,7 +1366,7 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
     // Add title
     svg.append('text')
       .attr('x', 0)
-      .attr('y', -radius - 40)
+      .attr('y', -radius - 25)
       .attr('text-anchor', 'middle')
       .style('font-size', '16px')
       .style('font-weight', 'bold')
@@ -1404,8 +1404,8 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
     d3.select(element).selectAll('*').remove();
     
     const margin = { top: 40, right: 20, bottom: 120, left: 60 };
-    const width = 400 - margin.left - margin.right;
-    const height = 300 - margin.top - margin.bottom;
+    const width = 320 - margin.left - margin.right;
+    const height = 200 - margin.top - margin.bottom;
     
     const svg = d3.select(element)
       .append('svg')
