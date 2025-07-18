@@ -289,6 +289,9 @@ export class AIPromptRunner {
         
         this.logStatus(`✅ Hierarchical template composition completed with ${Object.keys(childTemplateRenderingResult.renderedTemplates).length} child templates embedded`, true, params);
 
+        // Validate context length and potentially switch to a better model
+        selectedModel = await this.validateAndReselectForContextLength(selectedModel!, prompt, renderedPromptText, params.conversationMessages, params);
+
           // Create parent prompt run for the final composed prompt execution
         parentPromptRun = await this.createPromptRun(prompt, selectedModel, params, renderedPromptText, startTime, params.override?.vendorId);
         this.logStatus(`📝 Created prompt run ${parentPromptRun.ID} for hierarchical template composition`, true, params);
@@ -310,11 +313,36 @@ export class AIPromptRunner {
         }
 
         renderedPromptText = renderedPrompt.Output;
+        
+        // Validate context length and potentially switch to a better model
+        selectedModel = await this.validateAndReselectForContextLength(selectedModel!, prompt, renderedPromptText, params.conversationMessages, params);
       }
 
       // Check for cancellation after template rendering
       if (params.cancellationToken?.aborted) {
         throw new Error('Prompt execution was cancelled during template rendering');
+      }
+
+      // If no model was selected yet (no template case), select one now
+      if (!selectedModel) {
+        let modelSelectionPrompt = prompt;
+        if (params.modelSelectionPrompt) {
+          modelSelectionPrompt = params.modelSelectionPrompt;
+          this.logStatus(`🎯 Using prompt "${modelSelectionPrompt.Name}" for model selection instead of main prompt`, true, params);
+        }
+        
+        selectedModel = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
+        if (!selectedModel) {
+          throw new Error(`No suitable model found for prompt ${modelSelectionPrompt.Name}`);
+        }
+      }
+
+      // Validate context length for non-template cases or if prompt text exists
+      if (renderedPromptText || params.conversationMessages) {
+        const contextPrompt = renderedPromptText || (params.conversationMessages ? 
+          params.conversationMessages.map(m => m.content).join('\n') : '');
+        
+        selectedModel = await this.validateAndReselectForContextLength(selectedModel, prompt, contextPrompt, params.conversationMessages, params);
       }
 
       // Check if we need parallel execution based on ParallelizationMode
@@ -2841,6 +2869,182 @@ export class AIPromptRunner {
     }
   }
 
+  // ==================== CONTEXT LENGTH METHODS ====================
+
+  /**
+   * Estimates the number of tokens in a rendered prompt and conversation messages.
+   * This is a rough estimation based on character count and typical token ratios.
+   * 
+   * @param renderedPrompt - The rendered prompt text
+   * @param conversationMessages - Optional conversation messages
+   * @returns Estimated token count
+   */
+  private estimatePromptTokens(renderedPrompt: string, conversationMessages?: ChatMessage[]): number {
+    // Rough estimation: ~4 characters per token for English text
+    // This is a conservative estimate; actual token count can vary by model/tokenizer
+    let totalChars = renderedPrompt.length;
+    
+    if (conversationMessages) {
+      totalChars += conversationMessages.reduce((sum, msg) => sum + (msg.content?.length || 0), 0);
+    }
+    
+    // Add some overhead for message formatting, role indicators, etc.
+    const overhead = conversationMessages ? conversationMessages.length * 20 : 0;
+    totalChars += overhead;
+    
+    // Convert to tokens with safety margin (use 3.5 chars/token to be conservative)
+    return Math.ceil(totalChars / 3.5);
+  }
+
+  /**
+   * Validates if a model can handle the estimated context length.
+   * 
+   * @param model - The AI model to validate
+   * @param estimatedInputTokens - Estimated input token count
+   * @param requiredOutputTokens - Required output token count (default: 1000)
+   * @returns True if the model can likely handle the context length
+   */
+  private validateModelContextLength(
+    model: AIModelEntityExtended, 
+    estimatedInputTokens: number, 
+    requiredOutputTokens: number = 1000
+  ): boolean {
+    // Get the maximum context limits from the model's vendors
+    // Use the highest limits available across all vendors
+    let maxInputTokens = 0;
+    let maxOutputTokens = 0;
+    
+    if (model.ModelVendors && model.ModelVendors.length > 0) {
+      maxInputTokens = Math.max(...model.ModelVendors.map(mv => mv.MaxInputTokens || 0));
+      maxOutputTokens = Math.max(...model.ModelVendors.map(mv => mv.MaxOutputTokens || 0));
+    }
+    
+    // If no limits are set, assume it can handle the request
+    if (maxInputTokens === 0 && maxOutputTokens === 0) {
+      return true;
+    }
+    
+    // Check input token limit
+    if (maxInputTokens > 0 && estimatedInputTokens > maxInputTokens) {
+      return false;
+    }
+    
+    // Check output token limit
+    if (maxOutputTokens > 0 && requiredOutputTokens > maxOutputTokens) {
+      return false;
+    }
+    
+    // Check if total context (input + output) exceeds model capacity
+    // Some models have a total context limit rather than separate input/output limits
+    if (maxInputTokens > 0) {
+      const totalEstimatedTokens = estimatedInputTokens + requiredOutputTokens;
+      // Use a safety margin of 90% of the max input tokens as total context limit
+      const totalContextLimit = maxInputTokens * 0.9;
+      if (totalEstimatedTokens > totalContextLimit) {
+        return false;
+      }
+    }
+    
+    return true;
+  }
+
+  /**
+   * Validates context length after prompt rendering and attempts to find a better model if needed.
+   * 
+   * @param currentModel - The currently selected model
+   * @param prompt - The AI prompt entity
+   * @param renderedPromptText - The rendered prompt text
+   * @param conversationMessages - Optional conversation messages
+   * @param params - Execution parameters
+   * @returns The validated model (same as input) or a better model for context length
+   */
+  private async validateAndReselectForContextLength(
+    currentModel: AIModelEntityExtended,
+    prompt: AIPromptEntity,
+    renderedPromptText: string,
+    conversationMessages?: ChatMessage[],
+    params?: AIPromptParams
+  ): Promise<AIModelEntityExtended> {
+    // Estimate token count for the rendered prompt
+    const estimatedTokens = this.estimatePromptTokens(renderedPromptText, conversationMessages);
+    
+    // Check if current model can handle the context length
+    if (this.validateModelContextLength(currentModel, estimatedTokens)) {
+      // Current model is fine
+      const maxInputTokens = currentModel.ModelVendors?.length > 0 ? 
+        Math.max(...currentModel.ModelVendors.map(mv => mv.MaxInputTokens || 0)) : 0;
+      this.logStatus(`✅ Current model ${currentModel.Name} can handle estimated ${estimatedTokens} tokens (max: ${maxInputTokens || 'unlimited'})`, true, params);
+      return currentModel;
+    }
+    
+    // Current model cannot handle the context length, try to find a better one
+    const currentMaxInputTokens = currentModel.ModelVendors?.length > 0 ? 
+      Math.max(...currentModel.ModelVendors.map(mv => mv.MaxInputTokens || 0)) : 0;
+    this.logStatus(`⚠️ Current model ${currentModel.Name} cannot handle estimated ${estimatedTokens} tokens (max: ${currentMaxInputTokens || 0}), searching for larger context model...`, true, params);
+    
+    // Get all available candidates
+    const candidates = this.buildModelVendorCandidates(
+      prompt, 
+      undefined, // No explicit model ID - we want alternatives
+      params?.configurationId, 
+      params?.override?.vendorId
+    );
+    
+    // Filter candidates that can handle the context length and have API keys
+    const validCandidates = [];
+    for (const candidate of candidates) {
+      if (this.validateModelContextLength(candidate.model, estimatedTokens)) {
+        // Check if this candidate has an API key
+        const apiKey = GetAIAPIKey(candidate.driverClass);
+        if (this.isValidAPIKey(apiKey)) {
+          validCandidates.push(candidate);
+        }
+      }
+    }
+    
+    if (validCandidates.length === 0) {
+      // No better models available, log warning and continue with original model
+      this.logStatus(`⚠️ No alternative models found that can handle ${estimatedTokens} tokens. Continuing with ${currentModel.Name} - may encounter context length exceeded error.`, true, params);
+      return currentModel;
+    }
+    
+    // Sort by context window size (largest first), then by priority
+    validCandidates.sort((a, b) => {
+      const aMaxTokens = a.model.ModelVendors?.length > 0 ? 
+        Math.max(...a.model.ModelVendors.map(mv => mv.MaxInputTokens || 0)) : 0;
+      const bMaxTokens = b.model.ModelVendors?.length > 0 ? 
+        Math.max(...b.model.ModelVendors.map(mv => mv.MaxInputTokens || 0)) : 0;
+      
+      // Primary sort: context window size (largest first)
+      if (aMaxTokens !== bMaxTokens) {
+        return bMaxTokens - aMaxTokens;
+      }
+      
+      // Secondary sort: priority (higher is better)
+      return b.priority - a.priority;
+    });
+    
+    const bestCandidate = validCandidates[0];
+    
+    // Log the context-aware model switch
+    const bestCandidateMaxTokens = bestCandidate.model.ModelVendors?.length > 0 ? 
+      Math.max(...bestCandidate.model.ModelVendors.map(mv => mv.MaxInputTokens || 0)) : 0;
+    LogStatus(`🔄 Context-aware model switch: ${currentModel.Name} (${currentMaxInputTokens || 0} tokens) → ${bestCandidate.model.Name} (${bestCandidateMaxTokens || 0} tokens) for ${estimatedTokens} token request`);
+    
+    // Store the selected vendor info on the model for later use
+    const modelWithVendor = bestCandidate.model as AIModelEntityExtended & { 
+      _selectedVendorId?: string;
+      _selectedDriverClass?: string;
+      _selectedApiName?: string;
+    };
+    
+    modelWithVendor._selectedVendorId = bestCandidate.vendorId;
+    modelWithVendor._selectedDriverClass = bestCandidate.driverClass;
+    modelWithVendor._selectedApiName = bestCandidate.apiName;
+    
+    return bestCandidate.model;
+  }
+
   // ==================== FAILOVER METHODS ====================
 
   /**
@@ -2985,6 +3189,12 @@ export class AIPromptRunner {
       return !failedPairs.has(key);
     });
 
+    // Check if we have context length exceeded errors in the attempt history
+    const hasContextLengthError = attemptHistory.some(a => 
+      a.errorType === 'ContextLengthExceeded' || 
+      ErrorAnalyzer.analyzeError(a.error).errorType === 'ContextLengthExceeded'
+    );
+
     // Apply strategy-specific filtering and sorting
     let candidates: ModelVendorCandidate[];
     
@@ -3027,8 +3237,57 @@ export class AIPromptRunner {
         candidates = [];
     }
 
-    // Final sort by priority (higher is better)
-    return candidates.sort((a, b) => b.priority - a.priority);
+    // If we have context length errors, prioritize models with larger context windows
+    if (hasContextLengthError) {
+      const currentMaxTokens = currentModel.ModelVendors?.length > 0 ? 
+        Math.max(...currentModel.ModelVendors.map(mv => mv.MaxInputTokens || 0)) : 0;
+      
+      // Filter out models with same or smaller context windows
+      candidates = candidates.filter(c => {
+        const candidateMaxTokens = c.model.ModelVendors?.length > 0 ? 
+          Math.max(...c.model.ModelVendors.map(mv => mv.MaxInputTokens || 0)) : 0;
+        return candidateMaxTokens > currentMaxTokens;
+      });
+      
+      // Sort by context window size (largest first), then by priority
+      candidates.sort((a, b) => {
+        const aMaxTokens = a.model.ModelVendors?.length > 0 ? 
+          Math.max(...a.model.ModelVendors.map(mv => mv.MaxInputTokens || 0)) : 0;
+        const bMaxTokens = b.model.ModelVendors?.length > 0 ? 
+          Math.max(...b.model.ModelVendors.map(mv => mv.MaxInputTokens || 0)) : 0;
+        
+        // Primary sort: context window size (largest first)
+        if (aMaxTokens !== bMaxTokens) {
+          return bMaxTokens - aMaxTokens;
+        }
+        
+        // Secondary sort: priority (higher is better)
+        return b.priority - a.priority;
+      });
+      
+      // Log context-aware failover selection
+      if (candidates.length > 0) {
+        const bestCandidate = candidates[0];
+        const bestCandidateMaxTokens = bestCandidate.model.ModelVendors?.length > 0 ? 
+          Math.max(...bestCandidate.model.ModelVendors.map(mv => mv.MaxInputTokens || 0)) : 0;
+        LogStatusEx({
+          message: `🔄 Context-aware failover: Selected model ${bestCandidate.model.Name} with ${bestCandidateMaxTokens} max input tokens (vs ${currentMaxTokens} for failed model)`,
+          category: 'AI',
+          additionalArgs: [{
+            currentModel: currentModel.Name,
+            currentMaxTokens,
+            selectedModel: bestCandidate.model.Name,
+            selectedMaxTokens: bestCandidateMaxTokens,
+            candidateCount: candidates.length
+          }]
+        });
+      }
+    } else {
+      // Final sort by priority (higher is better) for non-context-length errors
+      candidates.sort((a, b) => b.priority - a.priority);
+    }
+    
+    return candidates;
   }
 
   /**
