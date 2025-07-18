@@ -1319,7 +1319,7 @@ export class AIAgentRun_ {
     StartingPayload?: string;
         
     @Field(() => Int, {description: `Total number of prompt iterations executed during this agent run. Incremented
-  each time the agent processes a prompt step.`}) 
+each time the agent processes a prompt step.`}) 
     TotalPromptIterations: number;
         
     @Field({nullable: true}) 
@@ -2237,19 +2237,19 @@ Retry mode. After reaching this limit, the validation will fail permanently.`})
     FinalPayloadValidationMaxRetries: number;
         
     @Field(() => Float, {nullable: true, description: `Maximum cost in dollars allowed for a single agent run. Run will be terminated
-  if this limit is exceeded.`}) 
+if this limit is exceeded.`}) 
     MaxCostPerRun?: number;
         
     @Field(() => Int, {nullable: true, description: `Maximum total tokens (input + output) allowed for a single agent run. Run will
-  be terminated if this limit is exceeded.`}) 
+be terminated if this limit is exceeded.`}) 
     MaxTokensPerRun?: number;
         
     @Field(() => Int, {nullable: true, description: `Maximum number of prompt iterations allowed for a single agent run. Run will be
-   terminated if this limit is exceeded.`}) 
+terminated if this limit is exceeded.`}) 
     MaxIterationsPerRun?: number;
         
     @Field(() => Int, {nullable: true, description: `Maximum time in seconds allowed for a single agent run. Run will be terminated
-  if this limit is exceeded.`}) 
+if this limit is exceeded.`}) 
     MaxTimePerRun?: number;
         
     @Field(() => Int, {nullable: true, description: `When acting as a sub-agent, minimum number of times this agent must be executed per parent agent run`}) 
@@ -2257,6 +2257,15 @@ Retry mode. After reaching this limit, the validation will fail permanently.`})
         
     @Field(() => Int, {nullable: true, description: `When acting as a sub-agent, maximum number of times this agent can be executed per parent agent run`}) 
     MaxExecutionsPerRun?: number;
+        
+    @Field({nullable: true, description: `Optional JSON schema validation to apply to the input payload before agent execution begins. Uses the same JSONValidator 
+format as FinalPayloadValidation.`}) 
+    StartingPayloadValidation?: string;
+        
+    @Field({description: `Determines how to handle StartingPayloadValidation failures. Fail = reject invalid input, Warn = log warning but 
+proceed.`}) 
+    @MaxLength(50)
+    StartingPayloadValidationMode: string;
         
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -2399,6 +2408,12 @@ export class CreateAIAgentInput {
 
     @Field(() => Int, { nullable: true })
     MaxExecutionsPerRun: number | null;
+
+    @Field({ nullable: true })
+    StartingPayloadValidation: string | null;
+
+    @Field({ nullable: true })
+    StartingPayloadValidationMode?: string;
 }
     
 
@@ -2499,6 +2514,12 @@ export class UpdateAIAgentInput {
 
     @Field(() => Int, { nullable: true })
     MaxExecutionsPerRun?: number | null;
+
+    @Field({ nullable: true })
+    StartingPayloadValidation?: string | null;
+
+    @Field({ nullable: true })
+    StartingPayloadValidationMode?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
