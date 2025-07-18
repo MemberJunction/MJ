@@ -1,0 +1,357 @@
+<div class="analytics-container">
+  <!-- Loading State -->
+  <div class="loading-state" *ngIf="isLoading">
+    <i class="fas fa-spinner fa-spin fa-2x"></i>
+    <p>Loading analytics data...</p>
+  </div>
+
+  <!-- Error State -->
+  <div class="error-state" *ngIf="error && !isLoading">
+    <i class="fas fa-exclamation-triangle fa-2x"></i>
+    <p>{{ error }}</p>
+    <button kendoButton (click)="loadData()">Retry</button>
+  </div>
+
+  <!-- Analytics Content -->
+  <div class="analytics-content" *ngIf="!isLoading && !error">
+    <kendo-panelbar>
+      <!-- Summary Cards -->
+      <kendo-panelbar-item [expanded]="true">
+        <ng-template kendoPanelBarItemTitle>
+          <i class="fas fa-tachometer-alt"></i> Overview
+        </ng-template>
+        <ng-template kendoPanelBarContent>
+      <div class="summary-cards">
+      <div class="summary-card">
+        <div class="card-icon prompts">
+          <i class="fas fa-microchip"></i>
+        </div>
+        <div class="card-content">
+          <h3>Total Prompts</h3>
+          <div class="metric-value">{{ promptMetrics.totalCount }}</div>
+          <div class="metric-detail">
+            <span class="success">{{ promptMetrics.statusBreakdown.success }} successful</span>
+            <span class="failed" *ngIf="promptMetrics.statusBreakdown.failed > 0">{{ promptMetrics.statusBreakdown.failed }} failed</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="summary-card">
+        <div class="card-icon actions">
+          <i class="fas fa-cog"></i>
+        </div>
+        <div class="card-content">
+          <h3>Total Actions</h3>
+          <div class="metric-value">{{ actionMetrics.totalCount }}</div>
+          <div class="metric-detail">
+            <span class="success">{{ actionMetrics.statusBreakdown.success }} successful</span>
+            <span class="failed" *ngIf="actionMetrics.statusBreakdown.failed > 0">{{ actionMetrics.statusBreakdown.failed }} failed</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="summary-card">
+        <div class="card-icon cost">
+          <i class="fas fa-dollar-sign"></i>
+        </div>
+        <div class="card-content">
+          <h3>Total Cost</h3>
+          <div class="metric-value">{{ formatCost(promptMetrics.costBreakdown.totalCost) }}</div>
+          <div class="metric-detail">
+            <span>{{ promptMetrics.tokenUsage.totalInput + promptMetrics.tokenUsage.totalOutput }} tokens</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="summary-card">
+        <div class="card-icon time">
+          <i class="fas fa-clock"></i>
+        </div>
+        <div class="card-content">
+          <h3>Execution Time</h3>
+          <div class="metric-value">{{ formatDuration(promptMetrics.totalExecutionTime + actionMetrics.totalExecutionTime) }}</div>
+          <div class="metric-detail">
+            <span>{{ timelineMetrics.totalSteps }} total steps</span>
+          </div>
+        </div>
+      </div>
+    </div>
+        </ng-template>
+      </kendo-panelbar-item>
+
+      <!-- Prompt Analytics -->
+      <kendo-panelbar-item [expanded]="true">
+        <ng-template kendoPanelBarItemTitle>
+          <i class="fas fa-microchip"></i> Prompt Analytics
+        </ng-template>
+        <ng-template kendoPanelBarContent>
+      <div class="analytics-panel">
+        <!-- No prompts message -->
+        <div class="no-data-message" *ngIf="promptMetrics.totalCount === 0">
+          <i class="fas fa-info-circle"></i>
+          <p>No prompt executions found in this agent run.</p>
+          <p class="small">This agent run may have only executed actions without any AI prompts.</p>
+        </div>
+
+        <div class="charts-grid" *ngIf="promptMetrics.totalCount > 0">
+          <!-- Model Distribution -->
+          <div class="chart-container">
+            <div id="modelDistributionChart" #modelDistributionChart></div>
+            <div class="chart-legend" *ngIf="promptMetrics.byModel.size > 0">
+              <div class="legend-item" *ngFor="let item of promptMetrics.byModel | keyvalue">
+                <span class="legend-color" [style.backgroundColor]="getModelColor(item.key)"></span>
+                <span class="legend-label">{{ item.key }}: {{ item.value.count }} ({{ (item.value.count / promptMetrics.totalCount * 100).toFixed(1) }}%)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Execution Time by Vendor -->
+          <div class="chart-container">
+            <div id="executionTimeChart" #executionTimeChart></div>
+          </div>
+
+          <!-- Cost by Vendor -->
+          <div class="chart-container">
+            <div id="costByVendorChart" #costByVendorChart></div>
+            <div class="chart-total">Total: {{ formatCost(promptMetrics.costBreakdown.totalCost) }}</div>
+          </div>
+
+          <!-- Token Usage -->
+          <div class="chart-container">
+            <div id="tokenUsageChart" #tokenUsageChart></div>
+          </div>
+        </div>
+
+        <!-- Additional Prompt Analytics Charts -->
+        <div class="charts-grid" style="margin-top: 30px;" *ngIf="promptMetrics.totalCount > 0">
+          <!-- Prompt Execution Time Distribution -->
+          <div class="chart-container">
+            <div id="promptTimeDistributionChart" #promptTimeDistributionChart></div>
+          </div>
+
+          <!-- Prompt Token Usage -->
+          <div class="chart-container">
+            <div id="promptTokenDistributionChart" #promptTokenDistributionChart></div>
+          </div>
+
+          <!-- Prompt Cost Distribution -->
+          <div class="chart-container">
+            <div id="promptCostDistributionChart" #promptCostDistributionChart></div>
+          </div>
+
+          <!-- Prompt Count by Name -->
+          <div class="chart-container">
+            <div id="promptCountByNameChart" #promptCountByNameChart></div>
+          </div>
+        </div>
+
+        <!-- Detailed Prompt Metrics -->
+        <div class="detailed-metrics">
+          <button kendoButton 
+                  fillMode="flat" 
+                  (click)="promptDetailsExpanded = !promptDetailsExpanded">
+            <i class="fas" [ngClass]="promptDetailsExpanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+            Detailed Prompt Metrics
+          </button>
+          
+          <div class="metrics-table" *ngIf="promptDetailsExpanded">
+            <table>
+              <thead>
+                <tr>
+                  <th>Prompt Name</th>
+                  <th>Count</th>
+                  <th>Avg Time</th>
+                  <th>Total Time</th>
+                  <th>Success Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let prompt of promptMetrics.byPrompt | keyvalue">
+                  <td>{{ prompt.key }}</td>
+                  <td>{{ prompt.value.count }}</td>
+                  <td>{{ formatDuration(prompt.value.avgTime) }}</td>
+                  <td>{{ formatDuration(prompt.value.totalTime) }}</td>
+                  <td>
+                    <span class="success-rate">
+                      <!-- Calculate success rate for this prompt -->
+                      {{ calculatePromptSuccessRate(prompt.key) }}%
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+        </ng-template>
+      </kendo-panelbar-item>
+
+      <!-- Action Analytics -->
+      <kendo-panelbar-item [expanded]="true">
+        <ng-template kendoPanelBarItemTitle>
+          <i class="fas fa-cog"></i> Action Analytics
+        </ng-template>
+        <ng-template kendoPanelBarContent>
+      <div class="analytics-panel">
+
+        <div class="charts-grid">
+          <!-- Action Success Rate -->
+          <div class="chart-container">
+            <div id="actionSuccessRateChart" #actionSuccessRateChart></div>
+          </div>
+
+          <!-- Step Type Distribution -->
+          <div class="chart-container">
+            <div id="stepTypeChart" #stepTypeChart></div>
+          </div>
+        </div>
+
+        <!-- Detailed Action Metrics -->
+        <div class="detailed-metrics">
+          <button kendoButton 
+                  fillMode="flat" 
+                  (click)="actionDetailsExpanded = !actionDetailsExpanded">
+            <i class="fas" [ngClass]="actionDetailsExpanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+            Detailed Action Metrics
+          </button>
+          
+          <div class="metrics-table" *ngIf="actionDetailsExpanded">
+            <table>
+              <thead>
+                <tr>
+                  <th>Action Name</th>
+                  <th>Count</th>
+                  <th>Avg Time</th>
+                  <th>Success Rate</th>
+                  <th>Type</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let action of actionMetrics.byAction | keyvalue">
+                  <td>{{ action.key }}</td>
+                  <td>{{ action.value.count }}</td>
+                  <td>{{ formatDuration(action.value.avgTime) }}</td>
+                  <td>
+                    <span class="success-rate" [class.high]="action.value.successRate > 0.9" 
+                                                [class.medium]="action.value.successRate > 0.7 && action.value.successRate <= 0.9"
+                                                [class.low]="action.value.successRate <= 0.7">
+                      {{ (action.value.successRate * 100).toFixed(1) }}%
+                    </span>
+                  </td>
+                  <td>{{ getActionType(action.key) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Error Analysis -->
+        <div class="error-analysis-section">
+          <div class="error-analysis" *ngIf="actionMetrics.errorAnalysis.size > 0">
+          <h3>
+            <i class="fas fa-exclamation-triangle"></i>
+            Common Errors
+          </h3>
+          <p class="error-analysis-description">
+            This section shows the most frequent error messages from failed actions, helping identify systemic issues that may need attention.
+          </p>
+          <div class="error-list">
+            <div class="error-item" *ngFor="let error of getTopErrors()">
+              <span class="error-count">{{ error.count }}x</span>
+              <span class="error-message">{{ error.message }}</span>
+            </div>
+          </div>
+        </div>
+          <div class="no-errors" *ngIf="actionMetrics.errorAnalysis.size === 0">
+            <i class="fas fa-check-circle"></i>
+            <p>No action errors detected in this run. All actions completed successfully!</p>
+          </div>
+        </div>
+      </div>
+        </ng-template>
+      </kendo-panelbar-item>
+
+      <!-- Model Performance Comparison -->
+      <kendo-panelbar-item [expanded]="true">
+        <ng-template kendoPanelBarItemTitle>
+          <i class="fas fa-chart-line"></i> Model Performance Comparison
+        </ng-template>
+        <ng-template kendoPanelBarContent>
+      <div class="analytics-panel">
+
+        <div class="model-comparison">
+          <table>
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>Vendor</th>
+                <th>Prompts</th>
+                <th>Avg Time</th>
+                <th>Total Cost</th>
+                <th>Avg Cost/Prompt</th>
+                <th>Input Tokens</th>
+                <th>Output Tokens</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let model of getModelPerformanceData()">
+                <td>{{ model.name }}</td>
+                <td>{{ model.vendor }}</td>
+                <td>{{ model.count }}</td>
+                <td>{{ formatDuration(model.avgTime) }}</td>
+                <td>{{ formatCost(model.totalCost) }}</td>
+                <td>{{ formatCost(model.avgCost) }}</td>
+                <td>{{ model.inputTokens | number:'1.0-0' }}</td>
+                <td>{{ model.outputTokens | number:'1.0-0' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+        </ng-template>
+      </kendo-panelbar-item>
+
+      <!-- Timeline Analysis -->
+      <kendo-panelbar-item [expanded]="true">
+        <ng-template kendoPanelBarItemTitle>
+          <i class="fas fa-stream"></i> Execution Timeline Analysis
+        </ng-template>
+        <ng-template kendoPanelBarContent>
+      <div class="analytics-panel">
+
+        <div class="timeline-stats">
+          <div class="stat-item">
+            <span class="stat-label">Total Steps</span>
+            <span class="stat-value">{{ timelineMetrics.totalSteps }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Parallel Executions</span>
+            <span class="stat-value">{{ timelineMetrics.parallelExecutions }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Max Nesting Depth</span>
+            <span class="stat-value">{{ timelineMetrics.deepestNesting }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Sub-Agent Runs</span>
+            <span class="stat-value">{{ subAgentRuns.length }}</span>
+          </div>
+        </div>
+
+        <div class="step-breakdown">
+          <h3>Steps by Type</h3>
+          <div class="step-type-list">
+            <div class="step-type-item" *ngFor="let type of timelineMetrics.stepsByType | keyvalue">
+              <i class="fas" [ngClass]="getStepTypeIcon(type.key)"></i>
+              <span class="type-name">{{ type.key }}</span>
+              <span class="type-count">{{ type.value }}</span>
+              <span class="type-percentage">({{ (type.value / timelineMetrics.totalSteps * 100).toFixed(1) }}%)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+        </ng-template>
+      </kendo-panelbar-item>
+    </kendo-panelbar>
+  </div>
+</div>

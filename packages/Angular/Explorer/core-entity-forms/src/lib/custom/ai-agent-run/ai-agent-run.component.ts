@@ -9,6 +9,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { TimelineItem, AIAgentRunTimelineComponent } from './ai-agent-run-timeline.component';
 import { AIAgentRunFormComponent } from '../../generated/Entities/AIAgentRun/aiagentrun.form.component';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
+import { AIAgentRunAnalyticsComponent } from './ai-agent-run-analytics.component';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Runs') 
 @Component({
@@ -29,10 +30,12 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   error: string | null = null;
   selectedItemJsonString = '{}';
   detailPaneTab: 'json' | 'diff' = 'diff';
+  analyticsLoaded = false;
   
   agent: AIAgentEntity | null = null;
   
   @ViewChild(AIAgentRunTimelineComponent) timelineComponent?: AIAgentRunTimelineComponent;
+  @ViewChild(AIAgentRunAnalyticsComponent) analyticsComponent?: AIAgentRunAnalyticsComponent;
 
   constructor(
     elementRef: ElementRef,
@@ -68,6 +71,17 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
       }
     } catch (error) {
       console.error('Error loading agent:', error);
+    }
+  }
+  
+  changeTab(tab: string) {
+    this.activeTab = tab;
+    
+    // Lazy load analytics when the tab is first accessed
+    if (tab === 'analytics' && !this.analyticsLoaded) {
+      this.analyticsLoaded = true;
+      // The component will load data in its ngOnInit
+      this.cdr.detectChanges();
     }
   }
   
@@ -128,6 +142,10 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
         // Trigger timeline refresh
         if (this.timelineComponent) {
           this.timelineComponent.loadData();
+        }
+        // Trigger analytics refresh
+        if (this.analyticsComponent) {
+          this.analyticsComponent.loadData();
         }
       });
     }
