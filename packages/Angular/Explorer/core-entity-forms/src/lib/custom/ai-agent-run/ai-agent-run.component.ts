@@ -1,13 +1,12 @@
 import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, ElementRef } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
-import { Subject, Observable, BehaviorSubject, combineLatest } from 'rxjs';
-import { takeUntil, map, distinctUntilChanged, shareReplay } from 'rxjs/operators';
-import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
-import { AIAgentRunEntity, AIAgentRunStepEntity, ActionExecutionLogEntity, AIPromptRunEntity, AIAgentEntity } from '@memberjunction/core-entities';
+import { Subject } from 'rxjs';
+import { CompositeKey, Metadata } from '@memberjunction/core';
+import { AIAgentRunEntity, AIAgentRunStepEntity, AIAgentEntity } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
 import { SharedService } from '@memberjunction/ng-shared';
-import { TimelineItem } from './ai-agent-run-timeline.component';
+import { TimelineItem, AIAgentRunTimelineComponent } from './ai-agent-run-timeline.component';
 import { AIAgentRunFormComponent } from '../../generated/Entities/AIAgentRun/aiagentrun.form.component';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 
@@ -32,6 +31,8 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   detailPaneTab: 'json' | 'diff' = 'diff';
   
   agent: AIAgentEntity | null = null;
+  
+  @ViewChild(AIAgentRunTimelineComponent) timelineComponent?: AIAgentRunTimelineComponent;
 
   constructor(
     elementRef: ElementRef,
@@ -121,7 +122,15 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   }
   
   refreshData() {
-    // Timeline component will handle its own refresh
+    // Reload the agent run record to get latest status
+    if (this.record?.ID) {
+      this.record.Load(this.record.ID).then(() => {
+        // Trigger timeline refresh
+        if (this.timelineComponent) {
+          this.timelineComponent.loadData();
+        }
+      });
+    }
   }
   
   getSelectedItemJson(): string {
