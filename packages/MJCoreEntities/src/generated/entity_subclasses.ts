@@ -1197,25 +1197,25 @@ Retry mode. After reaching this limit, the validation will fail permanently.`),
         * * Display Name: Max Cost Per Run
         * * SQL Data Type: decimal(10, 4)
     * * Description: Maximum cost in dollars allowed for a single agent run. Run will be terminated
-  if this limit is exceeded.`),
+if this limit is exceeded.`),
     MaxTokensPerRun: z.number().nullable().describe(`
         * * Field Name: MaxTokensPerRun
         * * Display Name: Max Tokens Per Run
         * * SQL Data Type: int
     * * Description: Maximum total tokens (input + output) allowed for a single agent run. Run will
-  be terminated if this limit is exceeded.`),
+be terminated if this limit is exceeded.`),
     MaxIterationsPerRun: z.number().nullable().describe(`
         * * Field Name: MaxIterationsPerRun
         * * Display Name: Max Iterations Per Run
         * * SQL Data Type: int
     * * Description: Maximum number of prompt iterations allowed for a single agent run. Run will be
-   terminated if this limit is exceeded.`),
+terminated if this limit is exceeded.`),
     MaxTimePerRun: z.number().nullable().describe(`
         * * Field Name: MaxTimePerRun
         * * Display Name: Max Time Per Run
         * * SQL Data Type: int
     * * Description: Maximum time in seconds allowed for a single agent run. Run will be terminated
-  if this limit is exceeded.`),
+if this limit is exceeded.`),
     MinExecutionsPerRun: z.number().nullable().describe(`
         * * Field Name: MinExecutionsPerRun
         * * Display Name: Min Executions Per Run
@@ -1226,6 +1226,23 @@ Retry mode. After reaching this limit, the validation will fail permanently.`),
         * * Display Name: Max Executions Per Run
         * * SQL Data Type: int
     * * Description: When acting as a sub-agent, maximum number of times this agent can be executed per parent agent run`),
+    StartingPayloadValidation: z.string().nullable().describe(`
+        * * Field Name: StartingPayloadValidation
+        * * Display Name: Starting Payload Validation
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON schema validation to apply to the input payload before agent execution begins. Uses the same JSONValidator 
+format as FinalPayloadValidation.`),
+    StartingPayloadValidationMode: z.union([z.literal('Fail'), z.literal('Warn')]).describe(`
+        * * Field Name: StartingPayloadValidationMode
+        * * Display Name: Starting Payload Validation Mode
+        * * SQL Data Type: nvarchar(25)
+        * * Default Value: Fail
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Fail
+    *   * Warn
+    * * Description: Determines how to handle StartingPayloadValidation failures. Fail = reject invalid input, Warn = log warning but 
+proceed.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -7666,7 +7683,7 @@ export const AIAgentRunSchema = z.object({
         * * SQL Data Type: int
         * * Default Value: 0
     * * Description: Total number of prompt iterations executed during this agent run. Incremented
-  each time the agent processes a prompt step.`),
+each time the agent processes a prompt step.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -14307,8 +14324,8 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
 
     /**
     * Validate() method override for AI Agent Actions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * MinExecutionsPerRun: This rule ensures that if a value for 'Minimum Executions Per Run' is provided, it must be zero or greater. If the value is not provided (left blank), that's also allowed.
     * * MaxExecutionsPerRun: This rule ensures that if a value for the maximum number of executions per run is provided, it must be greater than zero. If no value is provided, that's acceptable.
+    * * MinExecutionsPerRun: This rule ensures that if a value for 'Minimum Executions Per Run' is provided, it must be zero or greater. If the value is not provided (left blank), that's also allowed.
     * * Table-Level: This rule ensures that the minimum number of executions per run cannot be greater than the maximum number of executions per run. If either value is not specified, the rule is considered satisfied.  
     * @public
     * @method
@@ -14316,23 +14333,11 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateMinExecutionsPerRunIsNonNegative(result);
         this.ValidateMaxExecutionsPerRunGreaterThanZero(result);
+        this.ValidateMinExecutionsPerRunIsNonNegative(result);
         this.ValidateMinExecutionsPerRunLessThanOrEqualToMax(result);
 
         return result;
-    }
-
-    /**
-    * This rule ensures that if a value for 'Minimum Executions Per Run' is provided, it must be zero or greater. If the value is not provided (left blank), that's also allowed.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateMinExecutionsPerRunIsNonNegative(result: ValidationResult) {
-    	if (this.MinExecutionsPerRun !== null && this.MinExecutionsPerRun < 0) {
-    		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "Minimum executions per run must be zero or greater.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -14344,6 +14349,18 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     public ValidateMaxExecutionsPerRunGreaterThanZero(result: ValidationResult) {
     	if (this.MaxExecutionsPerRun !== null && this.MaxExecutionsPerRun <= 0) {
     		result.Errors.push(new ValidationErrorInfo("MaxExecutionsPerRun", "If a maximum executions per run is specified, it must be greater than zero.", this.MaxExecutionsPerRun, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if a value for 'Minimum Executions Per Run' is provided, it must be zero or greater. If the value is not provided (left blank), that's also allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMinExecutionsPerRunIsNonNegative(result: ValidationResult) {
+    	if (this.MinExecutionsPerRun !== null && this.MinExecutionsPerRun < 0) {
+    		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "Minimum executions per run must be zero or greater.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
     	}
     }
 
@@ -15739,7 +15756,7 @@ Retry mode. After reaching this limit, the validation will fail permanently.
     * * Display Name: Max Cost Per Run
     * * SQL Data Type: decimal(10, 4)
     * * Description: Maximum cost in dollars allowed for a single agent run. Run will be terminated
-  if this limit is exceeded.
+if this limit is exceeded.
     */
     get MaxCostPerRun(): number | null {
         return this.Get('MaxCostPerRun');
@@ -15753,7 +15770,7 @@ Retry mode. After reaching this limit, the validation will fail permanently.
     * * Display Name: Max Tokens Per Run
     * * SQL Data Type: int
     * * Description: Maximum total tokens (input + output) allowed for a single agent run. Run will
-  be terminated if this limit is exceeded.
+be terminated if this limit is exceeded.
     */
     get MaxTokensPerRun(): number | null {
         return this.Get('MaxTokensPerRun');
@@ -15767,7 +15784,7 @@ Retry mode. After reaching this limit, the validation will fail permanently.
     * * Display Name: Max Iterations Per Run
     * * SQL Data Type: int
     * * Description: Maximum number of prompt iterations allowed for a single agent run. Run will be
-   terminated if this limit is exceeded.
+terminated if this limit is exceeded.
     */
     get MaxIterationsPerRun(): number | null {
         return this.Get('MaxIterationsPerRun');
@@ -15781,7 +15798,7 @@ Retry mode. After reaching this limit, the validation will fail permanently.
     * * Display Name: Max Time Per Run
     * * SQL Data Type: int
     * * Description: Maximum time in seconds allowed for a single agent run. Run will be terminated
-  if this limit is exceeded.
+if this limit is exceeded.
     */
     get MaxTimePerRun(): number | null {
         return this.Get('MaxTimePerRun');
@@ -15814,6 +15831,39 @@ Retry mode. After reaching this limit, the validation will fail permanently.
     }
     set MaxExecutionsPerRun(value: number | null) {
         this.Set('MaxExecutionsPerRun', value);
+    }
+
+    /**
+    * * Field Name: StartingPayloadValidation
+    * * Display Name: Starting Payload Validation
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON schema validation to apply to the input payload before agent execution begins. Uses the same JSONValidator 
+format as FinalPayloadValidation.
+    */
+    get StartingPayloadValidation(): string | null {
+        return this.Get('StartingPayloadValidation');
+    }
+    set StartingPayloadValidation(value: string | null) {
+        this.Set('StartingPayloadValidation', value);
+    }
+
+    /**
+    * * Field Name: StartingPayloadValidationMode
+    * * Display Name: Starting Payload Validation Mode
+    * * SQL Data Type: nvarchar(25)
+    * * Default Value: Fail
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Fail
+    *   * Warn
+    * * Description: Determines how to handle StartingPayloadValidation failures. Fail = reject invalid input, Warn = log warning but 
+proceed.
+    */
+    get StartingPayloadValidationMode(): 'Fail' | 'Warn' {
+        return this.Get('StartingPayloadValidationMode');
+    }
+    set StartingPayloadValidationMode(value: 'Fail' | 'Warn') {
+        this.Set('StartingPayloadValidationMode', value);
     }
 
     /**
@@ -32670,7 +32720,7 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     * * SQL Data Type: int
     * * Default Value: 0
     * * Description: Total number of prompt iterations executed during this agent run. Incremented
-  each time the agent processes a prompt step.
+each time the agent processes a prompt step.
     */
     get TotalPromptIterations(): number {
         return this.Get('TotalPromptIterations');
