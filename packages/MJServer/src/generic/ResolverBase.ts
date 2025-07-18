@@ -13,7 +13,7 @@ import {
   RunViewResult,
   UserInfo,
 } from '@memberjunction/core';
-import { AuditLogEntity, UserViewEntity } from '@memberjunction/core-entities';
+import { AuditLogEntity, ErrorLogEntity, UserViewEntity } from '@memberjunction/core-entities';
 import { SQLServerDataProvider, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { PubSubEngine } from 'type-graphql';
 import { GraphQLError } from 'graphql';
@@ -727,7 +727,7 @@ export class ResolverBase {
           // load worked, now, only IF we have OldValues, we need to check them against the values in the DB we just loaded.
           if (input.OldValues___) {
             // we DO have OldValues, so we need to do a more in depth analysis
-            this.TestAndSetClientOldValuesToDBValues(input, clientNewValues, entityObject);
+            await this.TestAndSetClientOldValuesToDBValues(input, clientNewValues, entityObject, userInfo);
           } else {
             // no OldValues, so we can just set the new values from input
             entityObject.SetMany(input);
@@ -775,7 +775,7 @@ export class ResolverBase {
    *
    * ASSUMES: input object has an OldValues___ property that is an array of Key/Value pairs that represent the old values of the record that the client is trying to update.
    */
-  protected TestAndSetClientOldValuesToDBValues(input: any, clientNewValues: any, entityObject: BaseEntity) {
+  protected async TestAndSetClientOldValuesToDBValues(input: any, clientNewValues: any, entityObject: BaseEntity, contextUser: UserInfo) {
     // we have OldValues, so we need to compare them to the values we just loaded from the DB
     const clientOldValues = {};
     // for each item in the oldValues array, add it to the clientOldValues object
@@ -883,17 +883,48 @@ export class ResolverBase {
       });
 
       // now we have clientDifferences which shows what the client thinks they are changing. And, we have the dbDifferences array that shows changes between the clientOldValues and the dbValues
-      // if there is ANY overlap in the FIELDS that appear in both arrays, we need to throw an error
+      // if there is ANY overlap in the FIELDS that appear in both arrays, we need to log a warning but allow the save to continue
       const overlap = clientDifferences.filter((cd) => dbDifferences.find((dd) => dd.FieldName === cd.FieldName));
       if (overlap.length > 0) {
         const msg = {
           Message:
-            'Inconsistency between old values provided for changed fields, and the values of one or more of those fields in the database. Update operation cancelled.',
+            'Inconsistency between old values provided for changed fields, and the values of one or more of those fields in the database. Save operation continued with warning.',
           ClientDifferences: clientDifferences,
           DBDifferences: dbDifferences,
           Overlap: overlap,
         };
-        throw new Error(JSON.stringify(msg));
+        
+        // Log as warning to console and ErrorLog table instead of throwing error
+        console.warn('Entity save inconsistency detected but allowing save to continue:', JSON.stringify(msg));
+        LogError({
+          service: 'ResolverBase',
+          operation: 'TestAndSetClientOldValuesToDBValues',
+          error: `Entity save inconsistency detected: ${JSON.stringify(msg)}`,
+          details: {
+            entityName: entityObject.EntityInfo.Name,
+            clientDifferences: clientDifferences,
+            dbDifferences: dbDifferences,
+            overlap: overlap
+          }
+        });
+
+        // Create ErrorLog record in the database
+        try {
+          const md = new Metadata();
+          const errorLogEntity = await md.GetEntityObject<ErrorLogEntity>('Error Logs', contextUser);
+          errorLogEntity.Code = 'ENTITY_SAVE_INCONSISTENCY';
+          errorLogEntity.Message = `Entity save inconsistency detected for ${entityObject.EntityInfo.Name}: ${JSON.stringify(msg)}`;
+          errorLogEntity.Status = 'Warning';
+          errorLogEntity.Category = 'Entity Save';
+          errorLogEntity.CreatedBy = contextUser.Email || contextUser.Name;
+          
+          const saveResult = await errorLogEntity.Save();
+          if (!saveResult) {
+            console.error('Failed to save ErrorLog record');
+          }
+        } catch (errorLogError) {
+          console.error('Error creating ErrorLog record:', errorLogError);
+        }
       }
     }
 
