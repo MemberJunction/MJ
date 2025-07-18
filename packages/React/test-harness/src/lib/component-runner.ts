@@ -4,7 +4,10 @@ import {
   RuntimeContext,
   ComponentRegistry,
   STANDARD_LIBRARY_URLS,
-  getCoreLibraryUrls
+  getCoreLibraryUrls,
+  getUILibraryUrls,
+  getCSSUrls,
+  ComponentErrorAnalyzer
 } from '@memberjunction/react-runtime';
 
 export interface ComponentExecutionOptions {
@@ -27,15 +30,33 @@ export interface ComponentExecutionResult {
   success: boolean;
   html: string;
   errors: string[];
+  warnings: string[];
+  criticalWarnings: string[];
   console: { type: string; text: string }[];
   screenshot?: Buffer;
   executionTime: number;
+  renderCount?: number;
 }
 
 export class ComponentRunner {
   private compiler: ComponentCompiler;
   private registry: ComponentRegistry;
   private runtimeContext: RuntimeContext;
+
+  // Critical warning patterns that should fail tests
+  private static readonly CRITICAL_WARNING_PATTERNS = [
+    /Maximum update depth exceeded/i,
+    /Cannot update a component .* while rendering a different component/i,
+    /Cannot update during an existing state transition/i,
+    /Warning: setState.*unmounted component/i,
+    /Warning: Can't perform a React state update on an unmounted component/i,
+    /Encountered two children with the same key/i,
+    /Error: Minified React error/i,
+    /too many re-renders/i,
+  ];
+
+  // Maximum allowed renders before considering it excessive
+  private static readonly MAX_RENDER_COUNT = 1000;
 
   constructor(private browserManager: BrowserManager) {
     this.compiler = new ComponentCompiler();
@@ -48,40 +69,28 @@ export class ComponentRunner {
   async executeComponent(options: ComponentExecutionOptions): Promise<ComponentExecutionResult> {
     const startTime = Date.now();
     const errors: string[] = [];
+    const warnings: string[] = [];
+    const criticalWarnings: string[] = [];
     const consoleLogs: { type: string; text: string }[] = [];
+    let renderCount = 0;
 
     try {
       const page = await this.browserManager.getPage();
 
-      // Set up console logging
-      page.on('console', (msg: any) => {
-        consoleLogs.push({ type: msg.type(), text: msg.text() });
-      });
+      // Set up monitoring
+      this.setupConsoleLogging(page, consoleLogs, warnings, criticalWarnings);
+      this.setupErrorHandling(page, errors);
+      await this.injectRenderTracking(page);
 
-      // Set up error handling
-      page.on('pageerror', (error: Error) => {
-        errors.push(error.message);
-      });
-
-      // Create HTML template that uses the runtime's ComponentHierarchyRegistrar
+      // Create and load the component
       const htmlContent = this.createHTMLTemplate(options);
-      
-      // Navigate to a data URL with the HTML content
       await page.goto(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
 
-      // Wait for React to render
-      if (options.waitForSelector) {
-        await this.browserManager.waitForSelector(options.waitForSelector, { 
-          timeout: options.timeout || 30000 
-        });
-      }
-
-      if (options.waitForLoadState) {
-        await this.browserManager.waitForLoadState(options.waitForLoadState);
-      } else {
-        // Default wait for React to finish rendering
-        await page.waitForTimeout(100);
-      }
+      // Wait for render with timeout detection
+      const renderSuccess = await this.waitForRender(page, options, errors);
+      
+      // Get render count
+      renderCount = await this.getRenderCount(page);
 
       // Get the rendered HTML
       const html = await this.browserManager.getContent();
@@ -89,13 +98,27 @@ export class ComponentRunner {
       // Take screenshot if needed
       const screenshot = await this.browserManager.screenshot();
 
+      // Determine success and collect any additional errors
+      const { success, additionalErrors } = this.determineSuccess(
+        errors,
+        criticalWarnings,
+        renderCount,
+        !renderSuccess
+      );
+      
+      // Add any additional errors
+      errors.push(...additionalErrors);
+
       return {
-        success: errors.length === 0,
+        success,
         html,
         errors,
+        warnings,
+        criticalWarnings,
         console: consoleLogs,
         screenshot,
-        executionTime: Date.now() - startTime
+        executionTime: Date.now() - startTime,
+        renderCount
       };
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error));
@@ -103,8 +126,11 @@ export class ComponentRunner {
         success: false,
         html: '',
         errors,
+        warnings,
+        criticalWarnings,
         console: consoleLogs,
-        executionTime: Date.now() - startTime
+        executionTime: Date.now() - startTime,
+        renderCount
       };
     }
   }
@@ -118,6 +144,16 @@ export class ComponentRunner {
       .map(url => `  <script src="${url}"></script>`)
       .join('\n');
     
+    // Generate script tags for UI libraries
+    const uiLibraryScripts = getUILibraryUrls()
+      .map(url => `  <script src="${url}"></script>`)
+      .join('\n');
+    
+    // Generate CSS links
+    const cssLinks = getCSSUrls()
+      .map(url => `  <link rel="stylesheet" href="${url}">`)
+      .join('\n');
+    
     return `
 <!DOCTYPE html>
 <html>
@@ -128,10 +164,43 @@ export class ComponentRunner {
   <script crossorigin src="${STANDARD_LIBRARY_URLS.REACT_DOM}"></script>
   <script src="${STANDARD_LIBRARY_URLS.BABEL}"></script>
 ${coreLibraryScripts}
+${uiLibraryScripts}
+${cssLinks}
   <style>
     body { margin: 0; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
     #root { min-height: 100vh; }
   </style>
+  <script>
+    // Render tracking injection
+    (function() {
+      let renderCounter = 0;
+      window.__testHarnessRenderCount = 0;
+      
+      // Wait for React to be available
+      const setupRenderTracking = () => {
+        if (window.React && window.React.createElement) {
+          const originalCreateElement = window.React.createElement.bind(window.React);
+          
+          window.React.createElement = function(type, props, ...children) {
+            renderCounter++;
+            window.__testHarnessRenderCount = renderCounter;
+            
+            if (renderCounter > 1000) {
+              console.error('Excessive renders detected: ' + renderCounter + ' renders. Possible infinite loop.');
+            }
+            
+            return originalCreateElement(type, props, ...children);
+          };
+        }
+      };
+      
+      // Try to set up immediately
+      setupRenderTracking();
+      
+      // Also try after a delay in case React loads later
+      setTimeout(setupRenderTracking, 100);
+    })();
+  </script>
 </head>
 <body>
   <div id="root"></div>
@@ -146,7 +215,9 @@ ${coreLibraryScripts}
         _: window._,
         d3: window.d3,
         Chart: window.Chart,
-        dayjs: window.dayjs
+        dayjs: window.dayjs,
+        antd: window.antd,
+        ReactBootstrap: window.ReactBootstrap
       }
     };
     
@@ -177,6 +248,8 @@ ${coreLibraryScripts}
             const d3 = libraries.d3;
             const Chart = libraries.Chart;
             const dayjs = libraries.dayjs;
+            const antd = libraries.antd;
+            const ReactBootstrap = libraries.ReactBootstrap;
             
             \${transformed.code}
             return {
@@ -340,18 +413,18 @@ ${coreLibraryScripts}
           entities: []
         },
         rv: {
-          runView: async (params) => {
-            console.log('Mock runView called with:', params);
+          RunView: async (params) => {
+            console.log('Mock RunView called with:', params);
             return { Results: [], Success: true };
           },
-          runViews: async (params) => {
-            console.log('Mock runViews called with:', params);
+          RunViews: async (params) => {
+            console.log('Mock RunViews called with:', params);
             return params.map(() => ({ Results: [], Success: true }));
           }
         },
         rq: {
-          runQuery: async (params) => {
-            console.log('Mock runQuery called with:', params);
+          RunQuery: async (params) => {
+            console.log('Mock RunQuery called with:', params);
             return { Results: [], Success: true };
           }
         }
@@ -490,5 +563,139 @@ ${coreLibraryScripts}
   </script>
 </body>
 </html>`;
+  }
+
+  /**
+   * Checks if a console message is a warning
+   */
+  private isWarning(type: string, text: string): boolean {
+    return type === 'warning' || text.startsWith('Warning:');
+  }
+
+  /**
+   * Checks if a warning is critical and should fail the test
+   */
+  private isCriticalWarning(text: string): boolean {
+    return ComponentRunner.CRITICAL_WARNING_PATTERNS.some(pattern => pattern.test(text));
+  }
+
+  /**
+   * Sets up console logging with warning detection
+   */
+  private setupConsoleLogging(
+    page: any,
+    consoleLogs: { type: string; text: string }[],
+    warnings: string[],
+    criticalWarnings: string[]
+  ): void {
+    page.on('console', (msg: any) => {
+      const type = msg.type();
+      const text = msg.text();
+      
+      consoleLogs.push({ type, text });
+      
+      if (this.isWarning(type, text)) {
+        warnings.push(text);
+        
+        if (this.isCriticalWarning(text)) {
+          criticalWarnings.push(text);
+        }
+      }
+    });
+  }
+
+  /**
+   * Sets up error handling for the page
+   */
+  private setupErrorHandling(page: any, errors: string[]): void {
+    page.on('pageerror', (error: Error) => {
+      errors.push(error.message);
+    });
+  }
+
+  /**
+   * Injects render tracking code into the page
+   */
+  private async injectRenderTracking(page: any): Promise<void> {
+    // Instead of using evaluateOnNewDocument, we'll inject the script directly into the HTML
+    // This avoids the Playwright-specific API issue
+    // The actual injection will happen in createHTMLTemplate
+  }
+
+  /**
+   * Waits for component to render and checks for timeouts
+   */
+  private async waitForRender(
+    page: any,
+    options: ComponentExecutionOptions,
+    errors: string[]
+  ): Promise<boolean> {
+    const timeout = options.timeout || 10000; // 10 seconds default
+    
+    try {
+      if (options.waitForSelector) {
+        await this.browserManager.waitForSelector(options.waitForSelector, { timeout });
+      }
+
+      if (options.waitForLoadState) {
+        await this.browserManager.waitForLoadState(options.waitForLoadState);
+      } else {
+        // Default wait for React to finish rendering
+        await page.waitForTimeout(100);
+      }
+      
+      return true;
+    } catch (timeoutError) {
+      errors.push(`Component rendering timeout after ${timeout}ms - possible infinite render loop`);
+      return false;
+    }
+  }
+
+  /**
+   * Gets the render count from the page
+   */
+  private async getRenderCount(page: any): Promise<number> {
+    return await page.evaluate(() => (window as any).__testHarnessRenderCount || 0);
+  }
+
+  /**
+   * Determines if the component execution was successful
+   */
+  private determineSuccess(
+    errors: string[],
+    criticalWarnings: string[],
+    renderCount: number,
+    hasTimeout: boolean
+  ): { success: boolean; additionalErrors: string[] } {
+    const additionalErrors: string[] = [];
+    
+    if (renderCount > ComponentRunner.MAX_RENDER_COUNT) {
+      additionalErrors.push(`Excessive render count: ${renderCount} renders detected`);
+    }
+    
+    const success = errors.length === 0 && 
+                   criticalWarnings.length === 0 && 
+                   !hasTimeout && 
+                   renderCount <= ComponentRunner.MAX_RENDER_COUNT;
+    
+    return { success, additionalErrors };
+  }
+
+  /**
+   * Analyze component errors to identify failed components
+   * @param errors Array of error messages
+   * @returns Array of component names that failed
+   */
+  static analyzeComponentErrors(errors: string[]): string[] {
+    return ComponentErrorAnalyzer.identifyFailedComponents(errors);
+  }
+
+  /**
+   * Get detailed error analysis
+   * @param errors Array of error messages
+   * @returns Detailed failure information
+   */
+  static getDetailedErrorAnalysis(errors: string[]) {
+    return ComponentErrorAnalyzer.analyzeComponentErrors(errors);
   }
 }

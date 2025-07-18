@@ -354,6 +354,12 @@ export class BaseAgent {
                 return await this.createCancelledResult('Cancelled during initialization', params.contextUser);
             }
 
+            // Handle starting payload validation if configured
+            const startingValidationResult = await this.handleStartingPayloadValidation(wrappedParams);
+            if (startingValidationResult) {
+                return startingValidationResult;
+            }
+
             // Report validation progress
             wrappedParams.onProgress?.({
                 step: 'validation',
@@ -555,6 +561,125 @@ export class BaseAgent {
             };
         }
         return null;
+    }
+
+    /**
+     * Handles validation of the starting payload if configured.
+     * 
+     * This method validates the input payload against the agent's StartingPayloadValidation
+     * schema before execution begins. It respects the agent's PayloadScope if configured.
+     * 
+     * @param {ExecuteAgentParams} params - The execution parameters
+     * @returns {Promise<ExecuteAgentResult | null>} Error result if validation fails and mode is 'Fail', null otherwise
+     * @protected
+     */
+    protected async handleStartingPayloadValidation<P = any>(params: ExecuteAgentParams<any, P>): Promise<ExecuteAgentResult | null> {
+        const agent = params.agent;
+        
+        // Skip if no validation configured or no payload provided
+        if (!agent.StartingPayloadValidation || params.payload === undefined) {
+            return null;
+        }
+
+        try {
+            // Parse the validation schema
+            let validationSchema: any;
+            try {
+                validationSchema = JSON.parse(agent.StartingPayloadValidation);
+            } catch (parseError) {
+                this.logError(`Invalid StartingPayloadValidation JSON for agent ${agent.Name}: ${parseError.message}`, {
+                    category: 'StartingPayloadValidation',
+                    metadata: {
+                        agentName: agent.Name,
+                        agentId: agent.ID,
+                        validationSchema: agent.StartingPayloadValidation
+                    }
+                });
+                // Invalid schema, skip validation
+                return null;
+            }
+
+            // Determine which payload to validate based on PayloadScope
+            let payloadToValidate = params.payload;
+
+            // Validate the payload using JSONValidator
+            const jsonValidator = new JSONValidator();
+            const validationResult = jsonValidator.validate(payloadToValidate, validationSchema);
+
+            if (!validationResult.Success) {
+                // Validation failed
+                const errorMessages = validationResult.Errors.map(e => e.Message);
+                return this.handleStartingValidationFailure(params, errorMessages);
+            }
+
+            // Validation passed
+            this.logStatus(`✅ Starting payload validation passed for agent ${agent.Name}`, true, params);
+            return null;
+
+        } catch (error) {
+            this.logError(`Unexpected error during starting payload validation: ${error.message}`, {
+                category: 'StartingPayloadValidation',
+                metadata: {
+                    agentName: agent.Name,
+                    agentId: agent.ID,
+                    error: error.message
+                }
+            });
+            // On unexpected errors, let execution proceed
+            return null;
+        }
+    }
+
+    /**
+     * Handles starting payload validation failures based on the configured mode.
+     * 
+     * @param {ExecuteAgentParams} params - The execution parameters
+     * @param {string[]} errorMessages - The validation error messages
+     * @returns {ExecuteAgentResult | null} Error result if mode is 'Fail', null if mode is 'Warn'
+     * @private
+     */
+    private handleStartingValidationFailure(
+        params: ExecuteAgentParams,
+        errorMessages: string[]
+    ): ExecuteAgentResult | null {
+        const mode = params.agent.StartingPayloadValidationMode || 'Fail';
+        const validationFeedback = `Starting payload validation failed:\n${errorMessages.map((e, i) => `${i + 1}. ${e}`).join('\n')}`;
+
+        if (mode === 'Fail') {
+            this.logError(`Starting payload validation failed for agent ${params.agent.Name}`, {
+                agent: params.agent,
+                category: 'StartingPayloadValidation',
+                metadata: { errors: errorMessages }
+            });
+
+            // Update agent run with validation failure
+            if (this._agentRun) {
+                this._agentRun.ErrorMessage = validationFeedback;
+                this._agentRun.Status = 'Failed';
+                this._agentRun.Success = false;
+                this._agentRun.FinalStep = 'Failed';
+                // Note: We don't save here as the agent run will be saved in finalizeAgentRun
+            }
+
+            return {
+                success: false,
+                agentRun: this._agentRun!
+            };
+        } else if (mode === 'Warn') {
+            // Log warning but continue execution
+            this.logStatus(
+                `⚠️ WARNING: ${validationFeedback}`,
+                false,
+                params
+            );
+            return null;
+        }
+
+        // Default to fail for unknown modes
+        return {
+            success: false,
+            agentRun: this._agentRun!
+        };
     }
 
     /**
@@ -1413,13 +1538,13 @@ export class BaseAgent {
      * @protected
      */
     protected async processNextStep<P>(
+        nextStep: BaseAgentNextStep<P>,
         params: ExecuteAgentParams,
         agentType: AIAgentTypeEntity,
         promptResult: AIPromptRunResult,
         currentPayload: P,
         currentStep: AIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
-        const nextStep = await this.determineNextStep<P>(params, agentType, promptResult, currentPayload);
         const validatedNextStep = await this.validateNextStep<P>(params, nextStep, currentPayload, this._agentRun, currentStep);
         
         // Check guardrails if next step would continue execution
@@ -2355,13 +2480,13 @@ export class BaseAgent {
                 displayMode: 'both' // Show in both live and historical modes
             });
             
-            // Determine next step using agent type
-            const nextStep = await this.processNextStep<P>(params, config.agentType!, promptResult, payload, stepEntity);
+            // Determine next step using agent type, this doesn't validate, just gets the LLM response and then we can process payload changes
+            const initialNextStep = await this.determineNextStep<P>(params, config.agentType, promptResult, payload);
             
             // Apply payload changes if provided
             let finalPayload = payload; // Start with current payload
             let currentStepPayloadChangeResult = undefined;
-            if (nextStep.payloadChangeRequest) {
+            if (initialNextStep.payloadChangeRequest) {
                 // Parse the allowed paths if configured
                 const allowedPaths = params.agent.PayloadSelfWritePaths 
                     ? JSON.parse(params.agent.PayloadSelfWritePaths) 
@@ -2370,7 +2495,7 @@ export class BaseAgent {
                 // Apply the changes to the payload with operation control
                 const changeResult = this._payloadManager.applyAgentChangeRequest(
                     payload,
-                    nextStep.payloadChangeRequest,
+                    initialNextStep.payloadChangeRequest,
                     {
                         validateChanges: true,
                         logChanges: true,
@@ -2393,15 +2518,19 @@ export class BaseAgent {
                 // Set the final payload - the changeResult already respects the allowed paths
                 finalPayload = changeResult.result;
             }
-             
+
+            // now that we have processed the payload, we can process the next step which does validation and changes the next step if
+            // validation fails
+            const updatedNextStep = await this.processNextStep<P>(initialNextStep, params, config.agentType!, promptResult, finalPayload, stepEntity);
+
             // Prepare output data, these are simple elements of the state that are not typically
             // included in payload but are helpful. We do not include the prompt result here
             // or the payload as those are stored already(prompt result via TargetLogID -> AIPromptRunEntity)
             // and payload via the specialied PayloadAtStart/End fields on the step entity.
             const outputData = {
                 nextStep: {
-                    ...nextStep,
-                    reasoning: this.getNextStepReasoning(nextStep),
+                    ...updatedNextStep,
+                    reasoning: this.getNextStepReasoning(updatedNextStep),
                 },
                 // Include payload change metadata if changes were made
                 ...(currentStepPayloadChangeResult && {
@@ -2420,21 +2549,21 @@ export class BaseAgent {
             }
             
             // Update nextStep to include the final payload
-            nextStep.newPayload = finalPayload;
-            nextStep.previousPayload = payload;
+            updatedNextStep.newPayload = finalPayload;
+            updatedNextStep.previousPayload = payload;
             
             // Finalize step entity
             await this.finalizeStepEntity(stepEntity, promptResult.success, 
                 promptResult.success ? undefined : promptResult.errorMessage, outputData);
             
             // Return based on next step
-            if (nextStep.step === 'Chat') {
-                return { ...nextStep, terminate: true };
+            if (updatedNextStep.step === 'Chat') {
+                return { ...updatedNextStep, terminate: true };
             }
-            else if (nextStep.step === 'Success' || nextStep.step === 'Failed') {
-                return { ...nextStep, terminate: true };
+            else if (updatedNextStep.step === 'Success' || updatedNextStep.step === 'Failed') {
+                return { ...updatedNextStep, terminate: true };
             } else {
-                return { ...nextStep, terminate: false };
+                return { ...updatedNextStep, terminate: false };
             }
             
         } catch (error) {

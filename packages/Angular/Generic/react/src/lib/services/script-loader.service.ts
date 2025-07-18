@@ -9,7 +9,8 @@ import {
   STANDARD_LIBRARY_URLS,
   getCoreLibraryUrls,
   getUILibraryUrls,
-  getCSSUrls
+  getCSSUrls,
+  LibraryLoader
 } from '@memberjunction/react-runtime';
 
 /**
@@ -131,53 +132,19 @@ export class ScriptLoaderService implements OnDestroy {
     Babel: any;
     libraries: any;
   }> {
-    // Load React and ReactDOM with enhanced validation
-    const [React, ReactDOM, Babel] = await Promise.all([
-      this.loadScriptWithValidation(STANDARD_LIBRARY_URLS.REACT, 'React', (obj) => {
-        return obj && typeof obj.createElement === 'function' && typeof obj.Component === 'function';
-      }),
-      this.loadScriptWithValidation(STANDARD_LIBRARY_URLS.REACT_DOM, 'ReactDOM', (obj) => {
-        // Just check that ReactDOM exists - createRoot might not be immediately available
-        return obj != null && typeof obj === 'object';
-      }),
-      this.loadScript(STANDARD_LIBRARY_URLS.BABEL, 'Babel')
-    ]);
-
-    // Note: We don't validate createRoot here because it might not be immediately available
+    // Use the new LibraryLoader from react-runtime for consistency
+    const result = await LibraryLoader.loadAllLibraries();
+    
+    // The LibraryLoader handles all the loading, but we need to ensure
+    // ReactDOM.createRoot is available for Angular's specific needs
     // The ReactBridgeService will handle the delayed validation
-
-    // Load CSS files (non-blocking)
-    const cssUrls = getCSSUrls();
-    cssUrls.forEach(url => this.loadCSS(url));
-
-    // Load core libraries (lodash, d3, Chart.js, dayjs)
-    const coreLibraryPromises = getCoreLibraryUrls().map(url => {
-      const libName = this.getLibraryNameFromUrl(url);
-      return this.loadScript(url, libName);
+    
+    // Track loaded resources for cleanup
+    LibraryLoader.getLoadedResources().forEach((resource, url) => {
+      this.loadedResources.set(url, resource);
     });
-
-    // Load UI libraries (antd, ReactBootstrap)
-    const uiLibraryPromises = getUILibraryUrls().map(url => {
-      const libName = this.getLibraryNameFromUrl(url);
-      return this.loadScript(url, libName);
-    });
-
-    // Wait for all libraries to load
-    const [coreLibs, uiLibs] = await Promise.all([
-      Promise.all(coreLibraryPromises),
-      Promise.all(uiLibraryPromises)
-    ]);
-
-    // Map loaded libraries to their expected names
-    const [_, d3, Chart, dayjs] = coreLibs;
-    const [antd, ReactBootstrap] = uiLibs;
-
-    return {
-      React,
-      ReactDOM,
-      Babel,
-      libraries: { antd, ReactBootstrap, d3, Chart, _, dayjs }
-    };
+    
+    return result;
   }
 
   /**

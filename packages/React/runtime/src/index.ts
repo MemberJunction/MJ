@@ -94,6 +94,17 @@ export {
   createStandardLibraries
 } from './utilities/standard-libraries';
 
+export {
+  LibraryLoader,
+  LibraryLoadOptions,
+  LibraryLoadResult
+} from './utilities/library-loader';
+
+export {
+  ComponentErrorAnalyzer,
+  FailedComponentInfo
+} from './utilities/component-error-analyzer';
+
 // Version information
 export const VERSION = '2.69.1';
 
