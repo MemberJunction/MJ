@@ -45,6 +45,22 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
   
   private destroy$ = new Subject<void>();
   
+  // Chart expansion states
+  expandedCharts: { [key: string]: boolean } = {
+    modelDistribution: false,
+    executionTime: false,
+    costByVendor: false,
+    tokenUsage: false,
+    promptTime: false,
+    promptToken: false,
+    promptCost: false,
+    promptCount: false,
+    actionSuccess: false,
+    stepType: false
+  };
+  
+  viewMode: 'grid' | 'expanded' = 'grid';
+  
   // Loading state
   isLoading = true;
   error: string | null = null;
@@ -592,8 +608,9 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
     // Clear previous chart
     d3.select(element).selectAll('*').remove();
     
-    const width = 300;
-    const height = 220;
+    const isExpanded = this.expandedCharts['modelDistribution'];
+    const width = isExpanded ? 500 : 300;
+    const height = isExpanded ? 400 : 220;
     const radius = Math.min(width, height) / 2 - 40;
     
     const svg = d3.select(element)
@@ -654,9 +671,10 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
     // Clear previous chart
     d3.select(element).selectAll('*').remove();
     
+    const isExpanded = this.expandedCharts['executionTime'];
     const margin = { top: 40, right: 20, bottom: 70, left: 60 };
-    const width = 320 - margin.left - margin.right;
-    const height = 200 - margin.top - margin.bottom;
+    const width = (isExpanded ? 600 : 320) - margin.left - margin.right;
+    const height = (isExpanded ? 350 : 200) - margin.top - margin.bottom;
     
     const svg = d3.select(element)
       .append('svg')
@@ -1010,6 +1028,33 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
     
     if (totalRuns === 0) return '0';
     return ((successfulRuns / totalRuns) * 100).toFixed(1);
+  }
+  
+  toggleChartExpansion(chartKey: string): void {
+    this.expandedCharts[chartKey] = !this.expandedCharts[chartKey];
+    // Re-render the chart after expansion state changes
+    setTimeout(() => {
+      this.renderCharts();
+    }, 100);
+  }
+  
+  toggleViewMode(): void {
+    if (this.viewMode === 'grid') {
+      this.viewMode = 'expanded';
+      // Expand all charts
+      Object.keys(this.expandedCharts).forEach(key => {
+        this.expandedCharts[key] = true;
+      });
+    } else {
+      this.viewMode = 'grid';
+      // Collapse all charts
+      Object.keys(this.expandedCharts).forEach(key => {
+        this.expandedCharts[key] = false;
+      });
+    }
+    setTimeout(() => {
+      this.renderCharts();
+    }, 100);
   }
   
   getActionType(actionName: string): string {

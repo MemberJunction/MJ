@@ -86,6 +86,17 @@
         </ng-template>
         <ng-template kendoPanelBarContent>
       <div class="analytics-panel">
+        <!-- View Mode Toggle -->
+        <div class="view-mode-toggle" *ngIf="promptMetrics.totalCount > 0">
+          <button kendoButton 
+                  fillMode="flat" 
+                  size="small"
+                  (click)="toggleViewMode()">
+            <i class="fas" [ngClass]="viewMode === 'grid' ? 'fa-expand-arrows-alt' : 'fa-compress-arrows-alt'"></i>
+            {{ viewMode === 'grid' ? 'Expand All' : 'Collapse All' }}
+          </button>
+        </div>
+        
         <!-- No prompts message -->
         <div class="no-data-message" *ngIf="promptMetrics.totalCount === 0">
           <i class="fas fa-info-circle"></i>
@@ -95,53 +106,133 @@
 
         <div class="charts-grid" *ngIf="promptMetrics.totalCount > 0">
           <!-- Model Distribution -->
-          <div class="chart-container">
-            <div id="modelDistributionChart" #modelDistributionChart></div>
-            <div class="chart-legend" *ngIf="promptMetrics.byModel.size > 0">
-              <div class="legend-item" *ngFor="let item of promptMetrics.byModel | keyvalue">
-                <span class="legend-color" [style.backgroundColor]="getModelColor(item.key)"></span>
-                <span class="legend-label">{{ item.key }}: {{ item.value.count }} ({{ (item.value.count / promptMetrics.totalCount * 100).toFixed(1) }}%)</span>
+          <div class="chart-card" [class.expanded]="expandedCharts['modelDistribution']">
+            <div class="chart-card-header" (click)="toggleChartExpansion('modelDistribution')">
+              <h3><i class="fas fa-chart-pie"></i> Prompts by Model</h3>
+              <button class="expand-btn">
+                <i class="fas" [ngClass]="expandedCharts['modelDistribution'] ? 'fa-compress' : 'fa-expand'"></i>
+              </button>
+            </div>
+            <div class="chart-card-body">
+              <div class="chart-container">
+                <div id="modelDistributionChart" #modelDistributionChart></div>
+                <div class="chart-legend" *ngIf="promptMetrics.byModel.size > 0">
+                  <div class="legend-item" *ngFor="let item of promptMetrics.byModel | keyvalue">
+                    <span class="legend-color" [style.backgroundColor]="getModelColor(item.key)"></span>
+                    <span class="legend-label">{{ item.key }}: {{ item.value.count }} ({{ (item.value.count / promptMetrics.totalCount * 100).toFixed(1) }}%)</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
           <!-- Execution Time by Vendor -->
-          <div class="chart-container">
-            <div id="executionTimeChart" #executionTimeChart></div>
+          <div class="chart-card" [class.expanded]="expandedCharts['executionTime']">
+            <div class="chart-card-header" (click)="toggleChartExpansion('executionTime')">
+              <h3><i class="fas fa-clock"></i> Average Execution Time by Vendor</h3>
+              <button class="expand-btn">
+                <i class="fas" [ngClass]="expandedCharts['executionTime'] ? 'fa-compress' : 'fa-expand'"></i>
+              </button>
+            </div>
+            <div class="chart-card-body">
+              <div class="chart-container">
+                <div id="executionTimeChart" #executionTimeChart></div>
+              </div>
+            </div>
           </div>
 
           <!-- Cost by Vendor -->
-          <div class="chart-container">
-            <div id="costByVendorChart" #costByVendorChart></div>
-            <div class="chart-total">Total: {{ formatCost(promptMetrics.costBreakdown.totalCost) }}</div>
+          <div class="chart-card" [class.expanded]="expandedCharts['costByVendor']">
+            <div class="chart-card-header" (click)="toggleChartExpansion('costByVendor')">
+              <h3><i class="fas fa-dollar-sign"></i> Cost Distribution by Vendor</h3>
+              <button class="expand-btn">
+                <i class="fas" [ngClass]="expandedCharts['costByVendor'] ? 'fa-compress' : 'fa-expand'"></i>
+              </button>
+            </div>
+            <div class="chart-card-body">
+              <div class="chart-container">
+                <div id="costByVendorChart" #costByVendorChart></div>
+                <div class="chart-total">Total: {{ formatCost(promptMetrics.costBreakdown.totalCost) }}</div>
+              </div>
+            </div>
           </div>
 
           <!-- Token Usage -->
-          <div class="chart-container">
-            <div id="tokenUsageChart" #tokenUsageChart></div>
+          <div class="chart-card" [class.expanded]="expandedCharts['tokenUsage']">
+            <div class="chart-card-header" (click)="toggleChartExpansion('tokenUsage')">
+              <h3><i class="fas fa-coins"></i> Token Usage by Model</h3>
+              <button class="expand-btn">
+                <i class="fas" [ngClass]="expandedCharts['tokenUsage'] ? 'fa-compress' : 'fa-expand'"></i>
+              </button>
+            </div>
+            <div class="chart-card-body">
+              <div class="chart-container">
+                <div id="tokenUsageChart" #tokenUsageChart></div>
+              </div>
+            </div>
           </div>
         </div>
 
         <!-- Additional Prompt Analytics Charts -->
         <div class="charts-grid" style="margin-top: 20px;" *ngIf="promptMetrics.totalCount > 0">
           <!-- Prompt Execution Time Distribution -->
-          <div class="chart-container">
-            <div id="promptTimeDistributionChart" #promptTimeDistributionChart></div>
+          <div class="chart-card" [class.expanded]="expandedCharts['promptTime']">
+            <div class="chart-card-header" (click)="toggleChartExpansion('promptTime')">
+              <h3><i class="fas fa-hourglass-half"></i> Average Execution Time by Prompt</h3>
+              <button class="expand-btn">
+                <i class="fas" [ngClass]="expandedCharts['promptTime'] ? 'fa-compress' : 'fa-expand'"></i>
+              </button>
+            </div>
+            <div class="chart-card-body">
+              <div class="chart-container">
+                <div id="promptTimeDistributionChart" #promptTimeDistributionChart></div>
+              </div>
+            </div>
           </div>
 
           <!-- Prompt Token Usage -->
-          <div class="chart-container">
-            <div id="promptTokenDistributionChart" #promptTokenDistributionChart></div>
+          <div class="chart-card" [class.expanded]="expandedCharts['promptToken']">
+            <div class="chart-card-header" (click)="toggleChartExpansion('promptToken')">
+              <h3><i class="fas fa-database"></i> Token Usage by Prompt</h3>
+              <button class="expand-btn">
+                <i class="fas" [ngClass]="expandedCharts['promptToken'] ? 'fa-compress' : 'fa-expand'"></i>
+              </button>
+            </div>
+            <div class="chart-card-body">
+              <div class="chart-container">
+                <div id="promptTokenDistributionChart" #promptTokenDistributionChart></div>
+              </div>
+            </div>
           </div>
 
           <!-- Prompt Cost Distribution -->
-          <div class="chart-container">
-            <div id="promptCostDistributionChart" #promptCostDistributionChart></div>
+          <div class="chart-card" [class.expanded]="expandedCharts['promptCost']">
+            <div class="chart-card-header" (click)="toggleChartExpansion('promptCost')">
+              <h3><i class="fas fa-chart-pie"></i> Cost Distribution by Prompt</h3>
+              <button class="expand-btn">
+                <i class="fas" [ngClass]="expandedCharts['promptCost'] ? 'fa-compress' : 'fa-expand'"></i>
+              </button>
+            </div>
+            <div class="chart-card-body">
+              <div class="chart-container">
+                <div id="promptCostDistributionChart" #promptCostDistributionChart></div>
+              </div>
+            </div>
           </div>
 
           <!-- Prompt Count by Name -->
-          <div class="chart-container">
-            <div id="promptCountByNameChart" #promptCountByNameChart></div>
+          <div class="chart-card" [class.expanded]="expandedCharts['promptCount']">
+            <div class="chart-card-header" (click)="toggleChartExpansion('promptCount')">
+              <h3><i class="fas fa-list-ol"></i> Prompt Execution Count</h3>
+              <button class="expand-btn">
+                <i class="fas" [ngClass]="expandedCharts['promptCount'] ? 'fa-compress' : 'fa-expand'"></i>
+              </button>
+            </div>
+            <div class="chart-card-body">
+              <div class="chart-container">
+                <div id="promptCountByNameChart" #promptCountByNameChart></div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -196,13 +287,33 @@
 
         <div class="charts-grid">
           <!-- Action Success Rate -->
-          <div class="chart-container">
-            <div id="actionSuccessRateChart" #actionSuccessRateChart></div>
+          <div class="chart-card" [class.expanded]="expandedCharts['actionSuccess']">
+            <div class="chart-card-header" (click)="toggleChartExpansion('actionSuccess')">
+              <h3><i class="fas fa-chart-bar"></i> Action Success Rate</h3>
+              <button class="expand-btn">
+                <i class="fas" [ngClass]="expandedCharts['actionSuccess'] ? 'fa-compress' : 'fa-expand'"></i>
+              </button>
+            </div>
+            <div class="chart-card-body">
+              <div class="chart-container">
+                <div id="actionSuccessRateChart" #actionSuccessRateChart></div>
+              </div>
+            </div>
           </div>
 
           <!-- Step Type Distribution -->
-          <div class="chart-container">
-            <div id="stepTypeChart" #stepTypeChart></div>
+          <div class="chart-card" [class.expanded]="expandedCharts['stepType']">
+            <div class="chart-card-header" (click)="toggleChartExpansion('stepType')">
+              <h3><i class="fas fa-layer-group"></i> Step Type Distribution</h3>
+              <button class="expand-btn">
+                <i class="fas" [ngClass]="expandedCharts['stepType'] ? 'fa-compress' : 'fa-expand'"></i>
+              </button>
+            </div>
+            <div class="chart-card-body">
+              <div class="chart-container">
+                <div id="stepTypeChart" #stepTypeChart></div>
+              </div>
+            </div>
           </div>
         </div>
 
