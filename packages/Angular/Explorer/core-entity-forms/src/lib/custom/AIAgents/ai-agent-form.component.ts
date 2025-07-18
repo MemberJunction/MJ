@@ -312,57 +312,70 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         try {
             const rv = new RunView();
             
-            // Load sub-agents with data
-            const subAgentResult = await rv.RunView<AIAgentEntity>({
-                EntityName: 'AI Agents',
-                ExtraFilter: `ParentID='${this.record.ID}'`,
-                OrderBy: 'Name ASC' 
-            });
-            this.subAgents = subAgentResult.Results || [];
-            this.subAgentCount = subAgentResult.TotalRowCount || 0;
-
-            const promptResult = await rv.RunView<AIPromptEntityExtended>({
-                EntityName: 'AI Prompts',
-                ExtraFilter: `ID IN (SELECT PromptID FROM __mj.vwAIAgentPrompts WHERE AgentID='${this.record.ID}')` 
-            });
+            // Execute all queries in a single batch for better performance
+            const results = await rv.RunViews([
+                // Sub-agents
+                {
+                    EntityName: 'AI Agents',
+                    ExtraFilter: `ParentID='${this.record.ID}'`,
+                    OrderBy: 'Name ASC'
+                },
+                // Prompts
+                {
+                    EntityName: 'AI Prompts',
+                    ExtraFilter: `ID IN (SELECT PromptID FROM __mj.vwAIAgentPrompts WHERE AgentID='${this.record.ID}')`
+                },
+                // Actions
+                {
+                    EntityName: 'Actions',
+                    ExtraFilter: `ID IN (SELECT ActionID FROM __mj.vwAIAgentActions WHERE AgentID='${this.record.ID}')`,
+                    OrderBy: 'Name ASC'
+                },
+                // Learning cycles
+                {
+                    EntityName: 'AI Agent Learning Cycles',
+                    ExtraFilter: `AgentID='${this.record.ID}'`,
+                    OrderBy: 'StartedAt DESC'
+                },
+                // Notes
+                {
+                    EntityName: 'AI Agent Notes',
+                    ExtraFilter: `AgentID='${this.record.ID}'`
+                },
+                // Execution history
+                {
+                    EntityName: 'MJ: AI Agent Runs',
+                    ExtraFilter: `AgentID='${this.record.ID}'`,
+                    OrderBy: '__mj_CreatedAt DESC'
+                }
+            ]);
             
-            this.agentPrompts = promptResult.Results || [];
-            this.promptCount = promptResult.TotalRowCount || 0;
- 
-            const actionResult = await rv.RunView<ActionEntity>({
-                EntityName: 'Actions',
-                ExtraFilter: `ID IN (SELECT ActionID FROM __mj.vwAIAgentActions WHERE AgentID='${this.record.ID}')`,
-                OrderBy: 'Name ASC' 
-            });
-            
-            this.agentActions = actionResult.Results || [];
-            this.actionCount = actionResult.TotalRowCount || 0;
-            
-            // Load learning cycles with data
-            const learningResult = await rv.RunView<AIAgentLearningCycleEntity>({
-                EntityName: 'AI Agent Learning Cycles',
-                ExtraFilter: `AgentID='${this.record.ID}'`,
-                OrderBy: 'StartedAt DESC' 
-            });
-            this.learningCycles = learningResult.Results || [];
-            this.learningCycleCount = learningResult.TotalRowCount || 0;
-            
-            // Load notes with data
-            const noteResult = await rv.RunView<AIAgentNoteEntity>({
-                EntityName: 'AI Agent Notes',
-                ExtraFilter: `AgentID='${this.record.ID}'` 
-            });
-            this.agentNotes = noteResult.Results || [];
-            this.noteCount = noteResult.TotalRowCount || 0;
-            
-            // Load recent execution history
-            const historyResult = await rv.RunView<AIAgentRunEntity>({
-                EntityName: 'MJ: AI Agent Runs',
-                ExtraFilter: `AgentID='${this.record.ID}'`,
-                OrderBy: '__mj_CreatedAt DESC' 
-            });
-            this.recentExecutions = historyResult.Results || [];
-            this.executionHistoryCount = historyResult.TotalRowCount || 0;
+            // Process results in the same order as queries
+            if (results.length >= 6) {
+                // Sub-agents (index 0)
+                this.subAgents = results[0].Results as AIAgentEntity[] || [];
+                this.subAgentCount = results[0].TotalRowCount || 0;
+                
+                // Prompts (index 1)
+                this.agentPrompts = results[1].Results as AIPromptEntityExtended[] || [];
+                this.promptCount = results[1].TotalRowCount || 0;
+                
+                // Actions (index 2)
+                this.agentActions = results[2].Results as ActionEntity[] || [];
+                this.actionCount = results[2].TotalRowCount || 0;
+                
+                // Learning cycles (index 3)
+                this.learningCycles = results[3].Results as AIAgentLearningCycleEntity[] || [];
+                this.learningCycleCount = results[3].TotalRowCount || 0;
+                
+                // Notes (index 4)
+                this.agentNotes = results[4].Results as AIAgentNoteEntity[] || [];
+                this.noteCount = results[4].TotalRowCount || 0;
+                
+                // Execution history (index 5)
+                this.recentExecutions = results[5].Results as AIAgentRunEntity[] || [];
+                this.executionHistoryCount = results[5].TotalRowCount || 0;
+            }
 
             // Create snapshot for cancel/revert functionality
             this.createOriginalSnapshot();
