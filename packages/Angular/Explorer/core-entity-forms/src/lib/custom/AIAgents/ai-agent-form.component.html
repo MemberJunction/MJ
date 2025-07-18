@@ -70,9 +70,122 @@
         <div class="form-content">
             <kendo-panelbar>
 
-                <!-- Actions (First Panel - Expanded by default) -->
+                <!-- Requests & History -->
                 @if (record.ID) {
-                    <kendo-panelbar-item [expanded]="actionCount > 0">
+                    <kendo-panelbar-item [expanded]="false">
+                        <ng-template kendoPanelBarItemTitle>
+                            <i class="fa-solid fa-history"></i> Execution History{{ executionHistoryCount > 0 ? ' (' + executionHistoryCount + ')' : '' }}
+                        </ng-template>
+                        <ng-template kendoPanelBarContent>
+                            <div class="panel-content execution-history-panel">
+                                <div class="section-header">
+                                    <div class="section-description">
+                                        Review execution history, requests, and performance metrics for this agent.
+                                    </div>
+                                </div>
+                                
+                                @if (executionHistoryCount === 0) {
+                                    <div class="empty-state">
+                                        <i class="fa-solid fa-history"></i>
+                                        <h4>No Execution History</h4>
+                                        <p>This agent hasn't been executed yet. Use the Test Agent button to run the agent and see execution history here.</p>
+                                    </div>
+                                } @else {
+                                    <div class="timeline-list">
+                                        @for (execution of recentExecutions; track execution.ID) {
+                                            <div class="timeline-item" [class.expanded]="expandedExecutions[execution.ID]">
+                                                <div>
+                                                    <div class="timeline-marker" [style.background-color]="getExecutionStatusColor(execution.Status)">
+                                                        <i [class]="getExecutionStatusIcon(execution.Status)"></i>
+                                                    </div>
+                                                    <div class="timeline-content">
+                                                    <div class="timeline-header" (click)="toggleExecutionExpanded(execution.ID)">
+                                                        <div>
+                                                            <div class="timeline-title">
+                                                                <i class="fa-solid fa-chevron-right expand-icon" [class.expanded]="expandedExecutions[execution.ID]"></i>
+                                                                Execution #{{ execution.ID.substring(0, 8) }}
+                                                                <span class="timeline-date">{{ execution.__mj_CreatedAt | date:'MMM d, h:mm a' }}</span>
+                                                            </div>
+                                                            <div class="timeline-meta">
+                                                                <span class="status-badge" [style.background-color]="getExecutionStatusColor(execution.Status)">
+                                                                    {{ execution.Status || 'Unknown' }}
+                                                                </span>
+                                                                @if (execution.CompletedAt) {
+                                                                    <span class="execution-time">
+                                                                        <i class="fa-solid fa-stopwatch"></i>
+                                                                        {{ formatExecutionTimeFromDates(execution.StartedAt, execution.CompletedAt) }}
+                                                                    </span>
+                                                                }
+                                                                <div class="timeline-actions">
+                                                                    <button class="btn-primary" (click)="openExecutionRecord(execution.ID); $event.stopPropagation()">
+                                                                        <i class="fa-solid fa-external-link-alt"></i>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                            @if (execution.Result && !expandedExecutions[execution.ID]) {
+                                                                <div class="timeline-preview">{{ getExecutionResultPreview(execution, true) }}</div>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                    @if (expandedExecutions[execution.ID]) {
+                                                        <div class="timeline-expanded-content">
+                                                            @if (execution.Result) {
+                                                                <div class="result-section">
+                                                                    <h5>Result</h5>
+                                                                    <mj-code-editor 
+                                                                        [value]="getExecutionResultPreview(execution, false)"
+                                                                        [readonly]="true"
+                                                                        language="json"
+                                                                        [lineWrapping]="true"
+                                                                        style="max-height: 200px; width: 100%;">
+                                                                    </mj-code-editor>
+                                                                </div>
+                                                            }
+                                                            @if (execution.ErrorMessage) {
+                                                                <div class="error-section">
+                                                                    <h5><i class="fa-solid fa-exclamation-triangle"></i> Error</h5>
+                                                                    <div class="error-content">{{ execution.ErrorMessage }}</div>
+                                                                </div>
+                                                            }
+                                                            <div class="execution-details">
+                                                                <div class="detail-row">
+                                                                    <span class="detail-label">Started:</span>
+                                                                    <span class="detail-value">{{ execution.StartedAt | date:'medium' }}</span>
+                                                                </div>
+                                                                @if (execution.CompletedAt) {
+                                                                    <div class="detail-row">
+                                                                        <span class="detail-label">Completed:</span>
+                                                                        <span class="detail-value">{{ execution.CompletedAt | date:'medium' }}</span>
+                                                                    </div>
+                                                                }
+                                                                @if (execution.ConversationID) {
+                                                                    <div class="detail-row">
+                                                                        <span class="detail-label">Conversation:</span>
+                                                                        <span class="detail-value">{{ execution.ConversationID }}</span>
+                                                                    </div>
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }
+                                        @if (executionHistoryCount > recentExecutions.length) {
+                                            <div class="view-more-item" (click)="navigateToEntity('MJ: AI Agent Runs', '')">
+                                                <span>View all {{ executionHistoryCount }} executions...</span>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </ng-template>
+                    </kendo-panelbar-item>
+                }
+
+                <!-- Actions -->
+                @if (record.ID) {
+                    <kendo-panelbar-item [expanded]="false">
                         <ng-template kendoPanelBarItemTitle>
                             <i class="fa-solid fa-bolt"></i> Actions{{ actionCount > 0 ? ' (' + actionCount + ')' : '' }}
                         </ng-template>
@@ -148,9 +261,9 @@
                     </kendo-panelbar-item>
                 }
 
-                <!-- Sub-Agents (Second Panel) -->
+                <!-- Sub-Agents -->
                 @if (record.ID) {
-                    <kendo-panelbar-item [expanded]="subAgentCount > 0">
+                    <kendo-panelbar-item [expanded]="false">
                         <ng-template kendoPanelBarItemTitle>
                             <i class="fa-solid fa-sitemap"></i> Sub-Agents{{ subAgentCount > 0 ? ' (' + subAgentCount + ')' : '' }}
                         </ng-template>
@@ -250,9 +363,9 @@
                     </kendo-panelbar-item>
                 }
 
-                <!-- Prompts (Third Panel - With Model Selection) -->
+                <!-- Prompts (With Model Selection) -->
                 @if (record.ID) {
-                    <kendo-panelbar-item [expanded]="true">
+                    <kendo-panelbar-item [expanded]="false">
                         <ng-template kendoPanelBarItemTitle>
                             <i class="fa-solid fa-comments"></i> Prompts{{ promptCount > 0 ? ' (' + promptCount + ')' : '' }}
                         </ng-template>
@@ -485,121 +598,9 @@
                     </kendo-panelbar-item>
                 }
 
-                <!-- Requests & History -->
-                @if (record.ID) {
-                    <kendo-panelbar-item [expanded]="false">
-                        <ng-template kendoPanelBarItemTitle>
-                            <i class="fa-solid fa-history"></i> Execution History{{ executionHistoryCount > 0 ? ' (' + executionHistoryCount + ')' : '' }}
-                        </ng-template>
-                        <ng-template kendoPanelBarContent>
-                            <div class="panel-content execution-history-panel">
-                                <div class="section-header">
-                                    <div class="section-description">
-                                        Review execution history, requests, and performance metrics for this agent.
-                                    </div>
-                                </div>
-                                
-                                @if (executionHistoryCount === 0) {
-                                    <div class="empty-state">
-                                        <i class="fa-solid fa-history"></i>
-                                        <h4>No Execution History</h4>
-                                        <p>This agent hasn't been executed yet. Use the Test Agent button to run the agent and see execution history here.</p>
-                                    </div>
-                                } @else {
-                                    <div class="timeline-list">
-                                        @for (execution of recentExecutions; track execution.ID) {
-                                            <div class="timeline-item" [class.expanded]="expandedExecutions[execution.ID]">
-                                                <div>
-                                                    <div class="timeline-marker" [style.background-color]="getExecutionStatusColor(execution.Status)">
-                                                        <i [class]="getExecutionStatusIcon(execution.Status)"></i>
-                                                    </div>
-                                                    <div class="timeline-content">
-                                                    <div class="timeline-header" (click)="toggleExecutionExpanded(execution.ID)">
-                                                        <div>
-                                                            <div class="timeline-title">
-                                                                <i class="fa-solid fa-chevron-right expand-icon" [class.expanded]="expandedExecutions[execution.ID]"></i>
-                                                                Execution #{{ execution.ID.substring(0, 8) }}
-                                                                <span class="timeline-date">{{ execution.__mj_CreatedAt | date:'MMM d, h:mm a' }}</span>
-                                                            </div>
-                                                            <div class="timeline-meta">
-                                                                <span class="status-badge" [style.background-color]="getExecutionStatusColor(execution.Status)">
-                                                                    {{ execution.Status || 'Unknown' }}
-                                                                </span>
-                                                                @if (execution.CompletedAt) {
-                                                                    <span class="execution-time">
-                                                                        <i class="fa-solid fa-stopwatch"></i>
-                                                                        {{ formatExecutionTimeFromDates(execution.StartedAt, execution.CompletedAt) }}
-                                                                    </span>
-                                                                }
-                                                                <div class="timeline-actions">
-                                                                    <button class="btn-primary" (click)="openExecutionRecord(execution.ID); $event.stopPropagation()">
-                                                                        <i class="fa-solid fa-external-link-alt"></i>
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                            @if (execution.Result && !expandedExecutions[execution.ID]) {
-                                                                <div class="timeline-preview">{{ getExecutionResultPreview(execution, true) }}</div>
-                                                            }
-                                                        </div>
-                                                    </div>
-                                                    @if (expandedExecutions[execution.ID]) {
-                                                        <div class="timeline-expanded-content">
-                                                            @if (execution.Result) {
-                                                                <div class="result-section">
-                                                                    <h5>Result</h5>
-                                                                    <mj-code-editor 
-                                                                        [value]="getExecutionResultPreview(execution, false)"
-                                                                        [readonly]="true"
-                                                                        language="json"
-                                                                        [lineWrapping]="true"
-                                                                        style="max-height: 200px; width: 100%;">
-                                                                    </mj-code-editor>
-                                                                </div>
-                                                            }
-                                                            @if (execution.ErrorMessage) {
-                                                                <div class="error-section">
-                                                                    <h5><i class="fa-solid fa-exclamation-triangle"></i> Error</h5>
-                                                                    <div class="error-content">{{ execution.ErrorMessage }}</div>
-                                                                </div>
-                                                            }
-                                                            <div class="execution-details">
-                                                                <div class="detail-row">
-                                                                    <span class="detail-label">Started:</span>
-                                                                    <span class="detail-value">{{ execution.StartedAt | date:'medium' }}</span>
-                                                                </div>
-                                                                @if (execution.CompletedAt) {
-                                                                    <div class="detail-row">
-                                                                        <span class="detail-label">Completed:</span>
-                                                                        <span class="detail-value">{{ execution.CompletedAt | date:'medium' }}</span>
-                                                                    </div>
-                                                                }
-                                                                @if (execution.ConversationID) {
-                                                                    <div class="detail-row">
-                                                                        <span class="detail-label">Conversation:</span>
-                                                                        <span class="detail-value">{{ execution.ConversationID }}</span>
-                                                                    </div>
-                                                                }
-                                                            </div>
-                                                        </div>
-                                                    }
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        }
-                                        @if (executionHistoryCount > recentExecutions.length) {
-                                            <div class="view-more-item" (click)="navigateToEntity('MJ: AI Agent Runs', '')">
-                                                <span>View all {{ executionHistoryCount }} executions...</span>
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                            </div>
-                        </ng-template>
-                    </kendo-panelbar-item>
-                }
 
 
-                <!-- Payload (Third Panel) -->
+                <!-- Payload -->
                 <kendo-panelbar-item [expanded]="false">
                     <ng-template kendoPanelBarItemTitle>
                         <i class="fa-solid fa-box"></i> Payload
