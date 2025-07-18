@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/core-actions
 
+## 2.72.0
+
+### Patch Changes
+
+- Updated dependencies [636b6ee]
+  - @memberjunction/core-entities@2.72.0
+  - @memberjunction/ai-core-plus@2.72.0
+  - @memberjunction/actions@2.72.0
+  - @memberjunction/communication-engine@2.72.0
+  - @memberjunction/content-autotagging@2.72.0
+  - @memberjunction/external-change-detection@2.72.0
+  - @memberjunction/core-entities-server@2.72.0
+  - @memberjunction/ai-vector-sync@2.72.0
+  - @memberjunction/core@2.72.0
+  - @memberjunction/global@2.72.0
+
 ## 2.71.0
 
 ### Patch Changes
