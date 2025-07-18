@@ -186,16 +186,17 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   }
   
   private async loadPromptRuns(steps: AIAgentRunStepEntity[]) {
-    const promptIds = steps
-      .map(s => s.TargetID)
+    const promptRunIds = steps
+      .filter(s => s.StepType === 'Prompt' && s.TargetLogID)
+      .map(s => s.TargetLogID)
       .filter(id => id != null);
       
-    if (promptIds.length === 0) return;
+    if (promptRunIds.length === 0) return;
     
     const rv = new RunView();
     const result = await rv.RunView<AIPromptRunEntity>({
       EntityName: 'MJ: AI Prompt Runs',
-      ExtraFilter: `ID IN ('${promptIds.join("','")}')`,
+      ExtraFilter: `ID IN ('${promptRunIds.join("','")}')`,
       OrderBy: '__mj_CreatedAt' 
     });
     
@@ -221,7 +222,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
     
     // Build main timeline from steps
     steps.forEach(step => {
-      const item = this.createTimelineItemFromStep(step, 0);
+      const item = this.createTimelineItemFromStep(step, 0, promptRuns);
       
       // Don't load children immediately for sub-agents
       // They will be loaded on demand when expanded
@@ -232,12 +233,22 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
     return items;
   }
   
-  private createTimelineItemFromStep(step: AIAgentRunStepEntity, level: number): TimelineItem {
+  private createTimelineItemFromStep(step: AIAgentRunStepEntity, level: number, promptRuns?: AIPromptRunEntity[]): TimelineItem {
+    let subtitle = `Type: ${step.StepType}`;
+    
+    // For prompt steps, try to find the associated prompt run to get model/vendor info
+    if (step.StepType === 'Prompt' && step.TargetLogID && promptRuns) {
+      const promptRun = promptRuns.find(pr => pr.ID === step.TargetLogID);
+      if (promptRun) {
+        subtitle = `Model: ${promptRun.Model || 'Unknown'} | Vendor: ${promptRun.Vendor || 'Unknown'}`;
+      }
+    }
+    
     return {
       id: step.ID,
       type: 'step',
       title: step.StepName || `Step ${step.StepNumber}`,
-      subtitle: `Type: ${step.StepType}`,
+      subtitle: subtitle,
       status: step.Status,
       startTime: step.StartedAt,
       endTime: step.CompletedAt || undefined,
@@ -291,7 +302,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
       id: run.ID,
       type: 'prompt',
       title: run.Prompt || 'Prompt Run',
-      subtitle: `Model: ${run.Model || 'Unknown'}`,
+      subtitle: `Model: ${run.Model || 'Unknown'} | Vendor: ${run.Vendor || 'Unknown'}`,
       status: 'Completed',
       startTime: run.__mj_CreatedAt,
       endTime: run.__mj_UpdatedAt,
@@ -392,15 +403,36 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
       const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
         EntityName: 'MJ: AI Agent Run Steps',
         ExtraFilter: `AgentRunID = '${subAgentRunId}'`,
-        OrderBy: 'StepNumber' 
+        OrderBy: 'StepNumber',
+        ResultType: 'entity_object'
       });
       
       if (stepsResult.Success && stepsResult.Results && stepsResult.Results.length > 0) {
         console.log(`🔄 Timeline: Found ${stepsResult.Results.length} steps for sub-agent run ${subAgentRunId}`);
         
+        const steps = stepsResult.Results;
+        
+        // Load prompt runs for prompt steps
+        const promptSteps = steps.filter(s => s.StepType === 'Prompt' && s.TargetLogID);
+        let promptRuns: AIPromptRunEntity[] = [];
+        
+        if (promptSteps.length > 0) {
+          const promptRunIds = promptSteps.map(s => s.TargetLogID).filter(id => id != null);
+          
+          const promptResult = await rv.RunView<AIPromptRunEntity>({
+            EntityName: 'MJ: AI Prompt Runs',
+            ExtraFilter: `ID IN ('${promptRunIds.join("','")}')`,
+            OrderBy: '__mj_CreatedAt' 
+          });
+          
+          if (promptResult.Success) {
+            promptRuns = promptResult.Results || [];
+          }
+        }
+        
         // Create timeline items directly from steps
-        item.children = stepsResult.Results.map(step => 
-          this.createTimelineItemFromStep(step, item.level + 1)
+        item.children = steps.map(step => 
+          this.createTimelineItemFromStep(step, item.level + 1, promptRuns)
         );
       } else {
         console.log('🔄 Timeline: No steps found for sub-agent run');
