@@ -245,6 +245,16 @@ export class LoopAgentType extends BaseAgentType {
                     response.message = response.reasoning;
                 }
             }
+            else if (response.payloadChangeRequest?.newElements ||
+                    response.payloadChangeRequest?.updateElements ||
+                    response.payloadChangeRequest?.removeElements) {
+                // the AI forgot to mark taskComplete as true but provided a payloadChangeRequest
+                // with changes to the elements, so we can consider this a valid response
+                // and we can consider it attempting to have a taskComplete = true
+                // and validation will catch if it didn't actually complete and drive a retry
+                response.message = 'taskComplete set to true automatically due to payloadChangeRequest and no nextStep provided by AI';
+                response.taskComplete = true;
+            }
             else {
                 LogError('LoopAgentResponse requires nextStep when taskComplete is false');
                 return {success: false, message: 'Missing nextStep is a required field when taskComplete is false'};

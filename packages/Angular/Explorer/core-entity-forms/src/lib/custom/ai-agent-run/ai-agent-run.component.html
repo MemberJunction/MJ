@@ -63,10 +63,13 @@
 
     <!-- Tabs -->
     <div class="tabs">
-      <button class="tab" [class.active]="activeTab === 'timeline'" (click)="activeTab = 'timeline'">
+      <button class="tab" [class.active]="activeTab === 'timeline'" (click)="changeTab('timeline')">
         <i class="fas fa-stream"></i> Timeline
       </button>
-      <button class="tab" [class.active]="activeTab === 'details'" (click)="activeTab = 'details'">
+      <button class="tab" [class.active]="activeTab === 'analytics'" (click)="changeTab('analytics')">
+        <i class="fas fa-chart-line"></i> Analytics
+      </button>
+      <button class="tab" [class.active]="activeTab === 'details'" (click)="changeTab('details')">
         <i class="fas fa-info-circle"></i> Details
       </button>
     </div>
@@ -184,6 +187,15 @@
             </div>
           </kendo-splitter-pane>
         </kendo-splitter>
+      </div>
+
+      <!-- Analytics Tab -->
+      <div class="tab-content" *ngIf="activeTab === 'analytics'" style="height: 100%;">
+        <mj-ai-agent-run-analytics 
+          #analyticsComponent
+          [agentRunId]="record.ID"
+          *ngIf="analyticsLoaded">
+        </mj-ai-agent-run-analytics>
       </div>
 
       <!-- Details Tab -->

@@ -5,6 +5,7 @@
  */
 
 import { ComponentProps, ComponentCallbacks, ComponentStyles } from '../types';
+import { Subject, debounceTime } from 'rxjs';
 
 /**
  * Options for building component props
@@ -18,6 +19,8 @@ export interface PropBuilderOptions {
   transformData?: (data: any) => any;
   /** Transform state before passing to component */
   transformState?: (state: any) => any;
+  /** Debounce time for UpdateUserState callback in milliseconds */
+  debounceUpdateUserState?: number;
 }
 
 /**
@@ -43,7 +46,8 @@ export function buildComponentProps(
   const {
     validate = true,
     transformData,
-    transformState
+    transformState,
+    debounceUpdateUserState = 3000 // Default 3 seconds
   } = options;
 
   // Transform data if transformer provided
@@ -55,7 +59,7 @@ export function buildComponentProps(
     data: transformedData,
     userState: transformedState,
     utilities,
-    callbacks: normalizeCallbacks(callbacks),
+    callbacks: normalizeCallbacks(callbacks, debounceUpdateUserState),
     components,
     styles: normalizeStyles(styles)
   };
@@ -68,12 +72,44 @@ export function buildComponentProps(
   return props;
 }
 
+// Store subjects for debouncing per component instance
+const updateUserStateSubjects = new WeakMap<Function, Subject<any>>();
+
+// Loop detection state
+interface LoopDetectionState {
+  count: number;
+  lastUpdate: number;
+  lastState: any;
+}
+const loopDetectionStates = new WeakMap<Function, LoopDetectionState>();
+
+// Deep equality check for objects
+function deepEqual(obj1: any, obj2: any): boolean {
+  if (obj1 === obj2) return true;
+  
+  if (!obj1 || !obj2) return false;
+  if (typeof obj1 !== 'object' || typeof obj2 !== 'object') return false;
+  
+  const keys1 = Object.keys(obj1);
+  const keys2 = Object.keys(obj2);
+  
+  if (keys1.length !== keys2.length) return false;
+  
+  for (const key of keys1) {
+    if (!keys2.includes(key)) return false;
+    if (!deepEqual(obj1[key], obj2[key])) return false;
+  }
+  
+  return true;
+}
+
 /**
  * Normalizes component callbacks
  * @param callbacks - Raw callbacks object
+ * @param debounceMs - Debounce time for UpdateUserState in milliseconds
  * @returns Normalized callbacks
  */
-export function normalizeCallbacks(callbacks: any): ComponentCallbacks {
+export function normalizeCallbacks(callbacks: any, debounceMs: number = 3000): ComponentCallbacks {
   const normalized: ComponentCallbacks = {};
 
   // Ensure all callbacks are functions
@@ -86,7 +122,64 @@ export function normalizeCallbacks(callbacks: any): ComponentCallbacks {
   }
 
   if (callbacks.UpdateUserState && typeof callbacks.UpdateUserState === 'function') {
-    normalized.UpdateUserState = callbacks.UpdateUserState;
+    // Create a debounced version of UpdateUserState with loop detection
+    const originalCallback = callbacks.UpdateUserState;
+    
+    // Get or create a subject for this callback
+    let subject = updateUserStateSubjects.get(originalCallback);
+    if (!subject) {
+      subject = new Subject<any>();
+      updateUserStateSubjects.set(originalCallback, subject);
+      
+      // Subscribe to the subject with debounce
+      subject.pipe(
+        debounceTime(debounceMs)
+      ).subscribe(state => {
+        console.log(`[Skip Component] UpdateUserState called after ${debounceMs}ms debounce`);
+        originalCallback(state);
+      });
+    }
+    
+    // Get or create loop detection state
+    let loopState = loopDetectionStates.get(originalCallback);
+    if (!loopState) {
+      loopState = { count: 0, lastUpdate: 0, lastState: null };
+      loopDetectionStates.set(originalCallback, loopState);
+    }
+    
+    // Return a function that prevents redundant updates
+    normalized.UpdateUserState = (state: any) => {
+      // Check if this is a redundant update
+      if (loopState!.lastState && deepEqual(state, loopState!.lastState)) {
+        console.log('[Skip Component] Skipping redundant state update');
+        return; // Don't process identical state updates
+      }
+      
+      const now = Date.now();
+      const timeSinceLastUpdate = now - loopState!.lastUpdate;
+      
+      // Check for rapid updates
+      if (timeSinceLastUpdate < 100) {
+        loopState!.count++;
+        
+        if (loopState!.count > 5) {
+          console.error('[Skip Component] Rapid state updates detected - possible infinite loop');
+          console.error('Updates in last 100ms:', loopState!.count);
+          // Still process the update but warn
+        }
+      } else {
+        // Reset counter if more than 100ms has passed
+        loopState!.count = 0;
+      }
+      
+      loopState!.lastUpdate = now;
+      loopState!.lastState = JSON.parse(JSON.stringify(state)); // Deep clone to preserve state
+      
+      console.log('[Skip Component] Processing state update');
+      
+      // Push to debounce subject (which already has 3 second debounce)
+      subject!.next(state);
+    };
   }
 
   if (callbacks.NotifyEvent && typeof callbacks.NotifyEvent === 'function') {
