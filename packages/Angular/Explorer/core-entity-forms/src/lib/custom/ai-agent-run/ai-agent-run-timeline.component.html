@@ -11,7 +11,7 @@
       </mj-ai-agent-run-step-node>
       
       <!-- Sub-Run Timeline (Recursive) -->
-      <div class="sub-timeline" *ngIf="(item.type === 'subrun' || (item.type === 'step' && item.data?.StepType === 'subagent')) && item.isExpanded">
+      <div class="sub-timeline" *ngIf="(item.type === 'subrun' || (item.type === 'step' && item.data?.StepType === 'Sub-Agent')) && item.isExpanded">
         <!-- Show loading indicator while loading children -->
         <div class="loading-children" *ngIf="item.type === 'step' && !item.childrenLoaded">
           <i class="fas fa-spinner fa-spin"></i> Loading sub-agent steps...
