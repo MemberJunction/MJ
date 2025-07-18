@@ -23,7 +23,7 @@ import { AIAgentPromptEntity, AIPromptEntity } from "@memberjunction/core-entiti
  * });
  * ```
  */
-@RegisterClass(BaseAction, "Set Agent Prompt")
+@RegisterClass(BaseAction, "__SetAgentPrompt")
 export class SetAgentPromptAction extends BaseAgentManagementAction {
     
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {

@@ -21,7 +21,7 @@ import { AIAgentPromptEntity } from "@memberjunction/core-entities";
  * });
  * ```
  */
-@RegisterClass(BaseAction, "Deactivate Agent")
+@RegisterClass(BaseAction, "__DeactivateAgent")
 export class DeactivateAgentAction extends BaseAgentManagementAction {
     
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {

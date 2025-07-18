@@ -71,10 +71,6 @@ export class ListActionsAction extends BaseAgentManagementAction {
                     ID: action.ID,
                     Name: action.Name,
                     Description: action.Description,
-                    Type: action.Type,
-                    Category: action.Category,
-                    CategoryID: action.CategoryID,
-                    Status: action.Status,
                     // Include parameter information for planning
                     Parameters: await this.extractActionParameters(action, params.ContextUser)
                 })));
@@ -124,10 +120,6 @@ export class ListActionsAction extends BaseAgentManagementAction {
                     ID: param.ID,
                     Name: param.Name,
                     Type: param.Type,
-                    ValueType: param.ValueType,
-                    IsArray: param.IsArray,
-                    IsRequired: param.IsRequired,
-                    DefaultValue: param.DefaultValue,
                     Description: param.Description
                 }));
             } else {

@@ -23,7 +23,7 @@ import { AIAgentEntity, AIAgentPromptEntity, AIPromptEntity, AIPromptEntityExten
  * });
  * ```
  */
-@RegisterClass(BaseAction, "Export Agent Bundle")
+@RegisterClass(BaseAction, "__ExportAgentBundle")
 export class ExportAgentBundleAction extends BaseAgentManagementAction {
     
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
