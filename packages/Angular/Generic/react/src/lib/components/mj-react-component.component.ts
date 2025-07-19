@@ -27,7 +27,7 @@ import {
   ComponentHierarchyRegistrar,
   HierarchyRegistrationResult
 } from '@memberjunction/react-runtime';
-import { LogError, CompositeKey } from '@memberjunction/core';
+import { LogError, CompositeKey, KeyValuePair } from '@memberjunction/core';
 
 /**
  * Event emitted by React components
@@ -151,7 +151,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   @Output() stateChange = new EventEmitter<StateChangeEvent>();
   @Output() componentEvent = new EventEmitter<ReactComponentEvent>();
   @Output() refreshData = new EventEmitter<void>();
-  @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
+  @Output() openEntityRecord = new EventEmitter<{ entityName: string; key: CompositeKey }>();
   
   @ViewChild('container', { read: ElementRef, static: true }) container!: ElementRef<HTMLDivElement>;
   
@@ -359,12 +359,25 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         this.refreshData.emit();
       },
       OpenEntityRecord: (entityName: string, key: CompositeKey) => {
-        // Convert CompositeKey to a simple recordId for the event
-        // Try to get the ID field first, otherwise get the first value
-        const recordId = key.GetValueByFieldName('ID')?.toString() || 
-                        key.GetValueByIndex(0)?.toString() || 
-                        '';
-        this.openEntityRecord.emit({ entityName, recordId });
+        let keyToUse: CompositeKey | null = null;
+        if (key instanceof Array) {
+          keyToUse = CompositeKey.FromKeyValuePairs(key);
+        }
+        else if (typeof key === 'object' && !!key.GetValueByFieldName) {
+          keyToUse = key as CompositeKey;
+        }
+        else if (typeof key === 'object') {
+          //} && !!key.FieldName && !!key.Value) {
+          // possible that have an object that is a simple key/value pair with
+          // FieldName and value properties
+          const keyAny = key as any;
+          if (keyAny.FieldName && keyAny.Value) {
+            keyToUse = CompositeKey.FromKeyValuePairs([keyAny as KeyValuePair]);
+          }
+        }
+        if (keyToUse) {
+          this.openEntityRecord.emit({ entityName, key: keyToUse });
+        }  
       },
       UpdateUserState: (userState: any) => {
         // Prevent updates during rendering

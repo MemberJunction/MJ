@@ -1266,9 +1266,8 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     /**
      * Handle open entity record events
      */
-    public onOpenEntityRecord(event: { entityName: string; recordId: string }): void {
-        const key = new CompositeKey([{ FieldName: 'ID', Value: event.recordId }]);
-        this.handleOpenEntityRecord(event.entityName, key);
+    public onOpenEntityRecord(event: { entityName: string; key: CompositeKey }): void {
+        this.handleOpenEntityRecord(event.entityName, event.key);
     }
 
     
