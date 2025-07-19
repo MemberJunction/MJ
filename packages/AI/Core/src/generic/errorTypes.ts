@@ -2,7 +2,7 @@
  * Categorizes error types that can occur during AI model operations.
  * These categories help determine appropriate retry and failover strategies.
  * 
- * @typedef {'RateLimit' | 'Authentication' | 'ServiceUnavailable' | 'InternalServerError' | 'NetworkError' | 'InvalidRequest' | 'ModelError' | 'Unknown'} AIErrorType
+ * @typedef {'RateLimit' | 'Authentication' | 'ServiceUnavailable' | 'InternalServerError' | 'NetworkError' | 'InvalidRequest' | 'ContextLengthExceeded' | 'ModelError' | 'Unknown'} AIErrorType
  * 
  * @description
  * - `RateLimit`: Rate limit exceeded - typically HTTP 429. Suggests switching to another provider or waiting
@@ -11,6 +11,7 @@
  * - `InternalServerError`: Internal server error - typically HTTP 500. Indicates a problem on the provider's side
  * - `NetworkError`: Network connectivity issues. Connection timeouts, DNS failures, etc.
  * - `InvalidRequest`: Invalid request format or parameters - typically HTTP 400. Usually indicates a problem with the request itself
+ * - `ContextLengthExceeded`: Context length exceeded - typically HTTP 400 with context_length_exceeded code. Suggests switching to a model with larger context window
  * - `ModelError`: Model-specific errors. Model not found, model overloaded, etc.
  * - `Unknown`: Unknown or unclassified error
  * 
@@ -23,6 +24,7 @@ export type AIErrorType =
     | 'InternalServerError'
     | 'NetworkError'
     | 'InvalidRequest'
+    | 'ContextLengthExceeded'
     | 'ModelError'
     | 'Unknown';
 

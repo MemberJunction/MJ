@@ -40,6 +40,7 @@ LoadAgentManagementActions();
 
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
+import { LoadAIEngine } from '@memberjunction/aiengine';
 import { LoadOpenAILLM } from '@memberjunction/ai-openai';
 import { LoadAnthropicLLM } from '@memberjunction/ai-anthropic';
 import { LoadGroqLLM } from '@memberjunction/ai-groq';
@@ -48,6 +49,7 @@ import { LoadMistralLLM } from '@memberjunction/ai-mistral';
 // Load AI LLMs and Base AI Engine
 // These imports are necessary to ensure the LLMs are registered in the MemberJunction AI
 // system. They are not tree-shaken because they are dynamically loaded at runtime.
+LoadAIEngine();
 LoadOpenAILLM();
 LoadAnthropicLLM();
 LoadGroqLLM();

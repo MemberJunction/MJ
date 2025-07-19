@@ -2,7 +2,7 @@ import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPI
 import { ValidationAttempt, AIPromptRunResult } from '@memberjunction/ai-core-plus';
 import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
 import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
-import { AIModelEntityExtended, AIPromptEntity, AIPromptRunEntity, AIPromptModelEntity } from '@memberjunction/core-entities';
+import { AIModelEntityExtended, AIPromptEntity, AIPromptRunEntity, AIPromptModelEntity, AIModelVendorEntity } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateEntityExtended, TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
@@ -316,6 +316,21 @@ export class AIPromptRunner {
       if (params.cancellationToken?.aborted) {
         throw new Error('Prompt execution was cancelled during template rendering');
       }
+
+      // If no model was selected yet (no template case), select one now
+      if (!selectedModel) {
+        let modelSelectionPrompt = prompt;
+        if (params.modelSelectionPrompt) {
+          modelSelectionPrompt = params.modelSelectionPrompt;
+          this.logStatus(`🎯 Using prompt "${modelSelectionPrompt.Name}" for model selection instead of main prompt`, true, params);
+        }
+        
+        selectedModel = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
+        if (!selectedModel) {
+          throw new Error(`No suitable model found for prompt ${modelSelectionPrompt.Name}`);
+        }
+      }
+
 
       // Check if we need parallel execution based on ParallelizationMode
       const shouldUseParallelExecution = prompt.ParallelizationMode && prompt.ParallelizationMode !== 'None';
@@ -2841,6 +2856,17 @@ export class AIPromptRunner {
     }
   }
 
+  // ==================== CONTEXT LENGTH METHODS ====================
+
+  /**
+   * Estimates the number of tokens in a rendered prompt and conversation messages.
+   * This is a rough estimation based on character count and typical token ratios.
+   * 
+   * @param renderedPrompt - The rendered prompt text
+   * @param conversationMessages - Optional conversation messages
+   * @returns Estimated token count
+   */
+
   // ==================== FAILOVER METHODS ====================
 
   /**
@@ -2985,6 +3011,12 @@ export class AIPromptRunner {
       return !failedPairs.has(key);
     });
 
+    // Check if we have context length exceeded errors in the attempt history
+    const hasContextLengthError = attemptHistory.some(a => 
+      a.errorType === 'ContextLengthExceeded' || 
+      ErrorAnalyzer.analyzeError(a.error).errorType === 'ContextLengthExceeded'
+    );
+
     // Apply strategy-specific filtering and sorting
     let candidates: ModelVendorCandidate[];
     
@@ -3027,8 +3059,57 @@ export class AIPromptRunner {
         candidates = [];
     }
 
-    // Final sort by priority (higher is better)
-    return candidates.sort((a, b) => b.priority - a.priority);
+    // If we have context length errors, prioritize models with larger context windows
+    if (hasContextLengthError) {
+      const currentMaxTokens = currentModel.ModelVendors?.length > 0 ? 
+        Math.max(...currentModel.ModelVendors.map(mv => mv.MaxInputTokens || 0)) : 0;
+      
+      // Filter out models with same or smaller context windows
+      candidates = candidates.filter(c => {
+        const candidateMaxTokens = c.model.ModelVendors?.length > 0 ? 
+          Math.max(...c.model.ModelVendors.map(mv => mv.MaxInputTokens || 0)) : 0;
+        return candidateMaxTokens > currentMaxTokens;
+      });
+      
+      // Sort by priority first (existing algorithm), then by context window size as tiebreaker
+      candidates.sort((a, b) => {
+        // Primary sort: priority (higher is better) - maintains existing algorithm
+        if (a.priority !== b.priority) {
+          return b.priority - a.priority;
+        }
+        
+        // Secondary sort: context window size (largest first) - only as tiebreaker
+        const aMaxTokens = a.model.ModelVendors?.length > 0 ? 
+          Math.max(...a.model.ModelVendors.map((mv: AIModelVendorEntity) => mv.MaxInputTokens || 0)) : 0;
+        const bMaxTokens = b.model.ModelVendors?.length > 0 ? 
+          Math.max(...b.model.ModelVendors.map((mv: AIModelVendorEntity) => mv.MaxInputTokens || 0)) : 0;
+        
+        return bMaxTokens - aMaxTokens;
+      });
+      
+      // Log context-aware failover selection
+      if (candidates.length > 0) {
+        const bestCandidate = candidates[0];
+        const bestCandidateMaxTokens = bestCandidate.model.ModelVendors?.length > 0 ? 
+          Math.max(...bestCandidate.model.ModelVendors.map((mv: AIModelVendorEntity) => mv.MaxInputTokens || 0)) : 0;
+        LogStatusEx({
+          message: `🔄 Context-aware failover: Selected model ${bestCandidate.model.Name} with ${bestCandidateMaxTokens} max input tokens (vs ${currentMaxTokens} for failed model)`,
+          category: 'AI',
+          additionalArgs: [{
+            currentModel: currentModel.Name,
+            currentMaxTokens,
+            selectedModel: bestCandidate.model.Name,
+            selectedMaxTokens: bestCandidateMaxTokens,
+            candidateCount: candidates.length
+          }]
+        });
+      }
+    } else {
+      // Final sort by priority (higher is better) for non-context-length errors
+      candidates.sort((a, b) => b.priority - a.priority);
+    }
+    
+    return candidates;
   }
 
   /**
