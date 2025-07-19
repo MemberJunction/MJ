@@ -82,7 +82,53 @@ export type ComponentEntityDataRequirement = {
     sortFields?: string[];
 
     /**
+     * For the set of fields used in the combination of display, filter, and sort,
+     * this array is populated with additional metadata about each field. This will
+     * NOT include fields that are not used in the component.
+     */
+    fieldMetadata: SimpleEntityFieldInfo[]
+
+    /**
      * When/Where/How components should use this data
      */
     usageContext?: string;
+}
+
+/** 
+ * Simple type to share more information about the relevant fields 
+ * in an entity that are to be used in a component 
+ **/
+export type SimpleEntityFieldInfo = {
+    /**
+     * Name of the field
+     */
+    name: string;
+    /**
+     * Display sequence usually used for this field
+     */
+    sequence: number;  
+    /**
+     * Whether this field is usually displayed in a user-facing view
+     */
+    defaultInView: boolean;  
+    /**
+     * SQL Server type of the field, e.g., 'varchar', 'int', etc.
+     */
+    type: string; 
+    /**
+     * Whether the field allows null values
+     */
+    allowsNull: boolean; 
+    /**
+     * Whether the field is part of the primary key
+     */
+    isPrimaryKey: boolean;
+    /**
+     * Possible values for the field, if applicable
+     */
+    possibleValues?: string[]; 
+    /**
+     * Description of the field
+     */
+    description?: string;
 }
