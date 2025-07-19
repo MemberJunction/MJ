@@ -21,7 +21,8 @@ import { ComponentRootSpec, ComponentCallbacks, ComponentStyles } from '@memberj
 import { ReactBridgeService } from '../services/react-bridge.service';
 import { AngularAdapterService } from '../services/angular-adapter.service';
 import { 
-  buildComponentProps, 
+  buildComponentProps,
+  cleanupPropBuilder,
   ComponentError,
   createErrorBoundary,
   ComponentHierarchyRegistrar,
@@ -158,10 +159,13 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   private reactRoot: any = null;
   private compiledComponent: any = null;
   private destroyed$ = new Subject<void>();
+  private currentCallbacks: ComponentCallbacks | null = null;
   private currentState: any = {};
   isInitialized = false;
   private isRendering = false;
   private pendingRender = false;
+  private isDestroying = false;
+  private renderTimeout: any = null;
   hasError = false;
 
   constructor(
@@ -177,6 +181,12 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    // Set destroying flag immediately
+    this.isDestroying = true;
+    
+    // Cancel any pending renders
+    this.pendingRender = false;
+    
     this.destroyed$.next();
     this.destroyed$.complete();
     this.cleanup();
@@ -272,6 +282,11 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
    * Render the React component
    */
   private renderComponent() {
+    // Don't render if component is being destroyed
+    if (this.isDestroying) {
+      return;
+    }
+    
     if (!this.compiledComponent || !this.reactRoot) {
       return;
     }
@@ -293,12 +308,17 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     // Get components from resolver
     const components = this.adapter.getResolver().resolveComponents(this.component);
     
+    // Create callbacks once per component instance
+    if (!this.currentCallbacks) {
+      this.currentCallbacks = this.createCallbacks();
+    }
+    
     // Build props - pass styles as-is for Skip components
     const props = buildComponentProps(
       this._data || {},
       this.currentState,
       this.utilities || {},
-      this.createCallbacks(),
+      this.currentCallbacks,
       components,
       this.styles as any, // Skip components expect the full SkipComponentStyles structure
       { debounceUpdateUserState: 3000 } // 3 second debounce by default
@@ -318,23 +338,37 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       React.createElement(this.compiledComponent.component, props)
     );
 
+    // Clear any existing render timeout
+    if (this.renderTimeout) {
+      clearTimeout(this.renderTimeout);
+    }
+    
     // Render with timeout protection
-    const renderTimeout = setTimeout(() => {
-      this.componentEvent.emit({
-        type: 'error',
-        payload: {
-          error: 'Component render timeout - possible infinite loop detected',
-          source: 'render'
-        }
-      });
+    this.renderTimeout = setTimeout(() => {
+      // Check if still rendering and not destroyed
+      if (this.isRendering && !this.isDestroying) {
+        this.componentEvent.emit({
+          type: 'error',
+          payload: {
+            error: 'Component render timeout - possible infinite loop detected',
+            source: 'render'
+          }
+        });
+      }
     }, 5000);
 
     try {
       this.reactRoot.render(element);
-      clearTimeout(renderTimeout);
+      clearTimeout(this.renderTimeout);
+      this.renderTimeout = null;
       
       // Reset rendering flag after a microtask to allow React to complete
       Promise.resolve().then(() => {
+        // Don't update state if component is destroyed
+        if (this.isDestroying) {
+          return;
+        }
+        
         this.isRendering = false;
         
         // If there was a pending render request, execute it now
@@ -344,7 +378,8 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         }
       });
     } catch (error) {
-      clearTimeout(renderTimeout);
+      clearTimeout(this.renderTimeout);
+      this.renderTimeout = null;
       this.isRendering = false;
       this.handleReactError(error);
     }
@@ -380,8 +415,8 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         }  
       },
       UpdateUserState: (userState: any) => {
-        // Prevent updates during rendering
-        if (this.isRendering) {
+        // Prevent updates during rendering or destruction
+        if (this.isRendering || this.isDestroying) {
           return;
         }
         
@@ -435,8 +470,27 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
    * Clean up resources
    */
   private cleanup() {
-    // Unmount React root
+    // Clear any pending render timeout
+    if (this.renderTimeout) {
+      clearTimeout(this.renderTimeout);
+      this.renderTimeout = null;
+    }
+    
+    // Clean up prop builder subscriptions
+    if (this.currentCallbacks) {
+      cleanupPropBuilder(this.currentCallbacks);
+      this.currentCallbacks = null;
+    }
+    
+    // Unmount React root only if not currently rendering
     if (this.reactRoot) {
+      // If still rendering, wait for completion before unmounting
+      if (this.isRendering) {
+        // Force stop rendering
+        this.isRendering = false;
+        this.pendingRender = false;
+      }
+      
       this.reactBridge.unmountRoot(this.reactRoot);
       this.reactRoot = null;
     }
