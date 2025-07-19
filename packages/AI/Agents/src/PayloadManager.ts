@@ -1191,7 +1191,8 @@ export class PayloadManager {
             }
             delete target[key];
             counts.deletions++;
-            return;
+            // Don't return here - check if there's also a new value to add
+            // This handles the case where AI wants to replace by removing then adding
         }
         
         // Check for addition first
