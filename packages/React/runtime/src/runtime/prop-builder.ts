@@ -5,7 +5,7 @@
  */
 
 import { ComponentProps, ComponentCallbacks, ComponentStyles } from '../types';
-import { Subject, debounceTime } from 'rxjs';
+import { Subject, debounceTime, Subscription } from 'rxjs';
 
 /**
  * Options for building component props
@@ -75,6 +75,9 @@ export function buildComponentProps(
 // Store subjects for debouncing per component instance
 const updateUserStateSubjects = new WeakMap<Function, Subject<any>>();
 
+// Store subscriptions for cleanup
+const updateUserStateSubscriptions = new WeakMap<Function, Subscription>();
+
 // Loop detection state
 interface LoopDetectionState {
   count: number;
@@ -132,12 +135,15 @@ export function normalizeCallbacks(callbacks: any, debounceMs: number = 3000): C
       updateUserStateSubjects.set(originalCallback, subject);
       
       // Subscribe to the subject with debounce
-      subject.pipe(
+      const subscription = subject.pipe(
         debounceTime(debounceMs)
       ).subscribe(state => {
         console.log(`[Skip Component] UpdateUserState called after ${debounceMs}ms debounce`);
         originalCallback(state);
       });
+      
+      // Store the subscription for cleanup
+      updateUserStateSubscriptions.set(originalCallback, subscription);
     }
     
     // Get or create loop detection state
@@ -277,6 +283,33 @@ export function mergeProps(...propsList: Partial<ComponentProps>[]): ComponentPr
   }
 
   return merged;
+}
+
+/**
+ * Cleanup function for prop builder resources
+ * @param callbacks - The callbacks object that was used to build props
+ */
+export function cleanupPropBuilder(callbacks: ComponentCallbacks): void {
+  if (callbacks.UpdateUserState && typeof callbacks.UpdateUserState === 'function') {
+    const originalCallback = callbacks.UpdateUserState;
+    
+    // Unsubscribe from the subject
+    const subscription = updateUserStateSubscriptions.get(originalCallback);
+    if (subscription) {
+      subscription.unsubscribe();
+      updateUserStateSubscriptions.delete(originalCallback);
+    }
+    
+    // Complete and remove the subject
+    const subject = updateUserStateSubjects.get(originalCallback);
+    if (subject) {
+      subject.complete();
+      updateUserStateSubjects.delete(originalCallback);
+    }
+    
+    // Clear loop detection state
+    loopDetectionStates.delete(originalCallback);
+  }
 }
 
 /**

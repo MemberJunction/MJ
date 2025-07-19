@@ -981,7 +981,18 @@ export class PayloadManager {
     }
 
     /**
-     * Process changes for array elements
+     * Process changes for array elements with support for deep merging object elements.
+     * 
+     * For arrays containing objects, updates are merged deeply rather than replacing
+     * the entire element. This preserves existing properties while updating only the
+     * specified fields.
+     * 
+     * Example:
+     * Original: [{id: 1, name: "Test", value: 100}]
+     * Update: [{value: 200}]
+     * Result: [{id: 1, name: "Test", value: 200}]
+     * 
+     * Arrays of primitives still use replacement behavior for backwards compatibility.
      */
     private processArrayChanges(
         target: any[],
@@ -1012,7 +1023,13 @@ export class PayloadManager {
         
         // Process existing elements
         for (let i = 0; i < target.length; i++) {
-            if (removeArray && removeArray[i] === '_DELETE_') {
+            if (removeArray && removeArray[i] === '__DELETE__') {
+                counts.deletions++;
+                continue; // Skip deleted items
+            }
+            
+            // Check for __DELETE__ in updateArray as well
+            if (updateArray && updateArray[i] === '__DELETE__') {
                 counts.deletions++;
                 continue; // Skip deleted items
             }
@@ -1021,8 +1038,32 @@ export class PayloadManager {
             let elementToAdd = target[i];
             
             if (updateArray && this.isSignificantValue(updateArray[i])) {
-                elementToAdd = updateArray[i];
-                counts.updates++;
+                // Check if both the update and current element are objects for deep merge
+                if (typeof updateArray[i] === 'object' && typeof elementToAdd === 'object' && 
+                    !Array.isArray(updateArray[i]) && !Array.isArray(elementToAdd) &&
+                    updateArray[i] !== null && elementToAdd !== null) {
+                    // Deep merge for object elements - preserve existing properties
+                    elementToAdd = _.cloneDeep(elementToAdd);
+                    // Create a synthetic change request with just this update
+                    // The updateElements should be the object itself at the root level
+                    const elementChangeRequest: AgentPayloadChangeRequest<any> = {
+                        updateElements: updateArray[i]
+                    };
+                    this.processChangeRequest(
+                        elementToAdd,
+                        original ? original[i] : undefined,
+                        elementChangeRequest,
+                        [], // Empty path since updateArray[i] is already at the element level
+                        counts,
+                        warnings,
+                        allowedPaths,
+                        blockedOperations
+                    );
+                } else {
+                    // For primitives or arrays, replace entirely (existing behavior)
+                    elementToAdd = updateArray[i];
+                    counts.updates++;
+                }
             } else if (typeof elementToAdd === 'object' && elementToAdd !== null) {
                 // For objects/arrays that aren't being replaced, process nested changes
                 elementToAdd = _.cloneDeep(elementToAdd);
@@ -1095,6 +1136,27 @@ export class PayloadManager {
             );
         }
         
+        // After processing all changes, check for "_DELETE_" values in updateElements
+        // This allows deletion within update operations at any depth
+        const pathStr = path.join('.');
+        const updateObj = pathStr ? _.get(changeRequest.updateElements, pathStr) : changeRequest.updateElements;
+        
+        if (updateObj && typeof updateObj === 'object' && !Array.isArray(updateObj)) {
+            const keysToDelete: string[] = [];
+            
+            for (const [key, value] of Object.entries(updateObj)) {
+                if (value === '__DELETE__' && key in target) {
+                    keysToDelete.push(key);
+                }
+            }
+            
+            // Delete the keys after iteration to avoid modification during iteration
+            for (const key of keysToDelete) {
+                delete target[key];
+                counts.deletions++;
+            }
+        }
+        
         // Recurse into all existing keys for nested changes
         for (const key of Object.keys(target)) {
             if (!changeKeys.has(key) && typeof target[key] === 'object' && target[key] !== null) {
@@ -1137,7 +1199,7 @@ export class PayloadManager {
         
         // Check for deletion
         const removeValue = _.get(changeRequest.removeElements, pathStr);
-        if (removeValue === '_DELETE_') {
+        if (removeValue === '__DELETE__') {
             // Check if delete operation is allowed
             if (allowedPaths && !this.isOperationAllowedForPath(pathStr, 'delete', allowedPaths)) {
                 const warning = `Operation denied: Cannot delete '${pathStr}' - operation 'delete' not allowed`;
@@ -1156,7 +1218,8 @@ export class PayloadManager {
             }
             delete target[key];
             counts.deletions++;
-            return;
+            // Don't return here - check if there's also a new value to add
+            // This handles the case where AI wants to replace by removing then adding
         }
         
         // Check for addition first
@@ -1209,11 +1272,10 @@ export class PayloadManager {
                 return;
             }
             
-            // If both values are objects, we need to recursively process the update
+            // If both values are objects or arrays, we need to recursively process the update
             if (typeof effectiveUpdateValue === 'object' && effectiveUpdateValue !== null &&
-                typeof target[key] === 'object' && target[key] !== null &&
-                !Array.isArray(effectiveUpdateValue) && !Array.isArray(target[key])) {
-                // Recursively process nested updates
+                typeof target[key] === 'object' && target[key] !== null) {
+                // Recursively process nested updates for both objects and arrays
                 this.processChangeRequest(
                     target[key],
                     original ? original[key] : undefined,
@@ -1225,7 +1287,7 @@ export class PayloadManager {
                     blockedOperations
                 );
             } else {
-                // For non-objects or arrays, replace the value
+                // For primitives or type mismatches, replace the value
                 target[key] = effectiveUpdateValue;
                 counts.updates++;
             }
@@ -1255,6 +1317,21 @@ export class PayloadManager {
             target[key] = updateValue;
             counts.additions++;
             warnings.push(`Auto-corrected: '${key}' was in updateElements but doesn't exist (treated as addition)`);
+        } else if (removeValue !== undefined && removeValue !== '__DELETE__' && 
+                   typeof target[key] === 'object' && target[key] !== null) {
+            // Handle case where removeValue exists but isn't a direct deletion
+            // This happens with arrays where removeValue is like [{}, '_DELETE_', {}]
+            // We need to recurse to process the array removals
+            this.processChangeRequest(
+                target[key],
+                original ? original[key] : undefined,
+                changeRequest,
+                keyPath,
+                counts,
+                warnings,
+                allowedPaths,
+                blockedOperations
+            );
         }
     }
 

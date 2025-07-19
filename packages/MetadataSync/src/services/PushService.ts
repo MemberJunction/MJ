@@ -579,6 +579,11 @@ export class PushService {
         lastModified: new Date().toISOString(),
         checksum: await this.syncEngine.calculateChecksumWithFileContent(originalFields, entityDir)
       };
+      if (options.verbose) {
+        callbacks?.onLog?.(`   ✓ Updated sync metadata (record was ${isNew ? 'new' : 'changed'})`);
+      }
+    } else if (options.verbose) {
+      callbacks?.onLog?.(`   - Skipped sync metadata update (no changes detected)`);
     }
     
     // Restore original field values to preserve @ references
@@ -735,6 +740,18 @@ export class PushService {
           
           // Check if the record is dirty before saving
           let wasActuallyUpdated = false;
+          
+          // Check for file content changes for related entities
+          if (!isNew && relatedRecord.sync) {
+            const currentChecksum = await this.syncEngine.calculateChecksumWithFileContent(relatedRecord.fields, baseDir);
+            if (currentChecksum !== relatedRecord.sync.checksum) {
+              wasActuallyUpdated = true;
+              if (options.verbose) {
+                callbacks?.onLog?.(`${indent}📄 File content changed for related ${entityName} record (checksum mismatch)`);
+              }
+            }
+          }
+          
           if (!isNew && entity.Dirty) {
             // Record is dirty, get the changes
             const changes = entity.GetChangesSinceLastSave();
@@ -814,11 +831,18 @@ export class PushService {
               this.checkAndTrackRecord(entityName, entity, relatedFilePath, parentArrayIndex);
             }
             
-            // Always update sync metadata
-            relatedRecord.sync = {
-              lastModified: new Date().toISOString(),
-              checksum: this.syncEngine.calculateChecksum(relatedRecord.fields)
-            };
+            // Only update sync metadata if the record was actually changed
+            if (isNew || wasActuallyUpdated) {
+              relatedRecord.sync = {
+                lastModified: new Date().toISOString(),
+                checksum: await this.syncEngine.calculateChecksumWithFileContent(relatedRecord.fields, baseDir)
+              };
+              if (options.verbose) {
+                callbacks?.onLog?.(`${indent}  ✓ Updated sync metadata for related ${entityName} (record was ${isNew ? 'new' : 'changed'})`);
+              }
+            } else if (options.verbose) {
+              callbacks?.onLog?.(`${indent}  - Skipped sync metadata update for related ${entityName} (no changes detected)`);
+            }
           }
           
           // Process nested related entities if any
@@ -857,19 +881,6 @@ export class PushService {
            typeof data.fields === 'object';
   }
   
-  private getRecordKey(recordData: RecordData, entityName: string): string {
-    if (recordData.primaryKey) {
-      const keys = Object.entries(recordData.primaryKey)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([k, v]) => `${k}:${v}`)
-        .join('|');
-      return `${entityName}|${keys}`;
-    }
-    
-    // Generate a key from fields if no primary key
-    const fieldKeys = Object.keys(recordData.fields).sort().join(',');
-    return `${entityName}|fields:${fieldKeys}`;
-  }
   
   private formatFieldValue(value: any, maxLength: number = 50): string {
     let strValue = JSON.stringify(value);

@@ -267,13 +267,13 @@ export class AIPromptRunner {
       // Handle different prompt execution modes
       if (params.childPrompts && params.childPrompts.length > 0) {
         // Hierarchical template composition mode - render child templates first, then compose
-        this.logStatus(`🌳 Composing prompt with ${params.childPrompts.length} child templates in hierarchical mode`, true, params);
+        //this.logStatus(`🌳 Composing prompt with ${params.childPrompts.length} child templates in hierarchical mode`, true, params);
         
         // Determine which prompt to use for model selection
         let modelSelectionPrompt = prompt;
         if (params.modelSelectionPrompt) {
           modelSelectionPrompt = params.modelSelectionPrompt;
-          this.logStatus(`🎯 Using prompt "${modelSelectionPrompt.Name}" for model selection instead of parent prompt`, true, params);
+          //this.logStatus(`🎯 Using prompt "${modelSelectionPrompt.Name}" for model selection instead of parent prompt`, true, params);
         }
         
         // Select model using the appropriate prompt
@@ -286,12 +286,9 @@ export class AIPromptRunner {
         childTemplateRenderingResult = await this.renderChildPromptTemplates(params.childPrompts, params, params.cancellationToken);
         // Render the parent prompt with child templates embedded
         renderedPromptText = await this.renderPromptWithChildTemplates(prompt, params, childTemplateRenderingResult.renderedTemplates);
-        
-        this.logStatus(`✅ Hierarchical template composition completed with ${Object.keys(childTemplateRenderingResult.renderedTemplates).length} child templates embedded`, true, params);
 
           // Create parent prompt run for the final composed prompt execution
         parentPromptRun = await this.createPromptRun(prompt, selectedModel, params, renderedPromptText, startTime, params.override?.vendorId);
-        this.logStatus(`📝 Created prompt run ${parentPromptRun.ID} for hierarchical template composition`, true, params);
       } else if (prompt.TemplateID && (!params.conversationMessages || params.templateMessageRole !== 'none')) {
         // Regular template rendering mode
         // Initialize template engine
@@ -404,7 +401,7 @@ export class AIPromptRunner {
       let modelSelectionPrompt = prompt;
       if (params.modelSelectionPrompt) {
         modelSelectionPrompt = params.modelSelectionPrompt;
-        this.logStatus(`🎯 Using prompt "${modelSelectionPrompt.Name}" for model selection instead of main prompt`, true, params);
+        this.logStatus(`   Using prompt "${modelSelectionPrompt.Name}" for model selection instead of main prompt`, true, params);
       }
       
       selectedModel = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
@@ -492,7 +489,7 @@ export class AIPromptRunner {
     let modelSelectionPrompt = prompt;
     if (params.modelSelectionPrompt) {
       modelSelectionPrompt = params.modelSelectionPrompt;
-      this.logStatus(`🎯 Using prompt "${modelSelectionPrompt.Name}" for model selection in parallel execution`, true, params);
+      this.logStatus(`   Using prompt "${modelSelectionPrompt.Name}" for model selection in parallel execution`, true, params);
     }
 
     // Get prompt-specific model associations using the model selection prompt
@@ -758,7 +755,7 @@ export class AIPromptRunner {
       throw new Error('Child prompt execution was cancelled');
     }
 
-    this.logStatus(`🔄 Rendering ${childPrompts.length} child prompt templates in parallel`, true, params);
+    //this.logStatus(`🔄 Rendering ${childPrompts.length} child prompt templates in parallel`, true, params);
 
     // Render all child prompt templates in parallel at this level
     const childRenderingPromises = childPrompts.map(async (childParam) => {
@@ -782,7 +779,7 @@ export class AIPromptRunner {
         }
 
         // Render the child prompt template with merged data
-        this.logStatus(`  🔹 Rendering child prompt template: ${childParam.childPrompt.prompt.Name} -> ${childParam.parentPlaceholder}`, true, params);
+        //this.logStatus(`  🔹 Rendering child prompt template: ${childParam.childPrompt.prompt.Name} -> ${childParam.parentPlaceholder}`, true, params);
         
         const childPrompt = childParam.childPrompt.prompt;
         let renderedChildTemplate = '';
@@ -873,7 +870,7 @@ export class AIPromptRunner {
       renderedTemplatesMap[childResult.placeholder] = childResult.renderedTemplate;
     }
 
-    this.logStatus(`✅ Completed rendering of ${childResults.length} child prompt templates`, true, params);
+    //this.logStatus(`✅ Completed rendering of ${childResults.length} child prompt templates`, true, params);
     
     return {
       renderedTemplates: renderedTemplatesMap
@@ -919,12 +916,12 @@ export class AIPromptRunner {
         ...params.templateData    // Additional template data (highest priority)
       };
 
-      this.logStatus(`🔧 Rendering prompt template with ${Object.keys(childTemplates).length} child templates and ${Object.keys(systemPlaceholders).length} system placeholders`, true, params);
-      
+      this.logStatus(`   🔧 ${prompt.Name} [Rendering Prompt Template]`, true, params);
+
       // Log placeholder replacement for debugging
       for (const [placeholder, template] of Object.entries(childTemplates)) {
         const truncatedTemplate = template.length > 100 ? template.substring(0, 100) + '...' : template;
-        this.logStatus(`  📝 ${placeholder} -> ${truncatedTemplate}`, true, params);
+        //this.logStatus(`  📝 ${placeholder} -> ${truncatedTemplate}`, true, params);
       }
 
       // Render the template with the full params context
@@ -988,13 +985,13 @@ export class AIPromptRunner {
         return null;
       }
 
-      this.logStatus(`🔍 Found ${candidates.length} model-vendor candidates for prompt ${prompt.Name}`, true, params);
+      // this.logStatus(`🔍 Found ${candidates.length} model-vendor candidates for prompt ${prompt.Name}`, true, params);
       
-      if (candidates.length <= 5) {
-        candidates.forEach((c, i) => {
-          this.logStatus(`   ${i + 1}. ${c.model.Name} via ${c.vendorName || 'default'} (${c.driverClass}) - Priority: ${c.priority}${c.isPreferredVendor ? ' [PREFERRED]' : ''}`, true, params);
-        });
-      }
+      // if (candidates.length <= 5) {
+      //   candidates.forEach((c, i) => {
+      //     this.logStatus(`   ${i + 1}. ${c.model.Name} via ${c.vendorName || 'default'} (${c.driverClass}) - Priority: ${c.priority}${c.isPreferredVendor ? ' [PREFERRED]' : ''}`, true, params);
+      //   });
+      // }
 
       // Select the first candidate with an available API key
       const selected = await this.selectModelWithAPIKey(candidates, params);
@@ -1145,9 +1142,7 @@ export class AIPromptRunner {
                 (pm.Status === 'Active' || pm.Status === 'Preview') &&
                 !pm.ConfigurationID
         );
-      } else {
-        LogStatus(`Found ${promptModels.length} models for configuration "${configurationId}"`);
-      }
+      }  
     } else {
       // No configuration specified, only use NULL configuration models
       promptModels = AIEngine.Instance.PromptModels.filter(
@@ -1265,7 +1260,7 @@ export class AIPromptRunner {
     const checkedDrivers = new Map<string, boolean>(); // Cache to avoid repeated lookups
     let attemptCount = 0;
     
-    this.logStatus(`🔑 Checking API keys for ${candidates.length} model-vendor candidates...`, true, params);
+    //this.logStatus(`🔑 Checking API keys for ${candidates.length} model-vendor candidates...`, true, params);
     
     for (const candidate of candidates) {
       attemptCount++;
@@ -1274,7 +1269,7 @@ export class AIPromptRunner {
       if (checkedDrivers.has(candidate.driverClass)) {
         const hasKey = checkedDrivers.get(candidate.driverClass)!;
         if (hasKey) {
-          this.logStatus(`✅ Selected model ${candidate.model.Name} with ${candidate.vendorName || 'default'} vendor (cached API key exists)`, true, params);
+          this.logStatus(`   Selected model ${candidate.model.Name} with ${candidate.vendorName || 'default'} vendor (cached API key exists)`, true, params);
           return candidate;
         }
         // Skip logging for cached negative results to reduce noise
@@ -1287,7 +1282,7 @@ export class AIPromptRunner {
       checkedDrivers.set(candidate.driverClass, hasKey);
       
       if (hasKey) {
-        LogStatus(`✅ Selected model ${candidate.model.Name} with ${candidate.vendorName || 'default'} vendor (driver: ${candidate.driverClass})`);
+        LogStatus(`   Selected model ${candidate.model.Name} with ${candidate.vendorName || 'default'} vendor (driver: ${candidate.driverClass})`);
         if (candidate.isPreferredVendor) {
           this.logStatus(`   Using preferred vendor${candidate.vendorId ? ` (${candidate.vendorName})` : ''}`, true, params);
         }
@@ -1920,12 +1915,12 @@ export class AIPromptRunner {
         if (localKey) {
           apiKey = localKey.apiKey;
           if (verbose) {
-            console.log(`Using local API key for driver class: ${driverClass}`);
+            console.log(`   Using local API key for driver class: ${driverClass}`);
           }
         } else {
           apiKey = GetAIAPIKey(driverClass);
           if (verbose) {
-            console.log(`No local API key found for driver class ${driverClass}, using global key`);
+            console.log(`   No local API key found for driver class ${driverClass}, using global key`);
           }
         }
       } else {
@@ -2110,7 +2105,7 @@ export class AIPromptRunner {
         }
 
         if (attempt > 0) {
-          LogStatus(`🔄 Retrying execution due to validation failure, attempt ${attempt + 1}/${maxRetries + 1}`);
+          LogStatus(`   🔄 Retrying execution due to validation failure, attempt ${attempt + 1}/${maxRetries + 1}`);
           await this.applyRetryDelay(prompt, attempt);
         }
 
@@ -2173,14 +2168,14 @@ export class AIPromptRunner {
         // BUG FIX: Only retry in Strict mode, not in Warn or None modes
         if (prompt.ValidationBehavior === 'Strict' && attempt < maxRetries) {
           lastError = new Error(`Validation failed: ${validationErrors?.map(e => e.Message).join('; ')}`);
-          LogStatus(`⚠️ Validation failed on attempt ${attempt + 1}, will retry (Strict mode)`);
+          LogStatus(`   ⚠️ Validation failed on attempt ${attempt + 1}, will retry (Strict mode)`);
           continue; // Retry
         } else {
           // Either not strict mode or no more retries, return what we have
           const reason = prompt.ValidationBehavior !== 'Strict' 
             ? `${prompt.ValidationBehavior || 'None'} mode - continuing with invalid output (no retry)`
             : 'max retries exceeded';
-          LogStatus(`⚠️ Validation failed on attempt ${attempt + 1}, stopping retries (${reason})`);
+          LogStatus(`   ⚠️ Validation failed on attempt ${attempt + 1}, stopping retries (${reason})`);
           return {
             modelResult,
             parsedResult: { result, validationResult },
@@ -2245,7 +2240,7 @@ export class AIPromptRunner {
         delay = baseDelay;
     }
 
-    LogStatus(`Applying retry delay: ${delay}ms (strategy: ${prompt.RetryStrategy})`);
+    LogStatus(`   Applying retry delay: ${delay}ms (strategy: ${prompt.RetryStrategy})`);
     await new Promise(resolve => setTimeout(resolve, delay));
   }
 
@@ -2592,9 +2587,7 @@ export class AIPromptRunner {
       const validationResult = this._jsonValidator.validate(parsedResult, exampleObject);
       validationErrors.push(...validationResult.Errors);
 
-      if (validationErrors.length === 0) {
-        //LogStatus(`✅ Validation passed for prompt ${promptId}`);
-      } else {
+      if (validationErrors.length !== 0) {
         LogStatus(`⚠️ Validation found ${validationErrors.length} issues for prompt ${promptId}:`);
         validationErrors.forEach((error, index) => {
           LogStatus(`   ${index + 1}. ${error.Source}: ${error.Message}`);
@@ -2796,8 +2789,6 @@ export class AIPromptRunner {
             promptRun.ValidationBehavior || 'Warn'
           )
         });
-        
-        //LogStatus(`Updated prompt run ${promptRun.ID} with ${validationAttempts.length} validation attempts`);
       } else {
         // No validation attempts (possibly skipped validation)
         promptRun.ValidationAttemptCount = 1; // At least one attempt was made
