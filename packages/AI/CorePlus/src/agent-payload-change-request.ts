@@ -47,24 +47,81 @@ export type AgentPayloadChangeRequest<P = any> = {
      *          {} // placeholder object is ignored - since it is trailing, can be ommitted, this is for illustration
      *      ]
      *  }
+     * 
+     * DELETION WITHIN UPDATES:
+     * You can use "__DELETE__" within updateElements to remove properties or array elements at any depth:
+     * 
+     * Deleting object properties:
+     * {
+     *   updateElements: {
+     *     user: {
+     *       name: "New Name",      // update this property
+     *       tempData: "__DELETE__"   // remove this property
+     *     }
+     *   }
+     * }
+     * 
+     * Deleting array elements:
+     * {
+     *   updateElements: {
+     *     items: [
+     *       {},          // keep item 0
+     *       "__DELETE__",  // remove item 1
+     *       { value: 5 }, // update item 2
+     *       "__DELETE__"   // remove item 3
+     *     ]
+     *   }
+     * }
+     * 
+     * Complex nested example - updating and deleting within deep structures:
+     * {
+     *   updateElements: {
+     *     dataRequirements: {
+     *       dynamicData: {
+     *         requiredEntities: [
+     *           {
+     *             displayFields: ["Name", "UpdatedAt"], // update array
+     *             fieldMetadata: [
+     *               {},          // keep field 0
+     *               {},          // keep field 1
+     *               {},          // keep field 2
+     *               "__DELETE__"   // remove field 3 (e.g., LastUpdated)
+     *             ],
+     *             oldProperty: "__DELETE__"  // remove this property
+     *           }
+     *         ]
+     *       }
+     *     }
+     *   }
+     * }
+     * 
+     * IMPORTANT: When using "__DELETE__" in arrays, deletions are processed after updates at each depth level,
+     * ensuring correct index management. Multiple deletions in the same array are handled properly.
+     * 
+     * Alternative for complete replacement: If you need to completely replace a complex structure,
+     * you can use removeElements + newElements pattern:
+     * {
+     *   removeElements: { complexObject: "__DELETE__" },
+     *   newElements: { complexObject: { keyA: "valA", keyB: "valB" } }
+     * }
      */
     updateElements?: Partial<P>;
 
     /**
      * This partial of P includes all elements that should be removed from the payload. When an
-     * item needs to be removed, include the item here with a value of "_DELETE_".
+     * item needs to be removed, include the item here with a value of "__DELETE__".
      * 
      * For 1 removal:
      * {
-     *   itemToRemove: '_DELETE_'
+     *   itemToRemove: '__DELETE__'
      * }
      * 
      * This indicates that the itemToRemove should be removed from the payload.
      * 
      * For multiple removals:
      * {
-     *   itemToRemove1: '_DELETE_',
-     *   itemToRemove2: '_DELETE_'
+     *   itemToRemove1: '__DELETE__',
+     *   itemToRemove2: '__DELETE__'
      * }
      * 
      * Arrays: Include placeholder objects `{}` for items that are being kept in the array.
@@ -103,7 +160,7 @@ export type AgentPayloadChangeRequest<P = any> = {
      * NESTED OBJECTS:
      * {
      *   nestedObject: {
-     *     itemToRemove: '_DELETE_'
+     *     itemToRemove: '__DELETE__'
      *   }
      * }
      * 
@@ -113,7 +170,7 @@ export type AgentPayloadChangeRequest<P = any> = {
      *    itemToRemove: 'value',
      *    itemToKeep: 'value'
      *   },
-     *   anotherItemToRemove: '_DELETE_',
+     *   anotherItemToRemove: '__DELETE__',
      *   anotherItemToKeep: 12345  
      * }
      *

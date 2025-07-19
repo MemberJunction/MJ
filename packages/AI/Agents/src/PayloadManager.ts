@@ -1023,7 +1023,13 @@ export class PayloadManager {
         
         // Process existing elements
         for (let i = 0; i < target.length; i++) {
-            if (removeArray && removeArray[i] === '_DELETE_') {
+            if (removeArray && removeArray[i] === '__DELETE__') {
+                counts.deletions++;
+                continue; // Skip deleted items
+            }
+            
+            // Check for __DELETE__ in updateArray as well
+            if (updateArray && updateArray[i] === '__DELETE__') {
                 counts.deletions++;
                 continue; // Skip deleted items
             }
@@ -1130,6 +1136,27 @@ export class PayloadManager {
             );
         }
         
+        // After processing all changes, check for "_DELETE_" values in updateElements
+        // This allows deletion within update operations at any depth
+        const pathStr = path.join('.');
+        const updateObj = pathStr ? _.get(changeRequest.updateElements, pathStr) : changeRequest.updateElements;
+        
+        if (updateObj && typeof updateObj === 'object' && !Array.isArray(updateObj)) {
+            const keysToDelete: string[] = [];
+            
+            for (const [key, value] of Object.entries(updateObj)) {
+                if (value === '__DELETE__' && key in target) {
+                    keysToDelete.push(key);
+                }
+            }
+            
+            // Delete the keys after iteration to avoid modification during iteration
+            for (const key of keysToDelete) {
+                delete target[key];
+                counts.deletions++;
+            }
+        }
+        
         // Recurse into all existing keys for nested changes
         for (const key of Object.keys(target)) {
             if (!changeKeys.has(key) && typeof target[key] === 'object' && target[key] !== null) {
@@ -1172,7 +1199,7 @@ export class PayloadManager {
         
         // Check for deletion
         const removeValue = _.get(changeRequest.removeElements, pathStr);
-        if (removeValue === '_DELETE_') {
+        if (removeValue === '__DELETE__') {
             // Check if delete operation is allowed
             if (allowedPaths && !this.isOperationAllowedForPath(pathStr, 'delete', allowedPaths)) {
                 const warning = `Operation denied: Cannot delete '${pathStr}' - operation 'delete' not allowed`;
@@ -1290,7 +1317,7 @@ export class PayloadManager {
             target[key] = updateValue;
             counts.additions++;
             warnings.push(`Auto-corrected: '${key}' was in updateElements but doesn't exist (treated as addition)`);
-        } else if (removeValue !== undefined && removeValue !== '_DELETE_' && 
+        } else if (removeValue !== undefined && removeValue !== '__DELETE__' && 
                    typeof target[key] === 'object' && target[key] !== null) {
             // Handle case where removeValue exists but isn't a direct deletion
             // This happens with arrays where removeValue is like [{}, '_DELETE_', {}]
