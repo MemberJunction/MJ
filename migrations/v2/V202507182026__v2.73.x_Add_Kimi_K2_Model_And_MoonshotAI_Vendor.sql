@@ -82,6 +82,25 @@ VALUES
         16384  -- MaxOutputTokens (16k output limit)
     );
 
+-- 5. Add AIModelCost for Kimi K2 on Groq
+INSERT INTO ${flyway:defaultSchema}.AIModelCost (ID, ModelID, VendorID, StartedAt, EndedAt, Status, Currency, PriceTypeID, InputPricePerUnit, OutputPricePerUnit, UnitTypeID, ProcessingType, Comments)
+VALUES
+    (
+        'A261A9EC-A7E1-412B-86E2-BEEAD4B4F999',
+        @KimiModelID,
+        'E3A5CCEC-6A37-EF11-86D4-000D3A4E707E', -- Groq vendor ID
+        GETDATE(),
+        NULL,
+        'Active',
+        'USD',
+        'ece2bcb7-c854-4bf7-a517-d72793a40652', -- Same PriceTypeID as GPT-4o
+        1.00, -- $1.00 per million input tokens
+        3.00, -- $3.00 per million output tokens
+        '54208f7d-331c-40ab-84e8-163338ee9ea1', -- Same UnitTypeID as GPT-4o
+        'Realtime',
+        'Kimi K2 pricing on Groq as of July 2025'
+    );
+
 -- Log the operation
 PRINT 'Successfully added Moonshot AI vendor and Kimi K2 model with vendor associations';
 PRINT 'Moonshot AI Vendor ID: ' + CAST(@MoonshotVendorID AS NVARCHAR(50));

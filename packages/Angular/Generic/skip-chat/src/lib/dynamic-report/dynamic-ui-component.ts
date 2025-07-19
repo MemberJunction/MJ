@@ -1305,8 +1305,13 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
                     entityName = altMatch[0].Name;
                 }
             }
-            const cKey = new CompositeKey(key as any as KeyValuePair[])
-            this.DrillDownEvent.emit(new DrillDownInfo(entityName, cKey.ToWhereClause()));
+            // check what we were passed, it might be a real CompositeKey or a KeyValuePair[]
+            if (!(key instanceof CompositeKey)) {
+                // convert KeyValuePair[] to CompositeKey
+                key = new CompositeKey(key as KeyValuePair[]);
+            }
+            // Emit the drill down event with the entity name and where clause
+            this.DrillDownEvent.emit(new DrillDownInfo(entityName, key.ToWhereClause()));
         }
     }
     
