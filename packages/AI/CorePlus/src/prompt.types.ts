@@ -446,6 +446,24 @@ export class AIPromptParams {
    */
   cleanValidationSyntax?: boolean;
 
+
+  /**
+   * NOTE: Only applies when prompt.OutputType is 'object'
+   * 
+   * If this parameter is set to true, the runner will attempt to repair JSON parsing errors with a two
+   * step process, after a normal attempt to parse the JSON as-is where an error occurs:
+   * 1. We will use the JSON5 library to attempt to parse the JSON as-is. This is a fast
+   *    and deterministic method to parse JSON that handles some common invalid strict JSON issues such as
+   *    - Trailing commas
+   *    - Unquoted keys
+   *    - Single quotes around strings
+   *    - Unescaped control characters
+   *    - Comments    
+   * 2. If Step 1 fails, we will use a small LLM using a prompt called 'Repair JSON' within the `MJ: System` category
+   *    This prompt will attempt to fix the JSON with a small LLM that knows how to emit proper JSON
+   */
+  attemptJSONRepair?: boolean;
+
   /**
    * Optional callback fired immediately after the PromptRun record is created and saved.
    * Provides the PromptRun ID for immediate tracking/monitoring purposes.

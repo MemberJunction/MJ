@@ -1,6 +1,6 @@
 import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer } from '@memberjunction/ai';
 import { ValidationAttempt, AIPromptRunResult } from '@memberjunction/ai-core-plus';
-import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
+import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, RunView } from '@memberjunction/core';
 import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
 import { AIModelEntityExtended, AIPromptEntity, AIPromptRunEntity, AIPromptModelEntity, AIModelVendorEntity } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
@@ -15,6 +15,7 @@ import {
     ChildPromptParam,
     AIPromptParams
 } from '@memberjunction/ai-core-plus';
+import * as JSON5 from 'json5';
  
 
 
@@ -658,7 +659,7 @@ export class AIPromptRunner {
     for (const result of sortedResults) {
       if (result.task.taskId !== selectedResult.task.taskId) {
         // Parse and validate this result
-        const { result: parsedResultData, validationResult } = await this.parseAndValidateResultEnhanced(result.modelResult!, prompt, params.skipValidation, params.cleanValidationSyntax);
+        const { result: parsedResultData, validationResult } = await this.parseAndValidateResultEnhanced(result.modelResult!, prompt, params.skipValidation, params.cleanValidationSyntax, params);
         const parsedResult = { result: parsedResultData, validationResult };
 
         const resultUsage = result.modelResult?.data?.usage;
@@ -688,7 +689,7 @@ export class AIPromptRunner {
     }
 
     // Parse and validate the selected result
-    const { result: selectedResultData, validationResult: selectedValidationResult } = await this.parseAndValidateResultEnhanced(selectedResult.modelResult!, prompt, params.skipValidation, params.cleanValidationSyntax);
+    const { result: selectedResultData, validationResult: selectedValidationResult } = await this.parseAndValidateResultEnhanced(selectedResult.modelResult!, prompt, params.skipValidation, params.cleanValidationSyntax, params);
     const selectedParsedResult = { result: selectedResultData, validationResult: selectedValidationResult };
     const selectedUsage = selectedResult.modelResult?.data?.usage;
 
@@ -2152,6 +2153,7 @@ export class AIPromptRunner {
           prompt,
           params.skipValidation,
           params.cleanValidationSyntax,
+          params,
         );
 
         // Record this validation attempt
@@ -2412,13 +2414,21 @@ export class AIPromptRunner {
   }
 
   /**
-   * Enhanced parsing and validation with detailed error reporting
+   * Enhanced parsing and validation with detailed error reporting and JSON repair capabilities.
+   * 
+   * @param modelResult - The raw result from the AI model
+   * @param prompt - The AI prompt entity containing configuration
+   * @param skipValidation - Whether to skip validation
+   * @param cleanValidationSyntax - Whether to clean validation syntax from results
+   * @param params - Optional prompt parameters containing additional configuration like attemptJSONRepair
+   * @returns Parsed result with optional validation results and errors
    */
   private async parseAndValidateResultEnhanced(
     modelResult: ChatResult,
     prompt: AIPromptEntity,
     skipValidation: boolean = false,
     cleanValidationSyntax: boolean = false,
+    params?: AIPromptParams,
   ): Promise<{
     result: unknown;
     validationResult?: ValidationResult;
@@ -2443,71 +2453,32 @@ export class AIPromptRunner {
       try {
         switch (prompt.OutputType) {
           case 'string':
-            parsedResult = rawOutput.toString();
+            parsedResult = this.parseStringOutput(rawOutput);
             break;
 
-          case 'number': {
-            const numberResult = parseFloat(rawOutput);
-            if (isNaN(numberResult)) {
-                if (!skipValidation) {
-                const error = new ValidationErrorInfo('output', `Expected number output but got: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
-                validationErrors.push(error);
-                throw new Error(error.Message);
-              }
-            }
-            else {
-              parsedResult = numberResult;
-            }
+          case 'number':
+            parsedResult = this.parseNumberOutput(rawOutput, skipValidation, validationErrors);
             break;
-          }
 
-          case 'boolean': {
-            const lowerOutput = rawOutput.toLowerCase().trim();
-            if (['true', 'yes', '1'].includes(lowerOutput)) {
-              parsedResult = true;
-            } else if (['false', 'no', '0'].includes(lowerOutput)) {
-              parsedResult = false;
-            } else if (!skipValidation){
-              const error = new ValidationErrorInfo('output', `Expected boolean output but got: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
-              validationErrors.push(error);
-              throw new Error(error.Message);
-            } 
+          case 'boolean':
+            parsedResult = this.parseBooleanOutput(rawOutput, skipValidation, validationErrors);
             break;
-          }
 
-          case 'date': {
-            const dateResult = new Date(rawOutput);
-            if (isNaN(dateResult.getTime()) && !skipValidation) {
-              const error = new ValidationErrorInfo('output', `Expected date output but got: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
-              validationErrors.push(error);
-              throw new Error(error.Message);
-            }
-            else {
-              parsedResult = dateResult;  
-            }
+          case 'date':
+            parsedResult = this.parseDateOutput(rawOutput, skipValidation, validationErrors);
             break;
-          }
 
           case 'object':
-            try {
-              parsedResult = JSON.parse(CleanJSON(rawOutput));
-              
-              // ALWAYS clean validation syntax when we have an OutputExample for validation
-              // OR when explicitly requested via cleanValidationSyntax parameter
-              if (parsedResult && (cleanValidationSyntax || (!skipValidation && prompt.OutputExample))) {
-                const validator = new JSONValidator();
-                parsedResult = validator.cleanValidationSyntax<unknown>(parsedResult);
-              }
-            } catch (jsonError) {
-              // if we skip validation, we can allow thisk only emit this if 
-              // we are NOT skipping validation
-              if (!skipValidation) {
-                const error = new ValidationErrorInfo('output', `Expected JSON object but got invalid JSON: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
-                validationErrors.push(error);
-                throw new Error(error.Message);
-              }
-            }
+            parsedResult = await this.parseObjectOutput(
+              rawOutput, 
+              prompt, 
+              skipValidation, 
+              cleanValidationSyntax, 
+              validationErrors,
+              params
+            );
             break;
+            
           default:
             parsedResult = rawOutput;
         }
@@ -2573,6 +2544,208 @@ export class AIPromptRunner {
           // For None, we still return the validation result but mark as successful
           validationResult.Success = true;
           return { result: modelResult.data?.choices?.[0]?.message?.content, validationResult, validationErrors: [] };
+      }
+    }
+  }
+
+  /**
+   * Parses a string output value.
+   * 
+   * @param rawOutput - The raw output from the model
+   * @returns The parsed string value
+   */
+  private parseStringOutput(rawOutput: string): string {
+    return rawOutput.toString();
+  }
+
+  /**
+   * Parses a number output value with validation.
+   * 
+   * @param rawOutput - The raw output from the model
+   * @param skipValidation - Whether to skip validation
+   * @param validationErrors - Array to collect validation errors
+   * @returns The parsed number value
+   * @throws Error if the value cannot be parsed as a number and validation is enabled
+   */
+  private parseNumberOutput(
+    rawOutput: string, 
+    skipValidation: boolean, 
+    validationErrors: ValidationErrorInfo[]
+  ): number {
+    const numberResult = parseFloat(rawOutput);
+    if (isNaN(numberResult)) {
+      if (!skipValidation) {
+        const error = new ValidationErrorInfo('output', `Expected number output but got: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
+        validationErrors.push(error);
+        throw new Error(error.Message);
+      }
+      return numberResult; // Will be NaN if skipValidation is true
+    }
+    return numberResult;
+  }
+
+  /**
+   * Parses a boolean output value with flexible input handling.
+   * 
+   * @param rawOutput - The raw output from the model
+   * @param skipValidation - Whether to skip validation
+   * @param validationErrors - Array to collect validation errors
+   * @returns The parsed boolean value
+   * @throws Error if the value cannot be parsed as a boolean and validation is enabled
+   */
+  private parseBooleanOutput(
+    rawOutput: string, 
+    skipValidation: boolean, 
+    validationErrors: ValidationErrorInfo[]
+  ): boolean {
+    const lowerOutput = rawOutput.toLowerCase().trim();
+    if (['true', 'yes', '1'].includes(lowerOutput)) {
+      return true;
+    } else if (['false', 'no', '0'].includes(lowerOutput)) {
+      return false;
+    } else if (!skipValidation) {
+      const error = new ValidationErrorInfo('output', `Expected boolean output but got: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
+      validationErrors.push(error);
+      throw new Error(error.Message);
+    }
+    return false; // Default to false if skipValidation is true
+  }
+
+  /**
+   * Parses a date output value with validation.
+   * 
+   * @param rawOutput - The raw output from the model
+   * @param skipValidation - Whether to skip validation
+   * @param validationErrors - Array to collect validation errors
+   * @returns The parsed Date value
+   * @throws Error if the value cannot be parsed as a date and validation is enabled
+   */
+  private parseDateOutput(
+    rawOutput: string, 
+    skipValidation: boolean, 
+    validationErrors: ValidationErrorInfo[]
+  ): Date {
+    const dateResult = new Date(rawOutput);
+    if (isNaN(dateResult.getTime()) && !skipValidation) {
+      const error = new ValidationErrorInfo('output', `Expected date output but got: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
+      validationErrors.push(error);
+      throw new Error(error.Message);
+    }
+    return dateResult;
+  }
+
+  /**
+   * Parses an object (JSON) output value with optional repair capabilities.
+   * 
+   * @param rawOutput - The raw output from the model
+   * @param prompt - The AI prompt entity containing configuration
+   * @param skipValidation - Whether to skip validation
+   * @param cleanValidationSyntax - Whether to clean validation syntax
+   * @param validationErrors - Array to collect validation errors
+   * @param params - Optional prompt parameters containing attemptJSONRepair flag
+   * @returns The parsed object value
+   * @throws Error if the value cannot be parsed as JSON and validation is enabled
+   */
+  private async parseObjectOutput(
+    rawOutput: string,
+    prompt: AIPromptEntity,
+    skipValidation: boolean,
+    cleanValidationSyntax: boolean,
+    validationErrors: ValidationErrorInfo[],
+    params?: AIPromptParams
+  ): Promise<unknown> {
+    let parsedResult: unknown;
+    
+    try {
+      // First attempt: Use CleanJSON to handle common JSON issues
+      parsedResult = JSON.parse(CleanJSON(rawOutput));
+    } catch (jsonError) {
+      // If attemptJSONRepair is enabled and we're dealing with object output
+      if (params?.attemptJSONRepair && prompt.OutputType === 'object') {
+        parsedResult = await this.attemptJSONRepair(rawOutput, jsonError, params);
+      } else {
+        // Original error handling
+        if (!skipValidation) {
+          const error = new ValidationErrorInfo('output', `Expected JSON object but got invalid JSON: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
+          validationErrors.push(error);
+          throw new Error(error.Message);
+        }
+        return rawOutput; // Return raw output if skipping validation
+      }
+    }
+    
+    // Clean validation syntax if needed
+    if (parsedResult && (cleanValidationSyntax || (!skipValidation && prompt.OutputExample))) {
+      const validator = new JSONValidator();
+      parsedResult = validator.cleanValidationSyntax<unknown>(parsedResult);
+    }
+    
+    return parsedResult;
+  }
+
+  /**
+   * Attempts to repair malformed JSON using a two-step process.
+   * 
+   * @param rawOutput - The malformed JSON string
+   * @param originalError - The original parsing error
+   * @param params - Prompt parameters containing contextUser
+   * @returns The repaired and parsed JSON object
+   * @throws Error if JSON repair fails
+   */
+  private async attemptJSONRepair(
+    rawOutput: string,
+    originalError: Error,
+    params: AIPromptParams
+  ): Promise<unknown> {
+    // Step 1: Try JSON5 parsing
+    try {
+      this.logStatus('   🔧 Attempting JSON repair with JSON5...', true, params);
+      const json5Result = JSON5.parse(rawOutput);
+      this.logStatus('   ✅ JSON5 successfully parsed the malformed JSON', true, params);
+      return json5Result;
+    } catch (json5Error) {
+      // Step 2: Use AI to repair the JSON
+      this.logStatus('   🤖 JSON5 failed, attempting AI-based JSON repair...', true, params);
+      
+      try {
+        // Find the "Repair JSON" prompt in the "MJ: System" category
+        const rv = new RunView();
+        
+        const repairPrompt = AIEngine.Instance.Prompts.find(p => p.Name.trim().toLowerCase() === 'repair json' && p.Category.trim().toLowerCase() === 'mj: system');
+        if (!repairPrompt) {
+          throw new Error('Repair JSON prompt not found in MJ: System category');
+        }
+        
+        // Run the repair prompt
+        const repairResult = await this.ExecutePrompt({
+          prompt: repairPrompt,
+          data: {
+            ERROR_MESSAGE: originalError.message,
+            MALFORMED_JSON: rawOutput
+          },
+          skipValidation: true // don't want to validate as this would cause recursive infinity scenario if the JSON is invalid. Just one shot, fix or no fix
+        });
+        
+        if (!repairResult.success || !repairResult.result) {
+          throw new Error('AI-based JSON repair failed');
+        }
+        
+        this.logStatus('✅ AI successfully repaired the JSON', true, params);
+        return repairResult.result;
+        
+      } catch (aiRepairError) {
+        // Both repair attempts failed
+        this.logError(aiRepairError, {
+          category: 'JSONRepairFailed',
+          metadata: {
+            originalError: originalError.message,
+            json5Error: json5Error.message,
+            aiError: aiRepairError.message,
+            rawOutput: rawOutput.substring(0, 500)
+          }
+        });
+        
+        throw new Error(`JSON repair failed after both JSON5 and AI attempts: ${originalError.message}`);
       }
     }
   }
