@@ -1197,6 +1197,40 @@ export class PayloadManager {
     ): void {
         const pathStr = keyPath.join('.');
         
+        // Check for replacement first (complete replacement - remove then add)
+        const replaceValue = _.get(changeRequest.replaceElements, pathStr);
+        if (replaceValue !== undefined) {
+            // Check if appropriate operation is allowed (delete if exists, add if not)
+            const operation = key in target ? 'update' : 'add';
+            if (allowedPaths && !this.isOperationAllowedForPath(pathStr, operation, allowedPaths)) {
+                const warning = `Operation denied: Cannot replace '${pathStr}' - operation '${operation}' not allowed`;
+                warnings.push(warning);
+                if (blockedOperations) {
+                    blockedOperations.push({
+                        path: pathStr,
+                        operation: operation,
+                        from: target[key],
+                        to: replaceValue,
+                        reason: `operation '${operation}' not allowed`,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+                return;
+            }
+            
+            // Count the operations
+            if (key in target) {
+                counts.deletions++;
+                counts.additions++;
+            } else {
+                counts.additions++;
+            }
+            
+            // Replace the value
+            target[key] = replaceValue;
+            return; // Skip other operations since this is a complete replacement
+        }
+        
         // Check for deletion
         const removeValue = _.get(changeRequest.removeElements, pathStr);
         if (removeValue === '__DELETE__') {
@@ -1351,10 +1385,12 @@ export class PayloadManager {
         const removeObj = pathStr ? _.get(changeRequest.removeElements, pathStr) : changeRequest.removeElements;
         const updateObj = pathStr ? _.get(changeRequest.updateElements, pathStr) : changeRequest.updateElements;
         const newObj = pathStr ? _.get(changeRequest.newElements, pathStr) : changeRequest.newElements;
+        const replaceObj = pathStr ? _.get(changeRequest.replaceElements, pathStr) : changeRequest.replaceElements;
         
         addKeysFromObject(removeObj);
         addKeysFromObject(updateObj);
         addKeysFromObject(newObj);
+        addKeysFromObject(replaceObj);
         
         return keys;
     }
@@ -1555,6 +1591,7 @@ export class PayloadManager {
             newElements: transformObject(changeRequest.newElements, pathPrefix) as Partial<P>,
             updateElements: transformObject(changeRequest.updateElements, pathPrefix) as Partial<P>,
             removeElements: transformObject(changeRequest.removeElements, pathPrefix) as Partial<P>,
+            replaceElements: transformObject(changeRequest.replaceElements, pathPrefix) as Partial<P>,
             reasoning: changeRequest.reasoning
         } as AgentPayloadChangeRequest<P>;
     }
