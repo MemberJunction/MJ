@@ -130,7 +130,6 @@ export class ReactTestHarness {
       componentCode,
       description: `Component loaded from ${filePath}`,
       exampleUsage: `<${componentName} />`,
-      statePath: componentName.toLowerCase(),
       components: []
     };
     

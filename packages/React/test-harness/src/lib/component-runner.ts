@@ -413,7 +413,9 @@ ${cssLinks}
     const BuildUtilities = () => {
       const utilities = {
         md: {
-          entities: [],
+          entities: () => {
+            return window.__mjGetEntities();
+          },
           GetEntityObject: async (entityName) => {
             return await window.__mjGetEntityObject(entityName);
           }
@@ -688,6 +690,14 @@ ${cssLinks}
    * Expose MemberJunction utilities to the browser context
    */
   private async exposeMJUtilities(page: any): Promise<void> {
+    // Check if utilities are already exposed
+    const alreadyExposed = await page.evaluate(() => {
+      return typeof (window as any).__mjGetEntityObject === 'function';
+    });
+    
+    if (alreadyExposed) {
+      return; // Already exposed, skip
+    }
     // Create instances in Node.js context
     const metadata = new Metadata();
     const runView = new RunView();
@@ -697,10 +707,17 @@ ${cssLinks}
     await page.exposeFunction('__mjGetEntityObject', async (entityName: string) => {
       try {
         const entity = await metadata.GetEntityObject(entityName);
-        // Return serializable data only
-        return entity ? entity.GetAll() : null;
+        return entity;
       } catch (error) {
         console.error('Error in __mjGetEntityObject:', error);
+        return null;
+      }
+    });
+    await page.exposeFunction('__mjGetEntities',() => {
+      try {
+        return metadata.Entities;
+      } catch (error) {
+        console.error('Error in __mjGetEntities:', error);
         return null;
       }
     });

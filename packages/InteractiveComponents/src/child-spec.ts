@@ -65,15 +65,9 @@ export interface ComponentChildSpec {
      * This should be in markdown format and describe the implementation approach.
      * Includes:
      * - How the component is structured
-     * - State within the component
      * - Properites/events 
      */
     technicalDesign?: string;
-    
-    /**
-     * The path in the state tree where this component's state is stored
-     */
-    statePath: string;
     
     /**
      * An array of sub-components
