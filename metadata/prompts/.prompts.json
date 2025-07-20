@@ -1,6 +1,43 @@
 [
   {
     "fields": {
+      "Name": "Repair JSON",
+      "Description": "Repairs malformed JSON strings by correcting syntax errors such as missing commas, brackets, or quotes. Outputs the corrected JSON string.",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/system/json-repair.template.md",
+      "Status": "Active",
+      "ResponseFormat": "Any",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Lowest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 0,
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 4.1-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 2
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 1
+          }
+        } 
+      ]
+    }
+  },
+  {
+    "fields": {
       "Name": "Loop Agent Type: System Prompt",
       "Description": "Basic control structure for the Loop Agent Type",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",

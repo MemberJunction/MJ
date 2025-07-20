@@ -105,3 +105,80 @@ VALUES
 PRINT 'Successfully added Moonshot AI vendor and Kimi K2 model with vendor associations';
 PRINT 'Moonshot AI Vendor ID: ' + CAST(@MoonshotVendorID AS NVARCHAR(50));
 PRINT 'Kimi K2 Model ID: ' + CAST(@KimiModelID AS NVARCHAR(50));
+
+-- 6. Add GPT 4.1 nano model
+DECLARE @GPT41NanoModelID UNIQUEIDENTIFIER = '1BEC0566-9D7B-4A83-9701-DF5602A607EF';
+INSERT INTO ${flyway:defaultSchema}.AIModel 
+    (ID, Name, Description, AIModelTypeID, IsActive, PowerRank, SpeedRank, CostRank)
+VALUES 
+    (
+        @GPT41NanoModelID,
+        'GPT 4.1 Nano',
+        'GPT 4.1 Nano is a highly efficient and cost-effective small language model optimized for lightweight tasks while maintaining quality performance.',
+        'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E', -- LLM type
+        1, -- IsActive
+        4, -- PowerRank (lower performance tier)
+        10, -- SpeedRank (very fast)
+        10  -- CostRank (very cost effective)
+    );
+
+-- 7. Create AI Model Vendor associations for GPT 4.1 nano
+-- First for OpenAI as the model developer (no API name needed)
+INSERT INTO ${flyway:defaultSchema}.AIModelVendor 
+    (ID, ModelID, VendorID, TypeID, Priority, Status, SupportedResponseFormats, SupportsEffortLevel, SupportsStreaming)
+VALUES 
+    (
+        'A961C158-98FD-4963-A6B0-F4715C312738',
+        @GPT41NanoModelID,
+        'D8A5CCEC-6A37-EF11-86D4-000D3A4E707E', -- OpenAI vendor ID
+        '10DB468E-F2CE-475D-9F39-2DF2DE75D257', -- Model Developer type
+        0, -- Priority
+        'Active',
+        'Any',
+        0, -- SupportsEffortLevel
+        0  -- SupportsStreaming
+    );
+
+-- Second for OpenAI as the inference provider
+INSERT INTO ${flyway:defaultSchema}.AIModelVendor 
+    (ID, ModelID, VendorID, TypeID, APIName, Priority, Status, SupportedResponseFormats, SupportsEffortLevel, SupportsStreaming, DriverClass, DriverImportPath, MaxInputTokens, MaxOutputTokens)
+VALUES 
+    (
+        '9A2CBBF7-C708-406A-90A3-1948A05639F1',
+        @GPT41NanoModelID,
+        'D8A5CCEC-6A37-EF11-86D4-000D3A4E707E', -- OpenAI vendor ID
+        '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3', -- Inference Provider type
+        'gpt-4.1-nano', -- API name
+        0, -- Priority
+        'Active',
+        'Any, JSON',
+        1, -- SupportsEffortLevel
+        1, -- SupportsStreaming
+        'OpenAILLM',
+        NULL,
+        1047576, -- MaxInputTokens (1047k context window)
+        32768   -- MaxOutputTokens (32k output limit)
+    );
+
+-- 8. Add AIModelCost for GPT 4.1 nano
+INSERT INTO ${flyway:defaultSchema}.AIModelCost (ID, ModelID, VendorID, StartedAt, EndedAt, Status, Currency, PriceTypeID, InputPricePerUnit, OutputPricePerUnit, UnitTypeID, ProcessingType, Comments)
+VALUES
+    (
+        'F3A9A104-89AF-4703-90B9-191BBDA801F9',
+        @GPT41NanoModelID,
+        'D8A5CCEC-6A37-EF11-86D4-000D3A4E707E', -- OpenAI vendor ID
+        GETDATE(),
+        NULL,
+        'Active',
+        'USD',
+        'ece2bcb7-c854-4bf7-a517-d72793a40652', -- Same PriceTypeID as GPT-4o
+        0.10, -- $0.10 per million input tokens
+        0.40, -- $0.40 per million output tokens
+        '54208f7d-331c-40ab-84e8-163338ee9ea1', -- Same UnitTypeID as GPT-4o
+        'Realtime',
+        'GPT-4.1 Nano pricing as of July 2025'
+    );
+
+-- Log GPT 4.1 nano addition
+PRINT 'Successfully added GPT-4.1 Nano model with vendor association and cost';
+PRINT 'GPT-4.1 Nano Model ID: ' + CAST(@GPT41NanoModelID AS NVARCHAR(50));
