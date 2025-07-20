@@ -11,6 +11,7 @@ import {
 } from '@memberjunction/react-runtime';
 import { Metadata, RunView, RunQuery } from '@memberjunction/core';
 import type { RunViewParams, RunQueryParams } from '@memberjunction/core';
+import { ComponentLinter, ComponentType, FixSuggestion } from './component-linter';
 
 export interface ComponentExecutionOptions {
   componentSpec: ComponentSpec;
@@ -38,6 +39,8 @@ export interface ComponentExecutionResult {
   screenshot?: Buffer;
   executionTime: number;
   renderCount?: number;
+  lintViolations?: string[];
+  fixSuggestions?: FixSuggestion[];
 }
 
 export class ComponentRunner {
@@ -66,6 +69,30 @@ export class ComponentRunner {
     
     // Set up runtime context (will be populated in browser)
     this.runtimeContext = {} as RuntimeContext;
+  }
+
+  /**
+   * Lint component code before execution
+   */
+  async lintComponent(
+    componentCode: string, 
+    componentName: string,
+    componentType: ComponentType
+  ): Promise<{ violations: string[]; suggestions: FixSuggestion[]; hasErrors: boolean }> {
+    const lintResult = await ComponentLinter.lintComponent(
+      componentCode,
+      componentType,
+      componentName
+    );
+
+    const violations = lintResult.violations.map(v => v.message);
+    const hasErrors = lintResult.violations.some(v => v.severity === 'error');
+
+    return {
+      violations,
+      suggestions: lintResult.suggestions,
+      hasErrors
+    };
   }
 
   async executeComponent(options: ComponentExecutionOptions): Promise<ComponentExecutionResult> {

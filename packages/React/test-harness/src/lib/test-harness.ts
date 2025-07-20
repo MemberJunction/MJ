@@ -38,6 +38,30 @@ export class ReactTestHarness {
     props?: Record<string, any>,
     options?: Partial<ComponentExecutionOptions>
   ): Promise<ComponentExecutionResult> {
+    // First, lint the root component code
+    if (rootSpec.componentCode) {
+      const lintResult = await this.componentRunner.lintComponent(
+        rootSpec.componentCode,
+        rootSpec.componentName,
+        'root'
+      );
+
+      if (lintResult.hasErrors) {
+        // Return early with lint errors
+        return {
+          success: false,
+          html: '',
+          errors: lintResult.violations,
+          warnings: [],
+          criticalWarnings: [],
+          console: [],
+          executionTime: 0,
+          lintViolations: lintResult.violations,
+          fixSuggestions: lintResult.suggestions
+        };
+      }
+    }
+
     // Convert ComponentRootSpec to ComponentSpec format
     const spec: ComponentSpec = {
       componentName: rootSpec.componentName,
@@ -80,6 +104,30 @@ export class ReactTestHarness {
     props?: Record<string, any>,
     options?: Partial<ComponentExecutionOptions>
   ): Promise<ComponentExecutionResult> {
+    // First, lint the component code
+    if (childSpec.componentCode) {
+      const lintResult = await this.componentRunner.lintComponent(
+        childSpec.componentCode,
+        childSpec.componentName,
+        'child'
+      );
+
+      if (lintResult.hasErrors) {
+        // Return early with lint errors
+        return {
+          success: false,
+          html: '',
+          errors: lintResult.violations,
+          warnings: [],
+          criticalWarnings: [],
+          console: [],
+          executionTime: 0,
+          lintViolations: lintResult.violations,
+          fixSuggestions: lintResult.suggestions
+        };
+      }
+    }
+
     const spec: ComponentSpec = {
       componentName: childSpec.componentName,
       componentCode: childSpec.componentCode || '',
