@@ -1,15 +1,12 @@
 /**
  * Defines a structured way to request changes to the payload. If you are making a COMPLEX change to an object
  * you can either use `updateElements` as described below to make **surgical** changes to the payload, OR, a simple
- * approach is to use `removeElements` to remove the entire object and then use `newElements` to add the new object.
+ * approach is to use `replaceElements` to remove the entire object and replace it with a new object.
  * 
- * If you are providing the ENTIRE object again, use the removeElements + newElements approach like this:
+ * If you are providing the ENTIRE object again, use the **replaceElements** instead of **updateElements** approach like this:
  * {
- *   removeElements: {
- *     user: "__DELETE__" // This will complete remove the user object from the payload
- *   },
- *   newElements: {
- *     user: { // and here we ADD back the new user object
+ *   replaceElements: {
+ *     user: { // user object will REPLACE the entire existing object
  *       id: "new-id",
  *       name: "new-name"
  *       moreComplexData: {
@@ -121,13 +118,21 @@ export type AgentPayloadChangeRequest<P = any> = {
      * ensuring correct index management. Multiple deletions in the same array are handled properly.
      * 
      * Alternative for complete replacement: If you need to completely replace a complex structure,
-     * you can use removeElements + newElements pattern:
+     * you can use replaceElements pattern INSTEAD of updateElements:
      * {
-     *   removeElements: { complexObject: "__DELETE__" },
-     *   newElements: { complexObject: { keyA: "valA", keyB: "valB" } }
+     *   replaceElements: { complexObject: { keyA: "valA", keyB: "valB" } } // This replaces the entire complexObject
      * }
      */
     updateElements?: Partial<P>;
+
+    /**
+     * This partial of P includes all elements that should be replaced in the payload.
+     * The structure is identical to the payload type P with just the portions filled out
+     * that need to be replaced. This is useful when you want to replace an entire object
+     * or array with a new version. See @see updateElements for surgical updates instead of doing
+     * complete replacements.
+     */
+    replaceElements?: Partial<P>;
 
     /**
      * This partial of P includes all elements that should be removed from the payload. When an
