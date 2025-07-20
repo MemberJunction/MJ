@@ -9,6 +9,8 @@ import {
   getCSSUrls,
   ComponentErrorAnalyzer
 } from '@memberjunction/react-runtime';
+import { Metadata, RunView, RunQuery } from '@memberjunction/core';
+import type { RunViewParams, RunQueryParams } from '@memberjunction/core';
 
 export interface ComponentExecutionOptions {
   componentSpec: ComponentSpec;
@@ -81,6 +83,9 @@ export class ComponentRunner {
       this.setupConsoleLogging(page, consoleLogs, warnings, criticalWarnings);
       this.setupErrorHandling(page, errors);
       await this.injectRenderTracking(page);
+      
+      // Expose MJ utilities to the page
+      await this.exposeMJUtilities(page);
 
       // Create and load the component
       const htmlContent = this.createHTMLTemplate(options);
@@ -404,28 +409,26 @@ ${cssLinks}
     
     const hierarchyRegistrar = new SimpleHierarchyRegistrar(compiler, registry, runtimeContext);
     
-    // BuildUtilities function - copied from skip-chat implementation
+    // BuildUtilities function - uses real MJ utilities exposed via Playwright
     const BuildUtilities = () => {
-      // Create mock utilities for testing
-      // In production, this would use the actual Metadata, RunView, and RunQuery
       const utilities = {
         md: {
-          entities: []
+          entities: [],
+          GetEntityObject: async (entityName) => {
+            return await window.__mjGetEntityObject(entityName);
+          }
         },
         rv: {
           RunView: async (params) => {
-            console.log('Mock RunView called with:', params);
-            return { Results: [], Success: true };
+            return await window.__mjRunView(params);
           },
           RunViews: async (params) => {
-            console.log('Mock RunViews called with:', params);
-            return params.map(() => ({ Results: [], Success: true }));
+            return await window.__mjRunViews(params);
           }
         },
         rq: {
           RunQuery: async (params) => {
-            console.log('Mock RunQuery called with:', params);
-            return { Results: [], Success: true };
+            return await window.__mjRunQuery(params);
           }
         }
       };
@@ -679,6 +682,58 @@ ${cssLinks}
                    renderCount <= ComponentRunner.MAX_RENDER_COUNT;
     
     return { success, additionalErrors };
+  }
+
+  /**
+   * Expose MemberJunction utilities to the browser context
+   */
+  private async exposeMJUtilities(page: any): Promise<void> {
+    // Create instances in Node.js context
+    const metadata = new Metadata();
+    const runView = new RunView();
+    const runQuery = new RunQuery();
+    
+    // Expose individual functions since we can't pass complex objects
+    await page.exposeFunction('__mjGetEntityObject', async (entityName: string) => {
+      try {
+        const entity = await metadata.GetEntityObject(entityName);
+        // Return serializable data only
+        return entity ? entity.GetAll() : null;
+      } catch (error) {
+        console.error('Error in __mjGetEntityObject:', error);
+        return null;
+      }
+    });
+    
+    await page.exposeFunction('__mjRunView', async (params: RunViewParams) => {
+      try {
+        return await runView.RunView(params);
+      } catch (error) {
+        console.error('Error in __mjRunView:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return { Success: false, ErrorMessage: errorMessage, Results: [] };
+      }
+    });
+    
+    await page.exposeFunction('__mjRunViews', async (params: RunViewParams[]) => {
+      try {
+        return await runView.RunViews(params);
+      } catch (error) {
+        console.error('Error in __mjRunViews:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return params.map(() => ({ Success: false, ErrorMessage: errorMessage, Results: [] }));
+      }
+    });
+    
+    await page.exposeFunction('__mjRunQuery', async (params: RunQueryParams) => {
+      try {
+        return await runQuery.RunQuery(params);
+      } catch (error) {
+        console.error('Error in __mjRunQuery:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return { Success: false, ErrorMessage: errorMessage, Results: [] };
+      }
+    });
   }
 
   /**
