@@ -1,5 +1,27 @@
 /**
- * Defines a structured way to request changes to the payload
+ * Defines a structured way to request changes to the payload. If you are making a COMPLEX change to an object
+ * you can either use `updateElements` as described below to make **surgical** changes to the payload, OR, a simple
+ * approach is to use `removeElements` to remove the entire object and then use `newElements` to add the new object.
+ * 
+ * If you are providing the ENTIRE object again, use the removeElements + newElements approach like this:
+ * {
+ *   removeElements: {
+ *     user: "__DELETE__" // This will complete remove the user object from the payload
+ *   },
+ *   newElements: {
+ *     user: { // and here we ADD back the new user object
+ *       id: "new-id",
+ *       name: "new-name"
+ *       moreComplexData: {
+ *         keyA: "valA",
+ *         keyB: "valB"
+ *       }
+ *     }
+ *   }
+ * }
+ * 
+ * Alternatively, to make surgical changes review the documentation below for @see updateElements where you can make
+ * small incremental additions/updates/removals to the payload which is more token efficient and cleaner.
  */
 export type AgentPayloadChangeRequest<P = any> = {
     /**
