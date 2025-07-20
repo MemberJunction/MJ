@@ -1814,15 +1814,15 @@ export class BaseAgent {
             });
             
             // Check if execution was successful
-            if (!result.success) {
-                throw new Error(`Sub-agent '${subAgentRequest.name}' failed: ${result.agentRun?.ErrorMessage || 'Unknown error'}`);
+            if (result.success) {
+                this.logStatus(`✅ Sub-agent '${subAgentRequest.name}' completed successfully`, true, params);
             }
-            
-            this.logStatus(`✅ Sub-agent '${subAgentRequest.name}' completed successfully`, true, params);
+            else {
+                this.logStatus(`Sub-agent '${subAgentRequest.name}' failed: ${result.agentRun?.ErrorMessage || 'Unknown error'}`);
+            }
             
             // Return the full result for tracking
             return result;
-            
         } catch (error) {
             this.logError(error, {
                 category: 'SubAgentExecution',
