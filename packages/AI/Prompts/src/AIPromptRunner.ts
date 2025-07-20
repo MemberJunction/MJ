@@ -659,7 +659,7 @@ export class AIPromptRunner {
     for (const result of sortedResults) {
       if (result.task.taskId !== selectedResult.task.taskId) {
         // Parse and validate this result
-        const { result: parsedResultData, validationResult } = await this.parseAndValidateResultEnhanced(result.modelResult!, prompt, params.skipValidation, params.cleanValidationSyntax, params);
+        const { result: parsedResultData, validationResult } = await this.parseAndValidateResultEnhanced(result.modelResult!, prompt, params.skipValidation, params.cleanValidationSyntax, consolidatedPromptRun, params);
         const parsedResult = { result: parsedResultData, validationResult };
 
         const resultUsage = result.modelResult?.data?.usage;
@@ -689,7 +689,7 @@ export class AIPromptRunner {
     }
 
     // Parse and validate the selected result
-    const { result: selectedResultData, validationResult: selectedValidationResult } = await this.parseAndValidateResultEnhanced(selectedResult.modelResult!, prompt, params.skipValidation, params.cleanValidationSyntax, params);
+    const { result: selectedResultData, validationResult: selectedValidationResult } = await this.parseAndValidateResultEnhanced(selectedResult.modelResult!, prompt, params.skipValidation, params.cleanValidationSyntax, consolidatedPromptRun, params);
     const selectedParsedResult = { result: selectedResultData, validationResult: selectedValidationResult };
     const selectedUsage = selectedResult.modelResult?.data?.usage;
 
@@ -2153,6 +2153,7 @@ export class AIPromptRunner {
           prompt,
           params.skipValidation,
           params.cleanValidationSyntax,
+          promptRun,
           params,
         );
 
@@ -2428,6 +2429,7 @@ export class AIPromptRunner {
     prompt: AIPromptEntity,
     skipValidation: boolean = false,
     cleanValidationSyntax: boolean = false,
+    currentPromptRun: AIPromptRunEntity,
     params?: AIPromptParams,
   ): Promise<{
     result: unknown;
@@ -2475,6 +2477,7 @@ export class AIPromptRunner {
               skipValidation, 
               cleanValidationSyntax, 
               validationErrors,
+              currentPromptRun,
               params
             );
             break;
@@ -2652,6 +2655,7 @@ export class AIPromptRunner {
     skipValidation: boolean,
     cleanValidationSyntax: boolean,
     validationErrors: ValidationErrorInfo[],
+    currentPromptRun: AIPromptRunEntity,
     params?: AIPromptParams
   ): Promise<unknown> {
     let parsedResult: unknown;
@@ -2662,7 +2666,7 @@ export class AIPromptRunner {
     } catch (jsonError) {
       // If attemptJSONRepair is enabled and we're dealing with object output
       if (params?.attemptJSONRepair && prompt.OutputType === 'object') {
-        parsedResult = await this.attemptJSONRepair(rawOutput, jsonError, params);
+        parsedResult = await this.attemptJSONRepair(rawOutput, jsonError, params, currentPromptRun);
       } else {
         // Original error handling
         if (!skipValidation) {
@@ -2695,12 +2699,27 @@ export class AIPromptRunner {
   private async attemptJSONRepair(
     rawOutput: string,
     originalError: Error,
-    params: AIPromptParams
+    params: AIPromptParams,
+    currentPromptRun: AIPromptRunEntity
   ): Promise<unknown> {
     // Step 1: Try JSON5 parsing
     try {
       this.logStatus('   🔧 Attempting JSON repair with JSON5...', true, params);
-      const json5Result = JSON5.parse(rawOutput);
+      // first try to clean JSON in case we have it in a markdown block
+      let jsonToParse = rawOutput
+      try {
+        jsonToParse = CleanJSON(rawOutput);
+      }
+      catch (cleanError) {
+        this.logError(cleanError, {
+          category: 'JSONCleaningFailed',
+          metadata: {
+            originalError: originalError.message,
+            rawOutput: rawOutput.substring(0, 500)
+          }
+        });
+      }
+      const json5Result = JSON5.parse(jsonToParse);
       this.logStatus('   ✅ JSON5 successfully parsed the malformed JSON', true, params);
       return json5Result;
     } catch (json5Error) {
@@ -2716,6 +2735,8 @@ export class AIPromptRunner {
         
         // Run the repair prompt
         const repairResult = await this.ExecutePrompt({
+          parentPromptRunId: currentPromptRun.ID,
+          agentRunId: currentPromptRun.AgentRunID,
           contextUser: params.contextUser,
           prompt: repairPrompt,
           data: {
@@ -2726,12 +2747,13 @@ export class AIPromptRunner {
         });
         
         if (!repairResult.success || !repairResult.result) {
-          throw new Error('AI-based JSON repair failed');
+          throw new Error('AI-based JSON repair failed' + (repairResult.errorMessage ? `: ${repairResult.errorMessage}` : ''));
         }
+        // if we get here we have the text result in the reapairResult.result so let's try to parse it
+        const repairedJSON = JSON.parse(repairResult.result as string);
         
-        this.logStatus('✅ AI successfully repaired the JSON', true, params);
-        return repairResult.result;
-        
+        this.logStatus('   ✅ AI successfully repaired the JSON', true, params);
+        return repairedJSON;
       } catch (aiRepairError) {
         // Both repair attempts failed
         this.logError(aiRepairError, {
