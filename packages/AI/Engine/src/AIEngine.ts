@@ -6,7 +6,7 @@ import { ChatResult } from "@memberjunction/ai";
 import { BaseEntity, LogError, Metadata, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
 import { AIActionEntity, AIModelEntityExtended } from "@memberjunction/core-entities";
-import { AIEngineBase } from "@memberjunction/ai-engine-base";
+import { AIEngineBase, LoadBaseAIEngine } from "@memberjunction/ai-engine-base";
 
 
 /**
@@ -416,4 +416,9 @@ export class AIEngine extends AIEngineBase {
             throw new Error(`Error loading driver '${driverModuleName}' / '${driverClassName}' : ${e.message}`);
         }
     }
+}
+
+export function LoadAIEngine() {
+    // This function exists to prevent tree shaking from removing the AIEngine class
+    LoadBaseAIEngine();
 }
