@@ -2005,9 +2005,10 @@ export class AIPromptRunner {
 
       // Apply response format from prompt settings
       if (prompt.ResponseFormat && prompt.ResponseFormat !== 'Any') {
-        chatParams.responseFormat = prompt.ResponseFormat as 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific';
+        chatParams.responseFormat = prompt.ResponseFormat //as 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific';
       } else {
-        chatParams.responseFormat = 'JSON'; // Default to JSON for backward compatibility
+        // if chatParams.responseFormat is not set or set to Any, stay silent on response format
+        chatParams.responseFormat = undefined;
       }
 
       // Build message array with rendered prompt and conversation messages
