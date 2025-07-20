@@ -847,14 +847,19 @@ export class BaseAgent {
     }
 
     /**
-     * Executes the configured prompt.
+     * Executes the configured prompt. Always uses the attemptJSONRepair option to try to fix LLM
+     * JSON syntax issues if they arise.
      * 
      * @param {AIPromptParams} promptParams - The prompt parameters
      * @returns {Promise<AIPromptRunResult>} The prompt execution result
      * @protected
      */
     protected async executePrompt(promptParams: AIPromptParams): Promise<AIPromptRunResult> {
-        return await this._promptRunner.ExecutePrompt(promptParams);
+        const newParams = {
+            ...promptParams,
+            attemptJSONRepair: true
+        }
+        return await this._promptRunner.ExecutePrompt(newParams);
     }
 
     /**

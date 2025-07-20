@@ -20,9 +20,16 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT 4.1-nano",
+            "ModelID": "@lookup:AI Models.Name=GPT 4.1 Nano",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "DDED4899-65DC-4947-910A-16304D38FCAE"
+          },
+          "sync": {
+            "lastModified": "2025-07-20T17:15:22.663Z",
+            "checksum": "482d63e749cefdcaf94d6b058d36db4a9a6a9f15297cc673f825898830d03b17"
           }
         },
         {
@@ -31,9 +38,23 @@
             "ModelID": "@lookup:AI Models.Name=Qwen 3 32B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "443CB8FA-8846-47AC-86AB-4937F2B5CB86"
+          },
+          "sync": {
+            "lastModified": "2025-07-20T17:15:22.679Z",
+            "checksum": "11b69338b8e7ad6ad5dab8bdb2505ba6c310729dcf56faf5481cb26cad3fd18e"
           }
-        } 
+        }
       ]
+    },
+    "primaryKey": {
+      "ID": "58658DAE-C1CE-4621-9540-0735FE98414E"
+    },
+    "sync": {
+      "lastModified": "2025-07-20T17:15:22.640Z",
+      "checksum": "67f92d1c19f2d20be8b0758fe24f5a5d797fbf87336aa145d0ef1ad099951cc1"
     }
   },
   {
@@ -110,7 +131,7 @@
       "ID": "FF7D441F-36E1-458A-B548-0FC2208923BE"
     },
     "sync": {
-      "lastModified": "2025-07-20T01:35:33.353Z",
+      "lastModified": "2025-07-20T17:15:32.478Z",
       "checksum": "ba461e1fbfa773734c6214859981bfab13706342fb32c9cbb8dc3bc18d3338c8"
     }
   },
