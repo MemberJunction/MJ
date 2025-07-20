@@ -663,9 +663,10 @@ export class BaseAgent {
 
             return {
                 success: false,
-                agentRun: this._agentRun!
+                agentRun: this._agentRun!,
+                payload: params.payload // must pass back the original payload for consistency
             };
-        } else if (mode === 'Warn') {
+        } else { // if (mode === 'Warn') {
             // Log warning but continue execution
             this.logStatus(
                 `⚠️ WARNING: ${validationFeedback}`,
@@ -674,12 +675,6 @@ export class BaseAgent {
             );
             return null;
         }
-
-        // Default to fail for unknown modes
-        return {
-            success: false,
-            agentRun: this._agentRun!
-        };
     }
 
     /**
@@ -2704,95 +2699,107 @@ export class BaseAgent {
                 scopedPayload as SR
             );
             
-            // Handle scope transformation for the result
-            let resultPayloadForMerge = subAgentResult.payload;
-            if (subAgentEntity.PayloadScope) {
-                // The sub-agent returned a scoped payload, we need to wrap it back
-                resultPayloadForMerge = this._payloadManager.reversePayloadScope(
-                    subAgentResult.payload,
-                    subAgentEntity.PayloadScope
-                );
-            }
-            
-            // Merge upstream changes back into parent payload
-            const mergeResult = this._payloadManager.mergeUpstreamPayload(
-                subAgentRequest.name,
-                previousDecision.newPayload,
-                resultPayloadForMerge,
-                upstreamPaths,
-                params.verbose === true || IsVerboseLoggingEnabled()
-            );
-            
-            const mergedPayload = mergeResult.result;
-            
-            // Track the merge operation to detect what changed
-            // We create a synthetic change request that represents the merge
-            const mergeChangeRequest: AgentPayloadChangeRequest<any> = {
-                newElements: {},
-                updateElements: {},
-                removeElements: {}
-            };
-            
-            // Identify what changed in the merge by comparing original and merged payloads
-            const originalKeys = Object.keys(previousDecision.newPayload || {});
-            const mergedKeys = Object.keys(mergedPayload || {});
-            
-            // Find updates and additions
-            for (const key of mergedKeys) {
-                if (!(key in (previousDecision.newPayload || {}))) {
-                    mergeChangeRequest.newElements![key] = mergedPayload[key];
-                } else if (!_.isEqual(previousDecision.newPayload[key], mergedPayload[key])) {
-                    mergeChangeRequest.updateElements![key] = mergedPayload[key];
-                }
-            }
-            
-            // Find removals
-            for (const key of originalKeys) {
-                if (!(key in (mergedPayload || {}))) {
-                    mergeChangeRequest.removeElements![key] = '_DELETE_';
-                }
-            }
-            
+            let mergedPayload = previousDecision.newPayload; // Start with the original payload
             let currentStepPayloadChangeResult: PayloadChangeResultSummary | undefined = undefined;
-
-            // Analyze the merge if there were any changes
-            if (Object.keys(mergeChangeRequest.newElements!).length > 0 || 
-                Object.keys(mergeChangeRequest.updateElements!).length > 0 || 
-                Object.keys(mergeChangeRequest.removeElements!).length > 0) {
+            if (subAgentResult.success) {
+                // Handle scope transformation for the result
+                let resultPayloadForMerge = subAgentResult.payload;
+                if (subAgentEntity.PayloadScope) {
+                    // The sub-agent returned a scoped payload, we need to wrap it back
+                    resultPayloadForMerge = this._payloadManager.reversePayloadScope(
+                        subAgentResult.payload,
+                        subAgentEntity.PayloadScope
+                    );
+                }
                 
-                const mergeAnalysis = this._payloadManager.applyAgentChangeRequest<SR>(
-                    previousDecision.previousPayload,
-                    mergeChangeRequest as AgentPayloadChangeRequest<SR>,
-                    {
-                        validateChanges: false,
-                        logChanges: true,
-                        analyzeChanges: true,
-                        generateDiff: true,
-                        agentName: `${subAgentRequest.name} (upstream merge)`,
-                        verbose: params.verbose === true || IsVerboseLoggingEnabled()
-                    }
+                // Merge upstream changes back into parent payload
+                const mergeResult = this._payloadManager.mergeUpstreamPayload(
+                    subAgentRequest.name,
+                    previousDecision.newPayload,
+                    resultPayloadForMerge,
+                    upstreamPaths,
+                    params.verbose === true || IsVerboseLoggingEnabled()
                 );
                 
-                // Store merge analysis with upstream violations
-                currentStepPayloadChangeResult = this.buildPayloadChangeResultSummary(mergeAnalysis);
+                // update the merged payload with the result
+                mergedPayload = mergeResult.result;                
                 
-                // Add upstream merge violations if any occurred
-                if (mergeResult.blockedOperations && mergeResult.blockedOperations.length > 0) {
-                    if (!currentStepPayloadChangeResult.payloadValidation) {
-                        currentStepPayloadChangeResult.payloadValidation = {};
+                // Track the merge operation to detect what changed
+                // We create a synthetic change request that represents the merge
+                const mergeChangeRequest: AgentPayloadChangeRequest<any> = {
+                    newElements: {},
+                    updateElements: {},
+                    removeElements: {}
+                };
+                
+                // Identify what changed in the merge by comparing original and merged payloads
+                const originalKeys = Object.keys(previousDecision.newPayload || {});
+                const mergedKeys = Object.keys(mergedPayload || {});
+                
+                // Find updates and additions
+                for (const key of mergedKeys) {
+                    if (!(key in (previousDecision.newPayload || {}))) {
+                        mergeChangeRequest.newElements![key] = mergedPayload[key];
+                    } else if (!_.isEqual(previousDecision.newPayload[key], mergedPayload[key])) {
+                        mergeChangeRequest.updateElements![key] = mergedPayload[key];
                     }
-                    currentStepPayloadChangeResult.payloadValidation.upstreamMergeViolations = {
-                        subAgentName: subAgentRequest.name,
-                        attemptedOperations: mergeResult.blockedOperations,
-                        authorizedPaths: upstreamPaths,
-                        timestamp: new Date().toISOString()
-                    };
                 }
                 
-                if (mergeAnalysis.warnings.length > 0 && (params.verbose === true || IsVerboseLoggingEnabled())) {
-                    LogStatus(`Sub-agent merge warnings: ${mergeAnalysis.warnings.join('; ')}`);
+                // Find removals
+                for (const key of originalKeys) {
+                    if (!(key in (mergedPayload || {}))) {
+                        mergeChangeRequest.removeElements![key] = '_DELETE_';
+                    }
+                }
+                
+                // Analyze the merge if there were any changes
+                if (Object.keys(mergeChangeRequest.newElements!).length > 0 || 
+                    Object.keys(mergeChangeRequest.updateElements!).length > 0 || 
+                    Object.keys(mergeChangeRequest.removeElements!).length > 0) {
+                    
+                    const mergeAnalysis = this._payloadManager.applyAgentChangeRequest<SR>(
+                        previousDecision.previousPayload,
+                        mergeChangeRequest as AgentPayloadChangeRequest<SR>,
+                        {
+                            validateChanges: false,
+                            logChanges: true,
+                            analyzeChanges: true,
+                            generateDiff: true,
+                            agentName: `${subAgentRequest.name} (upstream merge)`,
+                            verbose: params.verbose === true || IsVerboseLoggingEnabled()
+                        }
+                    );
+                    
+                    // Store merge analysis with upstream violations
+                    currentStepPayloadChangeResult = this.buildPayloadChangeResultSummary(mergeAnalysis);
+                    
+                    // Add upstream merge violations if any occurred
+                    if (mergeResult.blockedOperations && mergeResult.blockedOperations.length > 0) {
+                        if (!currentStepPayloadChangeResult.payloadValidation) {
+                            currentStepPayloadChangeResult.payloadValidation = {};
+                        }
+                        currentStepPayloadChangeResult.payloadValidation.upstreamMergeViolations = {
+                            subAgentName: subAgentRequest.name,
+                            attemptedOperations: mergeResult.blockedOperations,
+                            authorizedPaths: upstreamPaths,
+                            timestamp: new Date().toISOString()
+                        };
+                    }
+                    
+                    if (mergeAnalysis.warnings.length > 0 && (params.verbose === true || IsVerboseLoggingEnabled())) {
+                        LogStatus(`Sub-agent merge warnings: ${mergeAnalysis.warnings.join('; ')}`);
+                    }
                 }
             }
+            else {
+                // if we have a failed sub-agent run we do NOT update the payload!!!
+                const msg = `Sub-agent '${subAgentRequest.name}' execution failed: ${subAgentResult.agentRun?.ErrorMessage || 'Unknown error'}`;
+                LogError(msg);
+                // merged payload is already set to the original payload so the rest of the below is okay
+                stepEntity.Success = false; // we had a failure
+                stepEntity.ErrorMessage = msg;
+            }
+
 
             // Update step entity with AIAgentRun ID if available
             if (subAgentResult.agentRun?.ID) {
