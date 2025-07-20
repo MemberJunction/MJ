@@ -1696,8 +1696,6 @@ export class BaseAgent {
     public async ExecuteSingleAction(params: ExecuteAgentParams, action: AgentAction, actionEntity: ActionEntityExtended, 
         contextUser?: UserInfo): Promise<ActionResult> {
         try {
-            this.logStatus(`⚡ Executing action '${action.name}'`, true, params);
-            
             const actionEngine = ActionEngineServer.Instance;
 
             // Convert params object to ActionParam array
@@ -1706,8 +1704,6 @@ export class BaseAgent {
                 Value: value,
                 Type: 'Input' as const
             }));
-            
-            this.logStatus(`📥 Action parameters: ${JSON.stringify(action.params)}`, true, params);
             
             // Execute the action and return the full ActionResult
             const result = await actionEngine.RunAction({
@@ -1719,11 +1715,11 @@ export class BaseAgent {
                 Context: params.context // pass along our context to actions so they can use it however they need
             });
             
-            if (!result.Success) {
-                throw new Error(`Action '${action.name}' failed: ${result.Message || 'Unknown error'}`);
+            if (result.Success) {
+                this.logStatus(`   ✅ Action '${action.name}' completed successfully`, true, params);
+            } else {
+                this.logStatus(`   ❌ Action '${action.name}' failed: ${result.Message || 'Unknown error'}`, false, params);
             }
-            
-            this.logStatus(`✅ Action '${action.name}' completed successfully`, true, params);
             
             return result;
             

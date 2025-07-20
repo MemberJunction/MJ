@@ -2709,8 +2709,6 @@ export class AIPromptRunner {
       
       try {
         // Find the "Repair JSON" prompt in the "MJ: System" category
-        const rv = new RunView();
-        
         const repairPrompt = AIEngine.Instance.Prompts.find(p => p.Name.trim().toLowerCase() === 'repair json' && p.Category.trim().toLowerCase() === 'mj: system');
         if (!repairPrompt) {
           throw new Error('Repair JSON prompt not found in MJ: System category');
@@ -2718,6 +2716,7 @@ export class AIPromptRunner {
         
         // Run the repair prompt
         const repairResult = await this.ExecutePrompt({
+          contextUser: params.contextUser,
           prompt: repairPrompt,
           data: {
             ERROR_MESSAGE: originalError.message,
