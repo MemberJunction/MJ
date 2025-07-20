@@ -53,6 +53,7 @@ export {
 
 export {
   buildComponentProps,
+  cleanupPropBuilder,
   normalizeCallbacks,
   normalizeStyles,
   validateComponentProps,

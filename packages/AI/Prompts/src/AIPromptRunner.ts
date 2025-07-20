@@ -1,6 +1,6 @@
 import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer } from '@memberjunction/ai';
 import { ValidationAttempt, AIPromptRunResult } from '@memberjunction/ai-core-plus';
-import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
+import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, RunView } from '@memberjunction/core';
 import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
 import { AIModelEntityExtended, AIPromptEntity, AIPromptRunEntity, AIPromptModelEntity, AIModelVendorEntity } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
@@ -15,6 +15,7 @@ import {
     ChildPromptParam,
     AIPromptParams
 } from '@memberjunction/ai-core-plus';
+import * as JSON5 from 'json5';
  
 
 
@@ -267,13 +268,13 @@ export class AIPromptRunner {
       // Handle different prompt execution modes
       if (params.childPrompts && params.childPrompts.length > 0) {
         // Hierarchical template composition mode - render child templates first, then compose
-        this.logStatus(`🌳 Composing prompt with ${params.childPrompts.length} child templates in hierarchical mode`, true, params);
+        //this.logStatus(`🌳 Composing prompt with ${params.childPrompts.length} child templates in hierarchical mode`, true, params);
         
         // Determine which prompt to use for model selection
         let modelSelectionPrompt = prompt;
         if (params.modelSelectionPrompt) {
           modelSelectionPrompt = params.modelSelectionPrompt;
-          this.logStatus(`🎯 Using prompt "${modelSelectionPrompt.Name}" for model selection instead of parent prompt`, true, params);
+          //this.logStatus(`🎯 Using prompt "${modelSelectionPrompt.Name}" for model selection instead of parent prompt`, true, params);
         }
         
         // Select model using the appropriate prompt
@@ -286,12 +287,9 @@ export class AIPromptRunner {
         childTemplateRenderingResult = await this.renderChildPromptTemplates(params.childPrompts, params, params.cancellationToken);
         // Render the parent prompt with child templates embedded
         renderedPromptText = await this.renderPromptWithChildTemplates(prompt, params, childTemplateRenderingResult.renderedTemplates);
-        
-        this.logStatus(`✅ Hierarchical template composition completed with ${Object.keys(childTemplateRenderingResult.renderedTemplates).length} child templates embedded`, true, params);
 
           // Create parent prompt run for the final composed prompt execution
         parentPromptRun = await this.createPromptRun(prompt, selectedModel, params, renderedPromptText, startTime, params.override?.vendorId);
-        this.logStatus(`📝 Created prompt run ${parentPromptRun.ID} for hierarchical template composition`, true, params);
       } else if (prompt.TemplateID && (!params.conversationMessages || params.templateMessageRole !== 'none')) {
         // Regular template rendering mode
         // Initialize template engine
@@ -419,7 +417,7 @@ export class AIPromptRunner {
       let modelSelectionPrompt = prompt;
       if (params.modelSelectionPrompt) {
         modelSelectionPrompt = params.modelSelectionPrompt;
-        this.logStatus(`🎯 Using prompt "${modelSelectionPrompt.Name}" for model selection instead of main prompt`, true, params);
+        this.logStatus(`   Using prompt "${modelSelectionPrompt.Name}" for model selection instead of main prompt`, true, params);
       }
       
       selectedModel = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
@@ -507,7 +505,7 @@ export class AIPromptRunner {
     let modelSelectionPrompt = prompt;
     if (params.modelSelectionPrompt) {
       modelSelectionPrompt = params.modelSelectionPrompt;
-      this.logStatus(`🎯 Using prompt "${modelSelectionPrompt.Name}" for model selection in parallel execution`, true, params);
+      this.logStatus(`   Using prompt "${modelSelectionPrompt.Name}" for model selection in parallel execution`, true, params);
     }
 
     // Get prompt-specific model associations using the model selection prompt
@@ -661,7 +659,7 @@ export class AIPromptRunner {
     for (const result of sortedResults) {
       if (result.task.taskId !== selectedResult.task.taskId) {
         // Parse and validate this result
-        const { result: parsedResultData, validationResult } = await this.parseAndValidateResultEnhanced(result.modelResult!, prompt, params.skipValidation, params.cleanValidationSyntax);
+        const { result: parsedResultData, validationResult } = await this.parseAndValidateResultEnhanced(result.modelResult!, prompt, params.skipValidation, params.cleanValidationSyntax, consolidatedPromptRun, params);
         const parsedResult = { result: parsedResultData, validationResult };
 
         const resultUsage = result.modelResult?.data?.usage;
@@ -691,7 +689,7 @@ export class AIPromptRunner {
     }
 
     // Parse and validate the selected result
-    const { result: selectedResultData, validationResult: selectedValidationResult } = await this.parseAndValidateResultEnhanced(selectedResult.modelResult!, prompt, params.skipValidation, params.cleanValidationSyntax);
+    const { result: selectedResultData, validationResult: selectedValidationResult } = await this.parseAndValidateResultEnhanced(selectedResult.modelResult!, prompt, params.skipValidation, params.cleanValidationSyntax, consolidatedPromptRun, params);
     const selectedParsedResult = { result: selectedResultData, validationResult: selectedValidationResult };
     const selectedUsage = selectedResult.modelResult?.data?.usage;
 
@@ -773,7 +771,7 @@ export class AIPromptRunner {
       throw new Error('Child prompt execution was cancelled');
     }
 
-    this.logStatus(`🔄 Rendering ${childPrompts.length} child prompt templates in parallel`, true, params);
+    //this.logStatus(`🔄 Rendering ${childPrompts.length} child prompt templates in parallel`, true, params);
 
     // Render all child prompt templates in parallel at this level
     const childRenderingPromises = childPrompts.map(async (childParam) => {
@@ -797,7 +795,7 @@ export class AIPromptRunner {
         }
 
         // Render the child prompt template with merged data
-        this.logStatus(`  🔹 Rendering child prompt template: ${childParam.childPrompt.prompt.Name} -> ${childParam.parentPlaceholder}`, true, params);
+        //this.logStatus(`  🔹 Rendering child prompt template: ${childParam.childPrompt.prompt.Name} -> ${childParam.parentPlaceholder}`, true, params);
         
         const childPrompt = childParam.childPrompt.prompt;
         let renderedChildTemplate = '';
@@ -888,7 +886,7 @@ export class AIPromptRunner {
       renderedTemplatesMap[childResult.placeholder] = childResult.renderedTemplate;
     }
 
-    this.logStatus(`✅ Completed rendering of ${childResults.length} child prompt templates`, true, params);
+    //this.logStatus(`✅ Completed rendering of ${childResults.length} child prompt templates`, true, params);
     
     return {
       renderedTemplates: renderedTemplatesMap
@@ -934,12 +932,12 @@ export class AIPromptRunner {
         ...params.templateData    // Additional template data (highest priority)
       };
 
-      this.logStatus(`🔧 Rendering prompt template with ${Object.keys(childTemplates).length} child templates and ${Object.keys(systemPlaceholders).length} system placeholders`, true, params);
-      
+      this.logStatus(`   🔧 ${prompt.Name} [Rendering Prompt Template]`, true, params);
+
       // Log placeholder replacement for debugging
       for (const [placeholder, template] of Object.entries(childTemplates)) {
         const truncatedTemplate = template.length > 100 ? template.substring(0, 100) + '...' : template;
-        this.logStatus(`  📝 ${placeholder} -> ${truncatedTemplate}`, true, params);
+        //this.logStatus(`  📝 ${placeholder} -> ${truncatedTemplate}`, true, params);
       }
 
       // Render the template with the full params context
@@ -1003,13 +1001,13 @@ export class AIPromptRunner {
         return null;
       }
 
-      this.logStatus(`🔍 Found ${candidates.length} model-vendor candidates for prompt ${prompt.Name}`, true, params);
+      // this.logStatus(`🔍 Found ${candidates.length} model-vendor candidates for prompt ${prompt.Name}`, true, params);
       
-      if (candidates.length <= 5) {
-        candidates.forEach((c, i) => {
-          this.logStatus(`   ${i + 1}. ${c.model.Name} via ${c.vendorName || 'default'} (${c.driverClass}) - Priority: ${c.priority}${c.isPreferredVendor ? ' [PREFERRED]' : ''}`, true, params);
-        });
-      }
+      // if (candidates.length <= 5) {
+      //   candidates.forEach((c, i) => {
+      //     this.logStatus(`   ${i + 1}. ${c.model.Name} via ${c.vendorName || 'default'} (${c.driverClass}) - Priority: ${c.priority}${c.isPreferredVendor ? ' [PREFERRED]' : ''}`, true, params);
+      //   });
+      // }
 
       // Select the first candidate with an available API key
       const selected = await this.selectModelWithAPIKey(candidates, params);
@@ -1160,9 +1158,7 @@ export class AIPromptRunner {
                 (pm.Status === 'Active' || pm.Status === 'Preview') &&
                 !pm.ConfigurationID
         );
-      } else {
-        LogStatus(`Found ${promptModels.length} models for configuration "${configurationId}"`);
-      }
+      }  
     } else {
       // No configuration specified, only use NULL configuration models
       promptModels = AIEngine.Instance.PromptModels.filter(
@@ -1280,7 +1276,7 @@ export class AIPromptRunner {
     const checkedDrivers = new Map<string, boolean>(); // Cache to avoid repeated lookups
     let attemptCount = 0;
     
-    this.logStatus(`🔑 Checking API keys for ${candidates.length} model-vendor candidates...`, true, params);
+    //this.logStatus(`🔑 Checking API keys for ${candidates.length} model-vendor candidates...`, true, params);
     
     for (const candidate of candidates) {
       attemptCount++;
@@ -1289,7 +1285,7 @@ export class AIPromptRunner {
       if (checkedDrivers.has(candidate.driverClass)) {
         const hasKey = checkedDrivers.get(candidate.driverClass)!;
         if (hasKey) {
-          this.logStatus(`✅ Selected model ${candidate.model.Name} with ${candidate.vendorName || 'default'} vendor (cached API key exists)`, true, params);
+          this.logStatus(`   Selected model ${candidate.model.Name} with ${candidate.vendorName || 'default'} vendor (cached API key exists)`, true, params);
           return candidate;
         }
         // Skip logging for cached negative results to reduce noise
@@ -1302,7 +1298,7 @@ export class AIPromptRunner {
       checkedDrivers.set(candidate.driverClass, hasKey);
       
       if (hasKey) {
-        LogStatus(`✅ Selected model ${candidate.model.Name} with ${candidate.vendorName || 'default'} vendor (driver: ${candidate.driverClass})`);
+        LogStatus(`   Selected model ${candidate.model.Name} with ${candidate.vendorName || 'default'} vendor (driver: ${candidate.driverClass})`);
         if (candidate.isPreferredVendor) {
           this.logStatus(`   Using preferred vendor${candidate.vendorId ? ` (${candidate.vendorName})` : ''}`, true, params);
         }
@@ -1935,12 +1931,12 @@ export class AIPromptRunner {
         if (localKey) {
           apiKey = localKey.apiKey;
           if (verbose) {
-            console.log(`Using local API key for driver class: ${driverClass}`);
+            console.log(`   Using local API key for driver class: ${driverClass}`);
           }
         } else {
           apiKey = GetAIAPIKey(driverClass);
           if (verbose) {
-            console.log(`No local API key found for driver class ${driverClass}, using global key`);
+            console.log(`   No local API key found for driver class ${driverClass}, using global key`);
           }
         }
       } else {
@@ -2010,9 +2006,10 @@ export class AIPromptRunner {
 
       // Apply response format from prompt settings
       if (prompt.ResponseFormat && prompt.ResponseFormat !== 'Any') {
-        chatParams.responseFormat = prompt.ResponseFormat as 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific';
+        chatParams.responseFormat = prompt.ResponseFormat //as 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific';
       } else {
-        chatParams.responseFormat = 'JSON'; // Default to JSON for backward compatibility
+        // if chatParams.responseFormat is not set or set to Any, stay silent on response format
+        chatParams.responseFormat = undefined;
       }
 
       // Build message array with rendered prompt and conversation messages
@@ -2125,7 +2122,7 @@ export class AIPromptRunner {
         }
 
         if (attempt > 0) {
-          LogStatus(`🔄 Retrying execution due to validation failure, attempt ${attempt + 1}/${maxRetries + 1}`);
+          LogStatus(`   🔄 Retrying execution due to validation failure, attempt ${attempt + 1}/${maxRetries + 1}`);
           await this.applyRetryDelay(prompt, attempt);
         }
 
@@ -2156,6 +2153,8 @@ export class AIPromptRunner {
           prompt,
           params.skipValidation,
           params.cleanValidationSyntax,
+          promptRun,
+          params,
         );
 
         // Record this validation attempt
@@ -2188,14 +2187,14 @@ export class AIPromptRunner {
         // BUG FIX: Only retry in Strict mode, not in Warn or None modes
         if (prompt.ValidationBehavior === 'Strict' && attempt < maxRetries) {
           lastError = new Error(`Validation failed: ${validationErrors?.map(e => e.Message).join('; ')}`);
-          LogStatus(`⚠️ Validation failed on attempt ${attempt + 1}, will retry (Strict mode)`);
+          LogStatus(`   ⚠️ Validation failed on attempt ${attempt + 1}, will retry (Strict mode)`);
           continue; // Retry
         } else {
           // Either not strict mode or no more retries, return what we have
           const reason = prompt.ValidationBehavior !== 'Strict' 
             ? `${prompt.ValidationBehavior || 'None'} mode - continuing with invalid output (no retry)`
             : 'max retries exceeded';
-          LogStatus(`⚠️ Validation failed on attempt ${attempt + 1}, stopping retries (${reason})`);
+          LogStatus(`   ⚠️ Validation failed on attempt ${attempt + 1}, stopping retries (${reason})`);
           return {
             modelResult,
             parsedResult: { result, validationResult },
@@ -2260,7 +2259,7 @@ export class AIPromptRunner {
         delay = baseDelay;
     }
 
-    LogStatus(`Applying retry delay: ${delay}ms (strategy: ${prompt.RetryStrategy})`);
+    LogStatus(`   Applying retry delay: ${delay}ms (strategy: ${prompt.RetryStrategy})`);
     await new Promise(resolve => setTimeout(resolve, delay));
   }
 
@@ -2416,13 +2415,22 @@ export class AIPromptRunner {
   }
 
   /**
-   * Enhanced parsing and validation with detailed error reporting
+   * Enhanced parsing and validation with detailed error reporting and JSON repair capabilities.
+   * 
+   * @param modelResult - The raw result from the AI model
+   * @param prompt - The AI prompt entity containing configuration
+   * @param skipValidation - Whether to skip validation
+   * @param cleanValidationSyntax - Whether to clean validation syntax from results
+   * @param params - Optional prompt parameters containing additional configuration like attemptJSONRepair
+   * @returns Parsed result with optional validation results and errors
    */
   private async parseAndValidateResultEnhanced(
     modelResult: ChatResult,
     prompt: AIPromptEntity,
     skipValidation: boolean = false,
     cleanValidationSyntax: boolean = false,
+    currentPromptRun: AIPromptRunEntity,
+    params?: AIPromptParams,
   ): Promise<{
     result: unknown;
     validationResult?: ValidationResult;
@@ -2447,71 +2455,33 @@ export class AIPromptRunner {
       try {
         switch (prompt.OutputType) {
           case 'string':
-            parsedResult = rawOutput.toString();
+            parsedResult = this.parseStringOutput(rawOutput);
             break;
 
-          case 'number': {
-            const numberResult = parseFloat(rawOutput);
-            if (isNaN(numberResult)) {
-                if (!skipValidation) {
-                const error = new ValidationErrorInfo('output', `Expected number output but got: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
-                validationErrors.push(error);
-                throw new Error(error.Message);
-              }
-            }
-            else {
-              parsedResult = numberResult;
-            }
+          case 'number':
+            parsedResult = this.parseNumberOutput(rawOutput, skipValidation, validationErrors);
             break;
-          }
 
-          case 'boolean': {
-            const lowerOutput = rawOutput.toLowerCase().trim();
-            if (['true', 'yes', '1'].includes(lowerOutput)) {
-              parsedResult = true;
-            } else if (['false', 'no', '0'].includes(lowerOutput)) {
-              parsedResult = false;
-            } else if (!skipValidation){
-              const error = new ValidationErrorInfo('output', `Expected boolean output but got: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
-              validationErrors.push(error);
-              throw new Error(error.Message);
-            } 
+          case 'boolean':
+            parsedResult = this.parseBooleanOutput(rawOutput, skipValidation, validationErrors);
             break;
-          }
 
-          case 'date': {
-            const dateResult = new Date(rawOutput);
-            if (isNaN(dateResult.getTime()) && !skipValidation) {
-              const error = new ValidationErrorInfo('output', `Expected date output but got: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
-              validationErrors.push(error);
-              throw new Error(error.Message);
-            }
-            else {
-              parsedResult = dateResult;  
-            }
+          case 'date':
+            parsedResult = this.parseDateOutput(rawOutput, skipValidation, validationErrors);
             break;
-          }
 
           case 'object':
-            try {
-              parsedResult = JSON.parse(CleanJSON(rawOutput));
-              
-              // ALWAYS clean validation syntax when we have an OutputExample for validation
-              // OR when explicitly requested via cleanValidationSyntax parameter
-              if (parsedResult && (cleanValidationSyntax || (!skipValidation && prompt.OutputExample))) {
-                const validator = new JSONValidator();
-                parsedResult = validator.cleanValidationSyntax<unknown>(parsedResult);
-              }
-            } catch (jsonError) {
-              // if we skip validation, we can allow thisk only emit this if 
-              // we are NOT skipping validation
-              if (!skipValidation) {
-                const error = new ValidationErrorInfo('output', `Expected JSON object but got invalid JSON: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
-                validationErrors.push(error);
-                throw new Error(error.Message);
-              }
-            }
+            parsedResult = await this.parseObjectOutput(
+              rawOutput, 
+              prompt, 
+              skipValidation, 
+              cleanValidationSyntax, 
+              validationErrors,
+              currentPromptRun,
+              params
+            );
             break;
+            
           default:
             parsedResult = rawOutput;
         }
@@ -2581,6 +2551,226 @@ export class AIPromptRunner {
     }
   }
 
+  /**
+   * Parses a string output value.
+   * 
+   * @param rawOutput - The raw output from the model
+   * @returns The parsed string value
+   */
+  private parseStringOutput(rawOutput: string): string {
+    return rawOutput.toString();
+  }
+
+  /**
+   * Parses a number output value with validation.
+   * 
+   * @param rawOutput - The raw output from the model
+   * @param skipValidation - Whether to skip validation
+   * @param validationErrors - Array to collect validation errors
+   * @returns The parsed number value
+   * @throws Error if the value cannot be parsed as a number and validation is enabled
+   */
+  private parseNumberOutput(
+    rawOutput: string, 
+    skipValidation: boolean, 
+    validationErrors: ValidationErrorInfo[]
+  ): number {
+    const numberResult = parseFloat(rawOutput);
+    if (isNaN(numberResult)) {
+      if (!skipValidation) {
+        const error = new ValidationErrorInfo('output', `Expected number output but got: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
+        validationErrors.push(error);
+        throw new Error(error.Message);
+      }
+      return numberResult; // Will be NaN if skipValidation is true
+    }
+    return numberResult;
+  }
+
+  /**
+   * Parses a boolean output value with flexible input handling.
+   * 
+   * @param rawOutput - The raw output from the model
+   * @param skipValidation - Whether to skip validation
+   * @param validationErrors - Array to collect validation errors
+   * @returns The parsed boolean value
+   * @throws Error if the value cannot be parsed as a boolean and validation is enabled
+   */
+  private parseBooleanOutput(
+    rawOutput: string, 
+    skipValidation: boolean, 
+    validationErrors: ValidationErrorInfo[]
+  ): boolean {
+    const lowerOutput = rawOutput.toLowerCase().trim();
+    if (['true', 'yes', '1'].includes(lowerOutput)) {
+      return true;
+    } else if (['false', 'no', '0'].includes(lowerOutput)) {
+      return false;
+    } else if (!skipValidation) {
+      const error = new ValidationErrorInfo('output', `Expected boolean output but got: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
+      validationErrors.push(error);
+      throw new Error(error.Message);
+    }
+    return false; // Default to false if skipValidation is true
+  }
+
+  /**
+   * Parses a date output value with validation.
+   * 
+   * @param rawOutput - The raw output from the model
+   * @param skipValidation - Whether to skip validation
+   * @param validationErrors - Array to collect validation errors
+   * @returns The parsed Date value
+   * @throws Error if the value cannot be parsed as a date and validation is enabled
+   */
+  private parseDateOutput(
+    rawOutput: string, 
+    skipValidation: boolean, 
+    validationErrors: ValidationErrorInfo[]
+  ): Date {
+    const dateResult = new Date(rawOutput);
+    if (isNaN(dateResult.getTime()) && !skipValidation) {
+      const error = new ValidationErrorInfo('output', `Expected date output but got: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
+      validationErrors.push(error);
+      throw new Error(error.Message);
+    }
+    return dateResult;
+  }
+
+  /**
+   * Parses an object (JSON) output value with optional repair capabilities.
+   * 
+   * @param rawOutput - The raw output from the model
+   * @param prompt - The AI prompt entity containing configuration
+   * @param skipValidation - Whether to skip validation
+   * @param cleanValidationSyntax - Whether to clean validation syntax
+   * @param validationErrors - Array to collect validation errors
+   * @param params - Optional prompt parameters containing attemptJSONRepair flag
+   * @returns The parsed object value
+   * @throws Error if the value cannot be parsed as JSON and validation is enabled
+   */
+  private async parseObjectOutput(
+    rawOutput: string,
+    prompt: AIPromptEntity,
+    skipValidation: boolean,
+    cleanValidationSyntax: boolean,
+    validationErrors: ValidationErrorInfo[],
+    currentPromptRun: AIPromptRunEntity,
+    params?: AIPromptParams
+  ): Promise<unknown> {
+    let parsedResult: unknown;
+    
+    try {
+      // First attempt: Use CleanJSON to handle common JSON issues
+      parsedResult = JSON.parse(CleanJSON(rawOutput));
+    } catch (jsonError) {
+      // If attemptJSONRepair is enabled and we're dealing with object output
+      if (params?.attemptJSONRepair && prompt.OutputType === 'object') {
+        parsedResult = await this.attemptJSONRepair(rawOutput, jsonError, params, currentPromptRun);
+      } else {
+        // Original error handling
+        if (!skipValidation) {
+          const error = new ValidationErrorInfo('output', `Expected JSON object but got invalid JSON: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
+          validationErrors.push(error);
+          throw new Error(error.Message);
+        }
+        return rawOutput; // Return raw output if skipping validation
+      }
+    }
+    
+    // Clean validation syntax if needed
+    if (parsedResult && (cleanValidationSyntax || (!skipValidation && prompt.OutputExample))) {
+      const validator = new JSONValidator();
+      parsedResult = validator.cleanValidationSyntax<unknown>(parsedResult);
+    }
+    
+    return parsedResult;
+  }
+
+  /**
+   * Attempts to repair malformed JSON using a two-step process.
+   * 
+   * @param rawOutput - The malformed JSON string
+   * @param originalError - The original parsing error
+   * @param params - Prompt parameters containing contextUser
+   * @returns The repaired and parsed JSON object
+   * @throws Error if JSON repair fails
+   */
+  private async attemptJSONRepair(
+    rawOutput: string,
+    originalError: Error,
+    params: AIPromptParams,
+    currentPromptRun: AIPromptRunEntity
+  ): Promise<unknown> {
+    // Step 1: Try JSON5 parsing
+    try {
+      this.logStatus('   🔧 Attempting JSON repair with JSON5...', true, params);
+      // first try to clean JSON in case we have it in a markdown block
+      let jsonToParse = rawOutput
+      try {
+        jsonToParse = CleanJSON(rawOutput);
+      }
+      catch (cleanError) {
+        this.logError(cleanError, {
+          category: 'JSONCleaningFailed',
+          metadata: {
+            originalError: originalError.message,
+            rawOutput: rawOutput.substring(0, 500)
+          }
+        });
+      }
+      const json5Result = JSON5.parse(jsonToParse);
+      this.logStatus('   ✅ JSON5 successfully parsed the malformed JSON', true, params);
+      return json5Result;
+    } catch (json5Error) {
+      // Step 2: Use AI to repair the JSON
+      this.logStatus('   🤖 JSON5 failed, attempting AI-based JSON repair...', true, params);
+      
+      try {
+        // Find the "Repair JSON" prompt in the "MJ: System" category
+        const repairPrompt = AIEngine.Instance.Prompts.find(p => p.Name.trim().toLowerCase() === 'repair json' && p.Category.trim().toLowerCase() === 'mj: system');
+        if (!repairPrompt) {
+          throw new Error('Repair JSON prompt not found in MJ: System category');
+        }
+        
+        // Run the repair prompt
+        const repairResult = await this.ExecutePrompt({
+          parentPromptRunId: currentPromptRun.ID,
+          agentRunId: currentPromptRun.AgentRunID,
+          contextUser: params.contextUser,
+          prompt: repairPrompt,
+          data: {
+            ERROR_MESSAGE: originalError.message,
+            MALFORMED_JSON: rawOutput
+          },
+          skipValidation: true // don't want to validate as this would cause recursive infinity scenario if the JSON is invalid. Just one shot, fix or no fix
+        });
+        
+        if (!repairResult.success || !repairResult.result) {
+          throw new Error('AI-based JSON repair failed' + (repairResult.errorMessage ? `: ${repairResult.errorMessage}` : ''));
+        }
+        // if we get here we have the text result in the reapairResult.result so let's try to parse it
+        const repairedJSON = JSON.parse(repairResult.result as string);
+        
+        this.logStatus('   ✅ AI successfully repaired the JSON', true, params);
+        return repairedJSON;
+      } catch (aiRepairError) {
+        // Both repair attempts failed
+        this.logError(aiRepairError, {
+          category: 'JSONRepairFailed',
+          metadata: {
+            originalError: originalError.message,
+            json5Error: json5Error.message,
+            aiError: aiRepairError.message,
+            rawOutput: rawOutput.substring(0, 500)
+          }
+        });
+        
+        throw new Error(`JSON repair failed after both JSON5 and AI attempts: ${originalError.message}`);
+      }
+    }
+  }
+
 
   /**
    * Validates parsed result against JSON schema derived from OutputExample
@@ -2607,9 +2797,7 @@ export class AIPromptRunner {
       const validationResult = this._jsonValidator.validate(parsedResult, exampleObject);
       validationErrors.push(...validationResult.Errors);
 
-      if (validationErrors.length === 0) {
-        //LogStatus(`✅ Validation passed for prompt ${promptId}`);
-      } else {
+      if (validationErrors.length !== 0) {
         LogStatus(`⚠️ Validation found ${validationErrors.length} issues for prompt ${promptId}:`);
         validationErrors.forEach((error, index) => {
           LogStatus(`   ${index + 1}. ${error.Source}: ${error.Message}`);
@@ -2811,8 +2999,6 @@ export class AIPromptRunner {
             promptRun.ValidationBehavior || 'Warn'
           )
         });
-        
-        //LogStatus(`Updated prompt run ${promptRun.ID} with ${validationAttempts.length} validation attempts`);
       } else {
         // No validation attempts (possibly skipped validation)
         promptRun.ValidationAttemptCount = 1; // At least one attempt was made
