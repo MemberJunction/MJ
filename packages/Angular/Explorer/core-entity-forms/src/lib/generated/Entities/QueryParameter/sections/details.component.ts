@@ -1,14 +1,23 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { QueryEntity } from '@memberjunction/core-entities';
+import { QueryParameterEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'Queries.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'MJ: Query Parameters.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-query-form-details',
+    selector: 'gen-queryparameter-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="QueryID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -19,16 +28,21 @@ import { QueryEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="CategoryID"
-            Type="textbox"
+            FieldName="Type"
+            Type="dropdownlist"
             [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="UserQuestion"
+            FieldName="IsRequired"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultValue"
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -42,49 +56,28 @@ import { QueryEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="SQL"
+            FieldName="SampleValue"
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="TechnicalDescription"
+            FieldName="ValidationFilters"
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="OriginalSQL"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Feedback"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Status"
+            FieldName="DetectionMethod"
             Type="dropdownlist"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="QualityRank"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ExecutionCostRank"
+            FieldName="AutoDetectConfidenceScore"
             Type="numerictextbox"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -105,14 +98,7 @@ import { QueryEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="UsesTemplate"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Category"
+            FieldName="Query"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -121,12 +107,12 @@ import { QueryEntity } from '@memberjunction/core-entities';
 </div>
     `
 })
-export class QueryDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: QueryEntity;
+export class QueryParameterDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: QueryParameterEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadQueryDetailsComponent() {
+export function LoadQueryParameterDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       

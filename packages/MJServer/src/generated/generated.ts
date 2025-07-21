@@ -19,7 +19,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIAgentRunEntity, AIVendorEntity, AIConfigurationEntity, AIAgentEntity, AIModelCostEntity, AIPromptModelEntity, AIAgentTypeEntity, AIAgentNoteEntity, AIAgentActionEntity, AIModelPriceTypeEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, AIModelVendorEntity, AIVendorTypeDefinitionEntity, ReportUserStateEntity, QueryEntityEntity, DashboardUserStateEntity, ArtifactTypeEntity, AIVendorTypeEntity, ConversationArtifactEntity, AIAgentPromptEntity, DashboardUserPreferenceEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, AIPromptRunEntity, AIAgentRunStepEntity, ConversationArtifactPermissionEntity, AIModelPriceUnitTypeEntity, AIAgentLearningCycleEntity, ReportVersionEntity, AIConfigurationParamEntity } from '@memberjunction/core-entities';
+import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIAgentRunEntity, AIVendorEntity, AIConfigurationEntity, AIAgentEntity, AIModelCostEntity, AIPromptModelEntity, AIAgentTypeEntity, AIAgentNoteEntity, AIAgentActionEntity, AIModelPriceTypeEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, AIModelVendorEntity, AIVendorTypeDefinitionEntity, ReportUserStateEntity, QueryEntityEntity, DashboardUserStateEntity, ArtifactTypeEntity, AIVendorTypeEntity, ConversationArtifactEntity, AIAgentPromptEntity, DashboardUserPreferenceEntity, QueryParameterEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, AIPromptRunEntity, AIAgentRunStepEntity, ConversationArtifactPermissionEntity, AIModelPriceUnitTypeEntity, AIAgentLearningCycleEntity, ReportVersionEntity, AIConfigurationParamEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -2258,12 +2258,10 @@ if this limit is exceeded.`})
     @Field(() => Int, {nullable: true, description: `When acting as a sub-agent, maximum number of times this agent can be executed per parent agent run`}) 
     MaxExecutionsPerRun?: number;
         
-    @Field({nullable: true, description: `Optional JSON schema validation to apply to the input payload before agent execution begins. Uses the same JSONValidator 
-format as FinalPayloadValidation.`}) 
+    @Field({nullable: true, description: `Optional JSON schema validation to apply to the input payload before agent execution begins. Uses the same JSONValidator format as FinalPayloadValidation.`}) 
     StartingPayloadValidation?: string;
         
-    @Field({description: `Determines how to handle StartingPayloadValidation failures. Fail = reject invalid input, Warn = log warning but 
-proceed.`}) 
+    @Field({description: `Determines how to handle StartingPayloadValidation failures. Fail = reject invalid input, Warn = log warning but proceed.`}) 
     @MaxLength(50)
     StartingPayloadValidationMode: string;
         
@@ -22202,6 +22200,13 @@ export class QueryField_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({description: `Indicates how this field was identified in the query output. "AI" means the QueryEntityServer used LLM analysis to parse the SELECT clause and determine field names, types, and their source entities/columns. This includes handling aliased columns, computed expressions, aggregations, and CASE statements. "Manual" means a user explicitly defined this output field. AI detection ensures the field list stays synchronized with query changes.`}) 
+    @MaxLength(100)
+    DetectionMethod: string;
+        
+    @Field(() => Float, {nullable: true, description: `Confidence score (0.00-1.00) indicating how certain the AI was about this field detection. Only populated when DetectionMethod="AI". Factors include: clarity of the SELECT clause, complexity of any expressions or transformations, confidence in type inference, and ability to trace back to source entity/column. Complex computed fields or ambiguous aliases result in lower scores. This helps identify fields that may need manual verification.`}) 
+    AutoDetectConfidenceScore?: number;
+        
     @Field() 
     @MaxLength(510)
     Query: string;
@@ -22255,6 +22260,12 @@ export class CreateQueryFieldInput {
 
     @Field({ nullable: true })
     SummaryDescription: string | null;
+
+    @Field({ nullable: true })
+    DetectionMethod?: string;
+
+    @Field(() => Float, { nullable: true })
+    AutoDetectConfidenceScore: number | null;
 }
     
 
@@ -22301,6 +22312,12 @@ export class UpdateQueryFieldInput {
 
     @Field({ nullable: true })
     SummaryDescription?: string | null;
+
+    @Field({ nullable: true })
+    DetectionMethod?: string;
+
+    @Field(() => Float, { nullable: true })
+    AutoDetectConfidenceScore?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -22645,6 +22662,9 @@ export class Query_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field(() => Boolean, {nullable: true, description: `Automatically set to true when the SQL column contains Nunjucks template markers (e.g., {{ paramName }}). This flag is maintained by the QueryEntityServer for performance optimization and discovery purposes. It allows quick filtering of parameterized queries and enables the UI to show parameter inputs only when needed. The system will automatically update this flag when the SQL content changes.`}) 
+    UsesTemplate?: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Category?: string;
@@ -22657,6 +22677,9 @@ export class Query_ {
     
     @Field(() => [QueryPermission_])
     QueryPermissions_QueryIDArray: QueryPermission_[]; // Link to QueryPermissions
+    
+    @Field(() => [QueryParameter_])
+    MJ_QueryParameters_QueryIDArray: QueryParameter_[]; // Link to MJ_QueryParameters
     
     @Field(() => [QueryEntity_])
     QueryEntities_QueryIDArray: QueryEntity_[]; // Link to QueryEntities
@@ -22703,6 +22726,9 @@ export class CreateQueryInput {
 
     @Field(() => Int, { nullable: true })
     ExecutionCostRank: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    UsesTemplate?: boolean | null;
 }
     
 
@@ -22746,6 +22772,9 @@ export class UpdateQueryInput {
 
     @Field(() => Int, { nullable: true })
     ExecutionCostRank?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    UsesTemplate?: boolean | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -22835,6 +22864,16 @@ export class QueryResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryPermissions] WHERE [QueryID]='${query_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Query Permissions', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [QueryParameter_])
+    async MJ_QueryParameters_QueryIDArray(@Root() query_: Query_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Query Parameters', userPayload);
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryParameters] WHERE [QueryID]='${query_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Query Parameters', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Query Parameters', rows);
         return result;
     }
         
@@ -35973,6 +36012,13 @@ export class QueryEntity_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({description: `Indicates how this entity-query relationship was identified. "AI" means the QueryEntityServer used LLM analysis to parse the SQL/template and identify which MemberJunction entities are referenced (by analyzing table names, joins, and query structure). "Manual" means a user explicitly marked this entity as being used by the query. AI detection helps maintain accurate metadata automatically as queries evolve.`}) 
+    @MaxLength(100)
+    DetectionMethod: string;
+        
+    @Field(() => Float, {nullable: true, description: `Confidence score (0.00-1.00) indicating how certain the AI was that this entity is actually used in the query. Only populated when DetectionMethod="AI". Considers factors like: direct table references vs indirect joins, clear entity names vs ambiguous aliases, and context from the query purpose. Lower scores might indicate the entity is only peripherally involved or the detection was uncertain.`}) 
+    AutoDetectConfidenceScore?: number;
+        
     @Field() 
     @MaxLength(510)
     Query: string;
@@ -35996,6 +36042,12 @@ export class CreateQueryEntityInput {
 
     @Field({ nullable: true })
     EntityID?: string;
+
+    @Field({ nullable: true })
+    DetectionMethod?: string;
+
+    @Field(() => Float, { nullable: true })
+    AutoDetectConfidenceScore: number | null;
 }
     
 
@@ -36012,6 +36064,12 @@ export class UpdateQueryEntityInput {
 
     @Field({ nullable: true })
     EntityID?: string;
+
+    @Field({ nullable: true })
+    DetectionMethod?: string;
+
+    @Field(() => Float, { nullable: true })
+    AutoDetectConfidenceScore?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -37251,6 +37309,231 @@ export class DashboardUserPreferenceResolver extends ResolverBase {
         const connPool = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Dashboard User Preferences', key, options, connPool, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Query Parameters
+//****************************************************************************
+@ObjectType({ description: `Stores parameter definitions for parameterized queries that use Nunjucks templates. Each parameter represents a dynamic value that can be passed when executing the query. Parameters are automatically extracted from the query template by the QueryEntityServer using LLM analysis, or can be manually defined. The combination of parameter metadata and validation filters creates a self-documenting, type-safe query execution system.` })
+export class QueryParameter_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(16)
+    QueryID: string;
+        
+    @Field({description: `The name of the parameter as it appears in the Nunjucks template. This must match exactly with the parameter reference in the SQL template. For example, if the template contains {{ userEmail | required | email }}, the Name would be "userEmail". Parameter names should follow JavaScript identifier rules: start with a letter, and contain only letters, numbers, and underscores.`}) 
+    @MaxLength(510)
+    Name: string;
+        
+    @Field({description: `The data type of the parameter used for validation and type conversion. Valid values are: "string" for text values, "number" for integers or decimals, "date" for date/datetime values (ISO 8601 format expected), "boolean" for true/false values, and "array" for multiple values (typically used with IN clauses). The type determines which validation filters can be applied and how the parameter is processed.`}) 
+    @MaxLength(100)
+    Type: string;
+        
+    @Field(() => Boolean, {nullable: true, description: `Indicates whether this parameter must be provided when executing the query. When true, the query execution will fail if the parameter is not supplied and no DefaultValue is set. This is automatically determined by the presence of the "required" filter in the template, but can be manually overridden. Required parameters ensure data integrity and prevent unintended query behavior.`}) 
+    IsRequired?: boolean;
+        
+    @Field({nullable: true, description: `The default value to use when the parameter is not provided during query execution. This value must be compatible with the parameter Type. For arrays, use JSON format like ["value1","value2"]. Default values allow queries to have sensible fallbacks while still accepting custom inputs. If a parameter is required (IsRequired=true), the default value is ignored.`}) 
+    DefaultValue?: string;
+        
+    @Field({nullable: true, description: `Human-readable description explaining the purpose and usage of this parameter. This is typically generated by LLM analysis of the query context but can be manually edited. Good descriptions include: what the parameter filters or controls, valid value ranges or formats, business meaning, and any special considerations. This text is shown in UI to help users understand what value to provide.`}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: `A concrete example value demonstrating the proper format for this parameter. Generated by LLM based on the query context and validation filters. For example: "john@example.com" for an email parameter, "2024-01-15" for a date, or "["active","pending"]" for a status array. Sample values help users understand the expected format and can be used in API documentation.`}) 
+    SampleValue?: string;
+        
+    @Field({nullable: true, description: `JSON array of Nunjucks filter definitions that validate and transform the parameter value. Each filter is an object with "name" and optional "args" properties. Filters are applied in order and can include: validation (required, email, min, max), transformation (trim, upper, lower), SQL safety (sqlsafe, sqljoin), and type conversion (number, date). Example: [{"name":"required"},{"name":"email"},{"name":"sqlsafe"}]. The filter chain ensures type safety and prevents SQL injection.`}) 
+    ValidationFilters?: string;
+        
+    @Field({description: `Indicates how this parameter was identified and added to the system. "AI" means it was automatically detected by LLM analysis of the query template, including extraction of parameter name, type inference from filters, and generation of description. "Manual" means it was explicitly defined by a user. This helps track which parameters might need human review and provides transparency about the source of metadata.`}) 
+    @MaxLength(100)
+    DetectionMethod: string;
+        
+    @Field(() => Float, {nullable: true, description: `Confidence score (0.00-1.00) indicating how certain the AI was about this parameter detection. Only populated when DetectionMethod="AI". Higher scores indicate the LLM was more confident about the parameter name, type, and usage. Scores above 0.80 are generally reliable, 0.60-0.80 may benefit from human review, and below 0.60 should be manually verified. This helps prioritize which auto-detected parameters need human attention.`}) 
+    AutoDetectConfidenceScore?: number;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    Query: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Query Parameters
+//****************************************************************************
+@InputType()
+export class CreateQueryParameterInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    QueryID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Type?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsRequired?: boolean | null;
+
+    @Field({ nullable: true })
+    DefaultValue: string | null;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    SampleValue: string | null;
+
+    @Field({ nullable: true })
+    ValidationFilters: string | null;
+
+    @Field({ nullable: true })
+    DetectionMethod?: string;
+
+    @Field(() => Float, { nullable: true })
+    AutoDetectConfidenceScore: number | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Query Parameters
+//****************************************************************************
+@InputType()
+export class UpdateQueryParameterInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    QueryID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Type?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsRequired?: boolean | null;
+
+    @Field({ nullable: true })
+    DefaultValue?: string | null;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    SampleValue?: string | null;
+
+    @Field({ nullable: true })
+    ValidationFilters?: string | null;
+
+    @Field({ nullable: true })
+    DetectionMethod?: string;
+
+    @Field(() => Float, { nullable: true })
+    AutoDetectConfidenceScore?: number | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Query Parameters
+//****************************************************************************
+@ObjectType()
+export class RunQueryParameterViewResult {
+    @Field(() => [QueryParameter_])
+    Results: QueryParameter_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(QueryParameter_)
+export class QueryParameterResolver extends ResolverBase {
+    @Query(() => RunQueryParameterViewResult)
+    async RunQueryParameterViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, connPool, userPayload, pubSub);
+    }
+
+    @Query(() => RunQueryParameterViewResult)
+    async RunQueryParameterViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, connPool, userPayload, pubSub);
+    }
+
+    @Query(() => RunQueryParameterViewResult)
+    async RunQueryParameterDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Query Parameters';
+        return super.RunDynamicViewGeneric(input, connPool, userPayload, pubSub);
+    }
+    @Query(() => QueryParameter_, { nullable: true })
+    async QueryParameter(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueryParameter_ | null> {
+        this.CheckUserReadPermissions('MJ: Query Parameters', userPayload);
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryParameters] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Query Parameters', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: Query Parameters', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @Mutation(() => QueryParameter_)
+    async CreateQueryParameter(
+        @Arg('input', () => CreateQueryParameterInput) input: CreateQueryParameterInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('MJ: Query Parameters', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => QueryParameter_)
+    async UpdateQueryParameter(
+        @Arg('input', () => UpdateQueryParameterInput) input: UpdateQueryParameterInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('MJ: Query Parameters', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => QueryParameter_)
+    async DeleteQueryParameter(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Query Parameters', key, options, connPool, userPayload, pubSub);
     }
     
 }
