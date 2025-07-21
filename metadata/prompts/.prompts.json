@@ -9,8 +9,6 @@
       "ResponseFormat": "Any",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Lowest",
-      "OutputType": "object",
-      "ValidationBehavior": "Warn",
       "ParallelizationMode": "None",
       "MaxRetries": 0,
       "PromptRole": "System",
@@ -55,7 +53,7 @@
       "ID": "58658DAE-C1CE-4621-9540-0735FE98414E"
     },
     "sync": {
-      "lastModified": "2025-07-20T17:15:22.640Z",
+      "lastModified": "2025-07-21T04:28:18.243Z",
       "checksum": "67f92d1c19f2d20be8b0758fe24f5a5d797fbf87336aa145d0ef1ad099951cc1"
     }
   },
@@ -133,7 +131,7 @@
       "ID": "FF7D441F-36E1-458A-B548-0FC2208923BE"
     },
     "sync": {
-      "lastModified": "2025-07-20T18:00:45.743Z",
+      "lastModified": "2025-07-21T04:28:34.773Z",
       "checksum": "ba461e1fbfa773734c6214859981bfab13706342fb32c9cbb8dc3bc18d3338c8"
     }
   },
