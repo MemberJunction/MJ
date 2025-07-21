@@ -594,6 +594,195 @@ SetProvider(myProvider);
 
 This library is written in TypeScript and provides full type definitions. All generated entity classes include proper typing for IntelliSense support.
 
+## Datasets
+
+Datasets are a powerful performance optimization feature in MemberJunction that allows efficient bulk loading of related entity data. Instead of making multiple individual API calls to load different entities, datasets enable you to load collections of related data in a single operation.
+
+### What Are Datasets?
+
+Datasets are pre-defined collections of related entity data that can be loaded together. Each dataset contains multiple "dataset items" where each item represents data from a specific entity. This approach dramatically reduces database round trips and improves application performance.
+
+### How Datasets Work
+
+1. **Dataset Definition**: Datasets are defined in the `Datasets` entity with a unique name and description
+2. **Dataset Items**: Each dataset contains multiple items defined in the `Dataset Items` entity, where each item specifies:
+   - The entity to load
+   - An optional filter to apply
+   - A unique code to identify the item within the dataset
+3. **Bulk Loading**: When you request a dataset, all items are loaded in parallel in a single database operation
+4. **Caching**: Datasets can be cached locally for offline use or improved performance
+
+### Key Benefits
+
+- **Reduced Database Round Trips**: Load multiple entities in one operation instead of many
+- **Better Performance**: Parallel loading and optimized queries
+- **Caching Support**: Built-in local caching with automatic cache invalidation
+- **Offline Capability**: Cached datasets enable offline functionality
+- **Consistency**: All data in a dataset is loaded at the same point in time
+
+### The MJ_Metadata Dataset
+
+The most important dataset in MemberJunction is `MJ_Metadata`, which loads all system metadata including:
+- Entities and their fields
+- Applications and settings
+- User roles and permissions
+- Query definitions
+- Navigation items
+- And more...
+
+This dataset is used internally by MemberJunction to bootstrap the metadata system efficiently.
+
+### Dataset API Methods
+
+The Metadata class provides several methods for working with datasets:
+
+#### GetDatasetByName()
+Always retrieves fresh data from the server without checking cache:
+
+```typescript
+const md = new Metadata();
+const dataset = await md.GetDatasetByName('MJ_Metadata');
+
+if (dataset.Success) {
+    // Process the dataset results
+    for (const item of dataset.Results) {
+        console.log(`Loaded ${item.Results.length} records from ${item.EntityName}`);
+    }
+}
+```
+
+#### GetAndCacheDatasetByName()
+Retrieves and caches the dataset, using cached version if up-to-date:
+
+```typescript
+// This will use cache if available and up-to-date
+const dataset = await md.GetAndCacheDatasetByName('ProductCatalog');
+
+// With custom filters for specific items
+const filters: DatasetItemFilterType[] = [
+    { ItemCode: 'Products', Filter: 'IsActive = 1' },
+    { ItemCode: 'Categories', Filter: 'ParentID IS NULL' }
+];
+const filteredDataset = await md.GetAndCacheDatasetByName('ProductCatalog', filters);
+```
+
+#### IsDatasetCacheUpToDate()
+Checks if the cached version is current without loading the data:
+
+```typescript
+const isUpToDate = await md.IsDatasetCacheUpToDate('ProductCatalog');
+if (!isUpToDate) {
+    console.log('Cache is stale, refreshing...');
+    await md.GetAndCacheDatasetByName('ProductCatalog');
+}
+```
+
+#### ClearDatasetCache()
+Removes a dataset from local cache:
+
+```typescript
+// Clear specific dataset
+await md.ClearDatasetCache('ProductCatalog');
+
+// Clear dataset with specific filters
+await md.ClearDatasetCache('ProductCatalog', filters);
+```
+
+### Dataset Filtering
+
+You can apply filters to individual dataset items to load subsets of data:
+
+```typescript
+const filters: DatasetItemFilterType[] = [
+    {
+        ItemCode: 'Orders',
+        Filter: "OrderDate >= '2024-01-01' AND Status = 'Active'"
+    },
+    {
+        ItemCode: 'OrderDetails',
+        Filter: "OrderID IN (SELECT ID FROM Orders WHERE OrderDate >= '2024-01-01')"
+    }
+];
+
+const dataset = await md.GetAndCacheDatasetByName('RecentOrders', filters);
+```
+
+### Dataset Caching
+
+Datasets are cached using the provider's local storage implementation:
+- **Browser**: IndexedDB or localStorage
+- **Node.js**: File system or memory cache
+- **React Native**: AsyncStorage
+
+The cache key includes:
+- Dataset name
+- Applied filters (if any)
+- Connection string (to prevent cache conflicts between environments)
+
+### Cache Invalidation
+
+The cache is automatically invalidated when:
+- Any entity in the dataset has newer data on the server
+- Row counts differ between cache and server
+- You manually clear the cache
+
+### Creating Custom Datasets
+
+To create your own dataset:
+
+1. Create a record in the `Datasets` entity:
+```typescript
+const datasetEntity = await md.GetEntityObject<DatasetEntity>('Datasets');
+datasetEntity.Name = 'CustomerDashboard';
+datasetEntity.Description = 'All data needed for customer dashboard';
+await datasetEntity.Save();
+```
+
+2. Add dataset items for each entity to include:
+```typescript
+const itemEntity = await md.GetEntityObject<DatasetItemEntity>('Dataset Items');
+itemEntity.DatasetID = datasetEntity.ID;
+itemEntity.Code = 'Customers';
+itemEntity.EntityID = md.EntityByName('Customers').ID;
+itemEntity.Sequence = 1;
+itemEntity.WhereClause = 'IsActive = 1';
+await itemEntity.Save();
+```
+
+### Best Practices
+
+1. **Use Datasets for Related Data**: When you need multiple entities that are logically related
+2. **Cache Strategically**: Use `GetAndCacheDatasetByName()` for data that doesn't change frequently
+3. **Apply Filters Wisely**: Filters reduce data volume but make cache keys more specific
+4. **Monitor Cache Size**: Large datasets can consume significant local storage
+5. **Refresh When Needed**: Use `IsDatasetCacheUpToDate()` to check before using cached data
+
+### Example: Loading a Dashboard
+
+```typescript
+// Define a dataset for a sales dashboard
+const dashboardFilters: DatasetItemFilterType[] = [
+    { ItemCode: 'Sales', Filter: "Date >= DATEADD(day, -30, GETDATE())" },
+    { ItemCode: 'Customers', Filter: "LastOrderDate >= DATEADD(day, -30, GETDATE())" },
+    { ItemCode: 'Products', Filter: "StockLevel < ReorderLevel" }
+];
+
+// Load with caching for performance
+const dashboard = await md.GetAndCacheDatasetByName('SalesDashboard', dashboardFilters);
+
+if (dashboard.Success) {
+    // Extract individual entity results
+    const recentSales = dashboard.Results.find(r => r.Code === 'Sales')?.Results || [];
+    const activeCustomers = dashboard.Results.find(r => r.Code === 'Customers')?.Results || [];
+    const lowStockProducts = dashboard.Results.find(r => r.Code === 'Products')?.Results || [];
+    
+    // Use the data to render your dashboard
+    console.log(`Recent sales: ${recentSales.length}`);
+    console.log(`Active customers: ${activeCustomers.length}`);
+    console.log(`Low stock products: ${lowStockProducts.length}`);
+}
+```
+
 ## License
 
 ISC License - see LICENSE file for details
