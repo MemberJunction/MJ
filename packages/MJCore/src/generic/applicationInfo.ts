@@ -2,6 +2,9 @@ import { BaseInfo } from './baseInfo'
 import { EntityInfo } from './entityInfo'
 import { IMetadataProvider } from './interfaces';
 
+/**
+ * Stores configuration settings and preferences for applications, including key-value pairs for runtime parameters and user-specific customizations.
+ */
 export class ApplicationSettingInfo extends BaseInfo {
     ID: string = null
     ApplicationName: string = null
@@ -17,6 +20,9 @@ export class ApplicationSettingInfo extends BaseInfo {
     }
 }
 
+/**
+ * List of entities within each application. An application can have any number of entities and an entity can be part of any number of applications.
+ */
 export class ApplicationEntityInfo extends BaseInfo {
     ID: string = null
     ApplicationName: string = null
@@ -31,6 +37,10 @@ export class ApplicationEntityInfo extends BaseInfo {
     EntityBaseTableCodeName: string = null
 
     private _EntityInfo: EntityInfo = null
+    /**
+     * Gets the full entity metadata for the entity linked to this application.
+     * @returns {EntityInfo} The entity information object
+     */
     public get EntityInfo(): EntityInfo {
         return this._EntityInfo
     }
@@ -46,7 +56,8 @@ export class ApplicationEntityInfo extends BaseInfo {
 }
 
 /**
- * Information about an application
+ * Applications are used to group entities in the user interface for ease of user access.
+ * Provides organizational structure for presenting entities to users.
  */
 export class ApplicationInfo extends BaseInfo {
     ID: string = null
@@ -57,11 +68,19 @@ export class ApplicationInfo extends BaseInfo {
     SchemaAutoAddNewEntities: string = null
 
     private _ApplicationEntities: ApplicationEntityInfo[] = []
+    /**
+     * Gets the list of entities that belong to this application with their display sequence.
+     * @returns {ApplicationEntityInfo[]} Array of application entity mappings
+     */
     public get ApplicationEntities(): ApplicationEntityInfo[] {
         return this._ApplicationEntities;
     } 
 
     private _ApplicationSettings: ApplicationSettingInfo[] = []
+    /**
+     * Gets the configuration settings for this application.
+     * @returns {ApplicationSettingInfo[]} Array of key-value settings
+     */
     public get ApplicationSettings(): ApplicationSettingInfo[] {
         return this._ApplicationSettings;
     }

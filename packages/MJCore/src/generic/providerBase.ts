@@ -13,6 +13,8 @@ import { ExplorerNavigationItem } from "./explorerNavigationItem";
 
 /**
  * AllMetadata is used to pass all metadata around in a single object for convenience and type safety.
+ * Contains all system metadata collections including entities, applications, security, and queries.
+ * This class provides a centralized way to access all MemberJunction metadata.
  */
 export class AllMetadata {
     CurrentUser: UserInfo = null;
@@ -35,7 +37,13 @@ export class AllMetadata {
     AllExplorerNavigationItems: ExplorerNavigationItem[] = [];
 }
 
-// Create a new instance of AllMetadata from a simple object
+/**
+ * Creates a new instance of AllMetadata from a simple object.
+ * Handles deserialization and proper instantiation of all metadata classes.
+ * @param data - The raw metadata object to convert
+ * @param md - The metadata provider for context
+ * @returns A fully populated AllMetadata instance with proper type instances
+ */
 export function MetadataFromSimpleObject(data: any, md: IMetadataProvider): AllMetadata {
     try {
         const newObject = new AllMetadata();
@@ -56,7 +64,10 @@ export function MetadataFromSimpleObject(data: any, md: IMetadataProvider): AllM
 }
 
 /**
- * This is a list of all metadata classes that are used in the AllMetadata class. This is used to automatically determine the class type when deserializing the metadata and otherwise whenever we need to iterate through all of the elements.
+ * This is a list of all metadata classes that are used in the AllMetadata class.
+ * Used to automatically determine the class type when deserializing the metadata and
+ * for iterating through all metadata collections.
+ * Each entry maps a property key to its corresponding class constructor.
  */
 export const AllMetadataArrays = [
     { key: 'AllEntities', class: EntityInfo  },
@@ -77,6 +88,11 @@ export const AllMetadataArrays = [
 ];
 
 
+/**
+ * Base class for all metadata providers in MemberJunction.
+ * Implements common functionality for metadata caching, refresh, and dataset management.
+ * Subclasses must implement abstract methods for provider-specific operations.
+ */
 export abstract class ProviderBase implements IMetadataProvider {
     private _ConfigData: ProviderConfigDataBase;
     private _latestLocalMetadataTimestamps: MetadataInfo[];
@@ -86,33 +102,73 @@ export abstract class ProviderBase implements IMetadataProvider {
     private _refresh = false;
 
     /******** ABSTRACT SECTION ****************************************************************** */
-    // Subclass can determine if we allow refresh at any given point in time
-    // subclass should return FALSE if it is doing something that should STOP refreshes
     /**
-     * Determines if a refresh is currently allowed or not
+     * Determines if a refresh is currently allowed or not.
+     * Subclasses should return FALSE if they are performing operations that should prevent refreshes.
+     * This helps avoid metadata refreshes during critical operations.
      */
     protected abstract get AllowRefresh(): boolean;
 
     /**
-     * Returns the provider type for the instance 
+     * Returns the provider type for the instance.
+     * Identifies whether this is a Database or Network provider.
      */
     public abstract get ProviderType(): ProviderType;
 
     /**
-     * For providers that have ProviderType==='Database', this property will return an object that represents the underlying database connection. For providers where 
-     * ProviderType==='Network' this property will throw an exception.
+     * For providers that have ProviderType==='Database', this property will return an object that represents the underlying database connection.
+     * For providers where ProviderType==='Network' this property will throw an exception.
+     * The type of object returned is provider-specific (e.g., SQL connection pool).
      */
     public abstract get DatabaseConnection(): any;
 
+    /**
+     * Gets the display name for a single entity record.
+     * Uses the entity's IsNameField or falls back to 'Name' field if available.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @param contextUser - Optional user context for permissions
+     * @returns The display name of the record or null if not found
+     */
     public abstract GetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): Promise<string>;
+    
+    /**
+     * Gets display names for multiple entity records in a single operation.
+     * More efficient than multiple GetEntityRecordName calls.
+     * @param info - Array of entity/key pairs to lookup
+     * @param contextUser - Optional user context for permissions
+     * @returns Array of results with names and status for each requested record
+     */
     public abstract GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]>;
 
+    /**
+     * Checks if a specific record is marked as a favorite by the user.
+     * @param userId - The ID of the user to check
+     * @param entityName - The name of the entity
+     * @param CompositeKey - The primary key value(s) for the record
+     * @param contextUser - Optional user context for permissions
+     * @returns True if the record is a favorite, false otherwise
+     */
     public abstract GetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo): Promise<boolean>;
 
+    /**
+     * Sets or removes a record's favorite status for a user.
+     * @param userId - The ID of the user
+     * @param entityName - The name of the entity
+     * @param CompositeKey - The primary key value(s) for the record
+     * @param isFavorite - True to mark as favorite, false to remove
+     * @param contextUser - User context for permissions (required)
+     */
     public abstract SetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void>;
     /******** END - ABSTRACT SECTION ****************************************************************** */
 
 
+    /**
+     * Configures the provider with the specified configuration data.
+     * Handles metadata refresh if needed and initializes the provider.
+     * @param data - Configuration including schema filters and connection info
+     * @returns True if configuration was successful
+     */
     public async Config(data: ProviderConfigDataBase): Promise<boolean> {
         this._ConfigData = data;
 
@@ -142,7 +198,11 @@ export abstract class ProviderBase implements IMetadataProvider {
         return true;
     }
 
-    
+    /**
+     * Builds dataset filters based on the provider configuration.
+     * Ensures MJ Core schema is always included and never excluded.
+     * @returns Array of filters to apply when loading metadata
+     */
     protected BuildDatasetFilterFromConfig(): DatasetItemFilterType[] {
         // setup the schema filters as needed
         const f: DatasetItemFilterType[] = [];
@@ -179,6 +239,12 @@ export abstract class ProviderBase implements IMetadataProvider {
     }
 
     protected static _mjMetadataDatasetName: string = 'MJ_Metadata';
+    
+    /**
+     * Retrieves all metadata from the server and constructs typed instances.
+     * Uses the MJ_Metadata dataset for efficient bulk loading.
+     * @returns Complete metadata collection with all relationships
+     */
     protected async GetAllMetadata(): Promise<AllMetadata> {
         try {
             // we are now using datasets instead of the custom metadata to GraphQL to simplify GraphQL's work as it was very slow preivously
@@ -241,8 +307,24 @@ export abstract class ProviderBase implements IMetadataProvider {
     }
     
 
+    /**
+     * Gets the current user information from the provider.
+     * Must be implemented by subclasses to return user-specific data.
+     * @returns Current user information including roles and permissions
+     */
     protected abstract GetCurrentUser(): Promise<UserInfo> 
 
+    /**
+     * Post-processes entity metadata to establish relationships between entities and their child objects.
+     * Links fields, permissions, relationships, and settings to their parent entities.
+     * @param entities - Array of entity metadata
+     * @param fields - Array of entity field metadata
+     * @param fieldValues - Array of entity field value metadata
+     * @param permissions - Array of entity permission metadata
+     * @param relationships - Array of entity relationship metadata
+     * @param settings - Array of entity settings metadata
+     * @returns Processed array of EntityInfo instances with all relationships established
+     */
     protected PostProcessEntityMetadata(entities: any[], fields: any[], fieldValues: any[], permissions: any[], relationships: any[], settings: any[]): any[] {
         const result: any[] = [];
         if (fieldValues && fieldValues.length > 0)
@@ -261,56 +343,125 @@ export abstract class ProviderBase implements IMetadataProvider {
         return result;
     }
 
+    /**
+     * Gets the configuration data that was provided to the provider.
+     * @returns The provider configuration including schema filters
+     */
     get ConfigData(): ProviderConfigDataBase {
         return this._ConfigData;
     }
 
+    /**
+     * Gets all entity metadata in the system.
+     * @returns Array of EntityInfo objects representing all entities
+     */
     public get Entities(): EntityInfo[] {
         return this._localMetadata.AllEntities;
     }
+    /**
+     * Gets all application metadata in the system.
+     * @returns Array of ApplicationInfo objects representing all applications
+     */
     public get Applications(): ApplicationInfo[] {
         return this._localMetadata.AllApplications;
     }
+    /**
+     * Gets the current user's information including roles and permissions.
+     * @returns UserInfo object for the authenticated user
+     */
     public get CurrentUser(): UserInfo {
         return this._localMetadata.CurrentUser;
     }
+    /**
+     * Gets all security roles defined in the system.
+     * @returns Array of RoleInfo objects representing all roles
+     */
     public get Roles(): RoleInfo[] {
         return this._localMetadata.AllRoles;
     }
+    /**
+     * Gets all row-level security filters defined in the system.
+     * @returns Array of RowLevelSecurityFilterInfo objects for data access control
+     */
     public get RowLevelSecurityFilters(): RowLevelSecurityFilterInfo[] {
         return this._localMetadata.AllRowLevelSecurityFilters;
     }
+    /**
+     * Gets all audit log types defined for tracking system activities.
+     * @returns Array of AuditLogTypeInfo objects
+     */
     public get AuditLogTypes(): AuditLogTypeInfo[] {
         return this._localMetadata.AllAuditLogTypes;
     }
+    /**
+     * Gets all authorization definitions in the system.
+     * @returns Array of AuthorizationInfo objects defining permissions
+     */
     public get Authorizations(): AuthorizationInfo[] {
         return this._localMetadata.AllAuthorizations;
     }
+    /**
+     * Gets all saved queries in the system.
+     * @returns Array of QueryInfo objects representing stored queries
+     */
     public get Queries(): QueryInfo[] {
         return this._localMetadata.AllQueries;
     }
+    /**
+     * Gets all query category definitions.
+     * @returns Array of QueryCategoryInfo objects for query organization
+     */
     public get QueryCategories(): QueryCategoryInfo[] {
         return this._localMetadata.AllQueryCategories;
     }
+    /**
+     * Gets all query field definitions.
+     * @returns Array of QueryFieldInfo objects defining query result columns
+     */
     public get QueryFields(): QueryFieldInfo[] {
         return this._localMetadata.AllQueryFields;
     }
+    /**
+     * Gets all query permission assignments.
+     * @returns Array of QueryPermissionInfo objects defining query access
+     */
     public get QueryPermissions(): QueryPermissionInfo[] {
         return this._localMetadata.AllQueryPermissions;
     }
+    /**
+     * Gets all query entity associations.
+     * @returns Array of QueryEntityInfo objects linking queries to entities
+     */
     public get QueryEntities(): QueryEntityInfo[] {
         return this._localMetadata.AllQueryEntities;
     }
+    /**
+     * Gets all query parameter definitions.
+     * @returns Array of QueryParameterInfo objects for parameterized queries
+     */
     public get QueryParameters(): QueryParameterInfo[] {
         return this._localMetadata.AllQueryParameters;
     }
+    /**
+     * Gets all library definitions in the system.
+     * @returns Array of LibraryInfo objects representing code libraries
+     */
     public get Libraries(): LibraryInfo[] {
         return this._localMetadata.AllLibraries;
     }
+    /**
+     * Gets all explorer navigation items including inactive ones.
+     * @returns Array of all ExplorerNavigationItem objects
+     */
     public get AllExplorerNavigationItems(): ExplorerNavigationItem[] {
         return this._localMetadata.AllExplorerNavigationItems;
     }
     private _cachedVisibleExplorerNavigationItems: ExplorerNavigationItem[] = null;
+    /**
+     * Gets only active explorer navigation items sorted by sequence.
+     * Results are cached for performance.
+     * @returns Array of active ExplorerNavigationItem objects
+     */
     public get VisibleExplorerNavigationItems(): ExplorerNavigationItem[] {
         // filter and sort once and cache
         if (!this._cachedVisibleExplorerNavigationItems)
@@ -318,6 +469,11 @@ export abstract class ProviderBase implements IMetadataProvider {
         return this._cachedVisibleExplorerNavigationItems;
     }
 
+    /**
+     * Refreshes all metadata from the server.
+     * Respects the AllowRefresh flag from subclasses.
+     * @returns True if refresh was initiated or allowed
+     */
     public async Refresh(): Promise<boolean> {
         // do nothing here, but set a _refresh flag for next time things are requested
         if (this.AllowRefresh) {
@@ -328,6 +484,11 @@ export abstract class ProviderBase implements IMetadataProvider {
             return true; // subclass is telling us not to do any refresh ops right now
     }
 
+    /**
+     * Checks if local metadata is out of date and needs refreshing.
+     * Compares local timestamps with server timestamps.
+     * @returns True if refresh is needed, false otherwise
+     */
     public async CheckToSeeIfRefreshNeeded(): Promise<boolean> {
         if (this.AllowRefresh) {
             await this.RefreshRemoteMetadataTimestamps(); // get the latest timestamps from the server first
@@ -338,6 +499,11 @@ export abstract class ProviderBase implements IMetadataProvider {
             return false;
     }
 
+    /**
+     * Refreshes metadata only if needed based on timestamp comparison.
+     * Combines check and refresh into a single operation.
+     * @returns True if refresh was successful or not needed
+     */
     public async RefreshIfNeeded(): Promise<boolean> {
         if (await this.CheckToSeeIfRefreshNeeded()) 
             return this.Refresh();
@@ -665,11 +831,17 @@ export abstract class ProviderBase implements IMetadataProvider {
     }
 
     /**
-     * This property is implemented by each sub-class of ProviderBase and is intended to return a unique string that identifies the instance of the provider for the connection it is making. For example
-     * for network connections, the URL including a TCP port would be a good connection string, whereas on database connections the database host url/instance/port would be a good connection string.
+     * This property is implemented by each sub-class of ProviderBase and is intended to return a unique string that identifies the instance of the provider for the connection it is making.
+     * For example: for network connections, the URL including a TCP port would be a good connection string, whereas on database connections the database host url/instance/port would be a good connection string.
+     * This is used as part of cache keys to ensure different connections don't share cached data.
      */
     public abstract get InstanceConnectionString(): string;
 
+    /**
+     * Converts dataset item filters into a unique string key for caching.
+     * @param itemFilters - Array of filters to convert
+     * @returns JSON-formatted string representing the filters
+     */
     protected ConvertItemFiltersToUniqueKey(itemFilters: DatasetItemFilterType[]): string {
         if (itemFilters) {
             const key = '{' + itemFilters.map(f => `"${f.ItemCode}":"${f.Filter}"`).join(',') + '}'; // this is a unique key for the item filters
@@ -694,16 +866,35 @@ export abstract class ProviderBase implements IMetadataProvider {
         }
     }
 
+    /**
+     * Creates a new transaction group for managing database transactions.
+     * Must be implemented by subclasses to provide transaction support.
+     * @returns A new transaction group instance
+     */
     public abstract CreateTransactionGroup(): Promise<TransactionGroupBase>;
 
+    /**
+     * Gets the latest metadata timestamps from the remote server.
+     * Used to determine if local cache is out of date.
+     * @returns Array of metadata timestamp information
+     */
     get LatestRemoteMetadata(): MetadataInfo[] {
         return this._latestRemoteMetadataTimestamps
     }
 
+    /**
+     * Gets the latest metadata timestamps from local cache.
+     * Used for comparison with remote timestamps.
+     * @returns Array of locally cached metadata timestamps
+     */
     get LatestLocalMetadata(): MetadataInfo[] {
         return this._latestLocalMetadataTimestamps
     }
 
+    /**
+     * Retrieves the latest metadata update timestamps from the server.
+     * @returns Array of metadata update information
+     */
     protected async GetLatestMetadataUpdates(): Promise<MetadataInfo[]> {
         const f = this.BuildDatasetFilterFromConfig();
         const d = await this.GetDatasetStatusByName(ProviderBase._mjMetadataDatasetName, f.length > 0 ? f : null)
@@ -728,6 +919,11 @@ export abstract class ProviderBase implements IMetadataProvider {
         }
     }
 
+    /**
+     * Refreshes the remote metadata timestamps from the server.
+     * Updates the internal cache of remote timestamps.
+     * @returns True if timestamps were successfully refreshed
+     */
     public async RefreshRemoteMetadataTimestamps(): Promise<boolean> {
         const mdTimeStamps = await this.GetLatestMetadataUpdates();  
         if (mdTimeStamps) {
@@ -738,6 +934,12 @@ export abstract class ProviderBase implements IMetadataProvider {
             return false;
     }
 
+    /**
+     * Checks if local metadata is obsolete compared to remote metadata.
+     * Compares timestamps and row counts to detect changes.
+     * @param type - Optional specific metadata type to check
+     * @returns True if local metadata is out of date
+     */
     public LocalMetadataObsolete(type?: string): boolean {
         const mdLocal = this.LatestLocalMetadata
         const mdRemote = this.LatestRemoteMetadata
@@ -787,12 +989,25 @@ export abstract class ProviderBase implements IMetadataProvider {
         return false;
     }
 
+    /**
+     * Updates the local metadata cache with new data.
+     * @param res - The new metadata to store locally
+     */
     protected UpdateLocalMetadata(res: AllMetadata) {
         this._localMetadata = res;
     }
 
-    abstract get LocalStorageProvider(): ILocalStorageProvider; // sub-class implements this based on whatever the local storage model is, different for browser vs. node
+    /**
+     * Gets the local storage provider implementation.
+     * Must be implemented by subclasses to provide environment-specific storage.
+     * @returns Local storage provider instance
+     */
+    abstract get LocalStorageProvider(): ILocalStorageProvider;
 
+    /**
+     * Loads metadata from local storage if available.
+     * Deserializes and reconstructs typed metadata objects.
+     */
     protected async LoadLocalMetadataFromStorage() {
         try {
             const ls = this.LocalStorageProvider;
@@ -831,6 +1046,10 @@ export abstract class ProviderBase implements IMetadataProvider {
         return "";
     }
 
+    /**
+     * Saves current metadata to local storage for caching.
+     * Serializes both timestamps and full metadata collections.
+     */
     public async SaveLocalMetadataToStorage() {
         try {
             const ls = this.LocalStorageProvider;
@@ -848,6 +1067,10 @@ export abstract class ProviderBase implements IMetadataProvider {
         }
     }
 
+    /**
+     * Removes all cached metadata from local storage.
+     * Clears both timestamps and metadata collections.
+     */
     public async RemoveLocalMetadataFromStorage() {
         try {
             const ls = this.LocalStorageProvider;
@@ -861,5 +1084,10 @@ export abstract class ProviderBase implements IMetadataProvider {
         }
     }
 
+    /**
+     * Gets the metadata provider instance.
+     * Must be implemented by subclasses to provide access to metadata.
+     * @returns The metadata provider instance
+     */
     protected abstract get Metadata(): IMetadataProvider;
 }

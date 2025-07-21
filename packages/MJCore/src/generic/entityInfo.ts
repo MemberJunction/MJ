@@ -55,6 +55,10 @@ export class RecordChange extends BaseInfo {
  * Information about the Entity Relationship between the Entity and the Related Entity - this class
  * maps to information in the Entity Relationships metadata entity.
  */
+/**
+ * Metadata about relationships between entities including display preferences for the UI.
+ * Defines foreign key relationships and how they should be represented in the user interface.
+ */
 export class EntityRelationshipInfo extends BaseInfo  {
     ID: string = null
 
@@ -130,6 +134,10 @@ export class EntityUserPermissionInfo {
     CanDelete: boolean;   
 }
 
+/**
+ * Security settings for each entity.
+ * Controls which roles can perform create, read, update, and delete operations.
+ */
 export class EntityPermissionInfo extends BaseInfo{
     ID: string = null
 
@@ -224,6 +232,10 @@ export const EntityFieldValueListType = {
 export type EntityFieldValueListType = typeof EntityFieldValueListType[keyof typeof EntityFieldValueListType];
 
 
+/**
+ * Defines allowed values for entity fields with value lists.
+ * Supports dropdowns, validations, and data integrity constraints.
+ */
 export class EntityFieldValueInfo extends BaseInfo {
     ID: string = null
 
@@ -252,6 +264,10 @@ export type GeneratedFormSectionType = typeof GeneratedFormSectionType[keyof typ
 
 /**
  * Field information within an entity - object models data from the Entity Fields entity in the metadata
+ */
+/**
+ * List of all fields within each entity with metadata about each field.
+ * Includes data types, relationships, defaults, and UI display preferences.
  */
 export class EntityFieldInfo extends BaseInfo {
     ID: string = null
@@ -733,6 +749,10 @@ export class EntityFieldInfo extends BaseInfo {
 /**
  * Entity Document Type Info object has information about the document types that exist across all entities. When Entity Documents are created they are associated with a document type.
  */
+/**
+ * Defines types of documents that can be generated from entity data.
+ * Supports various output formats for entity records.
+ */
 export class EntityDocumentTypeInfo extends BaseInfo {
     ID: string = null
 
@@ -750,6 +770,10 @@ export class EntityDocumentTypeInfo extends BaseInfo {
 
 /**
  * Settings allow you to store key/value pairs of information that can be used to configure the behavior of the entity.
+ */
+/**
+ * Stores entity-specific configuration settings.
+ * Allows customization of how entities function within the system.
  */
 export class EntitySettingInfo extends BaseInfo {   
     ID: string = null
@@ -769,7 +793,8 @@ export class EntitySettingInfo extends BaseInfo {
 
 
 /**
- * Metadata about an entity
+ * Catalog of all entities across all schemas.
+ * Contains comprehensive metadata about each entity including its database mappings, security settings, and UI preferences.
  */
 export class EntityInfo extends BaseInfo {
     public ID: string = null
@@ -952,23 +977,47 @@ export class EntityInfo extends BaseInfo {
         return this.Fields.filter((f) => f.IsPrimaryKey);
     }
 
+    /**
+     * Returns an array of all fields that have unique constraints on them.
+     * @returns {EntityFieldInfo[]} Array of fields with unique constraints
+     */
     get UniqueKeys(): EntityFieldInfo[] {
         return this.Fields.filter((f) => f.IsUnique);
     }
 
+    /**
+     * Returns an array of all fields that are foreign keys to other entities.
+     * @returns {EntityFieldInfo[]} Array of foreign key fields
+     */
     get ForeignKeys(): EntityFieldInfo[] {
         return this.Fields.filter((f) => f.RelatedEntityID && f.RelatedEntityID.length > 0);
     }
 
+    /**
+     * Gets all fields for this entity with their complete metadata.
+     * @returns {EntityFieldInfo[]} Array of all entity fields
+     */
     get Fields(): EntityFieldInfo[] {
         return this._Fields;
     }
+    /**
+     * Gets all relationships where other entities reference this entity.
+     * @returns {EntityRelationshipInfo[]} Array of entity relationships
+     */
     get RelatedEntities(): EntityRelationshipInfo[] {
         return this._RelatedEntities;
     }
+    /**
+     * Gets the security permissions for this entity by role.
+     * @returns {EntityPermissionInfo[]} Array of permission settings
+     */
     get Permissions(): EntityPermissionInfo[] {
         return this._Permissions;
     }
+    /**
+     * Gets custom configuration settings for this entity.
+     * @returns {EntitySettingInfo[]} Array of entity-specific settings
+     */
     get Settings(): EntitySettingInfo[] {
         return this._Settings;
     }

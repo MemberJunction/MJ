@@ -2,7 +2,8 @@ import { BaseInfo } from "./baseInfo";
 import { IMetadataProvider } from "./interfaces";
 
 /**
- * Information about a single user
+ * A list of all users who have or had access to the system.
+ * Contains user profile information, authentication details, and role assignments.
  */
 export class UserInfo extends BaseInfo {
     ID: string = null;
@@ -31,6 +32,10 @@ export class UserInfo extends BaseInfo {
     EmployeeSupervisorEmail: string = null
 
     private _UserRoles: UserRoleInfo[] = []
+    /**
+     * Gets the roles assigned to this user.
+     * @returns {UserRoleInfo[]} Array of user role assignments
+     */
     public get UserRoles(): UserRoleInfo[] {
         return this._UserRoles;
     } 
@@ -52,7 +57,7 @@ export class UserInfo extends BaseInfo {
 }
 
 /**
- * Information about a role that a user is linked to
+ * Associates users with roles in the system, managing role-based access control and permission inheritance.
  */
 export class UserRoleInfo extends BaseInfo {
     UserID: string = null
@@ -71,7 +76,8 @@ export class UserRoleInfo extends BaseInfo {
 }
 
 /**
- * Information about a single role
+ * Roles are used for security administration and can have zero to many Users as members.
+ * Defines groups of permissions that can be assigned to multiple users.
  */
 export class RoleInfo extends BaseInfo {
     ID: string = null
@@ -88,6 +94,9 @@ export class RoleInfo extends BaseInfo {
     }
 }
 
+/**
+ * Defines data access rules that filter records based on user context, implementing fine-grained security at the row level.
+ */
 export class RowLevelSecurityFilterInfo extends BaseInfo {
     ID: string = null
     Name: string = null
@@ -101,6 +110,12 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
         this.copyInitData(initData);
     }
 
+    /**
+     * Replaces user-specific tokens in the filter text with actual user values.
+     * Tokens are in the format {{UserFieldName}} where FieldName is any property of the UserInfo object.
+     * @param {UserInfo} user - The user whose properties will be substituted into the filter text
+     * @returns {string} The filter text with all user tokens replaced with actual values
+     */
     public MarkupFilterText(user: UserInfo): string {
         let ret = this.FilterText
         if (user) {
@@ -118,10 +133,8 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
 }
 
 /**
- * Represents detailed information about an authorization in the system, 
- * including its relationship to roles and the ability for a given user to execute actions that require this authorization.
- *  
- **/
+ * Stores the fundamental permissions and access rights that can be granted to users and roles throughout the system.
+ */
 export class AuthorizationInfo extends BaseInfo {
     ID: string = null
     /**
@@ -221,6 +234,9 @@ export const AuthorizationRoleType = {
 export type AuthorizationRoleType = typeof AuthorizationRoleType[keyof typeof AuthorizationRoleType];
 
 
+/**
+ * Links authorizations to roles, defining which permissions are granted to users assigned to specific roles in the system.
+ */
 export class AuthorizationRoleInfo extends BaseInfo {
     ID: string = null
     AuthorizationID: string = null
@@ -253,6 +269,9 @@ export class AuthorizationRoleInfo extends BaseInfo {
 }
 
 
+/**
+ * Defines the types of events that can be recorded in the audit log, enabling categorization and filtering of system activities.
+ */
 export class AuditLogTypeInfo extends BaseInfo {
     ID: string = null
     ParentID: string = null
