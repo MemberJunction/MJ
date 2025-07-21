@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/aiengine
 
+## 2.73.0
+
+### Patch Changes
+
+- 26c2b03: Added Load function to AIEngine package and call it from MJServer to prevent tree shaking.
+- Updated dependencies [e99336f]
+- Updated dependencies [eebfb9a]
+  - @memberjunction/core-entities@2.73.0
+  - @memberjunction/ai@2.73.0
+  - @memberjunction/ai-engine-base@2.73.0
+  - @memberjunction/ai-core-plus@2.73.0
+  - @memberjunction/actions-base@2.73.0
+  - @memberjunction/core@2.73.0
+  - @memberjunction/global@2.73.0
+
 ## 2.72.0
 
 ### Patch Changes
