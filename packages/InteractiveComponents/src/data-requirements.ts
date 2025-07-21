@@ -7,13 +7,16 @@ export interface ComponentDataRequirements {
      */
     mode: 'views' | 'queries' | 'hybrid';
     
-    queries: ComponentQueryDataRequirement[];
-
     /**
      * Describes the entities and fields the component will access to fulfill user requirements.
      */
     entities: ComponentEntityDataRequirement[];
     
+    /**
+     * Stored Queries that the component will use to fetch data.
+     */
+    queries: ComponentQueryDataRequirement[];
+
     /**
      * Description of data access patterns
      */
@@ -44,6 +47,12 @@ export type ComponentQueryDataRequirement = {
      * Queries can have parameters (not all do). See @see ComponentQueryParameterValue for details.
      */
     parameters?: ComponentQueryParameterValue[];
+
+    /**
+     * This is only provided when requesting a NEW query be created. For existing queries, this will be undefined.
+     * This SQL can use Nunjucks syntax/templating for parameters including the custom filters defined in 
+     */
+    newQuerySQL?: string;
 }
 
 /**
