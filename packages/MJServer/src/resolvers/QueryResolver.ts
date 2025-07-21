@@ -3,6 +3,7 @@ import { RunQuery } from '@memberjunction/core';
 import { Arg, Ctx, Field, Int, ObjectType, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
+import { GraphQLJSONObject } from 'graphql-type-json';
 
 @ObjectType()
 export class RunQueryResultType {
@@ -26,21 +27,26 @@ export class RunQueryResultType {
 
   @Field()
   ErrorMessage: string;
+
+  @Field(() => String, { nullable: true })
+  AppliedParameters?: string;
 }
 
 @Resolver(RunQueryResultType)
-export class ReportResolver {
+export class RunQueryResolver {
   @Query(() => RunQueryResultType)
   async GetQueryData(@Arg('QueryID', () => String) QueryID: string, 
                      @Ctx() context: AppContext,
                      @Arg('CategoryID', () => String, {nullable: true}) CategoryID?: string,
-                     @Arg('CategoryName', () => String, {nullable: true}) CategoryName?: string): Promise<RunQueryResultType> {
+                     @Arg('CategoryName', () => String, {nullable: true}) CategoryName?: string,
+                     @Arg('Parameters', () => GraphQLJSONObject, {nullable: true}) Parameters?: Record<string, any>): Promise<RunQueryResultType> {
     const runQuery = new RunQuery();
     const result = await runQuery.RunQuery(
       { 
         QueryID: QueryID,
         CategoryID: CategoryID,
-        CategoryName: CategoryName 
+        CategoryName: CategoryName,
+        Parameters: Parameters 
       }, 
       context.userPayload.userRecord);
     
@@ -52,6 +58,7 @@ export class ReportResolver {
       RowCount: result.RowCount,
       ExecutionTime: result.ExecutionTime,
       ErrorMessage: result.ErrorMessage,
+      AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined
     };
   }
 
@@ -59,13 +66,15 @@ export class ReportResolver {
   async GetQueryDataByName(@Arg('QueryName', () => String) QueryName: string, 
                            @Ctx() context: AppContext,
                            @Arg('CategoryID', () => String, {nullable: true}) CategoryID?: string,
-                           @Arg('CategoryName', () => String, {nullable: true}) CategoryName?: string): Promise<RunQueryResultType> {
+                           @Arg('CategoryName', () => String, {nullable: true}) CategoryName?: string,
+                           @Arg('Parameters', () => GraphQLJSONObject, {nullable: true}) Parameters?: Record<string, any>): Promise<RunQueryResultType> {
     const runQuery = new RunQuery();
     const result = await runQuery.RunQuery(
       { 
         QueryName: QueryName, 
         CategoryID: CategoryID,
-        CategoryName: CategoryName
+        CategoryName: CategoryName,
+        Parameters: Parameters
       },
       context.userPayload.userRecord);
       
@@ -77,6 +86,7 @@ export class ReportResolver {
       RowCount: result.RowCount,
       ExecutionTime: result.ExecutionTime,
       ErrorMessage: result.ErrorMessage,
+      AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined
     };
   }
 
@@ -85,13 +95,15 @@ export class ReportResolver {
   async GetQueryDataSystemUser(@Arg('QueryID', () => String) QueryID: string, 
                                @Ctx() context: AppContext,
                                @Arg('CategoryID', () => String, {nullable: true}) CategoryID?: string,
-                               @Arg('CategoryName', () => String, {nullable: true}) CategoryName?: string): Promise<RunQueryResultType> {
+                               @Arg('CategoryName', () => String, {nullable: true}) CategoryName?: string,
+                               @Arg('Parameters', () => GraphQLJSONObject, {nullable: true}) Parameters?: Record<string, any>): Promise<RunQueryResultType> {
     const runQuery = new RunQuery();
     const result = await runQuery.RunQuery(
       { 
         QueryID: QueryID,
         CategoryID: CategoryID,
-        CategoryName: CategoryName 
+        CategoryName: CategoryName,
+        Parameters: Parameters 
       }, 
       context.userPayload.userRecord);
     
@@ -103,6 +115,7 @@ export class ReportResolver {
       RowCount: result.RowCount,
       ExecutionTime: result.ExecutionTime,
       ErrorMessage: result.ErrorMessage,
+      AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined
     };
   }
 
@@ -111,13 +124,15 @@ export class ReportResolver {
   async GetQueryDataByNameSystemUser(@Arg('QueryName', () => String) QueryName: string, 
                                      @Ctx() context: AppContext,
                                      @Arg('CategoryID', () => String, {nullable: true}) CategoryID?: string,
-                                     @Arg('CategoryName', () => String, {nullable: true}) CategoryName?: string): Promise<RunQueryResultType> {
+                                     @Arg('CategoryName', () => String, {nullable: true}) CategoryName?: string,
+                                     @Arg('Parameters', () => GraphQLJSONObject, {nullable: true}) Parameters?: Record<string, any>): Promise<RunQueryResultType> {
     const runQuery = new RunQuery();
     const result = await runQuery.RunQuery(
       { 
         QueryName: QueryName, 
         CategoryID: CategoryID,
-        CategoryName: CategoryName
+        CategoryName: CategoryName,
+        Parameters: Parameters
       },
       context.userPayload.userRecord);
       
@@ -129,6 +144,7 @@ export class ReportResolver {
       RowCount: result.RowCount,
       ExecutionTime: result.ExecutionTime,
       ErrorMessage: result.ErrorMessage,
+      AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined
     };
   }
 }

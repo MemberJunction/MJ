@@ -1,4 +1,4 @@
-import { QueryInfo, QueryParameterInfo } from '@memberjunction/core';
+import { QueryInfo, QueryParameterInfo, RunQuerySQLFilterManager } from '@memberjunction/core';
 import * as nunjucks from 'nunjucks';
 
 /**
@@ -60,55 +60,15 @@ export class QueryParameterProcessor {
                 lstripBlocks: true
             });
 
-            // Add custom SQL-safe filters
-            this._nunjucksEnv.addFilter('sqlString', (value: any) => {
-                if (value === null || value === undefined) return 'NULL';
-                return `'${String(value).replace(/'/g, "''")}'`;
-            });
-
-            this._nunjucksEnv.addFilter('sqlNumber', (value: any) => {
-                const num = Number(value);
-                if (isNaN(num)) throw new Error(`Invalid number: ${value}`);
-                return num;
-            });
-
-            this._nunjucksEnv.addFilter('sqlDate', (value: any) => {
-                if (!value) return 'NULL';
-                const date = value instanceof Date ? value : new Date(value);
-                if (isNaN(date.getTime())) throw new Error(`Invalid date: ${value}`);
-                return `'${date.toISOString()}'`;
-            });
-
-            this._nunjucksEnv.addFilter('sqlBoolean', (value: any) => {
-                return value ? '1' : '0';
-            });
-
-            this._nunjucksEnv.addFilter('sqlIdentifier', (value: any) => {
-                if (!value) throw new Error('Identifier cannot be empty');
-                const identifier = String(value);
-                // Basic SQL injection prevention for identifiers
-                if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(identifier)) {
-                    throw new Error(`Invalid SQL identifier: ${identifier}`);
+            // Add custom SQL-safe filters from the RunQuerySQLFilterManager
+            const filterManager = RunQuerySQLFilterManager.Instance;
+            const filters = filterManager.getAllFilters();
+            
+            for (const filter of filters) {
+                if (filter.implementation) {
+                    this._nunjucksEnv.addFilter(filter.name, filter.implementation);
                 }
-                return `[${identifier}]`;
-            });
-
-            this._nunjucksEnv.addFilter('sqlIn', (values: any[]) => {
-                if (!Array.isArray(values) || values.length === 0) {
-                    return '(NULL)'; // This will match nothing
-                }
-                const escaped = values.map(v => {
-                    if (typeof v === 'string') {
-                        return `'${v.replace(/'/g, "''")}'`;
-                    } else if (typeof v === 'number') {
-                        return v;
-                    } else if (v === null || v === undefined) {
-                        return 'NULL';
-                    }
-                    return `'${String(v).replace(/'/g, "''")}'`;
-                });
-                return `(${escaped.join(', ')})`;
-            });
+            }
         }
         return this._nunjucksEnv;
     }

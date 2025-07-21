@@ -299,13 +299,16 @@ const users = dynamicResults.Results; // Properly typed as UserEntity[]
 
 ### RunQuery Class
 
-Execute stored queries with parameters:
+The `RunQuery` class provides secure execution of parameterized stored queries with advanced SQL injection protection and type-safe parameter handling.
+
+#### Basic Usage
 
 ```typescript
 import { RunQuery, RunQueryParams } from '@memberjunction/core';
 
 const rq = new RunQuery();
 
+// Execute by Query ID
 const params: RunQueryParams = {
     QueryID: '12345',
     Parameters: {
@@ -316,6 +319,363 @@ const params: RunQueryParams = {
 };
 
 const results = await rq.RunQuery(params);
+
+// Execute by Query Name and Category
+const namedParams: RunQueryParams = {
+    QueryName: 'Monthly Sales Report',
+    CategoryName: 'Sales',
+    Parameters: {
+        Month: 12,
+        Year: 2024,
+        MinAmount: 1000
+    }
+};
+
+const namedResults = await rq.RunQuery(namedParams);
+```
+
+#### Parameterized Queries
+
+RunQuery supports powerful parameterized queries using Nunjucks templates with built-in SQL injection protection:
+
+```sql
+-- Example stored query in the database
+SELECT 
+    o.ID,
+    o.OrderDate,
+    o.TotalAmount,
+    c.CustomerName
+FROM Orders o
+INNER JOIN Customers c ON o.CustomerID = c.ID
+WHERE 
+    o.OrderDate >= {{ startDate | sqlDate }} AND
+    o.OrderDate <= {{ endDate | sqlDate }} AND
+    o.Status IN {{ statusList | sqlIn }} AND
+    o.TotalAmount >= {{ minAmount | sqlNumber }}
+{% if includeCustomerInfo %}
+    AND c.IsActive = {{ isActive | sqlBoolean }}
+{% endif %}
+ORDER BY {{ orderClause | sqlNoKeywordsExpression }}
+```
+
+#### SQL Security Filters
+
+RunQuery includes comprehensive SQL filters to prevent injection attacks:
+
+##### sqlString Filter
+Safely escapes string values by doubling single quotes and wrapping in quotes:
+
+```sql
+-- Template
+WHERE CustomerName = {{ name | sqlString }}
+
+-- Input: "O'Brien"
+-- Output: WHERE CustomerName = 'O''Brien'
+```
+
+##### sqlNumber Filter
+Validates and formats numeric values:
+
+```sql
+-- Template
+WHERE Amount >= {{ minAmount | sqlNumber }}
+
+-- Input: "1000.50"
+-- Output: WHERE Amount >= 1000.5
+```
+
+##### sqlDate Filter
+Formats dates in ISO 8601 format:
+
+```sql
+-- Template
+WHERE CreatedDate >= {{ startDate | sqlDate }}
+
+-- Input: "2024-01-15"
+-- Output: WHERE CreatedDate >= '2024-01-15T00:00:00.000Z'
+```
+
+##### sqlBoolean Filter
+Converts boolean values to SQL bit representation:
+
+```sql
+-- Template
+WHERE IsActive = {{ active | sqlBoolean }}
+
+-- Input: true
+-- Output: WHERE IsActive = 1
+```
+
+##### sqlIdentifier Filter
+Safely formats SQL identifiers (table/column names):
+
+```sql
+-- Template
+SELECT * FROM {{ tableName | sqlIdentifier }}
+
+-- Input: "UserAccounts"
+-- Output: SELECT * FROM [UserAccounts]
+```
+
+##### sqlIn Filter
+Formats arrays for SQL IN clauses:
+
+```sql
+-- Template
+WHERE Status IN {{ statusList | sqlIn }}
+
+-- Input: ['Active', 'Pending', 'Review']
+-- Output: WHERE Status IN ('Active', 'Pending', 'Review')
+```
+
+##### sqlNoKeywordsExpression Filter (NEW)
+Validates SQL expressions by blocking dangerous keywords while allowing safe expressions:
+
+```sql
+-- Template
+ORDER BY {{ orderClause | sqlNoKeywordsExpression }}
+
+-- ✅ ALLOWED: "Revenue DESC, CreatedDate ASC"
+-- ✅ ALLOWED: "SUM(Amount) DESC"
+-- ✅ ALLOWED: "CASE WHEN Amount > 1000 THEN 1 ELSE 0 END"
+-- ❌ BLOCKED: "Revenue; DROP TABLE Users"
+-- ❌ BLOCKED: "Revenue UNION SELECT * FROM Secrets"
+```
+
+#### Parameter Types and Validation
+
+Query parameters are defined in the `QueryParameter` entity with automatic validation:
+
+```typescript
+// Example parameter definitions
+{
+    name: 'startDate',
+    type: 'date',
+    isRequired: true,
+    description: 'Start date for filtering records',
+    sampleValue: '2024-01-01'
+},
+{
+    name: 'statusList',
+    type: 'array',
+    isRequired: false,
+    defaultValue: '["Active", "Pending"]',
+    description: 'List of allowed status values'
+},
+{
+    name: 'minAmount',
+    type: 'number',
+    isRequired: true,
+    description: 'Minimum amount threshold'
+}
+```
+
+#### Query Permissions
+
+Queries support role-based access control:
+
+```typescript
+// Check if user can run a query (server-side or client-side)
+const query = md.Provider.Queries.find(q => q.ID === queryId);
+const canRun = query.UserCanRun(contextUser);
+const hasPermission = query.UserHasRunPermissions(contextUser);
+
+// Queries are only executable if:
+// 1. User has required role permissions
+// 2. Query status is 'Approved'
+```
+
+#### Advanced Features
+
+##### Conditional SQL Blocks
+Use Nunjucks conditionals for dynamic query structure:
+
+```sql
+SELECT 
+    CustomerID,
+    CustomerName,
+    TotalOrders
+    {% if includeRevenue %}
+    , TotalRevenue
+    {% endif %}
+FROM CustomerSummary
+WHERE CreatedDate >= {{ startDate | sqlDate }}
+{% if filterByRegion %}
+    AND Region = {{ region | sqlString }}
+{% endif %}
+```
+
+##### Complex Parameter Examples
+
+```typescript
+const complexParams: RunQueryParams = {
+    QueryName: 'Advanced Sales Analysis',
+    Parameters: {
+        // Date range
+        startDate: '2024-01-01',
+        endDate: '2024-12-31',
+        
+        // Array parameters
+        regions: ['North', 'South', 'East'],
+        productCategories: [1, 2, 5, 8],
+        
+        // Boolean flags
+        includeDiscounts: true,
+        excludeReturns: false,
+        
+        // Numeric thresholds
+        minOrderValue: 500.00,
+        maxOrderValue: 10000.00,
+        
+        // Dynamic expressions (safely validated)
+        orderBy: 'TotalRevenue DESC, CustomerName ASC',
+        groupingExpression: 'Region, ProductCategory'
+    }
+};
+```
+
+#### Error Handling
+
+RunQuery provides detailed error information:
+
+```typescript
+const result = await rq.RunQuery(params);
+
+if (!result.Success) {
+    console.error('Query failed:', result.ErrorMessage);
+    
+    // Common error types:
+    // - "Query not found"
+    // - "User does not have permission to run this query"
+    // - "Query is not in an approved status (current status: Pending)"
+    // - "Parameter validation failed: Required parameter 'startDate' is missing"
+    // - "Dangerous SQL keyword detected: DROP"
+    // - "Template processing failed: Invalid date: 'not-a-date'"
+} else {
+    console.log('Query executed successfully');
+    console.log('Rows returned:', result.RowCount);
+    console.log('Execution time:', result.ExecutionTime, 'ms');
+    console.log('Applied parameters:', result.AppliedParameters);
+    
+    // Process results
+    result.Results.forEach(row => {
+        console.log('Row data:', row);
+    });
+}
+```
+
+#### Query Categories
+
+Organize queries using categories for better management:
+
+```typescript
+// Query by category
+const categoryParams: RunQueryParams = {
+    QueryName: 'Top Customers',
+    CategoryName: 'Sales Reports',
+    Parameters: { limit: 10 }
+};
+
+// Query with category ID
+const categoryIdParams: RunQueryParams = {
+    QueryName: 'Revenue Trends',
+    CategoryID: 'sales-cat-123',
+    Parameters: { months: 12 }
+};
+```
+
+#### Best Practices for RunQuery
+
+1. **Always Use Filters**: Apply the appropriate SQL filter to every parameter
+2. **Define Clear Parameters**: Use descriptive names and provide sample values
+3. **Set Proper Permissions**: Restrict query access to appropriate roles
+4. **Validate Input Types**: Use the built-in type system (string, number, date, boolean, array)
+5. **Handle Errors Gracefully**: Check Success and provide meaningful error messages
+6. **Use Approved Queries**: Only execute queries with 'Approved' status
+7. **Leverage Categories**: Organize queries by functional area or team
+8. **Test Parameter Combinations**: Verify all conditional blocks work correctly
+9. **Document Query Purpose**: Add clear descriptions for queries and parameters
+10. **Review SQL Security**: Regular audit of complex expressions and dynamic SQL
+
+#### Performance Considerations
+
+- **Parameter Indexing**: Ensure filtered columns have appropriate database indexes
+- **Query Optimization**: Use efficient JOINs and WHERE clauses
+- **Result Limiting**: Consider adding TOP/LIMIT clauses for large datasets
+- **Caching**: Results are not automatically cached - implement application-level caching if needed
+- **Connection Pooling**: RunQuery leverages provider connection pooling automatically
+
+#### Integration with AI Systems
+
+RunQuery is designed to work seamlessly with AI systems:
+
+- **Token-Efficient Metadata**: Filter definitions are optimized for AI prompts
+- **Self-Documenting**: Parameter definitions include examples and descriptions
+- **Safe Code Generation**: AI can generate queries using the secure filter system
+- **Validation Feedback**: Clear error messages help AI systems learn and adapt
+
+#### Example: Complete Sales Dashboard Query
+
+```sql
+-- Stored query: "Sales Dashboard Data"
+SELECT 
+    DATEPART(month, o.OrderDate) AS Month,
+    DATEPART(year, o.OrderDate) AS Year,
+    COUNT(*) AS OrderCount,
+    SUM(o.TotalAmount) AS TotalRevenue,
+    AVG(o.TotalAmount) AS AvgOrderValue,
+    COUNT(DISTINCT o.CustomerID) AS UniqueCustomers
+    {% if includeProductBreakdown %}
+    , p.CategoryName
+    , SUM(od.Quantity) AS TotalQuantity
+    {% endif %}
+FROM Orders o
+{% if includeProductBreakdown %}
+    INNER JOIN OrderDetails od ON o.ID = od.OrderID
+    INNER JOIN Products p ON od.ProductID = p.ID
+{% endif %}
+WHERE 
+    o.OrderDate >= {{ startDate | sqlDate }} AND
+    o.OrderDate <= {{ endDate | sqlDate }} AND
+    o.Status IN {{ allowedStatuses | sqlIn }}
+    {% if filterByRegion %}
+    AND o.Region = {{ region | sqlString }}
+    {% endif %}
+    {% if minOrderValue %}
+    AND o.TotalAmount >= {{ minOrderValue | sqlNumber }}
+    {% endif %}
+GROUP BY 
+    DATEPART(month, o.OrderDate),
+    DATEPART(year, o.OrderDate)
+    {% if includeProductBreakdown %}
+    , p.CategoryName
+    {% endif %}
+ORDER BY {{ orderExpression | sqlNoKeywordsExpression }}
+```
+
+```typescript
+// Execute the dashboard query
+const dashboardResult = await rq.RunQuery({
+    QueryName: 'Sales Dashboard Data',
+    CategoryName: 'Analytics',
+    Parameters: {
+        startDate: '2024-01-01',
+        endDate: '2024-12-31',
+        allowedStatuses: ['Completed', 'Shipped'],
+        includeProductBreakdown: true,
+        filterByRegion: true,
+        region: 'North America',
+        minOrderValue: 100,
+        orderExpression: 'Year DESC, Month DESC, TotalRevenue DESC'
+    }
+});
+
+if (dashboardResult.Success) {
+    // Process the comprehensive dashboard data
+    const monthlyData = dashboardResult.Results;
+    console.log(`Generated dashboard with ${monthlyData.length} data points`);
+    console.log(`Parameters applied:`, dashboardResult.AppliedParameters);
+}
 ```
 
 ### RunReport Class
