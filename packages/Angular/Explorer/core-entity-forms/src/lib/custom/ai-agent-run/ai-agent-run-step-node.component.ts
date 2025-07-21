@@ -18,7 +18,7 @@ export class AIAgentRunStepNodeComponent {
   }
 
   get isSubAgent(): boolean {
-    return this.item.type === 'subrun' || (this.item.type === 'step' && this.item.data?.StepType === 'subagent');
+    return this.item.type === 'subrun' || (this.item.type === 'step' && this.item.data?.StepType === 'Sub-Agent');
   }
 
   get canNavigateToEntity(): boolean {

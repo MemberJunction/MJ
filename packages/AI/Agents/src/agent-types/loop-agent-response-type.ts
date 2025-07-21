@@ -51,9 +51,23 @@ export interface LoopAgentResponse<P = any> {
          */
         subAgent?: {
             name: string;
-            message: string; // Full context needed - no history passed
+
+            /**
+             * Instructions for the sub-agent, NOT the payload, that is handled elsewhere
+             */
+            message: string;  
+
+            /**
+             * Extra parameters - NOT the payload, only use these if the sub-agent 
+             * specifically **defines** parameters in its metadata, otherwise these will be
+             * ignored and waste tokens!
+             */
             templateParameters?: Record<string, any>;
-            terminateAfter: boolean; // true=end parent, false=continue
+
+            /**
+             * true=end parent, false=continue
+             */
+            terminateAfter: boolean; 
         };
     };
 }

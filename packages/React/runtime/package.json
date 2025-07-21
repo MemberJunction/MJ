@@ -28,7 +28,8 @@
     "@memberjunction/core": "2.72.0",
     "@memberjunction/global": "2.72.0",
     "@memberjunction/interactive-component-types": "2.72.0",
-    "@babel/standalone": "^7.23.5"
+    "@babel/standalone": "^7.23.5",
+    "rxjs": "^7.8.1"
   },
   "devDependencies": {
     "@types/node": "20.10.0",

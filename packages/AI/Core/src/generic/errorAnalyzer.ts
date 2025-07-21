@@ -56,6 +56,23 @@ export class ErrorAnalyzer {
         // Extract provider error code
         const providerErrorCode = this.extractProviderErrorCode(error);
         
+        // Check provider error code for context length exceeded (in case message parsing missed it)
+        if (providerErrorCode === 'context_length_exceeded') {
+            return {
+                httpStatusCode,
+                errorType: 'ContextLengthExceeded',
+                severity: 'Fatal',
+                canFailover: true,
+                suggestedRetryDelaySeconds,
+                providerErrorCode,
+                context: {
+                    provider: providerName,
+                    errorName: error?.name,
+                    errorConstructor: error?.constructor?.name
+                }
+            };
+        }
+        
         return {
             httpStatusCode,
             errorType,
@@ -123,6 +140,14 @@ export class ErrorAnalyzer {
         
         // Check error message and name patterns
         const errorString = (error?.message || error?.name || '').toLowerCase();
+        
+        // Check for context length exceeded errors first (before general InvalidRequest)
+        if (errorString.includes('context_length_exceeded') || 
+            errorString.includes('context length exceeded') ||
+            errorString.includes('reduce the length of the messages') ||
+            errorString.includes('maximum context length')) {
+            return 'ContextLengthExceeded';
+        }
         
         if (errorString.includes('rate limit') || 
             errorString.includes('too many requests') ||
@@ -197,6 +222,9 @@ export class ErrorAnalyzer {
             case 'InvalidRequest':
                 return 'Fatal';
                 
+            case 'ContextLengthExceeded':
+                return 'Fatal';
+                
             default:
                 return 'Transient';
         }
@@ -223,6 +251,9 @@ export class ErrorAnalyzer {
             case 'Authentication':
             case 'InvalidRequest':
                 return false;
+                
+            case 'ContextLengthExceeded':
+                return true;
                 
             default:
                 return true;
@@ -276,10 +307,32 @@ export class ErrorAnalyzer {
      * @returns {string | undefined} The provider error code if found, undefined otherwise
      */
     private static extractProviderErrorCode(error: any): string | undefined {
-        return error?.code || 
+        // Try to extract from various common locations
+        const code = error?.code || 
                error?.errorCode || 
                error?.error?.code ||
                error?.response?.data?.error?.code ||
                undefined;
+               
+        if (code) {
+            return code;
+        }
+        
+        // Try to parse from error message if it contains JSON
+        const errorMessage = error?.message || error?.errorMessage || '';
+        if (errorMessage.includes('{') && errorMessage.includes('}')) {
+            try {
+                // Extract JSON from error message
+                const jsonMatch = errorMessage.match(/\{.*\}/);
+                if (jsonMatch) {
+                    const parsed = JSON.parse(jsonMatch[0]);
+                    return parsed?.error?.code || parsed?.code || undefined;
+                }
+            } catch (parseError) {
+                // If JSON parsing fails, continue with undefined
+            }
+        }
+        
+        return undefined;
     }
 }

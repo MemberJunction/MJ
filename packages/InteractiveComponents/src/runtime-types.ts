@@ -31,51 +31,7 @@ export interface ComponentCallbacks {
      */
     NotifyEvent: (eventName: string, eventData: any) => void;
 }
-
-/**
- * Function signature for the initialization function of each component.
- * This function is called when the component is loaded by its container. The function receives the data context, an optional userState property, and a set of callbacks that can be used to interact with the parent component.
- * userState is an optional parameter that can be used to pass in any state information that the parent component wants to provide to the component that is specific
- * to the CURRENT user. If the component modifies the userState, it should notify the parent component via the UserStateChanged event in the callbacks object so that the parent component can handle storage.
- */
-export type ComponentInitFunction = (params: ComponentInitParams) => void;
-
-/**
- * This is the function signature for the print function that is provided by the component via the SkipComponentObject
- */
-export type ComponentPrintFunction = () => void;
-/**
- * This is the function signature for the refresh function that is provided by the component via the SkipComponentObject
- */
-export type ComponentRefreshFunction = () => void;
-
-/**
- * Parameters that are passed to the SkipComponentInitFunction when it is called by the parent component.
- */
-export interface ComponentInitParams {
-    /**
-     * Contains the static data specified by the root component specification. This data is pre-loaded and passed to 
-     * the component during initialization and anytime the component is refreshed.
-     */
-    staticData: SimpleDataContext;
-    /**
-     * Contains dynamic data and metadata utilities to access the host MJ system. 
-     */
-    utilities?: ComponentUtilities;
-    /**
-     * Any serializable JS object, represents the user-specific state.
-     */
-    userState?: any;
-    /**
-     * Callbacks that the component can use to interact with its parent. Allows the component to refresh data, open records, update user state, and send custom events.
-     */
-    callbacks?: ComponentCallbacks;
-    /**
-     * Styles the component should use as specified by its parent/container. The component can alter these styles based on the requirements specified by the requirements. 
-     */
-    styles?: ComponentStyles;
-}
-
+ 
 /**
  * Defines styles for the component. Container can provide styles to a top level component. The top level component 
  * can alter these styles based on the design documentation. Top level component will pass in its computed styles to 
@@ -212,6 +168,18 @@ export interface ComponentStyles {
     }
     overflow: string
 }
+
+
+
+/**
+ * This is the function signature for the print function that is provided by the component via the SkipComponentObject
+ */
+export type ComponentPrintFunction = () => void;
+/**
+ * This is the function signature for the refresh function that is provided by the component via the SkipComponentObject
+ */
+export type ComponentRefreshFunction = () => void;
+ 
 
 /**
  * The component will create this object and it will include the members defined in this interface and return upon its main function being called.

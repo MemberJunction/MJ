@@ -50,6 +50,7 @@ import { ActionParamDialogComponent } from "./Actions/action-param-dialog.compon
 import { AIAgentRunFormComponentExtended, LoadAIAgentRunFormComponent } from "./ai-agent-run/ai-agent-run.component";
 import { AIAgentRunTimelineComponent } from "./ai-agent-run/ai-agent-run-timeline.component";
 import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-node.component";
+import { AIAgentRunAnalyticsComponent } from "./ai-agent-run/ai-agent-run-analytics.component";
 
 @NgModule({
     declarations: [
@@ -81,6 +82,7 @@ import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-no
         AIAgentRunFormComponentExtended,
         AIAgentRunTimelineComponent,
         AIAgentRunStepNodeComponent,
+        AIAgentRunAnalyticsComponent,
     ],
     imports: [
         CommonModule,
@@ -135,6 +137,7 @@ import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-no
         AIAgentRunFormComponentExtended,
         AIAgentRunTimelineComponent,
         AIAgentRunStepNodeComponent,
+        AIAgentRunAnalyticsComponent,
     ],
     providers: [
         NewAgentDialogService,

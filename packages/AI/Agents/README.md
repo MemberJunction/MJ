@@ -48,8 +48,8 @@ Advanced payload access control for hierarchical agent execution:
 - Supports JSON path patterns with wildcards
 - Detects suspicious changes with configurable rules
 - Generates human-readable diffs for audit trails
-- **NEW**: PayloadScope support for narrowing sub-agent data access
-- **NEW**: Path transformation for scoped payload merging
+- PayloadScope support for narrowing sub-agent data access
+    - Transformation for scoped payload merging
 
 ## Installation
 
@@ -318,7 +318,7 @@ Input validation features:
 
 ### Final Payload Validation
 
-Agents can now validate their final output before marking execution as successful:
+Agents can validate their final output before marking execution as successful:
 
 ```typescript
 // Configure validation in AIAgent entity
