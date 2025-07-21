@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ai-betty-bot
 
+## 2.73.0
+
+### Patch Changes
+
+- Updated dependencies [eebfb9a]
+  - @memberjunction/ai@2.73.0
+  - @memberjunction/global@2.73.0
+
 ## 2.72.0
 
 ### Patch Changes

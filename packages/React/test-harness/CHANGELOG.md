@@ -1,5 +1,16 @@
 # @memberjunction/react-test-harness
 
+## 2.73.0
+
+### Minor Changes
+
+- eab6a48: migration files
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.73.0
+- @memberjunction/react-runtime@2.73.0
+
 ## 2.72.0
 
 ### Patch Changes
