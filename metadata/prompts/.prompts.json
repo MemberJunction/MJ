@@ -9,6 +9,8 @@
       "ResponseFormat": "Any",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Lowest",
+      "OutputType": "object",
+      "ValidationBehavior": "Warn",
       "ParallelizationMode": "None",
       "MaxRetries": 0,
       "PromptRole": "System",
