@@ -992,30 +992,43 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         if (dataReq.description) {
             markdown += `${dataReq.description}\n\n`;
         }
-        
-        if (dataReq.staticData) {
-            markdown += `### Static Data\n\n`;
-            if (dataReq.staticData.description) {
-                markdown += `${dataReq.staticData.description}\n\n`;
-            }
-            if (dataReq.staticData.dataContext) {
-                markdown += `**Data Context:** Present (pre-loaded data available)\n\n`;
-            }
-        }
-        
-        if (dataReq.dynamicData) {
-            markdown += `### Dynamic Data\n\n`;
-            if (dataReq.dynamicData.description) {
-                markdown += `${dataReq.dynamicData.description}\n\n`;
-            }
-            if (dataReq.dynamicData.requiredEntities && dataReq.dynamicData.requiredEntities.length > 0) {
-                markdown += `**Required Entities:**\n`;
-                dataReq.dynamicData.requiredEntities.forEach(entity => {
-                    markdown += `- ${entity}\n`;
-                });
+               
+        if (dataReq.entities && dataReq.entities.length > 0) {
+            markdown += `### Entities\n\n`;
+            dataReq.entities.forEach(entity => {
+                markdown += `#### ${entity.name}\n- Description: ${entity.description || 'No description provided.'}\n `;
+                if (entity.displayFields && entity.displayFields.length > 0) {
+                  markdown += `- Display Fields:\n`;
+                  entity.displayFields.forEach(field => {
+                      markdown += `  - ${field}\n`;
+                  });
+                }
+                if (entity.filterFields && entity.filterFields.length > 0) {
+                    markdown += `- Filter Fields:\n`;
+                    entity.filterFields.forEach(field => {
+                        markdown += `  - ${field}\n`;
+                    });
+                }
+                if (entity.sortFields && entity.sortFields.length > 0) {
+                    markdown += `- Sort Fields:\n`;
+                    entity.sortFields.forEach(field => {
+                        markdown += `  - ${field}\n`;
+                    });
+                }
+                if (entity.fieldMetadata && entity.fieldMetadata.length > 0) {
+                    markdown += `- Field Metadata:\n`;
+                    entity.fieldMetadata.forEach(meta => {
+                        markdown += `  - ${meta.name}: ${meta.description || 'No description provided.'}\n`;
+                    });
+                } 
+
+                if (entity.usageContext) {
+                    markdown += `- Usage Context: ${entity.usageContext}\n`;
+                }
                 markdown += '\n';
-            }
-        } 
+            });
+            markdown += '\n';
+        }
         
         const html = marked.parse(markdown);
         return this.sanitizer.sanitize(1, html);

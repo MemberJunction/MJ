@@ -1,53 +1,68 @@
-import { DataContext } from "@memberjunction/data-context";
-
-/**
- * This interface is critical for understanding how components interact with MemberJunction data
- */
 export interface ComponentDataRequirements {
     /**
-     * The primary data access mode for this component.
-     * - 'dynamic': Component fetches data at runtime using MJ utilities
-     * - 'static': Deprecated, use dynamic.  
-     * - 'hybrid': Deprecated, use dynamic.  
+     * How the component gets its data
+     * - 'views': Fetches data at runtime using MJ RunView() 
+     * - 'queries': Fetches data at runtime using MJ RunQuery()
+     * - 'hybrid': Uses both views and queries, depending on the context
      */
-    mode: 'static' | 'dynamic' | 'hybrid';
+    mode: 'views' | 'queries' | 'hybrid';
+    
+    queries: ComponentQueryDataRequirement[];
+
+    /**
+     * Describes the entities and fields the component will access to fulfill user requirements.
+     */
+    entities: ComponentEntityDataRequirement[];
     
     /**
-     * For static mode: References to data context items that this component uses.
-     * These are pre-loaded data snapshots that are passed to the component during initialization.
-     * @deprecated Use dynamicData instead
+     * Description of data access patterns
      */
-    staticData?: {
-        /**
-         * Reference to the data context that this component uses.
-         */
-        dataContext: DataContext;
-        
-        /**
-         * Description of how the static data is used by the component
-         */
-        description?: string;
-    };
-    
+    description?: string;
+}
+
+/**
+ * Describes how a component will use a specific query in MemberJunction to fetch data
+ */
+export type ComponentQueryDataRequirement = {
     /**
-     * For dynamic mode: Defines which MemberJunction entities this component needs access to.
-     * The component will use the RunView/RunQuery utilities to fetch data at runtime.
+     * Query name, used along with queryCategory to identify the query
      */
-    dynamicData?: {
-        /**
-         * Describes the entities and fields the component will
-         * need to fulfill user requirements.
-         */
-        requiredEntities: ComponentEntityDataRequirement[];
-        
-        /**
-         * Description of data access patterns
-         */
-        description?: string;
-    };
-    
+    name: string;
+
     /**
-     * General description of data requirements
+     * Query category, used along with queryName to identify the query
+     */
+    category: string;
+
+    /**
+     * Description of the query and how/why the component will use it 
+     */
+    description?: string;
+
+    /**
+     * Queries can have parameters (not all do). See @see ComponentQueryParameterValue for details.
+     */
+    parameters?: ComponentQueryParameterValue[];
+}
+
+/**
+ * Describes a single query parameter that a component will use when running a query.
+ */
+export type ComponentQueryParameterValue = {
+    /**
+     * Name of the parameter
+     */
+    name: string;
+
+    /**
+     * Value of the parameter. If the value is '@runtime', it indicates that the component will determine the value at runtime. 
+     * If anything other than '@runtime' is specified, it is a hardcoded value that the component will use.
+     */
+    value: string;
+
+    /**
+     * Description of the parameter and how it is used in the query. This is particular important if 
+     * the value is '@runtime' as it helps the component developer understand what the parameter is for and how to determine its value.
      */
     description?: string;
 }
@@ -59,12 +74,12 @@ export type ComponentEntityDataRequirement = {
     /**
      * Name of the entity (unique system-wide)
      */
-    entityName: string;
+    name: string;
 
     /**
      * Description of data in the entity
      */
-    entityDescription?: string;
+    description?: string;
 
     /**
      * Fields to show the user
