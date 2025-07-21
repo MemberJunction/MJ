@@ -6,7 +6,7 @@ import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterIn
 import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal } from "@memberjunction/global";
 import { LogError, LogStatus } from "./logging";
-import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } from "./queryInfo";
+import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo } from "./queryInfo";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
@@ -28,6 +28,8 @@ export class AllMetadata {
     AllQueries: QueryInfo[] = [];
     AllQueryFields: QueryFieldInfo[] = [];
     AllQueryPermissions: QueryPermissionInfo[] = [];
+    AllQueryEntities: QueryEntityInfo[] = [];
+    AllQueryParameters: QueryParameterInfo[] = [];
     AllEntityDocumentTypes: EntityDocumentTypeInfo[] = [];
     AllLibraries: LibraryInfo[] = [];
     AllExplorerNavigationItems: ExplorerNavigationItem[] = [];
@@ -67,6 +69,8 @@ export const AllMetadataArrays = [
     { key: 'AllQueries', class: QueryInfo },
     { key: 'AllQueryFields', class: QueryFieldInfo },
     { key: 'AllQueryPermissions', class: QueryPermissionInfo },
+    { key: 'AllQueryEntities', class: QueryEntityInfo },
+    { key: 'AllQueryParameters', class: QueryParameterInfo },
     { key: 'AllEntityDocumentTypes', class: EntityDocumentTypeInfo },
     { key: 'AllLibraries', class: LibraryInfo },
     { key: 'AllExplorerNavigationItems', class: ExplorerNavigationItem }
@@ -293,6 +297,12 @@ export abstract class ProviderBase implements IMetadataProvider {
     }
     public get QueryPermissions(): QueryPermissionInfo[] {
         return this._localMetadata.AllQueryPermissions;
+    }
+    public get QueryEntities(): QueryEntityInfo[] {
+        return this._localMetadata.AllQueryEntities;
+    }
+    public get QueryParameters(): QueryParameterInfo[] {
+        return this._localMetadata.AllQueryParameters;
     }
     public get Libraries(): LibraryInfo[] {
         return this._localMetadata.AllLibraries;

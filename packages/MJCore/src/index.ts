@@ -20,6 +20,8 @@ export * from "./generic/transactionGroup";
 export * from "./generic/util";
 export * from "./generic/logging";
 export * from "./generic/queryInfo";
+export * from "./generic/libraryInfo";
+export * from "./generic/explorerNavigationItem";
 export * from "./generic/compositeKey";
 export * from "./generic/authEvaluator";
 export * from "./generic/metadataUtil";

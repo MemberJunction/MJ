@@ -5,7 +5,7 @@ import { RunViewParams } from "../views/runView";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { RunReportParams } from "./runReport";
-import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } from "./queryInfo";
+import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo } from "./queryInfo";
 import { RunQueryParams } from "./runQuery";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
@@ -226,6 +226,10 @@ export interface IMetadataProvider {
     get QueryCategories(): QueryCategoryInfo[]
 
     get QueryPermissions(): QueryPermissionInfo[]
+
+    get QueryEntities(): QueryEntityInfo[]
+
+    get QueryParameters(): QueryParameterInfo[]
 
     get Libraries(): LibraryInfo[]
 
