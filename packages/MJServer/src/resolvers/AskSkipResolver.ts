@@ -1396,6 +1396,20 @@ cycle.`);
     );
   }
 
+
+  /**
+   * Recursively builds the category path for a query
+   * @param md 
+   * @param categoryID 
+   */
+  protected buildQueryCategoryPath(md: Metadata, categoryID: string): string {
+    const cat = md.QueryCategories.find((c) => c.ID === categoryID);
+    if (!cat) return '';
+    if (!cat.ParentID) return cat.Name; // base case, no parent, just return the name
+    const parentPath = this.buildQueryCategoryPath(md, cat.ParentID); // build the path recursively
+    return parentPath ? `${parentPath}/${cat.Name}` : cat.Name; 
+  }
+
   /**
    * Packages up queries from the metadata based on their status
    * Used to provide Skip with information about available queries
@@ -1412,6 +1426,7 @@ cycle.`);
         name: q.Name,
         description: q.Description,
         category: q.Category,
+        categoryPath: this.buildQueryCategoryPath(md, q.CategoryID),
         sql: q.SQL,
         originalSQL: q.OriginalSQL,
         feedback: q.Feedback,

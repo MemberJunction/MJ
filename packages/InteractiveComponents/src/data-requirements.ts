@@ -25,14 +25,15 @@ export interface ComponentDataRequirements {
  */
 export type ComponentQueryDataRequirement = {
     /**
-     * Query name, used along with queryCategory to identify the query
+     * Query name, used along with categoryPath to identify the query
      */
     name: string;
 
     /**
-     * Query category, used along with queryName to identify the query
+     * Full path of the category for the query. Categories can be hierarchical so a full path might be
+     * 'Membership/Users/ActiveUsers'. This helps in organizing queries and avoiding name collisions.
      */
-    category: string;
+    categoryPath: string;
 
     /**
      * Description of the query and how/why the component will use it 
