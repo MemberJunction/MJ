@@ -76,7 +76,7 @@ export class ScheduledAction_ {
     @MaxLength(40)
     Month?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Field CustomCronExpression for entity Scheduled Actions.`}) 
     @MaxLength(510)
     CustomCronExpression?: string;
         
@@ -314,11 +314,11 @@ export class ScheduledActionParam_ {
     @MaxLength(16)
     ActionParamID: string;
         
-    @Field() 
+    @Field({description: `Field ValueType for entity Scheduled Action Params.`}) 
     @MaxLength(40)
     ValueType: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Field Value for entity Scheduled Action Params.`}) 
     Value?: string;
         
     @Field({nullable: true}) 
@@ -894,7 +894,7 @@ export class AIAgentModel_ {
     @MaxLength(16)
     ModelID?: string;
         
-    @Field(() => Boolean, {nullable: true}) 
+    @Field(() => Boolean, {nullable: true, description: `Indicates whether this specific agent-model combination is currently enabled for use in AI operations.`}) 
     Active?: boolean;
         
     @Field(() => Int, {nullable: true, description: `The priority level of the AI model for the agent, where higher values indicate higher priority.`}) 
@@ -3437,7 +3437,7 @@ export class AIAgentNote_ {
     @MaxLength(16)
     AgentNoteTypeID?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `The content of the note, observation, or learning captured by the AI agent during its execution.`}) 
     Note?: string;
         
     @Field() 
@@ -5285,15 +5285,15 @@ export class Company_ {
     @MaxLength(400)
     Description: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `The primary website URL for this company or division.`}) 
     @MaxLength(200)
     Website?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `URL pointing to the company's logo image, used for branding in the UI.`}) 
     @MaxLength(1000)
     LogoURL?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `The primary email domain associated with this company, used for employee email validation and SSO configuration.`}) 
     @MaxLength(510)
     Domain?: string;
         
@@ -5503,15 +5503,15 @@ export class Employee_ {
     @MaxLength(16)
     ID: string;
         
-    @Field() 
+    @Field({description: `Business Central Management ID - unique identifier for cross-system employee tracking.`}) 
     @MaxLength(16)
     BCMID: string;
         
-    @Field() 
+    @Field({description: `Employee's first name or given name.`}) 
     @MaxLength(60)
     FirstName: string;
         
-    @Field() 
+    @Field({description: `Employee's last name or surname.`}) 
     @MaxLength(100)
     LastName: string;
         
@@ -5523,19 +5523,19 @@ export class Employee_ {
     @MaxLength(16)
     SupervisorID?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Employee's job title or position within the organization.`}) 
     @MaxLength(100)
     Title?: string;
         
-    @Field() 
+    @Field({description: `Employee's primary email address, must be unique across the system.`}) 
     @MaxLength(200)
     Email: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Employee's primary phone number for business contact.`}) 
     @MaxLength(40)
     Phone?: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Indicates whether the employee is currently active in the organization.`}) 
     Active: boolean;
         
     @Field() 
@@ -5816,7 +5816,7 @@ export class UserFavorite_ {
     @MaxLength(16)
     EntityID: string;
         
-    @Field() 
+    @Field({description: `The ID of the favorited record.`}) 
     @MaxLength(900)
     RecordID: string;
         
@@ -5985,11 +5985,11 @@ export class EmployeeCompanyIntegration_ {
     @MaxLength(16)
     CompanyIntegrationID: string;
         
-    @Field() 
+    @Field({description: `The employee's unique identifier in the external integrated system.`}) 
     @MaxLength(1500)
     ExternalSystemRecordID: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Indicates if this employee integration mapping is currently active.`}) 
     IsActive: boolean;
         
     @Field() 
@@ -7082,22 +7082,22 @@ export class Integration_ {
     @MaxLength(510)
     Description?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Base URL for navigating to records in the external system from MemberJunction.`}) 
     @MaxLength(1000)
     NavigationBaseURL?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `The TypeScript/JavaScript class name implementing this integration.`}) 
     @MaxLength(200)
     ClassName?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Module import path for the integration class in the codebase.`}) 
     @MaxLength(200)
     ImportPath?: string;
         
-    @Field(() => Int) 
+    @Field(() => Int, {description: `Maximum number of API requests to batch together, -1 for no limit.`}) 
     BatchMaxRequestCount: number;
         
-    @Field(() => Int) 
+    @Field(() => Int, {description: `Milliseconds to wait before sending a batch of requests, -1 to disable batching.`}) 
     BatchRequestWaitTime: number;
         
     @Field() 
@@ -7330,41 +7330,41 @@ export class CompanyIntegration_ {
     @MaxLength(16)
     IntegrationID: string;
         
-    @Field(() => Boolean, {nullable: true}) 
+    @Field(() => Boolean, {nullable: true, description: `Controls whether this integration is currently active for the company.`}) 
     IsActive?: boolean;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `OAuth access token for authenticating with the external system.`}) 
     @MaxLength(510)
     AccessToken?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `OAuth refresh token used to obtain new access tokens when they expire.`}) 
     @MaxLength(510)
     RefreshToken?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Timestamp when the current access token expires and needs to be refreshed.`}) 
     @MaxLength(8)
     TokenExpirationDate?: Date;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `API key for systems using key-based authentication instead of OAuth.`}) 
     @MaxLength(510)
     APIKey?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `The company's identifier in the external system, used for API calls.`}) 
     @MaxLength(200)
     ExternalSystemID?: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Indicates if data can only be read from the external system, not written back.`}) 
     IsExternalSystemReadOnly: boolean;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `OAuth client ID for this integration instance.`}) 
     @MaxLength(510)
     ClientID?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `OAuth client secret for authentication, should be encrypted at rest.`}) 
     @MaxLength(510)
     ClientSecret?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Flexible field for storing integration-specific configuration or metadata.`}) 
     @MaxLength(510)
     CustomAttribute1?: string;
         
@@ -7772,7 +7772,7 @@ export class EntityField_ {
     @Field(() => Boolean, {description: `If set to 1, the "Name" field of the Related Entity will be included in this entity as a virtual field`}) 
     IncludeRelatedEntityNameFieldInBaseView: boolean;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `For foreign key fields, maps which field in the related entity contains the display name. This is used by CodeGen to automatically add in virtual fields for the "Name Field" of the related entity.`}) 
     @MaxLength(510)
     RelatedEntityNameFieldMap?: string;
         
@@ -8184,7 +8184,7 @@ export class Entity_ {
     @MaxLength(510)
     Name: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Optional suffix appended to entity names for display purposes.`}) 
     @MaxLength(510)
     NameSuffix?: string;
         
@@ -8194,22 +8194,22 @@ export class Entity_ {
     @Field(() => Boolean, {description: `When set to 1 (default), whenever a description is modified in the underlying view (first choice) or table (second choice), the Description column in the entity definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.`}) 
     AutoUpdateDescription: boolean;
         
-    @Field() 
+    @Field({description: `The underlying database table name for this entity.`}) 
     @MaxLength(510)
     BaseTable: string;
         
-    @Field() 
+    @Field({description: `The "wrapper" database view used for querying this entity with joins and computed fields.`}) 
     @MaxLength(510)
     BaseView: string;
         
     @Field(() => Boolean, {description: `When set to 0, CodeGen no longer generates a base view for the entity.`}) 
     BaseViewGenerated: boolean;
         
-    @Field() 
+    @Field({description: `Database schema containing this entity's table and view.`}) 
     @MaxLength(510)
     SchemaName: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Indicates if this is a virtual entity without a physical database table.`}) 
     VirtualEntity: boolean;
         
     @Field(() => Boolean, {description: `When set to 1, changes made via the MemberJunction architecture will result in tracking records being created in the RecordChange table. In addition, when turned on CodeGen will ensure that your table has two fields: __mj_CreatedAt and __mj_UpdatedAt which are special fields used in conjunction with the RecordChange table to track changes to rows in your entity.`}) 
@@ -8242,52 +8242,52 @@ export class Entity_ {
     @Field(() => Boolean, {description: `Enabling this bit will result in search being possible at the API and UI layers`}) 
     AllowUserSearchAPI: boolean;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Whether full-text search indexing is enabled for this entity.`}) 
     FullTextSearchEnabled: boolean;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Name of the SQL Server full-text catalog if search is enabled.`}) 
     @MaxLength(510)
     FullTextCatalog?: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Indicates if the full-text catalog was auto-generated by CodeGen.`}) 
     FullTextCatalogGenerated: boolean;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Name of the full-text index on this entity's table.`}) 
     @MaxLength(510)
     FullTextIndex?: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Indicates if the full-text index was auto-generated by CodeGen.`}) 
     FullTextIndexGenerated: boolean;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Name of the function used for full-text searching this entity.`}) 
     @MaxLength(510)
     FullTextSearchFunction?: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Indicates if the search function was auto-generated by CodeGen.`}) 
     FullTextSearchFunctionGenerated: boolean;
         
-    @Field(() => Int, {nullable: true}) 
+    @Field(() => Int, {nullable: true, description: `Maximum number of rows to return in user-created views for this entity.`}) 
     UserViewMaxRows?: number;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Name of the stored procedure for creating records in this entity.`}) 
     @MaxLength(510)
     spCreate?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Name of the stored procedure for updating records in this entity.`}) 
     @MaxLength(510)
     spUpdate?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Name of the stored procedure for deleting records in this entity.`}) 
     @MaxLength(510)
     spDelete?: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Indicates if the create procedure was auto-generated by CodeGen.`}) 
     spCreateGenerated: boolean;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Indicates if the update procedure was auto-generated by CodeGen.`}) 
     spUpdateGenerated: boolean;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Indicates if the delete procedure was auto-generated by CodeGen.`}) 
     spDeleteGenerated: boolean;
         
     @Field(() => Boolean, {description: `When set to 1, the deleted spDelete will pre-process deletion to related entities that have 1:M cardinality with this entity. This does not have effect if spDeleteGenerated = 0`}) 
@@ -8308,14 +8308,14 @@ export class Entity_ {
     @MaxLength(40)
     RelationshipDefaultDisplayType: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Indicates if the default user form was auto-generated for this entity.`}) 
     UserFormGenerated: boolean;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `TypeScript class name for the entity subclass in the codebase.`}) 
     @MaxLength(510)
     EntityObjectSubclassName?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Import path for the entity subclass in the TypeScript codebase.`}) 
     @MaxLength(510)
     EntityObjectSubclassImport?: string;
         
@@ -9308,15 +9308,15 @@ export class User_ {
     @MaxLength(200)
     Name: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `User's first name or given name.`}) 
     @MaxLength(100)
     FirstName?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `User's last name or surname.`}) 
     @MaxLength(100)
     LastName?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `User's professional title or salutation.`}) 
     @MaxLength(100)
     Title?: string;
         
@@ -9324,14 +9324,14 @@ export class User_ {
     @MaxLength(200)
     Email: string;
         
-    @Field() 
+    @Field({description: `User account type (User, Guest, System, API).`}) 
     @MaxLength(30)
     Type: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Whether this user account is currently active and can log in.`}) 
     IsActive: boolean;
         
-    @Field() 
+    @Field({description: `Type of record this user is linked to (None, Employee, Contact, etc.).`}) 
     @MaxLength(20)
     LinkedRecordType: string;
         
@@ -9339,7 +9339,7 @@ export class User_ {
     @MaxLength(16)
     LinkedEntityID?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `ID of the specific record this user is linked to.`}) 
     @MaxLength(900)
     LinkedEntityRecordID?: string;
         
@@ -10131,40 +10131,40 @@ export class EntityRelationship_ {
     @MaxLength(16)
     RelatedEntityID: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Whether to include related records when fetching the parent entity via API.`}) 
     BundleInAPI: boolean;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Whether to include this relationship when querying all fields of the parent entity.`}) 
     IncludeInParentAllQuery: boolean;
         
-    @Field() 
+    @Field({description: `The cardinality of the relationship (One To Many, Many To Many, One To One).`}) 
     @MaxLength(40)
     Type: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `The primary key field of the parent entity in this relationship.`}) 
     @MaxLength(510)
     EntityKeyField?: string;
         
-    @Field() 
+    @Field({description: `The foreign key field in the related entity that references the parent.`}) 
     @MaxLength(510)
     RelatedEntityJoinField: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `For many-to-many relationships, the view containing the junction data.`}) 
     @MaxLength(510)
     JoinView?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `For many-to-many, the field in the junction table linking to the parent entity.`}) 
     @MaxLength(510)
     JoinEntityJoinField?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `For many-to-many, the field in the junction table linking to the related entity.`}) 
     @MaxLength(510)
     JoinEntityInverseJoinField?: string;
         
     @Field(() => Boolean, {description: `When unchecked the relationship will NOT be displayed on the generated form`}) 
     DisplayInForm: boolean;
         
-    @Field() 
+    @Field({description: `Where to display this relationship in the UI relative to other entity elements.`}) 
     @MaxLength(100)
     DisplayLocation: string;
         
@@ -10490,19 +10490,19 @@ export class UserRecordLog_ {
     @MaxLength(16)
     EntityID: string;
         
-    @Field() 
+    @Field({description: `The ID of the accessed record.`}) 
     @MaxLength(900)
     RecordID: string;
         
-    @Field() 
+    @Field({description: `Field EarliestAt for entity User Record Logs.`}) 
     @MaxLength(8)
     EarliestAt: Date;
         
-    @Field() 
+    @Field({description: `Field LatestAt for entity User Record Logs.`}) 
     @MaxLength(8)
     LatestAt: Date;
         
-    @Field(() => Int) 
+    @Field(() => Int, {description: `Field TotalCount for entity User Record Logs.`}) 
     TotalCount: number;
         
     @Field() 
@@ -10711,40 +10711,40 @@ export class UserView_ {
     @MaxLength(16)
     CategoryID?: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Whether this view is shared with other users.`}) 
     IsShared: boolean;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Whether this is the user's default view for the entity.`}) 
     IsDefault: boolean;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `JSON storing complete grid configuration including columns, widths, and formatting.`}) 
     GridState?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `JSON storing the view's filter configuration.`}) 
     FilterState?: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Indicates if custom filters beyond standard options are applied.`}) 
     CustomFilterState: boolean;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Whether AI-powered smart filtering is enabled for this view.`}) 
     SmartFilterEnabled: boolean;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Natural language prompt for AI-powered filtering.`}) 
     SmartFilterPrompt?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Generated WHERE clause from smart filter processing.`}) 
     SmartFilterWhereClause?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `AI-generated explanation of what the smart filter does.`}) 
     SmartFilterExplanation?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Direct SQL WHERE clause for the view filter.`}) 
     WhereClause?: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Indicates if a custom WHERE clause is used instead of standard filters.`}) 
     CustomWhereClause: boolean;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `JSON storing the view's sort configuration.`}) 
     SortState?: string;
         
     @Field() 
@@ -11074,7 +11074,7 @@ export class CompanyIntegrationRun_ {
     @MaxLength(8)
     EndedAt?: Date;
         
-    @Field(() => Int) 
+    @Field(() => Int, {description: `The total number of records processed during this integration run.`}) 
     TotalRecords: number;
         
     @Field({nullable: true}) 
@@ -11330,19 +11330,19 @@ export class CompanyIntegrationRunDetail_ {
     @MaxLength(16)
     EntityID: string;
         
-    @Field() 
+    @Field({description: `The ID of the specific record being processed in this integration operation.`}) 
     @MaxLength(900)
     RecordID: string;
         
-    @Field() 
+    @Field({description: `The type of operation performed (INSERT, UPDATE, DELETE, SYNC).`}) 
     @MaxLength(40)
     Action: string;
         
-    @Field() 
+    @Field({description: `Timestamp when this specific record operation was executed.`}) 
     @MaxLength(8)
     ExecutedAt: Date;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Indicates whether this individual record operation succeeded or failed.`}) 
     IsSuccess: boolean;
         
     @Field() 
@@ -11541,14 +11541,14 @@ export class ErrorLog_ {
     @MaxLength(16)
     CompanyIntegrationRunDetailID?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Error code for categorizing and handling specific error types.`}) 
     @MaxLength(40)
     Code?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `The primary error message describing what went wrong.`}) 
     Message?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `User or system process that encountered this error.`}) 
     @MaxLength(100)
     CreatedBy?: string;
         
@@ -11556,11 +11556,11 @@ export class ErrorLog_ {
     @MaxLength(20)
     Status?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `High-level category for grouping related errors (Database, API, Validation, etc.).`}) 
     @MaxLength(40)
     Category?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Full error details including stack trace, inner exceptions, and context data.`}) 
     Details?: string;
         
     @Field() 
@@ -11995,7 +11995,7 @@ export class ApplicationEntity_ {
     @MaxLength(16)
     EntityID: string;
         
-    @Field(() => Int) 
+    @Field(() => Int, {description: `Display order of this entity within the application, lower numbers appear first in navigation and menus.`}) 
     Sequence: number;
         
     @Field(() => Boolean, {description: `When set to 1, the entity will be included by default for a new user when they first access the application in question`}) 
@@ -12181,16 +12181,16 @@ export class EntityPermission_ {
     @MaxLength(16)
     RoleID: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Whether the role/user can create new records in this entity.`}) 
     CanCreate: boolean;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Whether the role/user can read/view records in this entity.`}) 
     CanRead: boolean;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Whether the role/user can update existing records in this entity.`}) 
     CanUpdate: boolean;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Whether the role/user can delete records from this entity.`}) 
     CanDelete: boolean;
         
     @Field({nullable: true}) 
@@ -12442,7 +12442,7 @@ export class UserApplicationEntity_ {
     @MaxLength(16)
     EntityID: string;
         
-    @Field(() => Int) 
+    @Field(() => Int, {description: `Display order of this entity for the user within the application.`}) 
     Sequence: number;
         
     @Field() 
@@ -12610,10 +12610,10 @@ export class UserApplication_ {
     @MaxLength(16)
     ApplicationID: string;
         
-    @Field(() => Int) 
+    @Field(() => Int, {description: `Display order of this application in the user's navigation.`}) 
     Sequence: number;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Whether this application is currently visible to the user.`}) 
     IsActive: boolean;
         
     @Field() 
@@ -12792,21 +12792,21 @@ export class CompanyIntegrationRunAPILog_ {
     @MaxLength(16)
     CompanyIntegrationRunID: string;
         
-    @Field() 
+    @Field({description: `Timestamp when this API call was executed during the integration run.`}) 
     @MaxLength(8)
     ExecutedAt: Date;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Indicates whether the API call completed successfully or encountered an error.`}) 
     IsSuccess: boolean;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `HTTP method used for the API call (GET, POST, PUT, DELETE, PATCH).`}) 
     @MaxLength(24)
     RequestMethod?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `The complete URL that was called, including query parameters.`}) 
     URL?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `JSON-formatted request body or parameters sent with the API call.`}) 
     Parameters?: string;
         
     @Field() 
@@ -12991,7 +12991,7 @@ export class List_ {
     @MaxLength(16)
     CategoryID?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Identifier for this list in an external system, used for synchronization.`}) 
     @MaxLength(200)
     ExternalSystemRecordID?: string;
         
@@ -13214,11 +13214,11 @@ export class ListDetail_ {
     @MaxLength(16)
     ListID: string;
         
-    @Field() 
+    @Field({description: `The ID of the record included in this list.`}) 
     @MaxLength(890)
     RecordID: string;
         
-    @Field(() => Int) 
+    @Field(() => Int, {description: `Order of this record within the list, for maintaining user-defined sorting.`}) 
     Sequence: number;
         
     @Field() 
@@ -13393,7 +13393,7 @@ export class UserViewRun_ {
     @MaxLength(16)
     UserViewID: string;
         
-    @Field() 
+    @Field({description: `Timestamp when the view was executed.`}) 
     @MaxLength(8)
     RunAt: Date;
         
@@ -13571,7 +13571,7 @@ export class UserViewRunDetail_ {
     @MaxLength(16)
     UserViewRunID: string;
         
-    @Field() 
+    @Field({description: `Field RecordID for entity User View Run Details.`}) 
     @MaxLength(900)
     RecordID: string;
         
@@ -13726,7 +13726,7 @@ export class WorkflowRun_ {
     @MaxLength(16)
     WorkflowID: string;
         
-    @Field() 
+    @Field({description: `Field ExternalSystemRecordID for entity Workflow Runs.`}) 
     @MaxLength(1000)
     ExternalSystemRecordID: string;
         
@@ -13742,7 +13742,7 @@ export class WorkflowRun_ {
     @MaxLength(20)
     Status: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `JSON-formatted detailed results from the workflow execution, including outputs from each step and any error information.`}) 
     Results?: string;
         
     @Field() 
@@ -13927,7 +13927,7 @@ export class Workflow_ {
     @MaxLength(16)
     WorkflowEngineID: string;
         
-    @Field() 
+    @Field({description: `The unique identifier of this workflow in an external system, used for synchronization with external workflow engines.`}) 
     @MaxLength(200)
     ExternalSystemRecordID: string;
         
@@ -14156,11 +14156,11 @@ export class WorkflowEngine_ {
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field() 
+    @Field({description: `Import path for the workflow engine driver.`}) 
     @MaxLength(1000)
     DriverPath: string;
         
-    @Field() 
+    @Field({description: `Class name implementing the workflow engine interface.`}) 
     @MaxLength(200)
     DriverClass: string;
         
@@ -14332,7 +14332,7 @@ export class RecordChange_ {
     @MaxLength(16)
     EntityID: string;
         
-    @Field() 
+    @Field({description: `Field RecordID for entity Record Changes.`}) 
     @MaxLength(1500)
     RecordID: string;
         
@@ -14365,7 +14365,7 @@ export class RecordChange_ {
     @MaxLength(100)
     Status: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Field ErrorLog for entity Record Changes.`}) 
     ErrorLog?: string;
         
     @Field({nullable: true}) 
@@ -14379,11 +14379,11 @@ export class RecordChange_ {
     @Field({nullable: true}) 
     Comments?: string;
         
-    @Field() 
+    @Field({description: `Field CreatedAt for entity Record Changes.`}) 
     @MaxLength(10)
     CreatedAt: Date;
         
-    @Field() 
+    @Field({description: `Field UpdatedAt for entity Record Changes.`}) 
     @MaxLength(10)
     UpdatedAt: Date;
         
@@ -14774,7 +14774,7 @@ export class RowLevelSecurityFilter_ {
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `SQL WHERE clause template that filters records based on user context variables.`}) 
     FilterText?: string;
         
     @Field() 
@@ -14964,14 +14964,14 @@ export class AuditLog_ {
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `JSON-formatted additional context about the audited event, including before/after values, parameters, or other relevant data.`}) 
     Details?: string;
         
     @Field({nullable: true}) 
     @MaxLength(16)
     EntityID?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `The primary key value of the record that was affected by this audited action, enabling direct lookup of the modified data.`}) 
     @MaxLength(900)
     RecordID?: string;
         
@@ -15174,7 +15174,7 @@ export class Authorization_ {
     @MaxLength(200)
     Name: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Indicates whether this authorization is currently active and can be granted to users or roles.`}) 
     IsActive: boolean;
         
     @Field(() => Boolean, {description: `When set to 1, Audit Log records are created whenever this authorization is invoked for a user`}) 
@@ -15427,7 +15427,7 @@ export class AuthorizationRole_ {
     @MaxLength(16)
     RoleID: string;
         
-    @Field() 
+    @Field({description: `Specifies whether this authorization is granted to ('grant') or explicitly denied ('deny') for the role.`}) 
     @MaxLength(20)
     Type: string;
         
@@ -15808,14 +15808,14 @@ export class EntityFieldValue_ {
     @MaxLength(16)
     EntityFieldID: string;
         
-    @Field(() => Int) 
+    @Field(() => Int, {description: `Display order for this value in dropdown lists and UI elements.`}) 
     Sequence: number;
         
-    @Field() 
+    @Field({description: `The actual value stored in the database for this option.`}) 
     @MaxLength(510)
     Value: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Optional code identifier for this value, useful for programmatic access. If not specified, same as Value`}) 
     @MaxLength(100)
     Code?: string;
         
@@ -16015,7 +16015,7 @@ export class AIModel_ {
     @Field(() => Int, {nullable: true, description: `Optional column that ranks the power of the AI model. Default is 0 and should be non-negative.`}) 
     PowerRank?: number;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Controls whether this AI model is available for use in the system.`}) 
     IsActive: boolean;
         
     @Field() 
@@ -16418,14 +16418,14 @@ export class AIAction_ {
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `The standard prompt template used when invoking this AI action, can include placeholders for dynamic values.`}) 
     DefaultPrompt?: string;
         
     @Field({nullable: true}) 
     @MaxLength(16)
     DefaultModelID?: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Controls whether this AI action is currently available for use across the system.`}) 
     IsActive: boolean;
         
     @Field() 
@@ -16633,7 +16633,7 @@ export class AIModelAction_ {
     @MaxLength(16)
     AIActionID: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Determines if this specific action is currently enabled for the associated AI model.`}) 
     IsActive: boolean;
         
     @Field() 
@@ -16815,25 +16815,25 @@ export class EntityAIAction_ {
     @MaxLength(510)
     Name: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `The AI prompt template used when this action is triggered by entity changes.`}) 
     Prompt?: string;
         
-    @Field() 
+    @Field({description: `The entity event that triggers this AI action (After Save, Before Delete, etc.).`}) 
     @MaxLength(30)
     TriggerEvent: string;
         
-    @Field() 
+    @Field({description: `Message shown to users when this AI action is executed.`}) 
     UserMessage: string;
         
-    @Field() 
+    @Field({description: `Where the AI output should be stored (Field, Message, File).`}) 
     @MaxLength(20)
     OutputType: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `The field name where AI output should be stored if OutputType is Field.`}) 
     @MaxLength(100)
     OutputField?: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Whether to skip AI processing if the output field already contains data.`}) 
     SkipIfOutputFieldNotEmpty: boolean;
         
     @Field({nullable: true}) 
@@ -17257,15 +17257,15 @@ export class QueueType_ {
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field() 
+    @Field({description: `Field DriverClass for entity Queue Types.`}) 
     @MaxLength(200)
     DriverClass: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Field DriverImportPath for entity Queue Types.`}) 
     @MaxLength(400)
     DriverImportPath?: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Field IsActive for entity Queue Types.`}) 
     IsActive: boolean;
         
     @Field() 
@@ -17449,53 +17449,53 @@ export class Queue_ {
     @MaxLength(16)
     QueueTypeID: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Field IsActive for entity Queues.`}) 
     IsActive: boolean;
         
-    @Field(() => Int, {nullable: true}) 
+    @Field(() => Int, {nullable: true, description: `Field ProcessPID for entity Queues.`}) 
     ProcessPID?: number;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Field ProcessPlatform for entity Queues.`}) 
     @MaxLength(60)
     ProcessPlatform?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Field ProcessVersion for entity Queues.`}) 
     @MaxLength(30)
     ProcessVersion?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Field ProcessCwd for entity Queues.`}) 
     @MaxLength(200)
     ProcessCwd?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Field ProcessIPAddress for entity Queues.`}) 
     @MaxLength(100)
     ProcessIPAddress?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Field ProcessMacAddress for entity Queues.`}) 
     @MaxLength(100)
     ProcessMacAddress?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Field ProcessOSName for entity Queues.`}) 
     @MaxLength(50)
     ProcessOSName?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Field ProcessOSVersion for entity Queues.`}) 
     @MaxLength(20)
     ProcessOSVersion?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Field ProcessHostName for entity Queues.`}) 
     @MaxLength(100)
     ProcessHostName?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Field ProcessUserID for entity Queues.`}) 
     @MaxLength(50)
     ProcessUserID?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Field ProcessUserName for entity Queues.`}) 
     @MaxLength(100)
     ProcessUserName?: string;
         
-    @Field() 
+    @Field({description: `Field LastHeartbeat for entity Queues.`}) 
     @MaxLength(8)
     LastHeartbeat: Date;
         
@@ -17755,16 +17755,16 @@ export class QueueTask_ {
     @MaxLength(8)
     EndedAt?: Date;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `JSON payload containing the data needed to process this task.`}) 
     Data?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `JSON configuration options for how this task should be processed.`}) 
     Options?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Result data from task execution, typically in JSON format.`}) 
     Output?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Error details if the task failed during processing.`}) 
     ErrorMessage?: string;
         
     @Field({nullable: true}) 
@@ -17970,7 +17970,7 @@ export class Dashboard_ {
     @MaxLength(16)
     CategoryID?: string;
         
-    @Field() 
+    @Field({description: `JSON configuration defining the dashboard layout, widgets, data sources, and display options.`}) 
     UIConfigDetails: string;
         
     @Field() 
@@ -18393,7 +18393,7 @@ export class OutputFormatType_ {
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Configuration or template for how data should be formatted in this output type.`}) 
     DisplayFormat?: string;
         
     @Field() 
@@ -18728,7 +18728,7 @@ export class Report_ {
     @MaxLength(16)
     UserID: string;
         
-    @Field() 
+    @Field({description: `Field SharingScope for entity Reports.`}) 
     @MaxLength(40)
     SharingScope: string;
         
@@ -18744,7 +18744,7 @@ export class Report_ {
     @MaxLength(16)
     DataContextID?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Field Configuration for entity Reports.`}) 
     Configuration?: string;
         
     @Field({nullable: true}) 
@@ -18759,11 +18759,11 @@ export class Report_ {
     @MaxLength(16)
     OutputDeliveryTypeID?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `For scheduled reports, the frequency of generation (Daily, Weekly, Monthly, etc.).`}) 
     @MaxLength(100)
     OutputFrequency?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Email address(es) to send the report to when using email delivery.`}) 
     @MaxLength(510)
     OutputTargetEmail?: string;
         
@@ -19072,7 +19072,7 @@ export class ReportSnapshot_ {
     @MaxLength(16)
     ReportID: string;
         
-    @Field() 
+    @Field({description: `Field ResultSet for entity Report Snapshots.`}) 
     ResultSet: string;
         
     @Field() 
@@ -19236,14 +19236,14 @@ export class ResourceType_ {
     @MaxLength(510)
     Name: string;
         
-    @Field() 
+    @Field({description: `Field DisplayName for entity Resource Types.`}) 
     @MaxLength(510)
     DisplayName: string;
         
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Icon identifier for displaying this resource type in the UI.`}) 
     @MaxLength(200)
     Icon?: string;
         
@@ -19486,7 +19486,7 @@ export class Tag_ {
     @MaxLength(16)
     ParentID?: string;
         
-    @Field() 
+    @Field({description: `Field DisplayName for entity Tags.`}) 
     @MaxLength(510)
     DisplayName: string;
         
@@ -19682,7 +19682,7 @@ export class TaggedItem_ {
     @MaxLength(16)
     EntityID: string;
         
-    @Field() 
+    @Field({description: `Field RecordID for entity Tagged Items.`}) 
     @MaxLength(900)
     RecordID: string;
         
@@ -20027,14 +20027,14 @@ export class WorkspaceItem_ {
     @MaxLength(16)
     ResourceTypeID: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `The ID of the resource (such as a view, dashboard, or other entity record) that is included in this workspace.`}) 
     @MaxLength(4000)
     ResourceRecordID?: string;
         
-    @Field(() => Int) 
+    @Field(() => Int, {description: `The display order of this item within the workspace, used for arranging resources in the user interface.`}) 
     Sequence: number;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `JSON configuration data specific to this workspace item, storing custom settings and state information.`}) 
     Configuration?: string;
         
     @Field() 
@@ -20373,7 +20373,7 @@ export class DatasetItem_ {
     @MaxLength(16)
     ID: string;
         
-    @Field() 
+    @Field({description: `Unique code identifier for this dataset item within its parent dataset.`}) 
     @MaxLength(100)
     Code: string;
         
@@ -20381,17 +20381,17 @@ export class DatasetItem_ {
     @MaxLength(16)
     DatasetID: string;
         
-    @Field(() => Int) 
+    @Field(() => Int, {description: `Order in which this item should be processed or displayed within the dataset.`}) 
     Sequence: number;
         
     @Field() 
     @MaxLength(16)
     EntityID: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `SQL WHERE clause to filter data when this dataset item is sourced from a query.`}) 
     WhereClause?: string;
         
-    @Field() 
+    @Field({description: `The date field name used for incremental updates and change detection.`}) 
     @MaxLength(200)
     DateFieldToCheck: string;
         
@@ -20588,21 +20588,21 @@ export class ConversationDetail_ {
     @MaxLength(16)
     ConversationID: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `External system identifier for this message, used for integration scenarios.`}) 
     @MaxLength(200)
     ExternalID?: string;
         
-    @Field() 
+    @Field({description: `The role of the message sender (user, assistant, system, function).`}) 
     @MaxLength(40)
     Role: string;
         
-    @Field() 
+    @Field({description: `The actual content of the message in the conversation.`}) 
     Message: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Error message if this conversation turn encountered a problem.`}) 
     Error?: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Flag indicating if this message should be hidden from end users (system messages, function calls, etc.).`}) 
     HiddenToUser: boolean;
         
     @Field() 
@@ -20885,7 +20885,7 @@ export class Conversation_ {
     @MaxLength(16)
     UserID: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `External system identifier for cross-system conversation tracking.`}) 
     @MaxLength(1000)
     ExternalID?: string;
         
@@ -20896,18 +20896,18 @@ export class Conversation_ {
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field() 
+    @Field({description: `The type or category of conversation (Skip, Support, Chat, etc.).`}) 
     @MaxLength(100)
     Type: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Indicates if this conversation has been archived and should not appear in active lists.`}) 
     IsArchived: boolean;
         
     @Field({nullable: true}) 
     @MaxLength(16)
     LinkedEntityID?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `ID of a related record this conversation is about (support ticket, order, etc.).`}) 
     @MaxLength(1000)
     LinkedRecordID?: string;
         
@@ -21174,24 +21174,24 @@ export class UserNotification_ {
     @MaxLength(16)
     UserID: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Brief title or subject of the notification.`}) 
     @MaxLength(510)
     Title?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Full notification message content.`}) 
     Message?: string;
         
     @Field({nullable: true}) 
     @MaxLength(16)
     ResourceTypeID?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Field ResourceConfiguration for entity User Notifications.`}) 
     ResourceConfiguration?: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Field Unread for entity User Notifications.`}) 
     Unread: boolean;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Timestamp when the user read this notification.`}) 
     @MaxLength(8)
     ReadAt?: Date;
         
@@ -21203,7 +21203,7 @@ export class UserNotification_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `ID of the specific record this notification is about.`}) 
     @MaxLength(16)
     ResourceRecordID?: string;
         
@@ -21382,14 +21382,14 @@ export class SchemaInfo_ {
     @MaxLength(16)
     ID: string;
         
-    @Field() 
+    @Field({description: `The database schema this information applies to.`}) 
     @MaxLength(100)
     SchemaName: string;
         
-    @Field(() => Int) 
+    @Field(() => Int, {description: `Field EntityIDMin for entity Schema Info.`}) 
     EntityIDMin: number;
         
-    @Field(() => Int) 
+    @Field(() => Int, {description: `Field EntityIDMax for entity Schema Info.`}) 
     EntityIDMax: number;
         
     @Field({nullable: true}) 
@@ -21550,7 +21550,7 @@ export class CompanyIntegrationRecordMap_ {
     @MaxLength(16)
     CompanyIntegrationID: string;
         
-    @Field() 
+    @Field({description: `The unique identifier for this record in the external integrated system.`}) 
     @MaxLength(1500)
     ExternalSystemRecordID: string;
         
@@ -21558,7 +21558,7 @@ export class CompanyIntegrationRecordMap_ {
     @MaxLength(16)
     EntityID: string;
         
-    @Field() 
+    @Field({description: `The internal MemberJunction record ID that corresponds to the external system record.`}) 
     @MaxLength(1500)
     EntityRecordID: string;
         
@@ -21725,7 +21725,7 @@ export class RecordMergeLog_ {
     @MaxLength(16)
     EntityID: string;
         
-    @Field() 
+    @Field({description: `The ID of the record that survived the merge and contains the consolidated data.`}) 
     @MaxLength(900)
     SurvivingRecordID: string;
         
@@ -21733,7 +21733,7 @@ export class RecordMergeLog_ {
     @MaxLength(16)
     InitiatedByUserID: string;
         
-    @Field() 
+    @Field({description: `Field ApprovalStatus for entity Record Merge Logs.`}) 
     @MaxLength(20)
     ApprovalStatus: string;
         
@@ -21741,19 +21741,19 @@ export class RecordMergeLog_ {
     @MaxLength(16)
     ApprovedByUserID?: string;
         
-    @Field() 
+    @Field({description: `Field ProcessingStatus for entity Record Merge Logs.`}) 
     @MaxLength(20)
     ProcessingStatus: string;
         
-    @Field() 
+    @Field({description: `Field ProcessingStartedAt for entity Record Merge Logs.`}) 
     @MaxLength(8)
     ProcessingStartedAt: Date;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Field ProcessingEndedAt for entity Record Merge Logs.`}) 
     @MaxLength(8)
     ProcessingEndedAt?: Date;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Detailed log of the merge process including field mappings and decisions.`}) 
     ProcessingLog?: string;
         
     @Field({nullable: true}) 
@@ -21988,7 +21988,7 @@ export class RecordMergeDeletionLog_ {
     @MaxLength(16)
     RecordMergeLogID: string;
         
-    @Field() 
+    @Field({description: `Field DeletedRecordID for entity Record Merge Deletion Logs.`}) 
     @MaxLength(1500)
     DeletedRecordID: string;
         
@@ -21996,7 +21996,7 @@ export class RecordMergeDeletionLog_ {
     @MaxLength(20)
     Status: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Field ProcessingLog for entity Record Merge Deletion Logs.`}) 
     ProcessingLog?: string;
         
     @Field() 
@@ -22161,7 +22161,7 @@ export class QueryField_ {
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field(() => Int) 
+    @Field(() => Int, {description: `Display order of this field in query results.`}) 
     Sequence: number;
         
     @Field({description: `The base type, not including parameters, in SQL. For example this field would be nvarchar or decimal, and wouldn't include type parameters. The SQLFullType field provides that information.`}) 
@@ -22176,20 +22176,20 @@ export class QueryField_ {
     @MaxLength(16)
     SourceEntityID?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `The original field name from the SQL query if different from the display name.`}) 
     @MaxLength(510)
     SourceFieldName?: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Indicates if this field is calculated from other fields rather than directly from the database.`}) 
     IsComputed: boolean;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Explanation of how this computed field is calculated.`}) 
     ComputationDescription?: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Whether this field represents an aggregate or summary value.`}) 
     IsSummary: boolean;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Description of what this summary field represents and how it's aggregated.`}) 
     SummaryDescription?: string;
         
     @Field() 
@@ -22626,22 +22626,22 @@ export class Query_ {
     @MaxLength(16)
     CategoryID?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `The natural language question this query answers, used for AI query selection.`}) 
     UserQuestion?: string;
         
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `The actual SQL query text to execute, may include parameters.`}) 
     SQL?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Technical documentation of the query logic, performance considerations, and parameter usage.`}) 
     TechnicalDescription?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `The original SQL before any optimization or modification, kept for reference.`}) 
     OriginalSQL?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `User feedback on query accuracy, performance, or suggested improvements.`}) 
     Feedback?: string;
         
     @Field() 
@@ -23604,11 +23604,11 @@ export class VectorDatabase_ {
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Field DefaultURL for entity Vector Databases.`}) 
     @MaxLength(510)
     DefaultURL?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Field ClassKey for entity Vector Databases.`}) 
     @MaxLength(200)
     ClassKey?: string;
         
@@ -23793,7 +23793,7 @@ export class EntityRecordDocument_ {
     @MaxLength(16)
     EntityID: string;
         
-    @Field() 
+    @Field({description: `The ID of the entity record this document was generated for.`}) 
     @MaxLength(900)
     RecordID: string;
         
@@ -23801,21 +23801,21 @@ export class EntityRecordDocument_ {
     @MaxLength(16)
     EntityDocumentID: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `The generated document text after template processing.`}) 
     DocumentText?: string;
         
     @Field() 
     @MaxLength(16)
     VectorIndexID: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Reference to the vector embedding of this document if AI search is enabled.`}) 
     @MaxLength(100)
     VectorID?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `JSON representation of the vector embedding for this document.`}) 
     VectorJSON?: string;
         
-    @Field() 
+    @Field({description: `Timestamp of when the source entity record was last updated.`}) 
     @MaxLength(8)
     EntityRecordUpdatedAt: Date;
         
@@ -24541,7 +24541,7 @@ export class DataContext_ {
     @MaxLength(16)
     UserID: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Timestamp of when the data in this context was last refreshed or recalculated.`}) 
     @MaxLength(8)
     LastRefreshedAt?: Date;
         
@@ -25360,18 +25360,18 @@ export class FileStorageProvider_ {
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field() 
+    @Field({description: `Identifier for the server-side driver implementation for this storage provider.`}) 
     @MaxLength(200)
     ServerDriverKey: string;
         
-    @Field() 
+    @Field({description: `Identifier for the client-side driver implementation for this storage provider.`}) 
     @MaxLength(200)
     ClientDriverKey: string;
         
-    @Field(() => Int) 
+    @Field(() => Int, {description: `Priority order for selecting storage providers, lower numbers are preferred.`}) 
     Priority: number;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Whether this storage provider is currently available for use.`}) 
     IsActive: boolean;
         
     @Field() 
@@ -25565,11 +25565,11 @@ export class File_ {
     @MaxLength(16)
     ProviderID: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `MIME type of the file content (e.g., image/jpeg, application/pdf).`}) 
     @MaxLength(510)
     ContentType?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Storage provider-specific identifier or path for this file.`}) 
     @MaxLength(1000)
     ProviderKey?: string;
         
@@ -25961,7 +25961,7 @@ export class FileEntityRecordLink_ {
     @MaxLength(16)
     EntityID: string;
         
-    @Field() 
+    @Field({description: `The ID of the entity record this file is attached to.`}) 
     @MaxLength(1500)
     RecordID: string;
         
@@ -26118,20 +26118,20 @@ export class VersionInstallation_ {
     @MaxLength(16)
     ID: string;
         
-    @Field(() => Int) 
+    @Field(() => Int, {description: `Major version number installed.`}) 
     MajorVersion: number;
         
-    @Field(() => Int) 
+    @Field(() => Int, {description: `Minor version number installed.`}) 
     MinorVersion: number;
         
-    @Field(() => Int) 
+    @Field(() => Int, {description: `Patch version number installed.`}) 
     PatchVersion: number;
         
     @Field({nullable: true, description: `What type of installation was applied`}) 
     @MaxLength(40)
     Type?: string;
         
-    @Field() 
+    @Field({description: `Timestamp when this version was installed.`}) 
     @MaxLength(8)
     InstalledAt: Date;
         
@@ -26332,22 +26332,22 @@ export class DuplicateRunDetailMatch_ {
     @MaxLength(40)
     MatchSource: string;
         
-    @Field() 
+    @Field({description: `The ID of the record identified as a potential duplicate match.`}) 
     @MaxLength(1000)
     MatchRecordID: string;
         
     @Field(() => Float, {description: `Value between 0 and 1 designating the computed probability of a match`}) 
     MatchProbability: number;
         
-    @Field() 
+    @Field({description: `Timestamp when this duplicate match was identified.`}) 
     @MaxLength(8)
     MatchedAt: Date;
         
-    @Field() 
+    @Field({description: `The action to take for this match (Ignore, Merge, Delete).`}) 
     @MaxLength(40)
     Action: string;
         
-    @Field() 
+    @Field({description: `Current approval status of the proposed action (Pending, Approved, Rejected).`}) 
     @MaxLength(40)
     ApprovalStatus: string;
         
@@ -26355,11 +26355,11 @@ export class DuplicateRunDetailMatch_ {
     @MaxLength(16)
     RecordMergeLogID?: string;
         
-    @Field() 
+    @Field({description: `Status of the merge operation if Action is Merge (Pending, Complete, Failed).`}) 
     @MaxLength(40)
     MergeStatus: string;
         
-    @Field() 
+    @Field({description: `Timestamp when records were merged, if applicable.`}) 
     @MaxLength(8)
     MergedAt: Date;
         
@@ -26558,7 +26558,7 @@ export class EntityDocumentSetting_ {
     @MaxLength(200)
     Name: string;
         
-    @Field() 
+    @Field({description: `JSON configuration value for this document generation setting.`}) 
     Value: string;
         
     @Field({nullable: true}) 
@@ -26727,7 +26727,7 @@ export class EntitySetting_ {
     @MaxLength(200)
     Name: string;
         
-    @Field() 
+    @Field({description: `The configuration value for this entity setting, often in JSON format.`}) 
     Value: string;
         
     @Field({nullable: true}) 
@@ -26908,22 +26908,22 @@ export class DuplicateRun_ {
     @MaxLength(8)
     EndedAt?: Date;
         
-    @Field() 
+    @Field({description: `Overall approval status for the duplicate run results (Pending, Approved, Rejected).`}) 
     @MaxLength(40)
     ApprovalStatus: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Comments or notes regarding the approval decision for this duplicate run.`}) 
     ApprovalComments?: string;
         
     @Field({nullable: true}) 
     @MaxLength(16)
     ApprovedByUserID?: string;
         
-    @Field() 
+    @Field({description: `Current processing status of the duplicate detection run (Pending, Running, Complete, Failed).`}) 
     @MaxLength(40)
     ProcessingStatus: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Error details if the duplicate detection run failed.`}) 
     ProcessingErrorMessage?: string;
         
     @Field() 
@@ -27146,11 +27146,11 @@ export class DuplicateRunDetail_ {
     @MaxLength(16)
     DuplicateRunID: string;
         
-    @Field() 
+    @Field({description: `The ID of the record being analyzed for duplicates.`}) 
     @MaxLength(1000)
     RecordID: string;
         
-    @Field() 
+    @Field({description: `Status of duplicate analysis for this record (Pending, Complete, Error).`}) 
     @MaxLength(40)
     MatchStatus: string;
         
@@ -27160,11 +27160,11 @@ export class DuplicateRunDetail_ {
     @Field({nullable: true, description: `If MatchStatus='Error' this field can be used to track the error from that phase of the process for logging/diagnostics.`}) 
     MatchErrorMessage?: string;
         
-    @Field() 
+    @Field({description: `Status of any merge operations for this record (Not Applicable, Pending, Complete, Failed).`}) 
     @MaxLength(40)
     MergeStatus: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Error details if merge operation failed for this record.`}) 
     MergeErrorMessage?: string;
         
     @Field() 
@@ -27357,7 +27357,7 @@ export class ApplicationSetting_ {
     @MaxLength(200)
     Name: string;
         
-    @Field() 
+    @Field({description: `The setting value, can be simple text, numbers, booleans, or JSON for complex configuration objects.`}) 
     Value: string;
         
     @Field({nullable: true}) 
@@ -28250,7 +28250,7 @@ export class EntityActionInvocationType_ {
     @Field({nullable: true, description: `Description of the invocation type.`}) 
     Description?: string;
         
-    @Field(() => Int) 
+    @Field(() => Int, {description: `Order in which this invocation type appears in UI lists and menus.`}) 
     DisplaySequence: number;
         
     @Field() 
@@ -28426,13 +28426,13 @@ export class Action_ {
     @MaxLength(40)
     Type: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `The natural language prompt provided by the user describing what the action should accomplish, used for AI code generation.`}) 
     UserPrompt?: string;
         
     @Field({nullable: true, description: `User's comments not shared with the LLM.`}) 
     UserComments?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `The generated or manually written code that implements the action logic, typically TypeScript/JavaScript that will be executed.`}) 
     Code?: string;
         
     @Field({nullable: true, description: `AI's explanation of the code.`}) 
@@ -29027,16 +29027,16 @@ export class ActionFilter_ {
     @MaxLength(16)
     ID: string;
         
-    @Field() 
+    @Field({description: `Human-readable explanation of what this filter checks and when it should prevent action execution, written for non-technical users.`}) 
     UserDescription: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Additional notes or implementation details about the filter logic, including examples or edge cases to consider.`}) 
     UserComments?: string;
         
-    @Field() 
+    @Field({description: `JavaScript code that evaluates to true (allow action) or false (prevent action), executed in the same context as the action.`}) 
     Code: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Technical documentation of the filter code logic, including expected inputs, outputs, and any dependencies or assumptions.`}) 
     CodeExplanation?: string;
         
     @Field() 
@@ -29366,7 +29366,7 @@ export class ActionResultCode_ {
     @MaxLength(16)
     ActionID: string;
         
-    @Field() 
+    @Field({description: `The unique code string returned by the action to indicate specific outcomes, used for programmatic handling of results.`}) 
     @MaxLength(510)
     ResultCode: string;
         
@@ -29708,10 +29708,10 @@ export class ActionExecutionLog_ {
     @MaxLength(10)
     EndedAt?: Date;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `JSON-formatted input parameters passed to the action during execution, storing the exact values used for this specific run.`}) 
     Params?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `The outcome code returned by the action execution, indicating success, failure, or specific error conditions as defined in Action Result Codes.`}) 
     @MaxLength(510)
     ResultCode?: string;
         
@@ -29916,10 +29916,10 @@ export class ActionParam_ {
     @MaxLength(510)
     Name: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `The default value for this parameter if not provided during action execution, can be a literal value or JSON for complex types.`}) 
     DefaultValue?: string;
         
-    @Field() 
+    @Field({description: `Specifies whether this parameter is used for Input, Output, or Both directions in the action execution flow.`}) 
     @MaxLength(20)
     Type: string;
         
@@ -29927,13 +29927,13 @@ export class ActionParam_ {
     @MaxLength(60)
     ValueType: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Indicates whether this parameter accepts or returns an array of values rather than a single value.`}) 
     IsArray: boolean;
         
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Determines if this parameter must be provided for input parameters or will always be populated for output parameters.`}) 
     IsRequired: boolean;
         
     @Field() 
@@ -31554,7 +31554,7 @@ export class CommunicationBaseMessageType_ {
     @MaxLength(16)
     ID: string;
         
-    @Field() 
+    @Field({description: `The unique identifier for this message type, used for routing and processing communications.`}) 
     @MaxLength(200)
     Type: string;
         
@@ -32430,7 +32430,7 @@ export class TemplateParam_ {
     @Field({nullable: true, description: `Default value of the parameter`}) 
     DefaultValue?: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Whether this parameter must be provided when using the template.`}) 
     IsRequired: boolean;
         
     @Field({nullable: true, description: `Only used when Type=Entity, this is used to link an Entity parameter with another parameter so that the rows in the Entity parameter can be filtered automatically based on the FKEY relationship between the Record and this Entity parameter. For example, if the Entity-based parameter is for an entity like Activities and there is another parameter of type Record for an entity like Contacts, in that situation the Activities Parameter would point to the Contacts parameter as the LinkedParameterName because we would filter down the Activities in each template render to only those linked to the Contact.`}) 
@@ -37551,11 +37551,11 @@ export class ContentProcessRun_ {
     @MaxLength(16)
     SourceID: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Timestamp when the content processing workflow began execution.`}) 
     @MaxLength(8)
     StartTime?: Date;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Timestamp when the content processing workflow completed or failed.`}) 
     @MaxLength(8)
     EndTime?: Date;
         
@@ -37563,7 +37563,7 @@ export class ContentProcessRun_ {
     @MaxLength(200)
     Status?: string;
         
-    @Field(() => Int, {nullable: true}) 
+    @Field(() => Int, {nullable: true, description: `Count of content items successfully processed during this run.`}) 
     ProcessedItems?: number;
         
     @Field() 
@@ -37743,7 +37743,7 @@ export class ContentSource_ {
     @MaxLength(16)
     ContentFileTypeID: string;
         
-    @Field() 
+    @Field({description: `Base URL or connection string for accessing this content source.`}) 
     @MaxLength(4000)
     URL: string;
         
@@ -37959,11 +37959,11 @@ export class ContentSourceParam_ {
     @MaxLength(16)
     ContentSourceID: string;
         
-    @Field() 
+    @Field({description: `Reference to the parameter definition in Content Source Type Params.`}) 
     @MaxLength(16)
     ContentSourceTypeParamID: string;
         
-    @Field() 
+    @Field({description: `The configured value for this parameter on this specific content source.`}) 
     Value: string;
         
     @Field() 
@@ -38295,14 +38295,14 @@ export class ContentSourceTypeParam_ {
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Data type of the parameter (string, number, boolean, date, etc.).`}) 
     @MaxLength(100)
     Type?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Default value to use if not specified when configuring a content source.`}) 
     DefaultValue?: string;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: `Indicates whether this parameter must be provided when setting up a content source.`}) 
     IsRequired: boolean;
         
     @Field() 
@@ -38473,10 +38473,10 @@ export class ContentType_ {
     @MaxLength(16)
     AIModelID: string;
         
-    @Field(() => Int) 
+    @Field(() => Int, {description: `Minimum number of tags that must be applied to content of this type.`}) 
     MinTags: number;
         
-    @Field(() => Int) 
+    @Field(() => Int, {description: `Maximum number of tags allowed on content of this type.`}) 
     MaxTags: number;
         
     @Field() 
@@ -38666,7 +38666,7 @@ export class ContentTypeAttribute_ {
     @MaxLength(16)
     ID: string;
         
-    @Field() 
+    @Field({description: `Reference to the Content Type this attribute belongs to.`}) 
     @MaxLength(16)
     ContentTypeID: string;
         
@@ -38674,7 +38674,7 @@ export class ContentTypeAttribute_ {
     @MaxLength(200)
     Name: string;
         
-    @Field() 
+    @Field({description: `The AI prompt template used to extract this attribute from content.`}) 
     Prompt: string;
         
     @Field({nullable: true}) 
@@ -38835,7 +38835,7 @@ export class ContentFileType_ {
     @MaxLength(510)
     Name: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `The file extension (e.g., .pdf, .docx, .jpg) used to identify this content type.`}) 
     @MaxLength(510)
     FileExtension?: string;
         
@@ -39027,15 +39027,15 @@ export class ContentItem_ {
     @MaxLength(16)
     ContentFileTypeID: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Hash value of the content used to detect changes and prevent duplicate processing.`}) 
     @MaxLength(200)
     Checksum?: string;
         
-    @Field() 
+    @Field({description: `The source location URL where this content was retrieved from.`}) 
     @MaxLength(4000)
     URL: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `The extracted text content from the source document or file.`}) 
     Text?: string;
         
     @Field() 
@@ -39269,7 +39269,7 @@ export class ContentItemAttribute_ {
     @MaxLength(200)
     Name: string;
         
-    @Field() 
+    @Field({description: `The extracted or assigned value for this attribute on the content item.`}) 
     Value: string;
         
     @Field() 
@@ -39425,7 +39425,7 @@ export class ContentItemTag_ {
     @MaxLength(16)
     ItemID: string;
         
-    @Field() 
+    @Field({description: `The tag text applied to the content item for categorization and search.`}) 
     @MaxLength(400)
     Tag: string;
         
@@ -39601,7 +39601,7 @@ export class GeneratedCode_ {
     @MaxLength(16)
     LinkedEntityID?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `JSON containing the primary key(s) of the record this generated code is associated with.`}) 
     LinkedRecordPrimaryKey?: string;
         
     @Field({description: `Status of the generated code, e.g., Pending, Approved, or Rejected.`}) 
