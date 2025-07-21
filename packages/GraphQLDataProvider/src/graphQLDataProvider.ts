@@ -307,32 +307,35 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     /**************************************************************************/
     public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         if (params.QueryID) {
-            return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryName, contextUser);
+            return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryName, contextUser, params.Parameters);
         }
         else if (params.QueryName) {
-            return this.RunQueryByName(params.QueryName, params.CategoryID, params.CategoryName, contextUser);
+            return this.RunQueryByName(params.QueryName, params.CategoryID, params.CategoryName, contextUser, params.Parameters);
         }
         else {
             throw new Error("No QueryID or QueryName provided to RunQuery");
         }
     }
 
-    public async RunQueryByID(QueryID: string, CategoryID?: string, CategoryName?: string, contextUser?: UserInfo): Promise<RunQueryResult> {
+    public async RunQueryByID(QueryID: string, CategoryID?: string, CategoryName?: string, contextUser?: UserInfo, Parameters?: Record<string, any>): Promise<RunQueryResult> {
         const query = gql`
-            query GetQueryDataQuery($QueryID: String!, $CategoryID: String, $CategoryName: String) {
-                GetQueryData(QueryID: $QueryID, CategoryID: $CategoryID, CategoryName: $CategoryName) {
+            query GetQueryDataQuery($QueryID: String!, $CategoryID: String, $CategoryName: String, $Parameters: JSON) {
+                GetQueryData(QueryID: $QueryID, CategoryID: $CategoryID, CategoryName: $CategoryName, Parameters: $Parameters) {
                     ${this.QueryReturnFieldList}
                 }
             }
         `;
     
         // Build the variables object, adding optional parameters if defined.
-        const variables: { QueryID: string; CategoryID?: string; CategoryName?: string } = { QueryID };
+        const variables: { QueryID: string; CategoryID?: string; CategoryName?: string; Parameters?: Record<string, any> } = { QueryID };
         if (CategoryID !== undefined) {
             variables.CategoryID = CategoryID;
         }
         if (CategoryName !== undefined) {
             variables.CategoryName = CategoryName;
+        }
+        if (Parameters !== undefined) {
+            variables.Parameters = Parameters;
         }
     
         const result = await this.ExecuteGQL(query, variables);
@@ -341,17 +344,26 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
     
-    public async RunQueryByName(QueryName: string, CategoryID?: string, CategoryName?: string, contextUser?: UserInfo): Promise<RunQueryResult> {
+    public async RunQueryByName(QueryName: string, CategoryID?: string, CategoryName?: string, contextUser?: UserInfo, Parameters?: Record<string, any>): Promise<RunQueryResult> {
         const query = gql`
-            query GetQueryDataByNameQuery($QueryName: String!, $CategoryID: String, $CategoryName: String) {
-                GetQueryDataByName(QueryName: $QueryName, CategoryID: $CategoryID, CategoryName: $CategoryName) {
+            query GetQueryDataByNameQuery($QueryName: String!, $CategoryID: String, $CategoryName: String, $Parameters: JSON) {
+                GetQueryDataByName(QueryName: $QueryName, CategoryID: $CategoryID, CategoryName: $CategoryName, Parameters: $Parameters) {
                     ${this.QueryReturnFieldList}
                 }
             }
         `;
     
         // Build the variables object, adding optional parameters if defined.
-        const variables = { QueryName, CategoryID, CategoryName };
+        const variables: { QueryName: string; CategoryID?: string; CategoryName?: string; Parameters?: Record<string, any> } = { QueryName };
+        if (CategoryID !== undefined) {
+            variables.CategoryID = CategoryID;
+        }
+        if (CategoryName !== undefined) {
+            variables.CategoryName = CategoryName;
+        }
+        if (Parameters !== undefined) {
+            variables.Parameters = Parameters;
+        }
     
         const result = await this.ExecuteGQL(query, variables);
         if (result && result.GetQueryDataByName) {
@@ -367,7 +379,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 Results
                 RowCount
                 ExecutionTime
-                ErrorMessage`
+                ErrorMessage
+                AppliedParameters`
     }
     protected TransformQueryPayload(data: any): RunQueryResult {
         try {
@@ -379,6 +392,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 RowCount: data.RowCount,
                 ExecutionTime: data.ExecutionTime,
                 ErrorMessage: data.ErrorMessage,
+                AppliedParameters: data.AppliedParameters ? JSON.parse(data.AppliedParameters) : undefined
             };    
         }
         catch (e) {

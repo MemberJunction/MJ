@@ -22,6 +22,12 @@ export type RunQueryParams = {
      * Optional, if provided, the query to be run will be selected to match the specified CategoryID 
      */
     CategoryID?: string
+    /**
+     * Optional parameters to pass to parameterized queries that use Nunjucks templates.
+     * Key-value pairs where keys match parameter names defined in QueryParameter metadata.
+     * Values will be validated and type-converted based on parameter definitions.
+     */
+    Parameters?: Record<string, any>
 }
 
 /**

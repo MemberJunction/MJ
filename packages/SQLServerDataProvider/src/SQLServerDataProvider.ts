@@ -63,6 +63,7 @@ import {
   KeyValuePair,
   IRunQueryProvider,
   RunQueryResult,
+  RunQueryParams,
   PotentialDuplicateRequest,
   PotentialDuplicateResponse,
   LogStatus,
@@ -72,7 +73,9 @@ import {
   Metadata,
   DatasetItemResultType,
   DatabaseProviderBase,
+  QueryInfo,
 } from '@memberjunction/core';
+import { QueryParameterProcessor } from './queryParameterProcessor';
 
 import {
   AuditLogEntity,
@@ -102,7 +105,6 @@ import {
   InternalSQLOptions
 } from './types.js';
 
-import { RunQueryParams } from '@memberjunction/core/dist/generic/runQuery';
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 import { EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult } from '@memberjunction/actions-base';
@@ -678,36 +680,83 @@ export class SQLServerDataProvider
   /**************************************************************************/
   public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
     try {
-      const QueryID = params.QueryID;
-      // run the sql and return the data
+      // Build filter to find the query
       let filter = params.QueryID ? `ID = '${params.QueryID}'` : `Name = '${params.QueryName}'`;
       if (params.CategoryID) {
-        filter += ` AND CategoryID = '${params.CategoryID}'`; /* if CategoryID is provided, we add it to the filter */
+        filter += ` AND CategoryID = '${params.CategoryID}'`;
       }
       if (params.CategoryName) {
-        filter += ` AND Category = '${params.CategoryName}'`; /* if CategoryName is provided, we add it to the filter */
+        filter += ` AND Category = '${params.CategoryName}'`;
       }
 
-      const sqlQuery = `SELECT ID, Name, SQL FROM [${this.MJCoreSchemaName}].vwQueries WHERE ${filter}`;
-      const queryInfo = await this.ExecuteSQL(sqlQuery, undefined, undefined, contextUser);
-      if (queryInfo && queryInfo.length > 0) {
-        const start = new Date().getTime();
-        const sql = queryInfo[0].SQL;
-        const result = await this.ExecuteSQL(sql, undefined, undefined, contextUser);
-        const end = new Date().getTime();
-        if (result)
-          return {
-            Success: true,
-            QueryID: queryInfo[0].ID,
-            QueryName: queryInfo[0].Name,
-            Results: result,
-            RowCount: result.length,
-            ExecutionTime: end - start,
-            ErrorMessage: '',
-          };
-        else throw new Error('Error running query SQL');
-      } else {
+      // First, get the query metadata
+      const queries = this.Queries.filter(q => {
+        if (params.QueryID) {
+          return q.ID === params.QueryID;
+        } else if (params.QueryName) {
+          let matches = q.Name === params.QueryName;
+          if (params.CategoryID) {
+            matches = matches && q.CategoryID === params.CategoryID;
+          }
+          if (params.CategoryName) {
+            matches = matches && q.Category === params.CategoryName;
+          }
+          return matches;
+        }
+        return false;
+      });
+
+      if (queries.length === 0) {
         throw new Error('Query not found');
+      }
+
+      const query = queries[0];
+      
+      // Check permissions and status
+      if (!query.UserCanRun(contextUser)) {
+        if (!query.UserHasRunPermissions(contextUser)) {
+          throw new Error('User does not have permission to run this query');
+        } else {
+          throw new Error(`Query is not in an approved status (current status: ${query.Status})`);
+        }
+      }
+
+      // Process the query with parameters if it uses templates
+      let finalSQL = query.SQL;
+      let appliedParameters: Record<string, any> = {};
+
+      if (query.UsesTemplate) {
+        const processingResult = QueryParameterProcessor.processQueryTemplate(query, params.Parameters);
+        
+        if (!processingResult.success) {
+          throw new Error(processingResult.error);
+        }
+        
+        finalSQL = processingResult.processedSQL;
+        appliedParameters = processingResult.appliedParameters || {};
+      } else if (params.Parameters && Object.keys(params.Parameters).length > 0) {
+        // Warn if parameters were provided but query doesn't use templates
+        LogStatus('Warning: Parameters provided but query does not use templates. Parameters will be ignored.');
+      }
+
+      // Execute the query
+      const start = new Date().getTime();
+      const result = await this.ExecuteSQL(finalSQL, undefined, undefined, contextUser);
+      const end = new Date().getTime();
+
+      if (result) {
+        return {
+          Success: true,
+          QueryID: query.ID,
+          QueryName: query.Name,
+          Results: result,
+          RowCount: result.length,
+          ExecutionTime: end - start,
+          ErrorMessage: '',
+          AppliedParameters: appliedParameters
+        };
+      } else {
+        throw new Error('Error executing query SQL');
       }
     } catch (e) {
       LogError(e);
@@ -722,6 +771,7 @@ export class SQLServerDataProvider
       };
     }
   }
+
   /**************************************************************************/
   // END ---- IRunQueryProvider
   /**************************************************************************/

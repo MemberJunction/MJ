@@ -1,6 +1,7 @@
 import { BaseInfo } from "./baseInfo";
 import { EntityInfo } from "./entityInfo";
 import { Metadata } from "./metadata";
+import { UserInfo } from "./securityInfo";
 
 /**
  * Catalog of stored queries. This is useful for any arbitrary query that is known to be performant and correct and can be reused. 
@@ -131,6 +132,54 @@ export class QueryInfo extends BaseInfo {
      */
     get CategoryInfo(): QueryCategoryInfo {
         return Metadata.Provider.QueryCategories.find(c => c.ID === this.CategoryID);
+    }
+
+    /**
+     * Checks if a user has permission to run this query based on their roles.
+     * A user can run a query if:
+     * 1. The query has no permissions defined (open to all)
+     * 2. The user has at least one role that is granted permission
+     * 
+     * @param user The user to check permissions for
+     * @returns true if the user has permission to run the query
+     */
+    public UserHasRunPermissions(user: UserInfo): boolean {
+        const permissions = this.Permissions;
+        
+        // If no permissions are defined, the query is open to all
+        if (!permissions || permissions.length === 0) {
+            return true;
+        }
+
+        // Check if user has any of the required roles
+        if (user && user.UserRoles) {
+            for (const userRole of user.UserRoles) {
+                if (permissions.some(p => p.RoleName === userRole.Role)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Checks if a user can run this query, considering both permissions and query status.
+     * A query can be run if:
+     * 1. The user has permission to run it (via UserHasRunPermissions)
+     * 2. The query status is 'Approved'
+     * 
+     * @param user The user to check
+     * @returns true if the user can run the query right now
+     */
+    public UserCanRun(user: UserInfo): boolean {
+        // First check permissions
+        if (!this.UserHasRunPermissions(user)) {
+            return false;
+        }
+
+        // Then check status - only approved queries can be run
+        return this.Status === 'Approved';
     }
 }
 

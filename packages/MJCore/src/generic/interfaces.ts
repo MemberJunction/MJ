@@ -539,6 +539,10 @@ export type RunQueryResult = {
     RowCount: number;
     ExecutionTime: number;
     ErrorMessage: string;
+    /**
+     * Parameters that were applied to the query, including defaults
+     */
+    AppliedParameters?: Record<string, any>;
 }
 
 /**
