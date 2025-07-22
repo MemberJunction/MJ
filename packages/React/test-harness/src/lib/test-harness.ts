@@ -35,8 +35,8 @@ export class ReactTestHarness {
    */
   async testRootComponent(
     rootSpec: ComponentRootSpec,
-    props?: Record<string, any>,
-    options?: Partial<ComponentExecutionOptions>
+    props: Record<string, any>,
+    options: ComponentExecutionOptions
   ): Promise<ComponentExecutionResult> {
     // First, lint the root component code
     if (rootSpec.componentCode) {
@@ -70,9 +70,9 @@ export class ReactTestHarness {
     };
 
     const result = await this.componentRunner.executeComponent({
-      componentSpec: spec,
       props,
-      ...options
+      ...options,
+      componentSpec: spec,
     });
 
     if (this.options.debug) {
@@ -101,8 +101,8 @@ export class ReactTestHarness {
    */
   async testChildComponent(
     childSpec: ComponentChildSpec,
-    props?: Record<string, any>,
-    options?: Partial<ComponentExecutionOptions>
+    props: Record<string, any>,
+    options: ComponentExecutionOptions
   ): Promise<ComponentExecutionResult> {
     // First, lint the component code
     if (childSpec.componentCode) {
@@ -135,9 +135,9 @@ export class ReactTestHarness {
     };
 
     return this.componentRunner.executeComponent({
-      componentSpec: spec,
       props,
-      ...options
+      ...options,
+      componentSpec: spec,
     });
   }
 
@@ -158,8 +158,8 @@ export class ReactTestHarness {
    */
   async testComponentFromFile(
     filePath: string,
-    props?: Record<string, any>,
-    options?: Partial<ComponentExecutionOptions>
+    props: Record<string, any>,
+    options: ComponentExecutionOptions
   ): Promise<ComponentExecutionResult> {
     const fs = await import('fs');
     const path = await import('path');
