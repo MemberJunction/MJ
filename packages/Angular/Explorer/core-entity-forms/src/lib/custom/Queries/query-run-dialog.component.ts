@@ -1,25 +1,27 @@
-import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import { QueryEntity, QueryParameterEntity } from '@memberjunction/core-entities';
-import { Metadata, RunView } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { Metadata } from '@memberjunction/core';
 
-export interface QueryParameterPair {
-    key: string;
-    value: string;
-    description?: string;
-    isRequired?: boolean;
-    type?: string;
-    defaultValue?: string;
+interface QueryRunResult {
+    QueryID: string;
+    QueryName: string;
+    Success: boolean;
+    Results: string;  // This is a JSON string that needs to be parsed
+    ErrorMessage: string;
+    RowCount: number;
+    ExecutionTime: number;
+    AppliedParameters?: string;  // JSON string of applied parameters
 }
 
-export interface QueryRunResult {
-    success: boolean;
-    results?: any[];
-    rowCount?: number;
-    executionTime?: number;
-    error?: string;
-    appliedParameters?: Record<string, any>;
+interface ParameterPair {
+    name: string;
+    value: string;
+    type: string;
+    defaultValue: string;
+    description: string;
+    isRequired: boolean;
 }
 
 @Component({
@@ -27,92 +29,82 @@ export interface QueryRunResult {
     templateUrl: './query-run-dialog.component.html',
     styleUrls: ['./query-run-dialog.component.css']
 })
-export class QueryRunDialogComponent implements OnInit {
+export class QueryRunDialogComponent implements OnInit, OnChanges {
     @Input() query: QueryEntity | null = null;
     @Input() parameters: QueryParameterEntity[] = [];
-    
-    public _isVisible: boolean = false;
-    @Input() 
-    get isVisible(): boolean {
-        return this._isVisible;
-    }
-    set isVisible(value: boolean) {
-        const wasVisible = this._isVisible;
-        this._isVisible = value;
-        
-        // Reset dialog state when opening
-        if (value && !wasVisible) {
-            this.resetDialogState();
-        }
-    }
-    
+    @Input() isVisible = false;
     @Output() isVisibleChange = new EventEmitter<boolean>();
     @Output() onClose = new EventEmitter<void>();
 
-    public parameterPairs: QueryParameterPair[] = [];
-    public isLoading = false;
     public isRunning = false;
-    public runResult: QueryRunResult | null = null;
+    public isLoadingParams = false;
+    public parameterPairs: ParameterPair[] = [];
     public parametersExpanded = true;
     public resultsExpanded = true;
-    public gridData: any[] = [];
-    public gridColumns: any[] = [];
+    public runResult: QueryRunResult | null = null;
+    public resultColumns: any[] = [];
+    public resultRows: any[] = [];
+    public selectedRows: any[] = [];
 
     ngOnInit() {
-        if (this.query && this.parameters) {
-            this.initializeParameterPairs();
+        this.initializeParameters();
+    }
+
+    ngOnChanges(changes: SimpleChanges) {
+        if (changes['isVisible'] && changes['isVisible'].currentValue) {
+            this.initializeParameters();
+        }
+        if (changes['parameters']) {
+            this.initializeParameters();
         }
     }
 
-    initializeParameterPairs() {
+    private initializeParameters() {
+        if (!this.query || !this.parameters) return;
+
+        // Create parameter pairs from defined query parameters only
         this.parameterPairs = this.parameters.map(param => ({
-            key: param.Name,
+            name: param.Name,
             value: param.DefaultValue || '',
-            description: param.Description || undefined,
-            isRequired: param.IsRequired || false,
-            type: param.Type,
-            defaultValue: param.DefaultValue || undefined
+            type: param.Type || 'string',
+            defaultValue: param.DefaultValue || '',
+            description: param.Description || '',
+            isRequired: param.IsRequired || false
         }));
+    }
 
-        // If no parameters, add one empty pair to start
-        if (this.parameterPairs.length === 0) {
-            this.addParameter();
+    getValueListOptions(valueList: string): Array<{text: string, value: string}> {
+        if (!valueList) return [];
+        
+        try {
+            const options = valueList.split(',').map(v => v.trim());
+            return options.map(opt => ({ text: opt, value: opt }));
+        } catch {
+            return [];
         }
     }
 
-    addParameter() {
-        this.parameterPairs.push({
-            key: '',
-            value: '',
-            isRequired: false,
-            type: 'string'
-        });
-    }
-
-    removeParameter(index: number) {
-        if (this.parameterPairs.length > 1) {
-            this.parameterPairs.splice(index, 1);
+    isParameterValid(param: ParameterPair): boolean {
+        if (param.isRequired && !param.value) {
+            return false;
         }
+        
+        // Additional type-specific validation could go here
+        if (param.type === 'number' && param.value) {
+            return !isNaN(Number(param.value));
+        }
+        
+        return true;
     }
 
     async runQuery() {
         if (!this.query?.ID) return;
 
-        // Validate parameter names - check for empty parameter names
-        const emptyNameParams = this.parameterPairs.filter(p => p.value && !p.key);
-        if (emptyNameParams.length > 0) {
-            MJNotificationService.Instance.CreateSimpleNotification(
-                'All parameters must have a name. Please enter parameter names or remove empty parameters.',
-                'warning'
-            );
-            return;
-        }
-
         // Validate required parameters
-        const invalidParams = this.parameterPairs.filter(p => p.key && !p.value && p.isRequired);
+        const invalidParams = this.parameterPairs.filter(p => p.isRequired && !p.value);
         if (invalidParams.length > 0) {
             MJNotificationService.Instance.CreateSimpleNotification(
-                `Required parameters missing: ${invalidParams.map(p => p.key).join(', ')}`,
+                `Required parameters missing: ${invalidParams.map(p => p.name).join(', ')}`,
                 'warning'
             );
             return;
@@ -125,13 +117,17 @@ export class QueryRunDialogComponent implements OnInit {
             // Build parameters object
             const queryParameters: Record<string, any> = {};
             this.parameterPairs.forEach(param => {
-                if (param.key && param.value) {
+                if (param.value) {
                     try {
                         // Try to parse as JSON first, fallback to string
-                        queryParameters[param.key] = JSON.parse(param.value);
+                        queryParameters[param.name] = JSON.parse(param.value);
                     } catch {
-                        // If JSON parsing fails, treat as string
-                        queryParameters[param.key] = param.value;
+                        // If JSON parsing fails, treat as string or number based on type
+                        if (param.type === 'number') {
+                            queryParameters[param.name] = Number(param.value);
+                        } else {
+                            queryParameters[param.name] = param.value;
+                        }
                     }
                 }
             });
@@ -147,9 +143,9 @@ export class QueryRunDialogComponent implements OnInit {
                         QueryName
                         Success
                         Results
+                        ErrorMessage
                         RowCount
                         ExecutionTime
-                        ErrorMessage
                         AppliedParameters
                     }
                 }
@@ -157,216 +153,194 @@ export class QueryRunDialogComponent implements OnInit {
 
             const variables = {
                 QueryID: this.query.ID,
-                Parameters: Object.keys(queryParameters).length > 0 ? queryParameters : null
+                Parameters: queryParameters
             };
 
-            const result = await dataProvider.ExecuteGQL(query, variables);
+            console.log('Executing query with variables:', variables);
             
-            if (result?.GetQueryData) {
-                const queryResult = result.GetQueryData;
-                
-                this.runResult = {
-                    success: queryResult.Success,
-                    rowCount: queryResult.RowCount,
-                    executionTime: queryResult.ExecutionTime,
-                    error: queryResult.ErrorMessage,
-                    appliedParameters: queryResult.AppliedParameters ? JSON.parse(queryResult.AppliedParameters) : undefined
-                };
+            const response = await dataProvider.ExecuteGQL(
+                query, 
+                variables
+            ) as {GetQueryData: QueryRunResult};
 
-                if (queryResult.Success) {
-                    // Parse results and set up grid
-                    const results = JSON.parse(queryResult.Results);
-                    this.runResult.results = results;
-                    this.setupGrid(results);
-                    
-                    // Collapse parameters and expand results after execution
-                    this.parametersExpanded = false;
-                    this.resultsExpanded = true;
-                    
-                    MJNotificationService.Instance.CreateSimpleNotification(
-                        `Query executed successfully in ${this.runResult.executionTime || 0}ms. ${this.runResult.rowCount || 0} rows returned.`,
-                        'success',
-                        4000
-                    );
+            if (response?.GetQueryData) {
+                this.runResult = response.GetQueryData;
+                
+                if (this.runResult.Success && this.runResult.Results) {
+                    // Parse the JSON string results
+                    try {
+                        const parsedResults = JSON.parse(this.runResult.Results);
+                        this.processResults(parsedResults);
+                        MJNotificationService.Instance.CreateSimpleNotification(
+                            `Query executed successfully. ${this.runResult.RowCount} rows returned.`,
+                            'success'
+                        );
+                    } catch (error) {
+                        console.error('Error parsing results:', error);
+                        MJNotificationService.Instance.CreateSimpleNotification(
+                            'Failed to parse query results',
+                            'error'
+                        );
+                    }
                 } else {
+                    console.error('Query execution failed:', this.runResult);
                     MJNotificationService.Instance.CreateSimpleNotification(
-                        `Query execution failed: ${this.runResult.error || 'Unknown error'}`,
-                        'error',
-                        5000
+                        this.runResult?.ErrorMessage || 'Query execution failed',
+                        'error'
                     );
                 }
             } else {
-                throw new Error(result.errors?.[0]?.message || 'Unknown GraphQL error');
+                throw new Error('No response from server');
             }
-
         } catch (error) {
-            console.error('Query execution error:', error);
+            console.error('Error running query:', error);
             this.runResult = {
-                success: false,
-                error: (error as Error).message || 'Unknown error occurred'
+                QueryID: this.query.ID,
+                QueryName: this.query.Name,
+                Success: false,
+                Results: '[]',
+                ErrorMessage: error instanceof Error ? error.message : 'Unknown error occurred',
+                RowCount: 0,
+                ExecutionTime: 0
             };
-            
-            // Still collapse parameters and expand results on error
-            this.parametersExpanded = false;
-            this.resultsExpanded = true;
-            
             MJNotificationService.Instance.CreateSimpleNotification(
-                `Query execution failed: ${this.runResult?.error || 'Unknown error'}`,
-                'error',
-                5000
+                'Failed to execute query. Please check your parameters and try again.',
+                'error'
             );
         } finally {
             this.isRunning = false;
         }
     }
 
-    setupGrid(results: any[]) {
-        this.gridData = results;
-        
-        if (results && results.length > 0) {
-            // Create columns based on the first row
-            const firstRow = results[0];
-            this.gridColumns = Object.keys(firstRow).map(key => ({
-                field: key,
-                title: this.formatColumnTitle(key),
-                width: this.getColumnWidth(key, firstRow[key])
-            }));
-        } else {
-            this.gridColumns = [];
+    private processResults(results: any[]) {
+        if (!results || results.length === 0) {
+            this.resultColumns = [];
+            this.resultRows = [];
+            return;
         }
+
+        // Extract columns from first row
+        const firstRow = results[0];
+        this.resultColumns = Object.keys(firstRow).map(key => ({
+            field: key,
+            title: this.formatColumnTitle(key),
+            width: this.calculateColumnWidth(key, results)
+        }));
+
+        // Set rows
+        this.resultRows = results;
     }
 
-    formatColumnTitle(fieldName: string): string {
-        // Convert field names like "CustomerID" to "Customer ID"
-        return fieldName.replace(/([A-Z])/g, ' $1').trim();
+    private formatColumnTitle(field: string): string {
+        // Convert camelCase or snake_case to Title Case
+        return field
+            .replace(/([A-Z])/g, ' $1')
+            .replace(/_/g, ' ')
+            .replace(/^\s+/, '')
+            .split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
     }
 
-    getColumnWidth(fieldName: string, sampleValue: any): number {
-        // Estimate column width based on field name and sample value
-        const fieldNameLength = fieldName.length;
-        const valueLength = sampleValue ? String(sampleValue).length : 0;
-        const maxLength = Math.max(fieldNameLength, valueLength, 8);
-        return Math.min(maxLength * 8 + 40, 300); // Cap at 300px
+    private calculateColumnWidth(field: string, data: any[]): number {
+        // Calculate appropriate column width based on content
+        const maxLength = Math.max(
+            field.length,
+            ...data.slice(0, 10).map(row => String(row[field] || '').length)
+        );
+        return Math.min(Math.max(maxLength * 10, 100), 300);
     }
 
     exportToCSV() {
-        if (!this.gridData || this.gridData.length === 0) return;
+        if (!this.resultRows || this.resultRows.length === 0) {
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'No data to export',
+                'warning'
+            );
+            return;
+        }
 
         // Create CSV content
-        const headers = this.gridColumns.map(col => col.title).join(',');
-        const rows = this.gridData.map(row => 
-            this.gridColumns.map(col => {
+        const headers = this.resultColumns.map(col => col.title).join(',');
+        const rows = this.resultRows.map(row =>
+            this.resultColumns.map(col => {
                 const value = row[col.field];
-                // Handle values that might contain commas or quotes
-                if (value && (value.toString().includes(',') || value.toString().includes('"'))) {
-                    return `"${value.toString().replace(/"/g, '""')}"`;
+                // Escape values containing commas or quotes
+                if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+                    return `"${value.replace(/"/g, '""')}"`;
                 }
-                return value || '';
+                return value;
             }).join(',')
         );
 
-        const csvContent = [headers, ...rows].join('\n');
+        const csv = [headers, ...rows].join('\n');
 
         // Create and download file
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-        const queryName = this.query?.Name?.replace(/[^a-zA-Z0-9]/g, '_') || 'query';
-        const filename = `${queryName}_results_${timestamp}.csv`;
-
-        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const blob = new Blob([csv], { type: 'text/csv' });
         const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${this.query?.Name || 'query'}_results_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
 
         MJNotificationService.Instance.CreateSimpleNotification(
-            `Results exported as ${filename}`,
+            'Results exported to CSV',
             'success'
         );
     }
 
-    copyToClipboard() {
-        if (!this.gridData || this.gridData.length === 0) return;
+    async copyToClipboard() {
+        if (!this.resultRows || this.resultRows.length === 0) {
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'No data to copy',
+                'warning'
+            );
+            return;
+        }
 
-        // Create tab-separated content for clipboard
-        const headers = this.gridColumns.map(col => col.title).join('\t');
-        const rows = this.gridData.map(row => 
-            this.gridColumns.map(col => row[col.field] || '').join('\t')
-        );
+        try {
+            // Create tab-delimited content for pasting into Excel
+            const headers = this.resultColumns.map(col => col.title).join('\t');
+            const rows = this.resultRows.map(row =>
+                this.resultColumns.map(col => row[col.field] || '').join('\t')
+            );
 
-        const clipboardContent = [headers, ...rows].join('\n');
+            const content = [headers, ...rows].join('\n');
+            await navigator.clipboard.writeText(content);
 
-        // Copy to clipboard
-        navigator.clipboard.writeText(clipboardContent).then(() => {
             MJNotificationService.Instance.CreateSimpleNotification(
                 'Results copied to clipboard',
                 'success'
             );
-        }).catch(err => {
-            console.error('Failed to copy to clipboard:', err);
+        } catch (error) {
+            console.error('Failed to copy to clipboard:', error);
             MJNotificationService.Instance.CreateSimpleNotification(
                 'Failed to copy to clipboard',
                 'error'
             );
-        });
+        }
     }
 
     close() {
-        this._isVisible = false;
+        this.isVisible = false;
         this.isVisibleChange.emit(false);
         this.onClose.emit();
-    }
-
-    private resetDialogState() {
-        // Reset expansion states
-        this.parametersExpanded = true;
-        this.resultsExpanded = true;
         
-        // Clear previous results
+        // Reset state
         this.runResult = null;
-        this.isRunning = false;
-        this.gridData = [];
-        this.gridColumns = [];
-        
-        // Reinitialize parameter pairs
-        this.initializeParameterPairs();
+        this.resultColumns = [];
+        this.resultRows = [];
+        this.selectedRows = [];
     }
 
-    get parametersAsJson(): string {
-        const parametersData: Record<string, any> = {};
-        this.parameterPairs.forEach(param => {
-            if (param.key && param.value) {
-                try {
-                    parametersData[param.key] = JSON.parse(param.value);
-                } catch {
-                    parametersData[param.key] = param.value;
-                }
-            }
-        });
-        return JSON.stringify(parametersData, null, 2);
-    }
-
-    /**
-     * Helper method to check if a parameter is defined in the query
-     */
-    isParameterDefined(paramKey: string): boolean {
-        return this.parameters.some(p => p.Name === paramKey);
-    }
-
-    /**
-     * Helper method to check if a parameter should show remove button
-     */
-    canRemoveParameter(param: QueryParameterPair): boolean {
-        return this.parameterPairs.length > 1 && !this.isParameterDefined(param.key);
-    }
-
-    /**
-     * Helper method to get the number of applied parameters for template
-     */
     getAppliedParametersCount(): number {
-        return this.runResult?.appliedParameters ? Object.keys(this.runResult.appliedParameters).length : 0;
+        return this.parameterPairs.filter(p => p.value).length;
+    }
+    
+    hasInvalidParameters(): boolean {
+        return this.parameterPairs.some(p => !this.isParameterValid(p));
     }
 }

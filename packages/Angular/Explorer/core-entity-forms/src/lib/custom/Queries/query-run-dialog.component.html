@@ -1,317 +1,222 @@
-<kendo-dialog *ngIf="_isVisible"
-              [minWidth]="700"
-              [width]="1000"
-              [height]="800"
-              (close)="close()"
-              [title]="'Run Query: ' + (query?.Name || 'Unknown')">
-              
-    <div class="dialog-content" style="display: flex; flex-direction: column; height: 100%; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
-        
-        <!-- Header Section -->
-        <div class="header-section" style="margin-bottom: 20px; padding-bottom: 16px; border-bottom: 2px solid #e9ecef;">
-            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-                <i class="fa-solid fa-database" style="color: #6c757d; font-size: 1.2em;"></i>
-                <h5 style="margin: 0; color: #495057; font-weight: 600;">Query Execution</h5>
-            </div>
-            <p style="margin: 0; color: #6c757d; font-size: 0.9em;">
-                Configure parameter values and execute the query. Parameters with <span style="color: #dc3545;">*</span> are required.
-            </p>
+<kendo-dialog 
+    *ngIf="isVisible"
+    [width]="900"
+    [height]="700"
+    (close)="close()">
+    
+    <kendo-dialog-titlebar>
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-play-circle" style="color: #007bff;"></i>
+            Run Query: {{ query?.Name || 'Untitled' }}
         </div>
-
-        <!-- Loading State -->
-        @if (isLoading) {
-            <div class="loading-state" style="display: flex; align-items: center; justify-content: center; padding: 40px;">
+    </kendo-dialog-titlebar>
+    
+    <div style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
+        @if (isLoadingParams) {
+            <div style="display: flex; align-items: center; justify-content: center; padding: 40px;">
                 <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; color: #6c757d; margin-right: 12px;"></i>
                 <span style="color: #6c757d;">Loading query parameters...</span>
             </div>
         } @else {
             
             <!-- Query Parameters Section -->
-            <kendo-expansionpanel 
-                [(expanded)]="parametersExpanded"
-                style="margin-bottom: 16px; flex-shrink: 0;">
-                <ng-template kendoExpansionPanelTitleDirective>
-                    <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                        <i class="fa-solid fa-sliders" style="color: #6c757d;"></i>
-                        Query Parameters
-                        @if (parameterPairs.length > 0) {
+            @if (parameterPairs.length > 0) {
+                <kendo-expansionpanel 
+                    [(expanded)]="parametersExpanded"
+                    style="margin-bottom: 16px; flex-shrink: 0;">
+                    <ng-template kendoExpansionPanelTitleDirective>
+                        <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                            <i class="fa-solid fa-sliders" style="color: #6c757d;"></i>
+                            Query Parameters
                             <span class="badge" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
                                 {{ parameterPairs.length }}
                             </span>
-                        }
-                    </span>
-                </ng-template>
-                
-                <div style="padding: 12px 0;">
-                    <div style="margin-bottom: 12px; color: #6c757d; font-size: 0.85em;">
-                        <i class="fa-solid fa-info-circle"></i>
-                        Configure parameter values for query execution. Values can be JSON objects, strings, or numbers.
-                    </div>
+                        </span>
+                    </ng-template>
                     
-                    <!-- Parameters Table -->
-                    @if (parameterPairs.length > 0) {
-                        <div style="border: 1px solid #dee2e6; border-radius: 6px; background: #f8f9fa;">
-                            <!-- Header -->
-                            <div style="display: grid; grid-template-columns: 200px 1fr 60px; gap: 12px; padding: 12px 16px; background: #e9ecef; font-weight: 600; font-size: 0.85em; color: #495057; border-bottom: 1px solid #dee2e6;">
-                                <div>Parameter Name</div>
-                                <div>Value</div>
-                                <div>Actions</div>
-                            </div>
-                            
-                            <!-- Parameter Rows -->
-                            @for (param of parameterPairs; track $index; let i = $index) {
-                                <div style="display: grid; grid-template-columns: 200px 1fr 60px; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #e9ecef; align-items: start; background: white;">
-                                    
-                                    <!-- Parameter Name -->
-                                    <div class="param-name" style="display: flex; flex-direction: column;">
-                                        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
-                                            @if (isParameterDefined(param.key)) {
-                                                <i class="fa-solid fa-database" style="color: #28a745; font-size: 0.75em;" title="Defined in query"></i>
-                                            } @else {
-                                                <i class="fa-solid fa-edit" style="color: #fd7e14; font-size: 0.75em;" title="Custom parameter"></i>
-                                            }
-                                            @if (param.isRequired) {
-                                                <span style="color: #dc3545; font-weight: bold;">*</span>
-                                            }
-                                        </div>
-                                        
-                                        @if (isParameterDefined(param.key)) {
-                                            <div style="font-family: 'Courier New', monospace; font-size: 0.9em; font-weight: 500; color: #495057; padding: 4px 0; word-break: break-word;">
-                                                {{ param.key }}
-                                            </div>
+                    <div style="padding: 12px 0;">
+                        <div style="margin-bottom: 12px; color: #6c757d; font-size: 0.85em;">
+                            <i class="fa-solid fa-info-circle"></i>
+                            Configure parameter values for query execution.
+                        </div>
+                        
+                        <!-- Parameters List -->
+                        <div style="display: flex; flex-direction: column; gap: 16px;">
+                            @for (param of parameterPairs; track param.name) {
+                                <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 16px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                                        <div>
+                                            <label style="font-weight: 600; color: #495057; display: flex; align-items: center; gap: 6px;">
+                                                <i class="fa-solid fa-at" style="color: #007bff;"></i>
+                                                {{ param.name }}
+                                                @if (param.isRequired) {
+                                                    <span style="color: #dc3545;">*</span>
+                                                }
+                                            </label>
                                             @if (param.description) {
-                                                <div style="font-size: 0.75em; color: #6c757d; margin-top: 2px; font-style: italic; word-break: break-word;">
+                                                <div style="font-size: 0.85em; color: #6c757d; margin-top: 4px;">
                                                     {{ param.description }}
                                                 </div>
                                             }
-                                            @if (param.type && param.type !== 'string') {
-                                                <div style="font-size: 0.7em; color: #17a2b8; margin-top: 2px;">
-                                                    Type: {{ param.type }}
-                                                </div>
+                                        </div>
+                                        <div style="display: flex; gap: 8px; align-items: center;">
+                                            <span class="badge" style="background: #6c757d; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.75em;">
+                                                {{ param.type }}
+                                            </span>
+                                            @if (!isParameterValid(param)) {
+                                                <i class="fa-solid fa-exclamation-triangle" style="color: #dc3545;" title="Required parameter is empty"></i>
                                             }
-                                        } @else {
-                                            <kendo-textbox [(ngModel)]="param.key"
-                                                          placeholder="Parameter name..."
-                                                          [disabled]="isRunning"
-                                                          style="font-family: 'Courier New', monospace; width: 100%;">
-                                            </kendo-textbox>
-                                        }
+                                        </div>
                                     </div>
                                     
-                                    <!-- Parameter Value -->
-                                    <div class="param-value">
-                                        <kendo-textarea [(ngModel)]="param.value"
-                                                       [rows]="2"
-                                                       [placeholder]="param.defaultValue ? 'Default: ' + param.defaultValue : 'Enter value (JSON strings, numbers, objects)...'"
-                                                       [disabled]="isRunning"
-                                                       style="font-family: 'Courier New', monospace; font-size: 0.9em; width: 100%;">
+                                    <!-- Parameter Value Input -->
+                                    @if (param.type === 'number') {
+                                        <kendo-numerictextbox
+                                            [(ngModel)]="param.value"
+                                            placeholder="Enter number value..."
+                                            style="width: 100%;">
+                                        </kendo-numerictextbox>
+                                    } @else {
+                                        <kendo-textarea
+                                            [(ngModel)]="param.value"
+                                            [rows]="2"
+                                            placeholder="Enter value (JSON, string, or number)..."
+                                            style="width: 100%; font-family: 'Courier New', monospace;">
                                         </kendo-textarea>
-                                    </div>
+                                    }
                                     
-                                    <!-- Actions -->
-                                    <div class="param-actions" style="display: flex; align-items: start; justify-content: center; padding-top: 4px;">
-                                        @if (canRemoveParameter(param)) {
-                                            <button kendoButton fillMode="flat"
-                                                        themeColor="error"
-                                                        size="small"
-                                                        (click)="removeParameter(i)"
-                                                        [disabled]="isRunning"
-                                                        title="Remove parameter">
-                                                <i class="fa-solid fa-times"></i>
-                                            </button>
-                                        }
-                                    </div>
+                                    @if (param.defaultValue) {
+                                        <div style="font-size: 0.8em; color: #6c757d; margin-top: 4px;">
+                                            Default: <code style="background: #e9ecef; padding: 2px 4px; border-radius: 3px;">{{ param.defaultValue }}</code>
+                                        </div>
+                                    }
                                 </div>
                             }
-                            
-                            <!-- Add Parameter Row -->
-                            <div style="padding: 12px 16px; text-align: center; background: white; border-top: 1px solid #dee2e6;">
-                                <button kendoButton fillMode="outline"
-                                            themeColor="success"
-                                            size="small"
-                                            (click)="addParameter()"
-                                            [disabled]="isRunning">
-                                    <i class="fa-solid fa-plus"></i> Add Parameter
-                                </button>
-                            </div>
                         </div>
-                    } @else {
-                        <div style="text-align: center; padding: 20px; color: #6c757d;">
-                            <i class="fa-solid fa-info-circle" style="font-size: 2em; margin-bottom: 12px; opacity: 0.5;"></i>
-                            <p style="margin: 0 0 12px 0;">No parameters defined yet</p>
-                            <button kendoButton themeColor="primary" size="small"
-                                        (click)="addParameter()"
-                                        [disabled]="isRunning">
-                                <i class="fa-solid fa-plus"></i> Add First Parameter
-                            </button>
-                        </div>
-                    }
+                    </div>
+                </kendo-expansionpanel>
+            } @else {
+                <div style="padding: 20px; background: #f8f9fa; border-radius: 6px; margin-bottom: 16px; text-align: center; color: #6c757d;">
+                    <i class="fa-solid fa-info-circle"></i> This query has no parameters.
                 </div>
-            </kendo-expansionpanel>
-
-            <!-- Execution Results Section -->
-            <kendo-expansionpanel 
-                [(expanded)]="resultsExpanded"
-                style="margin-bottom: 16px; flex: 1; display: flex; flex-direction: column;">
-                <ng-template kendoExpansionPanelTitleDirective>
-                    <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                        <i class="fa-solid fa-table" style="color: #6c757d;"></i>
-                        Query Results
-                        @if (runResult) {
-                            <span class="badge" 
-                                  [style.background]="runResult.success ? '#28a745' : '#dc3545'"
-                                  style="color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
-                                {{ runResult.success ? 'Success' : 'Error' }}
-                            </span>
-                            @if (runResult.success && runResult.rowCount !== undefined) {
-                                <span class="badge"
-                                      style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
-                                    {{ runResult.rowCount }} rows
+            }
+            
+            <!-- Results Section -->
+            @if (runResult) {
+                <kendo-expansionpanel 
+                    [(expanded)]="resultsExpanded"
+                    style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+                    <ng-template kendoExpansionPanelTitleDirective>
+                        <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                            <i class="fa-solid fa-table" style="color: #28a745;"></i>
+                            Query Results
+                            @if (runResult.Success) {
+                                <span class="badge" style="background: #28a745; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                                    {{ runResult.RowCount }} rows
+                                </span>
+                            } @else {
+                                <span class="badge" style="background: #dc3545; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                                    Error
                                 </span>
                             }
-                        }
-                    </span>
-                </ng-template>
-                
-                <div style="padding: 12px 0; flex: 1; display: flex; flex-direction: column;">
-                    @if (isRunning) {
-                        <div class="loading-state" style="display: flex; align-items: center; justify-content: center; padding: 40px; flex: 1;">
-                            <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; color: #6c757d; margin-right: 12px;"></i>
-                            <span style="color: #6c757d;">Executing query...</span>
-                        </div>
-                    } @else if (runResult) {
-                        <div style="flex: 1; display: flex; flex-direction: column;">
-                            <!-- Result Header with Stats -->
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; padding: 12px; border: 1px solid #dee2e6; border-radius: 6px;"
-                                 [style.background]="runResult.success ? '#d4edda' : '#f8d7da'">
-                                <div style="text-align: center;">
-                                    <div style="font-size: 0.75em; margin-bottom: 2px;" [style.color]="runResult.success ? '#155724' : '#721c24'">STATUS</div>
-                                    <div style="font-weight: 600;" [style.color]="runResult.success ? '#155724' : '#721c24'">
-                                        {{ runResult.success ? 'Success' : 'Failed' }}
-                                    </div>
+                            @if (runResult.ExecutionTime) {
+                                <span style="font-size: 0.8em; color: #6c757d; font-weight: normal;">
+                                    ({{ runResult.ExecutionTime }}ms)
+                                </span>
+                            }
+                        </span>
+                    </ng-template>
+                    
+                    <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+                        @if (runResult.Success) {
+                            @if (resultRows.length > 0) {
+                                <!-- Export Buttons -->
+                                <div style="display: flex; justify-content: flex-end; gap: 8px; padding: 12px; border-bottom: 1px solid #dee2e6;">
+                                    <button kendoButton 
+                                            fillMode="flat"
+                                            (click)="copyToClipboard()"
+                                            title="Copy to clipboard">
+                                        <i class="fa-solid fa-copy"></i> Copy
+                                    </button>
+                                    <button kendoButton 
+                                            fillMode="flat"
+                                            (click)="exportToCSV()"
+                                            title="Export to CSV">
+                                        <i class="fa-solid fa-download"></i> Export CSV
+                                    </button>
                                 </div>
-                                @if (runResult.rowCount !== undefined) {
-                                    <div style="text-align: center;">
-                                        <div style="font-size: 0.75em; margin-bottom: 2px;" [style.color]="runResult.success ? '#155724' : '#721c24'">ROWS</div>
-                                        <div style="font-weight: 600;" [style.color]="runResult.success ? '#155724' : '#721c24'">{{ runResult.rowCount }}</div>
-                                    </div>
-                                }
-                                @if (runResult.executionTime) {
-                                    <div style="text-align: center;">
-                                        <div style="font-size: 0.75em; margin-bottom: 2px;" [style.color]="runResult.success ? '#155724' : '#721c24'">EXECUTION TIME</div>
-                                        <div style="font-weight: 600;" [style.color]="runResult.success ? '#155724' : '#721c24'">{{ runResult.executionTime }}ms</div>
-                                    </div>
-                                }
-                                @if (runResult.success && gridData.length > 0) {
-                                    <div style="text-align: center;">
-                                        <div style="font-size: 0.75em; margin-bottom: 2px;" [style.color]="runResult.success ? '#155724' : '#721c24'">EXPORT</div>
-                                        <div style="display: flex; gap: 4px; justify-content: center;">
-                                            <button kendoButton fillMode="flat" size="small"
-                                                        (click)="copyToClipboard()"
-                                                        title="Copy to clipboard"
-                                                        style="min-width: auto; padding: 4px 8px;">
-                                                <i class="fa-solid fa-copy"></i>
-                                            </button>
-                                            <button kendoButton fillMode="flat" size="small"
-                                                        (click)="exportToCSV()"
-                                                        title="Export to CSV"
-                                                        style="min-width: auto; padding: 4px 8px;">
-                                                <i class="fa-solid fa-download"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                }
-                            </div>
-
-                            <!-- Result Content -->
-                            <div style="flex: 1; display: flex; flex-direction: column;">
-                                @if (runResult.success && gridData.length > 0) {
-                                    <div style="margin-bottom: 12px; flex: 1; display: flex; flex-direction: column;">
-                                        <h6 style="margin: 0 0 8px 0; color: #495057; display: flex; align-items: center; gap: 6px;">
-                                            <i class="fa-solid fa-table" style="color: #28a745;"></i>
-                                            Query Results ({{ gridData.length }} rows)
-                                        </h6>
-                                        <kendo-grid 
-                                            [data]="gridData"
-                                            [height]="300"
-                                            [scrollable]="'virtual'"
-                                            [sortable]="true"
-                                            [filterable]="true"
-                                            [resizable]="true"
-                                            style="flex: 1; border: 1px solid #dee2e6; border-radius: 4px;">
-                                            @for (column of gridColumns; track column.field) {
-                                                <kendo-grid-column 
-                                                    [field]="column.field" 
-                                                    [title]="column.title" 
-                                                    [width]="column.width">
-                                                </kendo-grid-column>
-                                            }
-                                        </kendo-grid>
-                                    </div>
-                                } @else if (runResult.success && gridData.length === 0) {
-                                    <div style="display: flex; align-items: center; justify-content: center; padding: 40px; color: #6c757d; flex: 1; border: 1px solid #dee2e6; border-radius: 4px; background: #f8f9fa;">
-                                        <div style="text-align: center;">
-                                            <i class="fa-solid fa-check-circle" style="font-size: 3em; margin-bottom: 12px; color: #28a745; opacity: 0.3;"></i>
-                                            <p style="margin: 0;">Query executed successfully but returned no results.</p>
-                                        </div>
-                                    </div>
-                                } @else if (!runResult.success && runResult.error) {
-                                    <div style="margin-bottom: 12px; flex: 1; display: flex; flex-direction: column;">
-                                        <h6 style="margin: 0 0 8px 0; color: #dc3545; display: flex; align-items: center; gap: 6px;">
-                                            <i class="fa-solid fa-exclamation-triangle"></i>
-                                            Error Details
-                                        </h6>
-                                        <div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; padding: 16px; color: #721c24; font-family: 'Courier New', monospace; font-size: 0.9em; white-space: pre-wrap; overflow: auto; flex: 1;">{{ runResult.error }}</div>
+                                
+                                <!-- Results Grid -->
+                                <kendo-grid 
+                                    [data]="resultRows"
+                                    [resizable]="true"
+                                    [sortable]="true"
+                                    [pageable]="{
+                                        pageSizes: [10, 20, 50, 100],
+                                        buttonCount: 5
+                                    }"
+                                    [pageSize]="20"
+                                    [height]="400"
+                                    style="flex: 1;">
+                                    
+                                    @for (col of resultColumns; track col.field) {
+                                        <kendo-grid-column 
+                                            [field]="col.field"
+                                            [title]="col.title"
+                                            [width]="col.width">
+                                        </kendo-grid-column>
+                                    }
+                                </kendo-grid>
+                            } @else {
+                                <div style="display: flex; align-items: center; justify-content: center; height: 200px; color: #6c757d;">
+                                    <i class="fa-solid fa-inbox" style="font-size: 48px; margin-bottom: 12px;"></i>
+                                    <p>No results returned</p>
+                                </div>
+                            }
+                        } @else {
+                            <div style="padding: 20px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 6px; margin: 12px;">
+                                <div style="color: #721c24;">
+                                    <i class="fa-solid fa-exclamation-circle"></i>
+                                    <strong>Query execution failed</strong>
+                                </div>
+                                @if (runResult.ErrorMessage) {
+                                    <div style="margin-top: 8px; font-family: 'Courier New', monospace; font-size: 0.9em;">
+                                        {{ runResult.ErrorMessage }}
                                     </div>
                                 }
                             </div>
-                        </div>
-                    } @else {
-                        <div style="display: flex; align-items: center; justify-content: center; padding: 40px; color: #6c757d; flex: 1;">
-                            <div style="text-align: center;">
-                                <i class="fa-solid fa-play-circle" style="font-size: 3em; margin-bottom: 12px; opacity: 0.3;"></i>
-                                <p style="margin: 0;">No results yet. Run the query to see results here.</p>
-                            </div>
-                        </div>
-                    }
-                </div>
-            </kendo-expansionpanel>
+                        }
+                    </div>
+                </kendo-expansionpanel>
+            }
         }
     </div>
-
-    <!-- Dialog Actions -->
+    
     <kendo-dialog-actions>
-        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-            <div>
-                @if (runResult?.appliedParameters) {
-                    <span style="font-size: 0.8em; color: #6c757d;">
-                        <i class="fa-solid fa-info-circle"></i>
-                        Applied {{ getAppliedParametersCount() }} parameter(s)
-                    </span>
+        @if (!runResult) {
+            <button kendoButton (click)="close()">
+                <i class="fa-solid fa-times"></i> Cancel
+            </button>
+            <button kendoButton 
+                    [themeColor]="'primary'"
+                    [disabled]="isRunning || hasInvalidParameters()"
+                    (click)="runQuery()">
+                @if (isRunning) {
+                    <i class="fa-solid fa-spinner fa-spin"></i> Running...
+                } @else {
+                    <i class="fa-solid fa-play"></i> Run Query
                 }
-            </div>
-            
-            <div style="display: flex; gap: 8px;">
-                <button kendoButton fillMode="outline" (click)="close()">
-                    Close
-                </button>
-                
-                @if (runResult?.success && gridData.length > 0) {
-                    <button kendoButton fillMode="outline" themeColor="info" (click)="exportToCSV()">
-                        <i class="fa-solid fa-download"></i> Export CSV
-                    </button>
-                }
-
-                <button kendoButton themeColor="primary"
-                             [disabled]="isRunning || isLoading"
-                             (click)="runQuery()">
-                    @if (isRunning) {
-                        <i class="fa-solid fa-spinner fa-spin"></i> Running...
-                    } @else {
-                        <i class="fa-solid fa-play"></i> Run Query
-                    }
-                </button>
-            </div>
-        </div>
+            </button>
+        } @else {
+            <button kendoButton (click)="close()">
+                <i class="fa-solid fa-times"></i> Close
+            </button>
+            <button kendoButton 
+                    [themeColor]="'primary'"
+                    [disabled]="isRunning"
+                    (click)="runQuery()">
+                <i class="fa-solid fa-refresh"></i> Run Again
+            </button>
+        }
     </kendo-dialog-actions>
 </kendo-dialog>

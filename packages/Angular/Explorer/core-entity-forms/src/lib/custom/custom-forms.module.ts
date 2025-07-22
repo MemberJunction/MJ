@@ -4,7 +4,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { InputsModule, TextBoxModule, TextAreaModule, NumericTextBoxModule, SwitchModule, CheckBoxModule } from '@progress/kendo-angular-inputs';
 import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { ButtonsModule, ButtonModule, SplitButtonModule } from '@progress/kendo-angular-buttons';
-import { DropDownsModule, ComboBoxModule } from '@progress/kendo-angular-dropdowns';
+import { DropDownsModule, ComboBoxModule, DropDownTreesModule } from '@progress/kendo-angular-dropdowns';
 import { LayoutModule, ExpansionPanelModule, TabStripModule, SplitterModule } from '@progress/kendo-angular-layout';
 import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { GridModule } from '@progress/kendo-angular-grid';
@@ -53,6 +53,7 @@ import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-no
 import { AIAgentRunAnalyticsComponent } from "./ai-agent-run/ai-agent-run-analytics.component";
 import { QueryFormExtendedComponent, LoadQueryFormExtendedComponent } from "./Queries/query-form.component";
 import { QueryRunDialogComponent } from "./Queries/query-run-dialog.component";
+import { QueryCategoryDialogComponent } from "./Queries/query-category-dialog.component";
 
 @NgModule({
     declarations: [
@@ -87,6 +88,7 @@ import { QueryRunDialogComponent } from "./Queries/query-run-dialog.component";
         AIAgentRunAnalyticsComponent,
         QueryFormExtendedComponent,
         QueryRunDialogComponent,
+        QueryCategoryDialogComponent,
     ],
     imports: [
         CommonModule,
@@ -106,6 +108,7 @@ import { QueryRunDialogComponent } from "./Queries/query-run-dialog.component";
         SwitchModule,
         DropDownsModule,
         ComboBoxModule,
+        DropDownTreesModule,
         ButtonsModule,
         ButtonModule,
         SplitButtonModule,

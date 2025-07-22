@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef } from '@angular/core';
-import { QueryEntity, QueryParameterEntity, QueryCategoryEntity } from '@memberjunction/core-entities';
+import { QueryEntity, QueryParameterEntity, QueryCategoryEntity, QueryFieldEntity, QueryEntityEntity, QueryPermissionEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { QueryFormComponent } from '../../generated/Entities/Query/query.form.component';
@@ -9,6 +9,12 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { Subject } from 'rxjs';
 
+interface CategoryTreeNode {
+    id: string;
+    name: string;
+    items?: CategoryTreeNode[];
+}
+
 @RegisterClass(BaseFormComponent, 'Queries') 
 @Component({
     selector: 'mj-query-form',
@@ -16,21 +22,45 @@ import { Subject } from 'rxjs';
     styleUrls: ['../../../shared/form-styles.css', './query-form.component.css']
 })
 export class QueryFormExtendedComponent extends QueryFormComponent implements OnInit, OnDestroy {
+    public override cdr!: ChangeDetectorRef;
     public record!: QueryEntity;
     public queryParameters: QueryParameterEntity[] = [];
+    public queryFields: QueryFieldEntity[] = [];
+    public queryEntities: QueryEntityEntity[] = [];
+    public queryPermissions: QueryPermissionEntity[] = [];
     public isLoadingParameters = false;
+    public isLoadingFields = false;
+    public isLoadingEntities = false;
+    public isLoadingPermissions = false;
     public hasUnsavedChanges = false;
-    public queryInfoExpanded = true;
-    public queryParametersExpanded = true;
     public showFiltersHelp = false;
     public showRunDialog = false;
+    public showCategoryDialog = false;
     
+    // Expansion panel states
+    public sqlPanelExpanded = true;
+    public parametersPanelExpanded = false;
+    public fieldsPanelExpanded = false;
+    public entitiesPanelExpanded = false;
+    public detailsPanelExpanded = false;
+    public permissionsPanelExpanded = false;
+    
+    // Category data
     public categoryOptions: Array<{text: string, value: string}> = [
         { text: 'Select Category...', value: '' }
     ];
+    public categories: QueryCategoryEntity[] = [];
+    public categoryTreeData: CategoryTreeNode[] = [];
+    
+    // Status options
+    public statusOptions = [
+        { text: 'Pending', value: 'Pending' },
+        { text: 'Approved', value: 'Approved' },
+        { text: 'Rejected', value: 'Rejected' },
+        { text: 'Expired', value: 'Expired' }
+    ];
 
     @ViewChild('sqlEditor') sqlEditor: CodeEditorComponent | null = null;
-    private isUpdatingEditorValue = false;
     
     // SQL Filters for help display
     public sqlFilters = RUN_QUERY_SQL_FILTERS;
@@ -39,8 +69,13 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
 
     async ngOnInit() {
         await super.ngOnInit();
-        await this.loadQueryParameters();
-        await this.loadCategories();
+        await Promise.all([
+            this.loadQueryParameters(),
+            this.loadQueryFields(),
+            this.loadQueryEntities(),
+            this.loadQueryPermissions(),
+            this.loadCategories()
+        ]);
     }
 
     ngOnDestroy() {
@@ -54,13 +89,15 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
             try {
                 const rv = new RunView();
                 const results = await rv.RunView<QueryParameterEntity>({
-                    EntityName: 'Query Parameters',
+                    EntityName: 'MJ: Query Parameters',
                     ExtraFilter: `QueryID='${this.record.ID}'`,
                     OrderBy: 'Name ASC',
                     ResultType: 'entity_object'
                 });
                 
-                this.queryParameters = results.Results || [];
+                if (results.Success) {
+                    this.queryParameters = results.Results || [];
+                }
             } catch (error) {
                 console.error('Error loading query parameters:', error);
             } finally {
@@ -69,24 +106,156 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
         }
     }
 
+    async loadQueryFields() {
+        if (this.record && this.record.ID) {
+            this.isLoadingFields = true;
+            try {
+                const rv = new RunView();
+                const results = await rv.RunView<QueryFieldEntity>({
+                    EntityName: 'Query Fields',
+                    ExtraFilter: `QueryID='${this.record.ID}'`,
+                    OrderBy: 'Sequence ASC, Name ASC',
+                    ResultType: 'entity_object'
+                });
+                
+                if (results.Success) {
+                    this.queryFields = results.Results || [];
+                }
+            } catch (error) {
+                console.error('Error loading query fields:', error);
+            } finally {
+                this.isLoadingFields = false;
+            }
+        }
+    }
+
+    async loadQueryEntities() {
+        if (this.record && this.record.ID) {
+            this.isLoadingEntities = true;
+            try {
+                const rv = new RunView();
+                const results = await rv.RunView<QueryEntityEntity>({
+                    EntityName: 'Query Entities',
+                    ExtraFilter: `QueryID='${this.record.ID}'`,
+                    OrderBy: 'EntityName ASC',
+                    ResultType: 'entity_object'
+                });
+                
+                if (results.Success) {
+                    this.queryEntities = results.Results || [];
+                }
+            } catch (error) {
+                console.error('Error loading query entities:', error);
+            } finally {
+                this.isLoadingEntities = false;
+            }
+        }
+    }
+
+    async loadQueryPermissions() {
+        if (this.record && this.record.ID) {
+            this.isLoadingPermissions = true;
+            try {
+                const rv = new RunView();
+                const results = await rv.RunView<QueryPermissionEntity>({
+                    EntityName: 'Query Permissions',
+                    ExtraFilter: `QueryID='${this.record.ID}'`,
+                    OrderBy: 'Type ASC',
+                    ResultType: 'entity_object'
+                });
+                
+                if (results.Success) {
+                    this.queryPermissions = results.Results || [];
+                }
+            } catch (error) {
+                console.error('Error loading query permissions:', error);
+            } finally {
+                this.isLoadingPermissions = false;
+            }
+        }
+    }
+
     async loadCategories() {
         try {
             const rv = new RunView();
-            const results = await rv.RunView({
-                EntityName: 'Query Categories'
+            const results = await rv.RunView<QueryCategoryEntity>({
+                EntityName: 'Query Categories',
+                OrderBy: 'Name',
+                ResultType: 'entity_object'
             });
             
-            this.categoryOptions = [
-                { text: 'Select Category...', value: '' },
-                ...results.Results.map((cat: any) => ({
-                    text: cat.Name,
-                    value: cat.ID
-                }))
-            ];
+            if (results.Success && results.Results) {
+                this.categories = results.Results;
+                this.categoryTreeData = this.buildCategoryTree(this.categories);
+                
+                // Build flat options for legacy compatibility
+                this.categoryOptions = [
+                    { text: 'Select Category...', value: '' },
+                    ...this.categories.map(cat => ({
+                        text: cat.Name,
+                        value: cat.ID
+                    }))
+                ];
+            }
         } catch (error) {
             console.error('Error loading categories:', error);
             this.categoryOptions = [{ text: 'Select Category...', value: '' }];
         }
+    }
+    
+    private buildCategoryTree(categories: QueryCategoryEntity[]): CategoryTreeNode[] {
+        const categoryMap = new Map<string, CategoryTreeNode>();
+        const rootCategories: CategoryTreeNode[] = [];
+        
+        // Create nodes for all categories
+        categories.forEach(cat => {
+            categoryMap.set(cat.ID, {
+                id: cat.ID,
+                name: cat.Name,
+                items: []
+            });
+        });
+        
+        // Build the tree structure
+        categories.forEach(cat => {
+            const node = categoryMap.get(cat.ID)!;
+            if (cat.ParentID && categoryMap.has(cat.ParentID)) {
+                const parent = categoryMap.get(cat.ParentID)!;
+                if (!parent.items) parent.items = [];
+                parent.items.push(node);
+            } else {
+                rootCategories.push(node);
+            }
+        });
+        
+        // Sort children alphabetically
+        const sortNodes = (nodes: CategoryTreeNode[]) => {
+            nodes.sort((a, b) => a.name.localeCompare(b.name));
+            nodes.forEach(node => {
+                if (node.items && node.items.length > 0) {
+                    sortNodes(node.items);
+                }
+            });
+        };
+        sortNodes(rootCategories);
+        
+        return rootCategories;
+    }
+    
+    getCategoryPath(): string {
+        if (!this.record.CategoryID) return '';
+        
+        const findPath = (categoryId: string): string[] => {
+            const category = this.categories.find(c => c.ID === categoryId);
+            if (!category) return [];
+            
+            if (category.ParentID) {
+                return [...findPath(category.ParentID), category.Name];
+            }
+            return [category.Name];
+        };
+        
+        return findPath(this.record.CategoryID).join(' / ');
     }
 
     async onCategoryChange(value: string) {
@@ -149,18 +318,6 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
         );
     }
 
-    onSQLChange(value: string | Event) {
-        if (this.isUpdatingEditorValue) {
-            return;
-        }
-        
-        if (this.record) {
-            // Handle both string and event types
-            const sqlValue = typeof value === 'string' ? value : (value as any)?.target?.value || '';
-            this.record.SQL = sqlValue;
-            this.updateUnsavedChangesFlag();
-        }
-    }
 
     /**
      * Updates the hasUnsavedChanges flag based on entity dirty states
@@ -210,6 +367,106 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
      */
     onRunDialogClose() {
         this.showRunDialog = false;
+    }
+    
+    /**
+     * Add a new parameter
+     */
+    async addParameter() {
+        try {
+            const md = new Metadata();
+            const newParam = await md.GetEntityObject<QueryParameterEntity>('MJ: Query Parameters');
+            newParam.QueryID = this.record.ID;
+            newParam.Name = `param${this.queryParameters.length + 1}`;
+            newParam.Type = 'string';
+            newParam.IsRequired = false;
+            
+            const saved = await newParam.Save();
+            if (saved) {
+                this.queryParameters.push(newParam);
+                this.updateUnsavedChangesFlag();
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Parameter added successfully',
+                    'success'
+                );
+            } else {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Failed to add parameter',
+                    'error'
+                );
+            }
+        } catch (error) {
+            console.error('Error adding parameter:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Error adding parameter',
+                'error'
+            );
+        }
+    }
+    
+    /**
+     * Edit a parameter
+     */
+    async editParameter(param: QueryParameterEntity) {
+        // TODO: Show parameter edit dialog
+        console.log('Edit parameter:', param);
+    }
+    
+    /**
+     * Delete a parameter
+     */
+    async deleteParameter(param: QueryParameterEntity) {
+        if (!confirm(`Are you sure you want to delete parameter "${param.Name}"?`)) {
+            return;
+        }
+        
+        try {
+            const deleted = await param.Delete();
+            if (deleted) {
+                const index = this.queryParameters.indexOf(param);
+                if (index > -1) {
+                    this.queryParameters.splice(index, 1);
+                }
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Parameter deleted successfully',
+                    'success'
+                );
+            } else {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Failed to delete parameter',
+                    'error'
+                );
+            }
+        } catch (error) {
+            console.error('Error deleting parameter:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Error deleting parameter',
+                'error'
+            );
+        }
+    }
+    
+    /**
+     * Handle category creation from dialog
+     */
+    async onCategoryCreated(newCategory: QueryCategoryEntity) {
+        // Reload categories to include the new one
+        await this.loadCategories();
+        
+        // Set the new category as selected
+        this.record.CategoryID = newCategory.ID;
+        
+        // Trigger change detection
+        this.cdr.detectChanges();
+    }
+    
+    /**
+     * Format date for display
+     */
+    formatDate(date: Date | string | null): string {
+        if (!date) return '-';
+        const d = typeof date === 'string' ? new Date(date) : date;
+        return d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
     }
 
     async SaveRecord(StopEditModeAfterSave: boolean = true): Promise<boolean> {
@@ -280,6 +537,143 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
                 return '#6c757d';
         }
     }
+
+    /**
+     * Handle SQL value changes from the code editor
+     */
+    onSQLChange(value: any) {
+        if (this.record) {
+            // Handle both direct string value and event object
+            const sqlValue = typeof value === 'string' ? value : value?.target?.value || '';
+            this.record.SQL = sqlValue;
+            this.updateUnsavedChangesFlag();
+        }
+    }
+
+    /**
+     * Add a new field
+     */
+    async addField() {
+        try {
+            const md = new Metadata();
+            const newField = await md.GetEntityObject<QueryFieldEntity>('Query Fields');
+            newField.QueryID = this.record.ID;
+            newField.Name = `field${this.queryFields.length + 1}`;
+            newField.Description = '';
+            newField.Sequence = (this.queryFields.length + 1) * 10;
+            newField.SQLBaseType = 'nvarchar';
+            newField.SQLFullType = 'nvarchar(255)';
+            
+            const saved = await newField.Save();
+            if (saved) {
+                this.queryFields.push(newField);
+                this.queryFields.sort((a, b) => (a.Sequence || 0) - (b.Sequence || 0));
+                this.updateUnsavedChangesFlag();
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Field added successfully',
+                    'success'
+                );
+            }
+        } catch (error) {
+            console.error('Error adding field:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Failed to add field',
+                'error'
+            );
+        }
+    }
+
+    /**
+     * Delete a field
+     */
+    async deleteField(field: QueryFieldEntity) {
+        if (!confirm(`Are you sure you want to delete field "${field.Name}"?`)) {
+            return;
+        }
+        
+        try {
+            const deleted = await field.Delete();
+            if (deleted) {
+                this.queryFields = this.queryFields.filter(f => f.ID !== field.ID);
+                this.updateUnsavedChangesFlag();
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Field deleted successfully',
+                    'success'
+                );
+            }
+        } catch (error) {
+            console.error('Error deleting field:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Failed to delete field',
+                'error'
+            );
+        }
+    }
+
+    /**
+     * Add a new entity
+     */
+    async addEntity() {
+        try {
+            const md = new Metadata();
+            const newEntity = await md.GetEntityObject<QueryEntityEntity>('Query Entities');
+            newEntity.QueryID = this.record.ID;
+            
+            const saved = await newEntity.Save();
+            if (saved) {
+                this.queryEntities.push(newEntity);
+                this.updateUnsavedChangesFlag();
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Entity added successfully',
+                    'success'
+                );
+            }
+        } catch (error) {
+            console.error('Error adding entity:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Failed to add entity',
+                'error'
+            );
+        }
+    }
+
+    /**
+     * Delete an entity
+     */
+    async deleteEntity(entity: QueryEntityEntity) {
+        if (!confirm(`Are you sure you want to delete entity "${entity.Entity}"?`)) {
+            return;
+        }
+        
+        try {
+            const deleted = await entity.Delete();
+            if (deleted) {
+                this.queryEntities = this.queryEntities.filter(e => e.ID !== entity.ID);
+                this.updateUnsavedChangesFlag();
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Entity deleted successfully',
+                    'success'
+                );
+            }
+        } catch (error) {
+            console.error('Error deleting entity:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Failed to delete entity',
+                'error'
+            );
+        }
+    }
+
+    /**
+     * Get entity options for dropdown
+     */
+    getEntityOptions(): Array<{text: string, id: string}> {
+        return Metadata.Provider.Entities.map(e => ({
+            text: e.Name,
+            id: e.ID
+        })).sort((a, b) => a.text.localeCompare(b.text));
+    }
+
 }
 
 export function LoadQueryFormExtendedComponent() {
