@@ -1,0 +1,17 @@
+[
+  {
+    "fields": {
+      "Name": "AI",
+      "ParentID": null,
+      "Description": "Queries related to AI operations including AI Agent Runs, AI Prompt Runs, cost calculations, and performance analytics.",
+      "UserID": "@lookup:Users.Name=System"
+    },
+    "primaryKey": {
+      "ID": "DE6AFA78-6DA3-44FF-B0A8-0ABE96A98E3C"
+    },
+    "sync": {
+      "lastModified": "2025-07-22T21:00:24.588Z",
+      "checksum": "a25603d2bbe98062f6cba1a16677bf3d918b4fdffaee8dc800c0c2e9099997b0"
+    }
+  }
+]
