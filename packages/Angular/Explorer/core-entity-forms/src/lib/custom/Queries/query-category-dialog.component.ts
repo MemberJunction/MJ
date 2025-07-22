@@ -116,6 +116,7 @@ export class QueryCategoryDialogComponent implements OnInit {
             const newCategory = await md.GetEntityObject<QueryCategoryEntity>('Query Categories');
             newCategory.Name = this.categoryName.trim();
             newCategory.ParentID = this.selectedParentId;
+            newCategory.UserID = md.CurrentUser.ID;
             
             const saved = await newCategory.Save();
             

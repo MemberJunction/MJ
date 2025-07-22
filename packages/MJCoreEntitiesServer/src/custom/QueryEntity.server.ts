@@ -46,15 +46,15 @@ export class QueryEntityExtended extends QueryEntity {
         try {
             // Check if this is a new record or if SQL has changed
             const sqlField = this.GetFieldByName('SQL');
-            const shouldExtractParams = !this.IsSaved || sqlField.Dirty;
+            const shouldExtractData = !this.IsSaved || sqlField.Dirty;
                         
             if (!this.IsSaved) {
                 await super.Save(options); // save new queries right away to get an ID
             }
 
             // Extract and sync parameters if needed
-            if (shouldExtractParams && this.SQL && this.SQL.trim().length > 0) {
-                await this.extractAndSyncParameters();
+            if (shouldExtractData && this.SQL && this.SQL.trim().length > 0) {
+                await this.extractAndSyncData();
             } else if (!this.SQL || this.SQL.trim().length === 0) {
                 // If SQL is empty, ensure UsesTemplate is false and remove all related data
                 this.UsesTemplate = false;
@@ -86,7 +86,7 @@ export class QueryEntityExtended extends QueryEntity {
         }
     }
     
-    private async extractAndSyncParameters(): Promise<void> {
+    private async extractAndSyncData(): Promise<void> {
         try {
             // Ensure AIEngine is configured
             await AIEngine.Instance.Config(false, this.ContextCurrentUser);
@@ -299,7 +299,7 @@ export class QueryEntityExtended extends QueryEntity {
         const md = new Metadata();
         
         try {
-            const existingFields = [];
+            const existingFields: QueryFieldEntity[] = [];
             if (this.IsSaved) {
                 // Get existing query fields
                 const rv = new RunView();
@@ -387,6 +387,11 @@ export class QueryEntityExtended extends QueryEntity {
                         existingField.IsComputed = isDynamic;
                         hasChanges = true;
                     }
+
+                    if (existingField.Sequence !== extractedFields.indexOf(extractedField) + 1) {
+                        existingField.Sequence = extractedFields.indexOf(extractedField) + 1;
+                        hasChanges = true;
+                    }
                     
                     if (hasChanges) {
                         promises.push(existingField.Save());
@@ -440,7 +445,7 @@ export class QueryEntityExtended extends QueryEntity {
                     )
                     && 
                     (e.SchemaName.trim().toLowerCase() === extracted.schemaName?.trim().toLowerCase() || 
-                     (e.SchemaName?.trim().toLowerCase() === 'dbo' && extracted.schemaName.trim().length === 0)) // match on schema, OR if no schema specified, match dbo if the entity is in dbo
+                     (!extracted.schemaName || extracted.schemaName.trim().length === 0) && e.SchemaName.trim().toLowerCase() === 'dbo') // match on schema, OR if no schema specified, match dbo if the entity is in dbo
                 );
                 
                 if (matchingEntity) {

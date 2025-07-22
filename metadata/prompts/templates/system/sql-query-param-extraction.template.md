@@ -75,9 +75,10 @@ SELECT
    a.City,
    a.Country,
    a.Region,
-   a.Industry
+   a.Industry,
    i.AverageFirmRevenue,
-   i.NumFirms
+   i.NumFirms,
+   (SELECT COUNT(*) FROM crm.vwCities WHERE Country = a.Country) AS CitiesInCountry,
 FROM
    crm.vwAccounts a
 INNER JOIN
@@ -153,7 +154,7 @@ Example Output for the above template:
       "description": "Sorting clause to be used when provided to order the results",
       "usage": ["example usage"],
       "defaultValue": null
-    }
+    } 
   ],
   "selectClause": [
     {
@@ -211,6 +212,12 @@ Example Output for the above template:
         "type": "number",
         "optional": false
     },
+    {
+      "name": "CitiesInCountry",
+      "description": "Count of the # of cities in the country in this grouping",
+      "type": "number",
+      "optional": false
+    }
   ],
   "fromClause": [
     {
@@ -222,6 +229,10 @@ Example Output for the above template:
         "schemaName": "crm",
         "baseViewOrTable": "vwIndustries",
         "alias": "i"
+    },
+    {
+        "schemaName": "crm",
+        "baseViewOrTable": "vwCities"
     }
   ]
 }
