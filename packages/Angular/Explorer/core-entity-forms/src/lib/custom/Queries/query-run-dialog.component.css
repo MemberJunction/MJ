@@ -1,0 +1,31 @@
+.param-value textarea {
+    resize: vertical;
+    min-height: 60px;
+}
+
+.loading-state {
+    color: #6c757d;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+kendo-grid {
+    font-size: 0.9em;
+}
+
+.dialog-content {
+    overflow-y: auto;
+}
+
+.header-section {
+    flex-shrink: 0;
+}
+
+.param-actions button {
+    min-width: 30px;
+    padding: 4px 6px;
+}

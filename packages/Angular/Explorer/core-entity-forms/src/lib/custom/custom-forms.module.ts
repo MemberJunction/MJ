@@ -51,6 +51,8 @@ import { AIAgentRunFormComponentExtended, LoadAIAgentRunFormComponent } from "./
 import { AIAgentRunTimelineComponent } from "./ai-agent-run/ai-agent-run-timeline.component";
 import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-node.component";
 import { AIAgentRunAnalyticsComponent } from "./ai-agent-run/ai-agent-run-analytics.component";
+import { QueryFormExtendedComponent, LoadQueryFormExtendedComponent } from "./Queries/query-form.component";
+import { QueryRunDialogComponent } from "./Queries/query-run-dialog.component";
 
 @NgModule({
     declarations: [
@@ -83,6 +85,8 @@ import { AIAgentRunAnalyticsComponent } from "./ai-agent-run/ai-agent-run-analyt
         AIAgentRunTimelineComponent,
         AIAgentRunStepNodeComponent,
         AIAgentRunAnalyticsComponent,
+        QueryFormExtendedComponent,
+        QueryRunDialogComponent,
     ],
     imports: [
         CommonModule,
@@ -138,6 +142,7 @@ import { AIAgentRunAnalyticsComponent } from "./ai-agent-run/ai-agent-run-analyt
         AIAgentRunTimelineComponent,
         AIAgentRunStepNodeComponent,
         AIAgentRunAnalyticsComponent,
+        QueryFormExtendedComponent,
     ],
     providers: [
         NewAgentDialogService,
@@ -156,4 +161,5 @@ export function LoadCoreCustomForms() {
     LoadActionExecutionLogFormComponentExtended();
     LoadActionFormComponentExtended();
     LoadAIAgentRunFormComponent();
+    LoadQueryFormExtendedComponent();
 }

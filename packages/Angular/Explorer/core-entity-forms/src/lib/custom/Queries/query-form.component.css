@@ -1,0 +1,28 @@
+.sql-editor-container {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.filters-help .filter-card {
+    transition: transform 0.2s ease;
+}
+
+.filters-help .filter-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.toolbar-actions {
+    margin-left: auto;
+}
+
+.query-header {
+    border-bottom: 2px solid #dee2e6;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}

@@ -1,0 +1,261 @@
+<div class="record-form-container">
+    @if (record) {
+        <form class="record-form" #form="ngForm">
+            <mj-form-toolbar [form]="this">
+                <!-- Run Query Button in toolbar -->
+                <div class="toolbar-actions" style="display: flex; gap: 8px; align-items: center;">
+                    <button kendoButton 
+                            themeColor="primary"
+                            fillMode="solid"
+                            size="small"
+                            (click)="runQuery()"
+                            [disabled]="!record.IsSaved"
+                            title="Run Query">
+                        <i class="fa-solid fa-play"></i> Run Query
+                    </button>
+                </div>
+            </mj-form-toolbar>
+
+            <!-- Header Section -->
+            <div class="query-header" style="background: #f8f9fa; border-bottom: 1px solid #dee2e6; padding: 12px 20px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 16px; align-items: start;">
+                    
+                    <!-- Name -->
+                    <div class="form-group" style="margin: 0;">
+                        <label class="form-label" style="font-weight: 500; margin-bottom: 4px; color: #495057; font-size: 0.9em;">
+                            <i class="fa-solid fa-database"></i> Query Name
+                        </label>
+                        @if (EditMode) {
+                            <kendo-textbox [(ngModel)]="record.Name" 
+                                          name="queryName" 
+                                          placeholder="Enter query name...">
+                            </kendo-textbox>
+                        } @else {
+                            <div class="form-control-plaintext" style="font-size: 1em; font-weight: 500; padding: 6px 0;">
+                                {{ record.Name || 'Unnamed Query' }}
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Category -->
+                    <div class="form-group" style="margin: 0;">
+                        <label class="form-label" style="font-weight: 500; margin-bottom: 4px; color: #495057; font-size: 0.9em;">
+                            <i class="fa-solid fa-folder"></i> Category
+                        </label>
+                        @if (EditMode) {
+                            <kendo-combobox [(ngModel)]="record.CategoryID" 
+                                           name="categoryId"
+                                           [data]="categoryOptions"
+                                           textField="text"
+                                           valueField="value"
+                                           [valuePrimitive]="true"
+                                           [allowCustom]="true"
+                                           (valueChange)="onCategoryChange($event)"
+                                           placeholder="Select or enter new category...">
+                            </kendo-combobox>
+                        } @else {
+                            <div class="form-control-plaintext" style="padding: 8px 0;">
+                                {{ record.Category || 'Uncategorized' }}
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Status Badge -->
+                    <div style="display: flex; flex-direction: column; align-items: flex-end; justify-content: center;">
+                        <span class="badge" 
+                              [style.background]="getStatusBadgeColor()" 
+                              style="color: white; padding: 6px 12px; border-radius: 4px; font-size: 0.85em;">
+                            <i class="fa-solid fa-check-circle" *ngIf="record.Status === 'Approved'"></i>
+                            <i class="fa-solid fa-clock" *ngIf="record.Status === 'Pending'"></i>
+                            <i class="fa-solid fa-times-circle" *ngIf="record.Status === 'Rejected'"></i>
+                            {{ record.Status || 'Unknown' }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <mj-tabstrip (TabSelected)="onTabSelect($event)" (ResizeContainer)="InvokeManualResize()">
+                
+                <!-- SQL Tab - Main Focus -->
+                <mj-tab Name="SQL">
+                    <i class="fa-solid fa-code"></i> SQL Query
+                </mj-tab>
+                <mj-tab-body>
+                    <div class="sql-editor-container content-margin" style="display: flex; flex-direction: column; height: 100%;">
+                        
+                        <!-- Description -->
+                        @if (EditMode || record.Description) {
+                            <div class="form-group" style="margin-bottom: 16px;">
+                                <label class="form-label" style="font-weight: 500; margin-bottom: 6px; color: #495057;">
+                                    <i class="fa-solid fa-align-left"></i> Description
+                                </label>
+                                @if (EditMode) {
+                                    <kendo-textarea [(ngModel)]="record.Description" 
+                                                   name="description"
+                                                   [rows]="2"
+                                                   placeholder="Enter query description...">
+                                    </kendo-textarea>
+                                } @else {
+                                    <div class="form-control-plaintext" style="padding: 8px 0; color: #6c757d;">
+                                        {{ record.Description || 'No description provided' }}
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        <!-- SQL Editor -->
+                        <div class="sql-editor-section" style="flex: 1; display: flex; flex-direction: column;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <label class="form-label" style="font-weight: 500; margin: 0; color: #495057;">
+                                    <i class="fa-solid fa-code"></i> SQL Query
+                                </label>
+                                
+                                <!-- SQL Filters Help Toggle -->
+                                <button type="button"
+                                        kendoButton 
+                                        fillMode="flat"
+                                        size="small"
+                                        (click)="toggleFiltersHelp()"
+                                        title="Show/hide SQL filters help">
+                                    <i class="fa-solid fa-question-circle"></i> SQL Filters Help
+                                    <i class="fa-solid" [ngClass]="showFiltersHelp ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                                </button>
+                            </div>
+
+                            <!-- SQL Filters Help (Expandable) -->
+                            @if (showFiltersHelp) {
+                                <div class="filters-help" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 16px; margin-bottom: 12px;">
+                                    <h6 style="margin: 0 0 12px 0; color: #495057; font-weight: 600;">
+                                        <i class="fa-solid fa-filter"></i> Available SQL Filters for Parameterized Queries
+                                    </h6>
+                                    
+                                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px;">
+                                        @for (filter of sqlFilters; track filter.name) {
+                                            <div class="filter-card" style="background: white; border: 1px solid #e9ecef; border-radius: 4px; padding: 12px;">
+                                                <div style="font-family: 'Courier New', monospace; font-weight: bold; color: #007bff; margin-bottom: 4px;">
+                                                    {{ filter.name }}
+                                                </div>
+                                                <div style="font-size: 0.85em; color: #495057; margin-bottom: 8px;">
+                                                    {{ filter.description }}
+                                                </div>
+                                                <div style="font-family: 'Courier New', monospace; font-size: 0.8em; background: #f1f3f4; padding: 6px; border-radius: 3px; margin-bottom: 4px;">
+                                                    {{ filter.exampleSyntax }}
+                                                </div>
+                                                @if (filter.notes) {
+                                                    <div style="font-size: 0.75em; color: #6c757d; font-style: italic;">
+                                                        {{ filter.notes }}
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+
+                            <!-- Code Editor -->
+                            @if (EditMode) {
+                                <mj-code-editor #sqlEditor
+                                               [value]="record.SQL || ''"
+                                               [language]="'sql'"
+                                               (valueChange)="onSQLChange($event)"
+                                               style="flex: 1; border: 1px solid #dee2e6; border-radius: 4px; height: 500px;">
+                                </mj-code-editor>
+                            } @else {
+                                <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 16px; font-family: 'Courier New', monospace; font-size: 0.9em; white-space: pre-wrap; overflow: auto; min-height: 300px; flex: 1;">
+                                    {{ record.SQL || 'No SQL query defined' }}
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </mj-tab-body>
+
+                <!-- Parameters Tab -->
+                <mj-tab Name="Parameters" [Visible]="record.IsSaved">
+                    <i class="fa-solid fa-sliders"></i> Parameters
+                    @if (queryParameters.length > 0) {
+                        <span class="badge badge-info" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.7em; margin-left: 6px;">
+                            {{ queryParameters.length }}
+                        </span>
+                    }
+                </mj-tab>
+                <mj-tab-body>
+                    <div class="content-margin">
+                        @if (isLoadingParameters) {
+                            <div style="display: flex; align-items: center; justify-content: center; padding: 40px;">
+                                <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; color: #6c757d; margin-right: 12px;"></i>
+                                <span style="color: #6c757d;">Loading parameters...</span>
+                            </div>
+                        } @else {
+                            <mj-user-view-grid 
+                                [Params]="BuildRelationshipViewParamsByEntityName('Query Parameters','QueryID')"  
+                                [NewRecordValues]="NewRecordValues('Query Parameters')"
+                                [AllowLoad]="IsCurrentTab('Parameters')"  
+                                [EditMode]="GridEditMode()">
+                            </mj-user-view-grid>
+                        }
+                    </div>
+                </mj-tab-body>
+
+                <!-- Details Tab -->
+                <mj-tab Name="Details">
+                    <i class="fa-solid fa-cogs"></i> Details
+                </mj-tab>
+                <mj-tab-body>
+                    <div style="padding: 20px;">
+                        <div class="record-form">
+                            <mj-form-field 
+                                [record]="record"
+                                [ShowLabel]="true"
+                                FieldName="Status"
+                                Type="dropdownlist"
+                                [EditMode]="EditMode">
+                            </mj-form-field>
+                            <mj-form-field 
+                                [record]="record"
+                                [ShowLabel]="true"
+                                FieldName="UsesTemplate"
+                                Type="checkbox"
+                                [EditMode]="EditMode">
+                            </mj-form-field>
+                            <mj-form-field 
+                                [record]="record"
+                                [ShowLabel]="true"
+                                FieldName="__mj_CreatedAt"
+                                Type="textbox"
+                                [EditMode]="false">
+                            </mj-form-field>
+                            <mj-form-field 
+                                [record]="record"
+                                [ShowLabel]="true"
+                                FieldName="__mj_UpdatedAt"
+                                Type="textbox"
+                                [EditMode]="false">
+                            </mj-form-field>
+                        </div>
+                    </div>
+                </mj-tab-body>
+
+                <!-- Permissions Tab -->
+                <mj-tab Name="Permissions" [Visible]="record.IsSaved">
+                    <i class="fa-solid fa-shield-alt"></i> Permissions
+                </mj-tab>
+                <mj-tab-body>
+                    <mj-user-view-grid 
+                        [Params]="BuildRelationshipViewParamsByEntityName('Query Permissions','QueryID')"  
+                        [NewRecordValues]="NewRecordValues('Query Permissions')"
+                        [AllowLoad]="IsCurrentTab('Permissions')"  
+                        [EditMode]="GridEditMode()">
+                    </mj-user-view-grid>
+                </mj-tab-body>
+            </mj-tabstrip>
+        </form>
+
+        <!-- Query Run Dialog -->
+        <mj-query-run-dialog 
+            [query]="record"
+            [parameters]="queryParameters"
+            [(isVisible)]="showRunDialog"
+            (onClose)="onRunDialogClose()">
+        </mj-query-run-dialog>
+    }
+</div>
