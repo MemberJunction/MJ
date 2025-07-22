@@ -48,6 +48,10 @@ export class QueryEntityExtended extends QueryEntity {
             const sqlField = this.GetFieldByName('SQL');
             const shouldExtractParams = !this.IsSaved || sqlField.Dirty;
                         
+            if (!this.IsSaved) {
+                await super.Save(options); // save new queries right away to get an ID
+            }
+
             // Extract and sync parameters if needed
             if (shouldExtractParams && this.SQL && this.SQL.trim().length > 0) {
                 await this.extractAndSyncParameters();
@@ -62,8 +66,8 @@ export class QueryEntityExtended extends QueryEntity {
             }
             
             // Commit the transaction
-            // Save the query now to incorporate any other changes that happened via the above that
-            // affected the query itself
+            // Save the query now to save any changes made by parameter extraction
+            // This will also save the UsesTemplate flag and any other changes
             const saveResult = await super.Save(options);
             if (!saveResult) {
                 await provider.RollbackTransaction();
@@ -154,17 +158,20 @@ export class QueryEntityExtended extends QueryEntity {
         try {
             // Get existing query parameters
             const rv = new RunView();
-            const existingParamsResult = await rv.RunView<QueryParameterEntity>({
-                EntityName: 'MJ: Query Parameters',
-                ExtraFilter: `QueryID='${this.ID}'`,
-                ResultType: 'entity_object'
-            }, this.ContextCurrentUser);
-            
-            if (!existingParamsResult.Success) {
-                throw new Error(`Failed to load existing query parameters: ${existingParamsResult.ErrorMessage}`);
+            const existingParams = [];
+            if (this.IsSaved) {
+                const existingParamsResult = await rv.RunView<QueryParameterEntity>({
+                    EntityName: 'MJ: Query Parameters',
+                    ExtraFilter: `QueryID='${this.ID}'`,
+                    ResultType: 'entity_object'
+                }, this.ContextCurrentUser);
+                
+                if (!existingParamsResult.Success) {
+                    throw new Error(`Failed to load existing query parameters: ${existingParamsResult.ErrorMessage}`);
+                }
+                
+                existingParams.push (...existingParamsResult.Results || []);
             }
-            
-            const existingParams = existingParamsResult.Results || [];
             
             // Convert extracted param names to lowercase for comparison
             const extractedParamNames = extractedParams.map(p => p.name.toLowerCase());
@@ -260,27 +267,28 @@ export class QueryEntityExtended extends QueryEntity {
     
     private async removeAllQueryParameters(): Promise<void> {
         try {
-            // Get all existing query parameters
-            const rv = new RunView();
-            const existingParamsResult = await rv.RunView<QueryParameterEntity>({
-                EntityName: 'MJ: Query Parameters',
-                ExtraFilter: `QueryID='${this.ID}'`,
-                ResultType: 'entity_object'
-            }, this.ContextCurrentUser);
-            
-            if (!existingParamsResult.Success) {
-                throw new Error(`Failed to load existing query parameters: ${existingParamsResult.ErrorMessage}`);
-            }
-            
-            const existingParams = existingParamsResult.Results || [];
-            
-            // Delete all existing parameters
-            const deletePromises = existingParams.map(param => param.Delete());
-            
-            if (deletePromises.length > 0) {
-                await Promise.all(deletePromises);
-            }
-            
+            if (this.IsSaved) {
+                // Get all existing query parameters
+                const rv = new RunView();
+                const existingParamsResult = await rv.RunView<QueryParameterEntity>({
+                    EntityName: 'MJ: Query Parameters',
+                    ExtraFilter: `QueryID='${this.ID}'`,
+                    ResultType: 'entity_object'
+                }, this.ContextCurrentUser);
+                
+                if (!existingParamsResult.Success) {
+                    throw new Error(`Failed to load existing query parameters: ${existingParamsResult.ErrorMessage}`);
+                }
+                
+                const existingParams = existingParamsResult.Results || [];
+                
+                // Delete all existing parameters
+                const deletePromises = existingParams.map(param => param.Delete());
+                
+                if (deletePromises.length > 0) {
+                    await Promise.all(deletePromises);
+                }
+            }            
         } catch (e) {
             LogError('Failed to remove query parameters:', e);
             throw e; // Re-throw since we're in a transaction
@@ -291,20 +299,23 @@ export class QueryEntityExtended extends QueryEntity {
         const md = new Metadata();
         
         try {
-            // Get existing query fields
-            const rv = new RunView();
-            const existingFieldsResult = await rv.RunView<QueryFieldEntity>({
-                EntityName: 'Query Fields',
-                ExtraFilter: `QueryID='${this.ID}'`,
-                ResultType: 'entity_object'
-            }, this.ContextCurrentUser);
-            
-            if (!existingFieldsResult.Success) {
-                throw new Error(`Failed to load existing query fields: ${existingFieldsResult.ErrorMessage}`);
-            }
-            
-            const existingFields = existingFieldsResult.Results || [];
-            
+            const existingFields = [];
+            if (this.IsSaved) {
+                // Get existing query fields
+                const rv = new RunView();
+                const existingFieldsResult = await rv.RunView<QueryFieldEntity>({
+                    EntityName: 'Query Fields',
+                    ExtraFilter: `QueryID='${this.ID}'`,
+                    ResultType: 'entity_object'
+                }, this.ContextCurrentUser);
+                
+                if (!existingFieldsResult.Success) {
+                    throw new Error(`Failed to load existing query fields: ${existingFieldsResult.ErrorMessage}`);
+                }
+                
+                existingFields.push(...existingFieldsResult.Results || []);
+            }            
+
             // Convert extracted field names to lowercase for comparison
             const extractedFieldNames = extractedFields.map(f => f.name.toLowerCase());
             
@@ -404,19 +415,21 @@ export class QueryEntityExtended extends QueryEntity {
         
         try {
             // Get existing query entities
-            const rv = new RunView();
-            const existingEntitiesResult = await rv.RunView<QueryEntityEntity>({
-                EntityName: 'Query Entities',
-                ExtraFilter: `QueryID='${this.ID}'`,
-                ResultType: 'entity_object'
-            }, this.ContextCurrentUser);
-            
-            if (!existingEntitiesResult.Success) {
-                throw new Error(`Failed to load existing query entities: ${existingEntitiesResult.ErrorMessage}`);
+            const existingEntities = [];
+            if (this.IsSaved) {
+                const rv = new RunView();
+                const existingEntitiesResult = await rv.RunView<QueryEntityEntity>({
+                    EntityName: 'Query Entities',
+                    ExtraFilter: `QueryID='${this.ID}'`,
+                    ResultType: 'entity_object'
+                }, this.ContextCurrentUser);
+                
+                if (!existingEntitiesResult.Success) {
+                    throw new Error(`Failed to load existing query entities: ${existingEntitiesResult.ErrorMessage}`);
+                }
+                
+                existingEntities.push(...existingEntitiesResult.Results || []);
             }
-            
-            const existingEntities = existingEntitiesResult.Results || [];
-            
             // Look up MJ entity IDs for the extracted base views using pre-loaded metadata
             const entityMappings = extractedEntities.map(extracted => {
                 // Find matching entity in metadata
@@ -477,6 +490,8 @@ export class QueryEntityExtended extends QueryEntity {
     
     private async removeAllQueryFields(): Promise<void> {
         try {
+            if (!this.IsSaved) return; // Nothing to remove if not saved
+
             const rv = new RunView();
             const existingFieldsResult = await rv.RunView<QueryFieldEntity>({
                 EntityName: 'Query Fields',
@@ -503,6 +518,8 @@ export class QueryEntityExtended extends QueryEntity {
     
     private async removeAllQueryEntities(): Promise<void> {
         try {
+            if (!this.IsSaved) return; // Nothing to remove if not saved
+            
             const rv = new RunView();
             const existingEntitiesResult = await rv.RunView<QueryEntityEntity>({
                 EntityName: 'Query Entities',
